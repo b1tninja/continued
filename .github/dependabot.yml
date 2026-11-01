@@ -31,6 +31,10 @@ updates:
       # (works through 6.7.0). Remove once the CLI is adapted.
       - dependency-name: ink
         versions: ["6.8.x"]
+      # 1.18 moved rg into per-platform packages; the VS Code packaging
+      # scripts and VsCodeIde expect node_modules/@vscode/ripgrep/bin/rg.
+      - dependency-name: "@vscode/ripgrep"
+        versions: [">=1.16.0"]
     groups:
       # Minor/patch bumps are batched into one PR per directory; majors stay
       # individual so they can be reviewed (and reverted) on their own.
