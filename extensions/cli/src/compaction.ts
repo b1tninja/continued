@@ -322,7 +322,23 @@ export function shouldAutoCompact(params: AutoCompactParams): boolean {
 
   const toolTokens = tools ? countToolDefinitionTokens(tools) : 0;
   const systemTokens = systemMessage ? encode(systemMessage).length : 0;
-  const shouldCompact = inputTokens >= compactionThreshold;
+  let shouldCompact = inputTokens >= compactionThreshold;
+
+  // Compaction only shrinks the history. If the system message and tools
+  // alone reach the threshold, compacting cannot get under it and would run
+  // on every request, so wait until the input no longer fits at all.
+  const fixedTokens = systemTokens + toolTokens;
+  if (
+    shouldCompact &&
+    fixedTokens >= compactionThreshold &&
+    inputTokens < contextLimit - maxTokens
+  ) {
+    logger.warn(
+      "Auto-compaction threshold is below the system message and tools; skipping compaction until the context is full",
+      { fixedTokens, compactionThreshold },
+    );
+    shouldCompact = false;
+  }
 
   logger.debug("Context usage check", {
     inputTokens,

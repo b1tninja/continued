@@ -240,3 +240,51 @@ export async function handleNormalAutoCompaction(
 
   return { chatHistory, wasCompacted: false };
 }
+
+/**
+ * Handle auto-continuation after compaction
+ */
+export function handleAutoContinuation(
+  compactionOccurred: boolean,
+  shouldContinue: boolean,
+  chatHistory: ChatHistoryItem[],
+  autoContinuedLastIteration: boolean,
+): { shouldAutoContinue: boolean; chatHistory: ChatHistoryItem[] } {
+  if (!compactionOccurred || shouldContinue) {
+    return { shouldAutoContinue: false, chatHistory };
+  }
+
+  // Compacting again straight after our own "continue" means compaction
+  // made no room; continuing again would loop, so stop instead
+  if (autoContinuedLastIteration) {
+    logger.warn(
+      "Compacted again right after auto-continuing; not continuing again",
+    );
+    return { shouldAutoContinue: false, chatHistory };
+  }
+
+  logger.debug(
+    "Auto-compaction occurred during this turn - automatically continuing session",
+  );
+
+  // Add a continuation message to the history
+  const chatHistorySvc = services.chatHistory;
+  if (
+    typeof chatHistorySvc?.isReady === "function" &&
+    chatHistorySvc.isReady()
+  ) {
+    chatHistorySvc.addUserMessage("continue");
+    chatHistory = chatHistorySvc.getHistory();
+  } else {
+    chatHistory.push({
+      message: {
+        role: "user",
+        content: "continue",
+      },
+      contextItems: [],
+    });
+  }
+
+  logger.debug("Added continuation message after compaction");
+  return { shouldAutoContinue: true, chatHistory };
+}

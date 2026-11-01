@@ -89,6 +89,37 @@ describe("getAutoCompactThreshold", () => {
   });
 });
 
+describe("shouldAutoCompact with a budget below the fixed prompt", () => {
+  const systemMessage = "s".repeat(400 * 4); // 400 tokens
+  const history = (tokens: number) => [
+    {
+      message: { role: "user" as const, content: "x".repeat(tokens * 4) },
+      contextItems: [],
+    },
+  ];
+
+  it("does not compact while the input still fits", () => {
+    const model = createModel(2000, 200, { autoCompactTokens: 300 });
+    expect(
+      shouldAutoCompact({ chatHistory: history(100), model, systemMessage }),
+    ).toBe(false);
+  });
+
+  it("compacts once the input no longer fits", () => {
+    const model = createModel(2000, 200, { autoCompactTokens: 300 });
+    expect(
+      shouldAutoCompact({ chatHistory: history(1500), model, systemMessage }),
+    ).toBe(true);
+  });
+
+  it("still compacts normally when the fixed prompt is below the threshold", () => {
+    const model = createModel(2000, 200, { autoCompactTokens: 600 });
+    expect(
+      shouldAutoCompact({ chatHistory: history(300), model, systemMessage }),
+    ).toBe(true);
+  });
+});
+
 describe("getSubagentModel", () => {
   it("returns the model unchanged without a sub-agent budget", () => {
     const model = createModel(524_288, 65_536, { autoCompactRatio: 0.5 });

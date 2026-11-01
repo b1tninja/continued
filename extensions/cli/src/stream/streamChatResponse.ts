@@ -25,6 +25,7 @@ import { validateContextLength } from "../util/tokenizer.js";
 import { getRequestTools, handleToolCalls } from "./handleToolCalls.js";
 import { injectSteeringMessage } from "./steering.js";
 import {
+  handleAutoContinuation,
   handleNormalAutoCompaction,
   handlePostToolValidation,
   handlePreApiCompaction,
@@ -92,42 +93,6 @@ function refreshChatHistoryFromService(
     } catch {}
   }
   return chatHistory;
-}
-
-// Helper function to handle auto-continuation after compaction
-function handleAutoContinuation(
-  compactionOccurred: boolean,
-  shouldContinue: boolean,
-  chatHistory: ChatHistoryItem[],
-): { shouldAutoContinue: boolean; chatHistory: ChatHistoryItem[] } {
-  if (!compactionOccurred || shouldContinue) {
-    return { shouldAutoContinue: false, chatHistory };
-  }
-
-  logger.debug(
-    "Auto-compaction occurred during this turn - automatically continuing session",
-  );
-
-  // Add a continuation message to the history
-  const chatHistorySvc = services.chatHistory;
-  if (
-    typeof chatHistorySvc?.isReady === "function" &&
-    chatHistorySvc.isReady()
-  ) {
-    chatHistorySvc.addUserMessage("continue");
-    chatHistory = chatHistorySvc.getHistory();
-  } else {
-    chatHistory.push({
-      message: {
-        role: "user",
-        content: "continue",
-      },
-      contextItems: [],
-    });
-  }
-
-  logger.debug("Added continuation message after compaction");
-  return { shouldAutoContinue: true, chatHistory };
 }
 
 // Helper function to process a single chunk
@@ -478,6 +443,7 @@ export async function streamChatResponse(
   let fullResponse = "";
   let finalResponse = "";
   let compactionOccurredThisTurn = false; // Track if compaction happened during this conversation turn
+  let autoContinuedLastIteration = false; // Whether the previous iteration only sent our own "continue"
 
   while (true) {
     // If ChatHistoryService is available, refresh local chatHistory view
@@ -617,6 +583,7 @@ export async function streamChatResponse(
       compactionOccurredThisTurn,
       shouldContinue,
       chatHistory,
+      autoContinuedLastIteration,
     );
     chatHistory = autoContinueResult.chatHistory;
     const shouldAutoContinue = autoContinueResult.shouldAutoContinue;
@@ -625,6 +592,7 @@ export async function streamChatResponse(
     if (shouldAutoContinue) {
       compactionOccurredThisTurn = false;
     }
+    autoContinuedLastIteration = shouldAutoContinue;
 
     // Check if we should continue (skip break if auto-continuing after compaction)
     if (!shouldContinue && !shouldAutoContinue) {
