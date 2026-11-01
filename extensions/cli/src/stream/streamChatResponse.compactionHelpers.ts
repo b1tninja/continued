@@ -19,6 +19,8 @@ export interface CompactionHelperOptions {
   callbacks?: StreamCallbacks;
   systemMessage: string;
   tools?: ChatCompletionTool[];
+  /** Save compacted history to the current session (default true) */
+  persistSession?: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export async function handlePreApiCompaction(
     callbacks,
     systemMessage,
     tools,
+    persistSession,
   } = options;
 
   if (isCompacting) {
@@ -51,6 +54,7 @@ export async function handlePreApiCompaction(
       },
       systemMessage,
       tools,
+      persistSession,
     });
 
   if (wasCompacted) {
@@ -77,8 +81,15 @@ export async function handlePostToolValidation(
   chatHistory: ChatHistoryItem[],
   options: CompactionHelperOptions,
 ): Promise<{ chatHistory: ChatHistoryItem[]; wasCompacted: boolean }> {
-  const { model, llmApi, isHeadless, callbacks, systemMessage, tools } =
-    options;
+  const {
+    model,
+    llmApi,
+    isHeadless,
+    callbacks,
+    systemMessage,
+    tools,
+    persistSession,
+  } = options;
 
   if (toolCalls.length === 0) {
     return { chatHistory, wasCompacted: false };
@@ -119,6 +130,7 @@ export async function handlePostToolValidation(
         },
         systemMessage,
         tools,
+        persistSession,
       });
 
     if (wasCompacted) {
@@ -171,15 +183,23 @@ export async function handlePostToolValidation(
 }
 
 /**
- * Handle normal auto-compaction check at 80% threshold
+ * Handle normal auto-compaction check at the model's threshold
+ * (see getAutoCompactThreshold)
  */
 export async function handleNormalAutoCompaction(
   chatHistory: ChatHistoryItem[],
   shouldContinue: boolean,
   options: CompactionHelperOptions,
 ): Promise<{ chatHistory: ChatHistoryItem[]; wasCompacted: boolean }> {
-  const { model, llmApi, isHeadless, callbacks, systemMessage, tools } =
-    options;
+  const {
+    model,
+    llmApi,
+    isHeadless,
+    callbacks,
+    systemMessage,
+    tools,
+    persistSession,
+  } = options;
 
   if (!shouldContinue) {
     return { chatHistory, wasCompacted: false };
@@ -202,6 +222,7 @@ export async function handleNormalAutoCompaction(
       },
       systemMessage,
       tools,
+      persistSession,
     });
 
   if (wasCompacted) {

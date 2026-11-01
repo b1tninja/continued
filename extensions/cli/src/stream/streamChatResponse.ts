@@ -9,6 +9,7 @@ import type {
 } from "openai/resources.mjs";
 
 import { pruneLastMessage } from "../compaction.js";
+import { getRequestBodyHints } from "../contextManagement.js";
 import { services } from "../services/index.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { applyChatCompletionToolOverrides } from "../tools/applyToolOverrides.js";
@@ -192,6 +193,7 @@ interface ProcessStreamingResponseOptions {
   isHeadless?: boolean;
   tools?: ChatCompletionTool[];
   systemMessage: string;
+  isCompacting?: boolean;
 }
 
 // Process a single streaming response and return whether we need to continue
@@ -213,6 +215,7 @@ export async function processStreamingResponse(
     isHeadless,
     tools,
     systemMessage,
+    isCompacting = false,
   } = options;
 
   let chatHistory = options.chatHistory;
@@ -285,6 +288,11 @@ export async function processStreamingResponse(
         stream: true,
         tools,
         ...getDefaultCompletionOptions(model.defaultCompletionOptions),
+        // A compaction summary is never continued, so it is a one-shot request
+        ...getRequestBodyHints(
+          model,
+          isCompacting ? "oneShot" : "conversation",
+        ),
       },
       retryAbortSignal,
     );
@@ -439,6 +447,14 @@ export async function processStreamingResponse(
   };
 }
 
+export interface StreamChatResponseOptions {
+  /**
+   * Whether auto-compaction saves the compacted history to the current
+   * session. False for sub-agents, whose child history is not the session's.
+   */
+  persistSession?: boolean;
+}
+
 // Main function that handles the conversation loop
 // eslint-disable-next-line max-params
 export async function streamChatResponse(
@@ -448,7 +464,9 @@ export async function streamChatResponse(
   abortController: AbortController,
   callbacks?: StreamCallbacks,
   isCompacting = false,
+  options: StreamChatResponseOptions = {},
 ) {
+  const { persistSession = true } = options;
   logger.debug("streamChatResponse called", {
     model,
     historyLength: chatHistory.length,
@@ -487,6 +505,7 @@ export async function streamChatResponse(
       callbacks,
       systemMessage,
       tools,
+      persistSession,
     });
     chatHistory = preCompactionResult.chatHistory;
     if (preCompactionResult.wasCompacted) {
@@ -509,6 +528,7 @@ export async function streamChatResponse(
         callbacks,
         tools,
         systemMessage,
+        isCompacting,
       });
 
     if (abortController?.signal.aborted) {
@@ -555,6 +575,7 @@ export async function streamChatResponse(
         callbacks,
         systemMessage,
         tools,
+        persistSession,
       },
     );
     chatHistory = postToolResult.chatHistory;
@@ -562,7 +583,7 @@ export async function streamChatResponse(
       compactionOccurredThisTurn = true;
     }
 
-    // Normal auto-compaction check at 80% threshold
+    // Normal auto-compaction check at the model's threshold
     const compactionResult = await handleNormalAutoCompaction(
       chatHistory,
       shouldContinue,
@@ -574,6 +595,7 @@ export async function streamChatResponse(
         callbacks,
         systemMessage,
         tools,
+        persistSession,
       },
     );
     chatHistory = compactionResult.chatHistory;
