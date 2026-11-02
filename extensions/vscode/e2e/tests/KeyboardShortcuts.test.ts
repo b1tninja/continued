@@ -226,6 +226,9 @@ describe("Keyboard Shortcuts", () => {
 
     await view.switchBack();
 
+    // The editor may have been re-laid out while the Continued view was open
+    editor = (await new EditorView().openEditor("Untitled-1")) as TextEditor;
+    await TestUtils.waitForSuccess(() => editor.click());
     await KeyboardShortcutsActions.HACK__typeWithSelect(editor, "hello");
 
     await TestUtils.waitForTimeout(DEFAULT_TIMEOUT.XS);
