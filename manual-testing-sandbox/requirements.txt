@@ -30,7 +30,7 @@ keras==2.6.0
 
 # Image processing
 pillow==8.3.2
-opencv-python==4.5.3.56
+opencv-python==5.0.0.93
 
 # Data handling and manipulation
 beautifulsoup4==4.10.0
