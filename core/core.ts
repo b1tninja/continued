@@ -14,6 +14,8 @@ import { DataLogger } from "./data/log";
 import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
 import DocsService from "./indexing/docs/DocsService";
 import { countTokens } from "./llm/countTokens";
+import Bedrock from "./llm/llms/Bedrock";
+import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
 import Ollama from "./llm/llms/Ollama";
@@ -486,19 +488,30 @@ export class Core {
       };
     });
     on("mcp/startAuthentication", async (msg) => {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      MCPManagerSingleton.getInstance().setStatus(
-        msg.data.serverId,
-        "authenticating",
-      );
-      const status = await performAuth(
-        msg.data.serverId,
-        msg.data.serverUrl,
-        this.ide,
-      );
-      if (status === "AUTHORIZED") {
-        await MCPManagerSingleton.getInstance().refreshConnection(
+      const manager = MCPManagerSingleton.getInstance();
+      const connection = manager.getConnection(msg.data.serverId);
+      const callbackPort = (
+        connection?.options as { oauth?: { callbackPort?: number } } | undefined
+      )?.oauth?.callbackPort;
+      manager.setStatus(msg.data.serverId, "authenticating");
+      try {
+        const status = await performAuth(
           msg.data.serverId,
+          msg.data.serverUrl,
+          this.ide,
+          // same proxy / CA settings as the connection itself
+          { callbackPort, fetchFn: connection?.getFetch() as any },
+        );
+        if (status === "AUTHORIZED") {
+          // Already signed in (for example the token was still valid)
+          await manager.refreshConnection(msg.data.serverId);
+        }
+      } catch (e) {
+        // Port busy, discovery failed, ...: show the cause and let the user retry
+        manager.setStatus(msg.data.serverId, "error");
+        await this.ide.showToast(
+          "error",
+          `Sign-in to ${msg.data.serverId} failed: ${e instanceof Error ? e.message : String(e)}`,
         );
       }
     });
@@ -587,6 +600,51 @@ export class Core {
       return completion;
     });
     on("llm/listModels", this.handleListModels.bind(this));
+
+    // Bedrock add-model form: discover available models / test a connection
+    // with the not-yet-saved settings.
+    on("bedrock/listModels", async (msg) => {
+      try {
+        const { endpoint, ...params } = msg.data;
+        if (endpoint === "mantle") {
+          const unavailable = mantleRegionError(params.region);
+          if (unavailable) return { ok: false as const, error: unavailable };
+          const mantle = new BedrockMantle({ ...params, model: "" });
+          return {
+            ok: true as const,
+            models: await mantle.listAvailableModels(),
+          };
+        }
+        const bedrock = new Bedrock({ ...params, model: "" });
+        return {
+          ok: true as const,
+          models: await bedrock.listAvailableModels(),
+        };
+      } catch (e) {
+        return {
+          ok: false as const,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    });
+    on("bedrock/testModel", async (msg) => {
+      try {
+        const { endpoint, ...params } = msg.data;
+        if (endpoint === "mantle") {
+          const unavailable = mantleRegionError(params.region);
+          if (unavailable) return { ok: false as const, error: unavailable };
+          const mantle = new BedrockMantle({ ...params });
+          return { ok: true as const, ...(await mantle.testModel()) };
+        }
+        const bedrock = new Bedrock({ ...params });
+        return { ok: true as const, ...(await bedrock.testModel()) };
+      } catch (e) {
+        return {
+          ok: false as const,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    });
 
     on("llm/compileChat", async (msg) => {
       const { messages, options } = msg.data;

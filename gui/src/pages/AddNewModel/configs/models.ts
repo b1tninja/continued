@@ -1383,6 +1383,105 @@ export const models: { [key: string]: ModelPackage } = {
     icon: "anthropic.png",
     isOpenSource: false,
   },
+  bedrockMantleGptOss120b: {
+    title: "GPT OSS 120B",
+    description:
+      "OpenAI's open-weight reasoning model on Amazon Bedrock Mantle. Use Test connection to discover every model your account can use.",
+    params: {
+      model: "openai.gpt-oss-120b",
+      contextLength: 128_000,
+      title: "GPT OSS 120B (Bedrock Mantle)",
+    },
+    providerOptions: ["bedrock-mantle"],
+    icon: "openai.png",
+    isOpenSource: true,
+  },
+  bedrockMantleGptOss20b: {
+    title: "GPT OSS 20B",
+    description:
+      "Smaller, faster OpenAI open-weight model on Amazon Bedrock Mantle.",
+    params: {
+      model: "openai.gpt-oss-20b",
+      contextLength: 128_000,
+      title: "GPT OSS 20B (Bedrock Mantle)",
+    },
+    providerOptions: ["bedrock-mantle"],
+    icon: "openai.png",
+    isOpenSource: true,
+  },
+  bedrockClaudeSonnet46: {
+    title: "Claude Sonnet 4.6",
+    description:
+      "Anthropic's balanced coding model, via Amazon Bedrock. Use Test connection to discover newer models available to your account.",
+    params: {
+      model: "anthropic.claude-sonnet-4-6",
+      contextLength: 200_000,
+      title: "Claude Sonnet 4.6 (Bedrock)",
+    },
+    providerOptions: ["bedrock"],
+    icon: "anthropic.png",
+    isOpenSource: false,
+  },
+  bedrockClaudeSonnet45: {
+    title: "Claude Sonnet 4.5",
+    description:
+      "Anthropic's best model for coding and agents, via Amazon Bedrock.",
+    params: {
+      model: "anthropic.claude-sonnet-4-5-20250929-v1:0",
+      contextLength: 200000,
+      title: "Claude Sonnet 4.5 (Bedrock)",
+    },
+    providerOptions: ["bedrock"],
+    icon: "anthropic.png",
+    isOpenSource: false,
+  },
+  bedrockClaudeHaiku45: {
+    title: "Claude Haiku 4.5",
+    description: "Fast and affordable Claude model, via Amazon Bedrock.",
+    params: {
+      model: "anthropic.claude-haiku-4-5-20251001-v1:0",
+      contextLength: 200000,
+      title: "Claude Haiku 4.5 (Bedrock)",
+    },
+    providerOptions: ["bedrock"],
+    icon: "anthropic.png",
+    isOpenSource: false,
+  },
+  bedrockClaudeOpus41: {
+    title: "Claude Opus 4.1",
+    description: "Anthropic's most capable Opus model, via Amazon Bedrock.",
+    params: {
+      model: "anthropic.claude-opus-4-1-20250805-v1:0",
+      contextLength: 200000,
+      title: "Claude Opus 4.1 (Bedrock)",
+    },
+    providerOptions: ["bedrock"],
+    icon: "anthropic.png",
+    isOpenSource: false,
+  },
+  bedrockNovaPro: {
+    title: "Amazon Nova Pro",
+    description:
+      "Amazon's multimodal model balancing accuracy, speed and cost.",
+    params: {
+      model: "amazon.nova-pro-v1:0",
+      contextLength: 300000,
+      title: "Amazon Nova Pro (Bedrock)",
+    },
+    providerOptions: ["bedrock"],
+    isOpenSource: false,
+  },
+  bedrockNovaLite: {
+    title: "Amazon Nova Lite",
+    description: "Amazon's low-cost multimodal model.",
+    params: {
+      model: "amazon.nova-lite-v1:0",
+      contextLength: 300000,
+      title: "Amazon Nova Lite (Bedrock)",
+    },
+    providerOptions: ["bedrock"],
+    isOpenSource: false,
+  },
   claude4Sonnet: {
     title: "Claude Sonnet 4",
     description:

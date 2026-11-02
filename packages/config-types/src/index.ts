@@ -31,6 +31,7 @@ export type ClientCertificateOptions = z.infer<
 export const requestOptionsSchema = z.object({
   timeout: z.number().optional(),
   verifySsl: z.boolean().optional(),
+  useSystemCa: z.boolean().optional(),
   caBundlePath: z.union([z.string(), z.array(z.string())]).optional(),
   proxy: z.string().optional(),
   headers: z.record(z.string()).optional(),
@@ -53,6 +54,7 @@ export const modelDescriptionSchema = z.object({
     "gemini",
     "mistral",
     "bedrock",
+    "bedrock-mantle",
     "sagemaker",
     "cloudflare",
     "azure",

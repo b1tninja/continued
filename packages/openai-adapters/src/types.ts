@@ -94,10 +94,28 @@ export const BedrockConfigSchema = OpenAIConfigSchema.extend({
       accessKeyId: z.string().optional(),
       secretAccessKey: z.string().optional(),
       profile: z.string().optional(),
+      sessionToken: z.string().optional(),
+      crossRegionInference: z.string().optional(),
+      serviceTier: z.string().optional(),
+      latency: z.string().optional(),
+      guardrailIdentifier: z.string().optional(),
+      guardrailVersion: z.string().optional(),
     })
     .optional(),
 });
 export type BedrockConfig = z.infer<typeof BedrockConfigSchema>;
+
+export const BedrockMantleConfigSchema = OpenAIConfigSchema.extend({
+  provider: z.literal("bedrock-mantle"),
+  env: z
+    .object({
+      region: z.string().optional(),
+      mantlePathPrefix: z.string().optional(),
+      maxTokensParam: z.string().optional(),
+    })
+    .optional(),
+});
+export type BedrockMantleConfig = z.infer<typeof BedrockMantleConfigSchema>;
 
 export const LlamastackConfigSchema = OpenAIConfigSchema.extend({
   provider: z.literal("llamastack"),
@@ -145,9 +163,7 @@ export interface AskSageTool {
 }
 
 export type AskSageToolChoice =
-  | "auto"
-  | "none"
-  | { type: "function"; function: { name: string } };
+  "auto" | "none" | { type: "function"; function: { name: string } };
 
 export interface AskSageToolCall {
   id: string;
@@ -258,6 +274,7 @@ export type AiSdkConfig = z.infer<typeof AiSdkConfigSchema>;
 export const LLMConfigSchema = z.discriminatedUnion("provider", [
   OpenAIConfigSchema,
   BedrockConfigSchema,
+  BedrockMantleConfigSchema,
   MoonshotConfigSchema,
   DeepseekConfigSchema,
   MiniMaxConfigSchema,

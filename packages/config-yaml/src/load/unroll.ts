@@ -213,13 +213,11 @@ export interface BaseUnrollAssistantOptions {
   injectRequestOptions?: RequestOptions;
 }
 
-export interface DoNotRenderSecretsUnrollAssistantOptions
-  extends BaseUnrollAssistantOptions {
+export interface DoNotRenderSecretsUnrollAssistantOptions extends BaseUnrollAssistantOptions {
   renderSecrets: false;
 }
 
-export interface RenderSecretsUnrollAssistantOptions
-  extends BaseUnrollAssistantOptions {
+export interface RenderSecretsUnrollAssistantOptions extends BaseUnrollAssistantOptions {
   renderSecrets: true;
   currentUserSlug: string;
   platformClient: PlatformClient;
@@ -378,6 +376,7 @@ export async function unrollBlocks(
     name: assistant.name,
     version: assistant.version,
     requestOptions: assistant.requestOptions,
+    modeModels: assistant.modeModels,
   };
 
   if (injectRequestOptions) {
@@ -398,6 +397,7 @@ export async function unrollBlocks(
     | "metadata"
     | "env"
     | "requestOptions"
+    | "modeModels"
   >)[] = ["models", "context", "data", "mcpServers", "prompts", "docs"];
 
   // Process all sections in parallel
