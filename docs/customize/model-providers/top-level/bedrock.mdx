@@ -45,7 +45,7 @@ Open the model selector, choose **Add Chat model**, and pick **Amazon Bedrock**:
 
 1. Choose how to authenticate (API key, AWS profile / SSO, access keys, or default credentials) and fill in the fields that appear.
 2. Pick your **AWS region**.
-3. Click **Test connection**. Continue lists the models your account can use in that region, including inference profiles and your own application inference profiles. Choose one from **Available models**.
+3. Click **Test connection**. Continue lists the models your account can use in that region, including inference profiles and your own application inference profiles, and the **Model** list above fills with them (newest first, legacy models last). The refresh icon next to **Model** reloads the list.
 4. Click **Send test message** to confirm the model actually answers (this catches missing model access and IAM problems before you save).
 5. Click **Connect**.
 
@@ -352,7 +352,17 @@ models:
       - chat
 ```
 
-You can also add it from the UI: **Add Chat model**, then **Amazon Bedrock (Mantle)**, then **Test connection** to list the models your key can use.
+You can also add it from the UI: **Add Chat model**, then **Amazon Bedrock (Mantle)**, then **Test connection** to list the models your key can use. The **Model** list then shows them with readable names; embedding and speech models are left out.
+
+### Models that need approval
+
+Some models are gated: your account can see the endpoint but not the model, or a policy denies it. The error text tells you which:
+
+- **"explicit deny"**: an IAM identity policy, permissions boundary or service control policy blocks it. Enabling the model in the console will not help; ask your AWS administrator.
+- **Not in the Test connection list**: your key is not entitled to it in that region. Restricted models (for example security-focused or limited-preview models) can also need separate approval from the model provider, so check the provider's access program as well as AWS.
+- **Present in the list but the request is rejected**: check the path prefix (`mantlePathPrefix`) and the token parameter (`maxTokensParam`) below.
+
+If a model you expect is missing from the list, type its ID into **Custom model ID (optional)**; the model card lists the ID and path prefix.
 
 To use every model your key can access without listing them by hand, set `model: AUTODETECT`; Continue fills in the list from `GET /v1/models`.
 
