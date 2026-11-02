@@ -192,13 +192,45 @@ pub fn retrieve(n: usize, tags: Vec<String>, v: Vec<f32>) -> Vec<Chunk> {
 mod tests {
     use super::*;
     use ndarray::{Array1, Array2};
-    use rand::Rng;
+    use rand::RngExt;
     use rusqlite::Connection;
     use std::time::Instant;
 
     fn rand_embedding(n: i32) -> Vec<f32> {
-        let mut rng = rand::thread_rng();
-        (0..n).map(|_| rng.gen()).collect()
+        let mut rng = rand::rng();
+        (0..n).map(|_| rng.random()).collect()
+    }
+
+    #[test]
+    fn test_chunk_roundtrip_keeps_usize_columns() {
+        // start_line / end_line / index are usize columns; rusqlite 0.41 only
+        // supports usize with the `fallible_uint` feature, so make sure they
+        // still survive a write and read.
+        create_database();
+        let hash = format!("roundtrip-{}", std::process::id());
+        let tag = format!("tag-{}", std::process::id());
+        let chunk = Chunk {
+            hash: hash.clone(),
+            content: "fn main() {}".to_string(),
+            embedding: vec![0.25; 384], // retrieve() assumes 384-d embeddings
+            start_line: 3,
+            end_line: 1_000_000,
+            file_path: "src/main.rs".to_string(),
+            index: 7,
+        };
+        add_chunk(chunk, vec![tag.clone()]);
+
+        let found: Vec<Chunk> = retrieve(10, vec![tag.clone()], vec![0.25; 384])
+            .into_iter()
+            .filter(|c| c.hash == hash)
+            .collect();
+        remove_tag(hash.clone(), tag);
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].start_line, 3);
+        assert_eq!(found[0].end_line, 1_000_000);
+        assert_eq!(found[0].index, 7);
+        assert_eq!(found[0].file_path, "src/main.rs");
     }
 
     #[test]
@@ -284,11 +316,11 @@ mod tests {
 
     #[test]
     fn benchmark_ndarray() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let n = 10_000;
         let d = 384;
-        let a: Array2<f32> = Array2::from_shape_fn((n, d), |_| rng.gen::<f32>());
-        let b: Array1<f32> = Array1::from_shape_fn(d, |_| rng.gen::<f32>());
+        let a: Array2<f32> = Array2::from_shape_fn((n, d), |_| rng.random::<f32>());
+        let b: Array1<f32> = Array1::from_shape_fn(d, |_| rng.random::<f32>());
 
         let time = Instant::now();
 

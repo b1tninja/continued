@@ -14,15 +14,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 dirs = "5.0.1"
-hex-literal = "0.4.1"
 homedir = "0.2.1"
 ignore = "0.4.20"
 ndarray = "0.15.6"
-rand = "0.8.5"
-rusqlite = { version = "0.41.1", features = ["bundled"] }
+rand = "0.10.3"
+rusqlite = { version = "0.41.1", features = ["bundled", "fallible_uint"] }
 serde = { version = "1.0.192", features = ["derive"] }
 serde_json = "1.0.108"
-sha1 = "0.10.6"
+sha1 = "0.11.0"
 tempfile = "3.8.1"
 
 [dev-dependencies]
