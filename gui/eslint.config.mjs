@@ -1,5 +1,4 @@
 import noBarrelFiles from "eslint-plugin-no-barrel-files";
-import react from "eslint-plugin-react";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -14,7 +13,6 @@ export default tseslint.config(
     linterOptions: { reportUnusedDisableDirectives: "off" },
     plugins: {
       "@typescript-eslint": tseslint.plugin,
-      react,
       "no-barrel-files": noBarrelFiles,
     },
     rules: {
