@@ -110,7 +110,8 @@ async function installRipgrepBinary(target, options = {}) {
       }
     }
 
-    execFileSync("tar", ["-xzf", path.join(tmp, packed.filename), "-C", tmp]);
+    // Relative names + cwd: GNU tar (Git Bash on Windows runners) reads "C:\\..." as host:path
+    execFileSync("tar", ["-xzf", packed.filename], { cwd: tmp });
     const extracted = path.join(tmp, "package", "bin", `rg${exe}`);
     if (!fs.existsSync(extracted)) {
       throw new Error(`${pkg} does not contain bin/rg${exe}`);
