@@ -76,7 +76,7 @@
     "axios": "^1.6.7",
     "cheerio": "^1.0.0-rc.12",
     "commander": "^12.0.0",
-    "comment-json": "^4.2.3",
+    "comment-json": "^5.0.0",
     "dbinfoz": "^0.14.0",
     "diff": "^8.0.3",
     "dotenv": "^16.4.5",
