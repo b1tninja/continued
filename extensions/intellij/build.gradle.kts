@@ -48,7 +48,7 @@ dependencies {
     }
 
     testImplementation("junit:junit:4.13.2")
-    testImplementation("io.mockk:mockk:1.14.2") {
+    testImplementation("io.mockk:mockk:1.14.11") {
         // this transitive dependency (1.6.4) conflicts with built-in version (1.7.3)
         // otherwise e2e tests (runIdeForUiTests) will have linkage errors
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
