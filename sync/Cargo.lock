@@ -386,12 +386,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hex-literal"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e712f64ec3850b98572bffac52e2c6f282b29fe6c5fa6d42334b30be438d95c1"
-
-[[package]]
 name = "homedir"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -905,7 +899,6 @@ name = "sync"
 version = "0.1.0"
 dependencies = [
  "dirs",
- "hex-literal",
  "homedir",
  "ignore",
  "ndarray",
