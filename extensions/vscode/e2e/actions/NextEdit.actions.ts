@@ -30,7 +30,9 @@ export class NextEditActions {
     const hasDecoration = await NextEditActions.forceNextEdit(editor);
     expect(hasDecoration).to.be.true;
 
-    await new Workbench().executeCommand("Continued: Hide Next Edit Suggestion");
+    await new Workbench().executeCommand(
+      "Continued: Hide Next Edit Suggestion",
+    );
 
     // Check if the editor text didn't change.
     const editorText = await editor.getText();
