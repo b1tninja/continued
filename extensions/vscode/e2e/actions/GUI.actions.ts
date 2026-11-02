@@ -37,6 +37,10 @@ export class GUIActions {
     const view = new WebView();
     const driver = view.getDriver();
 
+    // The iframe is looked up from the top-level page, so this must work even
+    // when the driver is currently inside a webview.
+    await driver.switchTo().defaultContent();
+
     const iframes = await GUISelectors.getAllIframes(driver);
     let continueIFrame: WebElement | undefined = undefined;
     let firstMatch: WebElement | undefined = undefined;
