@@ -11,7 +11,7 @@ val pluginVersion: String by project
 val isEap get() = environment("RELEASE_CHANNEL").orNull == "eap"
 
 plugins {
-    kotlin("jvm") version "2.1.0"
+    kotlin("jvm") version "2.4.21"
     id("org.jetbrains.intellij.platform") version "2.19.0"
     id("org.jetbrains.changelog") version "2.5.0"
     id("org.jetbrains.qodana") version "0.1.13"
