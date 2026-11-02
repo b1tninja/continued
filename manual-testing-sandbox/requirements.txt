@@ -33,7 +33,7 @@ pillow==8.3.2
 opencv-python==4.5.3.56
 
 # Data handling and manipulation
-beautifulsoup4==4.10.0
+beautifulsoup4==4.15.0
 sqlalchemy==1.4.25
 xlrd==2.0.1
 openpyxl==3.0.9
