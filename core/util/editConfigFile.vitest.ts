@@ -16,18 +16,34 @@ describe("editConfigFile (config.yaml)", () => {
   let dir: string;
   let editConfigFile: typeof import("./paths").editConfigFile;
   let cfgPath: string;
+  // When set, renameSync fails with this error instead of renaming.
+  let renameError: NodeJS.ErrnoException | undefined;
   const identityJson = (c: any) => c;
 
   beforeEach(async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "cfg-edit-"));
     process.env.CONTINUE_GLOBAL_DIR = dir;
+    renameError = undefined;
     vi.resetModules();
+    // Vitest cannot spy on ESM `fs` exports, so wrap the module instead.
+    vi.doMock("fs", async () => {
+      const real = await vi.importActual<typeof import("fs")>("fs");
+      const wrapped = {
+        ...real,
+        renameSync: (...args: Parameters<typeof real.renameSync>) => {
+          if (renameError) throw renameError;
+          return real.renameSync(...args);
+        },
+      };
+      return { ...wrapped, default: wrapped };
+    });
     ({ editConfigFile } = await import("./paths"));
     cfgPath = path.join(dir, "config.yaml");
     fs.writeFileSync(cfgPath, SOURCE);
   });
 
   afterEach(() => {
+    vi.doUnmock("fs");
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -66,6 +82,22 @@ describe("editConfigFile (config.yaml)", () => {
 
   it("leaves no temp files behind", () => {
     editConfigFile(identityJson, (c: any) => ({ ...c, name: "One" }));
+    expect(fs.readdirSync(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("falls back to an in-place write when the file is locked (Windows EPERM)", () => {
+    renameError = Object.assign(new Error("locked"), { code: "EPERM" });
+    editConfigFile(identityJson, (c: any) => ({ ...c, name: "Locked" }));
+    expect(YAML.parse(fs.readFileSync(cfgPath, "utf8")).name).toBe("Locked");
+    expect(fs.readdirSync(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("does not hide other write errors", () => {
+    renameError = Object.assign(new Error("disk full"), { code: "ENOSPC" });
+    expect(() =>
+      editConfigFile(identityJson, (c: any) => ({ ...c, name: "x" })),
+    ).toThrow("disk full");
+    expect(fs.readFileSync(cfgPath, "utf8")).toBe(SOURCE);
     expect(fs.readdirSync(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
   });
 

@@ -311,7 +311,15 @@ function writeFileAtomically(filePath: string, text: string): void {
     } catch {
       // Nothing more to clean up.
     }
-    throw e;
+    // Windows refuses to replace a file another process has open (an editor,
+    // antivirus or indexer): EPERM/EBUSY/EACCES. Losing the user's edit is
+    // worse than a non-atomic write, so fall back to writing in place.
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === "EPERM" || code === "EBUSY" || code === "EACCES") {
+      fs.writeFileSync(target, text);
+    } else {
+      throw e;
+    }
   }
   setConfigFilePermissions(target);
 }
