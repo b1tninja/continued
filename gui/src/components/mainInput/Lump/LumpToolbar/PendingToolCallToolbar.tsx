@@ -5,6 +5,7 @@ import { cancelToolCallThunk } from "../../../../redux/thunks/cancelToolCall";
 import { getAltKeyLabel, getMetaKeyLabel, isJetBrains } from "../../../../util";
 import { Button } from "../../../ui";
 import { useMainEditor } from "../../TipTapEditor";
+import { AlwaysAllowButton } from "./AlwaysAllowButton";
 
 export const generateToolCallButtonTestId = (
   action: "accept" | "reject",
@@ -45,8 +46,24 @@ export function PendingToolCallToolbar() {
           <span className="flex-1 truncate text-xs italic text-description">
             {toolCall.tool?.displayTitle ?? toolCall.toolCall.function.name}
           </span>
+          {toolCall.policyNote && (
+            <span
+              className="max-w-56 truncate text-2xs text-warning"
+              title={toolCall.policyNote}
+              data-testid={`policy-note-${toolCall.toolCallId}`}
+            >
+              {toolCall.policyNote}
+            </span>
+          )}
 
           <div className="flex items-center gap-1">
+            {!isJetBrains() && (
+              <AlwaysAllowButton
+                toolCallId={toolCall.toolCallId}
+                toolName={toolCall.toolCall.function.name}
+                parsedArgs={toolCall.parsedArgs}
+              />
+            )}
             <Button
               variant="ghost"
               size="sm"
