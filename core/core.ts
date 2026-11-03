@@ -9,6 +9,13 @@ import {
 } from "./autocomplete/util/openedFilesLruCache";
 import { ConfigHandler } from "./config/ConfigHandler";
 import { addModel, deleteModel } from "./config/util";
+import { saveModeModels } from "./config/yaml/saveModeModels";
+import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
+import { addToolRule } from "./tools/permissions/addRule";
+import {
+  suggestAllowRule,
+  withLoosensCheck,
+} from "./tools/permissions/suggest";
 import { DevDataSqliteDb } from "./data/devdataSqlite";
 import { DataLogger } from "./data/log";
 import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
@@ -368,6 +375,53 @@ export class Core {
       void this.configHandler.reloadConfig(
         "Model removed (config/deleteModel message)",
       );
+    });
+
+    on("config/setModeModels", async (msg) => {
+      const saved = saveModeModels(msg.data);
+      if (!saved) {
+        void this.ide.showToast(
+          "warning",
+          "Per-mode models are saved in config.yaml, and this profile has none.",
+        );
+        return { saved: false };
+      }
+      await this.configHandler.reloadConfig(
+        "Mode models changed (config/setModeModels message)",
+      );
+      return { saved: true };
+    });
+
+    on("tools/suggestAllowRule", async ({ data: { toolName, parsedArgs } }) => {
+      const { config } = await this.configHandler.loadConfig();
+      const tool = config?.tools.find((t) => t.function.name === toolName);
+      const isMcp =
+        !!tool?.uri?.startsWith("mcp:") && !!tool.originalFunctionName;
+      const suggestion = suggestAllowRule({
+        toolName,
+        parsedArgs,
+        readonly: tool?.readonly,
+        mcp:
+          isMcp && tool
+            ? { serverName: tool.group, toolName: tool.originalFunctionName! }
+            : undefined,
+      });
+      return withLoosensCheck(suggestion, tool, parsedArgs);
+    });
+
+    on("config/addToolRule", async (msg) => {
+      const result = addToolRule(msg.data.decision, msg.data.rule);
+      if (result === "added") {
+        await this.configHandler.reloadConfig(
+          "Tool rule added (config/addToolRule message)",
+        );
+      } else if (result === "no-config") {
+        void this.ide.showToast(
+          "warning",
+          "Tool rules are saved in config.yaml, and this profile has none.",
+        );
+      }
+      return { result };
     });
 
     on("config/newPromptFile", async (msg) => {
@@ -1130,25 +1184,14 @@ export class Core {
         }
 
         const tool = config.tools.find((t) => t.function.name === toolName);
-        if (!tool) {
-          return { policy: basePolicy };
-        }
-
-        // Extract display value for specific tools
-        let displayValue: string | undefined;
-        if (toolName === "runTerminalCommand" && parsedArgs.command) {
-          displayValue = parsedArgs.command as string;
-        }
-
-        if (tool.evaluateToolCallPolicy) {
-          const evaluatedPolicy = tool.evaluateToolCallPolicy(
-            basePolicy,
-            parsedArgs,
-            processedArgs,
-          );
-          return { policy: evaluatedPolicy, displayValue };
-        }
-        return { policy: basePolicy, displayValue };
+        return evaluateToolPolicyWithRules({
+          tool,
+          toolName,
+          basePolicy,
+          parsedArgs,
+          processedArgs,
+          permissions: config.toolPermissions,
+        });
       },
     );
 
