@@ -1687,6 +1687,12 @@ export interface ExperimentalConfig {
   onlyUseSystemMessageTools?: boolean;
 
   /**
+   * Show the "Auto" approval option, where a reviewer model decides tool calls
+   * the rules leave open. Needs a model with `roles: [reviewer]`.
+   */
+  enableAutoApproval?: boolean;
+
+  /**
    * Quick actions are a way to add custom commands to the Code Lens of
    * function and class declarations.
    */
