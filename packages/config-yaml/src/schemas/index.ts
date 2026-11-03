@@ -105,10 +105,20 @@ export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
  * Model (by its `name` in `models:`) to use in a chat mode, plus an optional
  * reasoning effort for that mode.
  */
-export const modeModelSchema = z.object({
-  model: z.string(),
-  reasoningEffort: reasoningEffortSchema.optional(),
-});
+export const modeModelSchema = z
+  .object({
+    /** Default model when switching into the mode (by `name`). */
+    model: z.string().optional(),
+    /**
+     * Models offered while in the mode (by `name`). When `model` is not set the
+     * default is the first entry that exists. The default is always offered.
+     */
+    models: z.array(z.string()).optional(),
+    reasoningEffort: reasoningEffortSchema.optional(),
+  })
+  .refine((m) => m.model !== undefined || (m.models?.length ?? 0) > 0, {
+    message: "Set `model`, or a non-empty `models` list",
+  });
 export type ModeModel = z.infer<typeof modeModelSchema>;
 
 /** Per-mode model selection. Modes without an entry keep the current model. */
@@ -119,12 +129,24 @@ export const modeModelsSchema = z.object({
 });
 export type ModeModels = z.infer<typeof modeModelsSchema>;
 
+/**
+ * Rules for tool calls, written `toolName(pattern)` or a bare `toolName`.
+ * Deny always wins over ask, and ask over allow. See plans/tool-auto-approval.md.
+ */
+export const toolPermissionsSchema = z.object({
+  allow: z.array(z.string()).optional(),
+  ask: z.array(z.string()).optional(),
+  deny: z.array(z.string()).optional(),
+});
+export type ToolPermissions = z.infer<typeof toolPermissionsSchema>;
+
 export const baseConfigYamlSchema = z.object({
   name: z.string(),
   version: z.string(),
   schema: z.string().optional(),
   metadata: z.record(z.string()).and(commonMetadataSchema.partial()).optional(),
   modeModels: modeModelsSchema.optional(),
+  toolPermissions: toolPermissionsSchema.optional(),
   env: envRecord.optional(),
   requestOptions: requestOptionsSchema.optional(),
 });
