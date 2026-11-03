@@ -24,6 +24,7 @@
   },
   "overrides": {
     "basic-ftp": "^6.2.1",
+    "zod": "^4.6.6",
     "@openapitools/openapi-generator-cli": {
       "glob": "^14.0.2"
     }
