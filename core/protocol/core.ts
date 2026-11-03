@@ -13,6 +13,7 @@ import {
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type { ModeModelsInput } from "../config/yaml/saveModeModels";
+import type { DecisionSource as ToolDecisionSource } from "../tools/permissions/decide";
 import { GlobalContextModelSelections } from "../util/GlobalContext";
 
 import {
@@ -142,6 +143,31 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    * whether a config.yaml was edited; false means there was none to edit.
    */
   "config/setModeModels": [ModeModelsInput, { saved: boolean }];
+  /**
+   * Add one rule to `toolPermissions` in the global config.yaml (comments
+   * kept). "no-config" means there was no config.yaml to edit.
+   */
+  "config/addToolRule": [
+    { decision: "allow" | "ask" | "deny"; rule: string },
+    { result: "added" | "exists" | "no-config" | "invalid" },
+  ];
+  /**
+   * The narrowest allow rule for a pending tool call, or why there is none.
+   * Nothing is written; "Always allow" then sends the rule to config/addToolRule.
+   */
+  "tools/suggestAllowRule": [
+    { toolName: string; parsedArgs: Record<string, unknown> },
+    (
+      | {
+          ok: true;
+          rule: string;
+          summary: string;
+          /** The tool's own safety check would still ask; confirm before saving. */
+          loosensCheck?: boolean;
+        }
+      | { ok: false; reason: string }
+    ),
+  ];
   "config/refreshProfiles": [
     (
       | undefined
@@ -161,6 +187,15 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       title: string | null;
     },
     GlobalContextModelSelections,
+  ];
+  /**
+   * Take the user to where a secret that is missing on this machine must be
+   * set: the .env file (created with an empty `NAME=` line), or the line of
+   * the config that uses it.
+   */
+  "config/openSecretLocation": [
+    { secretName: string; target: "env" | "configLine" },
+    void,
   ];
   "context/getContextItems": [
     {
@@ -363,7 +398,16 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       parsedArgs: Record<string, unknown>;
       processedArgs?: Record<string, unknown>;
     },
-    { policy: ToolPolicy; displayValue?: string },
+    {
+      policy: ToolPolicy;
+      displayValue?: string;
+      /** Set only when the user has toolPermissions rules. */
+      source?: ToolDecisionSource;
+      /** A sentence saying why, for the prompt or the refusal. */
+      reason?: string;
+      /** The rule that decided, as written in config.yaml. */
+      rule?: string;
+    },
   ];
   "tools/preprocessArgs": [
     { toolName: string; args: Record<string, unknown> },
