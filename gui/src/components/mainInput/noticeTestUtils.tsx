@@ -1,5 +1,4 @@
 import { act, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
 import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import { EMPTY_CONFIG, updateConfig } from "../../redux/slices/configSlice";
 import {
@@ -9,6 +8,10 @@ import {
 import { setPromptCacheSetting } from "../../redux/slices/uiSlice";
 import { setupStore } from "../../redux/store";
 import { renderWithProviders } from "../../util/test/render";
+
+// Tests import these from here as well, so they need one place to come from.
+// eslint-disable-next-line no-barrel-files/no-barrel-files
+export { act, screen, setPromptCacheState };
 
 export const claude = {
   title: "Claude Sonnet",
@@ -20,7 +23,8 @@ export const claude = {
 /** Renders a component in a store holding a Claude model and one chat message. */
 export async function setupNotice(
   component: JSX.Element,
-  setting: "auto" | "5m" | "1h" | "off" = "5m",
+  /** The toolbar choice; null leaves it unset, as in a fresh install. */
+  setting: "auto" | "5m" | "1h" | "off" | null = "5m",
 ) {
   const ideMessenger = new MockIdeMessenger();
   const store = setupStore({ ideMessenger });
@@ -39,9 +43,11 @@ export async function setupNotice(
         modelsByRole: { ...EMPTY_CONFIG.modelsByRole, chat: [claude] },
       } as any),
     );
-    store.dispatch(
-      setPromptCacheSetting({ modelTitle: claude.title, setting }),
-    );
+    if (setting !== null) {
+      store.dispatch(
+        setPromptCacheSetting({ modelTitle: claude.title, setting }),
+      );
+    }
     store.dispatch(
       newSession({
         sessionId: "test-session",
@@ -67,5 +73,3 @@ export const requestedAgo = (minutesAgo: number, extra = {}) => ({
   lastInputTokens: 366_000,
   ...extra,
 });
-
-export { act, screen, setPromptCacheState };

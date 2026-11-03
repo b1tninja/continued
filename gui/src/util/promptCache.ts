@@ -47,6 +47,8 @@ export interface PromptCacheSessionState {
   missesAcknowledged?: number;
   /** `lastRequestAt` the user dismissed the cold-cache notice for. */
   dismissedColdFor?: number;
+  /** The user dismissed the "caching is off" suggestion for this session. */
+  dismissedCachingOff?: boolean;
 }
 
 export const INITIAL_PROMPT_CACHE_STATE: PromptCacheSessionState = {

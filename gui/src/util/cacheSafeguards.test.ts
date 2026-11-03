@@ -192,15 +192,17 @@ describe("detectCacheMiss", () => {
     ).toBeUndefined();
   });
 
-  it("names what changed: the model, the tools, the system prompt", () => {
-    const other = model("anthropic", "claude-opus-4-8");
-    const changedAll = promptCacheKey(other, ["read_file"], "system B");
+  it("names what changed: the tools and the system prompt", () => {
+    const changed = promptCacheKey(sonnet, ["read_file"], "system B");
     const m = detectCacheMiss({
       before: before(),
       ...base,
-      key: changedAll,
+      key: changed,
     })!;
-    expect(m.causes).toEqual(["the model", "the tools", "the system prompt"]);
+    expect(m.causes).toEqual([
+      "the tools changed",
+      "the system prompt changed (a rule or a summary)",
+    ]);
   });
 
   it("names only the part that changed", () => {
@@ -209,7 +211,58 @@ describe("detectCacheMiss", () => {
       ...base,
       key: promptCacheKey(sonnet, ["read_file", "edit", "grep"], "system A"),
     })!;
-    expect(m.causes).toEqual(["the tools"]);
+    expect(m.causes).toEqual(["the tools changed"]);
+  });
+
+  it("notices a rule that started to match, because it changes the system prompt", () => {
+    const withRule = promptCacheKey(
+      sonnet,
+      ["read_file", "edit"],
+      "system A\n\nAlways use tabs.",
+    );
+    const m = detectCacheMiss({ before: before(), ...base, key: withRule })!;
+    expect(m.causes).toEqual([
+      "the system prompt changed (a rule or a summary)",
+    ]);
+  });
+
+  it("does not report a model switch on its own: the user chose it and was told", () => {
+    const other = model("anthropic", "claude-opus-4-8");
+    expect(
+      detectCacheMiss({
+        before: before(),
+        ...base,
+        key: promptCacheKey(other, ["read_file", "edit"], "system A"),
+      }),
+    ).toBeUndefined();
+  });
+
+  it("still reports a model switch that came with another change", () => {
+    const other = model("anthropic", "claude-opus-4-8");
+    const m = detectCacheMiss({
+      before: before(),
+      ...base,
+      key: promptCacheKey(other, ["read_file"], "system A"),
+    })!;
+    expect(m.causes).toEqual(["the model changed", "the tools changed"]);
+  });
+
+  it("says when the oldest messages were dropped to fit the window", () => {
+    const m = detectCacheMiss({ before: before(), ...base, pruned: true })!;
+    expect(m.causes).toEqual(["the oldest messages were dropped to fit"]);
+  });
+
+  it("adds pruning to a known cause", () => {
+    const m = detectCacheMiss({
+      before: before(),
+      ...base,
+      pruned: true,
+      key: promptCacheKey(sonnet, ["read_file"], "system A"),
+    })!;
+    expect(m.causes).toEqual([
+      "the tools changed",
+      "the oldest messages were dropped to fit",
+    ]);
   });
 });
 

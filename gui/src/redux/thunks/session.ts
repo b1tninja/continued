@@ -164,7 +164,7 @@ export const loadLastSession = createAsyncThunk<void, void, ThunkApiType>(
     }
     dispatch(newSession(session));
     if (session.chatModelTitle) {
-      dispatch(selectChatModelForProfile(session.chatModelTitle));
+      void dispatch(selectChatModelForProfile(session.chatModelTitle));
     }
   },
 );

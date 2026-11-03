@@ -1034,6 +1034,10 @@ export const sessionSlice = createSlice({
       const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
       state.promptCache = { ...current, dismissedColdFor: action.payload };
     },
+    dismissCachingOffNotice: (state) => {
+      const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
+      state.promptCache = { ...current, dismissedCachingOff: true };
+    },
     setNewestToolbarPreviewForInput: (
       state,
       {
@@ -1161,6 +1165,7 @@ export const {
   recordCacheMiss,
   acknowledgeCacheMisses,
   dismissColdCacheNotice,
+  dismissCachingOffNotice,
   setInlineErrorMessage,
   setIsPruned,
   setContextPercentage,

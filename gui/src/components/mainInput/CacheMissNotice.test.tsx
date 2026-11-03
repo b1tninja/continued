@@ -41,12 +41,34 @@ describe("CacheMissNotice", () => {
         setPromptCacheState({
           escalated: false,
           misses: 3,
-          lastMiss: { ...miss, causes: ["the tools"] },
+          lastMiss: { ...miss, causes: ["the tools changed"] },
+        }),
+      );
+    });
+    const text = screen.getByTestId("cache-miss-notice").textContent!;
+    expect(text).toContain("Likely cause: the tools changed.");
+    expect(text).not.toContain("Nothing the app controls changed");
+  });
+
+  it("lists several causes", async () => {
+    const { store } = await setup();
+    await act(async () => {
+      store.dispatch(
+        setPromptCacheState({
+          escalated: false,
+          misses: 3,
+          lastMiss: {
+            ...miss,
+            causes: [
+              "the tools changed",
+              "the oldest messages were dropped to fit",
+            ],
+          },
         }),
       );
     });
     expect(screen.getByTestId("cache-miss-notice").textContent).toContain(
-      "the tools changed",
+      "the tools changed; the oldest messages were dropped to fit.",
     );
   });
 

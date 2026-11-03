@@ -22,6 +22,7 @@ import { NewSessionButton } from "../../components/mainInput/belowMainInput/NewS
 import ThinkingBlockPeek from "../../components/mainInput/belowMainInput/ThinkingBlockPeek";
 import ContinueInputBox from "../../components/mainInput/ContinueInputBox";
 import { CacheMissNotice } from "../../components/mainInput/CacheMissNotice";
+import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
 import { LargeMessageNotice } from "../../components/mainInput/LargeMessageNotice";
 import { useOnboardingCard } from "../../components/OnboardingCard";
@@ -419,6 +420,7 @@ export function Chat() {
       <div className={"relative shrink-0"}>
         <CacheMissNotice />
         <ColdCacheNotice />
+        <CachingOffNotice />
         <LargeMessageNotice />
         <ContinueInputBox
           isMainInput

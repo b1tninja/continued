@@ -102,10 +102,12 @@ export async function compactConversation({
     conversationSummary: stripImages(response.content),
   };
 
-  // Update the session with the new history
+  // Update the session with the new history. The saved prompt cache record
+  // described the old, longer conversation; the next request builds a new one.
   const updatedSession = {
     ...session,
     history: updatedHistory,
+    promptCache: undefined,
   };
 
   historyManager.save(updatedSession);

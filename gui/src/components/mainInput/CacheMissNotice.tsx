@@ -19,7 +19,7 @@ export function CacheMissNotice() {
   const { readTokens, expectedTokens, causes } = state.lastMiss;
   const why =
     causes.length > 0
-      ? `Since the request before it, ${causes.join(" and ")} changed.`
+      ? `Likely cause: ${causes.join("; ")}.`
       : "Nothing the app controls changed, so the provider may not be caching this prompt, or something earlier in it keeps changing (tools, MCP servers or rules).";
 
   return (

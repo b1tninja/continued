@@ -72,8 +72,9 @@ function InputToolbar(props: InputToolbarProps) {
     );
 
   const supportsReasoning = modelSupportsReasoning(defaultModel);
-  // Changing the thinking settings or the images in a message always rebuilds
-  // the message cache.
+  // Changing the thinking settings rebuilds the message cache (measured live
+  // on Bedrock). Attaching an image to the new message does not, because it
+  // sits after everything already cached.
   const warmCacheNote = useWarmCacheNote();
 
   const smallFont = useFontSize(-2);
@@ -121,14 +122,7 @@ function InputToolbar(props: InputToolbarProps) {
                     }}
                   />
 
-                  <ToolTip
-                    place="top"
-                    content={
-                      warmCacheNote
-                        ? `Attach Image. ${warmCacheNote}`
-                        : "Attach Image"
-                    }
-                  >
+                  <ToolTip place="top" content="Attach Image">
                     <HoverItem className="">
                       <PhotoIcon
                         className="h-3 w-3 hover:brightness-125"

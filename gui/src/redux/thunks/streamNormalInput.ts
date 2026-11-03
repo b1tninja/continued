@@ -2,6 +2,7 @@ import { createAsyncThunk, unwrapResult } from "@reduxjs/toolkit";
 import { LLMFullCompletionOptions, ModelDescription } from "core";
 import { getRuleId } from "core/llm/rules/getSystemMessageWithRules";
 import { ToCoreProtocol } from "core/protocol";
+import { renderChatMessage } from "core/util/messageContent";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
 import { selectActiveTools } from "../selectors/selectActiveTools";
 import {
@@ -194,14 +195,6 @@ export const streamNormalInput = createAsyncThunk<
         )
       : baseSystemMessage;
 
-    // What the cached prefix is made of: the model, the tools and the system
-    // prompt. A change to any of them rebuilds the cache.
-    const cacheKey = promptCacheKey(
-      selectedChatModel,
-      activeTools.map((t) => t.function.name),
-      systemMessage,
-    );
-
     const withoutMessageIds = state.session.history.map((item) => {
       const { id, ...messageWithoutId } = item.message;
       return { ...item, message: messageWithoutId };
@@ -213,6 +206,17 @@ export const streamNormalInput = createAsyncThunk<
       state.config.config.rules,
       state.ui.ruleSettings,
       systemToolsFramework,
+    );
+
+    // What the cached prefix is made of: the model, the tools and the system
+    // prompt. A change to any of them rebuilds the cache. The system prompt is
+    // the final one: base message, matched rules and any conversation summary,
+    // so a rule that starts to match is noticed.
+    const finalSystem = messages.find((m) => m.role === "system");
+    const cacheKey = promptCacheKey(
+      selectedChatModel,
+      activeTools.map((t) => t.function.name),
+      finalSystem ? renderChatMessage(finalSystem) : undefined,
     );
 
     // TODO parallel tool calls will cause issues with this
@@ -297,6 +301,7 @@ export const streamNormalInput = createAsyncThunk<
                   readTokens:
                     message.usage.promptTokensDetails?.cachedTokens ?? 0,
                   totalInputTokens: total,
+                  pruned: didPrune,
                 });
                 if (miss) {
                   dispatch(

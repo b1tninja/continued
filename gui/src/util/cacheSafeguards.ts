@@ -92,6 +92,43 @@ export interface ColdResume extends CacheLoss {
   idleMs: number;
 }
 
+/** What each message costs with caching off, against with the cache warm. */
+export interface CachingOffCost {
+  tokens: number;
+  /** Per message, when the model is priced. */
+  perMessageUsd?: number;
+  warmUsd?: number;
+}
+
+/**
+ * With caching off, every message sends the whole conversation at the full
+ * input price. Returns that cost when it is big enough to be worth a
+ * suggestion; undefined while caching is on, before a size is known, or for a
+ * conversation too small to matter.
+ */
+export function cachingOffCost(
+  model: ModelDescription,
+  setting: PromptCacheSetting | undefined,
+  state: PromptCacheSessionState,
+): CachingOffCost | undefined {
+  if (!modelSupportsPromptCacheControl(model)) return undefined;
+  // An explicit "Off" in the toolbar is a decision, not an oversight.
+  if (setting === "off") return undefined;
+  if (promptCacheStatus(model, setting, state, 0).on) return undefined;
+  const tokens = state.lastInputTokens;
+  if (!tokens) return undefined;
+  const pricing = findAnthropicPricing(model.model, tokens);
+  if (!pricing) {
+    return tokens >= NOTICE_MIN_TOKENS_UNPRICED ? { tokens } : undefined;
+  }
+  const perMessageUsd = (tokens / 1_000_000) * pricing.input;
+  const warmUsd = (tokens / 1_000_000) * pricing.cacheRead;
+  // The saving per message, if the cache were warm.
+  return perMessageUsd - warmUsd >= NOTICE_MIN_EXTRA_USD
+    ? { tokens, perMessageUsd, warmUsd }
+    : undefined;
+}
+
 /**
  * The cost of sending the next message when the cache has expired: the whole
  * conversation is written again instead of read. Undefined while the cache is
@@ -152,6 +189,8 @@ export function promptCacheKey(
   };
 }
 
+const MODEL_CHANGED = "the model changed";
+
 /** The parts of the key that differ, as words for a message. */
 export function keyChanges(
   before: PromptCacheKey | undefined,
@@ -159,9 +198,11 @@ export function keyChanges(
 ): string[] {
   if (!before) return [];
   const changes: string[] = [];
-  if (before.model !== after.model) changes.push("the model");
-  if (before.tools !== after.tools) changes.push("the tools");
-  if (before.system !== after.system) changes.push("the system prompt");
+  if (before.model !== after.model) changes.push(MODEL_CHANGED);
+  if (before.tools !== after.tools) changes.push("the tools changed");
+  if (before.system !== after.system) {
+    changes.push("the system prompt changed (a rule or a summary)");
+  }
   return changes;
 }
 
@@ -197,6 +238,8 @@ export function detectCacheMiss(args: {
   requestAt: number;
   readTokens: number;
   totalInputTokens: number;
+  /** The oldest messages were dropped to fit the window, which moves the start. */
+  pruned?: boolean;
 }): CacheMissReport | undefined {
   const { before, key, requestAt, readTokens, totalInputTokens } = args;
   const expected = before.lastInputTokens;
@@ -208,5 +251,14 @@ export function detectCacheMiss(args: {
   if (totalInputTokens < expected - 1000) return undefined;
   if (readTokens >= expected * MISS_READ_SHARE) return undefined;
   const causes = keyChanges(before.lastKey, key);
+  // A model switch is the user's own doing and is warned about when they make
+  // it, so on its own it does not count as a fault worth reporting.
+  if (causes.length === 1 && causes[0] === MODEL_CHANGED && !args.pruned) {
+    return undefined;
+  }
+  // Once the window is full, every request drops the oldest messages, so the
+  // start of the prompt moves and nothing can be read. That is not a fault in
+  // the cache; it is the conversation not fitting.
+  if (args.pruned) causes.push("the oldest messages were dropped to fit");
   return { readTokens, expectedTokens: expected, causes };
 }
