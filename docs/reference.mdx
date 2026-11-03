@@ -279,6 +279,14 @@ The snake_case tool name also works as a rule name, for example `read_file(**/.e
 
 **When a call is refused,** the chat shows which rule did it, and the model is told not to retry or work around it.
 
+**"Always allow".** The approval prompt for a tool call has an **Always allow** button. It saves one `allow` rule to `config.yaml` (comments are kept) and then runs the call. The rule is as narrow as the call you were shown:
+
+- a terminal command becomes that exact command, so `npm test` allows `npm test` but not `npm test --force`, `sudo npm test` or `npm test; rm -rf /`;
+- a file read becomes that one path inside the project;
+- an MCP tool becomes that one tool, never the whole server.
+
+If a narrow rule cannot be made, the button says why and does nothing: commands with a redirect, `$(...)`, backticks, `*` or `?`, a `)`, a chained command (allow the parts one at a time), a path outside the project, URLs, and file edits (which are already reviewed as a diff). If the rule cannot be saved, for example because the profile has no `config.yaml`, the call is not run, and you can still press Accept for a one-off yes. The button is not shown in the JetBrains plugin yet. To remove a rule, delete its line from `config.yaml`.
+
 ---
 
 ### `context`
