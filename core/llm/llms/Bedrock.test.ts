@@ -349,6 +349,76 @@ describe("Bedrock", () => {
       expect(p.messages).toHaveLength(0);
     });
 
+    it("keeps earlier messages byte-identical from one request to the next", () => {
+      const model = sonnet45;
+      const b: any = new TestBedrock({
+        apiKey: "k",
+        model,
+        region: "us-east-1",
+      });
+      const turn = (n: number): ChatMessage[] => {
+        const out: ChatMessage[] = [{ role: "system", content: "sys" }];
+        for (let i = 1; i <= n; i++) {
+          out.push({ role: "user", content: `question ${i}` });
+          if (i < n) out.push({ role: "assistant", content: `answer ${i}` });
+        }
+        return out;
+      };
+      const convert = (n: number) =>
+        b._generateConverseInput(turn(n), { model, promptCaching: true })
+          .messages;
+      const strip = (m: any) => ({
+        ...m,
+        content: m.content.filter((c: any) => !c.cachePoint),
+      });
+
+      // Everything before the newest user message must match what the
+      // previous request sent, apart from where the cache points sit. This is
+      // what lets the cached conversation be read back (measured live: with
+      // the ID moving between messages, reads stopped growing on turn 3).
+      for (let n = 2; n <= 5; n++) {
+        const prev = convert(n - 1).map(strip);
+        const next = convert(n).map(strip);
+        expect(next.slice(0, prev.length - 1)).toEqual(prev.slice(0, -1));
+      }
+    });
+
+    it("puts the per-process ID on the first user message only", () => {
+      const b: any = new TestBedrock({
+        apiKey: "k",
+        model: sonnet45,
+        region: "us-east-1",
+      });
+      const input = b._generateConverseInput(
+        [
+          { role: "system", content: "sys" },
+          { role: "user", content: "one" },
+          { role: "assistant", content: "a" },
+          { role: "user", content: "two" },
+          { role: "assistant", content: "b" },
+          { role: "user", content: "three" },
+        ],
+        { model: sonnet45, promptCaching: true },
+      );
+      const texts = input.messages.map((m: any) =>
+        m.content.map((c: any) => c.text).filter(Boolean),
+      );
+      expect(texts[0][0]).toMatch(/^one<!-- SID: .+ -->$/);
+      for (const later of texts.slice(1)) {
+        for (const t of later) expect(t).not.toContain("SID:");
+      }
+    });
+
+    it("adds no ID when caching is off", () => {
+      const b: any = new TestBedrock({
+        apiKey: "k",
+        model: sonnet45,
+        region: "us-east-1",
+      });
+      const input = b._generateConverseInput(msgs, { model: sonnet45 });
+      expect(JSON.stringify(input.messages)).not.toContain("SID:");
+    });
+
     it("turns the caching header on only when something is cached", () => {
       const on: any = new TestBedrock({ apiKey: "k", model: sonnet45 });
       on._generateConverseInput(msgs, { model: sonnet45, promptCaching: true });

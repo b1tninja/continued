@@ -753,16 +753,31 @@ class Bedrock extends BaseLLM {
     return converted;
   }
 
+  /**
+   * Put cache points on the last two user messages, and make the cached prefix
+   * unique to this process.
+   *
+   * Bedrock caches at the AWS account level, so identical prompts from
+   * different users or processes would share entries (continuedev/continue
+   * #5035). A random ID in the prompt prevents that. It has to be in the same
+   * place on every request: this used to append it to the last two user
+   * messages, so a message lost its ID when it fell out of that window, its
+   * bytes changed, and the cached conversation stopped matching. Measured on
+   * Bedrock, reads stopped growing from the third turn on. The ID now goes on
+   * the first user message only; every later cached prefix includes it.
+   */
   private _addCachingToLastTwoUserMessages(converted: Message[], ttl?: "1h") {
+    const first = converted.find((m) => m.role === "user");
+    first?.content?.forEach((block) => {
+      if (block.text) {
+        block.text += getSecureID();
+      }
+    });
+
     let numCached = 0;
     for (let i = converted.length - 1; i >= 0; i--) {
       const message = converted[i];
       if (message.role === "user") {
-        message.content?.forEach((block) => {
-          if (block.text) {
-            block.text += getSecureID();
-          }
-        });
         message.content?.push({
           cachePoint: { type: "default", ...(ttl ? { ttl } : {}) },
         });
