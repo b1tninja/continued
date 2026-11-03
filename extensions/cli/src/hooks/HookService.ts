@@ -10,6 +10,7 @@ import { logger } from "../util/logger.js";
 
 import { loadHooksConfig } from "./hookConfig.js";
 import { runHooks } from "./hookRunner.js";
+import { BLOCKING_EVENTS } from "./types.js";
 import type { HookEventResult, HookInput, HooksConfig } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -98,7 +99,17 @@ export class HookService extends BaseService<HookServiceState> {
       return result;
     } catch (error) {
       logger.warn(`Hook event ${input.hook_event_name} failed:`, error);
-      // Hook errors should not break the main flow
+      // An error in the hook machinery itself must not wave through an action
+      // a hook was meant to guard. Other events cannot undo anything, so they
+      // carry on.
+      if (BLOCKING_EVENTS.includes(input.hook_event_name)) {
+        const detail = error instanceof Error ? error.message : String(error);
+        return {
+          blocked: true,
+          blockReason: `Hooks could not be run (${detail}). The action was blocked because hooks fail closed.`,
+          results: [],
+        };
+      }
       return { blocked: false, results: [] };
     }
   }
