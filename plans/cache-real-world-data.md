@@ -127,6 +127,9 @@ lesson: the gap that makes it switch to 1 hour has already cost a full rewrite.
   from 3 to 15 in each of four weeks, and captures about 60% of the per-conversation bound.
 - It is not free: at request 5, 1,346 of 5,708 conversations pay less (about 60 cents each on average) and
   2,003 pay more (about 16 cents each, the 1-hour premium on writes never reused). Net -3.8%.
+- The app today carries Auto's escalation into the next conversation. Replayed that way it costs 0.8% more
+  than starting each conversation fresh and cancels the request-5 rule (+0.2% together). The build plan
+  is in [`cache-adaptive-lifetime.md`](./cache-adaptive-lifetime.md).
 - Caveats: the data is agent traffic, where a request is usually a tool step. In chat a request is a human
   turn, so the same threshold would fire later in wall-clock time. An age trigger is as good but behaves
   differently in chat, so count requests and check the mode.
