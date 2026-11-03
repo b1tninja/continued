@@ -1088,6 +1088,12 @@ export interface RequestOptions {
 export interface CacheBehavior {
   cacheSystemMessage?: boolean;
   cacheConversation?: boolean;
+  /**
+   * Lifetime of prompt cache entries: "5m", "1h", or "auto" (5 minutes, then
+   * 1 hour after a pause a 1-hour entry would have covered). Does not turn
+   * caching on. A choice in the chat toolbar overrides it.
+   */
+  ttl?: "auto" | "5m" | "1h";
 }
 
 export interface ClientCertificateOptions {
@@ -1685,6 +1691,12 @@ export interface ExperimentalConfig {
   promptPath?: string;
   enableExperimentalTools?: boolean;
   onlyUseSystemMessageTools?: boolean;
+
+  /**
+   * Show the "Auto" approval option, where a reviewer model decides tool calls
+   * the rules leave open. Needs a model with `roles: [reviewer]`.
+   */
+  enableAutoApproval?: boolean;
 
   /**
    * Quick actions are a way to add custom commands to the Code Lens of
