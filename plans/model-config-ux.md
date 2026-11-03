@@ -60,7 +60,13 @@ modeModels:
 
 ### 4.2 Saving without losing comments
 
-Switch `editConfigYaml` to `YAML.parseDocument` and edit the document in place, so comments and key order survive. Add vitest cases: comments preserved, key order preserved, unknown fields preserved, invalid file left untouched.
+`editConfigYaml` does `YAML.parse` then `YAML.stringify`, which drops every comment. I ran both approaches with the `yaml` 2.9.1 that `core` uses, on a small commented sample containing a `${{ secrets.* }}` key:
+
+- The current approach lost all three comments.
+- `YAML.parseDocument`, edited in place (adding a model and a `modeModels.plan.models` list), kept every comment, the key order and the `${{ secrets.* }}` values.
+- It is not a byte-for-byte round trip. Runs of blank lines collapse to one, spaces before a trailing comment collapse to one, and short inline lists are re-spaced (`[chat]` becomes `[ chat ]`) unless `flowCollectionPadding: false` is passed.
+
+Decision: use `parseDocument` with `flowCollectionPadding: false`, accept the blank-line and comment-spacing normalization, skip the write when nothing changed, and keep one `config.yaml.bak` from before the first GUI edit so a user who versions the file can compare. Add vitest cases for comments, key order, unknown fields, secret references, and an invalid file being left untouched.
 
 ### 4.3 New core messages
 
@@ -87,6 +93,25 @@ The IntelliJ plugin keeps its own list of message names (`extensions/intellij/..
 
 - **Ways back in.** The Models tab Providers card, "Manage models..." in the picker, an "Edit providers and models" action under Configs, and a `continue.openModelSetup` command (`extensions/vscode/package.json` and `commands.ts`) that sends the existing `setupApiKey` webview message.
 
+### 4.5 Where API keys are stored (a user setting)
+
+Today `addModel` writes the key into each model entry, so checking five models for one provider would write five copies. Instead the setup flow asks once per provider connection where the key should live, and every checked model refers to it.
+
+| Option                                  | What is written                                                                                                  | Trade-off                                                                                                                                                    |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Secure storage (default when available) | The key goes to the IDE's secret storage. config.yaml gets `apiKey: ${{ secrets.CONTINUED_<PROVIDER>_API_KEY }}` | Encrypted in VS Code. The CLI and other tools cannot read it. Needs a new lookup source (below).                                                             |
+| `~/.continue/.env`                      | The key is appended to `.env`. config.yaml gets the same reference                                               | Plaintext. Works with anything that reads `.env`. The fallback when the IDE has no secret storage.                                                           |
+| Environment variable                    | Nothing is stored. config.yaml gets a reference to a name the user types                                         | For keys injected by something else, such as a secrets manager that launches the editor.                                                                     |
+| Inline in config.yaml                   | The key is written into the file, as today                                                                       | Simplest. The key sits in a file people sync or commit. On Windows the extension does not tighten file permissions (`setConfigFilePermissions` skips win32). |
+
+Default: secure storage if a test write and read-back succeeds (the same check `mcpOauthStore.ts` uses for MCP OAuth tokens, #14), otherwise `.env`. The choice is remembered. Existing configs are not touched; a "Move key to secure storage" action on the Providers card converts one, after confirmation.
+
+What I checked:
+
+- Local config loading resolves `${{ secrets.NAME }}` from `~/.continue/.env`, then `<workspace>/.continue/.env`, then `<workspace>/.env`, then the process environment (`core/config/yaml/LocalPlatformClient.ts`, used by `loadYaml.ts` with `renderSecrets: true`). `docs/faqs.mdx` and `docs/configuration.mdx` document the syntax. The 8 existing `LocalPlatformClient` tests pass (run today).
+- I found no code that writes `~/.continue/.env`, and secret storage is not a lookup source. A1 adds both.
+- A reference that cannot be resolved appears to stay in the config as literal text and would be sent as the key (my reading of `renderSecrets` and `fillTemplateVariables`; not run). `LLMConfigurationStatuses.MISSING_ENV_SECRET` exists and the Models tab already shows "(Missing env secret)" for it, but only the Relace provider overrides the status (with `MISSING_API_KEY`). A1 sets `MISSING_ENV_SECRET` when a key still contains an unresolved reference.
+
 ## 5. PR breakdown
 
 | PR  | Contents                                                                                                                       | Tests                                                                                                                       |
@@ -98,20 +123,22 @@ The IntelliJ plugin keeps its own list of message names (`extensions/intellij/..
 
 A1 lands first. A2, A3 and A4 can then proceed in parallel.
 
+Key storage (section 4.5) is split across two PRs. A1 carries the core pieces: the secret-storage lookup in `LocalPlatformClient`, a writer for `~/.continue/.env`, and the `MISSING_ENV_SECRET` status. A4 carries the storage choice in the setup flow and the "Move key" action.
+
 ## 6. Decisions and defaults
 
-| Question                                   | Default                                                                                                                                                                                                                                                       |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Where do per-mode sets live?               | `modeModels.<mode>.models`. The alternative, a `modes:` field on each model, is rejected because it changes the main model schema.                                                                                                                            |
-| One API key per model, or a shared secret? | Per-model copy for v1 (today's behaviour). A shared secret in `~/.continue/.env`, referenced from models, is attractive because `LocalPlatformClient` already reads that file, but it needs verification that templates resolve in a local config.yaml first. |
-| Which file is edited?                      | The global `~/.continue/config.yaml` (what `editConfigFile` writes). Other profiles show "Open file".                                                                                                                                                         |
-| Does Chat get its own column?              | Yes. Chat, Plan and Agent are separate keys in `modeModels` already.                                                                                                                                                                                          |
+| Question                                   | Default                                                                                                                                                                                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Where do per-mode sets live?               | `modeModels.<mode>.models`. The alternative, a `modes:` field on each model, is rejected because it changes the main model schema.                                                                                                   |
+| One API key per model, or a shared secret? | A user setting in the setup flow, one secret per provider connection (section 4.5). Default: secure storage when available, otherwise `~/.continue/.env`. Other choices: an environment variable, or inline in config.yaml as today. |
+| Which file is edited?                      | The global `~/.continue/config.yaml` (what `editConfigFile` writes). Other profiles show "Open file".                                                                                                                                |
+| Does Chat get its own column?              | Yes. Chat, Plan and Agent are separate keys in `modeModels` already.                                                                                                                                                                 |
 
 ## 7. Acceptance criteria
 
 - From a configured install, the Models tab opens the setup flow with existing models checked. Unchecking one and confirming removes it from config.yaml and from every `modeModels` list.
 - Selecting four models for Plan and two for Agent shows exactly those in the picker for each mode, and `Cmd+'` cycles only within the current mode's set.
-- A config.yaml with comments and extra fields is unchanged outside the edited entries after a GUI save.
+- After a GUI save, every comment, key, value and the key order outside the edited entries is preserved. Whitespace may be normalized (section 4.2).
 - An existing config with only `modeModels.<mode>.model` behaves exactly as before.
 
 ## 8. Risks
@@ -126,4 +153,10 @@ A1 lands first. A2, A3 and A4 can then proceed in parallel.
 
 ## 9. Not verified
 
-Written from reading the code only. Nothing was built or run for this plan. Still unchecked: how `${{ secrets.* }}` templates resolve for a local config.yaml, and whether `YAML.parseDocument` round-trips the sample configs without reformatting them.
+Written from reading the code, plus two things run on 2026-11-02: the existing `LocalPlatformClient` tests, and a comparison of `YAML.stringify` against `YAML.parseDocument` on a sample file (section 4.2). Nothing else was built or run. Still unchecked:
+
+- Secret resolution end to end in a running extension (only the unit tests were run).
+- That an unresolved reference ends up as literal text in the key (read, not run).
+- Which characters a secret name may contain. `CONTINUED_<PROVIDER>_API_KEY` uses only capitals and underscores, like the names in the docs.
+- Whether JetBrains supports `readSecrets` and `writeSecrets`. The CLI and test host return nothing (`core/util/filesystem.ts`).
+- That `parseDocument` behaves the same on real user configs. The test plan should include a few.

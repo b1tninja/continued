@@ -68,14 +68,14 @@ Carried over from `fork-plan.md` section 4.7, item 4. None started:
 
 ## Open decisions
 
-| Decision                                                               | Default used for planning                                             | Needs an owner |
-| ---------------------------------------------------------------------- | --------------------------------------------------------------------- | -------------- |
-| Where per-mode model lists live                                        | `modeModels.<mode>.models` in config.yaml                             | no             |
-| Which config file GUI setup edits                                      | the global `~/.continue/config.yaml` only (other profiles: open file) | no             |
-| One API key copy per model, or one shared secret in `~/.continue/.env` | per-model copy for v1; shared secret only after it is verified        | yes            |
-| Where tool-approval rules live                                         | config.yaml under `toolPermissions`                                   | no             |
-| Reviewer model for Auto mode                                           | any configured model; chosen by the evaluation in B4                  | yes            |
-| Distribution channel for the `.vsix` (fork-plan section 6)             | open                                                                  | yes            |
+| Decision                                                   | Default used for planning                                                                                                             | Needs an owner |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Where per-mode model lists live                            | `modeModels.<mode>.models` in config.yaml                                                                                             | no             |
+| Which config file GUI setup edits                          | the global `~/.continue/config.yaml` only (other profiles: open file)                                                                 | no             |
+| API key storage                                            | a user setting in the setup flow; default secure storage, else `~/.continue/.env` (see `model-config-ux.md` section 4.5)              | no             |
+| Where tool-approval rules live                             | config.yaml under `toolPermissions`                                                                                                   | no             |
+| Reviewer model for Auto mode                               | a user setting: a new `reviewer` model role, unset by default, so Auto stays unavailable until one is chosen (plan in the Track B PR) | no             |
+| Distribution channel for the `.vsix` (fork-plan section 6) | open                                                                                                                                  | yes            |
 
 ## How to use this file
 
