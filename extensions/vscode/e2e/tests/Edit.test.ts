@@ -1,7 +1,6 @@
 import { expect } from "chai";
 import {
   CodeLens,
-  Key,
   TextEditor,
   VSBrowser,
   WebView,
@@ -88,13 +87,22 @@ describe("Edit Test", () => {
    * text.
    */
   async function resetEditorAndSelectAll() {
-    await VSBrowser.instance.driver.switchTo().defaultContent();
+    const driver = VSBrowser.instance.driver;
+    await driver.switchTo().defaultContent();
     await TestUtils.waitForSuccess(async () => {
-      await editor.click();
-      await editor.sendKeys(Key.chord(TestUtils.osControlKey, "a"));
-      await editor.sendKeys(originalEditorText);
+      // setText focuses the editor itself (even if a webview had focus) and
+      // replaces the whole document.
+      await editor.setText(originalEditorText);
       expect((await editor.getText()).trim()).to.equal(originalEditorText);
-      await editor.sendKeys(Key.chord(TestUtils.osControlKey, "a"));
+      // getText() collapses the selection, so select everything afterwards,
+      // sending the keys to whichever element VS Code has focused.
+      await editor.focus();
+      await driver
+        .actions()
+        .keyDown(TestUtils.osControlKey)
+        .sendKeys("a")
+        .keyUp(TestUtils.osControlKey)
+        .perform();
     }, DEFAULT_TIMEOUT.MD);
   }
 
