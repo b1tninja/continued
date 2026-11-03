@@ -42,8 +42,11 @@ live("Bedrock prompt caching (live)", () => {
       crossRegionInference: "auto",
     } as any);
 
-    // A nonce makes this run's prefix unique, so earlier runs cannot hit.
-    const nonce = `run-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // A nonce makes this run's prefix unique, so earlier runs cannot hit. Set
+    // LIVE_NONCE to share a prefix between two separate runs (isolation check).
+    const nonce =
+      process.env.LIVE_NONCE ??
+      `run-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const system = `${nonce}. You answer in one short word. ${filler(1, 26000)}`;
     const messages: any[] = [{ role: "system", content: system }];
 
