@@ -80,7 +80,7 @@ Plan:
 - User-level files (`~/.continue`, `~/.claude`) always load.
 - Project-level files load only after the user trusts that project. Trust is stored in `~/.continue/trusted-hooks.json` as the project's real path plus a hash of its hook definitions. Changing the hooks asks again, as `direnv allow` does.
 - The TUI asks once, showing every command that would run.
-- Headless mode has no one to ask. Untrusted project hooks are skipped with a warning, unless `--trust-project-hooks` or `CONTINUE_TRUST_PROJECT_HOOKS=1` is set. This is not a fail-open hole: a project file is not organisation policy, which belongs in a user-level or managed file.
+- Headless mode has no one to ask. Untrusted project hooks are skipped with a warning, unless `--trust-project-hooks` is passed. There is no environment variable for this: the CLI loads a `.env` from the working directory, so a repository could set it. This is not a fail-open hole: a project file is not organisation policy, which belongs in a user-level or managed file.
 
 ## Decisions needed
 

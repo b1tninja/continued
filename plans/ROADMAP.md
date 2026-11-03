@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-11-03 (at `origin/main` 880f72bd4, after #125). Track C status updated after the safeguards work; Track D (hooks) added.
+Last updated: 2026-11-03 (at `origin/main` 880f72bd4, after #125). Track C status updated after the safeguards work; Track D (hooks) and Track E (upstream signals) added.
 
 This is the place to check what is done, what is in flight and what comes next. `fork-plan.md` stays as the original design record (why we forked, scope, risks, licensing, CI). Detailed plans for new work live next to this file.
 
@@ -86,6 +86,8 @@ Plan: [`hooks-wiring.md`](./hooks-wiring.md). Comparison with other tools: [`fea
 
 Problem: the CLI has a complete hooks system (17 events, command and HTTP handlers, Claude Code compatible settings files) that nothing calls, so hook files are read and ignored. Wiring it also needs fail-closed behaviour and a trust check, because project hook files run shell commands.
 
+Status: D1 to D3 are built on branch `feat/hooks-runner-fail-closed` (PR to follow). The trust check has no environment variable, because the CLI loads a `.env` from the working directory. See `hooks-wiring.md`.
+
 | PR  | Scope                                                                                                                                             | Depends on |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
 | D1  | Fix the runner: timeouts and other failures block by default, `onError` per hook, `deny` beats `allow`, `prompt` and `agent` handlers fail closed | none       |
@@ -93,6 +95,20 @@ Problem: the CLI has a complete hooks system (17 events, command and HTTP handle
 | D3  | Wire `PreToolUse`, `PostToolUse`, `PostToolUseFailure` and `UserPromptSubmit` into the CLI, with `updatedInput` re-running `preprocess`           | D1, D2     |
 | D4  | Docs page `docs/cli/hooks.mdx`; remaining events (`Stop`, `SessionStart`, `SessionEnd`, `PreCompact`, `Notification`, `PermissionRequest`)        | D3         |
 | D5  | Hooks in the IDE: share the runner with `core`                                                                                                    | D3         |
+
+### Track E: bugs and requests from upstream
+
+Plan: [`upstream-signals.md`](./upstream-signals.md)
+
+Problem: upstream no longer merges fixes, but its open issues and pull requests show bugs that still apply here. Several were confirmed by reading this fork's code (U1 to U4); the rest need reproducing first.
+
+| PR  | Scope                                                                                                                                             | Depends on |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| E1  | Subagents keep the parent's permission policy; Bash tool and hook runner stop waiting on detached children; address check on URL fetch (U1 to U3) | none       |
+| E2  | Pruning keeps the user's turn; OpenAI cost counts cached tokens, with current prices (U4, U9)                                                     | none       |
+| E3  | Reproduce, then fix: "Automatic" terminal policy and the edit-tool overwrite (U5, U6)                                                             | none       |
+| E4  | Proxy port matching, SSE comment lines, Windows `npx` for MCP servers (U7, U8, U10), alongside the MCP review                                     | none       |
+| E5  | Evaluate an ACP mode in `cn` for editors we do not ship (U11)                                                                                     | none       |
 
 ## Later
 
