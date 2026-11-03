@@ -112,7 +112,7 @@
     "tar": "^7.5.13",
     "tree-sitter-wasms": "^0.1.11",
     "untildify": "^6.0.0",
-    "uuid": "^9.0.1",
+    "uuid": "^11.1.1",
     "vectordb": "0.21.2",
     "web-tree-sitter": "^0.21.0",
     "win-ca": "^3.5.1",
@@ -130,6 +130,10 @@
     "tar": "^7.5.13",
     "vitest": {
       "@types/node": "$@types/node"
+    },
+    "protobufjs": "^7.6.3",
+    "@xenova/transformers": {
+      "sharp": "^0.35.5"
     }
   }
 }
