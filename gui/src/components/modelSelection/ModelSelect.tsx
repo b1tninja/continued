@@ -5,7 +5,7 @@ import {
   CubeIcon,
   PlusIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/Auth";
 import { AddModelForm } from "../../forms/AddModelForm";
@@ -17,6 +17,12 @@ import {
 } from "../../redux/slices/uiSlice";
 import { updateSelectedModelByRole } from "../../redux/thunks/updateSelectedModelByRole";
 import { getMetaKeyLabel, isMetaEquivalentKeyPressed } from "../../util";
+import {
+  getModeModelTitles,
+  nextModelTitle,
+  partitionModelsByMode,
+} from "../../util/modeModels";
+import { modelHasMissingSecret } from "../../util/missingSecrets";
 import { CONFIG_ROUTES } from "../../util/navigation";
 import {
   Button,
@@ -41,6 +47,8 @@ interface Option {
   apiKey?: string;
   sourceFile?: string;
   isAutoDetected?: boolean;
+  /** A `${{ secrets.* }}` credential with no value on this machine. */
+  missingSecret?: boolean;
 }
 
 function modelSelectTitle(model: any): string {
@@ -106,6 +114,14 @@ function ModelOption({
                 (Missing API key)
               </span>
             )}
+            {option.missingSecret && (
+              <span
+                className="ml-1.5 text-[10px] italic text-warning"
+                data-testid="model-option-key-not-set"
+              >
+                (Key not set)
+              </span>
+            )}
           </span>
         </div>
         <Button
@@ -159,6 +175,20 @@ function ModelSelect() {
     setSortedOptions(sorted);
   }, [options]);
 
+  // `modeModels.<mode>.models`: the models this mode offers. Edit mode has its
+  // own model list, so the per-mode list does not apply there.
+  const modeTitles = isInEdit ? undefined : getModeModelTitles(config, mode);
+  const { offered: offeredOptions, rest: otherOptions } = useMemo(
+    () => partitionModelsByMode(options, modeTitles),
+    [options, modeTitles?.join("\u0000")],
+  );
+  const { offered: offeredSorted, rest: otherSorted } = useMemo(
+    () => partitionModelsByMode(sortedOptions, modeTitles),
+    [sortedOptions, modeTitles?.join("\u0000")],
+  );
+  const modeLabel =
+    mode === "plan" ? "Plan" : mode === "agent" ? "Agent" : "Chat";
+
   useEffect(() => {
     setOptions(
       allModels.map((model) => {
@@ -168,6 +198,7 @@ function ModelSelect() {
           apiKey: model.apiKey,
           sourceFile: model.sourceFile,
           isAutoDetected: model.isFromAutoDetect,
+          missingSecret: modelHasMissingSecret(model),
         };
       }),
     );
@@ -184,13 +215,14 @@ function ModelSelect() {
           return;
         }
 
-        const direction = event.shiftKey ? -1 : 1;
-        const currentIndex = options.findIndex(
-          (option) => option.value === selectedModel?.title,
+        // Cycle only the models this mode offers; with no list, all of them.
+        const candidates = offeredOptions.length > 0 ? offeredOptions : options;
+        const newModelTitle = nextModelTitle(
+          candidates,
+          selectedModel?.title,
+          1,
         );
-        let nextIndex = (currentIndex + 1 * direction) % options.length;
-        if (nextIndex < 0) nextIndex = options.length - 1;
-        const newModelTitle = options[nextIndex].value;
+        if (!newModelTitle) return;
 
         void dispatch(setModeModelOverride({ mode, title: newModelTitle }));
         void dispatch(
@@ -207,7 +239,7 @@ function ModelSelect() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [options, selectedModel]);
+  }, [options, offeredOptions, selectedModel, mode, selectedProfile]);
 
   function onClickAddModel(e: MouseEvent) {
     e.stopPropagation();
@@ -237,6 +269,7 @@ function ModelSelect() {
   }
 
   const hasNoModels = allModels?.length === 0;
+  const selectedKeyNotSet = modelHasMissingSecret(selectedModel);
 
   return (
     <Listbox
@@ -280,9 +313,17 @@ function ModelSelect() {
                 }}
                 variant="ghost"
                 size="sm"
-                className="my-0 h-5 w-5 p-0"
+                className="relative my-0 h-5 w-5 p-0"
+                data-testid="model-select-configure"
               >
                 <Cog6ToothIcon className="h-3.5 w-3.5 text-description" />
+                {selectedKeyNotSet && (
+                  <span
+                    className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-warning"
+                    data-testid="model-select-key-not-set-dot"
+                    title="Key not set on this machine"
+                  />
+                )}
               </Button>
             </div>
           </div>
@@ -297,6 +338,43 @@ function ModelSelect() {
               <div className="px-2 py-4 text-center text-sm text-description-muted">
                 No models configured
               </div>
+            ) : offeredSorted.length > 0 ? (
+              <>
+                <div
+                  className="px-2 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-description-muted"
+                  data-testid="model-group-mode"
+                >
+                  {modeLabel} models
+                </div>
+                {offeredSorted.map((option) => (
+                  <ModelOption
+                    option={option}
+                    idx={options.indexOf(option)}
+                    key={`offered-${option.value}`}
+                    showMissingApiKeyMsg={option.apiKey === ""}
+                    isSelected={option.value === selectedModel?.title}
+                  />
+                ))}
+                {otherSorted.length > 0 && (
+                  <>
+                    <div
+                      className="px-2 pb-0.5 pt-2 text-[10px] uppercase tracking-wide text-description-muted"
+                      data-testid="model-group-all"
+                    >
+                      All models
+                    </div>
+                    {otherSorted.map((option) => (
+                      <ModelOption
+                        option={option}
+                        idx={options.indexOf(option)}
+                        key={`other-${option.value}`}
+                        showMissingApiKeyMsg={option.apiKey === ""}
+                        isSelected={option.value === selectedModel?.title}
+                      />
+                    ))}
+                  </>
+                )}
+              </>
             ) : (
               sortedOptions.map((option, idx) => (
                 <ModelOption
@@ -329,7 +407,8 @@ function ModelSelect() {
               <Divider className="!my-0" />
               <div className="flex items-center justify-start p-2 text-description">
                 <span className="block" style={{ fontSize: tinyFont }}>
-                  <code>{getMetaKeyLabel()}'</code> to toggle model
+                  <code>{getMetaKeyLabel()}'</code> to toggle{" "}
+                  {offeredOptions.length > 0 ? `${modeLabel} models` : "model"}
                 </span>
               </div>
             </>

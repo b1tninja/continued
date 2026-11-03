@@ -3,6 +3,7 @@ import {
   ModelRole,
   PromptTemplates,
   ToolOverrideConfig,
+  ToolPermissions,
 } from "@continuedev/config-yaml";
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { McpUiResourceMeta } from "@modelcontextprotocol/ext-apps";
@@ -513,6 +514,8 @@ interface ToolCallState {
   status: ToolStatus;
   parsedArgs: any;
   processedArgs?: Record<string, any>; // Added in preprocesing step
+  /** Why this call is waiting for approval, when a rule or protected path says so. */
+  policyNote?: string;
   output?: ContextItem[];
   tool?: Tool;
   mcpUiState?: McpUiState;
@@ -1837,7 +1840,13 @@ export type ModeReasoningEffort = "off" | "low" | "medium" | "high";
 
 /** Chat model (by title) and reasoning effort to use in a mode. */
 export interface ModeModelSetting {
+  /** The default model: selected when switching into the mode. */
   title: string;
+  /**
+   * Every model offered in the mode, default first. Absent when the config sets
+   * only `model`, in which case all models are offered as before.
+   */
+  titles?: string[];
   reasoningEffort?: ModeReasoningEffort;
 }
 
@@ -1867,6 +1876,8 @@ export interface ContinueConfig {
   modelsByRole: Record<ModelRole, ILLM[]>;
   selectedModelByRole: Record<ModelRole, ILLM | null>;
   modeModels?: ModeModelsConfig;
+  /** Rules from `toolPermissions:` in config.yaml (allow / ask / deny). */
+  toolPermissions?: ToolPermissions;
   data?: DataDestination[];
 }
 
