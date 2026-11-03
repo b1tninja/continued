@@ -1,9 +1,11 @@
 import { expect } from "chai";
 import {
   CodeLens,
+  Key,
   TextEditor,
   VSBrowser,
   WebView,
+  Workbench,
 } from "vscode-extension-tester";
 
 import { EditActions } from "../actions/Edit.actions";
@@ -30,15 +32,9 @@ describe("Edit Test", () => {
   beforeEach(async function () {
     this.timeout(DEFAULT_TIMEOUT.XL);
 
-    await GUIActions.toggleGui();
-
-    // Toggling the Continued view can leave keyboard focus inside its (possibly
-    // hidden) webview; give the editor focus explicitly before typing into it.
-    await VSBrowser.instance.driver.switchTo().defaultContent();
-    await TestUtils.waitForSuccess(() => editor.click());
-
-    await editor.typeTextAt(1, 1, originalEditorText);
-    await editor.selectText(originalEditorText);
+    // Don't toggle the Continued view here: "focus input" flips it open/closed
+    // depending on what the previous test left behind. Cmd+I below opens it.
+    await resetEditorAndSelectAll();
 
     ({ view } = await openEditInputWithRetry());
 
@@ -60,25 +56,47 @@ describe("Edit Test", () => {
     this.timeout(DEFAULT_TIMEOUT.XL);
 
     await VSBrowser.instance.driver.switchTo().defaultContent();
-    await editor.clearText();
 
-    // Best effort: the next beforeEach opens a fresh edit input anyway, and the
-    // webview may legitimately be hidden here (e.g. after accepting an edit).
-    try {
-      ({ view } = await GUIActions.switchToReactIframe({
-        requireDisplayed: true,
-      }));
-      const tipTapEditor = await GUISelectors.getMessageInputFieldAtIndex(
-        view,
-        0,
-      );
-      await tipTapEditor.clear();
-    } catch (e) {
-      console.error(`Failed to clear the edit input: ${e}`);
-    } finally {
-      await VSBrowser.instance.driver.switchTo().defaultContent();
+    // Best effort: leave edit mode and drop any diff that is still pending
+    // (both are no-ops when the test already accepted/rejected), so nothing
+    // leaks into the next test.
+    for (const command of ["continue.exitEditMode", "continue.rejectDiff"]) {
+      try {
+        await new Workbench().executeCommand(command);
+      } catch (e) {
+        console.error(`Failed to run ${command} during cleanup: ${e}`);
+      }
     }
+
+    try {
+      await TestUtils.waitForSuccess(async () => {
+        expect(await editor.getCodeLens("Accept")).to.be.undefined;
+      }, DEFAULT_TIMEOUT.SM);
+    } catch (e) {
+      console.error(`Edit CodeLens still visible during cleanup: ${e}`);
+    }
+
+    await resetEditorAndSelectAll();
   });
+
+  /**
+   * Put the editor into a known state: focused, containing exactly the
+   * original text, with all of it selected. Selecting with Ctrl+A rather than
+   * editor.typeTextAt/selectText avoids their Ctrl+G / find-widget quick
+   * inputs, which are "not interactable" when keyboard focus is in a webview.
+   * Idempotent, so it is retried until the document really has the expected
+   * text.
+   */
+  async function resetEditorAndSelectAll() {
+    await VSBrowser.instance.driver.switchTo().defaultContent();
+    await TestUtils.waitForSuccess(async () => {
+      await editor.click();
+      await editor.sendKeys(Key.chord(TestUtils.osControlKey, "a"));
+      await editor.sendKeys(originalEditorText);
+      expect((await editor.getText()).trim()).to.equal(originalEditorText);
+      await editor.sendKeys(Key.chord(TestUtils.osControlKey, "a"));
+    }, DEFAULT_TIMEOUT.MD);
+  }
 
   /**
    * Cmd+I is dropped when keyboard focus is stuck in a hidden webview, and the
