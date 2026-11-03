@@ -53,7 +53,6 @@ dependencies {
         // otherwise e2e tests (runIdeForUiTests) will have linkage errors
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
     }
-    testImplementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     testImplementation("com.automation-remarks:video-recorder-junit5:2.0")
     testRuntimeOnly("org.junit.vintage:junit-vintage-engine:6.1.3") // required to run both JUnit 5 and JUnit 3
     // Gradle 9 no longer supplies the JUnit Platform launcher itself
@@ -62,7 +61,7 @@ dependencies {
     testIntegrationImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     "testIntegrationRuntimeOnly"("org.junit.platform:junit-platform-launcher:6.1.3")
     testIntegrationImplementation("org.kodein.di:kodein-di-jvm:7.20.2")
-    testIntegrationImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.1")
+    testIntegrationImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0")
 }
 
 kotlin {
