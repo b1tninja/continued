@@ -7,6 +7,23 @@ export type PromptCacheSetting = "auto" | "5m" | "1h" | "off";
 
 export type PromptCacheTtl = "5m" | "1h";
 
+/** What the cached prefix was built from. A change to any part rebuilds it. */
+export interface PromptCacheKey {
+  model: string;
+  /** Checksum of the tool names sent, so a change to the tool list is visible. */
+  tools: string;
+  /** Checksum of the system message. */
+  system: string;
+}
+
+/** A request that should have read the cache and mostly did not. */
+export interface PromptCacheMiss {
+  readTokens: number;
+  expectedTokens: number;
+  /** What changed since the last request, in words; empty when unknown. */
+  causes: string[];
+}
+
 /** Per-session facts the Auto lifetime learns from. Not persisted. */
 export interface PromptCacheSessionState {
   /** When the last request in this session started (ms since epoch). */
@@ -21,6 +38,15 @@ export interface PromptCacheSessionState {
    * cache away would cost.
    */
   lastInputTokens?: number;
+  /** Model, mode and tools of the last request. */
+  lastKey?: PromptCacheKey;
+  /** Requests this session that missed a cache that should have been warm. */
+  misses?: number;
+  lastMiss?: PromptCacheMiss;
+  /** `misses` when the user dismissed the miss notice. */
+  missesAcknowledged?: number;
+  /** `lastRequestAt` the user dismissed the cold-cache notice for. */
+  dismissedColdFor?: number;
 }
 
 export const INITIAL_PROMPT_CACHE_STATE: PromptCacheSessionState = {
@@ -43,6 +69,7 @@ const TTL_MS: Record<PromptCacheTtl, number> = {
   "5m": 5 * 60 * 1000,
   "1h": 60 * 60 * 1000,
 };
+export const PROMPT_CACHE_TTL_MS = TTL_MS;
 
 /**
  * Whether the toolbar control does anything for this model: the providers whose
@@ -170,6 +197,7 @@ export function resolvePromptCache(
   return {
     options,
     nextState: {
+      ...state,
       lastRequestAt: now,
       escalated,
       lastTtl: ttl,

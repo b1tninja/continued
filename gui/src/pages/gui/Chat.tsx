@@ -21,6 +21,8 @@ import TimelineItem from "../../components/gui/TimelineItem";
 import { NewSessionButton } from "../../components/mainInput/belowMainInput/NewSessionButton";
 import ThinkingBlockPeek from "../../components/mainInput/belowMainInput/ThinkingBlockPeek";
 import ContinueInputBox from "../../components/mainInput/ContinueInputBox";
+import { CacheMissNotice } from "../../components/mainInput/CacheMissNotice";
+import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
 import { useOnboardingCard } from "../../components/OnboardingCard";
 import StepContainer from "../../components/StepContainer";
 import { TabBar } from "../../components/TabBar/TabBar";
@@ -414,6 +416,8 @@ export function Chat() {
           ))}
       </StepsDiv>
       <div className={"relative shrink-0"}>
+        <CacheMissNotice />
+        <ColdCacheNotice />
         <ContinueInputBox
           isMainInput
           isLastUserInput={false}

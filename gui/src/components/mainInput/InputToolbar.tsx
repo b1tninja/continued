@@ -11,6 +11,7 @@ import {
 } from "core/llm/autodetect";
 import { memo, useContext, useRef } from "react";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
+import { useNow } from "../../hooks/useNow";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectUseActiveFile } from "../../redux/selectors";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
@@ -18,6 +19,8 @@ import { setHasReasoningEnabled } from "../../redux/slices/sessionSlice";
 import { setReasoningSetting } from "../../redux/slices/uiSlice";
 import { exitEdit } from "../../redux/thunks/edit";
 import { getMetaKeyLabel, isMetaEquivalentKeyPressed } from "../../util";
+import { formatTokens, formatUsd } from "../../util/cacheNotices";
+import { isSignificantLoss, warmCacheLoss } from "../../util/cacheSafeguards";
 import { ToolTip } from "../gui/Tooltip";
 import ModelSelect from "../modelSelection/ModelSelect";
 import { ModeSelect } from "../ModeSelect";
@@ -71,6 +74,21 @@ function InputToolbar(props: InputToolbarProps) {
     );
 
   const supportsReasoning = modelSupportsReasoning(defaultModel);
+  const cacheSetting = useAppSelector((store) =>
+    defaultModel
+      ? store.ui.promptCacheSettings?.[defaultModel.title]
+      : undefined,
+  );
+  const cacheState = useAppSelector((store) => store.session.promptCache);
+  const now = useNow();
+  // Changing the thinking settings always rebuilds the message cache.
+  const reasoningLoss =
+    defaultModel && cacheState
+      ? warmCacheLoss(defaultModel, cacheSetting, cacheState, now)
+      : undefined;
+  const reasoningCacheNote = isSignificantLoss(reasoningLoss)
+    ? ` Prompt cache is warm: changing this re-reads ${formatTokens(reasoningLoss!.tokens)} tokens at full price${reasoningLoss!.extraUsd !== undefined ? ` (about ${formatUsd(reasoningLoss!.extraUsd)} more)` : ""}.`
+    : "";
 
   const smallFont = useFontSize(-2);
   const tinyFont = useFontSize(-3);
@@ -153,9 +171,9 @@ function InputToolbar(props: InputToolbarProps) {
                 <ToolTip
                   place="top"
                   content={
-                    hasReasoningEnabled
+                    (hasReasoningEnabled
                       ? "Disable model reasoning"
-                      : "Enable model reasoning"
+                      : "Enable model reasoning") + reasoningCacheNote
                   }
                 >
                   {hasReasoningEnabled ? (

@@ -45,6 +45,8 @@ async function sentOptions(opts: {
   model?: ModelDescription;
   setting?: PromptCacheSetting;
   lastRequestAgoMs?: number;
+  /** Input size of the previous request, in tokens. */
+  lastInputTokens?: number;
   /** Chunks the mocked model streams back (the last may carry usage). */
   reply?: any[];
 }) {
@@ -59,6 +61,7 @@ async function sentOptions(opts: {
       escalated: false,
       lastRequestAt: Date.now() - opts.lastRequestAgoMs,
       lastTtl: "5m",
+      lastInputTokens: opts.lastInputTokens,
     };
   }
   if (opts.setting) {
@@ -153,6 +156,75 @@ describe("prompt cache options in the chat request", () => {
     const { options } = await sentOptions({ model: gpt, setting: "1h" });
     expect(options.promptCaching).toBeUndefined();
     expect(options.promptCacheTtl).toBeUndefined();
+  });
+
+  it("records a miss when a warm cache was barely read", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      lastRequestAgoMs: 30_000,
+      lastInputTokens: 120_000,
+      reply: [
+        {
+          role: "assistant",
+          content: "hi",
+          usage: {
+            promptTokens: 5,
+            completionTokens: 5,
+            promptTokensDetails: {
+              cachedTokens: 1_000,
+              cacheWriteTokens: 125_000,
+            },
+          },
+        },
+      ],
+    });
+    expect(cache()?.misses).toBe(1);
+    expect(cache()?.lastMiss).toMatchObject({
+      readTokens: 1_000,
+      expectedTokens: 120_000,
+    });
+    // the new request's size and make-up are remembered for the next check
+    expect(cache()?.lastInputTokens).toBe(126_005);
+    expect(cache()?.lastKey).toBeDefined();
+  });
+
+  it("does not record a miss when the cache was read", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      lastRequestAgoMs: 30_000,
+      lastInputTokens: 120_000,
+      reply: [
+        {
+          role: "assistant",
+          content: "hi",
+          usage: {
+            promptTokens: 5,
+            completionTokens: 5,
+            promptTokensDetails: {
+              cachedTokens: 119_000,
+              cacheWriteTokens: 6_000,
+            },
+          },
+        },
+      ],
+    });
+    expect(cache()?.misses).toBeUndefined();
+  });
+
+  it("does not look for misses when caching is off", async () => {
+    const { cache } = await sentOptions({
+      setting: "off",
+      lastRequestAgoMs: 30_000,
+      lastInputTokens: 120_000,
+      reply: [
+        {
+          role: "assistant",
+          content: "hi",
+          usage: { promptTokens: 126_000, completionTokens: 5 },
+        },
+      ],
+    });
+    expect(cache()?.misses).toBeUndefined();
   });
 
   it("remembers the API's input size from the usage chunk", async () => {

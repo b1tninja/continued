@@ -1,6 +1,6 @@
 import { CircleStackIcon as CircleStackIconOutline } from "@heroicons/react/24/outline";
 import { CircleStackIcon as CircleStackIconSolid } from "@heroicons/react/24/solid";
-import { useEffect, useState } from "react";
+import { useNow } from "../../hooks/useNow";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { setPromptCacheSetting } from "../../redux/slices/uiSlice";
@@ -23,16 +23,6 @@ const CHOICES: (PromptCacheSetting | "config")[] = [
   "off",
   "config",
 ];
-
-/** Re-render about every 15 s so the warm/expired state stays honest. */
-function useNow(intervalMs = 15_000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
 
 function tooltipText(
   status: ReturnType<typeof promptCacheStatus>,

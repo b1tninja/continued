@@ -14,6 +14,64 @@ const mockUuidv4 = vi.mocked(uuidv4 as () => string);
 const mockRenderChatMessage = vi.mocked(renderChatMessage);
 const mockAddToolCallDeltaToState = vi.mocked(addToolCallDeltaToState);
 
+describe("sessionSlice prompt cache state across sessions", () => {
+  const state = {
+    ...({} as any),
+    id: "s1",
+    history: [],
+    streamAborter: new AbortController(),
+    symbols: {},
+    promptCache: {
+      escalated: true,
+      lastRequestAt: 123,
+      lastTtl: "1h",
+      lastInputTokens: 300_000,
+      lastKey: { model: "m", tools: "t", system: "s" },
+      misses: 4,
+      lastMiss: { readTokens: 0, expectedTokens: 1, causes: [] },
+      missesAcknowledged: 1,
+      dismissedColdFor: 123,
+    },
+  };
+
+  it("starts a new session with an empty cache but keeps what Auto learned", () => {
+    const next = sessionSlice.reducer(state, sessionSlice.actions.newSession());
+    expect(next.promptCache).toEqual({ escalated: true });
+  });
+
+  it("starts a loaded session empty too", () => {
+    const next = sessionSlice.reducer(
+      state,
+      sessionSlice.actions.newSession({
+        sessionId: "other",
+        title: "t",
+        history: [],
+      } as any),
+    );
+    expect(next.promptCache?.lastInputTokens).toBeUndefined();
+    expect(next.promptCache?.misses).toBeUndefined();
+    expect(next.promptCache?.escalated).toBe(true);
+  });
+
+  it("counts misses and acknowledges them", () => {
+    let s = sessionSlice.reducer(
+      state,
+      sessionSlice.actions.setPromptCacheState({ escalated: false }),
+    );
+    const miss = {
+      readTokens: 0,
+      expectedTokens: 90_000,
+      causes: ["the tools"],
+    };
+    s = sessionSlice.reducer(s, sessionSlice.actions.recordCacheMiss(miss));
+    s = sessionSlice.reducer(s, sessionSlice.actions.recordCacheMiss(miss));
+    expect(s.promptCache?.misses).toBe(2);
+    expect(s.promptCache?.lastMiss).toEqual(miss);
+    s = sessionSlice.reducer(s, sessionSlice.actions.acknowledgeCacheMisses());
+    expect(s.promptCache?.missesAcknowledged).toBe(2);
+  });
+});
+
 describe("sessionSlice streamUpdate", () => {
   beforeEach(() => {
     // Reset mocks before each test

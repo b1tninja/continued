@@ -385,6 +385,85 @@ describe("normalizeClaudeModelId", () => {
   });
 });
 
+describe("Claude 5 and 5.5 prices", () => {
+  const usage = (n: number, extra: Partial<Usage> = {}): Usage => ({
+    promptTokens: n,
+    completionTokens: 0,
+    ...extra,
+  });
+
+  it.each([
+    // [model, input $/MTok, output $/MTok]
+    ["claude-opus-5-5", 4, 20],
+    ["us.anthropic.claude-opus-5-5", 4, 20],
+    ["claude-opus-5", 5, 25],
+    ["claude-sonnet-5-5", 2, 10],
+    ["claude-sonnet-5", 2, 10],
+    ["claude-haiku-5-5", 0.1, 0.5],
+  ])("prices %s", (id, input, output) => {
+    // 90,000 tokens each way: under Haiku 5.5's 100,000-token long-prompt limit
+    const r = calculateRequestCost("anthropic", id, {
+      promptTokens: 90_000,
+      completionTokens: 90_000,
+    });
+    expect(r!.cost).toBeCloseTo(((input + output) * 90_000) / 1_000_000, 6);
+  });
+
+  it("reads Opus 5.5 and Sonnet 5.5 cache hits at 0.05x, others at 0.1x", () => {
+    const read = (id: string) =>
+      calculateRequestCost(
+        "anthropic",
+        id,
+        usage(0, { promptTokensDetails: { cachedTokens: 1_000_000 } }),
+      )!.cost;
+    expect(read("claude-opus-5-5")).toBeCloseTo(0.2, 6);
+    expect(read("claude-sonnet-5-5")).toBeCloseTo(0.1, 6);
+    expect(read("claude-opus-5")).toBeCloseTo(0.5, 6);
+    expect(read("claude-sonnet-5")).toBeCloseTo(0.2, 6);
+  });
+
+  it("does not price a later minor version at an earlier one's price", () => {
+    expect(findAnthropicPricing("claude-sonnet-5-6")).toBeNull();
+    expect(findAnthropicPricing("claude-opus-5-6")).toBeNull();
+    expect(findAnthropicPricing("claude-sonnet-5-5")).not.toBeNull();
+    // A dated release of the same version still matches
+    expect(findAnthropicPricing("claude-sonnet-5-20261001")).not.toBeNull();
+  });
+
+  describe("Haiku 5.5 long-context tier", () => {
+    it("charges the higher prices for a prompt over 100,000 tokens", () => {
+      const low = findAnthropicPricing("claude-haiku-5-5", 100_000)!;
+      const high = findAnthropicPricing("claude-haiku-5-5", 100_001)!;
+      expect(low.input).toBe(0.1);
+      expect(high.input).toBe(0.5);
+      expect(high.cacheRead).toBeCloseTo(0.05, 6);
+      expect(high.cacheWrite1h).toBeCloseTo(1, 6);
+      expect(high.output).toBe(2.5);
+    });
+
+    it("counts cache reads and writes toward the prompt length", () => {
+      const r = calculateRequestCost(
+        "anthropic",
+        "claude-haiku-5-5",
+        usage(10, {
+          promptTokensDetails: { cachedTokens: 150_000, cacheWriteTokens: 0 },
+        }),
+      )!;
+      // 150,010 tokens is a long prompt: read at $0.05/MTok, input at $0.50/MTok
+      expect(r.cost).toBeCloseTo((150_000 / 1e6) * 0.05 + (10 / 1e6) * 0.5, 9);
+    });
+
+    it("keeps the lower prices when the prompt is short", () => {
+      const r = calculateRequestCost(
+        "anthropic",
+        "claude-haiku-5-5",
+        usage(10, { promptTokensDetails: { cachedTokens: 50_000 } }),
+      )!;
+      expect(r.cost).toBeCloseTo((50_000 / 1e6) * 0.01 + (10 / 1e6) * 0.1, 9);
+    });
+  });
+});
+
 describe("every Claude model in llm-info has a price", () => {
   const claudeIds = allLlms
     .filter((m) => m.provider === "anthropic" || m.provider === "bedrock")

@@ -18,21 +18,32 @@ export interface CostBreakdown {
 const CACHE_WRITE_5M_MULTIPLIER = 1.25;
 const CACHE_WRITE_1H_MULTIPLIER = 2;
 
-interface ModelPricing {
+export interface ModelPricing {
   input: number;
   output: number;
   cacheWrite: number; // 5-minute write
   cacheWrite1h: number;
   cacheRead: number;
+  /**
+   * Prices for a request whose whole prompt (uncached input plus cache reads
+   * and writes) is longer than `aboveTokens`. The higher prices apply to every
+   * token of that request, not only the tokens above the limit.
+   */
+  longContext?: { aboveTokens: number; pricing: ModelPricing };
 }
 
-function anthropicPricing(input: number, output: number): ModelPricing {
+/** Cache reads cost 0.1x the input price, except on Opus 5.5 and Sonnet 5.5 (0.05x). */
+function anthropicPricing(
+  input: number,
+  output: number,
+  readMultiplier = 0.1,
+): ModelPricing {
   return {
     input,
     output,
     cacheWrite: input * CACHE_WRITE_5M_MULTIPLIER,
     cacheWrite1h: input * CACHE_WRITE_1H_MULTIPLIER,
-    cacheRead: input * 0.1,
+    cacheRead: input * readMultiplier,
   };
 }
 
@@ -44,6 +55,17 @@ function anthropicPricing(input: number, output: number): ModelPricing {
  * older, different price.
  */
 export const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
+  // Claude 5 and 5.5, list prices checked 2026-11-03 at
+  // platform.claude.com/docs/en/about-claude/pricing. Bedrock regional
+  // endpoints can be priced above list.
+  "claude-opus-5-5": anthropicPricing(4, 20, 0.05),
+  "claude-opus-5": anthropicPricing(5, 25),
+  "claude-sonnet-5-5": anthropicPricing(2, 10, 0.05),
+  "claude-sonnet-5": anthropicPricing(2, 10),
+  "claude-haiku-5-5": {
+    ...anthropicPricing(0.1, 0.5),
+    longContext: { aboveTokens: 100_000, pricing: anthropicPricing(0.5, 2.5) },
+  },
   "claude-sonnet-4-6": anthropicPricing(3, 15),
   "claude-sonnet-4-5": anthropicPricing(3, 15),
   "claude-sonnet-4-2025": anthropicPricing(3, 15), // claude-sonnet-4-20250514
@@ -94,7 +116,24 @@ const EXACT_ALIASES: Record<string, string> = {
   "claude-opus-4": "claude-opus-4-2025",
 };
 
-export function findAnthropicPricing(model: string): ModelPricing | null {
+/**
+ * True when what follows a matched prefix is a further minor version (`-6` in
+ * `claude-sonnet-5-6`) rather than a date (`-20250929`) or a suffix. A
+ * `claude-sonnet-5` entry must not price a later `claude-sonnet-5-6`.
+ */
+function continuesWithMinorVersion(rest: string): boolean {
+  return /^-\d{1,2}(?:-|$)/.test(rest);
+}
+
+/**
+ * @param inputTokens The request's whole prompt. When the model has a
+ * long-context tier and the prompt is over its limit, the tier's prices are
+ * returned.
+ */
+export function findAnthropicPricing(
+  model: string,
+  inputTokens?: number,
+): ModelPricing | null {
   let id = normalizeClaudeModelId(model);
   if (!id) return null;
   id = EXACT_ALIASES[id] ?? id;
@@ -102,8 +141,16 @@ export function findAnthropicPricing(model: string): ModelPricing | null {
     (a, b) => b.length - a.length,
   );
   for (const prefix of sortedKeys) {
-    if (id.startsWith(prefix)) {
-      return ANTHROPIC_PRICING[prefix];
+    if (
+      id.startsWith(prefix) &&
+      !continuesWithMinorVersion(id.slice(prefix.length))
+    ) {
+      const pricing = ANTHROPIC_PRICING[prefix];
+      const tier = pricing.longContext;
+      if (tier && inputTokens !== undefined && inputTokens > tier.aboveTokens) {
+        return tier.pricing;
+      }
+      return pricing;
     }
   }
   return null;
@@ -113,7 +160,13 @@ function calculateAnthropicCost(
   model: string,
   usage: Usage,
 ): CostBreakdown | null {
-  const modelPricing = findAnthropicPricing(model);
+  // The whole prompt decides the price tier. For Claude, `promptTokens` leaves
+  // out the cache reads and writes, so add them back.
+  const wholePrompt =
+    usage.promptTokens +
+    (usage.promptTokensDetails?.cachedTokens ?? 0) +
+    (usage.promptTokensDetails?.cacheWriteTokens ?? 0);
+  const modelPricing = findAnthropicPricing(model, wholePrompt);
   if (!modelPricing) {
     return null; // Unknown model
   }

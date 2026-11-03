@@ -20,14 +20,19 @@ import {
   setInlineErrorMessage,
   setIsPruned,
   setPromptCacheInputTokens,
+  setPromptCacheKey,
   setPromptCacheState,
+  recordCacheMiss,
   setToolGenerated,
   streamUpdate,
 } from "../slices/sessionSlice";
 import {
   resolvePromptCache,
   INITIAL_PROMPT_CACHE_STATE,
+  modelSupportsPromptCacheControl,
+  promptCacheStatus,
 } from "../../util/promptCache";
+import { detectCacheMiss, promptCacheKey } from "../../util/cacheSafeguards";
 import { totalInputTokens } from "core/llm/utils/cacheStats";
 import { ThunkApiType } from "../store";
 import { constructMessages } from "../util/constructMessages";
@@ -155,10 +160,18 @@ export const streamNormalInput = createAsyncThunk<
 
     // Prompt caching: the toolbar choice for this model, or config.yaml when
     // there is none. Auto learns from the pauses between requests this session.
+    const cacheStateBefore =
+      state.session.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
+    const cacheSetting =
+      state.ui.promptCacheSettings?.[selectedChatModel.title];
+    const cachingWasOn =
+      modelSupportsPromptCacheControl(selectedChatModel) &&
+      promptCacheStatus(selectedChatModel, cacheSetting, cacheStateBefore, 0)
+        .on;
     const cacheResolution = resolvePromptCache(
       selectedChatModel,
-      state.ui.promptCacheSettings?.[selectedChatModel.title],
-      state.session.promptCache ?? INITIAL_PROMPT_CACHE_STATE,
+      cacheSetting,
+      cacheStateBefore,
       Date.now(),
     );
     completionOptions = { ...completionOptions, ...cacheResolution.options };
@@ -180,6 +193,14 @@ export const streamNormalInput = createAsyncThunk<
           activeTools,
         )
       : baseSystemMessage;
+
+    // What the cached prefix is made of: the model, the tools and the system
+    // prompt. A change to any of them rebuilds the cache.
+    const cacheKey = promptCacheKey(
+      selectedChatModel,
+      activeTools.map((t) => t.function.name),
+      systemMessage,
+    );
 
     const withoutMessageIds = state.session.history.map((item) => {
       const { id, ...messageWithoutId } = item.message;
@@ -258,7 +279,8 @@ export const streamNormalInput = createAsyncThunk<
         dispatch(streamUpdate(next.value));
 
         // The final chunk carries the API's token counts. Remember the input
-        // size so the cache button can say what throwing the cache away costs.
+        // size so the cache button can say what throwing the cache away costs,
+        // and check that a cache that should have been warm was read.
         for (const message of next.value) {
           if (message.role === "assistant" && message.usage) {
             const total = totalInputTokens(
@@ -267,7 +289,27 @@ export const streamNormalInput = createAsyncThunk<
               message.usage,
             );
             if (total > 0) {
+              if (cachingWasOn) {
+                const miss = detectCacheMiss({
+                  before: cacheStateBefore,
+                  key: cacheKey,
+                  requestAt: cacheResolution.nextState.lastRequestAt ?? start,
+                  readTokens:
+                    message.usage.promptTokensDetails?.cachedTokens ?? 0,
+                  totalInputTokens: total,
+                });
+                if (miss) {
+                  dispatch(
+                    recordCacheMiss({
+                      readTokens: miss.readTokens,
+                      expectedTokens: miss.expectedTokens,
+                      causes: miss.causes,
+                    }),
+                  );
+                }
+              }
               dispatch(setPromptCacheInputTokens(total));
+              dispatch(setPromptCacheKey(cacheKey));
             }
           }
         }

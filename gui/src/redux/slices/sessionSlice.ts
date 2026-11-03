@@ -39,6 +39,8 @@ import { toolCallCtxItemToCtxItemWithId } from "../../pages/gui/ToolCallDiv/util
 import { addToolCallDeltaToState, isEditTool } from "../../util/toolCallState";
 import {
   INITIAL_PROMPT_CACHE_STATE,
+  type PromptCacheKey,
+  type PromptCacheMiss,
   type PromptCacheSessionState,
 } from "../../util/promptCache";
 import { RootState } from "../store";
@@ -701,6 +703,13 @@ export const sessionSlice = createSlice({
       state.inlineErrorMessage = undefined;
       state.isPruned = false;
       state.contextPercentage = undefined;
+      // A different conversation shares nothing with the cached one: its size,
+      // timing and misses do not carry over. What Auto learned about the
+      // user's pauses does.
+      state.promptCache = {
+        ...INITIAL_PROMPT_CACHE_STATE,
+        escalated: state.promptCache?.escalated ?? false,
+      };
 
       if (payload) {
         state.history = payload.history as any;
@@ -996,6 +1005,28 @@ export const sessionSlice = createSlice({
         lastInputTokens: action.payload,
       };
     },
+    setPromptCacheKey: (state, action: PayloadAction<PromptCacheKey>) => {
+      state.promptCache = {
+        ...(state.promptCache ?? INITIAL_PROMPT_CACHE_STATE),
+        lastKey: action.payload,
+      };
+    },
+    recordCacheMiss: (state, action: PayloadAction<PromptCacheMiss>) => {
+      const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
+      state.promptCache = {
+        ...current,
+        misses: (current.misses ?? 0) + 1,
+        lastMiss: action.payload,
+      };
+    },
+    acknowledgeCacheMisses: (state) => {
+      const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
+      state.promptCache = { ...current, missesAcknowledged: current.misses };
+    },
+    dismissColdCacheNotice: (state, action: PayloadAction<number>) => {
+      const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
+      state.promptCache = { ...current, dismissedColdFor: action.payload };
+    },
     setNewestToolbarPreviewForInput: (
       state,
       {
@@ -1119,6 +1150,10 @@ export const {
   setHasReasoningEnabled,
   setPromptCacheState,
   setPromptCacheInputTokens,
+  setPromptCacheKey,
+  recordCacheMiss,
+  acknowledgeCacheMisses,
+  dismissColdCacheNotice,
   setInlineErrorMessage,
   setIsPruned,
   setContextPercentage,
