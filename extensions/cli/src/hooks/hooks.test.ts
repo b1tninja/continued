@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getMatchingHookGroups, loadHooksConfig } from "./hookConfig.js";
 import { runHooks } from "./hookRunner.js";
+import { setTrustProjectHooksForRun } from "./hookTrust.js";
 import type {
   HookMatcherGroup,
   HooksConfig,
@@ -159,9 +160,15 @@ describe("hookConfig", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    // Helper: call loadHooksConfig with isolated homeDir and project cwd
+    // Helper: call loadHooksConfig with isolated homeDir and project cwd.
+    // Project hooks run only when trusted, so these tests trust for the run.
     function loadIsolated(cwd?: string) {
-      return loadHooksConfig(cwd ?? projectDir, fakeHome);
+      setTrustProjectHooksForRun(true);
+      try {
+        return loadHooksConfig(cwd ?? projectDir, fakeHome);
+      } finally {
+        setTrustProjectHooksForRun(false);
+      }
     }
 
     it("returns empty config when no settings files exist", () => {

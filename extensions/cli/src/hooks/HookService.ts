@@ -48,6 +48,16 @@ export class HookService extends BaseService<HookServiceState> {
 
     const loaded = loadHooksConfig(this.cwd);
 
+    if (loaded.untrustedProject) {
+      // stderr, so piped output is not polluted. The model never sees this.
+      const count = loaded.untrustedProject.handlers.length;
+      const [it, are, has] =
+        count === 1 ? ["it", "is", "it has"] : ["them", "are", "they have"];
+      process.stderr.write(
+        `This project defines ${count} hook${count === 1 ? "" : "s"} that ${are} not running because ${has} not been trusted. Run \`cn hooks\` to review ${it}.\n`,
+      );
+    }
+
     const eventCount = Object.keys(loaded.hooks).length;
     const handlerCount = Object.values(loaded.hooks).reduce(
       (sum, groups) =>
