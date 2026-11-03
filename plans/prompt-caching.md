@@ -1,6 +1,6 @@
 # Plan: prompt caching controls (Track C)
 
-Status: plan only, no product code written. Written 2026-11-02 against `origin/main` 37a972cfd. See [`ROADMAP.md`](./ROADMAP.md) for where this sits. The cost model in section 5 is [`prompt-caching-sim.mjs`](./prompt-caching-sim.mjs); run it with `node plans/prompt-caching-sim.mjs`.
+Status: C0 to C3 are built and in review (see section 9); defaults are unchanged (caching stays off unless chosen). Written 2026-11-02 against `origin/main` 37a972cfd and updated 2026-11-03 with live Bedrock measurements. See [`ROADMAP.md`](./ROADMAP.md) for where this sits. The cost model in section 5 is [`prompt-caching-sim.mjs`](./prompt-caching-sim.mjs); run it with `node plans/prompt-caching-sim.mjs`.
 
 ## 1. Problem
 
@@ -111,9 +111,9 @@ user[tool_result]  assistant[tool_use]  user[tool_result]      -> no block has c
 
 The last two tool-result messages use up the count of two, so the walk stops before it reaches the user's text. A plain chat (`q1 a1 q2`) marks both user messages. By the same walk, a session with one tool result still reaches the user's text and gets one marker, so the loss starts at the second tool result; I did not run that case. Nothing is cached past a breakpoint, so with no breakpoint a long Agent session pays full input price on the direct Anthropic path. I did not measure the hit rate against the live API. The Bedrock path adds a `cachePoint` block rather than editing a text block, so it does not have this problem (4.3 has another).
 
-### 4.3 Bedrock rewrites old messages as they leave the window (run, bytes only)
+### 4.3 Bedrock rewrote old messages as they left the window (run; confirmed live)
 
-`_addCachingToLastTwoUserMessages` appends `<!-- SID: <uuid> -->` to the text of the last two user messages and adds a `cachePoint`. When a message leaves that window the suffix is gone. Comparing the converted messages of consecutive requests in a chat:
+`_addCachingToLastTwoUserMessages` appended `<!-- SID: <uuid> -->` to the text of the last two user messages and added a `cachePoint`. When a message left that window the suffix was gone. Comparing the converted messages of consecutive requests in a chat:
 
 ```
 request N     q1   a1  q2+SID  a2  q3+SID
@@ -121,7 +121,19 @@ request N+1   q1   a1  q2      a2  q3+SID  a3  q4+SID
 per-message byte-identical:  [true, true, false, true, true]
 ```
 
-In a chat, every turn changes the previous turn's user message, so by Anthropic's prefix rule the entry written at request N cannot match request N+1 past `q1 a1`. The conversation would be rewritten at the write price every turn and only the system prompt and tools would be read, which costs more than no caching. In an Agent loop the effect is smaller: tool-result messages have no text block, so they get no suffix. In the loop I ran, the one text message ("fix it") lost its suffix once, when it left the window (`[false, true, true]` between requests 2 and 3). After that the only difference between requests was a `cachePoint` block moving (`[true, true, false, true, true]` between requests 3 and 4); I do not know whether Bedrock includes `cachePoint` blocks in its prefix match. I have not confirmed any of this against the service because Bedrock usage is not recorded (4.5); PR C0 measures it. The commit that added the suffix (189d0c87c) has no description, so its purpose is unknown. A plausible reason is to keep entries from matching across users.
+**Confirmed against Bedrock on 2026-11-02** (Haiku 4.5, 5 turns, about 7,000 tokens first turn and 1,450 added per turn). Old code: cache reads stopped growing after turn 2 and every later turn re-wrote 4,400 to 5,800 tokens at the write price.
+
+| Turn | Old: read / written | Fixed: read / written |
+| ---- | ------------------- | --------------------- |
+| 1    | 0 / 6,793           | 0 / 6,789             |
+| 2    | 6,793 / 1,482       | 6,789 / 1,450         |
+| 3    | 5,332 / 4,392       | 8,239 / 1,449         |
+| 4    | 5,332 / 5,846       | 9,688 / 1,454         |
+| 5    | not run             | 11,142 / 1,427        |
+
+The suffix is not an accident. PR #5035 added it because Bedrock caches at the AWS account level, so identical prompts from different users or processes would share entries. The fix keeps the conversation isolated and removes the instability: the ID goes on the first user message only, so every cached prefix after it includes it and no message changes once sent.
+
+**Isolation, checked live.** Two separate processes sent the same system prompt and then the same first user message. Process A wrote 6,790 tokens. Process B's first request read 5,330 tokens of that and wrote only 1,459. The 5,330 is the system prompt, which comes before the ID and is therefore shared across processes; the user turn, which carries the ID, was not shared (B wrote it fresh). This is the same exposure the old code had, since the old code also put the ID only on user messages. It means a system prompt is shareable between users of one AWS account. If a system prompt is confidential, that is a decision for the owner of #5035, and fixing it would need the ID inside the system prompt text itself, which changes what the model sees.
 
 ### 4.4 The prefix can change from the first token (read)
 
@@ -295,15 +307,15 @@ Turning the default on changes billing for existing users. The release note says
 
 ## 9. PR breakdown
 
-| PR  | Scope                                                                                                                                                                                                                                                                       | Depends on |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| C0  | Measure first: Bedrock returns `Usage` (input, read, write, per-lifetime writes); Anthropic keeps the 5m/1h split; the 1-hour price and missing Claude models in the cost table; hit rate against API input counts; the miss-cause report. No behaviour change to requests. | none       |
-| C1  | Fix the placement bugs: the shared helper marks the last block of each of the last two user-role messages (4.2), core `OpenRouter.ts` gets the same fix, and Bedrock stops editing old messages' text (4.3, after C0 shows whether it matters).                             | C0         |
-| C2  | `resolveCachePolicy`, the `cacheBehavior.ttl` field in every schema, one meaning for `promptCaching: false`, tools and system breakpoints on all Claude paths, `ttl` sent on Anthropic, Vertex and OpenRouter, Bedrock allowlist and retry. Default stays off.              | C1         |
-| C3  | Toolbar menu, per-model setting in `uiSlice`, warm/expired tooltip, the model/reasoning/mode switch notice, usage-panel additions.                                                                                                                                          | C2         |
-| C4  | Turn the default on for Claude models with Auto, after C0 data from at least a week of real use shows the hit rate and that Auto's thresholds are sensible. Release note.                                                                                                   | C3         |
-| C5  | Docs: update `anthropic.mdx` and `bedrock.mdx` for the new fields, add a short page on cache lifetime and cost. Written to the `docs-style` rules.                                                                                                                          | C2         |
-| C6  | Later: OpenAI `prompt_cache_options.ttl` and `prompt_cache_retention`; keepalive pings; cache-safe compaction; stable system prompt across modes.                                                                                                                           | C4         |
+| PR  | Scope                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Depends on |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| C0  | Measure first: Bedrock returns `Usage` (input, read, write, per-lifetime writes); Anthropic keeps the 5m/1h split; the 1-hour price and missing Claude models in the cost table; hit rate against API input counts; the miss-cause report. No behaviour change to requests. **Built** (the miss-cause report is not).                                                                                                                                                               | none       |
+| C1  | Fix the placement bugs: the shared helper marks the last block of each of the last two user-role messages (4.2), core `OpenRouter.ts` gets the same fix, and Bedrock stops editing old messages' text (4.3, after C0 shows whether it matters). **Built.** The Bedrock part is confirmed live; the Anthropic part is mock-tested only.                                                                                                                                              | C0         |
+| C2  | `resolveCachePolicy`, the `cacheBehavior.ttl` field in every schema, one meaning for `promptCaching: false`, tools and system breakpoints on all Claude paths, `ttl` sent on Anthropic, Vertex and OpenRouter, Bedrock allowlist and retry. Default stays off. **Partly built:** per-request `promptCaching` and `promptCacheTtl` on Anthropic and Bedrock, and the explicit-false rule. Not built: one `resolveCachePolicy`, `cacheBehavior.ttl` in config, Vertex and OpenRouter. | C1         |
+| C3  | Toolbar menu, per-model setting in `uiSlice`, warm/expired tooltip, the model/reasoning/mode switch notice, usage-panel additions. **Built** except the usage-panel additions beyond hit rate and 1-hour writes.                                                                                                                                                                                                                                                                    | C2         |
+| C4  | Turn the default on for Claude models with Auto, after C0 data from at least a week of real use shows the hit rate and that Auto's thresholds are sensible. Release note.                                                                                                                                                                                                                                                                                                           | C3         |
+| C5  | Docs: update `anthropic.mdx` and `bedrock.mdx` for the new fields, add a short page on cache lifetime and cost. Written to the `docs-style` rules.                                                                                                                                                                                                                                                                                                                                  | C2         |
+| C6  | Later: OpenAI `prompt_cache_options.ttl` and `prompt_cache_retention`; keepalive pings; cache-safe compaction; stable system prompt across modes.                                                                                                                                                                                                                                                                                                                                   | C4         |
 
 C0 and C1 are the ones that pay off for a user who changes nothing, so they go first and need no new setting.
 
@@ -330,17 +342,15 @@ C0 and C1 are the ones that pay off for a user who changes nothing, so they go f
 
 ## 11. Not verified
 
-Written from reading the code and the pages below. Run on 2026-11-02: two throwaway tests (Anthropic `convertMessages` placement and Bedrock `_convertMessages` byte comparison, both deleted afterwards) and `prompt-caching-sim.mjs`. Nothing was run against a live API, and no PR in this plan exists. Still unchecked:
+Run on 2026-11-02 and 03: throwaway code probes (Anthropic `convertMessages` placement, Bedrock message bytes), `prompt-caching-sim.mjs`, and live Bedrock runs (Haiku 4.5, a few cents): cache growth over 5 turns, 5-minute versus 1-hour writes, a 5.5-minute pause, and a two-process isolation check. Everything else is read from code or documentation. No live call was made to the Anthropic API, Vertex or OpenRouter. Still unchecked:
 
-- Whether Bedrock includes `cachePoint` blocks in its prefix match, and so whether 4.3 costs anything in an Agent loop (C0 answers it).
-- The real cache hit rate of an Agent session on any provider today. 4.2 says the markers are missing; it does not measure the effect.
+- The Anthropic-path placement fix (tool results get a breakpoint). It is covered by a test of the real request body against a mock, not by a live call. Needs an Anthropic key.
 - Whether `anthropic-beta: prompt-caching-2024-07-31` is still needed, and whether `ttl` works through every gateway users put in front of `apiBase`.
 - Vertex's support for a 1-hour lifetime, Google's own caching lifetimes (the page came back as HTML), and Nova's behaviour.
 - Core `OpenRouter.ts` placement beyond the lines seen in the search results.
-- The model picker and popover components C3 would reuse, and the exact InputToolbar test setup.
 - The full text of every paper in 3.5 (abstracts only), and the parts of the Claude Code engineering post that were cut off by the fetch tool.
-- Section 5 uses invented session shapes and a model that ignores output tokens, the 20-block lookback, and the real size of a prefix. Its escalation thresholds are a guess.
-- Whether the 189d0c87c suffix has a purpose that matters.
-- Whether `ROADMAP.md`'s other open items (A0 #98, B1) touch the same files.
+- Section 5 uses invented session shapes and a model that ignores output tokens, the 20-block lookback, and the real size of a prefix. Auto's thresholds are a guess; the live pause test shows only that 5.5 minutes is enough to lose a 5-minute entry and that a 1-hour entry survives it.
+- Bedrock's 1-hour allowlist is read from the AWS table. Only Haiku 4.5 was tried live.
+- The UI was tested with component tests, not clicked through in a real editor.
 
 Pages read on 2026-11-02: `platform.claude.com/docs/en/build-with-claude/prompt-caching` and `cache-diagnostics`; `code.claude.com/docs/en/prompt-caching`; `claude.com/blog/lessons-from-building-claude-code-prompt-caching-is-everything`; `docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching`; `platform.openai.com/docs/guides/prompt-caching`; `openrouter.ai/docs/features/prompt-caching`; and the arXiv search result pages for the papers in 3.5.

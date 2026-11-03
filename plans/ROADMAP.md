@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-11-03 (at `origin/main` eccd7c562, after #93).
+Last updated: 2026-11-03 (at `origin/main` 880f72bd4, after #125).
 
 This is the place to check what is done, what is in flight and what comes next. `fork-plan.md` stays as the original design record (why we forked, scope, risks, licensing, CI). Detailed plans for new work live next to this file.
 
@@ -21,12 +21,13 @@ PR numbers are from `b1tninja/continued`, read from `git log` and `gh pr list`. 
 
 ## In progress
 
-| Item                                 | State                                                                                                                                                                                         |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fork install guide, README, new icon | PR #92, open, branch `chore/rebrand-and-install-docs`                                                                                                                                         |
-| Missing-secret indicator (A0)        | PR #98, open. Detection, toolbar and gear indicators, panel with Open .env / Open config line / Copy name. Tested at unit and component level only; not yet clicked through in a real editor. |
-| Session cost tracking                | Branch `feat/session-cost-tracking` exists but has no commits of its own yet (same commit as `main`). No plan written yet.                                                                    |
-| Dependency updates                   | Open Dependabot PRs (for example #65-#69, #71-#79, #85). Merge in groups; rerun the CI gates after major bumps.                                                                               |
+| Item                                 | State                                                                                                                                                                                                                        |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fork install guide, README, new icon | PR #92, open, branch `chore/rebrand-and-install-docs`                                                                                                                                                                        |
+| Missing-secret indicator (A0)        | PR #98, open. Detection, toolbar and gear indicators, panel with Open .env / Open config line / Copy name. Tested at unit and component level only; not yet clicked through in a real editor.                                |
+| Session cost tracking                | Branch `feat/session-cost-tracking` exists but has no commits of its own yet (same commit as `main`). No plan written yet.                                                                                                   |
+| Prompt caching controls (Track C)    | C0 to C3 built on branches `feat/cache-visibility` and `feat/cache-toolbar`, PRs to follow. Toolbar menu, Auto lifetime, switch-cost notice, Bedrock cache fix (confirmed live). Default stays off. See `prompt-caching.md`. |
+| Dependency updates                   | Open Dependabot PRs (for example #65-#69, #71-#79, #85). Merge in groups; rerun the CI gates after major bumps.                                                                                                              |
 
 ## Next
 
