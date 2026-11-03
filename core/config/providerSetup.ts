@@ -8,7 +8,10 @@ import * as YAML from "yaml";
 import { editConfigFile, getConfigYamlPath } from "../util/paths";
 import { isValidSecretName } from "../util/unresolvedSecrets";
 
+import { defaultSecretName } from "./providerSecretName";
 import { modelDescriptionToYamlModel } from "./util";
+
+export { defaultSecretName };
 
 /**
  * Setting up a provider from the GUI: one provider connection (provider plus
@@ -83,15 +86,6 @@ const SECRET_REFERENCE =
 
 export function secretReference(name: string): string {
   return `\${{ secrets.${name} }}`;
-}
-
-/** Default secret name for a provider's key, e.g. CONTINUED_ANTHROPIC_API_KEY. */
-export function defaultSecretName(provider: string): string {
-  const slug = provider
-    .replace(/[^A-Za-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toUpperCase();
-  return `CONTINUED_${slug || "PROVIDER"}_API_KEY`;
 }
 
 type YamlModel = Record<string, any>;
