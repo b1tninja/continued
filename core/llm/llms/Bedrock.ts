@@ -36,9 +36,11 @@ import { getAnthropicThinkingParams } from "./anthropicThinking.js";
 import { PROVIDER_TOOL_SUPPORT } from "../toolSupport.js";
 import { createBedrockRequestHandler } from "./bedrockHttp.js";
 import { getSecureID } from "../utils/getSecureID.js";
+import { resolveCacheParts } from "./anthropicCache.js";
 import {
   applyCrossRegionInference,
   BedrockModelOption,
+  bedrockCacheTtl,
   bedrockUsageToUsage,
   buildModelCatalog,
   getBedrockErrorHint,
@@ -477,14 +479,23 @@ class Bedrock extends BaseLLM {
       messages.find((m) => m.role === "system")?.content ?? "",
     );
 
-    // Prompt and system message caching settings
-    const shouldCacheSystemMessage =
-      (!!systemMessage && this.cacheBehavior?.cacheSystemMessage) ||
-      this.completionOptions.promptCaching;
+    // Prompt and system message caching settings. `options` already includes the
+    // model's configured default, so an explicit `promptCaching: false` (for
+    // example from the toolbar) wins over `cacheBehavior`.
+    const parts = resolveCacheParts(
+      options.promptCaching,
+      this.cacheBehavior,
+      !!systemMessage,
+    );
+    const cacheTtl = bedrockCacheTtl(options.model, options.promptCacheTtl);
+    const cachePoint = {
+      cachePoint: {
+        type: "default" as const,
+        ...(cacheTtl ? { ttl: cacheTtl } : {}),
+      },
+    };
     const enablePromptCaching =
-      shouldCacheSystemMessage ||
-      this.cacheBehavior?.cacheConversation ||
-      this.completionOptions.promptCaching;
+      parts.tools || parts.system || parts.conversation;
 
     if (enablePromptCaching) {
       this.requestOptions.headers = {
@@ -513,16 +524,19 @@ class Bedrock extends BaseLLM {
           },
         })),
       } as ToolConfiguration;
-      const shouldCacheToolsConfig = this.completionOptions.promptCaching;
+      const shouldCacheToolsConfig = parts.tools;
       if (shouldCacheToolsConfig) {
-        toolConfig.tools!.push({ cachePoint: { type: "default" } });
+        toolConfig.tools!.push(cachePoint);
       }
       options.tools.forEach((tool) => {
         availableTools.add(tool.function.name);
       });
     }
 
-    const convertedMessages = this._convertMessages(messages, availableTools);
+    const convertedMessages = this._convertMessages(messages, availableTools, {
+      conversation: parts.conversation,
+      ttl: cacheTtl,
+    });
 
     return {
       modelId: applyCrossRegionInference(
@@ -531,8 +545,8 @@ class Bedrock extends BaseLLM {
         this.region,
       ),
       system: systemMessage
-        ? shouldCacheSystemMessage
-          ? [{ text: systemMessage }, { cachePoint: { type: "default" } }]
+        ? parts.system
+          ? [{ text: systemMessage }, cachePoint]
           : [{ text: systemMessage }]
         : undefined,
       toolConfig: toolConfig,
@@ -570,6 +584,7 @@ class Bedrock extends BaseLLM {
   private _convertMessages(
     messages: ChatMessage[],
     availableTools: Set<string>,
+    cache?: { conversation: boolean; ttl?: "1h" },
   ): Message[] {
     let currentRole: "user" | "assistant" = "user";
     let currentBlocks: ContentBlock[] = [];
@@ -724,17 +739,21 @@ class Bedrock extends BaseLLM {
     // The second-to-last because it retrieves potentially already cached contents,
     // The last one because we want it cached for later retrieval.
     // See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
-    if (
-      this.cacheBehavior?.cacheConversation ||
-      this.completionOptions.promptCaching
-    ) {
-      this._addCachingToLastTwoUserMessages(converted);
+    // Callers that do not pass `cache` (tests) get the settings configured on the model.
+    const cacheConversation =
+      cache?.conversation ??
+      !!(
+        this.cacheBehavior?.cacheConversation ||
+        this.completionOptions.promptCaching
+      );
+    if (cacheConversation) {
+      this._addCachingToLastTwoUserMessages(converted, cache?.ttl);
     }
 
     return converted;
   }
 
-  private _addCachingToLastTwoUserMessages(converted: Message[]) {
+  private _addCachingToLastTwoUserMessages(converted: Message[], ttl?: "1h") {
     let numCached = 0;
     for (let i = converted.length - 1; i >= 0; i--) {
       const message = converted[i];
@@ -744,7 +763,9 @@ class Bedrock extends BaseLLM {
             block.text += getSecureID();
           }
         });
-        message.content?.push({ cachePoint: { type: "default" } });
+        message.content?.push({
+          cachePoint: { type: "default", ...(ttl ? { ttl } : {}) },
+        });
         numCached++;
       }
       if (numCached === 2) {

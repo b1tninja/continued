@@ -19,9 +19,14 @@ import {
   setInactive,
   setInlineErrorMessage,
   setIsPruned,
+  setPromptCacheState,
   setToolGenerated,
   streamUpdate,
 } from "../slices/sessionSlice";
+import {
+  resolvePromptCache,
+  INITIAL_PROMPT_CACHE_STATE,
+} from "../../util/promptCache";
 import { ThunkApiType } from "../store";
 import { constructMessages } from "../util/constructMessages";
 
@@ -145,6 +150,19 @@ export const streamNormalInput = createAsyncThunk<
           state.session.hasReasoningEnabled,
           selectedChatModel,
         );
+
+    // Prompt caching: the toolbar choice for this model, or config.yaml when
+    // there is none. Auto learns from the pauses between requests this session.
+    const cacheResolution = resolvePromptCache(
+      selectedChatModel,
+      state.ui.promptCacheSettings?.[selectedChatModel.title],
+      state.session.promptCache ?? INITIAL_PROMPT_CACHE_STATE,
+      Date.now(),
+    );
+    completionOptions = { ...completionOptions, ...cacheResolution.options };
+    if (cacheResolution.nextState !== state.session.promptCache) {
+      dispatch(setPromptCacheState(cacheResolution.nextState));
+    }
 
     // Construct messages (excluding system message)
     const baseSystemMessage = getBaseSystemMessage(
