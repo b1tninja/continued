@@ -9,6 +9,13 @@ import {
 } from "./autocomplete/util/openedFilesLruCache";
 import { ConfigHandler } from "./config/ConfigHandler";
 import { addModel, deleteModel } from "./config/util";
+import { saveModeModels } from "./config/yaml/saveModeModels";
+import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
+import { addToolRule } from "./tools/permissions/addRule";
+import {
+  suggestAllowRule,
+  withLoosensCheck,
+} from "./tools/permissions/suggest";
 import { DevDataSqliteDb } from "./data/devdataSqlite";
 import { DataLogger } from "./data/log";
 import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
@@ -26,7 +33,11 @@ import { ChatDescriber } from "./util/chatDescriber";
 import { compactConversation } from "./util/conversationCompaction";
 import { GlobalContext } from "./util/GlobalContext";
 import historyManager from "./util/history";
-import { editConfigFile, migrateV1DevDataFiles } from "./util/paths";
+import {
+  editConfigFile,
+  getContinueGlobalPath,
+  migrateV1DevDataFiles,
+} from "./util/paths";
 
 import {
   isProcessBackgrounded,
@@ -59,6 +70,7 @@ import {
   isContinueConfigRelatedUri,
 } from "./config/loadLocalAssistants";
 import { CodebaseRulesCache } from "./config/markdown/loadCodebaseRules";
+import { openSecretLocation } from "./config/openSecretLocation";
 import {
   setupLocalConfig,
   setupProviderConfig,
@@ -365,6 +377,53 @@ export class Core {
       );
     });
 
+    on("config/setModeModels", async (msg) => {
+      const saved = saveModeModels(msg.data);
+      if (!saved) {
+        void this.ide.showToast(
+          "warning",
+          "Per-mode models are saved in config.yaml, and this profile has none.",
+        );
+        return { saved: false };
+      }
+      await this.configHandler.reloadConfig(
+        "Mode models changed (config/setModeModels message)",
+      );
+      return { saved: true };
+    });
+
+    on("tools/suggestAllowRule", async ({ data: { toolName, parsedArgs } }) => {
+      const { config } = await this.configHandler.loadConfig();
+      const tool = config?.tools.find((t) => t.function.name === toolName);
+      const isMcp =
+        !!tool?.uri?.startsWith("mcp:") && !!tool.originalFunctionName;
+      const suggestion = suggestAllowRule({
+        toolName,
+        parsedArgs,
+        readonly: tool?.readonly,
+        mcp:
+          isMcp && tool
+            ? { serverName: tool.group, toolName: tool.originalFunctionName! }
+            : undefined,
+      });
+      return withLoosensCheck(suggestion, tool, parsedArgs);
+    });
+
+    on("config/addToolRule", async (msg) => {
+      const result = addToolRule(msg.data.decision, msg.data.rule);
+      if (result === "added") {
+        await this.configHandler.reloadConfig(
+          "Tool rule added (config/addToolRule message)",
+        );
+      } else if (result === "no-config") {
+        void this.ide.showToast(
+          "warning",
+          "Tool rules are saved in config.yaml, and this profile has none.",
+        );
+      }
+      return { result };
+    });
+
     on("config/newPromptFile", async (msg) => {
       const { config } = await this.configHandler.loadConfig();
       await createNewPromptFileV2(this.ide, config?.experimental?.promptPath);
@@ -429,6 +488,16 @@ export class Core {
 
     on("config/openProfile", async (msg) => {
       await this.configHandler.openConfigProfile(msg.data.profileId);
+    });
+
+    on("config/openSecretLocation", async (msg) => {
+      await openSecretLocation({
+        ide: this.ide,
+        secretName: msg.data.secretName,
+        target: msg.data.target,
+        continueDir: getContinueGlobalPath(),
+        configUri: this.configHandler.currentProfile?.profileDescription.uri,
+      });
     });
 
     on("config/ideSettingsUpdate", async (msg) => {
@@ -1115,25 +1184,14 @@ export class Core {
         }
 
         const tool = config.tools.find((t) => t.function.name === toolName);
-        if (!tool) {
-          return { policy: basePolicy };
-        }
-
-        // Extract display value for specific tools
-        let displayValue: string | undefined;
-        if (toolName === "runTerminalCommand" && parsedArgs.command) {
-          displayValue = parsedArgs.command as string;
-        }
-
-        if (tool.evaluateToolCallPolicy) {
-          const evaluatedPolicy = tool.evaluateToolCallPolicy(
-            basePolicy,
-            parsedArgs,
-            processedArgs,
-          );
-          return { policy: evaluatedPolicy, displayValue };
-        }
-        return { policy: basePolicy, displayValue };
+        return evaluateToolPolicyWithRules({
+          tool,
+          toolName,
+          basePolicy,
+          parsedArgs,
+          processedArgs,
+          permissions: config.toolPermissions,
+        });
       },
     );
 
