@@ -2,7 +2,7 @@ import {
   ArrowPathIcon,
   ArrowTopRightOnSquareIcon,
 } from "@heroicons/react/24/outline";
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { Button, Input, StyledActionButton } from "../components";
 import Alert from "../components/gui/Alert";
@@ -19,15 +19,21 @@ import {
   ProviderInfo,
   providers,
 } from "../pages/AddNewModel/configs/providers";
-import type { BedrockModelOptionInfo } from "core/protocol/core";
+import type { BedrockEndpointModel } from "./modelListUtils";
 import {
   areRequiredFieldsFilled,
   buildModelFromForm,
   getBedrockConnectionParams,
   getRenderableFields,
 } from "./addModelFormUtils";
+import { listBedrockModelsFor } from "./bedrockModels";
 import { BedrockConnectionTester } from "./BedrockConnectionTester";
 import { FormSelect } from "./FormSelect";
+import {
+  bedrockEndpointModelsToPackages,
+  bedrockOptionsToPackages,
+  computeModelLists,
+} from "./modelListUtils";
 
 interface AddModelFormProps {
   onDone: () => void;
@@ -37,6 +43,23 @@ const MODEL_PROVIDERS_URL =
   "https://docs.continue.dev/customize/model-providers";
 const CODESTRAL_URL = "https://console.mistral.ai/codestral";
 const CONTINUE_SETUP_URL = "https://docs.continue.dev/setup/overview";
+
+const isBedrockProvider = (provider: string) =>
+  provider === "bedrock" || provider === "bedrock-mantle";
+
+/**
+ * Packages for a live Bedrock list. The combined "Amazon Bedrock" entry shows
+ * models from both endpoints (Mantle-only ones are labelled); the dedicated
+ * Mantle entry shows just Mantle's models.
+ */
+function bedrockPackagesFor(
+  formProvider: string,
+  models: BedrockEndpointModel[],
+) {
+  return formProvider === "bedrock-mantle"
+    ? bedrockOptionsToPackages(models, "bedrock-mantle")
+    : bedrockEndpointModelsToPackages(models);
+}
 
 export function AddModelForm({ onDone }: AddModelFormProps) {
   const [selectedProvider, setSelectedProvider] = useState<ProviderInfo>(
@@ -49,47 +72,118 @@ export function AddModelForm({ onDone }: AddModelFormProps) {
   const formMethods = useForm();
   // Subscribing to all values lets conditional fields (e.g. auth method) re-render.
   const formValues = formMethods.watch();
-  // Model chosen from Bedrock's live model list (overrides the package default).
-  const [pickedBedrockModel, setPickedBedrockModel] =
-    useState<BedrockModelOptionInfo>();
   const ideMessenger = useContext(IdeMessengerContext);
 
-  const [fetchedModelsList, setFetchedModelsList] = useState<ModelPackage[]>(
-    [],
-  );
+  // Models the provider reports for the entered credentials. Empty until a
+  // connection test or refresh succeeds; then it replaces the curated list.
+  const [liveModels, setLiveModels] = useState<ModelPackage[]>([]);
+  const [liveNotes, setLiveNotes] = useState<string[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [refreshError, setRefreshError] = useState<string>();
+  const providerRef = useRef(selectedProvider.provider);
+  providerRef.current = selectedProvider.provider;
 
   useEffect(() => {
     void initializeDynamicModels(ideMessenger);
   }, []);
 
   useEffect(() => {
-    setFetchedModelsList([]);
+    setLiveModels([]);
+    setLiveNotes([]);
+    setRefreshError(undefined);
   }, [selectedProvider]);
 
-  const handleFetchModels = useCallback(async () => {
-    const apiKey = formMethods.watch("apiKey");
-    const apiBase = formMethods.watch("apiBase");
-    if (!apiKey) return;
+  const modelLists = computeModelLists(selectedProvider, liveModels);
+  const isBedrock = isBedrockProvider(selectedProvider.provider);
+  const bedrockConnection = isBedrock
+    ? getBedrockConnectionParams(selectedProvider, selectedModel, formValues)
+    : undefined;
+  // The selected model is served only by the Mantle endpoint while the form is
+  // the combined "Amazon Bedrock" entry.
+  const usesMantleEndpoint =
+    selectedProvider.provider === "bedrock" &&
+    selectedModel.endpointProvider === "bedrock-mantle";
+  const canRefresh = isBedrock
+    ? areRequiredFieldsFilled(selectedProvider, formValues)
+    : !!formValues.apiKey &&
+      selectedProvider.provider !== "ollama" &&
+      selectedProvider.provider !== "openrouter";
 
+  /** Show a freshly loaded live list, keeping the current pick when it is still offered. */
+  function applyLiveModels(
+    packages: ModelPackage[],
+    forProvider: string,
+    notes: string[] = [],
+  ) {
+    if (providerRef.current !== forProvider) return;
+    setLiveModels(packages);
+    setLiveNotes(notes);
+    if (packages.length === 0) return;
+    const lists = computeModelLists(selectedProvider, packages);
+    const all = [...lists.top, ...(lists.other ?? [])];
+    if (!all.some((m) => m.params.model === selectedModel.params.model)) {
+      setSelectedModel(all[0]);
+    }
+  }
+
+  const handleRefreshModels = useCallback(async () => {
     const providerAtFetchTime = selectedProvider.provider;
     setIsFetchingModels(true);
+    setRefreshError(undefined);
     try {
+      if (isBedrockProvider(providerAtFetchTime)) {
+        const result = await listBedrockModelsFor(
+          ideMessenger,
+          bedrockConnection ?? {},
+        );
+        if (!result.ok) {
+          setRefreshError(result.error);
+          return;
+        }
+        applyLiveModels(
+          bedrockPackagesFor(providerAtFetchTime, result.models),
+          providerAtFetchTime,
+          result.notes,
+        );
+        return;
+      }
       const models = await fetchProviderModels(
         ideMessenger,
         providerAtFetchTime,
-        apiKey,
-        apiBase,
+        formMethods.getValues("apiKey"),
+        formMethods.getValues("apiBase"),
       );
-      setFetchedModelsList((prev) =>
-        selectedProvider.provider === providerAtFetchTime ? models : prev,
-      );
+      if (models.length === 0) {
+        setRefreshError("No models were returned. Check the API key.");
+        return;
+      }
+      applyLiveModels(models, providerAtFetchTime);
     } catch (error) {
       console.error("Failed to fetch models:", error);
+      setRefreshError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsFetchingModels(false);
     }
-  }, [ideMessenger, selectedProvider, formMethods]);
+  }, [
+    ideMessenger,
+    selectedProvider,
+    selectedModel,
+    formMethods,
+    bedrockConnection,
+  ]);
+
+  /** Picking from the list wins over a previously typed custom Bedrock model ID. */
+  function onPickModel(val: DisplayInfo) {
+    const match = [...modelLists.top, ...(modelLists.other ?? [])].find(
+      (option) => option.title === val.title,
+    );
+    if (match) {
+      setSelectedModel(match);
+      if (isBedrock) {
+        formMethods.setValue("model", "", { shouldDirty: true });
+      }
+    }
+  }
 
   const popularProviderTitles = [
     providers["openai"]?.title || "",
@@ -149,15 +243,20 @@ export function AddModelForm({ onDone }: AddModelFormProps) {
       : undefined;
 
   function onSubmit() {
+    // A Mantle-only model picked in the combined Bedrock form is saved with the
+    // Mantle provider; the credentials and region are the same.
+    const saveProvider = usesMantleEndpoint
+      ? (providers["bedrock-mantle"] ?? selectedProvider)
+      : selectedProvider;
     const model = buildModelFromForm(
-      selectedProvider,
+      saveProvider,
       selectedModel,
       formMethods.getValues(),
       {
+        // Live Bedrock entries carry a descriptive title ("... (Bedrock)").
         title:
-          pickedBedrockModel &&
-          formMethods.getValues("model") === pickedBedrockModel.id
-            ? `${pickedBedrockModel.name} (Bedrock)`
+          isBedrock && modelLists.isLive
+            ? selectedModel.params.title
             : undefined,
       },
     );
@@ -208,7 +307,7 @@ export function AddModelForm({ onDone }: AddModelFormProps) {
                 otherOptions={otherProviders}
                 searchPlaceholder="Search providers..."
               />
-              <span className="text-description-muted mt-1 block text-xs">
+              <span className="mt-1 block text-xs text-description-muted">
                 Don't see your provider?{" "}
                 <a
                   className="cursor-pointer text-inherit underline hover:text-inherit"
@@ -241,16 +340,18 @@ export function AddModelForm({ onDone }: AddModelFormProps) {
                 <label className="block text-sm font-medium">Model</label>
                 <button
                   type="button"
-                  title="Use entered API key to fetch available models"
+                  aria-label="Refresh model list"
+                  title={
+                    isBedrock
+                      ? "Use the entered credentials to list the models available in this region"
+                      : "Use the entered API key to list the models available to you"
+                  }
                   className={`cursor-pointer border-none bg-transparent p-0 ${
-                    apiKeyValue &&
-                    apiKeyValue.length > 0 &&
-                    selectedProvider.provider !== "ollama" &&
-                    selectedProvider.provider !== "openrouter"
+                    canRefresh
                       ? `text-description-muted hover:text-foreground`
                       : "invisible"
                   }`}
-                  onClick={handleFetchModels}
+                  onClick={handleRefreshModels}
                   disabled={isFetchingModels}
                 >
                   <ArrowPathIcon
@@ -260,56 +361,38 @@ export function AddModelForm({ onDone }: AddModelFormProps) {
               </div>
               <ModelSelectionListbox
                 selectedProvider={selectedModel}
-                setSelectedProvider={(val: DisplayInfo) => {
-                  const options =
-                    Object.entries(providers).find(
-                      ([, provider]) =>
-                        provider?.title === selectedProvider.title,
-                    )?.[1]?.packages ?? [];
-                  const allOptions = [...options, ...fetchedModelsList];
-                  const match = allOptions.find(
-                    (option) => option.title === val.title,
-                  );
-                  if (match) {
-                    setSelectedModel(match);
-                  }
-                }}
-                topOptions={(() => {
-                  const providerInfo = Object.entries(providers).find(
-                    ([, provider]) =>
-                      provider?.title === selectedProvider.title,
-                  )?.[1];
-                  return (
-                    providerInfo?.popularPackages ?? providerInfo?.packages
-                  );
-                })()}
-                otherOptions={(() => {
-                  const providerInfo = Object.entries(providers).find(
-                    ([, provider]) =>
-                      provider?.title === selectedProvider.title,
-                  )?.[1];
-                  const staticOther = providerInfo?.popularPackages
-                    ? providerInfo.packages.filter(
-                        (p) =>
-                          !new Set(
-                            providerInfo.popularPackages!.map((pp) => pp.title),
-                          ).has(p.title),
-                      )
-                    : undefined;
-                  // Merge dynamically fetched models (deduplicated)
-                  if (fetchedModelsList.length > 0) {
-                    const existingTitles = new Set(
-                      (providerInfo?.packages ?? []).map((p) => p.title),
-                    );
-                    const newModels = fetchedModelsList.filter(
-                      (m) => !existingTitles.has(m.title),
-                    );
-                    return [...(staticOther ?? []), ...newModels];
-                  }
-                  return staticOther;
-                })()}
-                otherOptionsLabel="Additional models"
+                setSelectedProvider={onPickModel}
+                topOptions={modelLists.top}
+                topOptionsLabel={
+                  modelLists.isLive ? "Latest available" : "Popular"
+                }
+                otherOptions={modelLists.other}
+                otherOptionsLabel={
+                  modelLists.isLive
+                    ? "Other available models"
+                    : "Additional models"
+                }
               />
+              {modelLists.isLive && (
+                <span className="mt-1 block text-xs text-description-muted">
+                  Showing {liveModels.length} model
+                  {liveModels.length === 1 ? "" : "s"} available to your
+                  account.
+                </span>
+              )}
+              {refreshError && (
+                <span className="mt-1 block whitespace-pre-wrap text-xs text-warning">
+                  Couldn't refresh the model list: {refreshError}
+                </span>
+              )}
+              {liveNotes.map((note) => (
+                <span
+                  key={note}
+                  className="mt-1 block text-xs text-description-muted"
+                >
+                  {note}
+                </span>
+              ))}
             </div>
 
             {selectedModel.params.model.startsWith("codestral") && (
@@ -333,18 +416,18 @@ export function AddModelForm({ onDone }: AddModelFormProps) {
                   <Input
                     id="apiKey"
                     className={
-                      apiKeyWarning ? "border-warning w-full" : "w-full"
+                      apiKeyWarning ? "w-full border-warning" : "w-full"
                     }
                     type="password"
                     placeholder={`Enter your ${selectedProvider.title} API key`}
                     {...formMethods.register("apiKey")}
                   />
                   {apiKeyWarning && (
-                    <span className="text-warning mt-1 block text-xs">
+                    <span className="mt-1 block text-xs text-warning">
                       {apiKeyWarning}
                     </span>
                   )}
-                  <span className="text-description-muted mt-1 block text-xs">
+                  <span className="mt-1 block text-xs text-description-muted">
                     <a
                       className="cursor-pointer text-inherit underline hover:text-inherit hover:brightness-125"
                       onClick={() => {
@@ -398,28 +481,32 @@ export function AddModelForm({ onDone }: AddModelFormProps) {
                   />
                 )}
                 {field.description && (
-                  <span className="text-description-muted mt-1 block text-xs">
+                  <span className="mt-1 block text-xs text-description-muted">
                     {field.description}
                   </span>
                 )}
               </div>
             ))}
 
-            {(selectedProvider.provider === "bedrock" ||
-              selectedProvider.provider === "bedrock-mantle") && (
+            {isBedrock && (
               <BedrockConnectionTester
-                connection={getBedrockConnectionParams(
-                  selectedProvider,
-                  selectedModel,
-                  formValues,
-                )}
+                connection={bedrockConnection ?? {}}
                 model={formValues.model || selectedModel.params.model}
                 canTest={areRequiredFieldsFilled(selectedProvider, formValues)}
-                onPickModel={(m) => {
-                  setPickedBedrockModel(m);
-                  formMethods.setValue("model", m?.id ?? "", {
-                    shouldDirty: true,
-                  });
+                testEndpoint={usesMantleEndpoint ? "mantle" : undefined}
+                onModelsLoaded={(models, notes) => {
+                  setRefreshError(undefined);
+                  const forProvider = selectedProvider.provider;
+                  if (!models) {
+                    setLiveModels([]);
+                    setLiveNotes([]);
+                    return;
+                  }
+                  applyLiveModels(
+                    bedrockPackagesFor(forProvider, models),
+                    forProvider,
+                    notes,
+                  );
                 }}
               />
             )}
@@ -430,7 +517,7 @@ export function AddModelForm({ onDone }: AddModelFormProps) {
               Connect
             </Button>
 
-            <span className="text-description-muted block w-full text-center text-xs">
+            <span className="block w-full text-center text-xs text-description-muted">
               This will update your{" "}
               <span
                 className="cursor-pointer underline hover:brightness-125"
