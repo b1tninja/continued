@@ -19,6 +19,7 @@ import {
   setInactive,
   setInlineErrorMessage,
   setIsPruned,
+  setPromptCacheInputTokens,
   setPromptCacheState,
   setToolGenerated,
   streamUpdate,
@@ -27,6 +28,7 @@ import {
   resolvePromptCache,
   INITIAL_PROMPT_CACHE_STATE,
 } from "../../util/promptCache";
+import { totalInputTokens } from "core/llm/utils/cacheStats";
 import { ThunkApiType } from "../store";
 import { constructMessages } from "../util/constructMessages";
 
@@ -254,6 +256,21 @@ export const streamNormalInput = createAsyncThunk<
         }
 
         dispatch(streamUpdate(next.value));
+
+        // The final chunk carries the API's token counts. Remember the input
+        // size so the cache button can say what throwing the cache away costs.
+        for (const message of next.value) {
+          if (message.role === "assistant" && message.usage) {
+            const total = totalInputTokens(
+              selectedChatModel.provider,
+              selectedChatModel.model,
+              message.usage,
+            );
+            if (total > 0) {
+              dispatch(setPromptCacheInputTokens(total));
+            }
+          }
+        }
         next = await gen.next();
       }
 

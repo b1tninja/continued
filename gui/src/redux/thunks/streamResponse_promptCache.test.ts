@@ -3,6 +3,7 @@ import { ModelDescription } from "core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockStore, getEmptyRootState } from "../../util/test/mockStore";
 import type { PromptCacheSetting } from "../../util/promptCache";
+import type { RootState } from "../store";
 import { streamResponseThunk } from "./streamResponse";
 
 vi.mock("../util/getBaseSystemMessage", () => ({
@@ -44,6 +45,8 @@ async function sentOptions(opts: {
   model?: ModelDescription;
   setting?: PromptCacheSetting;
   lastRequestAgoMs?: number;
+  /** Chunks the mocked model streams back (the last may carry usage). */
+  reply?: any[];
 }) {
   const model = opts.model ?? claude;
   const state = getEmptyRootState();
@@ -77,6 +80,9 @@ async function sentOptions(opts: {
   const sent: any[] = [];
   store.mockIdeMessenger.llmStreamChat = vi.fn(async function* (msg: any) {
     sent.push(msg);
+    if (opts.reply) {
+      yield opts.reply;
+    }
     return undefined;
   }) as any;
 
@@ -86,7 +92,12 @@ async function sentOptions(opts: {
       modifiers: { useCodebase: false, noContext: true },
     }) as any,
   );
-  return { options: sent[0]?.completionOptions, store };
+  return {
+    options: sent[0]?.completionOptions,
+    store,
+    /** The session's prompt cache state after the turn. */
+    cache: () => (store.getState() as RootState).session.promptCache,
+  };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -107,7 +118,7 @@ describe("prompt cache options in the chat request", () => {
   });
 
   it("sends the 1-hour lifetime for Auto after a pause 1 hour would have covered", async () => {
-    const { options, store } = await sentOptions({
+    const { options, cache } = await sentOptions({
       setting: "auto",
       lastRequestAgoMs: 11 * 60 * 1000,
     });
@@ -115,7 +126,7 @@ describe("prompt cache options in the chat request", () => {
       promptCaching: true,
       promptCacheTtl: "1h",
     });
-    expect(store.getState().session.promptCache?.escalated).toBe(true);
+    expect(cache()?.escalated).toBe(true);
   });
 
   it("sends the chosen fixed lifetime", async () => {
@@ -134,15 +145,36 @@ describe("prompt cache options in the chat request", () => {
 
   it("records when the request went out", async () => {
     const before = Date.now();
-    const { store } = await sentOptions({ setting: "auto" });
-    expect(
-      store.getState().session.promptCache?.lastRequestAt,
-    ).toBeGreaterThanOrEqual(before);
+    const { cache } = await sentOptions({ setting: "auto" });
+    expect(cache()?.lastRequestAt).toBeGreaterThanOrEqual(before);
   });
 
   it("never adds cache options for a provider that ignores them", async () => {
     const { options } = await sentOptions({ model: gpt, setting: "1h" });
     expect(options.promptCaching).toBeUndefined();
     expect(options.promptCacheTtl).toBeUndefined();
+  });
+
+  it("remembers the API's input size from the usage chunk", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      reply: [
+        { role: "assistant", content: "hi" },
+        {
+          role: "assistant",
+          content: "",
+          usage: {
+            promptTokens: 12,
+            completionTokens: 5,
+            promptTokensDetails: {
+              cachedTokens: 80_000,
+              cacheWriteTokens: 4_000,
+            },
+          },
+        },
+      ],
+    });
+    // 12 uncached + 80,000 read + 4,000 written
+    expect(cache()?.lastInputTokens).toBe(84_012);
   });
 });

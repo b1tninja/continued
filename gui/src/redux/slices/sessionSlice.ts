@@ -990,6 +990,12 @@ export const sessionSlice = createSlice({
     ) => {
       state.promptCache = action.payload;
     },
+    setPromptCacheInputTokens: (state, action: PayloadAction<number>) => {
+      state.promptCache = {
+        ...(state.promptCache ?? INITIAL_PROMPT_CACHE_STATE),
+        lastInputTokens: action.payload,
+      };
+    },
     setNewestToolbarPreviewForInput: (
       state,
       {
@@ -1112,6 +1118,7 @@ export const {
   setIsInEdit,
   setHasReasoningEnabled,
   setPromptCacheState,
+  setPromptCacheInputTokens,
   setInlineErrorMessage,
   setIsPruned,
   setContextPercentage,

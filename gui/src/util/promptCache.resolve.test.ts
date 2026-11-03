@@ -72,7 +72,16 @@ describe("resolvePromptCache in auto", () => {
       lastRequestAt: t0,
       escalated: false,
       lastTtl: "5m",
+      lastInputTokens: undefined,
     });
+  });
+
+  it("carries the last request's size into the next state", () => {
+    const r = step(
+      { escalated: false, lastRequestAt: t0, lastInputTokens: 84_000 },
+      t0 + 30 * 1000,
+    );
+    expect(r.nextState.lastInputTokens).toBe(84_000);
   });
 
   it("stays at 5 minutes while requests keep coming", () => {

@@ -15,6 +15,12 @@ export interface PromptCacheSessionState {
   escalated: boolean;
   /** Lifetime the last request wrote its cache entry with. */
   lastTtl?: PromptCacheTtl;
+  /**
+   * Input tokens of the last completed request as the API counted them
+   * (including cache reads and writes). Used to estimate what throwing the
+   * cache away would cost.
+   */
+  lastInputTokens?: number;
 }
 
 export const INITIAL_PROMPT_CACHE_STATE: PromptCacheSessionState = {
@@ -144,8 +150,54 @@ export function resolvePromptCache(
 
   return {
     options,
-    nextState: { lastRequestAt: now, escalated, lastTtl: ttl },
+    nextState: {
+      lastRequestAt: now,
+      escalated,
+      lastTtl: ttl,
+      lastInputTokens: state.lastInputTokens,
+    },
   };
+}
+
+/**
+ * What changing something that invalidates the cache would cost right now, or
+ * undefined when nothing is at stake (cache off, cold or no size known yet).
+ *
+ * Prices are per million input tokens. Re-reading the conversation at the
+ * 5-minute write price (1.25x) instead of the read price (0.1x) costs about
+ * 1.15x the input price per token, and the 1-hour write is 1.9x.
+ */
+export interface SwitchCost {
+  tokens: number;
+  /** Extra dollars for the next request, or undefined if the model is unpriced. */
+  extraUsd?: number;
+}
+
+export function switchCost(
+  status: PromptCacheStatus,
+  state: PromptCacheSessionState,
+  pricePerMTokInput: number | undefined,
+): SwitchCost | undefined {
+  if (!status.on || !status.warm || !state.lastInputTokens) return undefined;
+  const tokens = state.lastInputTokens;
+  const writeMultiplier = status.ttl === "1h" ? 2 : 1.25;
+  const extraUsd =
+    pricePerMTokInput === undefined
+      ? undefined
+      : (tokens / 1_000_000) * pricePerMTokInput * (writeMultiplier - 0.1);
+  return { tokens, extraUsd };
+}
+
+/** "84k tokens (about $0.31)", for the notice. */
+export function formatSwitchCost(cost: SwitchCost): string {
+  const tokens =
+    cost.tokens >= 1000
+      ? `${Math.round(cost.tokens / 1000)}k tokens`
+      : `${cost.tokens} tokens`;
+  if (cost.extraUsd === undefined) return tokens;
+  const usd =
+    cost.extraUsd < 0.01 ? "under $0.01" : `about $${cost.extraUsd.toFixed(2)}`;
+  return `${tokens} (${usd} more)`;
 }
 
 export interface PromptCacheStatus {
