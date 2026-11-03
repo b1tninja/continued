@@ -22,6 +22,7 @@ import {
   nextModelTitle,
   partitionModelsByMode,
 } from "../../util/modeModels";
+import { modelHasMissingSecret } from "../../util/missingSecrets";
 import { CONFIG_ROUTES } from "../../util/navigation";
 import {
   Button,
@@ -46,6 +47,8 @@ interface Option {
   apiKey?: string;
   sourceFile?: string;
   isAutoDetected?: boolean;
+  /** A `${{ secrets.* }}` credential with no value on this machine. */
+  missingSecret?: boolean;
 }
 
 function modelSelectTitle(model: any): string {
@@ -109,6 +112,14 @@ function ModelOption({
             {showMissingApiKeyMsg && (
               <span className="ml-1.5 text-[10px] italic">
                 (Missing API key)
+              </span>
+            )}
+            {option.missingSecret && (
+              <span
+                className="ml-1.5 text-[10px] italic text-warning"
+                data-testid="model-option-key-not-set"
+              >
+                (Key not set)
               </span>
             )}
           </span>
@@ -187,6 +198,7 @@ function ModelSelect() {
           apiKey: model.apiKey,
           sourceFile: model.sourceFile,
           isAutoDetected: model.isFromAutoDetect,
+          missingSecret: modelHasMissingSecret(model),
         };
       }),
     );
@@ -257,6 +269,7 @@ function ModelSelect() {
   }
 
   const hasNoModels = allModels?.length === 0;
+  const selectedKeyNotSet = modelHasMissingSecret(selectedModel);
 
   return (
     <Listbox
@@ -300,9 +313,17 @@ function ModelSelect() {
                 }}
                 variant="ghost"
                 size="sm"
-                className="my-0 h-5 w-5 p-0"
+                className="relative my-0 h-5 w-5 p-0"
+                data-testid="model-select-configure"
               >
                 <Cog6ToothIcon className="h-3.5 w-3.5 text-description" />
+                {selectedKeyNotSet && (
+                  <span
+                    className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-warning"
+                    data-testid="model-select-key-not-set-dot"
+                    title="Key not set on this machine"
+                  />
+                )}
               </Button>
             </div>
           </div>
