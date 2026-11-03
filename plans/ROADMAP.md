@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-11-03 (at `origin/main` 880f72bd4, after #125).
+Last updated: 2026-11-03 (at `origin/main` 880f72bd4, after #125). Track C status updated after the safeguards work.
 
 This is the place to check what is done, what is in flight and what comes next. `fork-plan.md` stays as the original design record (why we forked, scope, risks, licensing, CI). Detailed plans for new work live next to this file.
 
@@ -26,7 +26,7 @@ PR numbers are from `b1tninja/continued`, read from `git log` and `gh pr list`. 
 | Fork install guide, README, new icon | PR #92, open, branch `chore/rebrand-and-install-docs`                                                                                                                                                                        |
 | Missing-secret indicator (A0)        | PR #98, open. Detection, toolbar and gear indicators, panel with Open .env / Open config line / Copy name. Tested at unit and component level only; not yet clicked through in a real editor.                                |
 | Session cost tracking                | Branch `feat/session-cost-tracking` exists but has no commits of its own yet (same commit as `main`). No plan written yet.                                                                                                   |
-| Prompt caching controls (Track C)    | C0 to C3 and C6 built on branches `feat/cache-visibility`, `feat/cache-toolbar` and `feat/cache-safeguards`, stacked, PRs to follow. Toolbar menu, Auto lifetime, Bedrock cache fix (confirmed live), and warnings before expensive actions. Default stays off. See `prompt-caching.md` and `cache-safeguards.md`. |
+| Prompt caching controls (Track C)    | C0 to C3 and C6 built on branches `feat/cache-visibility`, `feat/cache-toolbar` and `feat/cache-safeguards`, stacked, PRs to follow. Toolbar menu, Auto lifetime, Bedrock cache fix (confirmed live), and warnings before expensive actions, including resuming a saved session. Default stays off. See `prompt-caching.md` and `cache-safeguards.md`. |
 | Dependency updates                   | Open Dependabot PRs (for example #65-#69, #71-#79, #85). Merge in groups; rerun the CI gates after major bumps.                                                                                                              |
 
 ## Next
@@ -74,11 +74,11 @@ Problem: cached prompts expire after 5 minutes by default, so a session that pau
 | C3  | Toolbar menu (Auto / 5 minutes / 1 hour / Off), warm-or-expired tooltip, switch-cost notice, usage panel                                                | C2         |
 | C4  | Default on for Claude models with Auto, after a week of C0 data                                                                                         | C3         |
 | C5  | Documentation for the new fields and a page on cache lifetime and cost                                                                                  | C2         |
-| C6  | Cache and cost safeguards: cold-cache notice, model and mode switch warnings, miss notice, context meter by size, Claude 5 prices (built, PR to follow, see `cache-safeguards.md`) | C3         |
-| C7  | Notice when a loaded session is resumed cold (needs the size of a saved session); warn on attaching an image or toggling a tool or MCP server in a large warm conversation | C6         |
-| C8  | Keep the cache when rules change the system prompt: send changes as an appended system message on the models that accept it (Opus 4.8, Sonnet 5.5, Opus 5.5, Haiku 5.5) | C6         |
-| C9  | Bedrock: hint to use the global inference profile (10% cheaper) when data residency allows; Claude 5.x Vertex and OpenRouter prices                      | C6         |
-| C10 | Evaluate tool result clearing and compaction suggestions on Continue's own data; warn before sending a 100k+ token message; session cost in the toolbar  | C6         |
+| C6  | Cache and cost safeguards, built: cold-cache notice (also on resuming a saved session), model and mode switch warnings, miss notice, large-message notice, notes on image, tool and MCP changes, context meter by size, Claude 5 prices, Global Bedrock hint (PR to follow, see `cache-safeguards.md`) | C3         |
+| C7  | Resume notice for sessions saved before C6 (they have no cache record); count @-attached files in the large-message notice                              | C6         |
+| C8  | Keep the cache when rules change the system prompt: send changes as an appended system message on the models that accept it (Opus 4.8, Sonnet 5.5, Opus 5.5, Haiku 5.5). Needs live tests on each provider | C6         |
+| C9  | Vertex and OpenRouter prices for Claude 5.x, with the Regional premium on Google Cloud                                                                  | C6         |
+| C10 | Evaluate tool result clearing and compaction suggestions on Continue's own data; session cost in the toolbar and a "spent on cold rewrites" line in the usage panel | C6         |
 
 ## Later
 
@@ -88,7 +88,7 @@ Carried over from `fork-plan.md` section 4.7, item 4. None started:
 - A global rules toggle per mode.
 - Context-window and cost display per model (see the session cost tracking branch above).
 - Import of Cline's MCP settings file, so servers are not configured twice.
-- Warn about other costly habits that need Continue's own data first: very large pasted files, repeated failed edits in one session, a large model for a small task. Candidates are listed under "Not built" in `cache-safeguards.md`.
+- Warn about other costly habits that need Continue's own data first: repeated failed edits in one session, a large model for a small task. Candidates are listed under "Not built" in `cache-safeguards.md`.
 
 ## Open decisions
 

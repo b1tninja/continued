@@ -41,26 +41,30 @@ Documented, and matching the billing: Claude Haiku 5.5 is priced by prompt lengt
 | 6 | A big conversation costs a lot per message | Context meter appears at 200k tokens, not 60% of the window; tooltip gives the cost of one more message warm and cold | Compact, New session | Measured | Built |
 | 7 | Haiku 5.5 charges 5x above 100k tokens | Meter appears at 80k; tooltip gives the multiplier and the size | Compact, New session | Documented | Built |
 | 8 | Claude 5 and 5.5 had no prices | Dollar amounts now shown for them | none | Documented | Built |
+| 9 | A saved session is opened after a break | The same cold-cache line as #1, using the size and time saved with the session: "Prompt cache expired 20 h ago. Sending re-reads 366k tokens..." | Compact first, New session, Use 1 hour cache | Documented, measured | Built (new sessions only; older saved sessions have no record) |
+| 10 | A very large message is about to be sent | Line above the input while the draft is over about 30k tokens: its size, what writing it to the cache costs and what each later message costs to re-read | Dismiss; edit the draft or start a new session | Guess for the threshold | Built (counts typed and pasted text, code blocks and images; files added with @ are not counted until sent) |
+| 11 | Attaching an image, turning a tool or an MCP server on or off, or reloading a server, rebuilds the cache | A sentence added to the tooltip of the image button, the tool policy and group switches, and the MCP Disconnect and Reload items while the cache is warm | informs | Documented | Built |
+| 12 | A long context answers less reliably | One line in the context meter tooltip from 200k tokens | Compact, New session | Documented | Built |
+| 13 | A Regional Bedrock profile costs 10% more than the global one | The setup form says so, and the choice is labelled "Global (10% cheaper)" | informs | Documented | Built |
 
 ## Built
 
 - `core/llm/utils/calculateRequestCost.ts`: Opus 5, Opus 5.5, Sonnet 5, Sonnet 5.5 and Haiku 5.5; cache reads at 0.05x on the two 5.5 models; Haiku 5.5's long-prompt tier. A later minor version (`claude-sonnet-5-6`) no longer matches an earlier entry's price and stays unpriced until added.
-- `gui/src/util/cacheSafeguards.ts`: the rules and thresholds (`coldResume`, `warmCacheLoss`, `detectCacheMiss`, `promptCacheKey`). `cacheNotices.ts`: wording helpers.
-- Components: `ColdCacheNotice`, `CacheMissNotice`, `NoticeBar`, `ModelSwitchConfirm`, `ModeSwitchCacheNotice`, and changes to `ModelSelect`, `ContextStatus` and `InputToolbar`.
-- A new or loaded session now starts with an empty cache record. Before, it kept the previous session's.
+- `gui/src/util/cacheSafeguards.ts`: the rules and thresholds (`coldResume`, `warmCacheLoss`, `detectCacheMiss`, `promptCacheKey`, `LARGE_MESSAGE_TOKENS`). `cacheNotices.ts`: wording helpers.
+- Components: `ColdCacheNotice`, `CacheMissNotice`, `LargeMessageNotice`, `NoticeBar`, `ModelSwitchConfirm`, `ModeSwitchCacheNotice`, and changes to `ModelSelect`, `ContextStatus`, `InputToolbar`, the tool policy and MCP server controls, and the Bedrock setup text. `useWarmCacheNote` gives them one shared sentence.
+- A new session starts with an empty cache record. A loaded session brings back its own, so a resume after a break can say its cache expired.
+- `Session` in `core/index.d.ts` has an optional `promptCache` (when the last request started, its size and lifetime), written by `saveCurrentSession` and kept by `HistoryManager.save`. Sessions saved before this have none and show no resume notice.
 
 ## Not built
 
 Also on [`ROADMAP.md`](./ROADMAP.md) under Track C.
 
-- **Resuming a saved session.** The biggest cold resume has no notice, because a loaded session has no recorded size. Needs the size from stored usage or an estimate.
 - **Caching on by default for Claude** (C4). A billing default; the owner decides.
-- **Rules that change the system prompt mid-session.** Rules matched against the latest tool output are written into the system prompt, so a match rebuilds the whole cache. Opus 4.8, Sonnet 5.5, Opus 5.5 and Haiku 5.5 accept a system message appended to the conversation instead, which keeps the cache. The miss notice already names "the system prompt" when this happens.
-- **Images, tools and MCP servers while the cache is warm.** Documented to rebuild the cache. Warn on attaching an image, or toggling a tool or server, in a large warm conversation.
-- **Global versus Regional Bedrock profile.** A hint in the Bedrock setup, not a warning, since Regional may be required for data residency.
+- **Rules that change the system prompt mid-session** (C8). Rules matched against the latest tool output are written into the system prompt, so a match rebuilds the whole cache. Opus 4.8, Sonnet 5.5, Opus 5.5 and Haiku 5.5 accept a system message appended to the conversation instead, which keeps the cache. This changes how requests are built for each provider, so it needs live testing on each. The miss notice already names "the system prompt" when this happens.
+- **Resume notice for sessions saved before this change.** They have no record. An estimate from the stored messages would be rough.
+- **Vertex and OpenRouter prices for Claude 5.x**, and the same Regional premium on Google Cloud.
 - **Tool result clearing.** Context editing drops old tool results server-side, but each clearing rebuilds the cache, so it needs a minimum amount per clearing. Evaluate before offering.
-- **Large attachments and pasted files.** The measured jumps of 100k+ tokens are unexplained. Warn before sending, from the token count of the message, once Continue has its own data.
-- **Quality, not only cost.** Anthropic documents that accuracy and recall fall as context grows. Add a line to the meter tooltip and consider suggesting a new session between unrelated tasks.
+- **Counting @-attached files in the large-message notice.** They are fetched when the message is sent.
 - **Session cost in the toolbar** and a "spent on cold rewrites" line in the usage panel.
 - **Guesses worth testing first**: suggest a new session after two rejected edits in a row; suggest a smaller model for a short, simple prompt.
 
@@ -70,3 +74,4 @@ Also on [`ROADMAP.md`](./ROADMAP.md) under Track C.
 - Changing model, tools or the system prompt makes the next requests count as misses. The notice names the cause, but if it proves noisy, count only misses with no known cause.
 - The Anthropic-path breakpoints on tool results are tested with mocks only. The Bedrock path had one live run.
 - Prices are list prices. A Regional Bedrock profile bills 10% more, so Bedrock figures for those models read about 10% low.
+- The 30k-token threshold for large messages, and the 4-characters-per-token estimate behind it, are guesses.
