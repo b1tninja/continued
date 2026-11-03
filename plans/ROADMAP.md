@@ -30,7 +30,7 @@ PR numbers are from `b1tninja/continued`, read from `git log` and `gh pr list`. 
 
 ## Next
 
-Two independent tracks. They share no code, so different people can build them in parallel. Each track is a series of small PRs, one concern per PR.
+Three independent tracks. They share no code, so different people can build them in parallel. Each track is a series of small PRs, one concern per PR.
 
 ### Track A: model and provider setup
 
@@ -58,6 +58,21 @@ Problem: tool approval is a three-way switch per tool, stored in the webview rat
 | B2  | Approval selector (Manual / Auto-approve / YOLO), Cline-style category toggles, per-server MCP switches, "Always allow"                           | B1         |
 | B3  | A `reviewer` model role and the optional "Auto" mode that uses it, with deny-and-continue and refusal caps, behind an experimental setting        | B1         |
 | B4  | Evaluation set; confirm or change the suggested reviewer defaults; documentation; the experimental flag is removed only if the quality bar is met | B3         |
+
+### Track C: prompt caching controls
+
+Plan: [`prompt-caching.md`](./prompt-caching.md)
+
+Problem: cached prompts expire after 5 minutes by default, so a session that pauses for a long command or a long read re-reads its whole history at full price. There is no switch for it, no way to choose the lifetime, no cost shown, and two placement bugs mean some sessions do not hit the cache at all. Independent of Tracks A and B.
+
+| PR  | Scope                                                                                                                                                   | Depends on |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| C0  | Measure: Bedrock usage, the 5m/1h write split, 1-hour price and missing Claude models in the cost table, hit rate against API counts, miss-cause report | none       |
+| C1  | Fix cache marker placement for Agent loops (tool results) and Bedrock's rewritten messages                                                              | C0         |
+| C2  | One policy function, `cacheBehavior.ttl`, `ttl` sent on Anthropic, Vertex, Bedrock and OpenRouter; default stays off                                    | C1         |
+| C3  | Toolbar menu (Auto / 5 minutes / 1 hour / Off), warm-or-expired tooltip, switch-cost notice, usage panel                                                | C2         |
+| C4  | Default on for Claude models with Auto, after a week of C0 data                                                                                         | C3         |
+| C5  | Documentation for the new fields and a page on cache lifetime and cost                                                                                  | C2         |
 
 ## Later
 
