@@ -67,11 +67,12 @@ dependencies {
 kotlin {
     jvmToolchain(17)
     compilerOptions {
-        // sinceBuild=241 (2024.1) bundles Kotlin 1.9.x; the IDE's own kotlin-stdlib is used at
+        // sinceBuild=241 (2024.1) bundles Kotlin 1.9.x; Kotlin 2.4 cannot target below 2.0, so pin to 2.0
+        // (the lowest allowed). The IDE's own kotlin-stdlib is used at
         // runtime (kotlin.stdlib.default.dependency=false), so only use APIs/language features
         // the oldest supported IDE provides.
-        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9)
-        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9)
+        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
+        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
     }
 }
 
