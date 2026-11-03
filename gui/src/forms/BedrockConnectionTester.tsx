@@ -1,14 +1,13 @@
 import { useContext, useState } from "react";
 import type {
   BedrockConnectionParams,
-  BedrockListModelsResult,
-  BedrockModelOptionInfo,
   BedrockTestModelResult,
 } from "core/protocol/core";
 import { Button } from "../components/ui/Button";
 import Alert from "../components/gui/Alert";
 import { IdeMessengerContext } from "../context/IdeMessenger";
-import { FormSelect } from "./FormSelect";
+import { BedrockAllModelsResult, listBedrockModelsFor } from "./bedrockModels";
+import type { BedrockEndpointModel } from "./modelListUtils";
 
 interface Props {
   /** Connection settings built from the current form values. */
@@ -17,30 +16,34 @@ interface Props {
   model: string;
   /** Required fields are filled in. */
   canTest: boolean;
-  onPickModel: (model: BedrockModelOptionInfo | undefined) => void;
-}
-
-function groupByProvider(models: BedrockModelOptionInfo[]) {
-  const groups = new Map<string, BedrockModelOptionInfo[]>();
-  for (const m of models) {
-    groups.set(m.provider, [...(groups.get(m.provider) ?? []), m]);
-  }
-  return [...groups.entries()];
+  /** Send the test message through Mantle (the selected model is Mantle-only). */
+  testEndpoint?: "mantle";
+  /**
+   * Called with the models available to these credentials (from every endpoint
+   * that could be queried) once the connection works, and with `undefined`
+   * when a new test starts or it fails. `notes` explains anything left out.
+   */
+  onModelsLoaded: (
+    models: BedrockEndpointModel[] | undefined,
+    notes: string[],
+  ) => void;
 }
 
 /**
  * "Test connection" for the Bedrock add-model form: lists the models available
- * to the entered credentials/region, and can send a one-word test message.
+ * to the entered credentials/region on both Bedrock endpoints (which then
+ * populate the Model picker), and can send a one-word test message.
  */
 export function BedrockConnectionTester({
   connection,
   model,
   canTest,
-  onPickModel,
+  testEndpoint,
+  onModelsLoaded,
 }: Props) {
   const ideMessenger = useContext(IdeMessengerContext);
   const [listing, setListing] = useState(false);
-  const [listResult, setListResult] = useState<BedrockListModelsResult>();
+  const [listResult, setListResult] = useState<BedrockAllModelsResult>();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<BedrockTestModelResult>();
 
@@ -48,22 +51,13 @@ export function BedrockConnectionTester({
     setListing(true);
     setListResult(undefined);
     setTestResult(undefined);
-    onPickModel(undefined);
+    onModelsLoaded(undefined, []);
     try {
-      const res = await ideMessenger.request(
-        "bedrock/listModels",
-        connection as BedrockConnectionParams,
-      );
-      setListResult(
-        res.status === "success"
-          ? res.content
-          : { ok: false, error: String(res.error ?? "Request failed") },
-      );
-    } catch (e) {
-      setListResult({
-        ok: false,
-        error: e instanceof Error ? e.message : String(e),
-      });
+      const result = await listBedrockModelsFor(ideMessenger, connection);
+      setListResult(result);
+      if (result.ok) {
+        onModelsLoaded(result.models, result.notes);
+      }
     } finally {
       setListing(false);
     }
@@ -75,6 +69,7 @@ export function BedrockConnectionTester({
     try {
       const res = await ideMessenger.request("bedrock/testModel", {
         ...(connection as BedrockConnectionParams),
+        ...(testEndpoint ? { endpoint: testEndpoint } : {}),
         model,
       });
       setTestResult(
@@ -93,6 +88,7 @@ export function BedrockConnectionTester({
   }
 
   const models = listResult?.ok ? listResult.models : [];
+  const mantleOnly = models.filter((m) => m.endpoint === "mantle").length;
 
   return (
     <div className="flex flex-col gap-2">
@@ -125,44 +121,15 @@ export function BedrockConnectionTester({
       )}
 
       {listResult?.ok && (
-        <>
-          <Alert type="success" size="sm">
-            <span className="text-xs">
-              Connected. {models.length} model
-              {models.length === 1 ? "" : "s"} available
-              {connection.region ? ` in ${connection.region}` : ""}.
-            </span>
-          </Alert>
-          {models.length > 0 && (
-            <div>
-              <label
-                className="mb-1 block text-sm font-medium"
-                htmlFor="bedrock-discovered-model"
-              >
-                Available models
-              </label>
-              <FormSelect
-                id="bedrock-discovered-model"
-                defaultValue=""
-                onChange={(e) =>
-                  onPickModel(models.find((m) => m.id === e.target.value))
-                }
-              >
-                <option value="">Keep the model selected above</option>
-                {groupByProvider(models).map(([provider, items]) => (
-                  <optgroup key={provider} label={provider}>
-                    {items.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                        {m.legacy ? " [legacy]" : ""}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </FormSelect>
-            </div>
-          )}
-        </>
+        <Alert type="success" size="sm">
+          <span className="text-xs">
+            Connected. {models.length} model
+            {models.length === 1 ? "" : "s"} available
+            {connection.region ? ` in ${connection.region}` : ""}
+            {mantleOnly > 0 ? ` (${mantleOnly} only on Mantle)` : ""}. The Model
+            list above now shows them.
+          </span>
+        </Alert>
       )}
 
       {testResult &&
