@@ -110,20 +110,60 @@ What I checked:
 
 - Local config loading resolves `${{ secrets.NAME }}` from `~/.continue/.env`, then `<workspace>/.continue/.env`, then `<workspace>/.env`, then the process environment (`core/config/yaml/LocalPlatformClient.ts`, used by `loadYaml.ts` with `renderSecrets: true`). `docs/faqs.mdx` and `docs/configuration.mdx` document the syntax. The 8 existing `LocalPlatformClient` tests pass (run today).
 - I found no code that writes `~/.continue/.env`, and secret storage is not a lookup source. A1 adds both.
-- A reference that cannot be resolved appears to stay in the config as literal text and would be sent as the key (my reading of `renderSecrets` and `fillTemplateVariables`; not run). `LLMConfigurationStatuses.MISSING_ENV_SECRET` exists and the Models tab already shows "(Missing env secret)" for it, but only the Relace provider overrides the status (with `MISSING_API_KEY`). A1 sets `MISSING_ENV_SECRET` when a key still contains an unresolved reference.
+- A reference that cannot be resolved stays in the config as literal text and is used as the key. Run on 2026-11-02: a model with `apiKey: ${{ secrets.CONTINUED_ANTHROPIC_API_KEY }}` and no matching secret, rendered through `renderSecrets` with `LocalPlatformClient`, came back with `apiKey` equal to that literal text and no error (section 4.6). `LLMConfigurationStatuses.MISSING_ENV_SECRET` exists and the Models tab already shows "(Missing env secret)" for it, but only the Relace provider overrides `getConfigurationStatus` (with `MISSING_API_KEY`), so nothing sets it for this case.
+
+### 4.6 A config that arrives without its secrets
+
+Secure storage is per machine. A config.yaml that is synced or copied to another machine keeps `apiKey: ${{ secrets.CONTINUED_ANTHROPIC_API_KEY }}`, but the key is not there. Today that is invisible until a request fails: the probe in section 4.5 shows the literal text becomes the key, so the provider rejects it and the user sees an authentication error that does not mention a missing secret.
+
+**Detect it at load time** (A1). After secrets are rendered, any model field that still holds a `${{ secrets.NAME }}` reference is unresolved. The check is a string scan using the existing `getTemplateVariables`, run on the rendered YAML in `loadYaml.ts`. For each unresolved name it records:
+
+- the secret name, which models use it, and the provider (so the message can say "Anthropic");
+- where it was looked up (secure storage, `~/.continue/.env`, workspace `.env` files, process environment), so the message can say where a value would be found.
+
+The result goes out in three places:
+
+1. **A non-fatal config error** per secret, in the existing `configError` list. The Configs tab and the toolbar already show these. The message names the secret and the models, and carries a new optional field `action` on `ConfigValidationError` (`{ kind: "setSecret", secretName, provider }`), so the GUI knows what to offer. `uri` already exists on that type for "open this file".
+2. **`MISSING_ENV_SECRET` on the model**, so the Models tab shows "(Missing env secret)" and the model cannot be picked, as it already works for invalid entries (`ModelRoleSelector.tsx`). BaseLLM gets this from a flag on the options set when the key still contains an unresolved reference.
+3. **No request is sent with the literal text.** `BaseLLM` refuses to call out when its key is an unresolved reference and throws "API key for <name> is not set on this machine", with the same action attached. This covers existing users who already have `${{ secrets.* }}` in their config.
+
+**Offer the fix where the user already is** (A4, using the setup flow):
+
+| Where the user sees it                                   | What is offered                                                                                                                                                       |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A banner in the chat when the selected model is affected | "Anthropic key is not set on this machine. [Enter key] [Use a different model]". Shown only while a model that needs it is selected, not for every unresolved secret. |
+| The config error row in the Configs tab                  | The same [Enter key] button, next to the existing "open file" click.                                                                                                  |
+| The Models tab, on the model row and the Providers card  | "(Missing key)" with [Enter key].                                                                                                                                     |
+| A failed request                                         | The error text from item 3 above, with a link in the message.                                                                                                         |
+
+[Enter key] opens the setup flow at step 1 for that provider connection, with the fields filled in from config.yaml and a banner saying where the key will be stored. Saving writes the secret to the chosen place (section 4.5) and reloads the config; nothing in config.yaml changes, because the reference is already correct. Other models that use the same secret are fixed by the same entry.
+
+**Other ways to jump to the place the secret must be set**, offered under a "More" menu on the same banner, because the right place depends on how the user manages secrets:
+
+- Open `~/.continue/.env` in the editor (created if missing, with the line `CONTINUED_ANTHROPIC_API_KEY=` ready to fill in).
+- Open config.yaml at the model's `apiKey` line. This needs the line number; the YAML document API gives it, so A1 records the position of each reference.
+- Copy the secret name, for users who set it as an environment variable or through a secrets manager that launches the editor.
+
+**Two cases to handle without a nag:**
+
+- A user on a managed machine whose keys come from the process environment never sees this, because the lookup finds them.
+- A user who has deliberately left a model unconfigured can dismiss the banner per secret. The dismissal is stored with the secret name only and is cleared when the secret is set.
+
+**Sharing a config on purpose.** The model Providers card gets "Export config for another machine", which copies config.yaml and lists the secret names the other machine will need, so the first-run experience there is a known checklist and not a surprise.
 
 ## 5. PR breakdown
 
-| PR  | Contents                                                                                                                       | Tests                                                                                                                       |
-| --- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| A1  | Schema, `resolveModeModels`, comment-preserving `editConfigYaml`, the three messages, `docs/reference.mdx` `modeModels` update | config-yaml schema tests; core vitest for resolve, merge/remove and comment preservation                                    |
-| A2  | Mode-aware picker and `Cmd+'` cycling; mode menu hint; helpers in `gui/src/util/modeModels.ts`                                 | gui vitest for the helpers and for cycling                                                                                  |
-| A3  | Checkbox table and Providers card on the Models tab                                                                            | gui vitest for the table; update e2e selectors if they reference the old dropdown                                           |
-| A4  | `ProviderSetupFlow`, `ModelChecklist`, onboarding integration, command and entry points                                        | gui vitest for the checklist and review step; e2e onboarding selectors (`extensions/vscode/e2e/selectors/GUI.selectors.ts`) |
+| PR  | Contents                                                                                                                                                                                                                                                                            | Tests                                                                                                                                           |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| A0  | Missing-secret detection (section 4.6): unresolved-reference scan after rendering, a non-fatal error per secret with an `action`, `MISSING_ENV_SECRET` on the model, refusal to send the literal reference as a key, and the "Enter key" banner opening the existing Add Model form | core vitest for the scan (resolved, unresolved, several models sharing one secret, a reference inside a non-key field); gui test for the banner |
+| A1  | Schema, `resolveModeModels`, comment-preserving `editConfigYaml`, the three messages, secret-storage lookup and `.env` writer, `docs/reference.mdx` `modeModels` update                                                                                                             | config-yaml schema tests; core vitest for resolve, merge/remove, comment preservation and the secret lookup                                     |
+| A2  | Mode-aware picker and `Cmd+'` cycling; mode menu hint; helpers in `gui/src/util/modeModels.ts`                                                                                                                                                                                      | gui vitest for the helpers and for cycling                                                                                                      |
+| A3  | Checkbox table and Providers card on the Models tab, including "(Missing key)" and "Export config for another machine"                                                                                                                                                              | gui vitest for the table; update e2e selectors if they reference the old dropdown                                                               |
+| A4  | `ProviderSetupFlow`, `ModelChecklist`, onboarding integration, command and entry points; "Enter key" opens the flow at step 1; the "More" menu                                                                                                                                      | gui vitest for the checklist and review step; e2e onboarding selectors (`extensions/vscode/e2e/selectors/GUI.selectors.ts`)                     |
 
-A1 lands first. A2, A3 and A4 can then proceed in parallel.
+A0 and A1 have no dependency on each other and can land in either order. A2, A3 and A4 follow A1. A0 is useful on its own: it fixes the confusing authentication error for anyone who already has a `${{ secrets.* }}` reference they have not set.
 
-Key storage (section 4.5) is split across two PRs. A1 carries the core pieces: the secret-storage lookup in `LocalPlatformClient`, a writer for `~/.continue/.env`, and the `MISSING_ENV_SECRET` status. A4 carries the storage choice in the setup flow and the "Move key" action.
+Key storage (section 4.5) is split across PRs. A1 carries the core pieces: the secret-storage lookup in `LocalPlatformClient` and a writer for `~/.continue/.env`. A4 carries the storage choice in the setup flow and the "Move key" action. A0 carries only detection, so it needs neither.
 
 ## 6. Decisions and defaults
 
@@ -143,20 +183,25 @@ Key storage (section 4.5) is split across two PRs. A1 carries the core pieces: t
 
 ## 8. Risks
 
-| Risk                                                                                      | Mitigation                                                                                                                    |
-| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `YAML.parseDocument` edits change formatting more than expected                           | Golden-file tests on a commented sample config before building on it.                                                         |
-| Removing a model that a `modeModels` entry or a selected role still names                 | The save step removes it from `modeModels`; if it was the selected model, fall back to the mode default.                      |
-| Merging into hand-edited entries matches the wrong model (same model id on two endpoints) | Match on provider, model and connection (`apiBase`, region, profile); show ambiguous matches in the review step.              |
-| The setup flow outgrows `AddModelForm` and regresses Bedrock                              | Extract by moving code; keep `AddModelForm.bedrock.test.tsx`, `addModelFormUtils.test.ts` and `modelListUtils.test.ts` green. |
-| One very large GUI change                                                                 | A2, A3 and A4 are separate PRs behind the A1 data model.                                                                      |
+| Risk                                                                                             | Mitigation                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `YAML.parseDocument` edits change formatting more than expected                                  | Golden-file tests on a commented sample config before building on it.                                                                                                                                              |
+| Removing a model that a `modeModels` entry or a selected role still names                        | The save step removes it from `modeModels`; if it was the selected model, fall back to the mode default.                                                                                                           |
+| Merging into hand-edited entries matches the wrong model (same model id on two endpoints)        | Match on provider, model and connection (`apiBase`, region, profile); show ambiguous matches in the review step.                                                                                                   |
+| The setup flow outgrows `AddModelForm` and regresses Bedrock                                     | Extract by moving code; keep `AddModelForm.bedrock.test.tsx`, `addModelFormUtils.test.ts` and `modelListUtils.test.ts` green.                                                                                      |
+| One very large GUI change                                                                        | A2, A3 and A4 are separate PRs behind the A1 data model.                                                                                                                                                           |
+| The unresolved-reference scan flags text that is not a secret (an example in a prompt or a rule) | Scan only the fields that hold credentials (`apiKey`, `env.*`, `requestOptions.headers`) and report a name only if it matches the secret-name pattern; test with a rule that mentions `${{ secrets.X }}` in prose. |
+| Refusing to send a literal reference breaks someone who truly uses that text as a key            | A key that is exactly a `${{ secrets.NAME }}` reference is never a valid key for any provider; the message says how to set it.                                                                                     |
+| The banner nags a user who intentionally has no key on this machine                              | Per-secret dismissal, stored by name only, cleared when the secret is set; the banner shows only while an affected model is selected.                                                                              |
 
 ## 9. Not verified
 
 Written from reading the code, plus two things run on 2026-11-02: the existing `LocalPlatformClient` tests, and a comparison of `YAML.stringify` against `YAML.parseDocument` on a sample file (section 4.2). Nothing else was built or run. Still unchecked:
 
-- Secret resolution end to end in a running extension (only the unit tests were run).
-- That an unresolved reference ends up as literal text in the key (read, not run).
+- Secret resolution end to end in a running extension (only the unit tests and the one probe in section 4.5 were run).
 - Which characters a secret name may contain. `CONTINUED_<PROVIDER>_API_KEY` uses only capitals and underscores, like the names in the docs.
-- Whether JetBrains supports `readSecrets` and `writeSecrets`. The CLI and test host return nothing (`core/util/filesystem.ts`).
+- Whether JetBrains supports `readSecrets` and `writeSecrets`. The CLI and test host return nothing (`core/util/filesystem.ts`), so there the default falls back to `.env` and the missing-secret banner has nowhere secure to save to.
 - That `parseDocument` behaves the same on real user configs. The test plan should include a few.
+- Whether an optional `action` field on `ConfigValidationError` (a type in `packages/config-yaml`, shared with the Hub schema and the CLI) is safe to add. It is optional, but the CLI and JetBrains plugin both consume that type.
+- Which providers read their key from a field other than `apiKey` (Bedrock uses `env.accessKeyId` and `env.secretAccessKey`; Azure and others have their own). The scan has to cover those; I only checked `apiKey` end to end.
+- Where `BaseLLM` should refuse a request: it sends from many subclasses, so the check likely belongs in one shared place (`fetch` wrapper or `_streamChat` entry), not in each provider.

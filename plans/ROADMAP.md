@@ -35,14 +35,15 @@ Two independent tracks. They share no code, so different people can build them i
 
 Plan: [`model-config-ux.md`](./model-config-ux.md)
 
-Problem: the setup wizard cannot be reopened to edit a configuration; each provider contributes exactly one chosen model; and you cannot choose a set of models per mode to switch between quickly.
+Problem: the setup wizard cannot be reopened to edit a configuration; each provider contributes exactly one chosen model; you cannot choose a set of models per mode to switch between quickly; and a config that references a secret not set on this machine fails with an unrelated authentication error instead of pointing at the missing key.
 
-| PR  | Scope                                                                                                                     | Depends on |
-| --- | ------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| A1  | Schema and core: `modeModels.<mode>.models` list, comment-preserving YAML edits, new setup messages                       | none       |
-| A2  | The chat model picker and `Cmd+'` follow the current mode's list                                                          | A1         |
-| A3  | Models tab: checkbox table (Chat / Plan / Agent) with a default per mode, plus a Providers card                           | A1         |
-| A4  | One reusable setup flow (credentials, model checklist, review) behind the onboarding card, "Manage models", and a command | A1         |
+| PR  | Scope                                                                                                                                         | Depends on |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| A0  | Detect `${{ secrets.* }}` references that are not set on this machine, say so, and offer an "Enter key" action; stop sending the literal text | none       |
+| A1  | Schema and core: `modeModels.<mode>.models` list, comment-preserving YAML edits, new setup messages, secret-storage lookup                    | none       |
+| A2  | The chat model picker and `Cmd+'` follow the current mode's list                                                                              | A1         |
+| A3  | Models tab: checkbox table (Chat / Plan / Agent) with a default per mode, plus a Providers card                                               | A1         |
+| A4  | One reusable setup flow (credentials, model checklist, review) behind the onboarding card, "Manage models", and a command; richer key fixes   | A1         |
 
 ### Track B: tool auto-approval and Auto mode
 
