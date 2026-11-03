@@ -13,6 +13,10 @@ import {
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type { ModeModelsInput } from "../config/yaml/saveModeModels";
+import type {
+  AutoReviewReply,
+  AutoReviewRequest,
+} from "../tools/permissions/auto/handler";
 import type { DecisionSource as ToolDecisionSource } from "../tools/permissions/decide";
 import { GlobalContextModelSelections } from "../util/GlobalContext";
 
@@ -409,6 +413,11 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       rule?: string;
     },
   ];
+  /**
+   * Auto approval (experimental): decide one call. Core re-runs the rules
+   * first; only a call they leave open reaches the reviewer model.
+   */
+  "tools/autoReview": [AutoReviewRequest, AutoReviewReply];
   "tools/preprocessArgs": [
     { toolName: string; args: Record<string, unknown> },
     {
