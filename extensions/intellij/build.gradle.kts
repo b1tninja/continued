@@ -60,7 +60,7 @@ dependencies {
 
     testIntegrationImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     "testIntegrationRuntimeOnly"("org.junit.platform:junit-platform-launcher:6.1.3")
-    testIntegrationImplementation("org.kodein.di:kodein-di-jvm:7.33")
+    testIntegrationImplementation("org.kodein.di:kodein-di-jvm:7.33.0")
     testIntegrationImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0")
 }
 
