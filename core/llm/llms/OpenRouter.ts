@@ -2,10 +2,13 @@ import { ChatCompletionCreateParams } from "openai/resources/index";
 
 import { OPENROUTER_HEADERS } from "@continuedev/openai-adapters";
 
-import { LLMOptions } from "../../index.js";
+import { CompletionOptions, LLMOptions } from "../../index.js";
 import { osModelsEditPrompt } from "../templates/edit.js";
 
 import OpenAI from "./OpenAI.js";
+import { resolvePromptCacheTtl } from "./anthropicCache.js";
+import { bedrockCacheTtl } from "./bedrockHelpers.js";
+import { applyCacheControlToOpenAIBody } from "./openaiCacheControl.js";
 
 class OpenRouter extends OpenAI {
   static providerName = "openrouter";
@@ -79,37 +82,9 @@ class OpenRouter extends OpenAI {
     return body;
   }
 
-  private addCacheControlToContent(content: any, addCaching: boolean): any {
-    if (!addCaching) return content;
-
-    if (typeof content === "string") {
-      return [
-        {
-          type: "text",
-          text: content,
-          cache_control: { type: "ephemeral" },
-        },
-      ];
-    }
-
-    if (Array.isArray(content)) {
-      // For array content, add cache_control to the last text item
-      return content.map((part, idx) => {
-        if (part.type === "text" && idx === content.length - 1) {
-          return {
-            ...part,
-            cache_control: { type: "ephemeral" },
-          };
-        }
-        return part;
-      });
-    }
-
-    return content;
-  }
-
   protected modifyChatBody(
     body: ChatCompletionCreateParams,
+    options?: CompletionOptions,
   ): ChatCompletionCreateParams {
     body = super.modifyChatBody(body);
 
@@ -117,74 +92,41 @@ class OpenRouter extends OpenAI {
       body = this.addGeminiThoughtSignatures(body);
     }
 
+    // The request's own setting (for example from the toolbar) wins over the
+    // model's configured default; an explicit false turns caching off.
+    const promptCaching =
+      options?.promptCaching ?? this.completionOptions.promptCaching;
+
     if (
       !this.isAnthropicModel(body.model) ||
-      (!this.cacheBehavior && !this.completionOptions.promptCaching)
+      promptCaching === false ||
+      (!this.cacheBehavior && !promptCaching)
     ) {
       return body;
     }
 
     const shouldCacheConversation =
-      this.cacheBehavior?.cacheConversation ||
-      this.completionOptions.promptCaching;
+      this.cacheBehavior?.cacheConversation || promptCaching;
     const shouldCacheSystemMessage =
-      this.cacheBehavior?.cacheSystemMessage ||
-      this.completionOptions.promptCaching;
+      this.cacheBehavior?.cacheSystemMessage || promptCaching;
+
+    // Anthropic-style cache_control, including ttl, is passed through to Claude
+    // models. The 1-hour lifetime is sent only for models known to take it
+    // (Claude 3.x models are 5 minutes only); otherwise the field is omitted.
+    const ttl = bedrockCacheTtl(
+      body.model,
+      resolvePromptCacheTtl(options?.promptCacheTtl, this.cacheBehavior?.ttl),
+    );
 
     if (!shouldCacheConversation && !shouldCacheSystemMessage) {
       return body;
     }
 
-    // Follow the same logic as Anthropic.ts: filter out system messages first
-    const filteredMessages = body.messages.filter(
-      (m: any) => m.role !== "system" && !!m.content,
-    );
-
-    // Find the last two user message indices from the filtered array
-    const lastTwoUserMsgIndices = filteredMessages
-      .map((msg: any, index: number) => (msg.role === "user" ? index : -1))
-      .filter((index: number) => index !== -1)
-      .slice(-2);
-
-    // Create a mapping from filtered indices to original indices
-    let filteredIndex = 0;
-    const filteredToOriginalIndexMap: number[] = [];
-    body.messages.forEach((msg: any, originalIndex: number) => {
-      if (msg.role !== "system" && !!msg.content) {
-        filteredToOriginalIndexMap[filteredIndex] = originalIndex;
-        filteredIndex++;
-      }
+    return applyCacheControlToOpenAIBody(body, {
+      system: !!shouldCacheSystemMessage,
+      conversation: !!shouldCacheConversation,
+      ttl,
     });
-
-    // Modify messages to add cache_control
-    body.messages = body.messages.map((message: any, idx) => {
-      // Handle system message caching
-      if (message.role === "system" && shouldCacheSystemMessage) {
-        return {
-          ...message,
-          content: this.addCacheControlToContent(message.content, true),
-        };
-      }
-
-      // Handle conversation caching for last two user messages
-      // Check if this message's index (in filtered array) is one of the last two user messages
-      const filteredIdx = filteredToOriginalIndexMap.indexOf(idx);
-      if (
-        message.role === "user" &&
-        shouldCacheConversation &&
-        filteredIdx !== -1 &&
-        lastTwoUserMsgIndices.includes(filteredIdx)
-      ) {
-        return {
-          ...message,
-          content: this.addCacheControlToContent(message.content, true),
-        };
-      }
-
-      return message;
-    });
-
-    return body;
   }
 }
 
