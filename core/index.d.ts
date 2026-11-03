@@ -3,6 +3,7 @@ import {
   ModelRole,
   PromptTemplates,
   ToolOverrideConfig,
+  ToolPermissions,
 } from "@continuedev/config-yaml";
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { McpUiResourceMeta } from "@modelcontextprotocol/ext-apps";
@@ -1867,6 +1868,8 @@ export interface ContinueConfig {
   modelsByRole: Record<ModelRole, ILLM[]>;
   selectedModelByRole: Record<ModelRole, ILLM | null>;
   modeModels?: ModeModelsConfig;
+  /** Rules from `toolPermissions:` in config.yaml (allow / ask / deny). */
+  toolPermissions?: ToolPermissions;
   data?: DataDestination[];
 }
 
