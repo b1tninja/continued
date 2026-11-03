@@ -7,9 +7,66 @@ import {
   setPromptCacheState,
   setupNotice,
 } from "./noticeTestUtils";
+import { newSession } from "../../redux/slices/sessionSlice";
 
 const setup = (setting?: "auto" | "5m" | "1h" | "off") =>
   setupNotice(<ColdCacheNotice />, setting);
+
+describe("ColdCacheNotice on a resumed session", () => {
+  const saved = (hoursAgo: number) => ({
+    sessionId: "old",
+    title: "Yesterday",
+    workspaceDirectory: "",
+    history: [
+      { message: { role: "user", content: "hi" }, contextItems: [] },
+      { message: { role: "assistant", content: "hello" }, contextItems: [] },
+    ],
+    promptCache: {
+      lastRequestAt: Date.now() - hoursAgo * 3_600_000,
+      lastInputTokens: 366_000,
+      lastTtl: "5m",
+    },
+  });
+
+  it("says the cache expired when a saved session is opened hours later", async () => {
+    const { store } = await setup();
+    await act(async () => {
+      store.dispatch(newSession(saved(20) as any));
+    });
+    const text = screen.getByTestId("cold-cache-notice").textContent!;
+    expect(text).toContain("expired 20 h ago");
+    expect(text).toContain("366k tokens");
+  });
+
+  it("offers a new session and compaction, which is what a resume needs", async () => {
+    const { store } = await setup();
+    await act(async () => {
+      store.dispatch(newSession(saved(3) as any));
+    });
+    expect(screen.getByTestId("cold-cache-compact")).toBeInTheDocument();
+    expect(screen.getByTestId("cold-cache-new-session")).toBeInTheDocument();
+  });
+
+  it("says nothing for a saved session with no cache record", async () => {
+    const { store } = await setup();
+    await act(async () => {
+      store.dispatch(
+        newSession({ ...saved(3), promptCache: undefined } as any),
+      );
+    });
+    expect(screen.queryByTestId("cold-cache-notice")).toBeNull();
+  });
+
+  it("says nothing for a saved session whose cache is still alive", async () => {
+    const { store } = await setup("1h");
+    await act(async () => {
+      const s = saved(0.2);
+      s.promptCache.lastTtl = "1h";
+      store.dispatch(newSession(s as any));
+    });
+    expect(screen.queryByTestId("cold-cache-notice")).toBeNull();
+  });
+});
 
 describe("ColdCacheNotice", () => {
   it("says what the next message costs once the cache has expired", async () => {

@@ -53,6 +53,28 @@ describe("sessionSlice prompt cache state across sessions", () => {
     expect(next.promptCache?.escalated).toBe(true);
   });
 
+  it("brings back a loaded session's own cache record, and nothing else of the old one", () => {
+    const next = sessionSlice.reducer(
+      state,
+      sessionSlice.actions.newSession({
+        sessionId: "other",
+        title: "t",
+        history: [],
+        promptCache: {
+          lastRequestAt: 999,
+          lastInputTokens: 250_000,
+          lastTtl: "5m",
+        },
+      } as any),
+    );
+    expect(next.promptCache).toEqual({
+      escalated: true,
+      lastRequestAt: 999,
+      lastInputTokens: 250_000,
+      lastTtl: "5m",
+    });
+  });
+
   it("counts misses and acknowledges them", () => {
     let s = sessionSlice.reducer(
       state,

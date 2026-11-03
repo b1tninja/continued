@@ -275,6 +275,16 @@ export interface SessionUsage extends Usage {
   totalCost: number;
 }
 
+/** What the prompt cache held when a session was last used. */
+export interface SessionPromptCache {
+  /** When the last request started (ms since epoch). */
+  lastRequestAt?: number;
+  /** Input tokens of that request, as the API counted them. */
+  lastInputTokens?: number;
+  /** Lifetime that request wrote its cache entry with. */
+  lastTtl?: "5m" | "1h";
+}
+
 export interface Session {
   sessionId: string;
   title: string;
@@ -286,6 +296,11 @@ export interface Session {
   chatModelTitle?: string | null;
   /** Optional: cumulative usage and cost for all LLM API calls in this session */
   usage?: SessionUsage;
+  /**
+   * Optional: lets a resumed session tell that its prompt cache has expired
+   * and what re-reading the conversation will cost.
+   */
+  promptCache?: SessionPromptCache;
 }
 
 export interface BaseSessionMetadata {

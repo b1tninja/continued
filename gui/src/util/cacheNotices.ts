@@ -71,3 +71,10 @@ export function longContextNote(
   }
   return undefined;
 }
+
+/**
+ * Anthropic documents that accuracy and recall fall as the context grows, so
+ * a long session costs more and can answer worse.
+ */
+export const QUALITY_NOTE =
+  "Answers can also get less reliable as the context grows. For an unrelated task, a new session is cheaper and usually better.";

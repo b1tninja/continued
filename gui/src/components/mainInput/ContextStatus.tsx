@@ -9,6 +9,7 @@ import {
   formatUsd,
   longContextNote,
   perMessageCost,
+  QUALITY_NOTE,
 } from "../../util/cacheNotices";
 import { useCompactConversation } from "../../util/compactConversation";
 import { promptCacheStatus } from "../../util/promptCache";
@@ -97,6 +98,11 @@ const ContextStatus = () => {
                 {`${formatTokens(tokens)} tokens are sent with every message.`}
                 {cost &&
                   ` One more message costs about ${formatUsd(cost.warmUsd)} with the prompt cache warm and ${formatUsd(cost.coldUsd)} after it expires.`}
+              </span>
+            )}
+            {isLarge && (
+              <span className="inline-block" data-testid="context-quality-note">
+                {QUALITY_NOTE}
               </span>
             )}
             {longNote && (

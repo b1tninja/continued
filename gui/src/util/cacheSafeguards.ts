@@ -168,6 +168,13 @@ export function keyChanges(
 export const MISS_MIN_PREFIX_TOKENS = 50_000;
 /** The miss notice appears after this many unseen misses in a session. */
 export const MISS_NOTICE_AFTER = 3;
+/**
+ * A draft this big (typed, pasted or as code blocks) gets a notice before it
+ * is sent: about 120 KB of text at 4 characters per token. It is sent again
+ * with every later message, so a big paste is a cost the user can avoid
+ * before it is incurred. The size is a guess; tune it from real use.
+ */
+export const LARGE_MESSAGE_TOKENS = 30_000;
 /** A request that read less than this share of the previous prompt missed. */
 export const MISS_READ_SHARE = 0.5;
 

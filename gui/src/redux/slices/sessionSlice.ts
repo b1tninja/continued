@@ -705,10 +705,17 @@ export const sessionSlice = createSlice({
       state.contextPercentage = undefined;
       // A different conversation shares nothing with the cached one: its size,
       // timing and misses do not carry over. What Auto learned about the
-      // user's pauses does.
+      // user's pauses does. A saved session brings back its own record, so
+      // resuming it after a break can say the cache has expired.
+      const saved = payload?.promptCache;
       state.promptCache = {
         ...INITIAL_PROMPT_CACHE_STATE,
         escalated: state.promptCache?.escalated ?? false,
+        ...(saved?.lastRequestAt !== undefined && {
+          lastRequestAt: saved.lastRequestAt,
+          lastInputTokens: saved.lastInputTokens,
+          lastTtl: saved.lastTtl,
+        }),
       };
 
       if (payload) {

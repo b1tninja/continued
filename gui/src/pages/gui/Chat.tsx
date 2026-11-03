@@ -23,6 +23,7 @@ import ThinkingBlockPeek from "../../components/mainInput/belowMainInput/Thinkin
 import ContinueInputBox from "../../components/mainInput/ContinueInputBox";
 import { CacheMissNotice } from "../../components/mainInput/CacheMissNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
+import { LargeMessageNotice } from "../../components/mainInput/LargeMessageNotice";
 import { useOnboardingCard } from "../../components/OnboardingCard";
 import StepContainer from "../../components/StepContainer";
 import { TabBar } from "../../components/TabBar/TabBar";
@@ -418,6 +419,7 @@ export function Chat() {
       <div className={"relative shrink-0"}>
         <CacheMissNotice />
         <ColdCacheNotice />
+        <LargeMessageNotice />
         <ContinueInputBox
           isMainInput
           isLastUserInput={false}
