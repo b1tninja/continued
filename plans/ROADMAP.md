@@ -110,6 +110,22 @@ Problem: upstream no longer merges fixes, but its open issues and pull requests 
 | E4  | Proxy port matching, SSE comment lines, Windows `npx` for MCP servers (U7, U8, U10), alongside the MCP review                                     | none       |
 | E5  | Evaluate an ACP mode in `cn` for editors we do not ship (U11)                                                                                     | none       |
 
+### Track F: task planning
+
+Plan: [`task-planning.md`](./task-planning.md)
+
+Problem: the CLI's `Checklist` tool keeps the list only as tool calls in the conversation, so compaction, pruning or a new session can lose the plan. The IDE has no task list at all. Other harnesses keep the list as state outside the transcript and put it back in front of the model each turn.
+
+| PR  | Scope                                                                                                                    | Depends on |
+| --- | ------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| F0  | Measure where the list should sit in the request, using the live Bedrock cache test; confirm a free CLI key              | none       |
+| F1  | `TaskPlan` in core and on `Session`; `TaskList` tool with a `Checklist` alias; the list in each request; summary prompts | F0         |
+| F2  | CLI progress strip, expand key, keyboard editing                                                                         | F1         |
+| F3  | IDE: tool, session field, list under the input, in-place editing                                                         | F1         |
+| F4  | Plan files in `.continue/plans/`, seeding the list                                                                       | F1         |
+| F5  | New session with this plan; optional block-completion setting                                                            | F1, C6     |
+| F6  | Subtasks with their own conversation                                                                                     | F1, E1     |
+
 ## Later
 
 Carried over from `fork-plan.md` section 4.7, item 4. None started:
