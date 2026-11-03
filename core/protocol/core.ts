@@ -12,6 +12,7 @@ import {
 } from "../autocomplete/util/types";
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
+import type { ModeModelsInput } from "../config/yaml/saveModeModels";
 import { GlobalContextModelSelections } from "../util/GlobalContext";
 
 import {
@@ -136,6 +137,11 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     },
   ];
   "config/deleteModel": [{ title: string }, void];
+  /**
+   * Write `modeModels` in the global config.yaml (comments kept). Returns
+   * whether a config.yaml was edited; false means there was none to edit.
+   */
+  "config/setModeModels": [ModeModelsInput, { saved: boolean }];
   "config/refreshProfiles": [
     (
       | undefined
