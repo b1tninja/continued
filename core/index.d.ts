@@ -3,6 +3,7 @@ import {
   ModelRole,
   PromptTemplates,
   ToolOverrideConfig,
+  ToolPermissions,
 } from "@continuedev/config-yaml";
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { McpUiResourceMeta } from "@modelcontextprotocol/ext-apps";
@@ -513,6 +514,8 @@ interface ToolCallState {
   status: ToolStatus;
   parsedArgs: any;
   processedArgs?: Record<string, any>; // Added in preprocesing step
+  /** Why this call is waiting for approval, when a rule or protected path says so. */
+  policyNote?: string;
   output?: ContextItem[];
   tool?: Tool;
   mcpUiState?: McpUiState;
@@ -1873,6 +1876,8 @@ export interface ContinueConfig {
   modelsByRole: Record<ModelRole, ILLM[]>;
   selectedModelByRole: Record<ModelRole, ILLM | null>;
   modeModels?: ModeModelsConfig;
+  /** Rules from `toolPermissions:` in config.yaml (allow / ask / deny). */
+  toolPermissions?: ToolPermissions;
   data?: DataDestination[];
 }
 
