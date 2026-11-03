@@ -15,8 +15,8 @@ export const requestOptionsSchema = z.object({
   useSystemCa: z.boolean().optional(),
   caBundlePath: z.union([z.string(), z.array(z.string())]).optional(),
   proxy: z.string().optional(),
-  headers: z.record(z.string()).optional(),
-  extraBodyProperties: z.record(z.any()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  extraBodyProperties: z.record(z.string(), z.any()).optional(),
   noProxy: z.array(z.string()).optional(),
   clientCertificate: clientCertificateOptionsSchema.optional(),
 });
@@ -30,6 +30,7 @@ export const modelRolesSchema = z.enum([
   "apply",
   "summarize",
   "subagent",
+  "reviewer",
 ]);
 export type ModelRole = z.infer<typeof modelRolesSchema>;
 
@@ -79,6 +80,10 @@ export type EmbeddingPrefixes = z.infer<typeof embeddingPrefixesSchema>;
 export const cacheBehaviorSchema = z.object({
   cacheSystemMessage: z.boolean().optional(),
   cacheConversation: z.boolean().optional(),
+  // Lifetime of cache entries. "auto" starts at 5 minutes and moves to 1 hour
+  // after a pause that a 1-hour entry would have covered. Does not turn
+  // caching on by itself.
+  ttl: z.enum(["auto", "5m", "1h"]).optional(),
 });
 export type CacheBehavior = z.infer<typeof cacheBehaviorSchema>;
 

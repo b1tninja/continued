@@ -68,19 +68,19 @@ export type RulesJson = z.infer<typeof rulesJsonSchema>;
 
 const defaultUsesSchema = z.string();
 
-export const blockItemWrapperSchema = <T extends z.AnyZodObject>(
+export const blockItemWrapperSchema = <T extends z.ZodObject>(
   schema: T,
-  usesSchema: z.ZodTypeAny = defaultUsesSchema,
+  usesSchema: z.ZodType<any> = defaultUsesSchema,
 ) =>
   z.object({
     uses: usesSchema,
-    with: z.record(z.string()).optional(),
+    with: z.record(z.string(), z.string()).optional(),
     override: schema.partial().optional(),
   });
 
-export const blockOrSchema = <T extends z.AnyZodObject>(
+export const blockOrSchema = <T extends z.ZodObject>(
   schema: T,
-  usesSchema: z.ZodTypeAny = defaultUsesSchema,
+  usesSchema: z.ZodType<any> = defaultUsesSchema,
 ) => z.union([schema, blockItemWrapperSchema(schema, usesSchema)]);
 
 export const commonMetadataSchema = z.object({
@@ -131,12 +131,38 @@ export type ModeModels = z.infer<typeof modeModelsSchema>;
 
 /**
  * Rules for tool calls, written `toolName(pattern)` or a bare `toolName`.
- * Deny always wins over ask, and ask over allow. See plans/tool-auto-approval.md.
+ * Deny always wins over ask, and ask over allow. `auto` only configures the
+ * experimental reviewer (Auto mode) and never loosens a rule. See plans/tool-auto-approval.md.
  */
 export const toolPermissionsSchema = z.object({
   allow: z.array(z.string()).optional(),
   ask: z.array(z.string()).optional(),
   deny: z.array(z.string()).optional(),
+  auto: z
+    .object({
+      /** Facts the reviewer model is told about, to judge "unknown destination" and "production". */
+      environment: z
+        .object({
+          trustedDomains: z.array(z.string()).optional(),
+          productionMarkers: z.array(z.string()).optional(),
+        })
+        .optional(),
+      /** Plain-language guidance added to the reviewer's prompt. */
+      guidance: z
+        .object({
+          block: z.array(z.string()).optional(),
+          allow: z.array(z.string()).optional(),
+        })
+        .optional(),
+      /** Stop the agent and ask after this many refusals in a row, or in total. */
+      limits: z
+        .object({
+          consecutiveDenials: z.number().int().min(1).optional(),
+          totalDenials: z.number().int().min(1).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 export type ToolPermissions = z.infer<typeof toolPermissionsSchema>;
 
@@ -144,7 +170,10 @@ export const baseConfigYamlSchema = z.object({
   name: z.string(),
   version: z.string(),
   schema: z.string().optional(),
-  metadata: z.record(z.string()).and(commonMetadataSchema.partial()).optional(),
+  metadata: z
+    .record(z.string(), z.string())
+    .and(commonMetadataSchema.partial())
+    .optional(),
   modeModels: modeModelsSchema.optional(),
   toolPermissions: toolPermissionsSchema.optional(),
   env: envRecord.optional(),
@@ -162,7 +191,7 @@ export const configYamlSchema = baseConfigYamlSchema.extend({
         modelSchema,
         z.object({
           uses: modelsUsesSchema,
-          with: z.record(z.string()).optional(),
+          with: z.record(z.string(), z.string()).optional(),
           override: partialModelSchema.optional(),
         }),
       ]),
@@ -176,7 +205,7 @@ export const configYamlSchema = baseConfigYamlSchema.extend({
         mcpServerSchema,
         z.object({
           uses: defaultUsesSchema,
-          with: z.record(z.string()).optional(),
+          with: z.record(z.string(), z.string()).optional(),
           override: partialMcpServerSchema.optional(),
         }),
       ]),
@@ -188,7 +217,7 @@ export const configYamlSchema = baseConfigYamlSchema.extend({
         ruleSchema,
         z.object({
           uses: defaultUsesSchema,
-          with: z.record(z.string()).optional(),
+          with: z.record(z.string(), z.string()).optional(),
         }),
       ]),
     )
