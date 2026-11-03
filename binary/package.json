@@ -48,12 +48,11 @@
     "core": "file:../core",
     "follow-redirects": "^1.15.5",
     "mac-ca": "^2.0.3",
-    "ncp": "^2.0.0",
     "node-fetch": "^3.3.2",
     "system-ca": "^1.0.2",
     "tar": "^7.5.13",
     "undici": "^8.12.3",
-    "uuid": "^9.0.1",
+    "uuid": "^11.1.1",
     "vectordb": "0.4.20",
     "win-ca": "^3.5.1"
   }

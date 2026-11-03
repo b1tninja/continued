@@ -13,6 +13,15 @@ import {
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type { ModeModelsInput } from "../config/yaml/saveModeModels";
+import type {
+  AutoReviewReply,
+  AutoReviewRequest,
+} from "../tools/permissions/auto/handler";
+import type {
+  ProviderSetupInfo,
+  SaveProviderModelsRequest,
+  SaveProviderModelsResult,
+} from "../config/providerSetup";
 import type { DecisionSource as ToolDecisionSource } from "../tools/permissions/decide";
 import { GlobalContextModelSelections } from "../util/GlobalContext";
 
@@ -193,6 +202,22 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    * set: the .env file (created with an empty `NAME=` line), or the line of
    * the config that uses it.
    */
+  /** Configured models grouped by provider connection. Never returns a key. */
+  "config/getProviderSetup": [undefined, ProviderSetupInfo];
+  /**
+   * Add and remove models of one provider connection in config.yaml and, when
+   * `key` is given, store the key where the user chose. The key value is
+   * never written to config.yaml unless storage is "inline".
+   */
+  "config/saveProviderModels": [
+    SaveProviderModelsRequest,
+    SaveProviderModelsResult,
+  ];
+  /** Store one secret (secure storage or ~/.continue/.env) and reload. */
+  "config/setSecret": [
+    { secretName: string; value: string; storage: "secure" | "env" },
+    { stored: boolean; error?: string; warning?: string },
+  ];
   "config/openSecretLocation": [
     { secretName: string; target: "env" | "configLine" },
     void,
@@ -409,6 +434,11 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       rule?: string;
     },
   ];
+  /**
+   * Auto approval (experimental): decide one call. Core re-runs the rules
+   * first; only a call they leave open reaches the reviewer model.
+   */
+  "tools/autoReview": [AutoReviewRequest, AutoReviewReply];
   "tools/preprocessArgs": [
     { toolName: string; args: Record<string, unknown> },
     {
