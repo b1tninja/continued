@@ -140,7 +140,7 @@ The popover is one small component used from all four places (the existing `Popo
 
 - **Enter key** opens the setup flow at step 1 for that provider, with fields filled in from config.yaml. Saving writes the secret where the user chose (section 4.5) and reloads; config.yaml is unchanged because the reference is already correct. One entry fixes every model that shares the secret.
 - **Open .env**, which opens `~/.continue/.env` (created if missing, with `CONTINUED_ANTHROPIC_API_KEY=` ready to fill in).
-- **Open config line**, which opens config.yaml at the model's `apiKey` line. This needs the line number; the YAML document API provides it, so A0 records the position of each reference.
+- **Open config line**, which opens config.yaml at the model's `apiKey` line. Built in A0 (#98) by searching the config text for the reference, so no YAML position tracking is needed; a secret used from another block file falls back to opening the main config.
 
 A "Copy name" button sits next to the secret name for people who set it as an environment variable.
 
@@ -205,4 +205,4 @@ Written from reading the code, plus two things run on 2026-11-02: the existing `
 - That `parseDocument` behaves the same on real user configs. The test plan should include a few.
 - Whether an optional `action` field on `ConfigValidationError` (a type in `packages/config-yaml`, shared with the Hub schema and the CLI) is safe to add. It is optional, but the CLI and JetBrains plugin both consume that type.
 - Which providers read their key from a field other than `apiKey` (Bedrock uses `env.accessKeyId` and `env.secretAccessKey`; Azure and others have their own). The scan has to cover those; I only checked `apiKey` end to end.
-- Where `BaseLLM` should refuse a request: it sends from many subclasses, so the check likely belongs in one shared place (`fetch` wrapper or `_streamChat` entry), not in each provider.
+- (Resolved in A0, #98.) The refusal went into the public `BaseLLM` methods (`streamChat`, `complete`, `streamComplete`, `streamFim`, `embed`, `rerank`), not a fetch wrapper, so every subclass is covered without touching providers. Not covered: a provider that bypasses those methods.
