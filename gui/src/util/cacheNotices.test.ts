@@ -65,10 +65,19 @@ describe("perMessageCost", () => {
   });
 
   it("uses the higher tier for a long prompt on Haiku 5.5", () => {
-    // over 100,000 tokens: $0.05/MTok read, $0.625/MTok write
-    const c = perMessageCost(haiku55, 200_000)!;
+    // Bare ID, so list price. Over 100,000 tokens: $0.05/MTok read, $0.625/MTok write
+    const c = perMessageCost(
+      model("bedrock", "anthropic.claude-haiku-5-5"),
+      200_000,
+    )!;
     expect(c.warmUsd).toBeCloseTo(0.01, 6);
     expect(c.coldUsd).toBeCloseTo(0.125, 6);
+  });
+
+  it("adds the Bedrock us. profile premium (1.10x) to the same prompt", () => {
+    const c = perMessageCost(haiku55, 200_000)!;
+    expect(c.warmUsd).toBeCloseTo(0.011, 6);
+    expect(c.coldUsd).toBeCloseTo(0.1375, 6);
   });
 });
 
