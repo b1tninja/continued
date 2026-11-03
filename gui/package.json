@@ -59,7 +59,7 @@
     "react-markdown": "^9.0.1",
     "react-redux": "^8.0.5",
     "react-remark": "^2.1.0",
-    "react-router-dom": "^6.30.3",
+    "react-router-dom": "^7.18.5",
     "react-switch": "^7.0.0",
     "react-syntax-highlighter": "^16.1.1",
     "react-tooltip": "^5.18.0",
@@ -79,7 +79,7 @@
     "tailwind-merge": "^3.0.2",
     "tippy.js": "^6.3.7",
     "unist-util-visit": "^5.0.0",
-    "uuid": "^9.0.1"
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
     "@swc/cli": "^0.8.0",
@@ -120,6 +120,7 @@
   "overrides": {
     "vitest": {
       "@types/node": "$@types/node"
-    }
+    },
+    "katex": "^0.18.2"
   }
 }
