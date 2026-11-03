@@ -63,4 +63,24 @@ describe("editConfigFile (config.yaml)", () => {
     expect(fs.readFileSync(cfgPath, "utf8")).toBe(bad);
     expect(fs.existsSync(`${cfgPath}.bak`)).toBe(false);
   });
+
+  it("leaves no temp files behind", () => {
+    editConfigFile(identityJson, (c: any) => ({ ...c, name: "One" }));
+    expect(fs.readdirSync(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("writes through a symlinked config.yaml instead of replacing the link", (ctx) => {
+    const real = path.join(dir, "dotfiles-config.yaml");
+    fs.renameSync(cfgPath, real);
+    try {
+      fs.symlinkSync(real, cfgPath);
+    } catch {
+      // Creating symlinks needs privileges on Windows; nothing to check there.
+      ctx.skip();
+      return;
+    }
+    editConfigFile(identityJson, (c: any) => ({ ...c, name: "Linked" }));
+    expect(fs.lstatSync(cfgPath).isSymbolicLink()).toBe(true);
+    expect(YAML.parse(fs.readFileSync(real, "utf8")).name).toBe("Linked");
+  });
 });

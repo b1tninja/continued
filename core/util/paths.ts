@@ -285,8 +285,35 @@ function editConfigYaml(callback: (config: ConfigYaml) => ConfigYaml): void {
       console.warn(`Could not write ${backupPath}:`, e);
     }
   }
-  fs.writeFileSync(configPath, text);
-  setConfigFilePermissions(configPath);
+  writeFileAtomically(configPath, text);
+}
+
+/**
+ * Write via a temp file and rename, so a crash mid-write cannot leave a
+ * truncated config.yaml. A symlinked config (common with dotfiles repos) is
+ * written through to its real target, so the link survives.
+ */
+function writeFileAtomically(filePath: string, text: string): void {
+  let target = filePath;
+  try {
+    target = fs.realpathSync(filePath);
+  } catch {
+    // Does not exist yet; write the path as given.
+  }
+  const tmp = `${target}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, text);
+    setConfigFilePermissions(tmp);
+    fs.renameSync(tmp, target);
+  } catch (e) {
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // Nothing more to clean up.
+    }
+    throw e;
+  }
+  setConfigFilePermissions(target);
 }
 
 export function editConfigFile(
