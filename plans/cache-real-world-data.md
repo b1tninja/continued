@@ -102,3 +102,31 @@ says regional and multi-region endpoints carry a 10% premium over global endpoin
 list prices and so under-reports `us.` Bedrock costs by about 9%. Not yet applied: a global profile has
 not been checked, and the right rule is per model ID prefix. Haiku 5.5 is billed at its higher
 prompt-length rates on 97% of its tokens in this data.
+
+## Making the lifetime adapt
+
+Tested on the same conversations (Claude, input-side cost at billed rates). Today's Auto pays for its
+lesson: the gap that makes it switch to 1 hour has already cost a full rewrite.
+
+| Idea                                                                            |                                   Result against today's Auto |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------: |
+| Learn each person's best of 5 min, 1 h and Auto from 3.5 weeks of their history | +0.2% (no gain); the same best option holds for 44% of people |
+| Start on 1 hour for people whose past conversations often had a long gap        |                                                -0.5% to +0.2% |
+| Best option per person, chosen with hindsight (an unreachable bound)            |                                                -1.8% to -2.8% |
+| Best of 5 min and 1 h per conversation, with hindsight (an unreachable bound)   |                                                         -6.3% |
+| Also escalate to 1 hour at the 5th request, whatever the gaps                   |                                     -3.8% (-3.4% at the 10th) |
+| Also escalate when a conversation is 1 to 2 minutes old                         |                                                -3.9% to -4.1% |
+| Also escalate once context passes 100k tokens                                   |                                                         -1.8% |
+| Keepalive pings every 270 s after the last request                              |                        -1.3% at best, with 71k extra requests |
+
+- Learning from a person's history does not pay: behaviour varies more between one person's conversations
+  than between people, and even knowing the future gains 2% to 3%. Local history in Continue covers one
+  person, so there is no population to learn from either.
+- The conversation itself is the useful signal. Of conversations that reach 5 requests, 43% later pause 5
+  to 55 minutes; of those reaching 50, 58%. Escalating at request 5 gives -2.9% to -4.4% for any threshold
+  from 3 to 15 in each of four weeks, and captures about 60% of the per-conversation bound.
+- It is not free: at request 5, 1,346 of 5,708 conversations pay less (about 60 cents each on average) and
+  2,003 pay more (about 16 cents each, the 1-hour premium on writes never reused). Net -3.8%.
+- Caveats: the data is agent traffic, where a request is usually a tool step. In chat a request is a human
+  turn, so the same threshold would fire later in wall-clock time. An age trigger is as good but behaves
+  differently in chat, so count requests and check the mode.
