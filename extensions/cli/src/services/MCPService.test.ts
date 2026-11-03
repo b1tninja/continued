@@ -14,7 +14,10 @@ const mockClient = {
 };
 
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
-  Client: vi.fn(() => mockClient),
+  // vitest 4 mocks invoked with `new` need a function, not an arrow
+  Client: vi.fn(function () {
+    return mockClient;
+  }),
 }));
 
 vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
@@ -30,9 +33,9 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
 }));
 
 vi.mock("https", () => ({
-  Agent: vi.fn().mockImplementation(() => ({
-    rejectUnauthorized: false,
-  })),
+  Agent: vi.fn().mockImplementation(function () {
+    return { rejectUnauthorized: false };
+  }),
 }));
 
 describe("MCPService", () => {
@@ -219,8 +222,9 @@ describe("MCPService", () => {
     });
 
     it("should create HttpsAgent when verifySsl is false for SSE transport", async () => {
-      const { SSEClientTransport } =
-        await import("@modelcontextprotocol/sdk/client/sse.js");
+      const { SSEClientTransport } = await import(
+        "@modelcontextprotocol/sdk/client/sse.js"
+      );
       const { Agent: HttpsAgent } = await import("https");
 
       const sseAssistant: AssistantConfig = {
@@ -257,8 +261,9 @@ describe("MCPService", () => {
     });
 
     it("should not create HttpsAgent when verifySsl is true for SSE transport", async () => {
-      const { SSEClientTransport } =
-        await import("@modelcontextprotocol/sdk/client/sse.js");
+      const { SSEClientTransport } = await import(
+        "@modelcontextprotocol/sdk/client/sse.js"
+      );
       const { Agent: HttpsAgent } = await import("https");
 
       const sseAssistant: AssistantConfig = {
@@ -301,8 +306,9 @@ describe("MCPService", () => {
     });
 
     it("should create HttpsAgent when verifySsl is false for streamable-http transport", async () => {
-      const { StreamableHTTPClientTransport } =
-        await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
+      const { StreamableHTTPClientTransport } = await import(
+        "@modelcontextprotocol/sdk/client/streamableHttp.js"
+      );
       const { Agent: HttpsAgent } = await import("https");
 
       const httpAssistant: AssistantConfig = {
@@ -336,8 +342,9 @@ describe("MCPService", () => {
     });
 
     it("should not create HttpsAgent when verifySsl is true for streamable-http transport", async () => {
-      const { StreamableHTTPClientTransport } =
-        await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
+      const { StreamableHTTPClientTransport } = await import(
+        "@modelcontextprotocol/sdk/client/streamableHttp.js"
+      );
       const { Agent: HttpsAgent } = await import("https");
 
       const httpAssistant: AssistantConfig = {
@@ -377,8 +384,9 @@ describe("MCPService", () => {
     });
 
     it("should not create HttpsAgent when verifySsl is not specified", async () => {
-      const { StreamableHTTPClientTransport } =
-        await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
+      const { StreamableHTTPClientTransport } = await import(
+        "@modelcontextprotocol/sdk/client/streamableHttp.js"
+      );
       const { Agent: HttpsAgent } = await import("https");
 
       const httpAssistant: AssistantConfig = {
