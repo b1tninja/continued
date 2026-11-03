@@ -11,7 +11,7 @@ val pluginVersion: String by project
 val isEap get() = environment("RELEASE_CHANNEL").orNull == "eap"
 
 plugins {
-    kotlin("jvm") version "2.1.0"
+    kotlin("jvm") version "2.4.21"
     id("org.jetbrains.intellij.platform") version "2.19.0"
     id("org.jetbrains.changelog") version "2.5.0"
     id("org.jetbrains.qodana") version "0.1.13"
@@ -60,12 +60,19 @@ dependencies {
 
     testIntegrationImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     "testIntegrationRuntimeOnly"("org.junit.platform:junit-platform-launcher:6.1.3")
-    testIntegrationImplementation("org.kodein.di:kodein-di-jvm:7.20.2")
+    testIntegrationImplementation("org.kodein.di:kodein-di-jvm:7.33")
     testIntegrationImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0")
 }
 
 kotlin {
     jvmToolchain(17)
+    compilerOptions {
+        // sinceBuild=241 (2024.1) bundles Kotlin 1.9.x; the IDE's own kotlin-stdlib is used at
+        // runtime (kotlin.stdlib.default.dependency=false), so only use APIs/language features
+        // the oldest supported IDE provides.
+        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9)
+        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9)
+    }
 }
 
 intellijPlatform {
