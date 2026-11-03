@@ -25,7 +25,7 @@
     "@semantic-release/npm": "^13.1.5",
     "@types/follow-redirects": "^1.14.4",
     "@types/node": "^20.19.43",
-    "semantic-release": "^24.2.7",
+    "semantic-release": "^25.0.9",
     "typescript": "^5.0.0",
     "vitest": "^5.0.5"
   },
