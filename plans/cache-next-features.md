@@ -50,6 +50,10 @@ says regional and multi-region endpoints carry a 10% premium over global endpoin
   factor to `us.` only, which is what was measured, until an AWS price list or a billing line says more.
 - Tests: table-driven by prefix and component; the long tier; a bare ID with `crossRegionInference` set.
 - Risk: low. Depends on: nothing.
+- Built on `feat/bedrock-us-price-factor` (`10a7ee46f` in the fork, stacked on the countdown branch).
+  `findAnthropicPricing` applies the factor, so the notices and the usage panel get it, and so does any other
+  caller whose model ID starts with `us.anthropic.`. The breakdown says when it was applied. 784 GUI tests and
+  the 97 cost tests pass; it was not checked in a running UI.
 
 ### C15: caching on by default in agent-style modes
 
@@ -83,25 +87,31 @@ Checked in the code on `feat/cache-countdown`; nothing run.
 - Bedrock adapter (`BedrockApi`): the cache points are commented out (`_addCachingToLastTwoUserMessages` is
   never called, and the system block is `false ? ... : ...`). It sends no cache points at all. A CLI user on
   Bedrock gets no prompt caching, and `cacheBehavior` is not in the adapter's Bedrock schema (also commented out).
-- The Bedrock adapter's usage mapping (near lines 762 and 797 of `Bedrock.ts`) was not read for cache
-  fields, so whether the CLI could even show hits on Bedrock is unchecked.
+- The Bedrock adapter reads no usage at all. A search of `Bedrock.ts` for `usage`, `metadata`, `inputTokens`
+  and the cache token fields finds only `usage: undefined` in the non-streaming reply and the embedding and
+  rerank replies. The Converse stream's `metadata` event, which carries the token counts and the cache read
+  and write counts, is never handled. So a CLI session on Bedrock cannot show tokens, cost or cache hits, and
+  `streamChatResponse.helpers.ts` falls back to its estimate. That is a code reading; it was not run.
 
-Before sizing: run the CLI once against Bedrock with a tool loop and read the cache read and write tokens
-the API returns. If they are zero, this is the largest finding in the plan: the data says caching saves
-about 85% of input-side cost, and a Bedrock CLI session would currently get none of it.
+Before sizing: the live run is still worth a few cents, but it can now only confirm what the code says: no
+cache points go out and no usage comes back. If so, this is the largest finding in the plan. The data says
+caching saves about 85% of input-side cost, and a Bedrock CLI session gets none of it and cannot even see it.
 
 Proposed, in this order, each its own PR:
 
-1. The Bedrock adapter sends `cachePoint` on the system block, the tools and the last two user messages,
+1. The Bedrock adapter handles the stream's `metadata` event and maps token counts and cache read and write
+   counts into `usage`. This comes first: without it nothing else in the CLI can be measured or priced.
+2. The Bedrock adapter sends `cachePoint` on the system block, the tools and the last two user messages,
    behind the same `promptCaching` setting the GUI honours, defaulting off until the live test passes.
-2. Both adapters accept a lifetime (`5m` or `1h`) and send it as `ttl`. `core` already has the Bedrock
+3. Both adapters accept a lifetime (`5m` or `1h`) and send it as `ttl`. `core` already has the Bedrock
    allowlist (`bedrockSupportsOneHourCache`); the adapters cannot import `core`, so move it somewhere both can.
-3. The CLI applies the Auto rule (C11a and C11b) from its own request count and the gap between requests.
+4. The CLI applies the Auto rule (C11a and C11b) from its own request count and the gap between requests.
    The CLI has no toolbar, so the setting comes from config and a flag.
 
 Tests: request-body tests in the adapters (there is a `Bedrock.vitest.ts`), the shared allowlist, and a CLI
 test with a mocked client. Live: a few cents on Bedrock, as for the GUI.
-Risk: medium for step 1 (turns on billing behaviour for CLI Bedrock users); low for step 2.
+Risk: low for step 1 (reads a field that is already sent); medium for step 2 (turns on billing behaviour for
+CLI Bedrock users); low for step 3.
 Depends on: the live check above.
 
 ### C17: show what lost caches cost
