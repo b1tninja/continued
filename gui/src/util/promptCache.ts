@@ -1,6 +1,7 @@
 import type { ModelDescription } from "core";
 import { bedrockSupportsOneHourCache } from "core/llm/llms/bedrockHelpers";
 import { normalizeClaudeModelId } from "core/llm/utils/calculateRequestCost";
+import { formatClockTime } from "./promptCacheCountdown";
 
 /** What the toolbar menu can set. `undefined` means "follow config.yaml". */
 export type PromptCacheSetting = "auto" | "5m" | "1h" | "off";
@@ -258,6 +259,10 @@ export interface PromptCacheStatus {
   warm: boolean;
   /** Milliseconds until that entry expires, when warm. */
   msLeft?: number;
+  /** When that entry expires (ms since epoch), when warm. */
+  expiresAt?: number;
+  /** Lifetime of that entry in ms, when warm. */
+  lifetimeMs?: number;
 }
 
 export function promptCacheStatus(
@@ -276,14 +281,20 @@ export function promptCacheStatus(
 
   let warm = false;
   let msLeft: number | undefined;
+  let expiresAt: number | undefined;
+  let lifetimeMs: number | undefined;
   if (on && state.lastRequestAt !== undefined) {
-    const expiresAt = state.lastRequestAt + TTL_MS[state.lastTtl ?? "5m"];
-    if (expiresAt > now) {
+    lifetimeMs = TTL_MS[state.lastTtl ?? "5m"];
+    const end = state.lastRequestAt + lifetimeMs;
+    if (end > now) {
       warm = true;
-      msLeft = expiresAt - now;
+      msLeft = end - now;
+      expiresAt = end;
+    } else {
+      lifetimeMs = undefined;
     }
   }
-  return { on, ttl, warm, msLeft };
+  return { on, ttl, warm, msLeft, expiresAt, lifetimeMs };
 }
 
 /** One-line summary for the toolbar tooltip. */
@@ -302,7 +313,11 @@ export function promptCacheTooltip(
         ? `from config (${life})`
         : life;
   if (status.warm && status.msLeft !== undefined) {
-    return `Prompt cache: warm, ${mode}. Expires in about ${formatTimeLeft(status.msLeft)} unless you send something.`;
+    const at =
+      status.expiresAt !== undefined
+        ? `at ${formatClockTime(status.expiresAt)} (in about ${formatTimeLeft(status.msLeft)})`
+        : `in about ${formatTimeLeft(status.msLeft)}`;
+    return `Prompt cache: warm, ${mode}. Expires ${at} unless you send something.`;
   }
   return `Prompt cache: ${mode}. Nothing cached right now; the next request writes it.`;
 }

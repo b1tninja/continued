@@ -100,6 +100,24 @@ describe("promptCacheStatus", () => {
     const s = promptCacheStatus(sonnet, "auto", cold, t0);
     expect(s.on).toBe(true);
     expect(s.warm).toBe(false);
+    expect(s.expiresAt).toBeUndefined();
+    expect(s.lifetimeMs).toBeUndefined();
+  });
+
+  it("reports when the entry expires and how long it lives", () => {
+    const s = promptCacheStatus(sonnet, "auto", warm5m, t0 + 2 * MIN);
+    expect(s.expiresAt).toBe(t0 + 5 * MIN);
+    expect(s.lifetimeMs).toBe(5 * MIN);
+    const hour = { escalated: true, lastRequestAt: t0, lastTtl: "1h" as const };
+    expect(promptCacheStatus(sonnet, "auto", hour, t0 + MIN).lifetimeMs).toBe(
+      60 * MIN,
+    );
+  });
+
+  it("has no expiry once the entry has lapsed", () => {
+    const s = promptCacheStatus(sonnet, "auto", warm5m, t0 + 6 * MIN);
+    expect(s.expiresAt).toBeUndefined();
+    expect(s.lifetimeMs).toBeUndefined();
   });
 
   it("is warm within the lifetime and reports the time left", () => {
@@ -143,6 +161,14 @@ describe("promptCacheTooltip", () => {
     expect(text).toContain("warm");
     expect(text).toContain("Auto (5 minutes)");
     expect(text).toContain("3 min");
+  });
+
+  it("gives the clock time the entry expires at", () => {
+    const status = promptCacheStatus(sonnet, "auto", warm5m, t0 + 2 * MIN);
+    const clock = new Intl.DateTimeFormat(undefined, {
+      timeStyle: "short",
+    }).format(new Date(t0 + 5 * MIN));
+    expect(promptCacheTooltip(status, "auto")).toContain(`at ${clock}`);
   });
 
   it("says nothing is cached once expired", () => {
