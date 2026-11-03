@@ -746,7 +746,6 @@
     "minisearch": "^7.0.0",
     "mocha": "^11.7.5",
     "monaco-vscode-textmate-theme-converter": "^0.1.7",
-    "ncp": "^2.0.0",
     "node-fetch": "^3.3.2",
     "node-machine-id": "^1.1.12",
     "react-markdown": "^8.0.7",
@@ -758,7 +757,7 @@
     "systeminformation": "^5.30.8",
     "tailwindcss": "^3.3.2",
     "undici": "^6.24.0",
-    "uuid": "^9.0.1",
+    "uuid": "^11.1.1",
     "uuidv4": "^6.2.13",
     "vectordb": "0.4.20",
     "vitest": "^5.0.5",
@@ -782,6 +781,13 @@
       "@types/node": "$@types/node"
     },
     "tar": "^7.5.13",
-    "undici-types@~7.18.0": "7.18.1"
+    "undici-types@~7.18.0": "7.18.1",
+    "dompurify": "^3.4.17",
+    "@vscode/vsce": {
+      "markdown-it": "^14.3.3"
+    },
+    "uuidv4": {
+      "uuid": "^11.1.1"
+    }
   }
 }
