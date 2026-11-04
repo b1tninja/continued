@@ -17,6 +17,7 @@ import {
   services,
 } from "../services/index.js";
 import { trackSessionUsage } from "../session.js";
+import { recordCacheTally } from "../util/cacheTally.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   executeToolCall,
@@ -353,6 +354,9 @@ export function recordStreamTelemetry(options: {
 
   telemetryService.recordCost(cost, model.model);
   trackSessionUsage(cost, usage);
+  // The session totals add up the providers' own counts; the cache tally
+  // normalises them per request so a hit share can be taken from it.
+  recordCacheTally(detectProvider(model.model), model.model, usage);
 
   telemetryService.recordResponseTime(
     totalDuration,
