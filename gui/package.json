@@ -88,7 +88,7 @@
     "@vitest/ui": "^5.0.5",
     "autoprefixer": "^10.4.13",
     "eslint": "^10.13.0",
-    "eslint-plugin-no-barrel-files": "^1.2.1",
+    "eslint-plugin-no-barrel-files": "^2.3.0",
     "jsdom": "^25.0.1",
     "postcss": "^8.4.21",
     "tailwindcss": "^3.2.7",
