@@ -1,5 +1,8 @@
 import type { ModelDescription } from "core";
-import { bedrockSupportsOneHourCache } from "core/llm/llms/bedrockHelpers";
+import {
+  anthropicStyleSupportsOneHourCache,
+  bedrockSupportsOneHourCache,
+} from "core/llm/llms/bedrockHelpers";
 import { normalizeClaudeModelId } from "core/llm/utils/calculateRequestCost";
 import { minCacheableTokens } from "core/llm/utils/cacheMinimums";
 import { formatClockTime } from "./promptCacheCountdown";
@@ -148,9 +151,16 @@ export function modelSupportsPromptCacheControl(
  */
 export function modelSupportsOneHourCache(model: ModelDescription): boolean {
   if (!modelSupportsPromptCacheControl(model)) return false;
-  return model.provider.toLowerCase() === "anthropic"
-    ? true
-    : bedrockSupportsOneHourCache(model.model);
+  switch (model.provider.toLowerCase()) {
+    case "anthropic":
+      return true;
+    case "bedrock":
+      // AWS's table, narrower than Anthropic's own.
+      return bedrockSupportsOneHourCache(model.model);
+    default:
+      // Vertex AI and OpenRouter take Anthropic's request shape.
+      return anthropicStyleSupportsOneHourCache(model.model);
+  }
 }
 
 /** Whether config.yaml turns caching on for this model without the toolbar. */

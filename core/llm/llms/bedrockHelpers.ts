@@ -318,6 +318,32 @@ export function bedrockCacheTtl(
     : undefined;
 }
 
+/**
+ * Claude models that take a 1-hour lifetime through Anthropic's own request
+ * shape, which Vertex AI and OpenRouter use: Anthropic's prompt caching page
+ * says 1 hour works on every model that supports caching. This list is wider
+ * than Bedrock's (Sonnet 4.5 is here and not in AWS's table) and still leaves
+ * out Claude 3.x and the original Claude 4 releases, which main's earlier list
+ * also left out because they were not seen in a table.
+ */
+const ANTHROPIC_STYLE_ONE_HOUR_MODELS =
+  /^claude-(haiku-4-5|haiku-5|sonnet-4-5|sonnet-4-6|sonnet-5|opus-4-5|opus-4-6|opus-4-7|opus-4-8|opus-5|fable|mythos)/;
+
+export function anthropicStyleSupportsOneHourCache(modelId: string): boolean {
+  const id = normalizeClaudeModelId(modelId);
+  return !!id && ANTHROPIC_STYLE_ONE_HOUR_MODELS.test(id);
+}
+
+/** The `ttl` for Vertex AI and OpenRouter, or undefined for the default. */
+export function anthropicStyleCacheTtl(
+  modelId: string,
+  requested: "5m" | "1h" | undefined,
+): "1h" | undefined {
+  return requested === "1h" && anthropicStyleSupportsOneHourCache(modelId)
+    ? "1h"
+    : undefined;
+}
+
 /** What an account's own model list says about a model's `global.` profile. */
 export type GlobalProfileStatus = "present" | "absent" | "unknown";
 

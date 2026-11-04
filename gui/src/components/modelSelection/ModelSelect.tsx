@@ -11,7 +11,11 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/Auth";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { useProviderSetupDialog } from "../ProviderSetup/useProviderSetupDialog";
-import { setModeModelOverride } from "../../redux/slices/uiSlice";
+import {
+  setDialogMessage,
+  setModeModelOverride,
+  setShowDialog,
+} from "../../redux/slices/uiSlice";
 import { updateSelectedModelByRole } from "../../redux/thunks/updateSelectedModelByRole";
 import { getMetaKeyLabel, isMetaEquivalentKeyPressed } from "../../util";
 import {

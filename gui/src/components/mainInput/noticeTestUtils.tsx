@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { act, screen } from "@testing-library/react";
 import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import { EMPTY_CONFIG, updateConfig } from "../../redux/slices/configSlice";
