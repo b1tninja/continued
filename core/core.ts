@@ -1270,7 +1270,9 @@ export class Core {
 
     on(
       "tools/evaluatePolicy",
-      async ({ data: { toolName, basePolicy, parsedArgs, processedArgs } }) => {
+      async ({
+        data: { toolName, basePolicy, parsedArgs, processedArgs, approval },
+      }) => {
         const { config } = await this.configHandler.loadConfig();
         if (!config) {
           throw new Error("Config not loaded");
@@ -1284,6 +1286,7 @@ export class Core {
           parsedArgs,
           processedArgs,
           permissions: config.toolPermissions,
+          approval,
         });
       },
     );
