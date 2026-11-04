@@ -33,6 +33,7 @@ import {
   applyCrossRegionInference,
   bedrockUsageToCompletionUsage,
   getBedrockErrorHint,
+  resolveBedrockCacheParts,
 } from "./bedrockHelpers.js";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import {
@@ -265,6 +266,7 @@ export class BedrockApi implements BaseLlmApi {
   private _convertMessages(
     oaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
     availableTools: Set<string>,
+    cache?: { conversation: boolean },
   ): Message[] {
     let currentRole: "user" | "assistant" = "user";
     let currentBlocks: ContentBlock[] = [];
@@ -399,23 +401,37 @@ export class BedrockApi implements BaseLlmApi {
     }
 
     // If caching is enabled, add cache points
-    // if (this.config.cacheBehavior?.cacheConversation) {
-    //   this._addCachingToLastTwoUserMessages(converted);
-    // }
+    if (cache?.conversation) {
+      this._addCachingToLastTwoUserMessages(converted);
+    }
 
     return converted;
   }
 
+  /**
+   * Put cache points on the last two user messages, and make the cached prefix
+   * unique to this process.
+   *
+   * Bedrock caches at the AWS account level, so identical prompts from
+   * different users or processes would share entries. A random ID in the
+   * prompt prevents that. It has to be in the same place on every request: if
+   * it were appended to the last two user messages, a message would lose its
+   * ID when it fell out of that window, its bytes would change, and the cached
+   * conversation would stop matching. So the ID goes on the first user message
+   * only, and every later cached prefix includes it.
+   */
   private _addCachingToLastTwoUserMessages(converted: Message[]) {
+    const first = converted.find((m) => m.role === "user");
+    first?.content?.forEach((block) => {
+      if (block.text) {
+        block.text += getSecureID();
+      }
+    });
+
     let numCached = 0;
     for (let i = converted.length - 1; i >= 0; i--) {
       const message = converted[i];
       if (message.role === "user") {
-        message.content?.forEach((block) => {
-          if (block.text) {
-            block.text += getSecureID();
-          }
-        });
         message.content?.push({ cachePoint: { type: "default" } });
         numCached++;
       }
@@ -445,6 +461,12 @@ export class BedrockApi implements BaseLlmApi {
     const availableTools = new Set<string>();
     let toolConfig: ToolConfiguration | undefined = undefined;
 
+    const parts = resolveBedrockCacheParts(
+      this.config.promptCaching,
+      this.config.cacheBehavior,
+      !!systemMessageText,
+    );
+
     if (oaiBody.tools && oaiBody.tools.length > 0) {
       toolConfig = {
         tools: oaiBody.tools.map((tool) => {
@@ -465,10 +487,10 @@ export class BedrockApi implements BaseLlmApi {
         }),
       } as ToolConfiguration;
 
-      // Add cache point if needed
-      // if (this.config.cacheBehavior?.cacheSystemMessage) {
-      //   toolConfig!.tools!.push({ cachePoint: { type: "default" } });
-      // }
+      // Add cache point after the tool list
+      if (parts.tools) {
+        toolConfig.tools!.push({ cachePoint: { type: "default" } });
+      }
 
       oaiBody.tools.forEach((tool) => {
         if (tool.type === "function" && "function" in tool) {
@@ -481,6 +503,7 @@ export class BedrockApi implements BaseLlmApi {
     const convertedMessages = this._convertMessages(
       oaiBody.messages,
       availableTools,
+      { conversation: parts.conversation },
     );
 
     // Build final request body
@@ -506,7 +529,7 @@ export class BedrockApi implements BaseLlmApi {
 
     // Add system message if present
     if (systemMessageText) {
-      body.system = false // this.config.cacheBehavior?.cacheSystemMessage // TODO
+      body.system = parts.system
         ? [{ text: systemMessageText }, { cachePoint: { type: "default" } }]
         : [{ text: systemMessageText }];
     }

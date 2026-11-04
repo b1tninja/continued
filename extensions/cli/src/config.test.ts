@@ -49,3 +49,45 @@ describe("config", () => {
     });
   });
 });
+
+describe("createLlmApi() prompt caching settings", () => {
+  const make = async (model: Partial<ModelConfig>) => {
+    const constructLlmApi = vi.fn(() => ({}) as any);
+    vi.resetModules();
+    vi.doMock("@continuedev/openai-adapters", () => ({ constructLlmApi }));
+    const { createLlmApi } = await import("./config.js");
+    createLlmApi(
+      { name: "m", model: "m", ...model } as ModelConfig,
+      null as any,
+    );
+    vi.doUnmock("@continuedev/openai-adapters");
+    return (constructLlmApi.mock.calls[0] as any[])[0];
+  };
+
+  test("passes promptCaching and cacheBehavior to the Bedrock adapter", async () => {
+    const config = await make({
+      provider: "bedrock",
+      model: "us.anthropic.claude-sonnet-4-6",
+      defaultCompletionOptions: { promptCaching: true },
+      cacheBehavior: { cacheConversation: true },
+    });
+    expect(config.promptCaching).toBe(true);
+    expect(config.cacheBehavior).toEqual({ cacheConversation: true });
+  });
+
+  test("leaves them undefined when the model config sets nothing", async () => {
+    const config = await make({ provider: "bedrock", model: "x" });
+    expect(config.promptCaching).toBeUndefined();
+    expect(config.cacheBehavior).toBeUndefined();
+  });
+
+  test("does not add them for other providers", async () => {
+    const config = await make({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      defaultCompletionOptions: { promptCaching: true },
+    });
+    expect("promptCaching" in config).toBe(false);
+    expect("cacheBehavior" in config).toBe(false);
+  });
+});

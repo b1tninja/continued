@@ -84,10 +84,16 @@ export type MiniMaxConfig = z.infer<typeof MiniMaxConfigSchema>;
 
 export const BedrockConfigSchema = OpenAIConfigSchema.extend({
   provider: z.literal("bedrock"),
-  // cacheBehavior: z.object({
-  //   cacheSystemMessage: z.boolean().optional(),
-  //   cacheConversation: z.boolean().optional(),
-  // }).optional(),
+  // Prompt caching is off unless one of these says otherwise. An explicit
+  // `promptCaching: false` wins over `cacheBehavior`; `true` caches the tools,
+  // the system prompt and the conversation.
+  promptCaching: z.boolean().optional(),
+  cacheBehavior: z
+    .object({
+      cacheSystemMessage: z.boolean().optional(),
+      cacheConversation: z.boolean().optional(),
+    })
+    .optional(),
   env: z
     .object({
       region: z.string().optional(),

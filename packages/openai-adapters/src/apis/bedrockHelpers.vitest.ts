@@ -4,6 +4,7 @@ import {
   bedrockUsageToCompletionUsage,
   getBedrockErrorHint,
   inferenceProfilePrefixForRegion,
+  resolveBedrockCacheParts,
 } from "./bedrockHelpers.js";
 
 describe("inferenceProfilePrefixForRegion", () => {
@@ -140,5 +141,26 @@ describe("bedrockUsageToCompletionUsage", () => {
       completion_tokens: 0,
       total_tokens: 0,
     });
+  });
+});
+
+describe("resolveBedrockCacheParts", () => {
+  const all = { tools: true, system: true, conversation: true };
+  const none = { tools: false, system: false, conversation: false };
+
+  it.each([
+    [undefined, undefined, true, none],
+    [true, undefined, true, all],
+    [true, undefined, false, { ...all, system: false }],
+    [false, { cacheConversation: true }, true, none],
+    [
+      undefined,
+      { cacheSystemMessage: true, cacheConversation: true },
+      true,
+      { tools: false, system: true, conversation: true },
+    ],
+    [undefined, { cacheSystemMessage: true }, false, none],
+  ] as const)("requested=%s behavior=%j hasSystem=%s", (r, b, s, expected) => {
+    expect(resolveBedrockCacheParts(r, b, s)).toEqual(expected);
   });
 });

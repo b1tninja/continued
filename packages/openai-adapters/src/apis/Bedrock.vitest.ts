@@ -258,3 +258,111 @@ describe("BedrockApi usage", () => {
     });
   });
 });
+
+describe("BedrockApi cache points", () => {
+  const tool = {
+    type: "function",
+    function: { name: "read", description: "d", parameters: {} },
+  };
+  const messages = [
+    { role: "system", content: "be brief" },
+    { role: "user", content: "one" },
+    { role: "assistant", content: "ok" },
+    { role: "user", content: "two" },
+    { role: "assistant", content: "ok" },
+    { role: "user", content: "three" },
+  ];
+  const convert = (config: any = {}, extra: any = {}) =>
+    (
+      new TestApi({ provider: "bedrock", env: {}, ...config } as any) as any
+    )._convertBody({
+      model: "anthropic.claude-sonnet-4-6",
+      messages: JSON.parse(JSON.stringify(messages)),
+      tools: [tool],
+      ...extra,
+    });
+  const points = (blocks: any[] | undefined) =>
+    (blocks ?? []).filter((b) => b.cachePoint).length;
+  const userPoints = (body: any) =>
+    body.messages
+      .filter((m: any) => m.role === "user")
+      .map((m: any) => points(m.content));
+
+  it("sends no cache points when nothing is configured", () => {
+    const body = convert();
+    expect(points(body.system)).toBe(0);
+    expect(points(body.toolConfig.tools)).toBe(0);
+    expect(userPoints(body)).toEqual([0, 0, 0]);
+    expect(JSON.stringify(body)).not.toContain("SID:");
+  });
+
+  it("promptCaching: true caches tools, system and the last two user messages", () => {
+    const body = convert({ promptCaching: true });
+    expect(points(body.system)).toBe(1);
+    expect(body.system[1]).toEqual({ cachePoint: { type: "default" } });
+    expect(points(body.toolConfig.tools)).toBe(1);
+    expect(body.toolConfig.tools.at(-1)).toEqual({
+      cachePoint: { type: "default" },
+    });
+    // four cache points in all, the most Bedrock allows
+    expect(userPoints(body)).toEqual([0, 1, 1]);
+  });
+
+  it("puts the process ID on the first user message only", () => {
+    const body = convert({ promptCaching: true });
+    const texts = body.messages.map((m: any) =>
+      m.content.map((b: any) => b.text ?? "").join(""),
+    );
+    const withId = texts.filter((t: string) => t.includes("SID:"));
+    expect(withId).toHaveLength(1);
+    expect(texts[0]).toContain("SID:");
+  });
+
+  it("keeps the first message's bytes the same when the conversation grows", () => {
+    const short = convert({ promptCaching: true });
+    const long = convert(
+      { promptCaching: true },
+      {
+        messages: [
+          ...messages,
+          { role: "assistant", content: "ok" },
+          { role: "user", content: "four" },
+        ],
+      },
+    );
+    expect(JSON.stringify(long.messages[0])).toBe(
+      JSON.stringify(short.messages[0]),
+    );
+  });
+
+  it("promptCaching: false wins over cacheBehavior", () => {
+    const body = convert({
+      promptCaching: false,
+      cacheBehavior: { cacheSystemMessage: true, cacheConversation: true },
+    });
+    expect(points(body.system)).toBe(0);
+    expect(userPoints(body)).toEqual([0, 0, 0]);
+  });
+
+  it("cacheBehavior alone switches on system and conversation, not tools", () => {
+    const body = convert({
+      cacheBehavior: { cacheSystemMessage: true, cacheConversation: true },
+    });
+    expect(points(body.system)).toBe(1);
+    expect(points(body.toolConfig.tools)).toBe(0);
+    expect(userPoints(body)).toEqual([0, 1, 1]);
+  });
+
+  it("cacheSystemMessage with no system message adds nothing", () => {
+    const body = convert(
+      { cacheBehavior: { cacheSystemMessage: true } },
+      { messages: messages.slice(1) },
+    );
+    expect(body.system).toBeUndefined();
+  });
+
+  it("does not cache tools when there are none", () => {
+    const body = convert({ promptCaching: true }, { tools: undefined });
+    expect(body.toolConfig).toBeUndefined();
+  });
+});

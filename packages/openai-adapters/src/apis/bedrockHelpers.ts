@@ -145,3 +145,39 @@ export function bedrockUsageToCompletionUsage(usage: BedrockTokenUsageLike): {
     },
   };
 }
+
+/** Which parts of a request get a cache point. */
+export interface BedrockCacheParts {
+  tools: boolean;
+  system: boolean;
+  conversation: boolean;
+}
+
+/**
+ * Decide which parts of a request get cache points. Keep in sync with
+ * `resolveCacheParts` in core/llm/llms/anthropicCache.ts.
+ *
+ * An explicit `promptCaching: false` turns everything off, even when
+ * `cacheBehavior` says otherwise. `true` caches the tools, the system prompt
+ * and the conversation (up to four cache points: tools, system and the last
+ * two user messages). When it is unset, only `cacheBehavior` applies, and with
+ * nothing set no cache points are sent.
+ */
+export function resolveBedrockCacheParts(
+  requested: boolean | undefined,
+  behavior:
+    { cacheSystemMessage?: boolean; cacheConversation?: boolean } | undefined,
+  hasSystem: boolean,
+): BedrockCacheParts {
+  if (requested === false) {
+    return { tools: false, system: false, conversation: false };
+  }
+  if (requested === true) {
+    return { tools: true, system: hasSystem, conversation: true };
+  }
+  return {
+    tools: false,
+    system: !!(behavior?.cacheSystemMessage && hasSystem),
+    conversation: !!behavior?.cacheConversation,
+  };
+}
