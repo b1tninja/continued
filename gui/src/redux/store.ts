@@ -58,6 +58,7 @@ const saveSubsetFilters = [
     "ruleSettings",
     "reasoningSettings",
     "promptCacheSettings",
+    "dismissedCacheTips",
   ]),
   createFilter("indexing", []),
   createFilter("tabs", ["tabs"]),

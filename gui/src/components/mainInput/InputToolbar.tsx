@@ -26,6 +26,7 @@ import { Button } from "../ui";
 import { useFontSize } from "../ui/font";
 import ContextStatus from "./ContextStatus";
 import HoverItem from "./InputToolbar/HoverItem";
+import { CacheTipsButton } from "./CacheTipsButton";
 import { PromptCacheButton } from "./PromptCacheButton";
 
 export interface ToolbarOptions {
@@ -173,6 +174,7 @@ function InputToolbar(props: InputToolbarProps) {
               </HoverItem>
             )}
             <PromptCacheButton />
+            <CacheTipsButton />
           </div>
         </div>
 
