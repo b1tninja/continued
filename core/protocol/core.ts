@@ -13,6 +13,7 @@ import {
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type { ModeModelsInput } from "../config/yaml/saveModeModels";
+import type { RulesByModeInput } from "../config/yaml/saveRulesByMode";
 import type {
   AutoReviewReply,
   AutoReviewRequest,
@@ -23,6 +24,7 @@ import type {
   SaveProviderModelsResult,
 } from "../config/providerSetup";
 import type { DecisionSource as ToolDecisionSource } from "../tools/permissions/decide";
+import type { ApprovalSettings } from "../tools/permissions/approval";
 import { GlobalContextModelSelections } from "../util/GlobalContext";
 
 import {
@@ -152,6 +154,11 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    * whether a config.yaml was edited; false means there was none to edit.
    */
   "config/setModeModels": [ModeModelsInput, { saved: boolean }];
+  /**
+   * Switch rules on or off per mode in the global config.yaml (comments kept).
+   * `null` removes a mode's entry. Returns false when there is no config.yaml.
+   */
+  "config/setRulesByMode": [RulesByModeInput, { saved: boolean }];
   /**
    * Add one rule to `toolPermissions` in the global config.yaml (comments
    * kept). "no-config" means there was no config.yaml to edit.
@@ -436,6 +443,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       basePolicy: ToolPolicy;
       parsedArgs: Record<string, unknown>;
       processedArgs?: Record<string, unknown>;
+      /** Approval mode and switches; absent means Manual. */
+      approval?: ApprovalSettings;
     },
     {
       policy: ToolPolicy;

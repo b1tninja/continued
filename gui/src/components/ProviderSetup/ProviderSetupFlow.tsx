@@ -42,6 +42,7 @@ import {
   buildChecklistRows,
   buildSaveRequest,
   connectionFromModel,
+  describeConnection,
   describeKeyPlan,
   diffSelection,
   findConnection,
@@ -49,6 +50,7 @@ import {
   KeyChoice,
   keyProblem,
   keyStorageOptions,
+  sameConnection,
   SetupStep,
 } from "./providerSetupUtils";
 import { ReviewStep } from "./ReviewStep";
@@ -187,10 +189,14 @@ export function ProviderSetupFlow({
       ),
     [provider, values],
   );
+  // When editing, the connection in config.yaml is the one the form started
+  // from, even after its endpoint field is changed: that edit moves it.
+  const editing = !enterKey ? initialConnection : undefined;
+  const connectionMoved = !!editing && !sameConnection(editing, connection);
   const configured = findConnection(
     setup?.connections ?? [],
     provider.provider,
-    connection,
+    editing ?? connection,
   );
   const configuredModels = configured?.models ?? [];
   const hasStoredKey = (configured?.key.state ?? "none") !== "none";
@@ -210,7 +216,7 @@ export function ProviderSetupFlow({
 
   // Start from what is configured (or the popular models) when the target
   // connection changes.
-  const connectionId = `${provider.provider}|${JSON.stringify(connection)}|${!!setup}`;
+  const connectionId = `${provider.provider}|${JSON.stringify(editing ?? connection)}|${!!setup}`;
   useEffect(() => {
     setChecked(initialChecked(groups, configuredModels));
     setConfirmedRemoval(false);
@@ -240,7 +246,8 @@ export function ProviderSetupFlow({
   const keyForRequest = sendKey ? keyChoice : undefined;
 
   const diff = diffSelection(groups, configuredModels, checked);
-  const hasChanges = diff.add.length > 0 || diff.remove.length > 0 || sendKey;
+  const hasChanges =
+    diff.add.length > 0 || diff.remove.length > 0 || sendKey || connectionMoved;
   const needsConfirm = diff.remove.length > 0 && !confirmedRemoval;
 
   const canRefresh = isBedrock
@@ -334,6 +341,7 @@ export function ProviderSetupFlow({
     try {
       const request = buildSaveRequest({
         provider,
+        editing,
         values,
         diff,
         key: keyForRequest,
@@ -698,6 +706,15 @@ export function ProviderSetupFlow({
             providerTitle={provider.title}
             diff={diff}
             keyPlan={describeKeyPlan(keyForRequest, provider.title)}
+            connectionChange={
+              connectionMoved && editing
+                ? {
+                    from: describeConnection(editing),
+                    to: describeConnection(connection),
+                    modelCount: configuredModels.length,
+                  }
+                : undefined
+            }
             confirmedRemoval={confirmedRemoval}
             onConfirmRemoval={setConfirmedRemoval}
             error={error}
