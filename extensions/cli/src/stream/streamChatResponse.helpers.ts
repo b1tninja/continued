@@ -24,7 +24,6 @@ import {
   services,
 } from "../services/index.js";
 import { trackSessionUsage } from "../session.js";
-import { recordCacheTally } from "../util/cacheTally.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   executeToolCall,
@@ -33,6 +32,7 @@ import {
   validateToolCallArgsPresent,
 } from "../tools/index.js";
 import { PreprocessedToolCall, ToolCall } from "../tools/types.js";
+import { recordCacheTally } from "../util/cacheTally.js";
 import { logger } from "../util/logger.js";
 
 import { StreamCallbacks } from "./streamChatResponse.types.js";
