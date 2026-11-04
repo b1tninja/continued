@@ -96,7 +96,7 @@
     "eslint-plugin-unused-imports": "^4.1.4",
     "execa": "^9.6.0",
     "express": "^5.1.0",
-    "gpt-tokenizer": "^3.0.1",
+    "gpt-tokenizer": "^4.1.0",
     "gradient-string": "^3.0.0",
     "ignore-walk": "^7.0.0",
     "ink": ">=6.1.0 <6.8.0",
