@@ -378,6 +378,7 @@ export const streamNormalInput = createAsyncThunk<
         ? {
             sessionId: state3.session.id,
             history: buildReviewHistory(state3.session.history),
+            onceGrants: state3.blockedCalls.grants,
           }
         : undefined,
     );
