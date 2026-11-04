@@ -4,6 +4,7 @@ import { normalizeClaudeModelId } from "core/llm/utils/calculateRequestCost";
 import { minCacheableTokens } from "core/llm/utils/cacheMinimums";
 import { formatClockTime } from "./promptCacheCountdown";
 import type { CacheLedgerEntry } from "./cacheLedger";
+import type { RequestFailure } from "./requestFailures";
 
 /** What the toolbar menu can set. `undefined` means "follow config.yaml". */
 export type PromptCacheSetting = "auto" | "5m" | "1h" | "off";
@@ -76,6 +77,12 @@ export interface PromptCacheSessionState {
    * not saved with the session and starts empty in every new conversation.
    */
   ledger?: CacheLedgerEntry[];
+  /**
+   * Requests that failed (throttled, overloaded, other), newest last. In
+   * memory only, like the ledger, and kept apart from it because they carry
+   * no token counts.
+   */
+  failures?: RequestFailure[];
 }
 
 export const INITIAL_PROMPT_CACHE_STATE: PromptCacheSessionState = {

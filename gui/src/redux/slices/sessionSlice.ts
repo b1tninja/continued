@@ -38,6 +38,7 @@ import { type InlineErrorMessageType } from "../../components/mainInput/InlineEr
 import { toolCallCtxItemToCtxItemWithId } from "../../pages/gui/ToolCallDiv/utils";
 import { addToolCallDeltaToState, isEditTool } from "../../util/toolCallState";
 import { appendLedger, type CacheLedgerEntry } from "../../util/cacheLedger";
+import { appendFailure, type RequestFailure } from "../../util/requestFailures";
 import {
   INITIAL_PROMPT_CACHE_STATE,
   type PromptCacheKey,
@@ -1033,6 +1034,13 @@ export const sessionSlice = createSlice({
         ledger: appendLedger(current.ledger, action.payload),
       };
     },
+    recordRequestFailure: (state, action: PayloadAction<RequestFailure>) => {
+      const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
+      state.promptCache = {
+        ...current,
+        failures: appendFailure(current.failures, action.payload),
+      };
+    },
     recordCacheMiss: (state, action: PayloadAction<PromptCacheMiss>) => {
       const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
       state.promptCache = {
@@ -1179,6 +1187,7 @@ export const {
   setPromptCacheKey,
   recordCacheMiss,
   recordCacheRequest,
+  recordRequestFailure,
   acknowledgeCacheMisses,
   dismissColdCacheNotice,
   dismissCachingOffNotice,
