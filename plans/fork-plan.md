@@ -269,7 +269,6 @@ What the fork contains (checked in `b1tninja/continued` at `main`, which GitHub 
 | `LICENSE`                                          | Apache License 2.0, copyright line "Copyright 2023 Continue Dev, Inc."                                                                         |
 | `extensions/vscode/LICENSE.txt`                    | Apache 2.0 notice, "Copyright 2023 Continue". Not byte-identical to the root file. Ships inside the `.vsix`.                                   |
 | `NOTICE`                                           | None exists upstream.                                                                                                                          |
-| `core/vendor/modules/@xenova/transformers/LICENSE` | Vendored Apache 2.0 code.                                                                                                                      |
 | `gui/public/fonts/Inter/LICENSE.txt`               | Inter font under the SIL Open Font License 1.1. Keep the license file with the font.                                                           |
 | `CLA.md` and `.github/workflows/cla.yaml`          | Upstream's CLA grants rights to Continue Dev, Inc. for contributions made to the upstream project. It does not bind our fork.                  |
 | Dependencies                                       | Not audited. Hundreds of npm packages plus native binaries (ripgrep, sqlite, onnx runtime, lancedb). Needs a generated inventory (section 11). |
