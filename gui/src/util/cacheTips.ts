@@ -7,6 +7,7 @@ import {
 } from "./cacheLedger";
 import { NOTICE_MIN_EXTRA_USD } from "./cacheSafeguards";
 import { formatUsd } from "./cacheNotices";
+import { countFailures, type RequestFailure } from "./requestFailures";
 import {
   configEnablesPromptCaching,
   configTtlPolicy,
@@ -52,6 +53,9 @@ export function globalModelId(modelId: string): string {
   return modelId.replace(/^(us|eu|apac|jp|au|ca)\./i, "global.");
 }
 
+/** Throttled requests in a conversation before the throttling tip appears. */
+export const THROTTLE_TIP_MIN = 2;
+
 /** The key under which a dismissal is stored. */
 export function cacheTipKey(modelTitle: string, tipId: string): string {
   return `${modelTitle}::${tipId}`;
@@ -62,6 +66,8 @@ export function cacheTips(
   setting: PromptCacheSetting | undefined,
   /** This conversation's requests so far; enables the tips drawn from it. */
   ledger?: CacheLedgerEntry[],
+  /** This conversation's failed requests; enables the throttling tip. */
+  failures?: RequestFailure[],
 ): CacheTip[] {
   if (!model) return [];
   const tips: CacheTip[] = [];
@@ -116,6 +122,9 @@ export function cacheTips(
     }
   }
 
+  const throttle = throttlingTip(model, setting, failures);
+  if (throttle) tips.push(throttle);
+
   if (fromSession) tips.push(fromSession);
   return tips;
 }
@@ -157,5 +166,45 @@ function sessionReplayTip(
       `about ${formatUsd(r.actualUsd)} and would have cost about ${formatUsd(bestUsd)} with ${POLICY_LABEL[r.best]}. ${how} ` +
       `This is an estimate from the token counts the provider reported. It assumes the same requests would have been sent, and it ` +
       `ignores output tokens, which caching does not change.`,
+  };
+}
+
+/**
+ * Throttled with caching off. AWS ("How tokens are counted in Amazon Bedrock"):
+ * a request uses quota for its uncached input, its cache writes and its output
+ * (times a burndown rate), and tokens read from a cache are not counted.
+ * Anthropic's prompt caching page says the same of its rate limit: cache hits
+ * are not deducted. So a conversation that is being throttled with caching
+ * off is spending quota on input that caching would have left out.
+ *
+ * Not said: that caching ends throttling (output and cache writes still count,
+ * and so does a burst of requests), or that a global endpoint throttles less
+ * (nothing read says so). Overloaded errors are the provider's capacity, not
+ * the account's quota, so they do not count here. OpenAI's own documentation
+ * says cached tokens still count toward its limits, which is why this tip is
+ * limited to the Anthropic and Bedrock models the cache button covers.
+ */
+function throttlingTip(
+  model: ModelDescription,
+  setting: PromptCacheSetting | undefined,
+  failures: RequestFailure[] | undefined,
+): CacheTip | undefined {
+  if (!modelSupportsPromptCacheControl(model)) return undefined;
+  const on =
+    setting === undefined
+      ? configEnablesPromptCaching(model)
+      : setting !== "off";
+  if (on) return undefined;
+  const { throttled } = countFailures(failures);
+  if (throttled < THROTTLE_TIP_MIN) return undefined;
+  const where =
+    model.provider?.toLowerCase() === "bedrock" ? "Bedrock" : "Anthropic";
+  return {
+    id: "throttled-caching-off",
+    severity: "warning",
+    title: `Throttled ${throttled} times with caching off`,
+    body:
+      `${where} does not count tokens read from a cache against your rate limit, but with caching off every input token of every request counts. ` +
+      `Turning caching on can reduce how often this conversation is throttled. It will not stop throttling by itself: output tokens and cache writes still count, and so does a burst of requests.`,
   };
 }

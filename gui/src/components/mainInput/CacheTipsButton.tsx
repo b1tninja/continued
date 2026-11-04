@@ -22,13 +22,14 @@ export function CacheTipsButton() {
   );
   const dismissed = useAppSelector((s) => s.ui.dismissedCacheTips);
   const ledger = useAppSelector((s) => s.session.promptCache?.ledger);
+  const failures = useAppSelector((s) => s.session.promptCache?.failures);
 
   const tips = useMemo(
     () =>
-      cacheTips(model, setting, ledger).filter(
+      cacheTips(model, setting, ledger, failures).filter(
         (t) => !dismissed?.[cacheTipKey(model?.title ?? "", t.id)],
       ),
-    [model, setting, dismissed, ledger],
+    [model, setting, dismissed, ledger, failures],
   );
 
   if (!model || tips.length === 0) return null;
