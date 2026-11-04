@@ -980,7 +980,7 @@ function sanitizeResponsesInput(input: ResponseInput): ResponseInput {
     )
       return true;
     // openai 7 types call_id as optional; an output without one has no call.
-    return item.call_id != null && validCallIds.has(item.call_id);
+    return !!item.call_id && validCallIds.has(item.call_id);
   });
 }
 
