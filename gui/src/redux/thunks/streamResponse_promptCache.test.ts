@@ -344,6 +344,49 @@ describe("prompt cache options in the chat request", () => {
     expect(JSON.stringify(ledger)).not.toContain('hi"');
   });
 
+  it("keeps what the provider said about the response in the ledger", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      reply: [
+        {
+          role: "assistant",
+          content: "",
+          usage: {
+            promptTokens: 12,
+            completionTokens: 5,
+            response: {
+              stopReason: "tool_use",
+              latencyMs: 812,
+              requestId: "req-abc",
+            },
+          },
+        },
+      ],
+    });
+    expect(cache()?.ledger?.[0]).toMatchObject({
+      stopReason: "tool_use",
+      latencyMs: 812,
+      requestId: "req-abc",
+    });
+  });
+
+  it("leaves those fields out when the provider sent none", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      reply: [
+        {
+          role: "assistant",
+          content: "",
+          usage: { promptTokens: 12, completionTokens: 5 },
+        },
+      ],
+    });
+    const e = cache()?.ledger?.[0] as any;
+    expect("stopReason" in e).toBe(false);
+    expect("latencyMs" in e).toBe(false);
+    expect("requestId" in e).toBe(false);
+  });
+
   it("notes that caching was off, and keeps recording", async () => {
     const { cache } = await sentOptions({
       setting: "off",

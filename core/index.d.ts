@@ -422,6 +422,18 @@ export interface ThinkingChatMessage {
 export interface Usage {
   completionTokens: number;
   promptTokens: number;
+  /**
+   * What the provider said about the response itself, apart from token counts.
+   * Each field is set only when the provider sends it.
+   */
+  response?: {
+    /** Why generation stopped: `tool_use`, `end_turn`, `max_tokens`, ... */
+    stopReason?: string;
+    /** The provider's own timing for the request (Bedrock `metrics.latencyMs`). */
+    latencyMs?: number;
+    /** An ID that identifies this call in the provider's logs and billing. */
+    requestId?: string;
+  };
   promptTokensDetails?: {
     cachedTokens?: number;
     /** This an Anthropic-specific property */

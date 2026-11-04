@@ -39,6 +39,12 @@ export interface CacheLedgerEntry {
   pruned?: boolean;
   /** Why a cache that should have been read was not; [] when unknown. */
   missCauses?: string[];
+  /** Why generation stopped, when the provider said (`tool_use`, `end_turn`...). */
+  stopReason?: string;
+  /** The provider's own timing for the request, when it sent one. */
+  latencyMs?: number;
+  /** The call's ID in the provider's logs; ties an entry to a billing line. */
+  requestId?: string;
 }
 
 export const LEDGER_MAX = 200;
@@ -80,6 +86,15 @@ export function buildLedgerEntry(args: {
     output: args.usage.completionTokens,
     ...(args.pruned && { pruned: true }),
     ...(args.missCauses && { missCauses: args.missCauses }),
+    ...(args.usage.response?.stopReason && {
+      stopReason: args.usage.response.stopReason,
+    }),
+    ...(args.usage.response?.latencyMs !== undefined && {
+      latencyMs: args.usage.response.latencyMs,
+    }),
+    ...(args.usage.response?.requestId && {
+      requestId: args.usage.response.requestId,
+    }),
   };
 }
 
