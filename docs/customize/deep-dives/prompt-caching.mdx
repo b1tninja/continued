@@ -50,6 +50,9 @@ models:
 ```
 
 `ttl` accepts `5m`, `1h` or `auto` (the Auto row above). It only chooses the lifetime and does not turn caching on; `promptCaching: true` (or the toolbar) does that. A choice in the toolbar other than "Config default" overrides it for that session. If the model cannot take a 1-hour lifetime (see Bedrock below), `1h` is sent as the 5-minute default. In JSON configuration the same field is `cacheBehavior.ttl`.
+The `cn` command line reaches Claude through shared adapters and reads the same `cacheBehavior.ttl` and `promptCaching`, on both Anthropic and Bedrock. `1h` puts a 1-hour lifetime on every cache point (on Bedrock only for the models listed under Bedrock below; others get 5 minutes). `auto` is applied by the CLI itself, which has no toolbar: it counts the session's requests that carry cache points, and moves to 1 hour at the fifth, or after a pause of more than 5 and up to 55 minutes, the same two rules as above. It has no chat mode, so every CLI session counts as an Agent session. On Anthropic the CLI's cache points were already on, so `ttl: 1h` is the only thing that changes there; on Bedrock they are off unless `promptCaching` or `cacheBehavior` turns them on.
+
+
 
 ## What gets cached
 
