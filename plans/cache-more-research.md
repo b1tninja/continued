@@ -171,3 +171,23 @@ Four live checks on Bedrock, all small, on Haiku 4.5 and Haiku 5.5. Each prints 
 At Haiku 4.5 prices that is roughly seven times cheaper for the compaction request (the second row pays full input price on 8.6k tokens; the third pays the read price on 12.2k and full price on 26). The caveat decides the design: this holds only while the parent's cache is warm. With it cold, sending the parent's prefix would write 12k tokens at the write price to a cache the compaction is about to make useless, which costs more than today's plain request. The cold-cache notice offers "Compact first" exactly when the cache is cold, so C25 as written helps the case least in need of it. Not tested: whether the model calls the tool instead of summarising (output was capped at 200 tokens and both stopped on the cap), and a real conversation.
 
 Total cost of all four checks: a few cents.
+
+## C41: Anthropic's automatic caching, evaluated 2026-11-04
+
+Source: Anthropic's prompt caching page (read in full for this section; nothing was run).
+
+**What it is.** One `cache_control` field at the top level of a Messages request. "The system automatically applies the cache breakpoint to the last cacheable block and moves it forward as conversations grow." It takes a 1-hour lifetime the same way (`ttl: 1h`). It is supported on all active Claude models. Pricing, minimum token thresholds, ordering rules and the 20-block lookback window are the same as for explicit breakpoints.
+
+**How it combines.** It uses one of the four breakpoint slots. With four explicit breakpoints already on the request, the API returns a 400; so does an explicit breakpoint on the last block with a different lifetime. If the last block cannot take a breakpoint it walks backward to the nearest one that can.
+
+**Where it is available.** "Every platform except the legacy Amazon Bedrock (Opus 4.6 and earlier) integration", where a top-level `cache_control` returns a 400. That page describes Anthropic's own Bedrock Messages integration. The Converse API this app uses on Bedrock sends `cachePoint` blocks, and nothing read says Converse has a top-level equivalent.
+
+**What this app does today.** It places up to four explicit breakpoints: the last tool, the system prompt, and the last block of each of the last two user messages. The code's reason for two (`anthropicCache.ts`): the second to last is where the previous request wrote its entry, so this request can read it, and the last is where this request writes. That is the same job automatic caching does by moving one breakpoint forward, at the price of a second slot.
+
+**Assessment: do not adopt.**
+
+- It would replace two message breakpoints with one moving breakpoint. That frees a slot and does the same read-then-write job, so the saving is one of the four slots and the simplicity of having no markers to place. Neither is worth a second code path: the markers are placed in one function now, for the app's own tool-loop shape (where the last blocks are tool results), and Anthropic's page itself says to use an explicit breakpoint when the last block changes on every request.
+- It is not available on the Bedrock path at all, which is where the app has the most caching work, so it could only ever be an Anthropic-direct option and would make that path differ from Bedrock.
+- The gain is simplicity (no markers to maintain), and the app already maintains them in one place.
+
+**Revisit if** Converse gains a top-level equivalent, or if measurement shows the second message breakpoint rarely produces a read the first would not have.
