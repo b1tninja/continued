@@ -99,7 +99,7 @@ caching saves about 85% of input-side cost, and a Bedrock CLI session gets none 
 
 Proposed, in this order, each its own PR:
 
-1. The Bedrock adapter handles the stream's `metadata` event and maps token counts and cache read and write
+1. **Done** (`feat/bedrock-adapter-usage`, `347d17f6c`, local, branched from the countdown commit). The Bedrock adapter handles the stream's `metadata` event and maps token counts and cache read and write
    counts into `usage`. This comes first: without it nothing else in the CLI can be measured or priced.
 2. The Bedrock adapter sends `cachePoint` on the system block, the tools and the last two user messages,
    behind the same `promptCaching` setting the GUI honours, defaulting off until the live test passes.
