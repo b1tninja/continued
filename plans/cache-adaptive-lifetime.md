@@ -111,7 +111,7 @@ disk: a session saved before this has neither and behaves as a new conversation.
 ### Not in this plan
 
 - Learning from a person's history (no gain, +0.2%).
-- Keepalive pings (-1.3% at best, 71,000 extra requests, refresh behaviour unmeasured).
+- Keepalive pings (-1.3% at best, 71,000 extra requests, a read refreshes the lifetime, confirmed live).
 - A context-size trigger (weaker, -1.8%) and an age trigger (as good as the count, -3.9% to -4.1%, but it
   fires at the second message in chat). The count is chosen because it is simpler to explain and to test.
 - Changing the default from "off" or "config". That is C4 and the owner's decision.
