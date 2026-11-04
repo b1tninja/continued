@@ -47,7 +47,6 @@ export function CacheTipsButton() {
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model?.title, model?.model, regionalBedrock, ideMessenger]);
 
   const tips = useMemo(
@@ -92,7 +91,7 @@ export function CacheTipsButton() {
               {tip.suggestion && (
                 <code
                   data-testid={`cache-tip-${tip.id}-suggestion`}
-                  className="mt-1 block select-all break-all rounded bg-transparent px-1 py-0.5 text-[11px]"
+                  className="mt-1 block rounded bg-transparent px-1 py-0.5 text-[11px] break-all select-all"
                 >
                   {tip.suggestion}
                 </code>

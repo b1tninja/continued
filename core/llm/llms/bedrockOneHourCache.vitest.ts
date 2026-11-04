@@ -1,8 +1,26 @@
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { beforeAll, describe, expect, it } from "vitest";
+import { bedrockSupportsOneHourCache as coreCopy } from "./bedrockHelpers";
+
+// Loaded at run time from a path held in a variable, not with a static import:
+// core's tsc build compiles every .ts file under core/, and a static import of
+// a file in packages/ pulls it into that build, which moves the output root up
+// a directory and leaves core/dist/index.js where the CLI cannot find it.
 // By path, not by package name: core resolves @continuedev/openai-adapters to
 // a built copy, which may be older than the source this test must compare.
-import { bedrockSupportsOneHourCache as adapterCopy } from "../../../packages/openai-adapters/src/apis/bedrockHelpers";
-import { describe, expect, it } from "vitest";
-import { bedrockSupportsOneHourCache as coreCopy } from "./bedrockHelpers";
+const ADAPTER_HELPERS = pathToFileURL(
+  resolve(
+    __dirname,
+    "../../../packages/openai-adapters/src/apis/bedrockHelpers.ts",
+  ),
+).href;
+let adapterCopy: (modelId: string) => boolean;
+
+beforeAll(async () => {
+  const mod = await import(/* @vite-ignore */ ADAPTER_HELPERS);
+  adapterCopy = mod.bedrockSupportsOneHourCache;
+});
 
 /**
  * The 1-hour allowlist exists twice: here in core, which the chat window
