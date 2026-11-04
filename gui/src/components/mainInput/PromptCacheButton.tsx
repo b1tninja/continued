@@ -4,7 +4,11 @@ import { useCountdownNow } from "../../hooks/useCountdownNow";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { formatCacheSummary, summarizeLedger } from "../../util/cacheLedger";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
-import { setPromptCacheSetting } from "../../redux/slices/uiSlice";
+import {
+  restoreCacheTipsForModel,
+  setPromptCacheSetting,
+} from "../../redux/slices/uiSlice";
+import { dismissedTipCount } from "../../util/cacheTips";
 import {
   modelSupportsOneHourCache,
   modelSupportsPromptCacheControl,
@@ -29,6 +33,9 @@ const CHOICES: (PromptCacheSetting | "config")[] = [
   "off",
   "config",
 ];
+
+/** Not a setting: a menu entry that brings dismissed tips back. */
+const RESTORE_TIPS = "restore-tips";
 
 const RING_RADIUS = 5;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -99,6 +106,7 @@ export function PromptCacheButton() {
   );
   const sessionState = useAppSelector((s) => s.session.promptCache);
   const isStreaming = useAppSelector((s) => s.session.isStreaming);
+  const dismissedTips = useAppSelector((s) => s.ui.dismissedCacheTips);
 
   const state = sessionState ?? { escalated: false };
   // Asking at the moment of the last request always finds the entry alive (when
@@ -120,6 +128,7 @@ export function PromptCacheButton() {
   );
   const canOneHour = modelSupportsOneHourCache(model);
   const choices = CHOICES.filter((c) => canOneHour || c !== "1h");
+  const dismissedCount = dismissedTipCount(dismissedTips, model.title);
 
   const showRing = status.on && status.warm;
   const msLeft = status.msLeft ?? 0;
@@ -131,14 +140,20 @@ export function PromptCacheButton() {
   return (
     <Listbox
       value={setting ?? "config"}
-      onChange={(choice: PromptCacheSetting | "config") =>
+      onChange={(
+        choice: PromptCacheSetting | "config" | typeof RESTORE_TIPS,
+      ) => {
+        if (choice === RESTORE_TIPS) {
+          dispatch(restoreCacheTipsForModel({ modelTitle: model.title }));
+          return;
+        }
         dispatch(
           setPromptCacheSetting({
             modelTitle: model.title,
             setting: choice === "config" ? undefined : choice,
           }),
-        )
-      }
+        );
+      }}
     >
       <div className="relative">
         <ToolTip
@@ -186,6 +201,19 @@ export function PromptCacheButton() {
               </div>
             </ListboxOption>
           ))}
+          {dismissedCount > 0 && (
+            <ListboxOption
+              value={RESTORE_TIPS}
+              data-testid="prompt-cache-option-restore-tips"
+            >
+              <div className="flex flex-col">
+                <span>Show dismissed tips</span>
+                <span className="text-xs text-description-muted">
+                  {dismissedCount} hidden for this model
+                </span>
+              </div>
+            </ListboxOption>
+          )}
         </ListboxOptions>
       </div>
     </Listbox>

@@ -1,3 +1,4 @@
+import { cacheTipKey } from "../../util/cacheTips";
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { MessageModes, RuleWithSource, Tool } from "core";
@@ -180,6 +181,16 @@ export const uiSlice = createSlice({
     restoreCacheTips: (state) => {
       state.dismissedCacheTips = {};
     },
+    /** Bring back the dismissed tips of one model, leaving other models' alone. */
+    restoreCacheTipsForModel: (
+      state,
+      action: PayloadAction<{ modelTitle: string }>,
+    ) => {
+      const prefix = cacheTipKey(action.payload.modelTitle, "");
+      for (const key of Object.keys(state.dismissedCacheTips)) {
+        if (key.startsWith(prefix)) delete state.dismissedCacheTips[key];
+      }
+    },
     setModeModelOverride: (
       state,
       action: PayloadAction<{ mode: MessageModes; title: string }>,
@@ -206,6 +217,7 @@ export const {
   setPromptCacheSetting,
   dismissCacheTip,
   restoreCacheTips,
+  restoreCacheTipsForModel,
   setModeModelOverride,
 } = uiSlice.actions;
 

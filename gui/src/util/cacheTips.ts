@@ -61,6 +61,16 @@ export function cacheTipKey(modelTitle: string, tipId: string): string {
   return `${modelTitle}::${tipId}`;
 }
 
+/** How many tips the user has dismissed for this model. */
+export function dismissedTipCount(
+  dismissed: Record<string, true> | undefined,
+  modelTitle: string,
+): number {
+  const prefix = cacheTipKey(modelTitle, "");
+  return Object.keys(dismissed ?? {}).filter((k) => k.startsWith(prefix))
+    .length;
+}
+
 export function cacheTips(
   model: ModelDescription | null | undefined,
   setting: PromptCacheSetting | undefined,
