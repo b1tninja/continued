@@ -5,11 +5,19 @@ import {
   setSecretInEnvFile,
 } from "../util/secretsFile";
 import { isValidSecretName } from "../util/unresolvedSecrets";
+import { withTimeout } from "../util/withTimeout";
 
 /** Where the setup flow can keep an API key. */
 export type SecretStorageKind = "secure" | "env";
 
 const PROBE_KEY = "continued.secretStorageProbe";
+
+/**
+ * How long to wait for the IDE's secret storage. A keychain can show an unlock
+ * prompt, so this is generous; an IDE that never replies must not block
+ * loading the config forever.
+ */
+export const SECURE_STORAGE_TIMEOUT_MS = 10_000;
 
 /**
  * True when the IDE can store a secret and read it back. The CLI and the test
@@ -22,8 +30,16 @@ export async function isSecureStorageAvailable(
 ): Promise<boolean> {
   try {
     const marker = "ok";
-    await ide.writeSecrets({ [PROBE_KEY]: marker });
-    const read = await ide.readSecrets([PROBE_KEY]);
+    await withTimeout(
+      ide.writeSecrets({ [PROBE_KEY]: marker }),
+      SECURE_STORAGE_TIMEOUT_MS,
+      "Secure storage",
+    );
+    const read = await withTimeout(
+      ide.readSecrets([PROBE_KEY]),
+      SECURE_STORAGE_TIMEOUT_MS,
+      "Secure storage",
+    );
     return read?.[PROBE_KEY] === marker;
   } catch {
     return false;

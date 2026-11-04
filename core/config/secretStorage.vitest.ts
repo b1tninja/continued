@@ -6,6 +6,7 @@ import * as dotenv from "dotenv";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  SECURE_STORAGE_TIMEOUT_MS,
   isSecureStorageAvailable,
   removeEnvSecret,
   storeSecret,
@@ -29,6 +30,21 @@ function memoryIde(options: { keep?: boolean } = {}) {
 }
 
 describe("isSecureStorageAvailable", () => {
+  it("is false, rather than hanging, when the IDE never replies", async () => {
+    vi.useFakeTimers();
+    try {
+      const never = () => new Promise<never>(() => {});
+      const result = isSecureStorageAvailable({
+        writeSecrets: never,
+        readSecrets: never,
+      });
+      await vi.advanceTimersByTimeAsync(SECURE_STORAGE_TIMEOUT_MS + 1);
+      expect(await result).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("is true when a write reads back", async () => {
     expect(await isSecureStorageAvailable(memoryIde().ide)).toBe(true);
   });

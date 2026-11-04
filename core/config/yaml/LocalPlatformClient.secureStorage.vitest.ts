@@ -2,6 +2,7 @@ import { FQSN, SecretType } from "@continuedev/config-yaml";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IDE } from "../..";
+import { SECURE_STORAGE_TIMEOUT_MS } from "../secretStorage";
 import { LocalPlatformClient } from "./LocalPlatformClient";
 
 const dotEnv: Record<string, string> = {};
@@ -99,5 +100,32 @@ describe("LocalPlatformClient secure storage lookup", () => {
     (ide as any).readSecrets = undefined;
     const [result] = await new LocalPlatformClient(ide).resolveFQSNs([fqsn]);
     expect(result?.found).toBeUndefined();
+  });
+
+  it("does not wait forever for an IDE that never answers, and asks only once", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      dotEnv[fqsn.secretName] = "from-dotenv";
+      const readSecrets = vi.fn(
+        () => new Promise<Record<string, string>>(() => {}),
+      );
+      const ide = makeIde({});
+      (ide as any).readSecrets = readSecrets;
+      const client = new LocalPlatformClient(ide);
+
+      const first = client.resolveFQSNs([fqsn]);
+      await vi.advanceTimersByTimeAsync(SECURE_STORAGE_TIMEOUT_MS + 1);
+      expect(((await first)[0] as any).value).toBe("from-dotenv");
+
+      // Later lookups skip the unresponsive storage instead of waiting again.
+      expect(((await client.resolveFQSNs([fqsn]))[0] as any).value).toBe(
+        "from-dotenv",
+      );
+      expect(readSecrets).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });

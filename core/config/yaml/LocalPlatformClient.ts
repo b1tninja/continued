@@ -8,6 +8,8 @@ import * as dotenv from "dotenv";
 import { IDE } from "../..";
 import { getContinueDotEnv } from "../../util/paths";
 import { joinPathsToUri } from "../../util/uri";
+import { SECURE_STORAGE_TIMEOUT_MS } from "../secretStorage";
+import { TimeoutError, withTimeout } from "../../util/withTimeout";
 
 /**
  * Resolves `${{ secrets.NAME }}` for local configs. Lookup order: the IDE's
@@ -15,6 +17,13 @@ import { joinPathsToUri } from "../../util/uri";
  * <workspace>/.env, then the process environment.
  */
 export class LocalPlatformClient implements PlatformClient {
+  /**
+   * Set when the IDE did not answer a secure storage request. An IDE that does
+   * not handle `readSecrets` never replies, so every later lookup would wait
+   * the full timeout again; skip it for the rest of this client's life.
+   */
+  private secureStorageUnresponsive = false;
+
   constructor(private readonly ide: IDE) {}
 
   /**
@@ -98,9 +107,14 @@ export class LocalPlatformClient implements PlatformClient {
   ): Promise<SecretResult | undefined> {
     try {
       if (typeof this.ide.readSecrets !== "function") return undefined;
-      const value = (await this.ide.readSecrets([fqsn.secretName]))?.[
-        fqsn.secretName
-      ];
+      if (this.secureStorageUnresponsive) return undefined;
+      const value = (
+        await withTimeout(
+          this.ide.readSecrets([fqsn.secretName]),
+          SECURE_STORAGE_TIMEOUT_MS,
+          "Secure storage",
+        )
+      )?.[fqsn.secretName];
       if (!value) return undefined;
       return {
         found: true,
@@ -112,6 +126,7 @@ export class LocalPlatformClient implements PlatformClient {
         },
       };
     } catch (error) {
+      if (error instanceof TimeoutError) this.secureStorageUnresponsive = true;
       console.warn(
         `Error reading secure storage: ${error instanceof Error ? error.message : String(error)}`,
       );
