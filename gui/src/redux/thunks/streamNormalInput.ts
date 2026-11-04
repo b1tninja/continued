@@ -12,6 +12,7 @@ import {
   errorToolCall,
   setActive,
   setAppliedRulesAtIndex,
+  addRequestUsageToSession,
   setContextPercentage,
   setInactive,
   setInlineErrorMessage,
@@ -48,7 +49,14 @@ import {
   selectPendingToolCalls,
 } from "../selectors/selectToolCalls";
 import { callToolById } from "./callToolById";
-import { evaluateToolPolicies } from "./evaluateToolPolicies";
+import {
+  selectApprovalSettings,
+  selectAutoApproval,
+} from "../selectors/selectAutoApproval";
+import {
+  buildReviewHistory,
+  evaluateToolPolicies,
+} from "./evaluateToolPolicies";
 import { preprocessToolCalls } from "./preprocessToolCallArgs";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
 
@@ -247,6 +255,13 @@ export const streamNormalInput = createAsyncThunk<
               dispatch(setPromptCacheInputTokens(total));
               dispatch(setPromptCacheKey(cacheKey));
             }
+            dispatch(
+              addRequestUsageToSession({
+                provider: selectedChatModel.provider,
+                model: selectedChatModel.model,
+                usage: message.usage,
+              }),
+            );
           }
         }
         next = await gen.next();
@@ -348,6 +363,14 @@ export const streamNormalInput = createAsyncThunk<
       activeTools,
       generatedCalls3,
       toolPolicies,
+      selectAutoApproval(state3).active
+        ? {
+            sessionId: state3.session.id,
+            history: buildReviewHistory(state3.session.history),
+            onceGrants: state3.blockedCalls.grants,
+          }
+        : undefined,
+      selectApprovalSettings(state3),
     );
     const autoApprovedPolicies = policies.filter(
       ({ policy }) => policy === "allowedWithoutPermission",

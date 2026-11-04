@@ -255,6 +255,8 @@ export const saveCurrentSession = createAsyncThunk<
       history: session.history,
       mode: session.mode,
       chatModelTitle: selectedChatModel?.title ?? null,
+      ...(session.usage && { usage: session.usage }),
+      checkpoints: session.checkpoints,
       // Enough for a resumed session to know its cache has expired and what
       // re-reading the conversation will cost.
       ...(cache?.lastRequestAt !== undefined && {

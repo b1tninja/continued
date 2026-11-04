@@ -8,17 +8,14 @@ export function useSubmitOnboarding(mode: OnboardingModes, isDialog = false) {
   const ideMessenger = useContext(IdeMessengerContext);
   const { close: closeOnboardingCard } = useOnboardingCard();
 
-  function submitOnboarding(provider?: string, apiKey?: string) {
+  /** The Local tab: write the Ollama setup to config.yaml and close the card. */
+  function submitOnboarding() {
     const onboardingStatus = getLocalStorage("onboardingStatus");
 
     // Always close the onboarding card and update config.yaml
     closeOnboardingCard(isDialog);
 
-    ideMessenger.post("onboarding/complete", {
-      mode,
-      provider,
-      apiKey,
-    });
+    ideMessenger.post("onboarding/complete", { mode });
 
     if (onboardingStatus === "Started") {
       // Local state
@@ -31,7 +28,21 @@ export function useSubmitOnboarding(mode: OnboardingModes, isDialog = false) {
     ideMessenger.post("config/openProfile", { profileId: undefined });
   }
 
+  /**
+   * The provider setup flow has already written config.yaml, so only the
+   * card and the first-run bookkeeping are left.
+   */
+  function finishOnboarding() {
+    const onboardingStatus = getLocalStorage("onboardingStatus");
+    closeOnboardingCard(isDialog);
+    if (onboardingStatus === "Started") {
+      setLocalStorage("onboardingStatus", "Completed");
+      ideMessenger.post("showTutorial", undefined);
+    }
+  }
+
   return {
     submitOnboarding,
+    finishOnboarding,
   };
 }

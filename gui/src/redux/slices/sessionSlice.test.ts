@@ -195,6 +195,7 @@ describe("sessionSlice streamUpdate", () => {
     newestToolbarPreviewForInput: {},
     isSessionMetadataLoading: false,
     compactionLoading: {},
+    checkpoints: [],
   });
 
   describe("Basic Chat Message", () => {

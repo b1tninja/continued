@@ -223,4 +223,150 @@ describe("ProviderSetupFlow", () => {
     ]);
     expect(saves).toEqual([]);
   });
+
+  it("asks before removing a plaintext copy from ~/.continue/.env", async () => {
+    const { messenger, secrets } = messengerWith();
+    messenger.responseHandlers["config/setSecret"] = async (req) => {
+      secrets.push(req);
+      return { stored: true, envShadowed: true };
+    };
+    const removals: any[] = [];
+    messenger.responseHandlers["config/removeEnvSecret"] = async (req) => {
+      removals.push(req);
+      return { removed: true };
+    };
+    const onDone = vi.fn();
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow
+        initialProvider="anthropic"
+        enterKey={{ secretName: "CONTINUED_ANTHROPIC_API_KEY" }}
+        onDone={onDone}
+      />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.type(screen.getByLabelText("API key"), "sk-ant-new");
+    await user.click(screen.getByRole("button", { name: "Save key" }));
+
+    // Nothing is removed, and the flow stays open, until the user answers.
+    expect(await screen.findByTestId("env-copy-prompt")).toBeDefined();
+    expect(removals).toEqual([]);
+    expect(onDone).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Remove from .env" }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(removals).toEqual([{ secretName: "CONTINUED_ANTHROPIC_API_KEY" }]);
+  });
+
+  it("keeps the .env line when the user says so", async () => {
+    const { messenger } = messengerWith();
+    messenger.responseHandlers["config/saveProviderModels"] = async () => ({
+      saved: true,
+      envShadowedSecret: "CONTINUED_ANTHROPIC_API_KEY",
+    });
+    const removals: any[] = [];
+    messenger.responseHandlers["config/removeEnvSecret"] = async (req) => {
+      removals.push(req);
+      return { removed: true };
+    };
+    const onDone = vi.fn();
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="anthropic" onDone={onDone} />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.type(screen.getByLabelText("API key"), "k");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(await screen.findByRole("button", { name: "Keep it" }));
+    expect(onDone).toHaveBeenCalled();
+    expect(removals).toEqual([]);
+  });
+
+  it("edits a connection's endpoint in place instead of adding a new connection", async () => {
+    const { messenger, saves } = messengerWith({
+      ...EMPTY_SETUP,
+      connections: [
+        {
+          provider: "lemonade",
+          connection: { apiBase: "http://localhost:8000/api/v1" },
+          models: [
+            { name: "Mine 1", model: "mine-one" },
+            { name: "Mine 2", model: "mine-two" },
+          ],
+          key: { state: "none" },
+        },
+      ],
+    });
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow
+        initialProvider="lemonade"
+        initialConnection={{ apiBase: "http://localhost:8000/api/v1" }}
+        onDone={vi.fn()}
+      />,
+      { mockIdeMessenger: messenger },
+    );
+
+    const apiBase = (await screen.findByLabelText(
+      "API Base",
+    )) as HTMLInputElement;
+    await waitFor(() =>
+      expect(apiBase.value).toBe("http://localhost:8000/api/v1"),
+    );
+    await user.clear(apiBase);
+    await user.type(apiBase, "http://gpu-box:8000/api/v1");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    // The models of the connection being edited stay checked.
+    const one = (await screen.findByLabelText("Mine 1")) as HTMLInputElement;
+    const two = screen.getByLabelText("Mine 2") as HTMLInputElement;
+    expect(one.checked && two.checked).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    expect(screen.getByTestId("review-connection-change").textContent).toMatch(
+      /http:\/\/localhost:8000\/api\/v1 becomes http:\/\/gpu-box:8000\/api\/v1.*2 existing models/,
+    );
+    expect(screen.queryByTestId("review-removals")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0].from).toEqual({ apiBase: "http://localhost:8000/api/v1" });
+    expect(saves[0].connection).toEqual({
+      apiBase: "http://gpu-box:8000/api/v1",
+    });
+    expect(saves[0].remove).toEqual([]);
+    expect(saves[0].add).toEqual([]);
+  });
+
+  it("does not send `from` when the endpoint is unchanged", async () => {
+    const { messenger, saves } = messengerWith({
+      ...EMPTY_SETUP,
+      connections: [
+        {
+          provider: "anthropic",
+          connection: {},
+          models: [{ name: "Old", model: "claude-old" }],
+          key: { state: "secret", secretName: "ANTHROPIC_API_KEY" },
+        },
+      ],
+    });
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow
+        initialProvider="anthropic"
+        initialConnection={{}}
+        onDone={vi.fn()}
+      />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    const boxes = (await screen.findAllByRole(
+      "checkbox",
+    )) as HTMLInputElement[];
+    const extra = boxes.find((b) => !b.checked)!;
+    await user.click(extra);
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    expect(screen.queryByTestId("review-connection-change")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0].from).toBeUndefined();
+  });
 });

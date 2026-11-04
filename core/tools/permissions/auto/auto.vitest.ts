@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MODEL_CATEGORIES } from "./categories";
 import { autoReviewToolCall, AutoReviewDeps } from "./handler";
 import { parseReviewerReply } from "./parse";
-import { buildReviewMessages } from "./prompt";
+import { buildReviewMessages, FLAGGED_OUTPUT_NOTE } from "./prompt";
 import { reviewToolCall } from "./review";
 import { AutoReviewSessions, AutoReviewState } from "./state";
 
@@ -343,6 +343,41 @@ describe("autoReviewToolCall: rules come first", () => {
     expect(llm.chat).toHaveBeenCalledTimes(1);
   });
 
+  it("a category switch settles the call before the reviewer", async () => {
+    const { llm, deps } = setup(deny("production-impact"));
+    const r = await run(deps, "ls -la", {
+      approval: { mode: "auto", categories: { runSafeCommands: true } },
+    });
+    expect(r).toMatchObject({
+      decision: "allow",
+      by: "rules",
+      ruleSource: "category",
+    });
+    expect(llm.chat).not.toHaveBeenCalled();
+  });
+
+  it("a switch that does not cover the command leaves it to the reviewer", async () => {
+    const { llm, deps } = setup(deny("production-impact"));
+    const r = await run(deps, "make deploy", {
+      approval: { mode: "auto", categories: { runSafeCommands: true } },
+    });
+    expect(r).toMatchObject({ decision: "deny", by: "reviewer" });
+    expect(llm.chat).toHaveBeenCalledTimes(1);
+  });
+
+  it("a protected path still asks with run-all on, and the reviewer is not asked", async () => {
+    const { llm, deps } = setup(allow);
+    const r = await run(deps, "cat .env", {
+      approval: { mode: "auto", categories: { runAllCommands: true } },
+    });
+    expect(r).toMatchObject({
+      decision: "ask",
+      by: "rules",
+      ruleSource: "protected-path",
+    });
+    expect(llm.chat).not.toHaveBeenCalled();
+  });
+
   it("the reviewer can refuse with a named reason", async () => {
     const { deps } = setup(deny("remote-code-execution"));
     const r = await run(deps, "make deploy");
@@ -506,5 +541,34 @@ describe("autoReviewToolCall: rules come first", () => {
     const { deps } = setup("allow it please");
     const r = await run(deps, "npm test");
     expect(r).toMatchObject({ decision: "ask", category: "uncertain" });
+  });
+});
+
+describe("injection hint in the reviewer prompt", () => {
+  const base = {
+    toolName: "run_terminal_command",
+    args: { command: "ls" },
+    environment: {},
+    nonce: "FIXEDNONCE123",
+  };
+  const text = (toolCalls: any[]) =>
+    buildReviewMessages({
+      ...base,
+      history: { userMessages: ["do it"], toolCalls },
+    })
+      .map((m) => m.content)
+      .join("\n");
+
+  it("marks an earlier call whose output was flagged", () => {
+    const t = text([
+      { name: "fetch_url_content", args: { url: "u" }, outputFlagged: true },
+    ]);
+    expect(t).toContain(FLAGGED_OUTPUT_NOTE);
+  });
+
+  it("adds nothing for an ordinary call", () => {
+    expect(
+      text([{ name: "read_file", args: { filepath: "a" } }]),
+    ).not.toContain(FLAGGED_OUTPUT_NOTE);
   });
 });

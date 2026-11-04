@@ -1,21 +1,41 @@
 import { ToolPolicy } from "@continuedev/terminal-security";
-import { Tool, ToolCallState } from "core";
+import { ChatHistoryItem, Tool, ToolCallState } from "core";
+import type { ApprovalSettings } from "core/tools/permissions/approval";
+import type { AutoReviewReply } from "core/tools/permissions/auto/handler";
+import type { ReviewHistory } from "core/tools/permissions/auto/prompt";
+import { isFlaggedOutput } from "core/tools/permissions/injection";
 import type { DecisionSource } from "core/tools/permissions/decide";
 import { IIdeMessenger } from "../../context/IdeMessenger";
 import { isEditTool } from "../../util/toolCallState";
 import {
+  addBlockedCall,
+  consumeGrant,
+  grantKey,
+} from "../slices/blockedCallsSlice";
+import {
   errorToolCall,
+  setToolCallDecision,
   setToolCallPolicyNote,
   updateToolCallOutput,
 } from "../slices/sessionSlice";
 import { DEFAULT_TOOL_SETTING, ToolPolicies } from "../slices/uiSlice";
 import { AppThunkDispatch } from "../store";
 
+/** Set when Auto mode is on and usable (see selectAutoApproval). */
+export interface AutoReviewContext {
+  sessionId: string;
+  history: ReviewHistory;
+  /** Exact calls the user allowed once from the Recently blocked list. */
+  onceGrants?: string[];
+}
+
 interface EvaluatedPolicy {
   policy: ToolPolicy;
   displayValue?: string;
-  /** Why core decided, when the user has toolPermissions rules. */
-  source?: DecisionSource;
+  /** Why core decided, when the user has toolPermissions rules. "auto" means the reviewer model. */
+  source?: DecisionSource | "auto" | "once";
+  /** The reviewer's named reason (Auto mode). */
+  category?: string;
   reason?: string;
   rule?: string;
   toolCallState: ToolCallState;
@@ -30,6 +50,7 @@ async function evaluateToolPolicy(
   activeTools: Tool[],
   toolCallState: ToolCallState,
   toolPolicies: ToolPolicies,
+  approval?: ApprovalSettings,
 ): Promise<EvaluatedPolicy> {
   const toolName = toolCallState.toolCall.function.name;
 
@@ -75,6 +96,7 @@ async function evaluateToolPolicy(
     basePolicy,
     parsedArgs: toolCallState.parsedArgs,
     processedArgs: toolCallState.processedArgs,
+    ...(approval ? { approval } : {}),
   });
 
   // Evaluate the policy dynamically
@@ -94,8 +116,12 @@ async function evaluateToolPolicy(
     basePolicy === "allowedWithPermission" &&
     dynamicPolicy === "allowedWithoutPermission" &&
     // The one exception: the user's own allow rule, which core has already
-    // checked cannot loosen a disabled tool or a refused command.
-    details.source !== "allow-rule"
+    // checked cannot loosen a disabled tool or a refused command. The same
+    // goes for the approval mode and switches, which core applies only to a
+    // call no rule, protected path or safety check has settled.
+    details.source !== "allow-rule" &&
+    details.source !== "category" &&
+    details.source !== "yolo"
   ) {
     return { ...details, policy: "allowedWithPermission", toolCallState }; // Cannot make more lenient
   }
@@ -103,13 +129,143 @@ async function evaluateToolPolicy(
   return { ...details, policy: dynamicPolicy, toolCallState };
 }
 
+/**
+ * What the reviewer is shown of the conversation: the user's own messages and
+ * the earlier tool calls (name and arguments), never the agent's prose or any
+ * tool output.
+ */
+export function buildReviewHistory(history: ChatHistoryItem[]): ReviewHistory {
+  const userMessages: string[] = [];
+  const toolCalls: ReviewHistory["toolCalls"] = [];
+  for (const item of history) {
+    const { message } = item;
+    if (message.role === "user") {
+      const text =
+        typeof message.content === "string"
+          ? message.content
+          : message.content
+              .map((p) => (p.type === "text" ? p.text : ""))
+              .join("");
+      if (text.trim()) userMessages.push(text);
+    }
+    for (const call of item.toolCallStates ?? []) {
+      toolCalls.push({
+        name: call.toolCall.function.name,
+        args: call.parsedArgs,
+        // Only the fact, never the text: the reviewer must not read outputs.
+        ...(call.output?.some((o) => isFlaggedOutput(o.content))
+          ? { outputFlagged: true }
+          : {}),
+      });
+    }
+  }
+  return { userMessages, toolCalls };
+}
+
+/**
+ * Auto mode: ask core's reviewer about calls that wait for approval. Core runs
+ * the rules again first, so a deny rule, protected path or ask rule comes back
+ * unchanged and the model is never asked. The reviewer can allow a call, leave
+ * it for the user, or refuse it; anything that goes wrong leaves it for the user.
+ */
+async function reviewOpenCalls(
+  ideMessenger: IIdeMessenger,
+  results: EvaluatedPolicy[],
+  auto: AutoReviewContext,
+  toolPolicies: ToolPolicies,
+  activeTools: Tool[],
+  dispatch: AppThunkDispatch,
+  approval?: ApprovalSettings,
+): Promise<EvaluatedPolicy[]> {
+  return Promise.all(
+    results.map(async (r) => {
+      const toolName = r.toolCallState.toolCall.function.name;
+      const open =
+        r.policy === "allowedWithPermission" &&
+        !isEditTool(toolName) &&
+        r.source !== "ask-rule" &&
+        r.source !== "protected-path";
+      if (!open) return r;
+
+      const basePolicy =
+        toolPolicies[toolName] ??
+        activeTools.find((t) => t.function.name === toolName)
+          ?.defaultToolPolicy ??
+        DEFAULT_TOOL_SETTING;
+      // The user allowed this exact call once after Auto refused it. This is
+      // reached only for a call the rules left open, so no deny rule, protected
+      // path or ask rule can be skipped by it.
+      const key = grantKey(toolName, r.toolCallState.parsedArgs);
+      if (auto.onceGrants?.includes(key)) {
+        dispatch(consumeGrant(key));
+        return {
+          ...r,
+          policy: "allowedWithoutPermission" as const,
+          source: "once" as const,
+          reason: "You allowed this exact call once.",
+        };
+      }
+      let reply: AutoReviewReply;
+      try {
+        const res = await ideMessenger.request("tools/autoReview", {
+          sessionId: auto.sessionId,
+          toolName,
+          basePolicy,
+          parsedArgs: r.toolCallState.parsedArgs,
+          processedArgs: r.toolCallState.processedArgs,
+          history: auto.history,
+          ...(approval ? { approval } : {}),
+        });
+        if (res.status !== "success") return r;
+        reply = res.content;
+      } catch (e) {
+        console.error(`Auto review failed for ${toolName}`, e);
+        return r;
+      }
+
+      // The reviewer only ever acts on a call that was waiting for the user.
+      if (reply.by === "rules") return r;
+      switch (reply.decision) {
+        case "allow":
+          return {
+            ...r,
+            policy: "allowedWithoutPermission" as const,
+            source: "auto" as const,
+            reason: `Allowed by Auto: ${reply.reason}`,
+          };
+        case "deny":
+          return {
+            ...r,
+            policy: "disabled" as const,
+            source: "auto" as const,
+            category: reply.category,
+            reason: reply.reason,
+          };
+        default:
+          return {
+            ...r,
+            source: "auto" as const,
+            category: reply.category,
+            reason: `Auto: ${reply.reason}${reply.category ? ` [${reply.category}]` : ""}`,
+          };
+      }
+    }),
+  );
+}
+
 /** The text the model sees when a call is refused, naming who refused it. */
 export function refusalMessage(
   command: string,
-  source: DecisionSource | undefined,
+  source: DecisionSource | "auto" | "once" | undefined,
   reason: string | undefined,
+  category?: string,
 ): { description: string; content: string } {
   switch (source) {
+    case "auto":
+      return {
+        description: `Blocked by Auto${category ? ` [${category}]` : ""}`,
+        content: `A reviewer model refused this call${category ? ` (${category})` : ""}: ${reason ?? "no reason given"}\n\n${command}\n\nDo not retry it or reach the same result another way. Find a safer route to the user's request, or tell the user what you need and ask how they want to proceed.`,
+      };
     case "deny-rule":
       return {
         description: "Blocked by your rule",
@@ -139,18 +295,32 @@ export async function evaluateToolPolicies(
   activeTools: Tool[],
   generatedToolCalls: ToolCallState[],
   toolPolicies: ToolPolicies,
+  auto?: AutoReviewContext,
+  approval?: ApprovalSettings,
 ): Promise<EvaluatedPolicy[]> {
   // Check if ALL tool calls are auto-approved using dynamic evaluation
-  const policyResults = await Promise.all(
+  let policyResults = await Promise.all(
     generatedToolCalls.map((toolCallState) =>
       evaluateToolPolicy(
         ideMessenger,
         activeTools,
         toolCallState,
         toolPolicies,
+        approval,
       ),
     ),
   );
+  if (auto) {
+    policyResults = await reviewOpenCalls(
+      ideMessenger,
+      policyResults,
+      auto,
+      toolPolicies,
+      activeTools,
+      dispatch,
+      approval,
+    );
+  }
 
   const disabledResults = policyResults.filter(
     ({ policy }) => policy === "disabled",
@@ -162,7 +332,9 @@ export async function evaluateToolPolicies(
     if (
       policy === "allowedWithPermission" &&
       reason &&
-      (source === "protected-path" || source === "ask-rule")
+      (source === "protected-path" ||
+        source === "ask-rule" ||
+        source === "auto")
     ) {
       dispatch(
         setToolCallPolicyNote({
@@ -173,17 +345,74 @@ export async function evaluateToolPolicies(
     }
   }
 
+  // The decision chip: say why a call ran without asking.
+  for (const r of policyResults) {
+    const { source, reason, rule, toolCallState } = r;
+    if (
+      r.policy === "allowedWithoutPermission" &&
+      (source === "allow-rule" ||
+        source === "auto" ||
+        source === "once" ||
+        source === "category" ||
+        source === "yolo")
+    ) {
+      dispatch(
+        setToolCallDecision({
+          toolCallId: toolCallState.toolCallId,
+          decision: {
+            outcome: "allowed",
+            source,
+            ...(reason ? { reason } : {}),
+            ...(rule ? { rule } : {}),
+          },
+        }),
+      );
+    }
+  }
+
   for (const {
     displayValue,
     source,
     reason,
+    rule,
+    category,
     toolCallState,
   } of disabledResults) {
     dispatch(errorToolCall({ toolCallId: toolCallState.toolCallId }));
+    const blockedSource = source ?? "safety-floor";
+    dispatch(
+      setToolCallDecision({
+        toolCallId: toolCallState.toolCallId,
+        decision: {
+          outcome: "blocked",
+          source: blockedSource,
+          ...(reason ? { reason } : {}),
+          ...(rule ? { rule } : {}),
+          ...(category ? { category } : {}),
+        },
+      }),
+    );
+    dispatch(
+      addBlockedCall({
+        id: toolCallState.toolCallId,
+        toolName: toolCallState.toolCall.function.name,
+        summary: displayValue || toolCallState.toolCall.function.name,
+        source: blockedSource,
+        ...(reason ? { reason } : {}),
+        ...(category ? { category } : {}),
+        parsedArgs: toolCallState.parsedArgs ?? {},
+        at: Date.now(),
+      }),
+    );
 
     // Use the displayValue from the policy evaluation, or fallback to function name
     const command = displayValue || toolCallState.toolCall.function.name;
-    const { description, content } = refusalMessage(command, source, reason);
+    const { description, content } = refusalMessage(
+      command,
+      source,
+      reason,
+      category,
+    );
 
     // Add error message explaining why it's disabled
     dispatch(

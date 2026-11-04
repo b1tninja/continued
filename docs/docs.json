@@ -78,6 +78,7 @@
             "pages": [
               "customize/overview",
               "customize/models",
+              "customize/model-setup",
               "customize/mcp-tools",
               "customize/rules",
               "customize/prompts",
@@ -134,7 +135,8 @@
                   "customize/model-roles/edit",
                   "customize/model-roles/apply",
                   "customize/model-roles/embeddings",
-                  "customize/model-roles/reranking"
+                  "customize/model-roles/reranking",
+                  "customize/model-roles/reviewer"
                 ]
               },
               {

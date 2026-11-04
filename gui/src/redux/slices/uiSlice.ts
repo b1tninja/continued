@@ -1,8 +1,14 @@
+import type { JSX } from "react";
 import { cacheTipKey } from "../../util/cacheTips";
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { MessageModes, RuleWithSource, Tool } from "core";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
+import type {
+  ApprovalCategories,
+  ApprovalCategoryName,
+  ApprovalModeName,
+} from "core/tools/permissions/approval";
 import {
   defaultOnboardingCardState,
   OnboardingCardState,
@@ -38,6 +44,23 @@ type UIState = {
   /** Model the user picked by hand per mode; wins over `modeModels` until reload. */
   modeModelOverrides: Partial<Record<MessageModes, string>>;
   ttsActive: boolean;
+  /** "auto" needs the experimental flag and a reviewer model; see selectAutoApproval. */
+  approvalMode: ApprovalMode;
+  /** The Auto-approve switches; used by Auto-approve and Auto modes. */
+  approvalCategories: ApprovalCategories;
+  /** Per-MCP-server switch, by server name; wins over the global MCP switch. */
+  approvalMcpServers: { [serverName: string]: boolean };
+};
+
+/**
+ * manual: ask as today. autoApprove: the switches allow. auto: the switches,
+ * then a reviewer model (experimental). yolo: allow everything that no deny
+ * rule, protected path or ask rule stops.
+ */
+export type ApprovalMode = ApprovalModeName;
+
+export const DEFAULT_APPROVAL_CATEGORIES: ApprovalCategories = {
+  readFiles: true,
 };
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";
@@ -52,6 +75,9 @@ export const DEFAULT_UI_SLICE: UIState = {
     getLocalStorage(LocalStorageKey.HasDismissedExploreDialog) ?? false,
   shouldAddFileForEditing: false,
   ttsActive: false,
+  approvalMode: "manual",
+  approvalCategories: DEFAULT_APPROVAL_CATEGORIES,
+  approvalMcpServers: {},
   toolSettings: {},
   toolGroupSettings: {
     [BUILT_IN_GROUP_NAME]: "include",
@@ -151,6 +177,29 @@ export const uiSlice = createSlice({
           break;
       }
     },
+    setApprovalMode: (state, { payload }: PayloadAction<ApprovalMode>) => {
+      state.approvalMode = payload;
+    },
+    setApprovalCategory: (
+      state,
+      {
+        payload,
+      }: PayloadAction<{ category: ApprovalCategoryName; enabled: boolean }>,
+    ) => {
+      state.approvalCategories = {
+        ...state.approvalCategories,
+        [payload.category]: payload.enabled,
+      };
+    },
+    setApprovalMcpServer: (
+      state,
+      { payload }: PayloadAction<{ server: string; enabled: boolean }>,
+    ) => {
+      state.approvalMcpServers = {
+        ...state.approvalMcpServers,
+        [payload.server]: payload.enabled,
+      };
+    },
     setTTSActive: (state, { payload }: PayloadAction<boolean>) => {
       state.ttsActive = payload;
     },
@@ -212,6 +261,9 @@ export const {
   addTool,
   addRule,
   toggleRuleSetting,
+  setApprovalMode,
+  setApprovalCategory,
+  setApprovalMcpServer,
   setTTSActive,
   setReasoningSetting,
   setPromptCacheSetting,

@@ -121,12 +121,9 @@ export function ModeSelect() {
           <span className="hidden sm:block">
             {mode === "chat" ? "Chat" : mode === "agent" ? "Agent" : "Plan"}
           </span>
-          <ChevronDownIcon
-            className="h-2 w-2 flex-shrink-0"
-            aria-hidden="true"
-          />
+          <ChevronDownIcon className="h-2 w-2 shrink-0" aria-hidden="true" />
         </ListboxButton>
-        <ListboxOptions className="min-w-32 max-w-48">
+        <ListboxOptions className="max-w-48 min-w-32">
           <ListboxOption value="chat">
             <div className="flex flex-row items-center gap-1.5">
               <ModeIcon mode="chat" />
@@ -140,7 +137,7 @@ export function ModeSelect() {
               >
                 <InformationCircleIcon
                   data-tooltip-id="chat-tip"
-                  className="h-2.5 w-2.5 flex-shrink-0"
+                  className="h-2.5 w-2.5 shrink-0"
                 />
               </ToolTip>
               <span
@@ -162,7 +159,7 @@ export function ModeSelect() {
                 }}
                 content="Read-only/MCP tools available"
               >
-                <InformationCircleIcon className="h-2.5 w-2.5 flex-shrink-0" />
+                <InformationCircleIcon className="h-2.5 w-2.5 shrink-0" />
               </ToolTip>
             </div>
             {!isGoodAtAgentMode && notGreatAtAgent("Plan")}
@@ -182,7 +179,7 @@ export function ModeSelect() {
                 }}
                 content="All tools available"
               >
-                <InformationCircleIcon className="h-2.5 w-2.5 flex-shrink-0" />
+                <InformationCircleIcon className="h-2.5 w-2.5 shrink-0" />
               </ToolTip>
             </div>
             {!isGoodAtAgentMode && notGreatAtAgent("Agent")}

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { fetchwithRequestOptions } from "@continuedev/fetch";
 import * as URI from "uri-js";
 import { v4 as uuidv4 } from "uuid";
@@ -10,6 +11,7 @@ import {
 import { ConfigHandler } from "./config/ConfigHandler";
 import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
+import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
@@ -38,6 +40,7 @@ import { GlobalContext } from "./util/GlobalContext";
 import historyManager from "./util/history";
 import {
   editConfigFile,
+  getConfigYamlPath,
   getContinueGlobalPath,
   migrateV1DevDataFiles,
 } from "./util/paths";
@@ -77,15 +80,25 @@ import { openSecretLocation } from "./config/openSecretLocation";
 import {
   defaultSecretName,
   readProviderConnections,
+  ProviderSetupError,
   saveProviderModels,
   validateSaveRequest,
 } from "./config/providerSetup";
-import { isSecureStorageAvailable, storeSecret } from "./config/secretStorage";
 import {
-  setupLocalConfig,
-  setupProviderConfig,
-  setupQuickstartConfig,
-} from "./config/onboarding";
+  existingMcpServerNames,
+  findSettingsFiles,
+  importMcpServers,
+  previewImport,
+  readGlobalConfigYaml,
+} from "./config/importClineMcp";
+import {
+  annotateKeyStorage,
+  isSecureStorageAvailable,
+  moveEnvSecretToSecureStorage,
+  removeEnvSecret,
+  storeSecret,
+} from "./config/secretStorage";
+import { setupLocalConfig } from "./config/onboarding";
 import {
   createNewGlobalRuleFile,
   createNewWorkspaceBlockFile,
@@ -403,6 +416,21 @@ export class Core {
       return { saved: true };
     });
 
+    on("config/setRulesByMode", async (msg) => {
+      const saved = saveRulesByMode(msg.data);
+      if (!saved) {
+        void this.ide.showToast(
+          "warning",
+          "Per-mode rule switches are saved in config.yaml, and this profile has none.",
+        );
+        return { saved: false };
+      }
+      await this.configHandler.reloadConfig(
+        "Rules by mode changed (config/setRulesByMode message)",
+      );
+      return { saved: true };
+    });
+
     on("tools/suggestAllowRule", async ({ data: { toolName, parsedArgs } }) => {
       const { config } = await this.configHandler.loadConfig();
       const tool = config?.tools.find((t) => t.function.name === toolName);
@@ -516,7 +544,11 @@ export class Core {
       const remembered = this.globalContext.get("preferredKeyStorage");
       const { connections, editable } = readProviderConnections();
       return {
-        connections,
+        connections: await annotateKeyStorage(connections, {
+          ide: this.ide,
+          continueDir: getContinueGlobalPath(),
+          secureStorageAvailable,
+        }),
         secureStorageAvailable,
         preferredKeyStorage:
           remembered === "env" || !secureStorageAvailable
@@ -533,7 +565,7 @@ export class Core {
         return { saved: false, error: invalid };
       }
 
-      let warning: string | undefined;
+      let envShadowedSecret: string | undefined;
       const key = req.key;
       if (key && key.storage !== "inline" && key.storage !== "envVar") {
         if (key.value) {
@@ -548,7 +580,7 @@ export class Core {
           if (!stored.stored) {
             return { saved: false, error: stored.error };
           }
-          warning = stored.warning;
+          if (stored.envShadowed) envShadowedSecret = key.secretName;
         }
         this.globalContext.update("preferredKeyStorage", key.storage);
       }
@@ -562,7 +594,15 @@ export class Core {
               key: { storage: key.storage, secretName: key.secretName },
             }
           : req;
-      const saved = saveProviderModels(toSave);
+      let saved: boolean;
+      try {
+        saved = saveProviderModels(toSave);
+      } catch (e) {
+        if (e instanceof ProviderSetupError) {
+          return { saved: false, error: e.message };
+        }
+        throw e;
+      }
       if (!saved) {
         void this.ide.showToast(
           "warning",
@@ -573,7 +613,40 @@ export class Core {
       await this.configHandler.reloadConfig(
         "Provider models changed (config/saveProviderModels message)",
       );
-      return { saved: true, ...(warning ? { warning } : {}) };
+      return {
+        saved: true,
+        ...(envShadowedSecret ? { envShadowedSecret } : {}),
+      };
+    });
+
+    on("config/previewMcpImport", async () => {
+      return previewImport(
+        findSettingsFiles(),
+        existingMcpServerNames(readGlobalConfigYaml()),
+      );
+    });
+
+    on("config/importMcpServers", async (msg) => {
+      const result = await importMcpServers(msg.data, {
+        ide: this.ide,
+        continueDir: getContinueGlobalPath(),
+        sources: findSettingsFiles(),
+        readConfig: readGlobalConfigYaml,
+        editConfig: (cb) => {
+          if (!fs.existsSync(getConfigYamlPath())) return false;
+          editConfigFile((c) => c, cb);
+          return true;
+        },
+      });
+      if (result.imported.length > 0) {
+        if (result.secretsStored.length > 0) {
+          this.globalContext.update("preferredKeyStorage", msg.data.storage);
+        }
+        await this.configHandler.reloadConfig(
+          "MCP servers imported (config/importMcpServers message)",
+        );
+      }
+      return result;
     });
 
     on("config/setSecret", async (msg) => {
@@ -589,6 +662,35 @@ export class Core {
         this.globalContext.update("preferredKeyStorage", storage);
         await this.configHandler.reloadConfig(
           "Secret stored (config/setSecret message)",
+        );
+      }
+      return result;
+    });
+
+    on("config/moveKeyToSecureStorage", async (msg) => {
+      const result = await moveEnvSecretToSecureStorage({
+        ide: this.ide,
+        name: msg.data.secretName,
+        continueDir: getContinueGlobalPath(),
+      });
+      if (result.moved) {
+        this.globalContext.update("preferredKeyStorage", "secure");
+        await this.configHandler.reloadConfig(
+          "Key moved to secure storage (config/moveKeyToSecureStorage message)",
+        );
+      }
+      return result;
+    });
+
+    on("config/removeEnvSecret", async (msg) => {
+      const result = await removeEnvSecret({
+        ide: this.ide,
+        name: msg.data.secretName,
+        continueDir: getContinueGlobalPath(),
+      });
+      if (result.removed) {
+        await this.configHandler.reloadConfig(
+          "Secret removed from .env (config/removeEnvSecret message)",
         );
       }
       return result;
@@ -1292,7 +1394,9 @@ export class Core {
 
     on(
       "tools/evaluatePolicy",
-      async ({ data: { toolName, basePolicy, parsedArgs, processedArgs } }) => {
+      async ({
+        data: { toolName, basePolicy, parsedArgs, processedArgs, approval },
+      }) => {
         const { config } = await this.configHandler.loadConfig();
         if (!config) {
           throw new Error("Config not loaded");
@@ -1306,6 +1410,7 @@ export class Core {
           parsedArgs,
           processedArgs,
           permissions: config.toolPermissions,
+          approval,
         });
       },
     );
@@ -1597,22 +1702,13 @@ export class Core {
   private async handleCompleteOnboarding(
     msg: Message<CompleteOnboardingPayload>,
   ) {
-    const { mode, provider, apiKey } = msg.data;
+    const { mode } = msg.data;
 
     let editConfigYamlCallback: (config: ConfigYaml) => ConfigYaml;
 
     switch (mode) {
       case OnboardingModes.LOCAL:
         editConfigYamlCallback = setupLocalConfig;
-        break;
-
-      case OnboardingModes.API_KEY:
-        if (provider && apiKey) {
-          editConfigYamlCallback = (config: ConfigYaml) =>
-            setupProviderConfig(config, provider, apiKey);
-        } else {
-          editConfigYamlCallback = setupQuickstartConfig;
-        }
         break;
 
       default:

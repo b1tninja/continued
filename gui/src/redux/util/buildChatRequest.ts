@@ -1,6 +1,7 @@
 import type { LLMFullCompletionOptions, ModelDescription, Tool } from "core";
 import type { ChatMessage, RuleMetadata } from "core";
 import { modelSupportsNativeTools } from "core/llm/toolSupport";
+import { rulesEnabledForMode } from "core/llm/rules/rulesByMode";
 import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { SystemMessageToolCodeblocksFramework } from "core/tools/systemMessageTools/toolCodeblocks";
@@ -151,7 +152,11 @@ export function buildChatRequest(
   const { messages, appliedRules, appliedRuleIndex } = constructMessages(
     withoutMessageIds as any,
     systemMessage,
-    state.config.config.rules,
+    // The per-mode global rules switch (rulesByMode): off for this mode means
+    // no rules are matched at all.
+    rulesEnabledForMode(state.config.config.rulesByMode, state.session.mode)
+      ? state.config.config.rules
+      : [],
     state.ui.ruleSettings,
     systemToolsFramework,
   );

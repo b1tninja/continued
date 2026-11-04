@@ -14,18 +14,24 @@ import {
   ChatMessage,
   ContextItem,
   ContextItemWithId,
+  FileCheckpoint,
   FileSymbolMap,
   McpUiState,
   MessageModes,
   PromptLog,
   RuleMetadata,
   Session,
+  SessionUsage,
   ThinkingChatMessage,
   Tool,
   ToolCallDelta,
   ToolCallState,
+  TurnCheckpoint,
+  Usage,
 } from "core";
 import { mergeReasoningDetails } from "core/llm/openaiTypeConverters";
+import { addRequestUsage } from "core/llm/utils/sessionUsage";
+import { addFileSnapshot } from "core/util/checkpoints";
 import { NEW_SESSION_TITLE } from "core/util/constants";
 import {
   renderChatMessage,
@@ -230,8 +236,12 @@ type SessionState = {
   promptCache?: PromptCacheSessionState;
   isPruned?: boolean;
   contextPercentage?: number;
+  /** Tokens and estimated cost of this session's requests, saved with it. */
+  usage?: SessionUsage;
   inlineErrorMessage?: InlineErrorMessageType;
   compactionLoading: Record<number, boolean>; // Track compaction loading by message index
+  /** Pre-edit file snapshots for "Restore to here"; see core/util/checkpoints.ts */
+  checkpoints: TurnCheckpoint[];
 };
 
 export const INITIAL_SESSION_STATE: SessionState = {
@@ -252,6 +262,7 @@ export const INITIAL_SESSION_STATE: SessionState = {
   lastSessionId: undefined,
   newestToolbarPreviewForInput: {},
   compactionLoading: {},
+  checkpoints: [],
   promptCache: { ...INITIAL_PROMPT_CACHE_STATE },
 };
 
@@ -452,6 +463,19 @@ export const sessionSlice = createSlice({
       state.inlineErrorMessage = undefined;
       state.isPruned = false;
       state.contextPercentage = undefined;
+    },
+    addCheckpointSnapshot: (
+      state,
+      { payload }: PayloadAction<{ turnId: string; file: FileCheckpoint }>,
+    ) => {
+      state.checkpoints = addFileSnapshot(
+        state.checkpoints,
+        payload.turnId,
+        payload.file,
+      );
+    },
+    setCheckpoints: (state, { payload }: PayloadAction<TurnCheckpoint[]>) => {
+      state.checkpoints = payload;
     },
     deleteCompaction: (state, action: PayloadAction<number>) => {
       // Removes the conversation summary from the specified message
@@ -705,6 +729,7 @@ export const sessionSlice = createSlice({
       state.inlineErrorMessage = undefined;
       state.isPruned = false;
       state.contextPercentage = undefined;
+      state.usage = payload?.usage;
       // A different conversation shares nothing with the cached one: its size,
       // timing, misses and what Auto learned all start over. Each conversation
       // starts on the 5-minute lifetime and earns the 1-hour one from its own
@@ -731,6 +756,7 @@ export const sessionSlice = createSlice({
         state.history = payload.history as any;
         state.title = payload.title;
         state.id = payload.sessionId;
+        state.checkpoints = payload.checkpoints ?? [];
         if (payload.mode) {
           state.mode = payload.mode;
         }
@@ -738,6 +764,7 @@ export const sessionSlice = createSlice({
         state.history = [];
         state.title = NEW_SESSION_TITLE;
         state.id = uuidv4();
+        state.checkpoints = [];
       }
     },
     updateSessionTitle: (state, { payload }: PayloadAction<string>) => {
@@ -1000,6 +1027,21 @@ export const sessionSlice = createSlice({
         toolCallState.policyNote = action.payload.note;
       }
     },
+    setToolCallDecision: (
+      state,
+      action: PayloadAction<{
+        toolCallId: string;
+        decision: NonNullable<ToolCallState["decision"]>;
+      }>,
+    ) => {
+      const toolCallState = findToolCallById(
+        state.history,
+        action.payload.toolCallId,
+      );
+      if (toolCallState) {
+        toolCallState.decision = action.payload.decision;
+      }
+    },
     setMode: (state, action: PayloadAction<MessageModes>) => {
       state.mode = action.payload;
     },
@@ -1096,6 +1138,13 @@ export const sessionSlice = createSlice({
     setContextPercentage: (state, action: PayloadAction<number>) => {
       state.contextPercentage = action.payload;
     },
+    addRequestUsageToSession: (
+      state,
+      action: PayloadAction<{ provider: string; model: string; usage: Usage }>,
+    ) => {
+      const { provider, model, usage } = action.payload;
+      state.usage = addRequestUsage(state.usage, provider, model, usage);
+    },
   },
   selectors: {
     selectIsGatheringContext: (state) => {
@@ -1161,12 +1210,15 @@ export const {
   setMainEditorContentTrigger,
   deleteMessage,
   deleteCompaction,
+  addCheckpointSnapshot,
+  setCheckpoints,
   setIsGatheringContext,
   resetNextCodeBlockToApplyIndex,
   updateApplyState,
   abortStream,
   setToolCallCalling,
   setToolCallPolicyNote,
+  setToolCallDecision,
   cancelToolCall,
   errorToolCall,
   acceptToolCall,
@@ -1184,6 +1236,7 @@ export const {
   setHasReasoningEnabled,
   setPromptCacheState,
   setPromptCacheInputTokens,
+  addRequestUsageToSession,
   setPromptCacheKey,
   recordCacheMiss,
   recordCacheRequest,
