@@ -104,6 +104,7 @@ class MessageTypes {
             "config/importMcpServers",
             "config/setSecret",
             "config/removeEnvSecret",
+            "config/moveKeyToSecureStorage",
             "mcp/reloadServer",
             "mcp/startAuthentication",
             "mcp/removeAuthentication",

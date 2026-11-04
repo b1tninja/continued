@@ -559,7 +559,11 @@ export async function importMcpServers(
     });
     if (stored.stored) {
       result.secretsStored.push(name);
-      if (stored.warning) result.warnings.push(stored.warning);
+      if (stored.envShadowed) {
+        result.warnings.push(
+          `${name} is now in secure storage; ~/.continue/.env still has an unused copy you can remove.`,
+        );
+      }
     } else {
       result.secretsPending.push(name);
       result.warnings.push(`${name} was not stored: ${stored.error}`);
