@@ -99,6 +99,7 @@ class MessageTypes {
             "config/saveProviderModels",
             "config/setSecret",
             "config/removeEnvSecret",
+            "config/moveKeyToSecureStorage",
             "mcp/reloadServer",
             "mcp/startAuthentication",
             "mcp/removeAuthentication",
