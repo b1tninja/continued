@@ -183,7 +183,7 @@ Run through the built adapter and the built CLI (`dist/cn.js`, headless, a throw
 
 What this changed:
 
-- **A bug, fixed:** `promptCaching: true` sent cache points to every model on Bedrock, which breaks GPT, Nova and Grok. The adapter now sends them to Claude models only (`33ca5f9e4`).
+- **A bug, fixed:** `promptCaching: true` sent cache points to every model on Bedrock, which breaks GPT, Nova and Grok. The adapter now sends them to Claude models only (`33ca5f9e4`), and so does `core`'s Bedrock provider (`99cfe2542` on `feat/auto-request-count`).
 - **Keepalive:** a read refreshes the lifetime, so the 1.3% estimate for pings rests on a confirmed mechanism. It is still a small gain for 71,000 extra requests, so it stays deferred.
 - **C18:** GPT models report cache writes with no lifetime detail, and Grok reports reads only. A read-only status needs per-family wording, not one 30-minute ring.
 - **Not done:** the fine boundary between 4:30 and 5:06, the long-gap runs for GPT, and the other Claude models.

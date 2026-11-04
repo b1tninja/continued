@@ -168,3 +168,7 @@ threshold and C4.
 | C13 | Log `escalatedBy`, the request number at escalation and the hit result of the next request, per session, in the existing dev data (C0) | C11b | Low. Local only |
 
 Order: C11a, C11b, C12. C13 can land with C11b. Each is its own PR.
+
+## Status
+
+C11a, C11b and C12 are built on `feat/auto-request-count` in the fork (`41dec094f`, local). `newSession` no longer copies `escalated`. `resolvePromptCache` takes the mode, counts one request per model call, and escalates at `AUTO_ESCALATE_AT_REQUEST = 5` in agent, plan and background modes only; the count, the escalation and its reason (`escalatedBy`) are saved with the session and restored on resume, and old sessions start counting from zero. The tooltip says why Auto switched. The full GUI suite (801 tests) passes, including a thunk test that drives the real request path for the 4th and 5th request, chat mode, and caching off; `sessionSlice.test.ts` changed on purpose. Not checked in a running window. The open questions below are unchanged: the threshold is the other tools' plateau, not Continue's own data, and C13 is what would settle it.
