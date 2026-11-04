@@ -874,6 +874,7 @@ export class Core {
           index: msg.data.index,
           historyManager,
           currentModel,
+          conversationPrefix: msg.data.prefix,
         });
         return undefined;
       } catch (error) {

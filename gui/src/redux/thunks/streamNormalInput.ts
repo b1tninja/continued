@@ -4,11 +4,6 @@ import { getRuleId } from "core/llm/rules/getSystemMessageWithRules";
 import { ToCoreProtocol } from "core/protocol";
 import { renderChatMessage } from "core/util/messageContent";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
-import { selectActiveTools } from "../selectors/selectActiveTools";
-import {
-  getModeReasoningEffort,
-  reasoningOptionsForEffort,
-} from "../../util/modeModels";
 import { selectSelectedChatModel } from "../slices/configSlice";
 import {
   abortStream,
@@ -43,55 +38,18 @@ import {
 } from "../../util/cacheSafeguards";
 import { totalInputTokens } from "core/llm/utils/cacheStats";
 import { ThunkApiType } from "../store";
-import { constructMessages } from "../util/constructMessages";
+import { buildChatRequest } from "../util/buildChatRequest";
 
-import { modelSupportsNativeTools } from "core/llm/toolSupport";
-import { applyToolOverrides } from "core/tools/applyToolOverrides";
-import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { interceptSystemToolCalls } from "core/tools/systemMessageTools/interceptSystemToolCalls";
-import { SystemMessageToolCodeblocksFramework } from "core/tools/systemMessageTools/toolCodeblocks";
 
 import {
   selectCurrentToolCalls,
   selectPendingToolCalls,
 } from "../selectors/selectToolCalls";
-import { getBaseSystemMessage } from "../util/getBaseSystemMessage";
 import { callToolById } from "./callToolById";
 import { evaluateToolPolicies } from "./evaluateToolPolicies";
 import { preprocessToolCalls } from "./preprocessToolCallArgs";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
-
-/**
- * Builds completion options with reasoning configuration based on session state and model capabilities.
- *
- * @param baseOptions - Base completion options to extend
- * @param hasReasoningEnabled - Whether reasoning is enabled in the session
- * @param model - The selected model with provider and completion options
- * @returns Completion options with reasoning configuration
- */
-function buildReasoningCompletionOptions(
-  baseOptions: LLMFullCompletionOptions,
-  hasReasoningEnabled: boolean | undefined,
-  model: ModelDescription,
-): LLMFullCompletionOptions {
-  if (hasReasoningEnabled === undefined) {
-    return baseOptions;
-  }
-
-  const reasoningOptions: LLMFullCompletionOptions = {
-    ...baseOptions,
-    reasoning: !!hasReasoningEnabled,
-  };
-
-  // Add reasoning budget tokens if reasoning is enabled and provider supports it
-  if (hasReasoningEnabled && model.underlyingProviderName !== "ollama") {
-    // Ollama doesn't support limiting reasoning tokens at this point
-    reasoningOptions.reasoningBudgetTokens =
-      model.completionOptions?.reasoningBudgetTokens ?? 2048;
-  }
-
-  return reasoningOptions;
-}
 
 export const streamNormalInput = createAsyncThunk<
   void,
@@ -118,53 +76,17 @@ export const streamNormalInput = createAsyncThunk<
       throw new Error("No chat model selected");
     }
 
-    // Get tools and apply model-level overrides (disabled, description, etc.)
-    let activeTools = selectActiveTools(state);
-    if (selectedChatModel.toolOverrides?.length) {
-      const { tools: overriddenTools, errors } = applyToolOverrides(
-        activeTools,
-        selectedChatModel.toolOverrides,
-      );
-      activeTools = overriddenTools;
-      for (const error of errors) {
-        if (!error.fatal) {
-          console.warn(`Tool override warning: ${error.message}`);
-        }
-      }
-    }
-
-    // Use the centralized selector to determine if system message tools should be used
-    const useNativeTools = state.config.config.experimental
-      ?.onlyUseSystemMessageTools
-      ? false
-      : modelSupportsNativeTools(selectedChatModel);
-    const systemToolsFramework = !useNativeTools
-      ? new SystemMessageToolCodeblocksFramework()
-      : undefined;
-
-    // Construct completion options
-    let completionOptions: LLMFullCompletionOptions = {};
-    if (useNativeTools && activeTools.length > 0) {
-      completionOptions = {
-        tools: activeTools,
-      };
-    }
-
-    // An explicit reasoning toggle wins; otherwise use the mode's configured
-    // reasoning effort (`modeModels.<mode>.reasoningEffort`).
-    const modeReasoning =
-      state.session.hasReasoningEnabled === undefined
-        ? reasoningOptionsForEffort(
-            getModeReasoningEffort(state.config.config, state.session.mode),
-          )
-        : undefined;
-    completionOptions = modeReasoning
-      ? { ...completionOptions, ...modeReasoning }
-      : buildReasoningCompletionOptions(
-          completionOptions,
-          state.session.hasReasoningEnabled,
-          selectedChatModel,
-        );
+    // Tools, reasoning, system message and messages: one function builds them,
+    // and the compaction request calls it too, so the two start with the same bytes.
+    const {
+      activeTools,
+      completionOptions: builtOptions,
+      messages,
+      appliedRules,
+      appliedRuleIndex,
+      systemToolsFramework,
+    } = buildChatRequest(state);
+    let completionOptions: LLMFullCompletionOptions = builtOptions;
 
     // Prompt caching: the toolbar choice for this model, or config.yaml when
     // there is none. Auto learns from the pauses between requests this session.
@@ -187,34 +109,6 @@ export const streamNormalInput = createAsyncThunk<
     if (cacheResolution.nextState !== state.session.promptCache) {
       dispatch(setPromptCacheState(cacheResolution.nextState));
     }
-
-    // Construct messages (excluding system message)
-    const baseSystemMessage = getBaseSystemMessage(
-      state.session.mode,
-      selectedChatModel,
-      activeTools,
-    );
-
-    const systemMessage = systemToolsFramework
-      ? addSystemMessageToolsToSystemMessage(
-          systemToolsFramework,
-          baseSystemMessage,
-          activeTools,
-        )
-      : baseSystemMessage;
-
-    const withoutMessageIds = state.session.history.map((item) => {
-      const { id, ...messageWithoutId } = item.message;
-      return { ...item, message: messageWithoutId };
-    });
-
-    const { messages, appliedRules, appliedRuleIndex } = constructMessages(
-      withoutMessageIds,
-      systemMessage,
-      state.config.config.rules,
-      state.ui.ruleSettings,
-      systemToolsFramework,
-    );
 
     // What the cached prefix is made of: the model, the tools and the system
     // prompt. A change to any of them rebuilds the cache. The system prompt is

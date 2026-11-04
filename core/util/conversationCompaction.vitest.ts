@@ -60,3 +60,78 @@ describe("compactConversation", () => {
     expect(session.promptCache?.lastInputTokens).toBe(366_000);
   });
 });
+
+describe("compactConversation with the conversation prefix", () => {
+  const prefix = {
+    messages: [
+      { role: "system" as const, content: "the system prompt" },
+      { role: "user" as const, content: "hi" },
+      { role: "assistant" as const, content: "hello" },
+    ],
+    options: {
+      tools: [{ function: { name: "read_file" } }] as any,
+      promptCaching: true,
+      promptCacheTtl: "1h" as const,
+    },
+  };
+  const run = async (chat: any, withPrefix: boolean) => {
+    const session = sessionWithCache();
+    const historyManager = { load: () => session, save: vi.fn() } as any;
+    await compactConversation({
+      sessionId: "s1",
+      index: 1,
+      historyManager,
+      currentModel: { chat } as any,
+      ...(withPrefix && { conversationPrefix: prefix }),
+    });
+    return historyManager.save.mock.calls[0][0] as Session;
+  };
+
+  it("sends the conversation's messages, then the summary prompt, with its options", async () => {
+    const chat = vi.fn(async () => ({
+      role: "assistant",
+      content: "a summary",
+    }));
+    const saved = await run(chat, true);
+    expect(chat).toHaveBeenCalledTimes(1);
+    const [messages, , options] = chat.mock.calls[0] as any[];
+    expect(messages.slice(0, 3)).toEqual(prefix.messages);
+    expect(messages).toHaveLength(4);
+    expect(messages[3].role).toBe("user");
+    expect(messages[3].content).toContain("Create a comprehensive summary");
+    expect(messages[3].content).toContain("Do not call any tool");
+    expect(options).toEqual(prefix.options);
+    expect(saved.history[1].conversationSummary).toBe("a summary");
+  });
+
+  it("does not change the conversation's own messages", async () => {
+    const chat = vi.fn(async () => ({ role: "assistant", content: "s" }));
+    const before = JSON.stringify(prefix);
+    await run(chat, true);
+    expect(JSON.stringify(prefix)).toBe(before);
+  });
+
+  it("falls back to the plain request when the reply has no text", async () => {
+    const chat = vi
+      .fn()
+      .mockResolvedValueOnce({ role: "assistant", content: "  " })
+      .mockResolvedValueOnce({ role: "assistant", content: "plain summary" });
+    const saved = await run(chat, true);
+    expect(chat).toHaveBeenCalledTimes(2);
+    const [messages, , options] = chat.mock.calls[1] as any[];
+    expect(options).toEqual({});
+    expect(messages.some((m: any) => m.role === "system")).toBe(false);
+    expect(saved.history[1].conversationSummary).toBe("plain summary");
+  });
+
+  it("is the old request exactly when no prefix is given", async () => {
+    const chat = vi.fn(async () => ({ role: "assistant", content: "s" }));
+    await run(chat, false);
+    const [messages, , options] = chat.mock.calls[0] as any[];
+    expect(options).toEqual({});
+    expect(messages.some((m: any) => m.role === "system")).toBe(false);
+    expect(messages[messages.length - 1].content).not.toContain(
+      "Do not call any tool",
+    );
+  });
+});

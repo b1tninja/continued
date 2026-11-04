@@ -365,6 +365,14 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     {
       index: number;
       sessionId: string;
+      /**
+       * The conversation as the chat last sent it, so the summary request can
+       * read a warm prompt cache. Sent only when that is worth doing.
+       */
+      prefix?: {
+        messages: ChatMessage[];
+        options: LLMFullCompletionOptions;
+      };
     },
     string | undefined,
   ];
