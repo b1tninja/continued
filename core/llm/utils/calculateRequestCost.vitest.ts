@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { Usage } from "../..";
 
 import {
+  bedrockRegionalPriceFactor,
   calculateRequestCost,
   CostBreakdown,
   findAnthropicPricing,
@@ -395,7 +396,6 @@ describe("Claude 5 and 5.5 prices", () => {
   it.each([
     // [model, input $/MTok, output $/MTok]
     ["claude-opus-5-5", 4, 20],
-    ["us.anthropic.claude-opus-5-5", 4, 20],
     ["claude-opus-5", 5, 25],
     ["claude-sonnet-5-5", 2, 10],
     ["claude-sonnet-5", 2, 10],
@@ -461,6 +461,131 @@ describe("Claude 5 and 5.5 prices", () => {
       )!;
       expect(r.cost).toBeCloseTo((50_000 / 1e6) * 0.01 + (10 / 1e6) * 0.1, 9);
     });
+  });
+});
+
+describe("Bedrock regional endpoint price factor", () => {
+  const MTOK = 1_000_000;
+
+  it.each([
+    // Geographic profiles carry the premium on Sonnet/Haiku/Opus 4.5 and later
+    ["us.anthropic.claude-opus-5-5", 1.1],
+    ["US.anthropic.claude-opus-5-5", 1.1],
+    ["eu.anthropic.claude-opus-5-5", 1.1],
+    ["apac.anthropic.claude-sonnet-5-5", 1.1],
+    ["jp.anthropic.claude-haiku-5-5", 1.1],
+    ["au.anthropic.claude-sonnet-4-6", 1.1],
+    ["ca.anthropic.claude-opus-4-8", 1.1],
+    ["us.anthropic.claude-haiku-4-5-20251001-v1:0", 1.1],
+    ["us.anthropic.claude-sonnet-4-5-20250929-v1:0", 1.1],
+    ["us.anthropic.claude-opus-4-5-20251101-v1:0", 1.1],
+    ["us.anthropic.claude-fable-5", 1.1],
+    // Global endpoints and bare IDs are list price
+    ["global.anthropic.claude-opus-5-5", 1],
+    ["anthropic.claude-opus-5-5", 1],
+    ["claude-opus-5-5", 1],
+    // GovCloud is priced separately
+    ["us-gov.anthropic.claude-sonnet-4-6", 1],
+    // Earlier models keep their existing pricing
+    ["us.anthropic.claude-opus-4-1-20250805-v1:0", 1],
+    ["us.anthropic.claude-sonnet-4-20250514-v1:0", 1],
+    ["us.anthropic.claude-3-7-sonnet-20250219-v1:0", 1],
+    ["us.anthropic.claude-3-5-haiku-20241022-v1:0", 1],
+    // Not Claude
+    ["us.openai.gpt-6.1-sol", 1],
+  ])("%s has factor %s", (id, factor) => {
+    expect(bedrockRegionalPriceFactor(id)).toBe(factor);
+  });
+
+  it.each([
+    ["input", { promptTokens: MTOK, completionTokens: 0 }, 4],
+    ["output", { promptTokens: 0, completionTokens: MTOK }, 20],
+    [
+      "cache read",
+      {
+        promptTokens: 0,
+        completionTokens: 0,
+        promptTokensDetails: { cachedTokens: MTOK },
+      },
+      0.2,
+    ],
+    [
+      "5-minute write",
+      {
+        promptTokens: 0,
+        completionTokens: 0,
+        promptTokensDetails: { cacheWriteTokens: MTOK },
+      },
+      5,
+    ],
+    [
+      "1-hour write",
+      {
+        promptTokens: 0,
+        completionTokens: 0,
+        promptTokensDetails: {
+          cacheWriteTokens: MTOK,
+          cacheWriteTokens5m: 0,
+          cacheWriteTokens1h: MTOK,
+        },
+      },
+      8,
+    ],
+  ] as [string, Usage, number][])(
+    "scales %s by 1.10 on a us. profile",
+    (_name, usage, listCost) => {
+      const list = calculateRequestCost("bedrock", "claude-opus-5-5", usage)!;
+      const us = calculateRequestCost(
+        "bedrock",
+        "us.anthropic.claude-opus-5-5",
+        usage,
+      )!;
+      expect(list.cost).toBeCloseTo(listCost, 6);
+      expect(us.cost).toBeCloseTo(listCost * 1.1, 6);
+    },
+  );
+
+  it("leaves global. and bare IDs at list price", () => {
+    const usage: Usage = { promptTokens: MTOK, completionTokens: 0 };
+    for (const id of [
+      "global.anthropic.claude-opus-5-5",
+      "anthropic.claude-opus-5-5",
+    ]) {
+      expect(calculateRequestCost("bedrock", id, usage)!.cost).toBeCloseTo(
+        4,
+        6,
+      );
+    }
+  });
+
+  it("scales the Haiku 5.5 long-context tier too", () => {
+    const low = findAnthropicPricing("us.anthropic.claude-haiku-5-5", 100_000)!;
+    const high = findAnthropicPricing(
+      "us.anthropic.claude-haiku-5-5",
+      100_001,
+    )!;
+    expect(low.input).toBe(0.11);
+    expect(high.input).toBe(0.55);
+    expect(high.output).toBe(2.75);
+    expect(high.cacheRead).toBeCloseTo(0.055, 6);
+    expect(high.cacheWrite1h).toBeCloseTo(1.1, 6);
+  });
+
+  it("does not change the shared price table", () => {
+    findAnthropicPricing("us.anthropic.claude-opus-5-5");
+    expect(findAnthropicPricing("claude-opus-5-5")!.input).toBe(4);
+  });
+
+  it("says in the breakdown that the factor was applied", () => {
+    const usage: Usage = { promptTokens: 1000, completionTokens: 1000 };
+    const us = calculateRequestCost(
+      "bedrock",
+      "us.anthropic.claude-opus-5-5",
+      usage,
+    )!;
+    const list = calculateRequestCost("bedrock", "claude-opus-5-5", usage)!;
+    expect(us.breakdown).toContain("× 1.1");
+    expect(list.breakdown).not.toContain("Anthropic list ×");
   });
 });
 

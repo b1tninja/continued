@@ -75,6 +75,8 @@ Prices are multiples of the model's input price. These are the figures Continued
 
 Dollars per million tokens. Claude 4 Opus and 4.1 are $15 input; Claude 3 Haiku has its own cache prices. The table in `core/llm/utils/calculateRequestCost.ts` has every model.
 
+On Bedrock, Anthropic says regional and multi-region endpoints cost 10 percent more than global ones, for Claude Sonnet 4.5, Haiku 4.5, Opus 4.5 and every later model. Continued applies that to model IDs that start with `us.`, `eu.`, `apac.`, `jp.`, `au.` or `ca.`, and prices `global.` IDs and earlier models at list. Only `us.` was checked against real billing data. Set the full ID (for example `us.anthropic.claude-sonnet-4-6`) in your config for the estimate to include the premium. A bare ID with `crossRegionInference` set is prefixed only when the request is sent, so its estimate stays at list price.
+
 A cached session costs more than an uncached one on its first request and less on every request after that, as long as the entry has not expired. Switching the model, changing reasoning settings, or anything that changes the system prompt (such as a rule that starts to match) misses the cache, and the next request writes the prefix again. A one-prompt session never pays back the write.
 
 While the cache is warm and you open the model picker, Continued shows how many tokens switching model would re-read and an estimated extra cost. It does not warn about changes to reasoning or mode.

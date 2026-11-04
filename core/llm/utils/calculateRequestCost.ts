@@ -56,8 +56,8 @@ function anthropicPricing(
  */
 export const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
   // Claude 5 and 5.5, list prices checked 2026-11-03 at
-  // platform.claude.com/docs/en/about-claude/pricing. Bedrock regional
-  // endpoints can be priced above list.
+  // platform.claude.com/docs/en/about-claude/pricing. These are list prices;
+  // `findAnthropicPricing` adds the Bedrock `us.` profile premium.
   "claude-opus-5-5": anthropicPricing(4, 20, 0.05),
   "claude-opus-5": anthropicPricing(5, 25),
   "claude-sonnet-5-5": anthropicPricing(2, 10, 0.05),
@@ -126,11 +126,75 @@ function continuesWithMinorVersion(rest: string): boolean {
 }
 
 /**
+ * Anthropic: "Regional and multi-region endpoints include a 10 percent premium
+ * over global endpoints", for Claude Sonnet 4.5, Haiku 4.5, Opus 4.5 and all
+ * later models; "earlier models retain their existing pricing"
+ * (platform.claude.com/docs/en/about-claude/pricing, checked 2026-11-04).
+ * Measured on one week of Bedrock invocation logs: a `us.` profile billed 1.10
+ * times list on every component (input, output, cache reads, both write
+ * lifetimes).
+ *
+ * On Bedrock the endpoint type is the prefix of the model ID: the geographic
+ * ones (`us.`, `eu.`, `apac.`, `jp.`, `au.`, `ca.`) carry the premium and
+ * `global.` does not. `us-gov.` is GovCloud, which is priced separately, so it
+ * is left at list. A bare ID with `crossRegionInference` set is prefixed later,
+ * at request time, so it cannot be seen here and stays at list.
+ *
+ * Only `us.` was seen in billing data; the other prefixes follow the vendor's
+ * statement and are not measured.
+ */
+const BEDROCK_GEO_PROFILE_FACTOR = 1.1;
+const BEDROCK_GEO_PREFIX = /^(us|eu|apac|jp|au|ca)\.anthropic\./i;
+/** Normalized IDs of the models the premium applies to: 4.5 and later. */
+const REGIONAL_PREMIUM_MODELS =
+  /^claude-(?:(?:opus|sonnet|haiku)-(?:4-[5-9]|[5-9])|fable|mythos)/;
+
+/** The multiplier to apply to list prices for this model ID. */
+export function bedrockRegionalPriceFactor(model: string): number {
+  if (!BEDROCK_GEO_PREFIX.test(model)) return 1;
+  const id = normalizeClaudeModelId(model);
+  return id && REGIONAL_PREMIUM_MODELS.test(id)
+    ? BEDROCK_GEO_PROFILE_FACTOR
+    : 1;
+}
+
+/** Scale a price and drop the floating-point tail (3 * 1.1 is 3.3000000000000003). */
+function scalePrice(price: number, factor: number): number {
+  return Math.round(price * factor * 1e6) / 1e6;
+}
+
+function scalePricing(pricing: ModelPricing, factor: number): ModelPricing {
+  if (factor === 1) return pricing;
+  const scaled: ModelPricing = {
+    input: scalePrice(pricing.input, factor),
+    output: scalePrice(pricing.output, factor),
+    cacheWrite: scalePrice(pricing.cacheWrite, factor),
+    cacheWrite1h: scalePrice(pricing.cacheWrite1h, factor),
+    cacheRead: scalePrice(pricing.cacheRead, factor),
+  };
+  if (pricing.longContext) {
+    scaled.longContext = {
+      aboveTokens: pricing.longContext.aboveTokens,
+      pricing: scalePricing(pricing.longContext.pricing, factor),
+    };
+  }
+  return scaled;
+}
+
+/**
  * @param inputTokens The request's whole prompt. When the model has a
  * long-context tier and the prompt is over its limit, the tier's prices are
  * returned.
  */
 export function findAnthropicPricing(
+  model: string,
+  inputTokens?: number,
+): ModelPricing | null {
+  const pricing = findListPricing(model, inputTokens);
+  return pricing && scalePricing(pricing, bedrockRegionalPriceFactor(model));
+}
+
+function findListPricing(
   model: string,
   inputTokens?: number,
 ): ModelPricing | null {
@@ -239,6 +303,10 @@ function calculateAnthropicCost(
 
   // Build final breakdown string
   let breakdown = `Model: ${model}\n`;
+  const regionalFactor = bedrockRegionalPriceFactor(model);
+  if (regionalFactor !== 1) {
+    breakdown += `Prices: Anthropic list × ${regionalFactor} (Bedrock regional endpoint)\n`;
+  }
   breakdown += breakdownParts.join("\n");
   if (breakdownParts.length > 1) {
     breakdown += `\nTotal: $${totalCost.toFixed(6)}`;
