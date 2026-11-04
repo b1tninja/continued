@@ -31,6 +31,7 @@ import {
 
 import {
   applyCrossRegionInference,
+  bedrockUsageToCompletionUsage,
   getBedrockErrorHint,
 } from "./bedrockHelpers.js";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
@@ -43,7 +44,13 @@ import {
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { fromStatic } from "@aws-sdk/token-providers";
 import { BedrockConfig } from "../types.js";
-import { chatChunk, chatChunkFromDelta, embedding, rerank } from "../util.js";
+import {
+  chatChunk,
+  chatChunkFromDelta,
+  embedding,
+  rerank,
+  usageChatChunk,
+} from "../util.js";
 import { safeParseArgs } from "../util/parseArgs.js";
 import { parseDataUrl } from "../util/url.js";
 import {
@@ -529,6 +536,7 @@ export class BedrockApi implements BaseLlmApi {
     signal: AbortSignal,
   ): Promise<ChatCompletion> {
     let completion = "";
+    let usage: ChatCompletion["usage"];
     const toolCalls: ChatCompletionMessageToolCall[] = [];
 
     for await (const chunk of this.chatCompletionStream(
@@ -538,7 +546,10 @@ export class BedrockApi implements BaseLlmApi {
       },
       signal,
     )) {
-      if (chunk.choices[0].delta.content) {
+      if (chunk.usage) {
+        usage = chunk.usage;
+      }
+      if (chunk.choices[0]?.delta?.content) {
         completion += chunk.choices[0].delta.content;
       }
       // TODO tool calls not supported
@@ -562,7 +573,7 @@ export class BedrockApi implements BaseLlmApi {
           },
         },
       ],
-      usage: undefined,
+      usage,
     };
   }
 
@@ -647,6 +658,15 @@ export class BedrockApi implements BaseLlmApi {
               },
             });
           }
+        }
+
+        // The metadata event arrives last and carries the token counts,
+        // including the cache read and write counts when caching is on.
+        if (chunk.metadata?.usage) {
+          yield usageChatChunk({
+            model: body.model,
+            usage: bedrockUsageToCompletionUsage(chunk.metadata.usage),
+          });
         }
       }
     } catch (error) {

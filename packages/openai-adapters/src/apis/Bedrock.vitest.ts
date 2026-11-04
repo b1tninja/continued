@@ -143,3 +143,118 @@ describe("BedrockApi networking (requestOptions)", () => {
     expect(handler.constructor.name).not.toBe("NodeHttpHandler");
   });
 });
+
+describe("BedrockApi usage", () => {
+  const events = [
+    { contentBlockDelta: { delta: { text: "Hello" } } },
+    { contentBlockDelta: { delta: { text: " there" } } },
+    {
+      metadata: {
+        usage: {
+          inputTokens: 12,
+          outputTokens: 34,
+          cacheReadInputTokens: 5000,
+          cacheWriteInputTokens: 700,
+        },
+      },
+    },
+  ];
+
+  const makeStreaming = (stream: any[]) => {
+    class StreamApi extends TestApi {
+      async getClient() {
+        return {
+          send: async () => ({
+            stream: (async function* () {
+              for (const e of stream) yield e;
+            })(),
+          }),
+        } as any;
+      }
+    }
+    return new StreamApi({ provider: "bedrock", env: {} } as any);
+  };
+
+  const body = {
+    model: "anthropic.claude-sonnet-4-6",
+    messages: [{ role: "user", content: "hi" }],
+    stream: true,
+  } as any;
+
+  it("streams a final usage chunk with the cache counts", async () => {
+    const api = makeStreaming(events);
+    const chunks: any[] = [];
+    for await (const c of api.chatCompletionStream(
+      body,
+      new AbortController().signal,
+    )) {
+      chunks.push(c);
+    }
+    const usageChunks = chunks.filter((c) => c.usage);
+    expect(usageChunks).toHaveLength(1);
+    expect(usageChunks[0].choices).toEqual([]);
+    expect(usageChunks[0].usage).toEqual({
+      prompt_tokens: 12,
+      completion_tokens: 34,
+      total_tokens: 46,
+      prompt_tokens_details: {
+        cached_tokens: 5000,
+        cache_read_tokens: 5000,
+        cache_write_tokens: 700,
+      },
+    });
+    // The usage chunk comes after the text
+    expect(chunks[chunks.length - 1]).toBe(usageChunks[0]);
+  });
+
+  it("returns the usage from a non-streaming call", async () => {
+    const api = makeStreaming(events);
+    const res = await api.chatCompletionNonStream(
+      { ...body, stream: false },
+      new AbortController().signal,
+    );
+    expect(res.choices[0].message.content).toBe("Hello there");
+    expect(res.usage).toMatchObject({
+      prompt_tokens: 12,
+      completion_tokens: 34,
+      prompt_tokens_details: { cache_read_tokens: 5000 },
+    });
+  });
+
+  it("emits no usage chunk when the stream has no metadata", async () => {
+    const api = makeStreaming(events.slice(0, 2));
+    const chunks: any[] = [];
+    for await (const c of api.chatCompletionStream(
+      body,
+      new AbortController().signal,
+    )) {
+      chunks.push(c);
+    }
+    expect(chunks.filter((c) => c.usage)).toHaveLength(0);
+    const res = await api.chatCompletionNonStream(
+      { ...body, stream: false },
+      new AbortController().signal,
+    );
+    expect(res.usage).toBeUndefined();
+  });
+
+  it("counts missing cache fields as zero", async () => {
+    const api = makeStreaming([
+      { metadata: { usage: { inputTokens: 3, outputTokens: 4 } } },
+    ]);
+    const res = await api.chatCompletionNonStream(
+      { ...body, stream: false },
+      new AbortController().signal,
+    );
+    expect(res.usage).toEqual({
+      prompt_tokens: 3,
+      completion_tokens: 4,
+      total_tokens: 7,
+      prompt_tokens_details: {
+        cached_tokens: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+      },
+    });
+  });
+});

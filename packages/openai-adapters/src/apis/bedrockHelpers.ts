@@ -104,3 +104,44 @@ export function getBedrockErrorHint(
   }
   return undefined;
 }
+
+/** The fields of Bedrock's `TokenUsage` that the adapter reads. */
+export interface BedrockTokenUsageLike {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheWriteInputTokens?: number;
+}
+
+/**
+ * Map the usage in a Converse stream's `metadata` event to the OpenAI usage
+ * shape, with the cache fields named as the Anthropic adapter names them.
+ * With caching on, Bedrock's `inputTokens` counts only tokens that were
+ * neither read from nor written to the cache, the same meaning as Anthropic's
+ * `input_tokens`, so `prompt_tokens` keeps that meaning on both adapters.
+ */
+export function bedrockUsageToCompletionUsage(usage: BedrockTokenUsageLike): {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  prompt_tokens_details: {
+    cached_tokens: number;
+    cache_read_tokens: number;
+    cache_write_tokens: number;
+  };
+} {
+  const read = usage.cacheReadInputTokens ?? 0;
+  const write = usage.cacheWriteInputTokens ?? 0;
+  const prompt = usage.inputTokens ?? 0;
+  const completion = usage.outputTokens ?? 0;
+  return {
+    prompt_tokens: prompt,
+    completion_tokens: completion,
+    total_tokens: prompt + completion,
+    prompt_tokens_details: {
+      cached_tokens: read,
+      cache_read_tokens: read,
+      cache_write_tokens: write,
+    },
+  };
+}
