@@ -92,7 +92,7 @@ Carried over from `fork-plan.md` section 4.7, item 4. None started:
 - Checkpoints for file edits, so an Agent run can be rolled back.
 - A global rules toggle per mode.
 - Context-window and cost display per model.
-- Import of Cline's MCP settings file, so servers are not configured twice.
+- Import of Cline's MCP settings file, so servers are not configured twice. In progress, see `import-cline-mcp.md`.
 
 ## Open decisions
 

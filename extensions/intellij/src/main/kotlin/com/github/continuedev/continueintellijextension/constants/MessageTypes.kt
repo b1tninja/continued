@@ -97,6 +97,8 @@ class MessageTypes {
             "config/openSecretLocation",
             "config/getProviderSetup",
             "config/saveProviderModels",
+            "config/previewMcpImport",
+            "config/importMcpServers",
             "config/setSecret",
             "mcp/reloadServer",
             "mcp/startAuthentication",

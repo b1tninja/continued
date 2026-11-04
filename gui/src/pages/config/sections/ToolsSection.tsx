@@ -31,6 +31,7 @@ import { IdeMessengerContext } from "../../../context/IdeMessenger";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
 import { updateConfig } from "../../../redux/slices/configSlice";
 import { ConfigHeader } from "../components/ConfigHeader";
+import { ImportClineMcpButton } from "../components/ImportClineMcp";
 import { ToolPoliciesGroup } from "../components/ToolPoliciesGroup";
 
 interface MCPServerStatusProps {
@@ -521,6 +522,9 @@ export function ToolsSection() {
                 </span>
               </Alert>
             )}
+            <div className="flex justify-end">
+              <ImportClineMcpButton />
+            </div>
             {mergedBlocks.length > 0 ? (
               mergedBlocks.map(({ block, blockFromYaml }) => (
                 <MCPServerPreview

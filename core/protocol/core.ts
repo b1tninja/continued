@@ -18,6 +18,11 @@ import type {
   AutoReviewRequest,
 } from "../tools/permissions/auto/handler";
 import type {
+  McpImportPreview,
+  McpImportRequest,
+  McpImportResult,
+} from "../config/importClineMcp";
+import type {
   ProviderSetupInfo,
   SaveProviderModelsRequest,
   SaveProviderModelsResult,
@@ -213,6 +218,16 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     SaveProviderModelsRequest,
     SaveProviderModelsResult,
   ];
+  /**
+   * Find Cline and Roo Code MCP settings files and say what importing each
+   * server would do. Lists secret names only, never values.
+   */
+  "config/previewMcpImport": [undefined, McpImportPreview];
+  /**
+   * Add the chosen servers from a detected Cline / Roo Code settings file to
+   * config.yaml. Credentials become ${{ secrets.NAME }} references.
+   */
+  "config/importMcpServers": [McpImportRequest, McpImportResult];
   /** Store one secret (secure storage or ~/.continue/.env) and reload. */
   "config/setSecret": [
     { secretName: string; value: string; storage: "secure" | "env" },

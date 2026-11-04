@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { fetchwithRequestOptions } from "@continuedev/fetch";
 import * as URI from "uri-js";
 import { v4 as uuidv4 } from "uuid";
@@ -37,6 +38,7 @@ import { GlobalContext } from "./util/GlobalContext";
 import historyManager from "./util/history";
 import {
   editConfigFile,
+  getConfigYamlPath,
   getContinueGlobalPath,
   migrateV1DevDataFiles,
 } from "./util/paths";
@@ -79,6 +81,13 @@ import {
   saveProviderModels,
   validateSaveRequest,
 } from "./config/providerSetup";
+import {
+  existingMcpServerNames,
+  findSettingsFiles,
+  importMcpServers,
+  previewImport,
+  readGlobalConfigYaml,
+} from "./config/importClineMcp";
 import { isSecureStorageAvailable, storeSecret } from "./config/secretStorage";
 import {
   setupLocalConfig,
@@ -573,6 +582,36 @@ export class Core {
         "Provider models changed (config/saveProviderModels message)",
       );
       return { saved: true, ...(warning ? { warning } : {}) };
+    });
+
+    on("config/previewMcpImport", async () => {
+      return previewImport(
+        findSettingsFiles(),
+        existingMcpServerNames(readGlobalConfigYaml()),
+      );
+    });
+
+    on("config/importMcpServers", async (msg) => {
+      const result = await importMcpServers(msg.data, {
+        ide: this.ide,
+        continueDir: getContinueGlobalPath(),
+        sources: findSettingsFiles(),
+        readConfig: readGlobalConfigYaml,
+        editConfig: (cb) => {
+          if (!fs.existsSync(getConfigYamlPath())) return false;
+          editConfigFile((c) => c, cb);
+          return true;
+        },
+      });
+      if (result.imported.length > 0) {
+        if (result.secretsStored.length > 0) {
+          this.globalContext.update("preferredKeyStorage", msg.data.storage);
+        }
+        await this.configHandler.reloadConfig(
+          "MCP servers imported (config/importMcpServers message)",
+        );
+      }
+      return result;
     });
 
     on("config/setSecret", async (msg) => {
