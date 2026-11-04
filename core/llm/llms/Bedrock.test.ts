@@ -347,6 +347,23 @@ describe("Bedrock", () => {
       }
     });
 
+    it.each([
+      "openai.gpt-6.1-sol",
+      "us.openai.gpt-5.6-sol",
+      "amazon.nova-pro-v1:0",
+      "us.xai.grok-4.7",
+    ])("never sends a cache point to %s, even with caching on", (model) => {
+      const input = build(
+        model,
+        { promptCaching: true, promptCacheTtl: "1h" },
+        {
+          cacheBehavior: { cacheConversation: true, cacheSystemMessage: true },
+        },
+      );
+      expect(JSON.stringify(input)).not.toContain("cachePoint");
+      expect(JSON.stringify(input)).not.toContain("SID:");
+    });
+
     it("an explicit false overrides cacheBehavior", () => {
       const p = points(
         build(

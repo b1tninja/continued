@@ -482,11 +482,18 @@ class Bedrock extends BaseLLM {
     // Prompt and system message caching settings. `options` already includes the
     // model's configured default, so an explicit `promptCaching: false` (for
     // example from the toolbar) wins over `cacheBehavior`.
-    const parts = resolveCacheParts(
-      options.promptCaching,
-      this.cacheBehavior,
-      !!systemMessage,
-    );
+    //
+    // Only Claude models take cache points. Other models on Bedrock either
+    // cache by themselves (GPT, Grok) or not at all (Nova), and reject a
+    // request that carries a cachePoint field (checked live), so a model
+    // config with `promptCaching: true` must not reach them.
+    const parts = /claude/i.test(options.model)
+      ? resolveCacheParts(
+          options.promptCaching,
+          this.cacheBehavior,
+          !!systemMessage,
+        )
+      : { tools: false, system: false, conversation: false };
     const cacheTtl = bedrockCacheTtl(
       options.model,
       resolvePromptCacheTtl(options.promptCacheTtl, this.cacheBehavior?.ttl),
