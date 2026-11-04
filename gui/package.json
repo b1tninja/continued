@@ -53,7 +53,7 @@
     "react-redux": "^8.0.5",
     "react-remark": "^2.1.0",
     "react-router-dom": "^7.18.5",
-    "react-tooltip": "^5.18.0",
+    "react-tooltip": "^6.0.9",
     "redux-logger": "^3.0.6",
     "redux-persist": "^6.0.0",
     "redux-persist-transform-filter": "^0.0.22",
