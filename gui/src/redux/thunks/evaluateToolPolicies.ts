@@ -251,7 +251,7 @@ async function reviewOpenCalls(
 /** The text the model sees when a call is refused, naming who refused it. */
 export function refusalMessage(
   command: string,
-  source: DecisionSource | "auto" | undefined,
+  source: DecisionSource | "auto" | "once" | undefined,
   reason: string | undefined,
   category?: string,
 ): { description: string; content: string } {
