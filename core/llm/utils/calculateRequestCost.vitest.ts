@@ -464,16 +464,35 @@ describe("Claude 5 and 5.5 prices", () => {
   });
 });
 
-describe("Bedrock us. profile price factor", () => {
+describe("Bedrock regional endpoint price factor", () => {
   const MTOK = 1_000_000;
 
   it.each([
+    // Geographic profiles carry the premium on Sonnet/Haiku/Opus 4.5 and later
     ["us.anthropic.claude-opus-5-5", 1.1],
     ["US.anthropic.claude-opus-5-5", 1.1],
+    ["eu.anthropic.claude-opus-5-5", 1.1],
+    ["apac.anthropic.claude-sonnet-5-5", 1.1],
+    ["jp.anthropic.claude-haiku-5-5", 1.1],
+    ["au.anthropic.claude-sonnet-4-6", 1.1],
+    ["ca.anthropic.claude-opus-4-8", 1.1],
+    ["us.anthropic.claude-haiku-4-5-20251001-v1:0", 1.1],
+    ["us.anthropic.claude-sonnet-4-5-20250929-v1:0", 1.1],
+    ["us.anthropic.claude-opus-4-5-20251101-v1:0", 1.1],
+    ["us.anthropic.claude-fable-5", 1.1],
+    // Global endpoints and bare IDs are list price
     ["global.anthropic.claude-opus-5-5", 1],
-    ["eu.anthropic.claude-opus-5-5", 1],
     ["anthropic.claude-opus-5-5", 1],
     ["claude-opus-5-5", 1],
+    // GovCloud is priced separately
+    ["us-gov.anthropic.claude-sonnet-4-6", 1],
+    // Earlier models keep their existing pricing
+    ["us.anthropic.claude-opus-4-1-20250805-v1:0", 1],
+    ["us.anthropic.claude-sonnet-4-20250514-v1:0", 1],
+    ["us.anthropic.claude-3-7-sonnet-20250219-v1:0", 1],
+    ["us.anthropic.claude-3-5-haiku-20241022-v1:0", 1],
+    // Not Claude
+    ["us.openai.gpt-6.1-sol", 1],
   ])("%s has factor %s", (id, factor) => {
     expect(bedrockRegionalPriceFactor(id)).toBe(factor);
   });

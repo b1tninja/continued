@@ -126,18 +126,36 @@ function continuesWithMinorVersion(rest: string): boolean {
 }
 
 /**
- * Bedrock bills Claude on a `us.` cross-region inference profile at 1.10 times
- * Anthropic's list price, on every component (input, output, cache reads and
- * both write lifetimes). Measured on one week of invocation logs. Not
- * confirmed for `eu.`, `apac.` or `global.` profiles, which are priced at list.
- * The prefix is only visible when the configured model ID carries it; a bare
- * ID with `crossRegionInference` set is prefixed later, at request time.
+ * Anthropic: "Regional and multi-region endpoints include a 10 percent premium
+ * over global endpoints", for Claude Sonnet 4.5, Haiku 4.5, Opus 4.5 and all
+ * later models; "earlier models retain their existing pricing"
+ * (platform.claude.com/docs/en/about-claude/pricing, checked 2026-11-04).
+ * Measured on one week of Bedrock invocation logs: a `us.` profile billed 1.10
+ * times list on every component (input, output, cache reads, both write
+ * lifetimes).
+ *
+ * On Bedrock the endpoint type is the prefix of the model ID: the geographic
+ * ones (`us.`, `eu.`, `apac.`, `jp.`, `au.`, `ca.`) carry the premium and
+ * `global.` does not. `us-gov.` is GovCloud, which is priced separately, so it
+ * is left at list. A bare ID with `crossRegionInference` set is prefixed later,
+ * at request time, so it cannot be seen here and stays at list.
+ *
+ * Only `us.` was seen in billing data; the other prefixes follow the vendor's
+ * statement and are not measured.
  */
-const BEDROCK_US_PROFILE_FACTOR = 1.1;
+const BEDROCK_GEO_PROFILE_FACTOR = 1.1;
+const BEDROCK_GEO_PREFIX = /^(us|eu|apac|jp|au|ca)\.anthropic\./i;
+/** Normalized IDs of the models the premium applies to: 4.5 and later. */
+const REGIONAL_PREMIUM_MODELS =
+  /^claude-(?:(?:opus|sonnet|haiku)-(?:4-[5-9]|[5-9])|fable|mythos)/;
 
 /** The multiplier to apply to list prices for this model ID. */
 export function bedrockRegionalPriceFactor(model: string): number {
-  return /^us\.anthropic\./i.test(model) ? BEDROCK_US_PROFILE_FACTOR : 1;
+  if (!BEDROCK_GEO_PREFIX.test(model)) return 1;
+  const id = normalizeClaudeModelId(model);
+  return id && REGIONAL_PREMIUM_MODELS.test(id)
+    ? BEDROCK_GEO_PROFILE_FACTOR
+    : 1;
 }
 
 /** Scale a price and drop the floating-point tail (3 * 1.1 is 3.3000000000000003). */
@@ -287,7 +305,7 @@ function calculateAnthropicCost(
   let breakdown = `Model: ${model}\n`;
   const regionalFactor = bedrockRegionalPriceFactor(model);
   if (regionalFactor !== 1) {
-    breakdown += `Prices: Anthropic list × ${regionalFactor} (Bedrock us. profile)\n`;
+    breakdown += `Prices: Anthropic list × ${regionalFactor} (Bedrock regional endpoint)\n`;
   }
   breakdown += breakdownParts.join("\n");
   if (breakdownParts.length > 1) {
