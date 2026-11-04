@@ -1,5 +1,5 @@
-import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { AssistantUnrolled, ModelConfig } from "@continuedev/config-yaml";
+import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { ChatHistoryItem } from "core/index.js";
 import {
   autoReviewToolCall,
