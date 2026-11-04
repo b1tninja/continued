@@ -461,11 +461,16 @@ export class BedrockApi implements BaseLlmApi {
     const availableTools = new Set<string>();
     let toolConfig: ToolConfiguration | undefined = undefined;
 
-    const parts = resolveBedrockCacheParts(
-      this.config.promptCaching,
-      this.config.cacheBehavior,
-      !!systemMessageText,
-    );
+    // Only Claude models take cache points. The others (GPT, Nova, Grok, ...)
+    // either cache by themselves or not at all, and reject a request that
+    // carries a cachePoint field, so `promptCaching: true` must not reach them.
+    const parts = /claude/i.test(oaiBody.model)
+      ? resolveBedrockCacheParts(
+          this.config.promptCaching,
+          this.config.cacheBehavior,
+          !!systemMessageText,
+        )
+      : { tools: false, system: false, conversation: false };
 
     if (oaiBody.tools && oaiBody.tools.length > 0) {
       toolConfig = {

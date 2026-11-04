@@ -366,3 +366,43 @@ describe("BedrockApi cache points", () => {
     expect(body.toolConfig).toBeUndefined();
   });
 });
+
+describe("BedrockApi cache points on non-Claude models", () => {
+  const body = (model: string) =>
+    (
+      new TestApi({
+        provider: "bedrock",
+        env: {},
+        promptCaching: true,
+      } as any) as any
+    )._convertBody({
+      model,
+      messages: [
+        { role: "system", content: "be brief" },
+        { role: "user", content: "hi" },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: { name: "read", description: "d", parameters: {} },
+        },
+      ],
+    });
+
+  it.each([
+    "us.openai.gpt-6.1-sol",
+    "us.amazon.nova-pro-v1:0",
+    "us.xai.grok-4.7",
+  ])("sends no cachePoint to %s even with promptCaching on", (model) => {
+    expect(JSON.stringify(body(model))).not.toContain("cachePoint");
+    expect(JSON.stringify(body(model))).not.toContain("SID:");
+  });
+
+  it.each([
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "anthropic.claude-sonnet-4-6",
+    "global.anthropic.claude-sonnet-5-5",
+  ])("still sends cachePoint to %s", (model) => {
+    expect(JSON.stringify(body(model))).toContain("cachePoint");
+  });
+});
