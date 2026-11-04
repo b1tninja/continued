@@ -602,3 +602,68 @@ describe("every Claude model in llm-info has a price", () => {
     expect(findAnthropicPricing(id)).not.toBeNull();
   });
 });
+
+describe("Fable and Mythos prices", () => {
+  const cost = (id: string, usage: Partial<Usage>) =>
+    calculateRequestCost("anthropic", id, {
+      promptTokens: 0,
+      completionTokens: 0,
+      ...usage,
+    })!.cost;
+
+  it.each([
+    "claude-fable-5",
+    "claude-fable-5-1",
+    "claude-mythos-5",
+    "claude-mythos-5-1",
+    "us.anthropic.claude-fable-5-1",
+    "global.anthropic.claude-mythos-5",
+  ])("%s is priced", (id) => {
+    expect(findAnthropicPricing(id)).not.toBeNull();
+  });
+
+  it("charges 10 in and 50 out per million tokens", () => {
+    expect(
+      cost("claude-fable-5-1", {
+        promptTokens: 1_000_000,
+        completionTokens: 1_000_000,
+      }),
+    ).toBeCloseTo(60, 6);
+  });
+
+  it("reads at 0.025x on the 5.1 releases and 0.1x on 5", () => {
+    const read = (id: string) =>
+      cost(id, { promptTokensDetails: { cachedTokens: 1_000_000 } });
+    expect(read("claude-fable-5-1")).toBeCloseTo(0.25, 6);
+    expect(read("claude-mythos-5-1")).toBeCloseTo(0.25, 6);
+    expect(read("claude-fable-5")).toBeCloseTo(1, 6);
+    expect(read("claude-mythos-5")).toBeCloseTo(1, 6);
+  });
+
+  it("writes at 1.25x for 5 minutes and 2x for 1 hour", () => {
+    const write = (id: string, d: object) =>
+      cost(id, { promptTokensDetails: { cacheWriteTokens: 1_000_000, ...d } });
+    expect(write("claude-fable-5-1", {})).toBeCloseTo(12.5, 6);
+    expect(
+      write("claude-fable-5-1", {
+        cacheWriteTokens5m: 0,
+        cacheWriteTokens1h: 1_000_000,
+      }),
+    ).toBeCloseTo(20, 6);
+  });
+
+  it("does not price a later minor version at an earlier one's price", () => {
+    expect(findAnthropicPricing("claude-fable-5-2")).toBeNull();
+    expect(findAnthropicPricing("claude-mythos-5-2")).toBeNull();
+  });
+
+  it("adds the regional premium on a geographic profile, not on global", () => {
+    const per = (id: string) =>
+      calculateRequestCost("bedrock", id, {
+        promptTokens: 1_000_000,
+        completionTokens: 0,
+      })!.cost;
+    expect(per("global.anthropic.claude-fable-5-1")).toBeCloseTo(10, 6);
+    expect(per("us.anthropic.claude-fable-5-1")).toBeCloseTo(11, 6);
+  });
+});

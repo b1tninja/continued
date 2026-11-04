@@ -60,6 +60,12 @@ export const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
   // `findAnthropicPricing` adds the Bedrock `us.` profile premium.
   "claude-opus-5-5": anthropicPricing(4, 20, 0.05),
   "claude-opus-5": anthropicPricing(5, 25),
+  // Fable and Mythos: $10 / $50, 5m write 1.25x, 1h write 2x. Reads are 0.025x
+  // on the 5.1 releases and 0.1x on 5 (pricing page, checked 2026-11-04).
+  "claude-fable-5-1": anthropicPricing(10, 50, 0.025),
+  "claude-fable-5": anthropicPricing(10, 50),
+  "claude-mythos-5-1": anthropicPricing(10, 50, 0.025),
+  "claude-mythos-5": anthropicPricing(10, 50),
   "claude-sonnet-5-5": anthropicPricing(2, 10, 0.05),
   "claude-sonnet-5": anthropicPricing(2, 10),
   "claude-haiku-5-5": {
