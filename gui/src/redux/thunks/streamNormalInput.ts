@@ -36,7 +36,11 @@ import {
   promptCacheStatus,
 } from "../../util/promptCache";
 import { buildLedgerEntry } from "../../util/cacheLedger";
-import { detectCacheMiss, promptCacheKey } from "../../util/cacheSafeguards";
+import {
+  detectCacheMiss,
+  expectedRebuildCauses,
+  promptCacheKey,
+} from "../../util/cacheSafeguards";
 import { totalInputTokens } from "core/llm/utils/cacheStats";
 import { ThunkApiType } from "../store";
 import { constructMessages } from "../util/constructMessages";
@@ -302,15 +306,15 @@ export const streamNormalInput = createAsyncThunk<
             if (total > 0) {
               let missCauses: string[] | undefined;
               if (cachingWasOn) {
-                const miss = detectCacheMiss({
+                const request = {
                   before: cacheStateBefore,
                   key: cacheKey,
                   requestAt: cacheResolution.nextState.lastRequestAt ?? start,
                   readTokens:
                     message.usage.promptTokensDetails?.cachedTokens ?? 0,
                   totalInputTokens: total,
-                  pruned: didPrune,
-                });
+                };
+                const miss = detectCacheMiss({ ...request, pruned: didPrune });
                 if (miss) {
                   missCauses = miss.causes;
                   dispatch(
@@ -320,6 +324,11 @@ export const streamNormalInput = createAsyncThunk<
                       causes: miss.causes,
                     }),
                   );
+                } else {
+                  // Not a fault, but the cache was not read either: a model
+                  // switch or a shortened conversation. Recorded so the
+                  // session summary can count it as an expected rebuild.
+                  missCauses = expectedRebuildCauses(request);
                 }
               }
               // One in-memory record per request, for the session's own

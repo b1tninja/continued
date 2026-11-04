@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatCacheSummary, summarizeLedger } from "./cacheLedger";
 import { entry, MIN, t0 } from "./cacheLedger.testUtils";
+import { MODEL_CHANGED, SHORTER_PROMPT_CAUSE } from "./cacheSafeguards";
 
 describe("summarizeLedger", () => {
   it("is undefined when there are no requests, or caching was never on", () => {
@@ -84,6 +85,18 @@ describe("summarizeLedger", () => {
       }),
     ])!;
     expect(s.expectedRebuilds).toBe(3);
+    expect(s.misses).toBe(0);
+  });
+
+  it("counts a shortened conversation as an expected rebuild, from the cause the thunk records", () => {
+    const s = summarizeLedger([
+      entry({
+        write5m: 30_000,
+        missCauses: [SHORTER_PROMPT_CAUSE],
+      }),
+      entry({ write5m: 40_000, missCauses: [MODEL_CHANGED] }),
+    ])!;
+    expect(s.expectedRebuilds).toBe(2);
     expect(s.misses).toBe(0);
   });
 

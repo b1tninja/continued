@@ -209,7 +209,8 @@ export function promptCacheKey(
   };
 }
 
-const MODEL_CHANGED = "the model changed";
+/** The cause named when the model differs from the previous request's. */
+export const MODEL_CHANGED = "the model changed";
 
 /**
  * The first earlier message that is no longer the same, or undefined. Only the
@@ -304,4 +305,43 @@ export function detectCacheMiss(args: {
   // the cache; it is the conversation not fitting.
   if (args.pruned) causes.push("the oldest messages were dropped to fit");
   return { readTokens, expectedTokens: expected, causes };
+}
+
+/** Why an expected rebuild happened, for the session summary. */
+export const MODEL_SWITCH_CAUSE = MODEL_CHANGED;
+export const SHORTER_PROMPT_CAUSE =
+  "the conversation was shortened (compaction or truncation)";
+
+/**
+ * A request whose cache could not be read because of something the user or the
+ * app did on purpose. `detectCacheMiss` stays quiet about these (it only
+ * reports faults), so the ledger would not know. Returns the causes, or
+ * undefined when the request was an ordinary one.
+ *
+ * It looks at the same facts as `detectCacheMiss`: caching on, the previous
+ * request inside its lifetime and big enough to matter, and little read. Then:
+ * a different model is a switch; a prompt shorter than the last one is a
+ * compaction or a cut. Anything else is left to `detectCacheMiss`.
+ */
+export function expectedRebuildCauses(args: {
+  before: PromptCacheSessionState;
+  key: PromptCacheKey;
+  requestAt: number;
+  readTokens: number;
+  totalInputTokens: number;
+}): string[] | undefined {
+  const { before, key, requestAt, readTokens, totalInputTokens } = args;
+  const expected = before.lastInputTokens;
+  if (!expected || expected < MISS_MIN_PREFIX_TOKENS) return undefined;
+  if (before.lastRequestAt === undefined) return undefined;
+  const lifetime = PROMPT_CACHE_TTL_MS[before.lastTtl ?? "5m"];
+  if (requestAt - before.lastRequestAt > lifetime) return undefined;
+  if (readTokens >= expected * MISS_READ_SHARE) return undefined;
+
+  const causes: string[] = [];
+  if (before.lastKey && before.lastKey.model !== key.model) {
+    causes.push(MODEL_SWITCH_CAUSE);
+  }
+  if (totalInputTokens < expected - 1000) causes.push(SHORTER_PROMPT_CAUSE);
+  return causes.length > 0 ? causes : undefined;
 }

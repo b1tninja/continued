@@ -295,6 +295,7 @@ export interface CacheSummary {
 const EXPECTED_CAUSES = [
   /^the model changed/,
   /^the oldest messages were dropped/,
+  /^the conversation was shortened/,
 ];
 
 function isExpected(causes: string[] | undefined): boolean {

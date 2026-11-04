@@ -1,3 +1,4 @@
+import { promptCacheKey } from "../../util/cacheSafeguards";
 import { JSONContent } from "@tiptap/core";
 import { ModelDescription } from "core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -51,6 +52,8 @@ async function sentOptions(opts: {
   reply?: any[];
   /** Requests this conversation has already sent. */
   requests?: number;
+  /** The model the previous request was made with, when it differs. */
+  previousModel?: string;
   mode?: "chat" | "agent" | "plan" | "background";
 }) {
   const model = opts.model ?? claude;
@@ -70,6 +73,13 @@ async function sentOptions(opts: {
       lastRequestAt: Date.now() - opts.lastRequestAgoMs,
       lastTtl: "5m",
       lastInputTokens: opts.lastInputTokens,
+      ...(opts.previousModel && {
+        lastKey: promptCacheKey(
+          { ...model, model: opts.previousModel, provider: model.provider },
+          [],
+          "You are a helpful assistant.",
+        ),
+      }),
     };
   }
   if (opts.setting) {
@@ -261,6 +271,73 @@ describe("prompt cache options in the chat request", () => {
       ],
     });
     expect(cache()?.misses).toBeUndefined();
+  });
+  it("records a model switch as an expected rebuild, not a miss", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      lastRequestAgoMs: 30_000,
+      lastInputTokens: 120_000,
+      previousModel: "claude-opus-4-6",
+      reply: [
+        {
+          role: "assistant",
+          content: "hi",
+          usage: {
+            promptTokens: 5,
+            completionTokens: 5,
+            promptTokensDetails: { cachedTokens: 0, cacheWriteTokens: 125_000 },
+          },
+        },
+      ],
+    });
+    expect(cache()?.misses).toBeUndefined();
+    expect(cache()?.ledger?.[0].missCauses).toEqual(["the model changed"]);
+  });
+
+  it("records a shortened conversation as an expected rebuild", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      lastRequestAgoMs: 30_000,
+      lastInputTokens: 120_000,
+      reply: [
+        {
+          role: "assistant",
+          content: "hi",
+          usage: {
+            promptTokens: 5,
+            completionTokens: 5,
+            promptTokensDetails: { cachedTokens: 0, cacheWriteTokens: 30_000 },
+          },
+        },
+      ],
+    });
+    expect(cache()?.misses).toBeUndefined();
+    expect(cache()?.ledger?.[0].missCauses).toEqual([
+      "the conversation was shortened (compaction or truncation)",
+    ]);
+  });
+
+  it("leaves an ordinary request without causes", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      lastRequestAgoMs: 30_000,
+      lastInputTokens: 120_000,
+      reply: [
+        {
+          role: "assistant",
+          content: "hi",
+          usage: {
+            promptTokens: 5,
+            completionTokens: 5,
+            promptTokensDetails: {
+              cachedTokens: 119_000,
+              cacheWriteTokens: 6_000,
+            },
+          },
+        },
+      ],
+    });
+    expect("missCauses" in (cache()?.ledger?.[0] as object)).toBe(false);
   });
 
   it("does not look for misses when caching is off", async () => {
