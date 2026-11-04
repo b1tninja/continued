@@ -101,14 +101,16 @@ Proposed, in this order, each its own PR:
 
 1. **Done** (`feat/bedrock-adapter-usage`, `347d17f6c`, local, branched from the countdown commit). The Bedrock adapter handles the stream's `metadata` event and maps token counts and cache read and write
    counts into `usage`. This comes first: without it nothing else in the CLI can be measured or priced.
-2. **Built, untested against Bedrock** (`feat/bedrock-adapter-usage`, `4efb659d2`, local). The Bedrock adapter sends `cachePoint` on the system block, the tools and the last two user messages,
+2. **Built and checked live** (`feat/bedrock-adapter-usage`, `4efb659d2`, local). The Bedrock adapter sends `cachePoint` on the system block, the tools and the last two user messages,
    behind the same `promptCaching` setting the GUI honours, defaulting off until the live test passes.
 3. Both adapters accept a lifetime (`5m` or `1h`) and send it as `ttl`. `core` already has the Bedrock
    allowlist (`bedrockSupportsOneHourCache`); the adapters cannot import `core`, so move it somewhere both can.
 4. The CLI applies the Auto rule (C11a and C11b) from its own request count and the gap between requests.
    The CLI has no toolbar, so the setting comes from config and a flag.
 
-Step 2 as built: the adapter reads `promptCaching` and `cacheBehavior` from its config and uses the same rules as `core` (`promptCaching: false` wins; `true` caches tools, system and the last two user messages; nothing set sends no cache points). The CLI passes them from the model config (`defaultCompletionOptions.promptCaching`, `cacheBehavior`). The process ID goes on the first user message only, as in `core`. Not done: no `ttl` is sent (step 3), and `core` also sets the `x-amzn-bedrock-enablepromptcaching` header when caching is on; the adapter does not, and whether Converse needs it is unverified. The first live run should check the cache write count comes back above zero and, if not, add the header.
+Step 2 as built: the adapter reads `promptCaching` and `cacheBehavior` from its config and uses the same rules as `core` (`promptCaching: false` wins; `true` caches tools, system and the last two user messages; nothing set sends no cache points). The CLI passes them from the model config (`defaultCompletionOptions.promptCaching`, `cacheBehavior`). The process ID goes on the first user message only, as in `core`. Not done: no `ttl` is sent (step 3).
+
+Live check (2026-11-04, Haiku 4.5 on a `us.` profile, a prompt of about 11,400 tokens with one tool, three non-streaming requests through the built adapter): with caching off the usage came back with about 11,400 uncached prompt tokens on every request and zero cache tokens, so step 1 works. With `promptCaching: true` request 1 wrote 11,414 tokens, request 2 read 11,414 and wrote 16, and request 3 read 11,430 and wrote 17, with 3 uncached prompt tokens each time. So caching works without the `x-amzn-bedrock-enablepromptcaching` header that `core` sets; the adapter does not need it. Not checked: streaming, a real tool loop with tool results, a 1-hour lifetime (no `ttl` is sent yet, step 3), and the CLI itself end to end.
 
 Tests: request-body tests in the adapters (there is a `Bedrock.vitest.ts`), the shared allowlist, and a CLI
 test with a mocked client. Live: a few cents on Bedrock, as for the GUI.
