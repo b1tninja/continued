@@ -20,12 +20,15 @@ import {
   PromptLog,
   RuleMetadata,
   Session,
+  SessionUsage,
   ThinkingChatMessage,
   Tool,
   ToolCallDelta,
   ToolCallState,
+  Usage,
 } from "core";
 import { mergeReasoningDetails } from "core/llm/openaiTypeConverters";
+import { addRequestUsage } from "core/llm/utils/sessionUsage";
 import { NEW_SESSION_TITLE } from "core/util/constants";
 import {
   renderChatMessage,
@@ -226,6 +229,8 @@ type SessionState = {
   promptCache?: PromptCacheSessionState;
   isPruned?: boolean;
   contextPercentage?: number;
+  /** Tokens and estimated cost of this session's requests, saved with it. */
+  usage?: SessionUsage;
   inlineErrorMessage?: InlineErrorMessageType;
   compactionLoading: Record<number, boolean>; // Track compaction loading by message index
 };
@@ -701,6 +706,7 @@ export const sessionSlice = createSlice({
       state.inlineErrorMessage = undefined;
       state.isPruned = false;
       state.contextPercentage = undefined;
+      state.usage = payload?.usage;
 
       if (payload) {
         state.history = payload.history as any;
@@ -1031,6 +1037,13 @@ export const sessionSlice = createSlice({
     setContextPercentage: (state, action: PayloadAction<number>) => {
       state.contextPercentage = action.payload;
     },
+    addRequestUsageToSession: (
+      state,
+      action: PayloadAction<{ provider: string; model: string; usage: Usage }>,
+    ) => {
+      const { provider, model, usage } = action.payload;
+      state.usage = addRequestUsage(state.usage, provider, model, usage);
+    },
   },
   selectors: {
     selectIsGatheringContext: (state) => {
@@ -1119,6 +1132,7 @@ export const {
   setHasReasoningEnabled,
   setPromptCacheState,
   setPromptCacheInputTokens,
+  addRequestUsageToSession,
   setInlineErrorMessage,
   setIsPruned,
   setContextPercentage,
