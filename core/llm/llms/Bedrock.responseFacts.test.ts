@@ -13,7 +13,11 @@ jest.mock("@aws-sdk/credential-providers", () => ({
   })),
 }));
 
-/** A Bedrock whose client returns the given Converse stream events. */
+/**
+ * A Bedrock whose client returns the given Converse stream events. It replaces
+ * the private `_getClient`, which TypeScript rejects; Jest does not type-check.
+ */
+// @ts-expect-error overriding a private method on purpose
 class StreamBedrock extends Bedrock {
   constructor(
     private events: any[],
