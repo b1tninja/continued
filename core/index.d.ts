@@ -286,6 +286,31 @@ export interface Session {
   chatModelTitle?: string | null;
   /** Optional: cumulative usage and cost for all LLM API calls in this session */
   usage?: SessionUsage;
+  /** Optional: file snapshots taken before agent edits, used by "Restore to here" */
+  checkpoints?: TurnCheckpoint[];
+}
+
+/**
+ * Prior state of one file, captured before an agent tool call changed it.
+ * See core/util/checkpoints.ts.
+ */
+export interface FileCheckpoint {
+  /** File URI, as used by the IDE interface */
+  uri: string;
+  /** False when the agent created the file, so restoring means deleting it */
+  existed: boolean;
+  /** Prior contents. Absent when `existed` is false or the file was skipped */
+  content?: string;
+  /** Why the contents were not stored, so this file cannot be restored */
+  skipped?: "too_large" | "unreadable" | "evicted";
+}
+
+/** All files first touched during one turn (one user message and its replies). */
+export interface TurnCheckpoint {
+  /** `message.id` of the user message that started the turn */
+  turnId: string;
+  createdAt: number;
+  files: FileCheckpoint[];
 }
 
 export interface BaseSessionMetadata {
@@ -1890,6 +1915,11 @@ export interface ModeModelSetting {
   reasoningEffort?: ModeReasoningEffort;
 }
 
+/** Whether rules are sent in each mode. A mode left out is enabled. */
+export type RulesByModeConfig = Partial<
+  Record<"chat" | "agent" | "plan", boolean>
+>;
+
 /** Per-mode model selection from `modeModels:` in config.yaml. */
 export type ModeModelsConfig = Partial<
   Record<"chat" | "agent" | "plan", ModeModelSetting>
@@ -1916,6 +1946,8 @@ export interface ContinueConfig {
   modelsByRole: Record<ModelRole, ILLM[]>;
   selectedModelByRole: Record<ModelRole, ILLM | null>;
   modeModels?: ModeModelsConfig;
+  /** Per-mode rules switch from `rulesByMode:` in config.yaml; a missing mode is on. */
+  rulesByMode?: RulesByModeConfig;
   /** Rules from `toolPermissions:` in config.yaml (allow / ask / deny). */
   toolPermissions?: ToolPermissions;
   data?: DataDestination[];
@@ -1942,6 +1974,7 @@ export interface BrowserSerializedContinueConfig {
   modelsByRole: Record<ModelRole, ModelDescription[]>;
   selectedModelByRole: Record<ModelRole, ModelDescription | null>;
   modeModels?: ModeModelsConfig;
+  rulesByMode?: RulesByModeConfig;
 }
 
 // DOCS SUGGESTIONS AND PACKAGE INFO
@@ -2026,8 +2059,6 @@ export interface Skill {
 
 export interface CompleteOnboardingPayload {
   mode: OnboardingModes;
-  provider?: string;
-  apiKey?: string;
 }
 
 export interface CompiledMessagesResult {

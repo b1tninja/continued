@@ -56,6 +56,8 @@ const saveSubsetFilters = [
   createFilter("config", []),
   createFilter("ui", [
     "approvalMode",
+    "approvalCategories",
+    "approvalMcpServers",
     "toolSettings",
     "toolGroupSettings",
     "ruleSettings",
