@@ -138,3 +138,12 @@ summary object is the C24 data in JSON. Lower priority than C23 to C25 because i
 - **Anthropic cache diagnostics as a feature:** it is Claude API only, not Bedrock, and Bedrock is the
   provider this fork is built around. C23 does the useful part locally.
 - **Explicit `prompt_cache_breakpoint` for GPT:** AWS says Converse does not support it for these models.
+
+## Status
+
+C26 is done (conditions in `cache-safeguards.md`). C23 and C24 are built on `feat/cache-messages-changed` (`43bc71e10`, local), stacked on `feat/cache-ledger`.
+
+- C23: the cache key carries a checksum per message after the system message. Usage, metadata and IDs are left out, since they are attached after a message is sent. `keyChanges` names the first earlier message that differs, which covers an edit, a regenerated reply and a removal. A conversation that only grew is not a change. A test builds the key from real `constructMessages` output, so context items are covered too.
+- C24: `summarizeLedger` and `formatCacheSummary` produce the line, and the cache button tooltip shows it as "This session: ...". It is in the tooltip, not the usage panel, because the console window has no Redux store.
+- Known gap in C24: the ledger only records requests the miss detector reported. That detector says nothing for a model-only switch or a compaction (a shorter prompt), so neither appears as an expected rebuild. Fixing it means recording them in the thunk. Claude Code counts both.
+- Not checked: how the tooltip reads on screen. The tests cover the text builders and the key, not the portal.
