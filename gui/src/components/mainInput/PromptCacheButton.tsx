@@ -8,6 +8,7 @@ import {
   restoreCacheTipsForModel,
   setPromptCacheSetting,
 } from "../../redux/slices/uiSlice";
+import { cacheExportText } from "../../util/cacheExport";
 import { dismissedTipCount } from "../../util/cacheTips";
 import {
   modelSupportsOneHourCache,
@@ -36,6 +37,8 @@ const CHOICES: (PromptCacheSetting | "config")[] = [
 
 /** Not a setting: a menu entry that brings dismissed tips back. */
 const RESTORE_TIPS = "restore-tips";
+/** Not a setting either: copies the session's cache record to the clipboard. */
+const COPY_RECORD = "copy-record";
 
 const RING_RADIUS = 5;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -141,8 +144,20 @@ export function PromptCacheButton() {
     <Listbox
       value={setting ?? "config"}
       onChange={(
-        choice: PromptCacheSetting | "config" | typeof RESTORE_TIPS,
+        choice:
+          | PromptCacheSetting
+          | "config"
+          | typeof RESTORE_TIPS
+          | typeof COPY_RECORD,
       ) => {
+        if (choice === COPY_RECORD) {
+          void navigator.clipboard
+            .writeText(
+              cacheExportText(state.ledger, state.failures, Date.now()),
+            )
+            .catch(() => {});
+          return;
+        }
         if (choice === RESTORE_TIPS) {
           dispatch(restoreCacheTipsForModel({ modelTitle: model.title }));
           return;
@@ -201,6 +216,20 @@ export function PromptCacheButton() {
               </div>
             </ListboxOption>
           ))}
+          {(state.ledger?.length ?? 0) > 0 && (
+            <ListboxOption
+              value={COPY_RECORD}
+              data-testid="prompt-cache-option-copy-record"
+            >
+              <div className="flex flex-col">
+                <span>Copy cache record</span>
+                <span className="text-xs text-description-muted">
+                  Counts and timings of this conversation's requests, no message
+                  text
+                </span>
+              </div>
+            </ListboxOption>
+          )}
           {dismissedCount > 0 && (
             <ListboxOption
               value={RESTORE_TIPS}
