@@ -149,3 +149,25 @@ C26 is done (conditions in `cache-safeguards.md`). C23 and C24 are built on `fea
 - Not checked: how the tooltip reads on screen. The tests cover the text builders and the key, not the portal.
 
 C31 to C33 are built on branches stacked above `feat/cache-messages-changed` (local): `feat/cache-expected-rebuilds`, then the failure list and the throttling tip. C31 closes the gap noted under C24: model switches and compactions are now counted as expected rebuilds. Vendor wording behind C33: AWS says a request's quota use is its uncached input plus its cache writes plus its output times a burndown rate, with cache reads left out; Anthropic says cache hits are not deducted from its rate limit; OpenAI says cached tokens still count toward its limits. Nothing read says a global endpoint is throttled less, so the tip does not say it. The tip is measured on no real throttled session.
+
+## Live results, 2026-11-04
+
+Four live checks on Bedrock, all small, on Haiku 4.5 and Haiku 5.5. Each prints token counts only.
+
+**The adapters send `ttl` (C16).** The built Bedrock adapter, configured with `cacheBehavior.ttl: 1h`, sent two requests with a shared 4.5k-token prefix. The first wrote 4,532 tokens, all reported under `1h` in `cacheDetails` and none under `5m`. The second read 4,495 and wrote 37, again under `1h`. So the adapter's cache points carry the lifetime, Bedrock accepts it on Haiku 4.5, and the new `cacheDetails` mapping fills the per-lifetime split. Not run: the Anthropic adapter's 1-hour `cache_control`, which has no credential here.
+
+**What the app records matches the invocation log (C35, in part).** Both requests were found in the invocation log by their time and token counts: the log shows the same 4,532 written, then 4,495 read and 37 written, with 3 uncached input and 5 output tokens each. The adapter does not surface the request ID, so the match is by counts and timing, not by ID. This confirms the token counts the ledger is built from. It does not test the replay's cost projection: the invocation log has no prices, and Cost Explorer lags by a day. The replay against a real bill remains open.
+
+**Converse accepts a `system` role in `messages`, with conditions (C8).** Haiku 5.5 rejected it three ways and accepted it once. The accepted shape was `user, system, assistant, user`: the request returned 200 and the reply followed the system message's instruction. The errors state the rule: a system message with content must immediately follow a user turn and must precede an assistant turn or end the array, which is what Anthropic's page on mid-conversation system messages says. So `user, system` (the last turn must be a user message on this model) and `user, system, user` (a system message must be followed by an assistant turn) both fail. It also rejected `temperature` outright ("deprecated for this model"). The placement rule matters for C8: an appended system message can only go where an assistant turn follows it, so it is not simply "append to the end". Not tested: whether such a message keeps a cache prefix alive, which is the point of C8.
+
+**Compaction reads the cache if it sends the parent's prefix (C25).** One synthetic conversation of about 12k tokens, with a system prompt, a tool and three turns:
+
+| Request                                                    | Uncached | Read   | Written |
+| ---------------------------------------------------------- | -------- | ------ | ------- |
+| The parent's own turn (writes the cache)                   | 3        | 0      | 12,181  |
+| Compaction as it is today: history and summary prompt only | 8,598    | 0      | 0       |
+| Compaction with the parent's system, tools and cache point | 26       | 12,181 | 0       |
+
+At Haiku 4.5 prices that is roughly seven times cheaper for the compaction request (the second row pays full input price on 8.6k tokens; the third pays the read price on 12.2k and full price on 26). The caveat decides the design: this holds only while the parent's cache is warm. With it cold, sending the parent's prefix would write 12k tokens at the write price to a cache the compaction is about to make useless, which costs more than today's plain request. The cold-cache notice offers "Compact first" exactly when the cache is cold, so C25 as written helps the case least in need of it. Not tested: whether the model calls the tool instead of summarising (output was capped at 200 tokens and both stopped on the cap), and a real conversation.
+
+Total cost of all four checks: a few cents.
