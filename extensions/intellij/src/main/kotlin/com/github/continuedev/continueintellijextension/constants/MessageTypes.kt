@@ -37,6 +37,8 @@ class MessageTypes {
             "showToast",
             "openUrl",
             "isWorkspaceRemote",
+            "readSecrets",
+            "writeSecrets",
 
             // These only come from the GUI for now but should be here to prevent confusion
             "toggleDevTools",
@@ -88,6 +90,7 @@ class MessageTypes {
             "config/getSerializedProfileInfo",
             "config/deleteModel",
             "config/setModeModels",
+            "config/setRulesByMode",
             "config/addToolRule",
             "tools/suggestAllowRule",
             "config/refreshProfiles",
