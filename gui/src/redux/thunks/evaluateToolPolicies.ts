@@ -1,5 +1,6 @@
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { ChatHistoryItem, Tool, ToolCallState } from "core";
+import type { ApprovalSettings } from "core/tools/permissions/approval";
 import type { AutoReviewReply } from "core/tools/permissions/auto/handler";
 import type { ReviewHistory } from "core/tools/permissions/auto/prompt";
 import { isFlaggedOutput } from "core/tools/permissions/injection";
@@ -41,6 +42,7 @@ async function evaluateToolPolicy(
   activeTools: Tool[],
   toolCallState: ToolCallState,
   toolPolicies: ToolPolicies,
+  approval?: ApprovalSettings,
 ): Promise<EvaluatedPolicy> {
   const toolName = toolCallState.toolCall.function.name;
 
@@ -86,6 +88,7 @@ async function evaluateToolPolicy(
     basePolicy,
     parsedArgs: toolCallState.parsedArgs,
     processedArgs: toolCallState.processedArgs,
+    ...(approval ? { approval } : {}),
   });
 
   // Evaluate the policy dynamically
@@ -105,8 +108,12 @@ async function evaluateToolPolicy(
     basePolicy === "allowedWithPermission" &&
     dynamicPolicy === "allowedWithoutPermission" &&
     // The one exception: the user's own allow rule, which core has already
-    // checked cannot loosen a disabled tool or a refused command.
-    details.source !== "allow-rule"
+    // checked cannot loosen a disabled tool or a refused command. The same
+    // goes for the approval mode and switches, which core applies only to a
+    // call no rule, protected path or safety check has settled.
+    details.source !== "allow-rule" &&
+    details.source !== "category" &&
+    details.source !== "yolo"
   ) {
     return { ...details, policy: "allowedWithPermission", toolCallState }; // Cannot make more lenient
   }
@@ -159,6 +166,7 @@ async function reviewOpenCalls(
   auto: AutoReviewContext,
   toolPolicies: ToolPolicies,
   activeTools: Tool[],
+  approval?: ApprovalSettings,
 ): Promise<EvaluatedPolicy[]> {
   return Promise.all(
     results.map(async (r) => {
@@ -184,6 +192,7 @@ async function reviewOpenCalls(
           parsedArgs: r.toolCallState.parsedArgs,
           processedArgs: r.toolCallState.processedArgs,
           history: auto.history,
+          ...(approval ? { approval } : {}),
         });
         if (res.status !== "success") return r;
         reply = res.content;
@@ -265,6 +274,7 @@ export async function evaluateToolPolicies(
   generatedToolCalls: ToolCallState[],
   toolPolicies: ToolPolicies,
   auto?: AutoReviewContext,
+  approval?: ApprovalSettings,
 ): Promise<EvaluatedPolicy[]> {
   // Check if ALL tool calls are auto-approved using dynamic evaluation
   let policyResults = await Promise.all(
@@ -274,6 +284,7 @@ export async function evaluateToolPolicies(
         activeTools,
         toolCallState,
         toolPolicies,
+        approval,
       ),
     ),
   );
@@ -284,6 +295,7 @@ export async function evaluateToolPolicies(
       auto,
       toolPolicies,
       activeTools,
+      approval,
     );
   }
 
