@@ -52,15 +52,18 @@ export function createLlmApi(
     apiBase: model.apiBase,
     requestOptions: model.requestOptions,
     env: model.env,
-    // Prompt caching settings. Only the Bedrock adapter reads them (the
-    // Anthropic adapter has its own `cachingStrategy`), and caching stays off
-    // there unless the model config turns it on.
+    // Prompt caching settings. The Bedrock adapter reads `promptCaching` and
+    // `cacheBehavior`, and caching stays off there unless the model config turns
+    // it on. The Anthropic adapter has its own `cachingStrategy` and reads only
+    // the lifetime, so that is all it is given.
     ...(model.provider === "bedrock"
       ? {
           promptCaching: model.defaultCompletionOptions?.promptCaching,
           cacheBehavior: model.cacheBehavior,
         }
-      : {}),
+      : model.provider === "anthropic" && model.cacheBehavior?.ttl
+        ? { cacheBehavior: { ttl: model.cacheBehavior.ttl } }
+        : {}),
   };
 
   return constructLlmApi(config) ?? null;

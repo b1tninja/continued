@@ -305,6 +305,15 @@ export function recordStreamTelemetry(options: {
             cachedTokens: fullUsage.prompt_tokens_details.cache_read_tokens,
             cacheWriteTokens:
               fullUsage.prompt_tokens_details.cache_write_tokens,
+            // The split by lifetime, when the adapter has one, prices a 1-hour
+            // write at the 1-hour rate.
+            ...(fullUsage.prompt_tokens_details.cache_write_tokens_1h !==
+              undefined && {
+              cacheWriteTokens5m:
+                fullUsage.prompt_tokens_details.cache_write_tokens_5m,
+              cacheWriteTokens1h:
+                fullUsage.prompt_tokens_details.cache_write_tokens_1h,
+            }),
           }
         : undefined,
     };

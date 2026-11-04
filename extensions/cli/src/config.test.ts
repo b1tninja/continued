@@ -90,4 +90,36 @@ describe("createLlmApi() prompt caching settings", () => {
     expect("promptCaching" in config).toBe(false);
     expect("cacheBehavior" in config).toBe(false);
   });
+
+  test("gives the Anthropic adapter only the lifetime", async () => {
+    const config = await make({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      defaultCompletionOptions: { promptCaching: true },
+      cacheBehavior: { cacheConversation: true, ttl: "1h" },
+    });
+    expect(config.cacheBehavior).toEqual({ ttl: "1h" });
+    expect("promptCaching" in config).toBe(false);
+  });
+
+  test("passes auto through to the adapter, which decides per request", async () => {
+    const config = await make({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      cacheBehavior: { ttl: "auto" },
+    });
+    expect(config.cacheBehavior).toEqual({ ttl: "auto" });
+  });
+
+  test("passes the lifetime to the Bedrock adapter with the rest", async () => {
+    const config = await make({
+      provider: "bedrock",
+      model: "us.anthropic.claude-sonnet-4-6",
+      cacheBehavior: { cacheConversation: true, ttl: "1h" },
+    });
+    expect(config.cacheBehavior).toEqual({
+      cacheConversation: true,
+      ttl: "1h",
+    });
+  });
 });
