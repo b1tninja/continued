@@ -46,7 +46,6 @@
     "fflate": "0.8.3",
     "satori": {
       "fflate": "0.7.5"
-    },
-    "minimatch": "^11.0.1"
+    }
   }
 }
