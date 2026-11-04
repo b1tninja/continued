@@ -35,25 +35,28 @@ first, so it is a placeholder with a test, not a build.
 
 Claude models on Bedrock `us.` inference profiles were billed at 1.10 times Anthropic's list price on
 input, output, cache reads and both write lifetimes. The cost table uses list prices, so every dollar
-figure the app shows for those models, including the notices, is about 9% low. Anthropic's pricing page
-says regional and multi-region endpoints carry a 10% premium over global endpoints for Claude 4.5 and later.
+figure the app shows for those models, including the notices, is about 9% low. Anthropic documents the
+rule: "Regional and multi-region endpoints include a 10 percent premium over global endpoints", for Claude
+Sonnet 4.5, Haiku 4.5, Opus 4.5 and all later models, and "earlier models retain their existing pricing"
+(platform.claude.com/docs/en/about-claude/pricing, read 2026-11-04).
 
 - `calculateRequestCost(provider, model, usage)` calls `calculateAnthropicCost`, which calls
   `findAnthropicPricing`, which calls `normalizeClaudeModelId`. That function drops everything before
-  `claude`, so the `us.` prefix is gone before the price lookup. Read the prefix first, then normalise.
-- Factor 1.10 for `us.`; 1.0 for `global.` and for IDs with no prefix. Applies to every component, including
-  Haiku 5.5's higher price above 100,000 tokens (billed long-tier rates were list times 1.10).
+  `claude`, so the prefix is gone before the price lookup. Read the prefix first, then normalise.
+- Factor 1.10 for the geographic prefixes `us.`, `eu.`, `apac.`, `jp.`, `au.` and `ca.` on those models;
+  1.0 for `global.`, for `us-gov.` (GovCloud is priced separately), for IDs with no prefix and for earlier
+  models. Applies to every component, including Haiku 5.5's higher price above 100,000 tokens.
 - The Bedrock provider also prefixes a bare model ID at request time from `env.crossRegionInference`
-  (`applyCrossRegionInference`). The factor needs that setting when the configured ID has no prefix.
+  (`applyCrossRegionInference`). The factor needs the prefix in the configured ID; a bare one stays at list.
 - Tooltips that quote a figure say when the factor was applied. The existing "estimated" label stays.
-- Not confirmed: `eu.` and `apac.` factors, and whether a `global.` profile really bills at list. Apply the
-  factor to `us.` only, which is what was measured, until an AWS price list or a billing line says more.
-- Tests: table-driven by prefix and component; the long tier; a bare ID with `crossRegionInference` set.
+- Evidence: only `us.` was seen in billing data. The other prefixes follow the vendor's statement. The AWS
+  Bedrock price table is rendered by script and could not be read, so no per-model figure was checked there.
+- Tests: table-driven by prefix and model; each component; the long tier; the shared table is not changed.
 - Risk: low. Depends on: nothing.
-- Built on `feat/bedrock-us-price-factor` (`10a7ee46f` in the fork, stacked on the countdown branch).
-  `findAnthropicPricing` applies the factor, so the notices and the usage panel get it, and so does any other
-  caller whose model ID starts with `us.anthropic.`. The breakdown says when it was applied. 784 GUI tests and
-  the 97 cost tests pass; it was not checked in a running UI.
+- Built on `feat/bedrock-us-price-factor` (`10a7ee46f`, then `f462f7286` and `823e77f98` for the other
+  prefixes and the docs, in the fork, stacked on the countdown branch). `findAnthropicPricing` applies the
+  factor, so the notices and the usage panel get it. The breakdown says when it was applied. Not checked in a
+  running UI.
 
 ### C15: caching on by default in agent-style modes
 
@@ -137,17 +140,26 @@ C10 asked for a "spent on cold rewrites" line in the usage panel. The data gives
 ### C18: models that cache by themselves
 
 In the Bedrock data, OpenAI models bill cache writes as a "30m" usage type. Their hit rate is 93% to 97% out
-to 10 minutes, 77% to 83% between 20 and 30 minutes, and about 10% from 30 minutes. That fits a 30-minute
-lifetime. It is a reading of the pattern, not something the provider documents here.
+to 10 minutes, 77% to 83% between 20 and 30 minutes, and about 10% from 30 minutes. The AWS guide documents
+this: GPT-5.6, GPT-6 and GPT-6.1 list "30 minutes" as the TTL, and "`30m` is the only supported value" for
+`prompt_cache_options.ttl`. It is a minimum: cached prefixes "remain available for reuse for at least 30
+minutes". Writes on GPT-5.6 and later bill at 1.25 times the uncached input rate; GPT-5.5 and earlier cache
+implicitly with no write fee.
 
 - `modelSupportsPromptCacheControl` is true only for Claude on Anthropic and Bedrock, so the toolbar button,
   the countdown and the cold-cache notices are hidden for these models even though their caches expire and a
   pause past 30 minutes costs a full rewrite.
 - Proposed: a read-only status for models that cache automatically. The countdown ring runs from a 30-minute
-  lifetime and the tooltip says the provider manages it and there is nothing to set.
-- Check first: the provider's documentation for the lifetime, and whether a request through Continue to
-  these models returns cache read and write tokens at all. If not, there is nothing to show.
-- Risk: low. Depends on: the check.
+  lifetime and the tooltip says the provider manages it and there is nothing to set. Say "at least 30
+  minutes", not "30 minutes".
+- GPT-5.6 and later also take explicit `prompt_cache_breakpoint` fields, but "Converse doesn't support
+  explicit caching for this model", so Continue's Bedrock path cannot use them. Implicit caching is what
+  these models get through Converse, and a cache point in the request is rejected (confirmed live).
+- Grok reported reads and never writes; Nova's implicit reuse "isn't reported in the cache usage fields and
+  isn't billed as cache reads". So a status for those needs its own wording, and Nova has nothing to show.
+- Check first: whether a request through Continue to these models returns cache read and write tokens. The
+  live run showed it does for GPT-5.6 and 6.1 Sol.
+- Risk: low. Depends on: nothing now.
 
 ### C19: long sessions
 
@@ -173,20 +185,57 @@ Run through the built adapter and the built CLI (`dist/cn.js`, headless, a throw
 | Does a streamed tool loop cache?                 | Yes. Haiku 4.5, five requests with tool results: 78% of prompt tokens were reads.                                                                                                                                                                         |
 | Does the CLI itself cache and record it?         | Yes. Six sequential file reads in one headless session: 49,645 cache read and 16,742 cache write tokens in the session file, 3,141 uncached. A first request of about 3,000 tokens wrote nothing, so a short CLI session starts below the cache minimum.  |
 | Claude models, 5-minute cache points             | Haiku 4.5, Haiku 5.5 and Sonnet 5.5 write on request 1 and read on 2 and 3. Only these three were checked for the 5-minute default.                                                                                                                       |
-| GPT 5.6 Sol and 6.1 Sol                          | Cache by themselves, with no cache point: write on request 1, read on 2 and 3. They reject a request that carries a cache point.                                                                                                                          |
+| GPT 5.6 Sol and 6.1 Sol                          | Cache by themselves, with no cache point: write on request 1, read on 2 and 3. They reject a request that carries a cache point; AWS says Converse does not support their explicit breakpoints.                                                           |
 | Nova Pro                                         | Rejects the cache point; with none sent, no caching shown.                                                                                                                                                                                                |
 | Grok 4.7                                         | Rejects the cache point; without it, reads appear from request 2 and writes never do.                                                                                                                                                                     |
 | Does a read refresh the 5-minute lifetime?       | Yes. An entry written at 0:00 and read at 4:30 was still read at 9:00. Untouched, it was gone at 5:30. An entry read at 4:30 and then left was gone at 9:36 (about 5 minutes after its last read). Same result on Haiku 4.5 and Sonnet 5.5.               |
 | Does `ttl: 1h` work?                             | Accepted on Haiku 4.5, Haiku 5.5, Sonnet 5.5 and Opus 5.5. `cacheDetails` reports the lifetime of each write, so the 5-minute and 1-hour split can be priced. Other Claude models were not open to this role, so the allowlist is not confirmed for them. |
 | Does a 1-hour entry survive reads at 4:30, 9:00? | Yes. Not tested past an hour.                                                                                                                                                                                                                             |
-| GPT 6.1 Sol read after a gap                     | Hit at 5 and at 10 minutes. The runs for 20, 28, 33 and 40 minutes were stopped early, so the 30-minute reading in C18 is still an inference.                                                                                                             |
+| GPT 6.1 Sol read after a gap                     | Hit at 5 and at 10 minutes. The runs for 20, 28, 33 and 40 minutes were stopped early, so the 30-minute reading was not tested here. AWS documents it as a minimum of 30 minutes (see Sources).                                                           |
 
 What this changed:
 
 - **A bug, fixed:** `promptCaching: true` sent cache points to every model on Bedrock, which breaks GPT, Nova and Grok. The adapter now sends them to Claude models only (`33ca5f9e4`), and so does `core`'s Bedrock provider (`99cfe2542` on `feat/auto-request-count`).
 - **Keepalive:** a read refreshes the lifetime, so the 1.3% estimate for pings rests on a confirmed mechanism. It is still a small gain for 71,000 extra requests, so it stays deferred.
 - **C18:** GPT models report cache writes with no lifetime detail, and Grok reports reads only. A read-only status needs per-family wording, not one 30-minute ring.
-- **Not done:** the fine boundary between 4:30 and 5:06, the long-gap runs for GPT, and the other Claude models.
+- **Not done:** the fine boundary between 4:30 and 5:06 (the docs do not give it), the long-gap runs for GPT, and the other Claude models.
+
+## Sources, read 2026-11-04
+
+What the vendors' own documentation says about each finding. Quotes are from the pages named. The AWS
+Bedrock price table is rendered by script and came back as unresolved placeholders, so no per-model dollar
+figure was read from it.
+
+| Finding                              | Source                                             | What it says                                                                                                                                                                                                                                       |
+| ------------------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A hit refreshes the lifetime         | AWS prompt caching guide; Anthropic prompt caching | "The cache has a Time To Live (TTL), which resets with each successful cache hit." Anthropic: a hit is "also a cache refresh". Matches the live run that read at 4:30 and 9:00.                                                                    |
+| `ttl` values                         | AWS API reference, `CachePointBlock`               | `type: default`, optional `ttl` of `5m` or `1h`.                                                                                                                                                                                                   |
+| `cacheDetails`                       | AWS API reference, `TokenUsage`                    | "Detailed breakdown of cache writes by TTL. Empty if no cache creation occurred. Sorted by TTL duration (1h before 5m)."                                                                                                                           |
+| `inputTokens` excludes cached tokens | AWS guide, Converse section                        | "total input tokens = inputTokens + cacheReadInputTokens + cacheWriteInputTokens".                                                                                                                                                                 |
+| No header is needed                  | AWS guide                                          | It never mentions `x-amzn-bedrock-enablepromptcaching`; the live run cached without it.                                                                                                                                                            |
+| 1-hour list                          | AWS guide, supported models table                  | Every Claude row lists "5 minutes, 1 hour". Sonnet 4.5 is not in the table. A `ttl` on a model that takes only 5 minutes "can result in a `ValidationException`".                                                                                  |
+| Minimum prompt length                | AWS guide; Anthropic                               | A checkpoint below the minimum "still succeeds, but your prefix isn't cached". 512 tokens for the 5.x models, 1,024 for Sonnet 4.6, Sonnet 5 and Opus 4.8, 4,096 for Haiku 4.5 and Opus 4.5 to 4.7 on Bedrock (Anthropic lists Opus 4.7 at 2,048). |
+| Four checkpoints                     | AWS guide                                          | "up to 4 for Claude models", and the lookback checks "only about 20 content blocks".                                                                                                                                                               |
+| 1-hour before 5-minute               | Both                                               | "A 1-hour cache entry must appear before any 5-minute cache entries."                                                                                                                                                                              |
+| Regional premium                     | Anthropic pricing                                  | "Regional and multi-region endpoints include a 10 percent premium over global endpoints", for Sonnet 4.5, Haiku 4.5, Opus 4.5 and later; earlier models keep their pricing.                                                                        |
+| OpenAI lifetime and fee              | AWS guide, OpenAI section                          | GPT-5.6 and later: "`30m` is the only supported value", reused "for at least 30 minutes", writes at 1.25 times input. GPT-5.5 and earlier: implicit, no write fee.                                                                                 |
+| Explicit caching on GPT              | AWS guide                                          | "Converse doesn't support explicit caching for this model."                                                                                                                                                                                        |
+| Nova                                 | AWS guide                                          | Implicit reuse "isn't reported in the cache usage fields and isn't billed as cache reads". Explicit checkpoints on some Nova models, 5 minutes.                                                                                                    |
+| Automatic caching (Claude)           | AWS guide                                          | One top-level `cache_control` via `additionalModelRequestFields`, on Haiku 4.5, Sonnet 4.6, Opus 4.7 and later. It uses one of the four checkpoint slots. Other models return a `ValidationException`.                                             |
+
+Not in the documentation: the boundary between 4:30 and 5:06 (the docs say "5 minutes" and the live run
+agrees), the exact point a 30-minute GPT entry expires, and any per-model Bedrock dollar figure.
+
+What changed in the code because of these (branch `fix/cache-minimum-and-ttl-allowlist`, `fe1806238`):
+
+- **The minimum prompt length is now known per model.** A first request under it is accepted and not cached,
+  with no error. This is what the live CLI run hit: about 3,000 tokens on Haiku 4.5, which needs 4,096. The
+  status no longer shows a warm cache for it, the tooltip says why, and the cold-resume notice stays quiet.
+- **The Bedrock 1-hour list follows the AWS table.** Sonnet 4.5 is out, since it is not in the table.
+- **The regional premium covers `us.`, `eu.`, `apac.`, `jp.`, `au.` and `ca.`** on the models Anthropic names.
+
+Not done: Anthropic's automatic caching (a possible simplification, not a drop-in, since it takes a slot and
+is unsupported on some models), and a minimum-length check in the CLI adapters.
 
 ## Order
 
