@@ -26,7 +26,7 @@
     "@google/genai": "^1.30.0",
     "@smithy/node-http-handler": "^4.14.1",
     "ai": "^6.0.86",
-    "dotenv": "^16.5.0",
+    "dotenv": "^18.0.9",
     "google-auth-library": "^10.4.1",
     "json-schema": "^0.4.0",
     "node-fetch": "^3.3.2",
