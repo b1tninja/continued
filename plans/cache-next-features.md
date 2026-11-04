@@ -163,6 +163,31 @@ rebuilt many times, or a context that keeps growing.
 - A placeholder with an entry condition. Build C13 first.
 - Risk: low. Depends on: C13 and a week of data from our own use.
 
+## Live results on Bedrock (2026-11-04)
+
+Run through the built adapter and the built CLI (`dist/cn.js`, headless, a throwaway config and global directory), on the `us.` profiles this role can use. Prompts were about 11,000 to 14,000 tokens and each carried a unique nonce, so every first request was a clean write. Not every model is open to this role, so the sweeps are partial.
+
+| Question                                         | Result                                                                                                                                                                                                                                                    |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Does the adapter report usage when streaming?    | Yes. One usage chunk per request, after the text.                                                                                                                                                                                                         |
+| Does a streamed tool loop cache?                 | Yes. Haiku 4.5, five requests with tool results: 78% of prompt tokens were reads.                                                                                                                                                                         |
+| Does the CLI itself cache and record it?         | Yes. Six sequential file reads in one headless session: 49,645 cache read and 16,742 cache write tokens in the session file, 3,141 uncached. A first request of about 3,000 tokens wrote nothing, so a short CLI session starts below the cache minimum.  |
+| Claude models, 5-minute cache points             | Haiku 4.5, Haiku 5.5 and Sonnet 5.5 write on request 1 and read on 2 and 3. Only these three were checked for the 5-minute default.                                                                                                                       |
+| GPT 5.6 Sol and 6.1 Sol                          | Cache by themselves, with no cache point: write on request 1, read on 2 and 3. They reject a request that carries a cache point.                                                                                                                          |
+| Nova Pro                                         | Rejects the cache point; with none sent, no caching shown.                                                                                                                                                                                                |
+| Grok 4.7                                         | Rejects the cache point; without it, reads appear from request 2 and writes never do.                                                                                                                                                                     |
+| Does a read refresh the 5-minute lifetime?       | Yes. An entry written at 0:00 and read at 4:30 was still read at 9:00. Untouched, it was gone at 5:30. An entry read at 4:30 and then left was gone at 9:36 (about 5 minutes after its last read). Same result on Haiku 4.5 and Sonnet 5.5.               |
+| Does `ttl: 1h` work?                             | Accepted on Haiku 4.5, Haiku 5.5, Sonnet 5.5 and Opus 5.5. `cacheDetails` reports the lifetime of each write, so the 5-minute and 1-hour split can be priced. Other Claude models were not open to this role, so the allowlist is not confirmed for them. |
+| Does a 1-hour entry survive reads at 4:30, 9:00? | Yes. Not tested past an hour.                                                                                                                                                                                                                             |
+| GPT 6.1 Sol read after a gap                     | Hit at 5 and at 10 minutes. The runs for 20, 28, 33 and 40 minutes were stopped early, so the 30-minute reading in C18 is still an inference.                                                                                                             |
+
+What this changed:
+
+- **A bug, fixed:** `promptCaching: true` sent cache points to every model on Bedrock, which breaks GPT, Nova and Grok. The adapter now sends them to Claude models only (`33ca5f9e4`).
+- **Keepalive:** a read refreshes the lifetime, so the 1.3% estimate for pings rests on a confirmed mechanism. It is still a small gain for 71,000 extra requests, so it stays deferred.
+- **C18:** GPT models report cache writes with no lifetime detail, and Grok reports reads only. A read-only status needs per-family wording, not one 30-minute ring.
+- **Not done:** the fine boundary between 4:30 and 5:06, the long-gap runs for GPT, and the other Claude models.
+
 ## Order
 
 | Order | Feature         | Why here                                                         |
