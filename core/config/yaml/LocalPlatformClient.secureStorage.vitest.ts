@@ -45,16 +45,36 @@ describe("LocalPlatformClient secure storage lookup", () => {
     expect(result?.secretLocation?.secretType).toBe(SecretType.LocalEnv);
   });
 
-  it("prefers ~/.continue/.env, then falls back to secure storage over process.env", async () => {
+  it("reads secure storage before ~/.continue/.env, and .env before process.env", async () => {
     process.env[fqsn.secretName] = "from-process";
+    dotEnv[fqsn.secretName] = "from-dotenv";
     const ide = makeIde({ [fqsn.secretName]: "from-secure" });
 
     let [result] = await new LocalPlatformClient(ide).resolveFQSNs([fqsn]);
     expect((result as any).value).toBe("from-secure");
 
-    dotEnv[fqsn.secretName] = "from-dotenv";
-    [result] = await new LocalPlatformClient(ide).resolveFQSNs([fqsn]);
+    // Nothing in secure storage: the .env file is next.
+    [result] = await new LocalPlatformClient(makeIde({})).resolveFQSNs([fqsn]);
     expect((result as any).value).toBe("from-dotenv");
+
+    // Nothing in either: the process environment is last.
+    delete dotEnv[fqsn.secretName];
+    [result] = await new LocalPlatformClient(makeIde({})).resolveFQSNs([fqsn]);
+    expect((result as any).value).toBe("from-process");
+  });
+
+  it("reads secure storage before workspace .env files too", async () => {
+    const ide = makeIde({ [fqsn.secretName]: "from-secure" });
+    (ide as any).getWorkspaceDirs = async () => ["file:///ws"];
+    (ide as any).fileExists = async () => true;
+    (ide as any).readFile = async () => `${fqsn.secretName}=from-workspace\n`;
+
+    let [result] = await new LocalPlatformClient(ide).resolveFQSNs([fqsn]);
+    expect((result as any).value).toBe("from-secure");
+
+    (ide as any).readSecrets = async () => ({});
+    [result] = await new LocalPlatformClient(ide).resolveFQSNs([fqsn]);
+    expect((result as any).value).toBe("from-workspace");
   });
 
   it("falls through to process.env when secure storage has nothing", async () => {

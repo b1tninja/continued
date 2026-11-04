@@ -9,6 +9,11 @@ import { IDE } from "../..";
 import { getContinueDotEnv } from "../../util/paths";
 import { joinPathsToUri } from "../../util/uri";
 
+/**
+ * Resolves `${{ secrets.NAME }}` for local configs. Lookup order: the IDE's
+ * secure storage, then ~/.continue/.env, <workspace>/.continue/.env and
+ * <workspace>/.env, then the process environment.
+ */
 export class LocalPlatformClient implements PlatformClient {
   constructor(private readonly ide: IDE) {}
 
@@ -122,14 +127,16 @@ export class LocalPlatformClient implements PlatformClient {
     const results: (SecretResult | undefined)[] = [];
 
     for (let i = 0; i < fqsns.length; i++) {
-      let secretResult = await this.findSecretInEnvFiles(fqsns[i]);
+      // The IDE's secure storage first (where the setup flow keeps a key),
+      // so a key saved there is not shadowed by an older plaintext copy.
+      let secretResult = await this.findSecretInSecureStorage(fqsns[i]);
 
-      // Then the IDE's secure storage (where the setup flow keeps a key)
+      // Then the .env files
       if (!secretResult?.found) {
-        secretResult = await this.findSecretInSecureStorage(fqsns[i]);
+        secretResult = await this.findSecretInEnvFiles(fqsns[i]);
       }
 
-      // If not found in .env files or secure storage, try process.env
+      // If not found in secure storage or .env files, try process.env
       if (!secretResult?.found) {
         const secretValueFromProcessEnv = process.env[fqsns[i].secretName];
         if (secretValueFromProcessEnv !== undefined) {

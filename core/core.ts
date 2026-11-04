@@ -79,7 +79,11 @@ import {
   saveProviderModels,
   validateSaveRequest,
 } from "./config/providerSetup";
-import { isSecureStorageAvailable, storeSecret } from "./config/secretStorage";
+import {
+  isSecureStorageAvailable,
+  removeEnvSecret,
+  storeSecret,
+} from "./config/secretStorage";
 import {
   setupLocalConfig,
   setupProviderConfig,
@@ -532,7 +536,7 @@ export class Core {
         return { saved: false, error: invalid };
       }
 
-      let warning: string | undefined;
+      let envShadowedSecret: string | undefined;
       const key = req.key;
       if (key && key.storage !== "inline" && key.storage !== "envVar") {
         if (key.value) {
@@ -547,7 +551,7 @@ export class Core {
           if (!stored.stored) {
             return { saved: false, error: stored.error };
           }
-          warning = stored.warning;
+          if (stored.envShadowed) envShadowedSecret = key.secretName;
         }
         this.globalContext.update("preferredKeyStorage", key.storage);
       }
@@ -572,7 +576,10 @@ export class Core {
       await this.configHandler.reloadConfig(
         "Provider models changed (config/saveProviderModels message)",
       );
-      return { saved: true, ...(warning ? { warning } : {}) };
+      return {
+        saved: true,
+        ...(envShadowedSecret ? { envShadowedSecret } : {}),
+      };
     });
 
     on("config/setSecret", async (msg) => {
@@ -588,6 +595,20 @@ export class Core {
         this.globalContext.update("preferredKeyStorage", storage);
         await this.configHandler.reloadConfig(
           "Secret stored (config/setSecret message)",
+        );
+      }
+      return result;
+    });
+
+    on("config/removeEnvSecret", async (msg) => {
+      const result = await removeEnvSecret({
+        ide: this.ide,
+        name: msg.data.secretName,
+        continueDir: getContinueGlobalPath(),
+      });
+      if (result.removed) {
+        await this.configHandler.reloadConfig(
+          "Secret removed from .env (config/removeEnvSecret message)",
         );
       }
       return result;
