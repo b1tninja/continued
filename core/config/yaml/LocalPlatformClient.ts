@@ -8,8 +8,22 @@ import * as dotenv from "dotenv";
 import { IDE } from "../..";
 import { getContinueDotEnv } from "../../util/paths";
 import { joinPathsToUri } from "../../util/uri";
+import { SECURE_STORAGE_TIMEOUT_MS } from "../secretStorage";
+import { TimeoutError, withTimeout } from "../../util/withTimeout";
 
+/**
+ * Resolves `${{ secrets.NAME }}` for local configs. Lookup order: the IDE's
+ * secure storage, then ~/.continue/.env, <workspace>/.continue/.env and
+ * <workspace>/.env, then the process environment.
+ */
 export class LocalPlatformClient implements PlatformClient {
+  /**
+   * Set when the IDE did not answer a secure storage request. An IDE that does
+   * not handle `readSecrets` never replies, so every later lookup would wait
+   * the full timeout again; skip it for the rest of this client's life.
+   */
+  private secureStorageUnresponsive = false;
+
   constructor(private readonly ide: IDE) {}
 
   /**
@@ -87,6 +101,39 @@ export class LocalPlatformClient implements PlatformClient {
     }
   }
 
+  /** The IDE's secret storage; hosts without one return nothing. */
+  private async findSecretInSecureStorage(
+    fqsn: FQSN,
+  ): Promise<SecretResult | undefined> {
+    try {
+      if (typeof this.ide.readSecrets !== "function") return undefined;
+      if (this.secureStorageUnresponsive) return undefined;
+      const value = (
+        await withTimeout(
+          this.ide.readSecrets([fqsn.secretName]),
+          SECURE_STORAGE_TIMEOUT_MS,
+          "Secure storage",
+        )
+      )?.[fqsn.secretName];
+      if (!value) return undefined;
+      return {
+        found: true,
+        fqsn,
+        value,
+        secretLocation: {
+          secretName: fqsn.secretName,
+          secretType: SecretType.LocalEnv,
+        },
+      };
+    } catch (error) {
+      if (error instanceof TimeoutError) this.secureStorageUnresponsive = true;
+      console.warn(
+        `Error reading secure storage: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
+  }
+
   async resolveFQSNs(fqsns: FQSN[]): Promise<(SecretResult | undefined)[]> {
     if (fqsns.length === 0) {
       return [];
@@ -95,9 +142,16 @@ export class LocalPlatformClient implements PlatformClient {
     const results: (SecretResult | undefined)[] = [];
 
     for (let i = 0; i < fqsns.length; i++) {
-      let secretResult = await this.findSecretInEnvFiles(fqsns[i]);
+      // The IDE's secure storage first (where the setup flow keeps a key),
+      // so a key saved there is not shadowed by an older plaintext copy.
+      let secretResult = await this.findSecretInSecureStorage(fqsns[i]);
 
-      // If not found in .env files, try process.env
+      // Then the .env files
+      if (!secretResult?.found) {
+        secretResult = await this.findSecretInEnvFiles(fqsns[i]);
+      }
+
+      // If not found in secure storage or .env files, try process.env
       if (!secretResult?.found) {
         const secretValueFromProcessEnv = process.env[fqsns[i].secretName];
         if (secretValueFromProcessEnv !== undefined) {

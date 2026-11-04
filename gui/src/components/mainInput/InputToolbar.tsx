@@ -20,11 +20,14 @@ import { exitEdit } from "../../redux/thunks/edit";
 import { getMetaKeyLabel, isMetaEquivalentKeyPressed } from "../../util";
 import { ToolTip } from "../gui/Tooltip";
 import ModelSelect from "../modelSelection/ModelSelect";
+import { ApprovalSelect } from "../ApprovalSelect";
 import { ModeSelect } from "../ModeSelect";
 import { Button } from "../ui";
 import { useFontSize } from "../ui/font";
 import ContextStatus from "./ContextStatus";
 import HoverItem from "./InputToolbar/HoverItem";
+import { PromptCacheButton } from "./PromptCacheButton";
+import { UsageIndicator } from "./UsageIndicator";
 
 export interface ToolbarOptions {
   hideUseCodebase?: boolean;
@@ -78,7 +81,7 @@ function InputToolbar(props: InputToolbarProps) {
     <>
       <div
         onClick={props.onClick}
-        className={`find-widget-skip flex select-none flex-row items-center justify-between gap-1 bg-vsc-input-background pt-1 ${props.hidden ? "pointer-events-none h-0 cursor-default opacity-0" : "pointer-events-auto mt-2 cursor-text opacity-100"}`}
+        className={`find-widget-skip flex flex-row items-center justify-between gap-1 bg-vsc-input-background pt-1 select-none ${props.hidden ? "pointer-events-none h-0 cursor-default opacity-0" : "pointer-events-auto mt-2 cursor-text opacity-100"}`}
         style={{
           fontSize: smallFont,
         }}
@@ -91,6 +94,7 @@ function InputToolbar(props: InputToolbarProps) {
               </HoverItem>
             </ToolTip>
           )}
+          {!isInEdit && <ApprovalSelect />}
           <ToolTip place="top" content="Select Model">
             <HoverItem className="!p-0">
               <ModelSelect />
@@ -165,6 +169,8 @@ function InputToolbar(props: InputToolbarProps) {
                 </ToolTip>
               </HoverItem>
             )}
+            <PromptCacheButton />
+            <UsageIndicator />
           </div>
         </div>
 

@@ -1,5 +1,8 @@
 import {
   applyCrossRegionInference,
+  bedrockCacheTtl,
+  bedrockSupportsOneHourCache,
+  bedrockUsageToUsage,
   buildModelCatalog,
   getBedrockErrorHint,
   inferenceProfilePrefixForRegion,
@@ -245,5 +248,86 @@ describe("getBedrockErrorHint (discovery)", () => {
     expect(getBedrockErrorHint(e, { region: "us-eest-1" })).toContain(
       "us-eest-1",
     );
+  });
+});
+
+describe("bedrockUsageToUsage", () => {
+  it("maps tokens and cache reads and writes", () => {
+    expect(
+      bedrockUsageToUsage({
+        inputTokens: 40,
+        outputTokens: 7,
+        cacheReadInputTokens: 9000,
+        cacheWriteInputTokens: 600,
+      }),
+    ).toEqual({
+      promptTokens: 40,
+      completionTokens: 7,
+      promptTokensDetails: { cachedTokens: 9000, cacheWriteTokens: 600 },
+    });
+  });
+
+  it("splits writes by lifetime from cacheDetails", () => {
+    const usage = bedrockUsageToUsage({
+      inputTokens: 1,
+      outputTokens: 1,
+      cacheWriteInputTokens: 600,
+      cacheDetails: [
+        { ttl: "1h", inputTokens: 500 },
+        { ttl: "5m", inputTokens: 100 },
+      ],
+    });
+    expect(usage.promptTokensDetails.cacheWriteTokens1h).toBe(500);
+    expect(usage.promptTokensDetails.cacheWriteTokens5m).toBe(100);
+  });
+
+  it("leaves the split unset when cacheDetails is empty or absent", () => {
+    for (const cacheDetails of [undefined, []]) {
+      const usage = bedrockUsageToUsage({ inputTokens: 1, cacheDetails });
+      expect(usage.promptTokensDetails.cacheWriteTokens5m).toBeUndefined();
+      expect(usage.promptTokensDetails.cacheWriteTokens1h).toBeUndefined();
+    }
+  });
+
+  it("defaults missing fields to zero", () => {
+    expect(bedrockUsageToUsage({})).toEqual({
+      promptTokens: 0,
+      completionTokens: 0,
+      promptTokensDetails: { cachedTokens: 0, cacheWriteTokens: 0 },
+    });
+  });
+});
+
+describe("bedrockSupportsOneHourCache", () => {
+  it.each([
+    ["us.anthropic.claude-sonnet-4-5-20250929-v1:0", true],
+    ["anthropic.claude-sonnet-4-6", true],
+    ["anthropic.claude-haiku-4-5-20251001-v1:0", true],
+    ["anthropic.claude-opus-4-6-v1", true],
+    ["global.anthropic.claude-opus-4-5-20251101-v1:0", true],
+    // Listed as 5 minutes only, or not listed: never send a ttl.
+    ["anthropic.claude-3-7-sonnet-20250219-v1:0", false],
+    ["anthropic.claude-3-5-sonnet-20241022-v2:0", false],
+    ["anthropic.claude-sonnet-4-20250514-v1:0", false],
+    ["anthropic.claude-opus-4-1-20250805-v1:0", false],
+    ["amazon.nova-pro-v1:0", false],
+    ["openai.gpt-5.6-sol", false],
+  ])("%s -> %s", (id, expected) => {
+    expect(bedrockSupportsOneHourCache(id)).toBe(expected);
+  });
+});
+
+describe("bedrockCacheTtl", () => {
+  const ok = "anthropic.claude-sonnet-4-5-20250929-v1:0";
+  const old = "anthropic.claude-3-7-sonnet-20250219-v1:0";
+
+  it("returns 1h only when asked for and supported", () => {
+    expect(bedrockCacheTtl(ok, "1h")).toBe("1h");
+    expect(bedrockCacheTtl(old, "1h")).toBeUndefined();
+  });
+
+  it("omits the ttl for the default lifetime", () => {
+    expect(bedrockCacheTtl(ok, "5m")).toBeUndefined();
+    expect(bedrockCacheTtl(ok, undefined)).toBeUndefined();
   });
 });

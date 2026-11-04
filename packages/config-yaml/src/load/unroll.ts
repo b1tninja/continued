@@ -399,6 +399,7 @@ export async function unrollBlocks(
     | "env"
     | "requestOptions"
     | "modeModels"
+    | "rulesByMode"
     | "toolPermissions"
   >)[] = ["models", "context", "data", "mcpServers", "prompts", "docs"];
 
@@ -844,8 +845,8 @@ export function mergeOverrides<T extends Record<string, any>>(
 }
 
 function formatZodError(error: any): string {
-  if (error.errors && Array.isArray(error.errors)) {
-    return error.errors
+  if (error.issues && Array.isArray(error.issues)) {
+    return error.issues
       .map((e: any) => {
         const path = e.path.length > 0 ? `${e.path.join(".")}: ` : "";
         return `${path}${e.message}`;

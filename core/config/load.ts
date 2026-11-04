@@ -485,6 +485,7 @@ async function intermediateToFinalConfig({
       embed: newEmbedder ? [newEmbedder] : [],
       rerank: newReranker ? [newReranker] : [],
       subagent: [],
+      reviewer: [],
     },
     selectedModelByRole: {
       chat: null, // Not implemented (uses GUI defaultModel)
@@ -495,6 +496,7 @@ async function intermediateToFinalConfig({
       rerank: newReranker ?? null,
       summarize: null, // Not implemented
       subagent: null,
+      reviewer: null,
     },
     rules: [],
   };
@@ -657,6 +659,7 @@ async function finalToBrowserConfig(
       ]),
     ) as Record<ModelRole, ModelDescription | null>, // TODO better types here
     modeModels: final.modeModels,
+    rulesByMode: final.rulesByMode,
     // data not included here because client doesn't need
   };
 }

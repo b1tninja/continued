@@ -57,7 +57,7 @@ function TipTapEditorInner(props: TipTapEditorProps) {
   const historyLength = useAppSelector((store) => store.session.history.length);
   const isInEdit = useAppSelector((store) => store.session.isInEdit);
 
-  const { editor, onEnter } = createEditorConfig({
+  const { editor, onEnter, placeholderTextRef } = createEditorConfig({
     props,
     ideMessenger,
     dispatch,
@@ -85,14 +85,12 @@ function TipTapEditorInner(props: TipTapEditorProps) {
     if (!editor) {
       return;
     }
-    const placeholder = getPlaceholderText(props.placeholder, historyLength);
-    const placeholderExt = editor.extensionManager.extensions.find(
-      (e) => e.name === "placeholder",
-    ) as any;
-    if (placeholderExt) {
-      placeholderExt.options["placeholder"] = placeholder;
-      editor.view.dispatch(editor.state.tr);
-    }
+    placeholderTextRef.current = getPlaceholderText(
+      props.placeholder,
+      historyLength,
+    );
+    // Dispatch an empty transaction so the placeholder decoration redraws
+    editor.view.dispatch(editor.state.tr);
   }, [editor, props.placeholder, historyLength]);
 
   useEffect(() => {
@@ -264,7 +262,7 @@ function TipTapEditorInner(props: TipTapEditorProps) {
         event.preventDefault();
       }}
     >
-      <div className="px-2.5 pb-1 pt-2">
+      <div className="px-2.5 pt-2 pb-1">
         <EditorContent
           className={`scroll-container overflow-y-scroll ${props.isMainInput ? "max-h-[70vh]" : ""}`}
           spellCheck={false}

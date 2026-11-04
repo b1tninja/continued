@@ -466,6 +466,259 @@ describe("Anthropic", () => {
     });
   });
 
+  describe("Usage", () => {
+    // The suite's Response is node-fetch's, which cannot wrap a web
+    // ReadableStream (it would send "[object ReadableStream]"), so the SSE
+    // body is passed as a string.
+    async function collectUsage(events: any[]) {
+      const anthropic = new Anthropic({
+        apiKey: "test-api-key",
+        model: "claude-sonnet-4-5",
+        apiBase: "https://api.anthropic.com/v1/",
+      });
+      const sse = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
+      (anthropic as any).fetch = vi.fn().mockResolvedValue(
+        new Response(sse, {
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      );
+
+      let usage: any;
+      for await (const chunk of anthropic.streamChat(
+        [{ role: "user", content: "hello" }],
+        new AbortController().signal,
+      )) {
+        if (chunk.role === "assistant" && chunk.usage) {
+          usage = chunk.usage;
+        }
+      }
+      return usage;
+    }
+
+    test("keeps the 5-minute and 1-hour cache write split", async () => {
+      const usage = await collectUsage([
+        {
+          type: "message_start",
+          message: {
+            usage: {
+              input_tokens: 12,
+              cache_read_input_tokens: 9000,
+              cache_creation_input_tokens: 700,
+              cache_creation: {
+                ephemeral_5m_input_tokens: 200,
+                ephemeral_1h_input_tokens: 500,
+              },
+            },
+          },
+        },
+        { type: "message_delta", usage: { output_tokens: 33 } },
+        { type: "content_block_stop" },
+      ]);
+
+      expect(usage.promptTokens).toBe(12);
+      expect(usage.completionTokens).toBe(33);
+      expect(usage.promptTokensDetails).toEqual({
+        cachedTokens: 9000,
+        cacheWriteTokens: 700,
+        cacheWriteTokens5m: 200,
+        cacheWriteTokens1h: 500,
+      });
+    });
+
+    test("leaves the split unset when the API does not report it", async () => {
+      const usage = await collectUsage([
+        {
+          type: "message_start",
+          message: {
+            usage: {
+              input_tokens: 12,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 700,
+            },
+          },
+        },
+        { type: "content_block_stop" },
+      ]);
+
+      expect(usage.promptTokensDetails.cacheWriteTokens).toBe(700);
+      expect(usage.promptTokensDetails.cacheWriteTokens5m).toBeUndefined();
+      expect(usage.promptTokensDetails.cacheWriteTokens1h).toBeUndefined();
+    });
+  });
+
+  describe("Prompt caching request body", () => {
+    const tools = [
+      {
+        type: "function" as const,
+        function: { name: "read_file", description: "Read", parameters: {} },
+      },
+      {
+        type: "function" as const,
+        function: { name: "ls", description: "List", parameters: {} },
+      },
+    ];
+    const agentLoop: any[] = [
+      { role: "system", content: "You are an agent." },
+      { role: "user", content: "fix the bug" },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "t1",
+            type: "function",
+            function: { name: "ls", arguments: "{}" },
+          },
+        ],
+      },
+      { role: "tool", content: "a.ts b.ts", toolCallId: "t1" },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "t2",
+            type: "function",
+            function: { name: "read_file", arguments: "{}" },
+          },
+        ],
+      },
+      { role: "tool", content: "export const x = 1;", toolCallId: "t2" },
+    ];
+
+    async function sentBody(completionOptions: any, model: any = {}) {
+      const anthropic = new Anthropic({
+        apiKey: "test-api-key",
+        model: "claude-sonnet-4-5",
+        apiBase: "https://api.anthropic.com/v1/",
+        ...model,
+      });
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response('data: {"type":"content_block_stop"}\n\n', {
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      );
+      (anthropic as any).fetch = fetchMock;
+      for await (const _ of anthropic.streamChat(
+        agentLoop,
+        new AbortController().signal,
+        { tools, ...completionOptions },
+      )) {
+      }
+      const [, init] = fetchMock.mock.calls[0];
+      return { body: JSON.parse(init.body), headers: init.headers };
+    }
+
+    const marked = (body: any) => ({
+      tools: body.tools.map((t: any) => !!t.cache_control),
+      system: Array.isArray(body.system) && !!body.system[0].cache_control,
+      messages: body.messages.map((m: any) =>
+        m.content.map((b: any) => !!b.cache_control),
+      ),
+    });
+
+    test("sends no breakpoints unless caching is asked for", async () => {
+      const { body, headers } = await sentBody({});
+      expect(marked(body).tools).toEqual([false, false]);
+      expect(marked(body).system).toBe(false);
+      expect(marked(body).messages.flat()).not.toContain(true);
+      expect(headers["anthropic-beta"]).toBeUndefined();
+    });
+
+    test("marks tools, system and the last two tool results in an Agent loop", async () => {
+      const { body, headers } = await sentBody({ promptCaching: true });
+      const m = marked(body);
+      expect(m.tools).toEqual([false, true]);
+      expect(m.system).toBe(true);
+      // Assistant turns carry a placeholder text block before the tool_use, so
+      // find the marked blocks by type rather than by position.
+      const markedBlocks = body.messages.flatMap((msg: any, i: number) =>
+        msg.content
+          .filter((b: any) => b.cache_control)
+          .map((b: any) => `${i}:${b.type}`),
+      );
+      // messages: 0 user text, 1 assistant, 2 tool_result, 3 assistant, 4 tool_result
+      expect(markedBlocks).toEqual(["2:tool_result", "4:tool_result"]);
+      expect(headers["anthropic-beta"]).toBeDefined();
+    });
+
+    test("sends the 1-hour lifetime on every breakpoint", async () => {
+      const { body } = await sentBody({
+        promptCaching: true,
+        promptCacheTtl: "1h",
+      });
+      const controls = [
+        body.tools[1].cache_control,
+        body.system[0].cache_control,
+        body.messages[2].content[0].cache_control,
+        body.messages[4].content[0].cache_control,
+      ];
+      for (const c of controls) {
+        expect(c).toEqual({ type: "ephemeral", ttl: "1h" });
+      }
+    });
+
+    test("uses cacheBehavior.ttl when the request does not choose", async () => {
+      const { body } = await sentBody(
+        { promptCaching: true },
+        { cacheBehavior: { ttl: "1h" } },
+      );
+      expect(body.system[0].cache_control).toEqual({
+        type: "ephemeral",
+        ttl: "1h",
+      });
+    });
+
+    test("the request's lifetime wins over cacheBehavior.ttl", async () => {
+      const { body } = await sentBody(
+        { promptCaching: true, promptCacheTtl: "5m" },
+        { cacheBehavior: { ttl: "1h" } },
+      );
+      expect(body.system[0].cache_control).toEqual({ type: "ephemeral" });
+    });
+
+    test('cacheBehavior.ttl "auto" sends no lifetime on its own', async () => {
+      const { body } = await sentBody(
+        { promptCaching: true },
+        { cacheBehavior: { ttl: "auto" } },
+      );
+      expect(body.system[0].cache_control).toEqual({ type: "ephemeral" });
+    });
+
+    test("cacheBehavior.ttl does not turn caching on", async () => {
+      const { body } = await sentBody({}, { cacheBehavior: { ttl: "1h" } });
+      expect(marked(body).system).toBe(false);
+    });
+
+    test("keeps the default lifetime implicit for 5 minutes", async () => {
+      const { body } = await sentBody({
+        promptCaching: true,
+        promptCacheTtl: "5m",
+      });
+      expect(body.system[0].cache_control).toEqual({ type: "ephemeral" });
+    });
+
+    test("an explicit false overrides cacheBehavior", async () => {
+      const { body } = await sentBody(
+        { promptCaching: false },
+        {
+          cacheBehavior: { cacheConversation: true, cacheSystemMessage: true },
+        },
+      );
+      expect(marked(body).system).toBe(false);
+      expect(marked(body).messages.flat()).not.toContain(true);
+    });
+
+    test("cacheBehavior alone still works as before", async () => {
+      const { body } = await sentBody(
+        {},
+        { cacheBehavior: { cacheConversation: true } },
+      );
+      expect(marked(body).messages.flat().filter(Boolean)).toHaveLength(2);
+      expect(marked(body).tools).toEqual([false, false]);
+    });
+  });
+
   describe("Error handling", () => {
     test("should throw error when API key is missing", async () => {
       const anthropic = new Anthropic({

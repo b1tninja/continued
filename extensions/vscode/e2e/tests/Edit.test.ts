@@ -4,6 +4,7 @@ import {
   TextEditor,
   VSBrowser,
   WebView,
+  Workbench,
 } from "vscode-extension-tester";
 
 import { EditActions } from "../actions/Edit.actions";
@@ -30,19 +31,11 @@ describe("Edit Test", () => {
   beforeEach(async function () {
     this.timeout(DEFAULT_TIMEOUT.XL);
 
-    await GUIActions.toggleGui();
+    // Don't toggle the Continued view here: "focus input" flips it open/closed
+    // depending on what the previous test left behind. Cmd+I below opens it.
+    await resetEditorAndSelectAll();
 
-    // Toggling the Continued view can leave keyboard focus inside its (possibly
-    // hidden) webview; give the editor focus explicitly before typing into it.
-    await VSBrowser.instance.driver.switchTo().defaultContent();
-    await TestUtils.waitForSuccess(() => editor.click());
-
-    await editor.typeTextAt(1, 1, originalEditorText);
-    await editor.selectText(originalEditorText);
-
-    await EditActions.invokeEditShortcut(editor);
-
-    ({ view } = await GUIActions.switchToReactIframe());
+    ({ view } = await openEditInputWithRetry());
 
     await GUIActions.sendMessage({
       view,
@@ -61,16 +54,83 @@ describe("Edit Test", () => {
   afterEach(async function () {
     this.timeout(DEFAULT_TIMEOUT.XL);
 
-    await editor.clearText();
+    await VSBrowser.instance.driver.switchTo().defaultContent();
 
-    ({ view } = await GUIActions.switchToReactIframe());
+    // Best effort: leave edit mode and drop any diff that is still pending
+    // (both are no-ops when the test already accepted/rejected), so nothing
+    // leaks into the next test.
+    for (const command of ["continue.exitEditMode", "continue.rejectDiff"]) {
+      try {
+        await new Workbench().executeCommand(command);
+      } catch (e) {
+        console.error(`Failed to run ${command} during cleanup: ${e}`);
+      }
+    }
 
-    const tipTapEditor = await GUISelectors.getMessageInputFieldAtIndex(
-      view,
-      0,
-    );
-    await tipTapEditor.clear();
+    try {
+      await TestUtils.waitForSuccess(async () => {
+        expect(await editor.getCodeLens("Accept")).to.be.undefined;
+      }, DEFAULT_TIMEOUT.SM);
+    } catch (e) {
+      console.error(`Edit CodeLens still visible during cleanup: ${e}`);
+    }
+
+    await resetEditorAndSelectAll();
   });
+
+  /**
+   * Put the editor into a known state: focused, containing exactly the
+   * original text, with all of it selected. Selecting with Ctrl+A rather than
+   * editor.typeTextAt/selectText avoids their Ctrl+G / find-widget quick
+   * inputs, which are "not interactable" when keyboard focus is in a webview.
+   * Idempotent, so it is retried until the document really has the expected
+   * text.
+   */
+  async function resetEditorAndSelectAll() {
+    const driver = VSBrowser.instance.driver;
+    await driver.switchTo().defaultContent();
+    await TestUtils.waitForSuccess(async () => {
+      // setText focuses the editor itself (even if a webview had focus) and
+      // replaces the whole document.
+      await editor.setText(originalEditorText);
+      expect((await editor.getText()).trim()).to.equal(originalEditorText);
+      // getText() collapses the selection, so select everything afterwards,
+      // sending the keys to whichever element VS Code has focused.
+      await editor.focus();
+      await driver
+        .actions()
+        .keyDown(TestUtils.osControlKey)
+        .sendKeys("a")
+        .keyUp(TestUtils.osControlKey)
+        .perform();
+    }, DEFAULT_TIMEOUT.MD);
+  }
+
+  /**
+   * Cmd+I is dropped when keyboard focus is stuck in a hidden webview, and the
+   * webview takes a moment to show and render its input. Press the shortcut and
+   * wait until the visible Continued webview has its input; press again if not.
+   */
+  async function openEditInputWithRetry(attempts = 3) {
+    const driver = VSBrowser.instance.driver;
+    let lastError: unknown;
+    for (let i = 0; i < attempts; i++) {
+      await driver.switchTo().defaultContent();
+      await EditActions.invokeEditShortcut(editor);
+      try {
+        return await TestUtils.waitForSuccess(async () => {
+          const result = await GUIActions.switchToReactIframe({
+            requireDisplayed: true,
+          });
+          await GUISelectors.getMessageInputFieldAtIndex(result.view, 0);
+          return result;
+        }, DEFAULT_TIMEOUT.SM);
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError;
+  }
 
   async function getCodeLensWithRetry(editor: TextEditor, text: string) {
     let codeLens: CodeLens | undefined;
@@ -81,7 +141,7 @@ describe("Edit Test", () => {
     return codeLens;
   }
 
-  it.only("Accepts an Edit in the GUI", async () => {
+  it("Accepts an Edit in the GUI", async () => {
     ({ view } = await GUIActions.switchToReactIframe());
 
     await EditActions.acceptEditInGUI(view);

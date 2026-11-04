@@ -2,18 +2,18 @@ import { ModelRole } from "@continuedev/config-yaml";
 import { ModelDescription } from "core";
 import { useContext, useState } from "react";
 import Shortcut from "../../../components/gui/Shortcut";
+import { useProviderSetupDialog } from "../../../components/ProviderSetup/useProviderSetupDialog";
 import { useEditModel } from "../../../components/mainInput/Lump/useEditBlock";
 import { Card, Divider, Toggle } from "../../../components/ui";
 import { useAuth } from "../../../context/Auth";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
-import { AddModelForm } from "../../../forms/AddModelForm";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
-import { setDialogMessage, setShowDialog } from "../../../redux/slices/uiSlice";
 import { updateSelectedModelByRole } from "../../../redux/thunks/updateSelectedModelByRole";
 import { getMetaKeyLabel, isJetBrains } from "../../../util";
 import { ConfigHeader } from "../components/ConfigHeader";
 import { ModelRoleRow } from "../components/ModelRoleRow";
 import { ModeModelsTable } from "../components/ModeModelsTable";
+import { ProvidersCard } from "../components/ProvidersCard";
 
 const MODEL_DOCS_URLS = {
   chat: {
@@ -57,17 +57,10 @@ export function ModelsSection() {
 
   const handleConfigureModel = useEditModel();
 
+  const { openSetup } = useProviderSetupDialog();
+
   function handleAddModel() {
-    dispatch(setShowDialog(true));
-    dispatch(
-      setDialogMessage(
-        <AddModelForm
-          onDone={() => {
-            dispatch(setShowDialog(false));
-          }}
-        />,
-      ),
-    );
+    openSetup();
   }
 
   return (
@@ -75,7 +68,7 @@ export function ModelsSection() {
       <ConfigHeader
         title="Models"
         onAddClick={handleAddModel}
-        addButtonTooltip="Add model"
+        addButtonTooltip="Manage models"
       />
 
       <Card>
@@ -170,6 +163,8 @@ export function ModelsSection() {
         )}
       </Card>
 
+      <ProvidersCard />
+
       {!jetbrains && <ModeModelsTable />}
 
       <Card>
@@ -177,7 +172,7 @@ export function ModelsSection() {
           isOpen={showAdditionalRoles}
           onToggle={() => setShowAdditionalRoles(!showAdditionalRoles)}
           title="Additional model roles"
-          subtitle="Apply, Embed, Rerank"
+          subtitle="Apply, Embed, Rerank, Reviewer"
         >
           <div className="flex flex-col">
             <ModelRoleRow
@@ -216,6 +211,25 @@ export function ModelsSection() {
               onConfigure={handleConfigureModel}
               setupURL="https://docs.continue.dev/customize/model-roles/reranking"
             />
+
+            {config.experimental?.enableAutoApproval && (
+              <>
+                <Divider />
+
+                <ModelRoleRow
+                  role="reviewer"
+                  displayName="Reviewer (experimental)"
+                  description="Reviews tool calls in Auto approval mode. Your messages and the tool calls are sent to this model's provider. Add roles: [reviewer] to a model in config.yaml to list it here."
+                  models={config.modelsByRole.reviewer}
+                  selectedModel={
+                    config.selectedModelByRole.reviewer ?? undefined
+                  }
+                  onSelect={(model) => handleRoleUpdate("reviewer", model)}
+                  onConfigure={handleConfigureModel}
+                  setupURL="https://docs.continue.dev/customize/model-roles/reviewer"
+                />
+              </>
+            )}
           </div>
         </Toggle>
       </Card>

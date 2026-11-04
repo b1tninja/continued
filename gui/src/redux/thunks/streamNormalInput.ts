@@ -1,6 +1,7 @@
 import { createAsyncThunk, unwrapResult } from "@reduxjs/toolkit";
 import { LLMFullCompletionOptions, ModelDescription } from "core";
 import { getRuleId } from "core/llm/rules/getSystemMessageWithRules";
+import { rulesEnabledForMode } from "core/llm/rules/rulesByMode";
 import { ToCoreProtocol } from "core/protocol";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
 import { selectActiveTools } from "../selectors/selectActiveTools";
@@ -15,13 +16,21 @@ import {
   errorToolCall,
   setActive,
   setAppliedRulesAtIndex,
+  addRequestUsageToSession,
   setContextPercentage,
   setInactive,
   setInlineErrorMessage,
   setIsPruned,
+  setPromptCacheInputTokens,
+  setPromptCacheState,
   setToolGenerated,
   streamUpdate,
 } from "../slices/sessionSlice";
+import {
+  resolvePromptCache,
+  INITIAL_PROMPT_CACHE_STATE,
+} from "../../util/promptCache";
+import { totalInputTokens } from "core/llm/utils/cacheStats";
 import { ThunkApiType } from "../store";
 import { constructMessages } from "../util/constructMessages";
 
@@ -37,7 +46,14 @@ import {
 } from "../selectors/selectToolCalls";
 import { getBaseSystemMessage } from "../util/getBaseSystemMessage";
 import { callToolById } from "./callToolById";
-import { evaluateToolPolicies } from "./evaluateToolPolicies";
+import {
+  selectApprovalSettings,
+  selectAutoApproval,
+} from "../selectors/selectAutoApproval";
+import {
+  buildReviewHistory,
+  evaluateToolPolicies,
+} from "./evaluateToolPolicies";
 import { preprocessToolCalls } from "./preprocessToolCallArgs";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
 
@@ -146,6 +162,19 @@ export const streamNormalInput = createAsyncThunk<
           selectedChatModel,
         );
 
+    // Prompt caching: the toolbar choice for this model, or config.yaml when
+    // there is none. Auto learns from the pauses between requests this session.
+    const cacheResolution = resolvePromptCache(
+      selectedChatModel,
+      state.ui.promptCacheSettings?.[selectedChatModel.title],
+      state.session.promptCache ?? INITIAL_PROMPT_CACHE_STATE,
+      Date.now(),
+    );
+    completionOptions = { ...completionOptions, ...cacheResolution.options };
+    if (cacheResolution.nextState !== state.session.promptCache) {
+      dispatch(setPromptCacheState(cacheResolution.nextState));
+    }
+
     // Construct messages (excluding system message)
     const baseSystemMessage = getBaseSystemMessage(
       state.session.mode,
@@ -169,7 +198,9 @@ export const streamNormalInput = createAsyncThunk<
     const { messages, appliedRules, appliedRuleIndex } = constructMessages(
       withoutMessageIds,
       systemMessage,
-      state.config.config.rules,
+      rulesEnabledForMode(state.config.config.rulesByMode, state.session.mode)
+        ? state.config.config.rules
+        : [],
       state.ui.ruleSettings,
       systemToolsFramework,
     );
@@ -236,6 +267,28 @@ export const streamNormalInput = createAsyncThunk<
         }
 
         dispatch(streamUpdate(next.value));
+
+        // The final chunk carries the API's token counts. Remember the input
+        // size so the cache button can say what throwing the cache away costs.
+        for (const message of next.value) {
+          if (message.role === "assistant" && message.usage) {
+            const total = totalInputTokens(
+              selectedChatModel.provider,
+              selectedChatModel.model,
+              message.usage,
+            );
+            if (total > 0) {
+              dispatch(setPromptCacheInputTokens(total));
+            }
+            dispatch(
+              addRequestUsageToSession({
+                provider: selectedChatModel.provider,
+                model: selectedChatModel.model,
+                usage: message.usage,
+              }),
+            );
+          }
+        }
         next = await gen.next();
       }
 
@@ -335,6 +388,14 @@ export const streamNormalInput = createAsyncThunk<
       activeTools,
       generatedCalls3,
       toolPolicies,
+      selectAutoApproval(state3).active
+        ? {
+            sessionId: state3.session.id,
+            history: buildReviewHistory(state3.session.history),
+            onceGrants: state3.blockedCalls.grants,
+          }
+        : undefined,
+      selectApprovalSettings(state3),
     );
     const autoApprovedPolicies = policies.filter(
       ({ policy }) => policy === "allowedWithoutPermission",

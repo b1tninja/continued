@@ -270,9 +270,39 @@ export interface IContextProvider {
   get deprecationMessage(): string | null;
 }
 
+/** Token and cost totals for one model within a session. */
+export interface ModelUsage {
+  provider: string;
+  model: string;
+  /** Requests that reported usage. */
+  requests: number;
+  /** Input tokens that were neither read from nor written to the cache. */
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  /** Estimated cost in USD of the requests that could be priced. */
+  cost: number;
+  /** How many of `requests` could be priced. Fewer than `requests` means `cost` is partial. */
+  pricedRequests: number;
+}
+
 export interface SessionUsage extends Usage {
-  /** Total cumulative cost in USD for all LLM API calls in this session */
+  /**
+   * Total estimated cost in USD of the requests that could be priced. Requests
+   * to models without a known price add nothing (see `ModelUsage.pricedRequests`).
+   */
   totalCost: number;
+  /** Totals per model, keyed `provider/model`. */
+  byModel?: Record<string, ModelUsage>;
+  /** The latest request, for the context-window display. */
+  lastRequest?: {
+    provider: string;
+    model: string;
+    /** All input tokens of that request as the API counted them. */
+    inputTokens: number;
+    outputTokens: number;
+  };
 }
 
 export interface Session {
@@ -286,6 +316,31 @@ export interface Session {
   chatModelTitle?: string | null;
   /** Optional: cumulative usage and cost for all LLM API calls in this session */
   usage?: SessionUsage;
+  /** Optional: file snapshots taken before agent edits, used by "Restore to here" */
+  checkpoints?: TurnCheckpoint[];
+}
+
+/**
+ * Prior state of one file, captured before an agent tool call changed it.
+ * See core/util/checkpoints.ts.
+ */
+export interface FileCheckpoint {
+  /** File URI, as used by the IDE interface */
+  uri: string;
+  /** False when the agent created the file, so restoring means deleting it */
+  existed: boolean;
+  /** Prior contents. Absent when `existed` is false or the file was skipped */
+  content?: string;
+  /** Why the contents were not stored, so this file cannot be restored */
+  skipped?: "too_large" | "unreadable" | "evicted";
+}
+
+/** All files first touched during one turn (one user message and its replies). */
+export interface TurnCheckpoint {
+  /** `message.id` of the user message that started the turn */
+  turnId: string;
+  createdAt: number;
+  files: FileCheckpoint[];
 }
 
 export interface BaseSessionMetadata {
@@ -406,6 +461,14 @@ export interface Usage {
     cachedTokens?: number;
     /** This an Anthropic-specific property */
     cacheWriteTokens?: number;
+    /**
+     * Part of `cacheWriteTokens` written with the 5-minute lifetime. Only set
+     * when the provider reports the split (Anthropic `cache_creation`, Bedrock
+     * `cacheDetails`); when absent, treat all writes as 5-minute.
+     */
+    cacheWriteTokens5m?: number;
+    /** Part of `cacheWriteTokens` written with the 1-hour lifetime. */
+    cacheWriteTokens1h?: number;
     audioTokens?: number;
   };
   completionTokensDetails?: {
@@ -507,6 +570,18 @@ interface McpUiState {
   content: McpUiResourceContents;
 }
 
+interface ToolCallDecision {
+  outcome: "allowed" | "blocked";
+  /** A rule, the safety check, a switch, YOLO, the Auto reviewer, or the user ("once"). */
+  source: string;
+  /** One line saying why. */
+  reason?: string;
+  /** The rule as written in config.yaml, when one decided. */
+  rule?: string;
+  /** The reviewer's category, for Auto. */
+  category?: string;
+}
+
 // Will exist only on "assistant" messages with tool calls
 interface ToolCallState {
   toolCallId: string;
@@ -516,6 +591,8 @@ interface ToolCallState {
   processedArgs?: Record<string, any>; // Added in preprocesing step
   /** Why this call is waiting for approval, when a rule or protected path says so. */
   policyNote?: string;
+  /** Why the call ran or was refused, for the decision chip. Set by the policy check. */
+  decision?: ToolCallDecision;
   output?: ContextItem[];
   tool?: Tool;
   mcpUiState?: McpUiState;
@@ -1080,6 +1157,12 @@ export interface RequestOptions {
 export interface CacheBehavior {
   cacheSystemMessage?: boolean;
   cacheConversation?: boolean;
+  /**
+   * Lifetime of prompt cache entries: "5m", "1h", or "auto" (5 minutes, then
+   * 1 hour after a pause a 1-hour entry would have covered). Does not turn
+   * caching on. A choice in the chat toolbar overrides it.
+   */
+  ttl?: "auto" | "5m" | "1h";
 }
 
 export interface ClientCertificateOptions {
@@ -1222,6 +1305,12 @@ export interface BaseCompletionOptions {
   reasoning?: boolean;
   reasoningBudgetTokens?: number;
   promptCaching?: boolean;
+  /**
+   * Lifetime of prompt cache entries written by this request. Only honoured by
+   * providers that support it (Anthropic and Claude models on Bedrock); omit
+   * for the provider's default of 5 minutes.
+   */
+  promptCacheTtl?: "5m" | "1h";
 }
 
 export interface ModelCapability {
@@ -1673,6 +1762,12 @@ export interface ExperimentalConfig {
   onlyUseSystemMessageTools?: boolean;
 
   /**
+   * Show the "Auto" approval option, where a reviewer model decides tool calls
+   * the rules leave open. Needs a model with `roles: [reviewer]`.
+   */
+  enableAutoApproval?: boolean;
+
+  /**
    * Quick actions are a way to add custom commands to the Code Lens of
    * function and class declarations.
    */
@@ -1850,6 +1945,11 @@ export interface ModeModelSetting {
   reasoningEffort?: ModeReasoningEffort;
 }
 
+/** Whether rules are sent in each mode. A mode left out is enabled. */
+export type RulesByModeConfig = Partial<
+  Record<"chat" | "agent" | "plan", boolean>
+>;
+
 /** Per-mode model selection from `modeModels:` in config.yaml. */
 export type ModeModelsConfig = Partial<
   Record<"chat" | "agent" | "plan", ModeModelSetting>
@@ -1876,6 +1976,8 @@ export interface ContinueConfig {
   modelsByRole: Record<ModelRole, ILLM[]>;
   selectedModelByRole: Record<ModelRole, ILLM | null>;
   modeModels?: ModeModelsConfig;
+  /** Per-mode rules switch from `rulesByMode:` in config.yaml; a missing mode is on. */
+  rulesByMode?: RulesByModeConfig;
   /** Rules from `toolPermissions:` in config.yaml (allow / ask / deny). */
   toolPermissions?: ToolPermissions;
   data?: DataDestination[];
@@ -1902,6 +2004,7 @@ export interface BrowserSerializedContinueConfig {
   modelsByRole: Record<ModelRole, ModelDescription[]>;
   selectedModelByRole: Record<ModelRole, ModelDescription | null>;
   modeModels?: ModeModelsConfig;
+  rulesByMode?: RulesByModeConfig;
 }
 
 // DOCS SUGGESTIONS AND PACKAGE INFO
@@ -1986,8 +2089,6 @@ export interface Skill {
 
 export interface CompleteOnboardingPayload {
   mode: OnboardingModes;
-  provider?: string;
-  apiKey?: string;
 }
 
 export interface CompiledMessagesResult {

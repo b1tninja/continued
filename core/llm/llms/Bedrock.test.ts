@@ -261,6 +261,295 @@ describe("Bedrock", () => {
     });
   });
 
+  describe("prompt cache points", () => {
+    const sonnet45 = "anthropic.claude-sonnet-4-5-20250929-v1:0";
+    const old = "anthropic.claude-3-7-sonnet-20250219-v1:0";
+    const tools = [
+      {
+        type: "function" as const,
+        function: { name: "ls", description: "List", parameters: {} },
+      },
+    ];
+    const msgs: ChatMessage[] = [
+      { role: "system", content: "You are an agent." },
+      { role: "user", content: "fix it" },
+      { role: "assistant", content: "ok" },
+      { role: "user", content: "and this" },
+    ];
+
+    function build(model: string, options: any, ctor: any = {}) {
+      const b: any = new TestBedrock({
+        apiKey: "k",
+        model,
+        region: "us-east-1",
+        ...ctor,
+      });
+      b.capabilities = { tools: true };
+      return b._generateConverseInput(msgs, { model, tools, ...options });
+    }
+
+    const points = (input: any) => ({
+      tools: input.toolConfig.tools.filter((t: any) => t.cachePoint),
+      system: input.system.filter((s: any) => s.cachePoint),
+      messages: input.messages.flatMap((m: any) =>
+        m.content.filter((c: any) => c.cachePoint),
+      ),
+    });
+
+    it("adds no cache points unless caching is asked for", () => {
+      const p = points(build(sonnet45, {}));
+      expect(p.tools).toHaveLength(0);
+      expect(p.system).toHaveLength(0);
+      expect(p.messages).toHaveLength(0);
+    });
+
+    it("adds cache points to tools, system and the last two user messages", () => {
+      const p = points(build(sonnet45, { promptCaching: true }));
+      expect(p.tools).toHaveLength(1);
+      expect(p.system).toHaveLength(1);
+      expect(p.messages).toHaveLength(2);
+      expect(p.system[0].cachePoint).toEqual({ type: "default" });
+    });
+
+    it("sends ttl 1h on every cache point for a model that supports it", () => {
+      const p = points(
+        build(sonnet45, { promptCaching: true, promptCacheTtl: "1h" }),
+      );
+      const all = [...p.tools, ...p.system, ...p.messages];
+      expect(all).toHaveLength(4);
+      for (const c of all) {
+        expect(c.cachePoint).toEqual({ type: "default", ttl: "1h" });
+      }
+    });
+
+    it("uses cacheBehavior.ttl when the request does not choose", () => {
+      const cfg = { cacheBehavior: { ttl: "1h" } };
+      const p = points(build(sonnet45, { promptCaching: true }, cfg));
+      for (const c of [...p.tools, ...p.system, ...p.messages]) {
+        expect(c.cachePoint).toEqual({ type: "default", ttl: "1h" });
+      }
+      // The request's choice wins over config.
+      const q = points(
+        build(sonnet45, { promptCaching: true, promptCacheTtl: "5m" }, cfg),
+      );
+      expect(q.system[0].cachePoint).toEqual({ type: "default" });
+      // Config "1h" still never reaches a 5-minute-only model.
+      const o = points(build(old, { promptCaching: true }, cfg));
+      expect(o.system[0].cachePoint).toEqual({ type: "default" });
+    });
+
+    it("never sends ttl to a model that only takes 5 minutes", () => {
+      const p = points(
+        build(old, { promptCaching: true, promptCacheTtl: "1h" }),
+      );
+      for (const c of [...p.tools, ...p.system, ...p.messages]) {
+        expect(c.cachePoint).toEqual({ type: "default" });
+      }
+    });
+
+    it("an explicit false overrides cacheBehavior", () => {
+      const p = points(
+        build(
+          sonnet45,
+          { promptCaching: false },
+          {
+            cacheBehavior: {
+              cacheConversation: true,
+              cacheSystemMessage: true,
+            },
+          },
+        ),
+      );
+      expect(p.tools).toHaveLength(0);
+      expect(p.system).toHaveLength(0);
+      expect(p.messages).toHaveLength(0);
+    });
+
+    it("keeps earlier messages byte-identical from one request to the next", () => {
+      const model = sonnet45;
+      const b: any = new TestBedrock({
+        apiKey: "k",
+        model,
+        region: "us-east-1",
+      });
+      const turn = (n: number): ChatMessage[] => {
+        const out: ChatMessage[] = [{ role: "system", content: "sys" }];
+        for (let i = 1; i <= n; i++) {
+          out.push({ role: "user", content: `question ${i}` });
+          if (i < n) out.push({ role: "assistant", content: `answer ${i}` });
+        }
+        return out;
+      };
+      const convert = (n: number) =>
+        b._generateConverseInput(turn(n), { model, promptCaching: true })
+          .messages;
+      const strip = (m: any) => ({
+        ...m,
+        content: m.content.filter((c: any) => !c.cachePoint),
+      });
+
+      // Everything before the newest user message must match what the
+      // previous request sent, apart from where the cache points sit. This is
+      // what lets the cached conversation be read back (measured live: with
+      // the ID moving between messages, reads stopped growing on turn 3).
+      for (let n = 2; n <= 5; n++) {
+        const prev = convert(n - 1).map(strip);
+        const next = convert(n).map(strip);
+        expect(next.slice(0, prev.length - 1)).toEqual(prev.slice(0, -1));
+      }
+    });
+
+    it("puts the per-process ID on the first user message only", () => {
+      const b: any = new TestBedrock({
+        apiKey: "k",
+        model: sonnet45,
+        region: "us-east-1",
+      });
+      const input = b._generateConverseInput(
+        [
+          { role: "system", content: "sys" },
+          { role: "user", content: "one" },
+          { role: "assistant", content: "a" },
+          { role: "user", content: "two" },
+          { role: "assistant", content: "b" },
+          { role: "user", content: "three" },
+        ],
+        { model: sonnet45, promptCaching: true },
+      );
+      const texts = input.messages.map((m: any) =>
+        m.content.map((c: any) => c.text).filter(Boolean),
+      );
+      expect(texts[0][0]).toMatch(/^one<!-- SID: .+ -->$/);
+      for (const later of texts.slice(1)) {
+        for (const t of later) expect(t).not.toContain("SID:");
+      }
+    });
+
+    describe("on rewritten messages (agent loop)", () => {
+      const toolCall = (id: string) => ({
+        id,
+        type: "function" as const,
+        function: { name: "ls", arguments: "{}" },
+      });
+      // Bedrock rewrites this history: consecutive tool results are folded
+      // into ONE user message, so Continue has 9 messages and Bedrock gets 8.
+      const loop: ChatMessage[] = [
+        { role: "system", content: "You are an agent." },
+        { role: "user", content: "fix it" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [toolCall("a"), toolCall("b")],
+        },
+        { role: "tool", content: "out a", toolCallId: "a" },
+        { role: "tool", content: "out b", toolCallId: "b" },
+        { role: "assistant", content: "", toolCalls: [toolCall("c")] },
+        { role: "tool", content: "out c", toolCallId: "c" },
+        { role: "assistant", content: "done" },
+        { role: "user", content: "next" },
+      ];
+
+      function convert(history: ChatMessage[]) {
+        const b: any = new TestBedrock({
+          apiKey: "k",
+          model: sonnet45,
+          region: "us-east-1",
+        });
+        b.capabilities = { tools: true };
+        return b._generateConverseInput(history, {
+          model: sonnet45,
+          tools,
+          promptCaching: true,
+        }).messages as any[];
+      }
+      const markerIndexes = (messages: any[]) =>
+        messages.flatMap((m, i) =>
+          m.content.some((c: any) => c.cachePoint) ? [i] : [],
+        );
+
+      it("marks the last two Bedrock user messages, not Continue messages", () => {
+        const messages = convert(loop);
+        expect(messages.map((m) => m.role)).toEqual([
+          "user",
+          "assistant",
+          "user", // tool results a and b, merged
+          "assistant",
+          "user", // tool result c
+          "assistant",
+          "user", // "next"
+        ]);
+        // Markers on the tool-result message for c and on "next". Not on the
+        // merged a+b message, and never on an assistant message.
+        expect(markerIndexes(messages)).toEqual([4, 6]);
+      });
+
+      it("puts the marker after the last block of the message, outside toolResult", () => {
+        const messages = convert(loop);
+        for (const i of [4, 6]) {
+          const blocks = messages[i].content;
+          expect(blocks.filter((c: any) => c.cachePoint)).toHaveLength(1);
+          expect(blocks[blocks.length - 1].cachePoint).toEqual({
+            type: "default",
+          });
+        }
+        const toolResultMessage = messages[4].content;
+        expect(toolResultMessage[0].toolResult.toolUseId).toBe("c");
+        expect(JSON.stringify(toolResultMessage[0].toolResult)).not.toContain(
+          "cachePoint",
+        );
+      });
+
+      it("moves the marker to the new last two user messages when the loop grows", () => {
+        const grown = convert([
+          ...loop,
+          { role: "assistant", content: "", toolCalls: [toolCall("d")] },
+          { role: "tool", content: "out d", toolCallId: "d" },
+        ]);
+        // user messages are now 0, 2, 4, 6, 8; the last two are 6 and 8
+        expect(markerIndexes(grown)).toEqual([6, 8]);
+        // A message that left the window is unchanged except for the marker.
+        const before = convert(loop);
+        const strip = (m: any) => m.content.filter((c: any) => !c.cachePoint);
+        expect(strip(grown[4])).toEqual(strip(before[4]));
+      });
+
+      it("counts a single tool-only user message as one marker", () => {
+        const messages = convert([
+          { role: "system", content: "s" },
+          { role: "user", content: "go" },
+          { role: "assistant", content: "", toolCalls: [toolCall("a")] },
+          { role: "tool", content: "out a", toolCallId: "a" },
+        ]);
+        expect(markerIndexes(messages)).toEqual([0, 2]);
+        expect(messages[2].content.at(-1).cachePoint).toBeDefined();
+        expect(messages[2].content[0].toolResult).toBeDefined();
+      });
+    });
+
+    it("adds no ID when caching is off", () => {
+      const b: any = new TestBedrock({
+        apiKey: "k",
+        model: sonnet45,
+        region: "us-east-1",
+      });
+      const input = b._generateConverseInput(msgs, { model: sonnet45 });
+      expect(JSON.stringify(input.messages)).not.toContain("SID:");
+    });
+
+    it("turns the caching header on only when something is cached", () => {
+      const on: any = new TestBedrock({ apiKey: "k", model: sonnet45 });
+      on._generateConverseInput(msgs, { model: sonnet45, promptCaching: true });
+      expect(on.requestOptions.headers).toMatchObject({
+        "x-amzn-bedrock-enablepromptcaching": "true",
+      });
+      const off: any = new TestBedrock({ apiKey: "k", model: sonnet45 });
+      off._generateConverseInput(msgs, { model: sonnet45 });
+      expect(off.requestOptions.headers ?? {}).not.toHaveProperty(
+        "x-amzn-bedrock-enablepromptcaching",
+      );
+    });
+  });
+
   describe("streamChat", () => {
     let bedrock: TestBedrock;
     const mockAbortSignal = new AbortController().signal;

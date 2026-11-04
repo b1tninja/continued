@@ -254,6 +254,8 @@ export const saveCurrentSession = createAsyncThunk<
       history: session.history,
       mode: session.mode,
       chatModelTitle: selectedChatModel?.title ?? null,
+      ...(session.usage && { usage: session.usage }),
+      checkpoints: session.checkpoints,
     };
 
     const result = await dispatch(updateSession(updatedSession));

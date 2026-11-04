@@ -1,3 +1,5 @@
+import { normalizeClaudeModelId } from "../utils/calculateRequestCost.js";
+
 /**
  * Pure helpers for the Bedrock provider (kept separate from Bedrock.ts so they
  * can be unit tested without the AWS SDK).
@@ -235,4 +237,80 @@ export function buildModelCatalog(
       Number(!!a.legacy) - Number(!!b.legacy) ||
       a.name.localeCompare(b.name),
   );
+}
+
+/** The fields of Bedrock's `TokenUsage` that the provider reads. */
+export interface BedrockTokenUsageLike {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheWriteInputTokens?: number;
+  cacheDetails?: { ttl?: string; inputTokens?: number }[];
+}
+
+/**
+ * Map Bedrock's usage to Continue's `Usage`. With caching on, Bedrock's
+ * `inputTokens` counts only tokens that were neither read from nor written to
+ * the cache, which is the same meaning as Anthropic's `input_tokens`, so
+ * `promptTokens` keeps that meaning on both paths.
+ */
+export function bedrockUsageToUsage(usage: BedrockTokenUsageLike): {
+  promptTokens: number;
+  completionTokens: number;
+  promptTokensDetails: {
+    cachedTokens: number;
+    cacheWriteTokens: number;
+    cacheWriteTokens5m?: number;
+    cacheWriteTokens1h?: number;
+  };
+} {
+  const details: {
+    cachedTokens: number;
+    cacheWriteTokens: number;
+    cacheWriteTokens5m?: number;
+    cacheWriteTokens1h?: number;
+  } = {
+    cachedTokens: usage.cacheReadInputTokens ?? 0,
+    cacheWriteTokens: usage.cacheWriteInputTokens ?? 0,
+  };
+  // `cacheDetails` is empty when nothing was written.
+  if (usage.cacheDetails?.length) {
+    details.cacheWriteTokens5m = 0;
+    details.cacheWriteTokens1h = 0;
+    for (const d of usage.cacheDetails) {
+      if (d.ttl === "1h") details.cacheWriteTokens1h += d.inputTokens ?? 0;
+      else if (d.ttl === "5m") details.cacheWriteTokens5m += d.inputTokens ?? 0;
+    }
+  }
+  return {
+    promptTokens: usage.inputTokens ?? 0,
+    completionTokens: usage.outputTokens ?? 0,
+    promptTokensDetails: details,
+  };
+}
+
+/**
+ * Claude models on Bedrock that accept a 1-hour cache lifetime (`ttl: "1h"` on a
+ * cache point). From the Bedrock prompt caching table (checked 2026-11-02).
+ * Sending `ttl` to a model that only supports 5 minutes can fail the request
+ * with a ValidationException, so anything not listed here gets the default.
+ * Rows for older Sonnet 4 and Opus 4 / 4.1 models were not visible when the
+ * table was read, so they are left out.
+ */
+const ONE_HOUR_CACHE_MODELS =
+  /^claude-(haiku-4-5|haiku-5|sonnet-4-5|sonnet-4-6|sonnet-5|opus-4-5|opus-4-6|opus-4-7|opus-4-8|opus-5|fable|mythos)/;
+
+export function bedrockSupportsOneHourCache(modelId: string): boolean {
+  const id = normalizeClaudeModelId(modelId);
+  return !!id && ONE_HOUR_CACHE_MODELS.test(id);
+}
+
+/** The `ttl` to put on a cache point, or undefined for the default. */
+export function bedrockCacheTtl(
+  modelId: string,
+  requested: "5m" | "1h" | undefined,
+): "1h" | undefined {
+  return requested === "1h" && bedrockSupportsOneHourCache(modelId)
+    ? "1h"
+    : undefined;
 }
