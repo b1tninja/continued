@@ -1,6 +1,7 @@
 import type { ModelDescription } from "core";
 import { bedrockSupportsOneHourCache } from "core/llm/llms/bedrockHelpers";
 import { normalizeClaudeModelId } from "core/llm/utils/calculateRequestCost";
+import { minCacheableTokens } from "core/llm/utils/cacheMinimums";
 import { formatClockTime } from "./promptCacheCountdown";
 
 /** What the toolbar menu can set. `undefined` means "follow config.yaml". */
@@ -311,6 +312,12 @@ export interface PromptCacheStatus {
   expiresAt?: number;
   /** Lifetime of that entry in ms, when warm. */
   lifetimeMs?: number;
+  /**
+   * The last request was shorter than the model's cache minimum, so the
+   * provider cached nothing (and said nothing). Only set when the minimum is
+   * known and the API has reported the size.
+   */
+  belowMinimum?: { tokens: number; minimum: number };
 }
 
 export function promptCacheStatus(
@@ -327,11 +334,22 @@ export function promptCacheStatus(
   const ttl: PromptCacheTtl =
     policy === "1h" || (policy === "auto" && state.escalated) ? "1h" : "5m";
 
+  // A prompt under the model's minimum is not cached, so there is no entry to
+  // be warm or to expire.
+  const minimum = minCacheableTokens(model.model, model.provider);
+  const belowMinimum =
+    on &&
+    minimum !== undefined &&
+    state.lastInputTokens !== undefined &&
+    state.lastInputTokens < minimum
+      ? { tokens: state.lastInputTokens, minimum }
+      : undefined;
+
   let warm = false;
   let msLeft: number | undefined;
   let expiresAt: number | undefined;
   let lifetimeMs: number | undefined;
-  if (on && state.lastRequestAt !== undefined) {
+  if (on && !belowMinimum && state.lastRequestAt !== undefined) {
     lifetimeMs = TTL_MS[state.lastTtl ?? "5m"];
     const end = state.lastRequestAt + lifetimeMs;
     if (end > now) {
@@ -342,7 +360,7 @@ export function promptCacheStatus(
       lifetimeMs = undefined;
     }
   }
-  return { on, ttl, warm, msLeft, expiresAt, lifetimeMs };
+  return { on, ttl, warm, msLeft, expiresAt, lifetimeMs, belowMinimum };
 }
 
 /** One-line summary for the toolbar tooltip. */
@@ -367,6 +385,10 @@ export function promptCacheTooltip(
       : setting === undefined
         ? `from config (${life})`
         : life;
+  if (status.belowMinimum) {
+    const { tokens, minimum } = status.belowMinimum;
+    return `Prompt cache: ${mode}. Nothing is cached yet: the last request was about ${tokens.toLocaleString()} tokens and this model caches from ${minimum.toLocaleString()}. It starts once the conversation is longer.`;
+  }
   if (status.warm && status.msLeft !== undefined) {
     const at =
       status.expiresAt !== undefined

@@ -23,13 +23,13 @@ or choose a setting from the prompt cache button in the chat toolbar, next to th
 
 A cached prefix expires after a period without use. Each request that reads it starts the period again at no charge.
 
-| Setting     | Lifetime sent            | Write price    | Notes                                                              |
-| ----------- | ------------------------ | -------------- | ------------------------------------------------------------------ |
-| 5 minutes   | none (provider default)  | 1.25x input    | Cheapest write. Expires if you pause longer than 5 minutes.        |
-| 1 hour      | `ttl: "1h"`              | 2x input       | Survives long commands and breaks.                                 |
-| Auto        | starts at 5 minutes      | 1.25x, then 2x | Switches to 1 hour for the rest of the session, see below.         |
-| Off         | caching disabled         | none           | Every request is sent and billed at the full input price.          |
-| Config default | none                  | 1.25x          | Follows `config.yaml`: on only if the model enables caching there. |
+| Setting        | Lifetime sent           | Write price    | Notes                                                              |
+| -------------- | ----------------------- | -------------- | ------------------------------------------------------------------ |
+| 5 minutes      | none (provider default) | 1.25x input    | Cheapest write. Expires if you pause longer than 5 minutes.        |
+| 1 hour         | `ttl: "1h"`             | 2x input       | Survives long commands and breaks.                                 |
+| Auto           | starts at 5 minutes     | 1.25x, then 2x | Switches to 1 hour for the rest of the session, see below.         |
+| Off            | caching disabled        | none           | Every request is sent and billed at the full input price.          |
+| Config default | none                    | 1.25x          | Follows `config.yaml`: on only if the model enables caching there. |
 
 Reading a cached prefix costs 0.1x the input price whatever the lifetime.
 
@@ -67,11 +67,11 @@ cacheBehavior:
 
 Prices are multiples of the model's input price. These are the figures Continued uses; they are Anthropic list prices as of 2026-11-02, and Bedrock or a reseller can differ.
 
-| Model        | Input | 5-minute write | 1-hour write | Read    |
-| ------------ | ----- | -------------- | ------------ | ------- |
-| Sonnet 4.6   | $3    | $3.75          | $6           | $0.30   |
-| Opus 4.5-4.8 | $5    | $6.25          | $10          | $0.50   |
-| Haiku 4.5    | $1    | $1.25          | $2           | $0.10   |
+| Model        | Input | 5-minute write | 1-hour write | Read  |
+| ------------ | ----- | -------------- | ------------ | ----- |
+| Sonnet 4.6   | $3    | $3.75          | $6           | $0.30 |
+| Opus 4.5-4.8 | $5    | $6.25          | $10          | $0.50 |
+| Haiku 4.5    | $1    | $1.25          | $2           | $0.10 |
 
 Dollars per million tokens. Claude 4 Opus and 4.1 are $15 input; Claude 3 Haiku has its own cache prices. The table in `core/llm/utils/calculateRequestCost.ts` has every model.
 
@@ -89,7 +89,7 @@ The setting is stored per model and survives restarts.
 
 ## Bedrock
 
-On Bedrock, `1 hour` is offered only for models known to accept it: Claude Haiku 4.5, Sonnet 4.5, 4.6 and 5, and Opus 4.5 to 4.8 and 5. For any other Claude model the menu has no 1-hour entry, and a request that asks for it is sent with the 5-minute default, because an unsupported `ttl` can fail the request.
+On Bedrock, `1 hour` is offered only for models the AWS prompt caching guide lists with a 1-hour option: Claude Haiku 4.5 and 5.5, Sonnet 4.6, 5 and 5.5, Opus 4.5 to 4.8, 5 and 5.5, Fable and Mythos. Sonnet 4.5, Sonnet 4, Opus 4 and 4.1, and Claude 3 models are not in that table. For any other Claude model the menu has no 1-hour entry, and a request that asks for it is sent with the 5-minute default, because an unsupported `ttl` can fail the request.
 
 Continued also adds a per-process ID to the first user message so that two people sharing an AWS account do not read each other's cached conversation. The system prompt comes before it and can still be shared.
 

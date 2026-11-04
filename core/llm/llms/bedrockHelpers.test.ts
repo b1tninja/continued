@@ -300,12 +300,25 @@ describe("bedrockUsageToUsage", () => {
 
 describe("bedrockSupportsOneHourCache", () => {
   it.each([
-    ["us.anthropic.claude-sonnet-4-5-20250929-v1:0", true],
-    ["anthropic.claude-sonnet-4-6", true],
-    ["anthropic.claude-haiku-4-5-20251001-v1:0", true],
+    // Every Claude row of the AWS Bedrock table lists "5 minutes, 1 hour"
+    ["anthropic.claude-haiku-5-5", true],
+    ["anthropic.claude-sonnet-5-5", true],
+    ["anthropic.claude-opus-5-5", true],
+    ["anthropic.claude-fable-5-1", true],
+    ["anthropic.claude-mythos-5-1", true],
+    ["anthropic.claude-fable-5", true],
+    ["anthropic.claude-mythos-5", true],
+    ["anthropic.claude-opus-5", true],
+    ["anthropic.claude-opus-4-8", true],
+    ["anthropic.claude-opus-4-7", true],
     ["anthropic.claude-opus-4-6-v1", true],
     ["global.anthropic.claude-opus-4-5-20251101-v1:0", true],
-    // Listed as 5 minutes only, or not listed: never send a ttl.
+    ["anthropic.claude-sonnet-5", true],
+    ["anthropic.claude-sonnet-4-6", true],
+    ["us.anthropic.claude-sonnet-4-6", true],
+    ["anthropic.claude-haiku-4-5-20251001-v1:0", true],
+    // Not in that table: never send a ttl (it can fail the request).
+    ["us.anthropic.claude-sonnet-4-5-20250929-v1:0", false],
     ["anthropic.claude-3-7-sonnet-20250219-v1:0", false],
     ["anthropic.claude-3-5-sonnet-20241022-v2:0", false],
     ["anthropic.claude-sonnet-4-20250514-v1:0", false],
@@ -318,7 +331,7 @@ describe("bedrockSupportsOneHourCache", () => {
 });
 
 describe("bedrockCacheTtl", () => {
-  const ok = "anthropic.claude-sonnet-4-5-20250929-v1:0";
+  const ok = "anthropic.claude-sonnet-4-6";
   const old = "anthropic.claude-3-7-sonnet-20250219-v1:0";
 
   it("returns 1h only when asked for and supported", () => {

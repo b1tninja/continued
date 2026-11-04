@@ -142,7 +142,7 @@ export function coldResume(
 ): ColdResume | undefined {
   if (!modelSupportsPromptCacheControl(model)) return undefined;
   const status = promptCacheStatus(model, setting, state, now);
-  if (!status.on || status.warm) return undefined;
+  if (!status.on || status.warm || status.belowMinimum) return undefined;
   if (state.lastRequestAt === undefined || !state.lastInputTokens) {
     return undefined;
   }
