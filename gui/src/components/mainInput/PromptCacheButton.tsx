@@ -76,8 +76,9 @@ function CountdownRing({
 function tooltipText(
   status: ReturnType<typeof promptCacheStatus>,
   setting: PromptCacheSetting | undefined,
+  reason?: "gap" | "requests",
 ): string {
-  return promptCacheTooltip(status, setting);
+  return promptCacheTooltip(status, setting, reason);
 }
 
 /**
@@ -133,7 +134,10 @@ export function PromptCacheButton() {
       }
     >
       <div className="relative">
-        <ToolTip place="top" content={tooltipText(status, setting)}>
+        <ToolTip
+          place="top"
+          content={tooltipText(status, setting, state.escalatedBy)}
+        >
           <ListboxButton
             data-testid="prompt-cache-button"
             aria-label="Prompt cache"

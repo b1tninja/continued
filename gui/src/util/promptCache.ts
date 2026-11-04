@@ -29,8 +29,20 @@ export interface PromptCacheMiss {
 export interface PromptCacheSessionState {
   /** When the last request in this session started (ms since epoch). */
   lastRequestAt?: number;
-  /** Auto has seen a gap that a 1-hour lifetime would have covered. */
+  /**
+   * Auto has moved this conversation to the 1-hour lifetime: it saw a gap that
+   * a 1-hour entry would have covered, or the conversation reached
+   * `AUTO_ESCALATE_AT_REQUEST` requests in an agent-style mode.
+   */
   escalated: boolean;
+  /** Why `escalated` was set, for the tooltip. */
+  escalatedBy?: "gap" | "requests";
+  /**
+   * Requests this conversation has sent with caching on, one per model call
+   * (a tool loop counts each call). Starts at 0 in every new conversation and
+   * is saved with the session, so a resumed one keeps counting.
+   */
+  requests?: number;
   /** Lifetime the last request wrote its cache entry with. */
   lastTtl?: PromptCacheTtl;
   /**
@@ -67,6 +79,22 @@ export const AUTO_ESCALATE_MIN_GAP_MS = 5 * 60 * 1000;
  * guess; see plans/prompt-caching.md section 6.3.
  */
 export const AUTO_ESCALATE_MAX_GAP_MS = 55 * 60 * 1000;
+/**
+ * Auto moves to the 1-hour lifetime at this request of a conversation, in
+ * agent-style modes. A week of real agent traffic (replayed in
+ * plans/cache-adaptive-lifetime.md) saves 2.9% to 4.4% for any threshold from
+ * 3 to 15, so 5 is a point on a plateau and not a tuned value.
+ */
+export const AUTO_ESCALATE_AT_REQUEST = 5;
+
+/**
+ * Modes that send tools, where each request is a model call in a loop and not
+ * a human turn. Chat keeps the gap rule only: no data says what five human
+ * turns predict.
+ */
+export function isAgentStyleMode(mode: string | undefined): boolean {
+  return mode === "agent" || mode === "plan" || mode === "background";
+}
 
 const TTL_MS: Record<PromptCacheTtl, number> = {
   "5m": 5 * 60 * 1000,
@@ -137,6 +165,7 @@ export function resolvePromptCache(
   setting: PromptCacheSetting | undefined,
   state: PromptCacheSessionState,
   now: number,
+  mode?: string,
 ): PromptCacheResolution {
   if (!modelSupportsPromptCacheControl(model)) {
     return { options: {}, nextState: state };
@@ -156,11 +185,28 @@ export function resolvePromptCache(
   }
 
   let escalated = state.escalated;
+  let escalatedBy = state.escalatedBy;
   if (state.lastRequestAt !== undefined) {
     const gap = now - state.lastRequestAt;
     if (gap > AUTO_ESCALATE_MIN_GAP_MS && gap <= AUTO_ESCALATE_MAX_GAP_MS) {
+      if (!escalated) escalatedBy = "gap";
       escalated = true;
     }
+  }
+
+  // One count per model call, including each call after a tool result.
+  const requests = (state.requests ?? 0) + 1;
+  const followsAuto =
+    setting === "auto" ||
+    (setting === undefined && configTtlPolicy(model) === "auto");
+  if (
+    followsAuto &&
+    !escalated &&
+    isAgentStyleMode(mode) &&
+    requests >= AUTO_ESCALATE_AT_REQUEST
+  ) {
+    escalated = true;
+    escalatedBy = "requests";
   }
 
   let options: PromptCacheResolution["options"];
@@ -203,6 +249,8 @@ export function resolvePromptCache(
       ...state,
       lastRequestAt: now,
       escalated,
+      ...(escalatedBy && { escalatedBy }),
+      requests,
       lastTtl: ttl,
       lastInputTokens: state.lastInputTokens,
     },
@@ -301,14 +349,21 @@ export function promptCacheStatus(
 export function promptCacheTooltip(
   status: PromptCacheStatus,
   setting: PromptCacheSetting | undefined,
+  reason?: "gap" | "requests",
 ): string {
   if (!status.on) {
     return "Prompt cache: off. Every request re-reads the whole conversation at full price.";
   }
   const life = status.ttl === "1h" ? "1 hour" : "5 minutes";
+  const why =
+    setting === "auto" && status.ttl === "1h" && reason
+      ? reason === "requests"
+        ? `, switched after ${AUTO_ESCALATE_AT_REQUEST} requests`
+        : ", switched after a pause"
+      : "";
   const mode =
     setting === "auto"
-      ? `Auto (${life})`
+      ? `Auto (${life}${why})`
       : setting === undefined
         ? `from config (${life})`
         : life;
@@ -339,7 +394,8 @@ export const PROMPT_CACHE_SETTING_LABELS: Record<
   },
   auto: {
     label: "Auto",
-    detail: "5 minutes, then 1 hour once you pause 5 to 55 minutes",
+    detail:
+      "5 minutes, then 1 hour after 5 requests in Agent, Plan or Background, or once you pause 5 to 55 minutes",
   },
   "5m": {
     label: "5 minutes",

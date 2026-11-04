@@ -283,6 +283,11 @@ export interface SessionPromptCache {
   lastInputTokens?: number;
   /** Lifetime that request wrote its cache entry with. */
   lastTtl?: "5m" | "1h";
+  /** Requests the conversation has sent with caching on (Auto counts them). */
+  requests?: number;
+  /** Auto moved the conversation to the 1-hour lifetime. */
+  escalated?: boolean;
+  escalatedBy?: "gap" | "requests";
 }
 
 export interface Session {

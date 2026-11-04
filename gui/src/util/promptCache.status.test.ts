@@ -204,3 +204,32 @@ describe("formatTimeLeft", () => {
     expect(formatTimeLeft(ms)).toBe(expected);
   });
 });
+
+describe("promptCacheTooltip says why Auto switched", () => {
+  const status = {
+    on: true,
+    ttl: "1h" as const,
+    warm: false,
+  };
+
+  it("after the request count", () => {
+    expect(promptCacheTooltip(status, "auto", "requests")).toContain(
+      "Auto (1 hour, switched after 5 requests)",
+    );
+  });
+
+  it("after a pause", () => {
+    expect(promptCacheTooltip(status, "auto", "gap")).toContain(
+      "Auto (1 hour, switched after a pause)",
+    );
+  });
+
+  it("says nothing about why when Auto is still on 5 minutes or the lifetime is fixed", () => {
+    expect(
+      promptCacheTooltip({ ...status, ttl: "5m" }, "auto", "requests"),
+    ).toContain("Auto (5 minutes)");
+    expect(promptCacheTooltip(status, "1h", "requests")).not.toContain(
+      "switched",
+    );
+  });
+});

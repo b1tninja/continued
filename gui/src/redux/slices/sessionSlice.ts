@@ -704,17 +704,24 @@ export const sessionSlice = createSlice({
       state.isPruned = false;
       state.contextPercentage = undefined;
       // A different conversation shares nothing with the cached one: its size,
-      // timing and misses do not carry over. What Auto learned about the
-      // user's pauses does. A saved session brings back its own record, so
-      // resuming it after a break can say the cache has expired.
+      // timing, misses and what Auto learned all start over. Each conversation
+      // starts on the 5-minute lifetime and earns the 1-hour one from its own
+      // requests (carrying the flag over cost 0.8% in a replay of a week of
+      // real traffic, cancelling the saving from the request count). A saved
+      // session brings back its own record, so resuming it after a break can
+      // say the cache has expired and keeps counting from where it was.
       const saved = payload?.promptCache;
       state.promptCache = {
         ...INITIAL_PROMPT_CACHE_STATE,
-        escalated: state.promptCache?.escalated ?? false,
         ...(saved?.lastRequestAt !== undefined && {
           lastRequestAt: saved.lastRequestAt,
           lastInputTokens: saved.lastInputTokens,
           lastTtl: saved.lastTtl,
+          ...(saved.requests !== undefined && { requests: saved.requests }),
+          ...(saved.escalated && {
+            escalated: true,
+            escalatedBy: saved.escalatedBy,
+          }),
         }),
       };
 

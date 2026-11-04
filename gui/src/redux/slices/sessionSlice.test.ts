@@ -34,9 +34,9 @@ describe("sessionSlice prompt cache state across sessions", () => {
     },
   };
 
-  it("starts a new session with an empty cache but keeps what Auto learned", () => {
+  it("starts a new session with an empty cache and nothing Auto learned before", () => {
     const next = sessionSlice.reducer(state, sessionSlice.actions.newSession());
-    expect(next.promptCache).toEqual({ escalated: true });
+    expect(next.promptCache).toEqual({ escalated: false });
   });
 
   it("starts a loaded session empty too", () => {
@@ -50,7 +50,8 @@ describe("sessionSlice prompt cache state across sessions", () => {
     );
     expect(next.promptCache?.lastInputTokens).toBeUndefined();
     expect(next.promptCache?.misses).toBeUndefined();
-    expect(next.promptCache?.escalated).toBe(true);
+    expect(next.promptCache?.requests).toBeUndefined();
+    expect(next.promptCache?.escalated).toBe(false);
   });
 
   it("brings back a loaded session's own cache record, and nothing else of the old one", () => {
@@ -68,11 +69,49 @@ describe("sessionSlice prompt cache state across sessions", () => {
       } as any),
     );
     expect(next.promptCache).toEqual({
-      escalated: true,
+      escalated: false,
       lastRequestAt: 999,
       lastInputTokens: 250_000,
       lastTtl: "5m",
     });
+  });
+
+  it("brings back a saved session's request count and escalation, so resuming keeps counting", () => {
+    const next = sessionSlice.reducer(
+      state,
+      sessionSlice.actions.newSession({
+        sessionId: "other",
+        title: "t",
+        history: [],
+        promptCache: {
+          lastRequestAt: 999,
+          lastTtl: "1h",
+          requests: 7,
+          escalated: true,
+          escalatedBy: "requests",
+        },
+      } as any),
+    );
+    expect(next.promptCache).toMatchObject({
+      escalated: true,
+      escalatedBy: "requests",
+      requests: 7,
+      lastTtl: "1h",
+    });
+  });
+
+  it("a session saved before the count existed starts counting from zero", () => {
+    const next = sessionSlice.reducer(
+      state,
+      sessionSlice.actions.newSession({
+        sessionId: "old",
+        title: "t",
+        history: [],
+        promptCache: { lastRequestAt: 999, lastTtl: "5m" },
+      } as any),
+    );
+    expect(next.promptCache?.requests).toBeUndefined();
+    expect(next.promptCache?.escalated).toBe(false);
   });
 
   it("counts misses and acknowledges them", () => {

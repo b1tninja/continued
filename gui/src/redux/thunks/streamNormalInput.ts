@@ -174,6 +174,7 @@ export const streamNormalInput = createAsyncThunk<
       cacheSetting,
       cacheStateBefore,
       Date.now(),
+      state.session.mode,
     );
     completionOptions = { ...completionOptions, ...cacheResolution.options };
     if (cacheResolution.nextState !== state.session.promptCache) {

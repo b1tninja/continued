@@ -262,6 +262,9 @@ export const saveCurrentSession = createAsyncThunk<
           lastRequestAt: cache.lastRequestAt,
           lastInputTokens: cache.lastInputTokens,
           lastTtl: cache.lastTtl,
+          requests: cache.requests,
+          escalated: cache.escalated,
+          escalatedBy: cache.escalatedBy,
         },
       }),
     };

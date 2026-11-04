@@ -49,6 +49,9 @@ async function sentOptions(opts: {
   lastInputTokens?: number;
   /** Chunks the mocked model streams back (the last may carry usage). */
   reply?: any[];
+  /** Requests this conversation has already sent. */
+  requests?: number;
+  mode?: "chat" | "agent" | "plan" | "background";
 }) {
   const model = opts.model ?? claude;
   const state = getEmptyRootState();
@@ -56,9 +59,14 @@ async function sentOptions(opts: {
   state.session.history = [
     { message: { id: "1", role: "user", content: "hello" }, contextItems: [] },
   ];
+  if (opts.mode) state.session.mode = opts.mode;
+  if (opts.requests !== undefined && opts.lastRequestAgoMs === undefined) {
+    state.session.promptCache = { escalated: false, requests: opts.requests };
+  }
   if (opts.lastRequestAgoMs !== undefined) {
     state.session.promptCache = {
       escalated: false,
+      requests: opts.requests,
       lastRequestAt: Date.now() - opts.lastRequestAgoMs,
       lastTtl: "5m",
       lastInputTokens: opts.lastInputTokens,
@@ -130,6 +138,50 @@ describe("prompt cache options in the chat request", () => {
       promptCacheTtl: "1h",
     });
     expect(cache()?.escalated).toBe(true);
+  });
+
+  it("moves Auto to 1 hour on the 5th request of an agent conversation", async () => {
+    const fourth = await sentOptions({
+      setting: "auto",
+      mode: "agent",
+      requests: 3,
+    });
+    expect(fourth.options.promptCacheTtl).toBe("5m");
+    expect(fourth.cache()?.requests).toBe(4);
+
+    const fifth = await sentOptions({
+      setting: "auto",
+      mode: "agent",
+      requests: 4,
+    });
+    expect(fifth.options).toMatchObject({
+      promptCaching: true,
+      promptCacheTtl: "1h",
+    });
+    expect(fifth.cache()).toMatchObject({
+      requests: 5,
+      escalated: true,
+      escalatedBy: "requests",
+    });
+  });
+
+  it("does not move Auto to 1 hour by count in chat mode", async () => {
+    const { options, cache } = await sentOptions({
+      setting: "auto",
+      mode: "chat",
+      requests: 20,
+    });
+    expect(options.promptCacheTtl).toBe("5m");
+    expect(cache()?.escalated).toBe(false);
+  });
+
+  it("does not count requests when caching is off", async () => {
+    const { cache } = await sentOptions({
+      setting: "off",
+      mode: "agent",
+      requests: 4,
+    });
+    expect(cache()?.requests).toBe(4);
   });
 
   it("sends the chosen fixed lifetime", async () => {
