@@ -1,5 +1,7 @@
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
-import { useMemo } from "react";
+import type { BedrockGlobalProfileStatus } from "core/protocol/core";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { dismissCacheTip } from "../../redux/slices/uiSlice";
@@ -23,13 +25,42 @@ export function CacheTipsButton() {
   const dismissed = useAppSelector((s) => s.ui.dismissedCacheTips);
   const ledger = useAppSelector((s) => s.session.promptCache?.ledger);
   const failures = useAppSelector((s) => s.session.promptCache?.failures);
+  const ideMessenger = useContext(IdeMessengerContext);
+  // Whether the account lists a global profile, asked once per Bedrock model
+  // that uses a regional ID. Until it answers, the tip suggests the global ID.
+  const [globalProfiles, setGlobalProfiles] = useState<
+    Record<string, BedrockGlobalProfileStatus>
+  >({});
+  const regionalBedrock =
+    model?.provider?.toLowerCase() === "bedrock" &&
+    /^(us|eu|apac|jp|au|ca)\./i.test(model.model);
+  useEffect(() => {
+    if (!model || !regionalBedrock || globalProfiles[model.title]) return;
+    const title = model.title;
+    let live = true;
+    ideMessenger
+      .request("bedrock/globalProfile", { title })
+      .then((res) => {
+        const status = res.status === "success" ? res.content : "unknown";
+        if (live) setGlobalProfiles((prev) => ({ ...prev, [title]: status }));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model?.title, model?.model, regionalBedrock, ideMessenger]);
 
   const tips = useMemo(
     () =>
-      cacheTips(model, setting, ledger, failures).filter(
-        (t) => !dismissed?.[cacheTipKey(model?.title ?? "", t.id)],
-      ),
-    [model, setting, dismissed, ledger, failures],
+      cacheTips(
+        model,
+        setting,
+        ledger,
+        failures,
+        model ? globalProfiles[model.title] : undefined,
+      ).filter((t) => !dismissed?.[cacheTipKey(model?.title ?? "", t.id)]),
+    [model, setting, dismissed, ledger, failures, globalProfiles],
   );
 
   if (!model || tips.length === 0) return null;

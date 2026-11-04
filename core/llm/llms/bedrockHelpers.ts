@@ -317,3 +317,28 @@ export function bedrockCacheTtl(
     ? "1h"
     : undefined;
 }
+
+/** What an account's own model list says about a model's `global.` profile. */
+export type GlobalProfileStatus = "present" | "absent" | "unknown";
+
+/**
+ * Whether the catalog lists the `global.` inference profile of a model given by
+ * a regional ID (`us.anthropic.claude-sonnet-4-6` ->
+ * `global.anthropic.claude-sonnet-4-6`). Only a regional ID has a global
+ * counterpart worth asking about: a `global.` ID is already it, and a bare ID,
+ * an ARN or an application profile has none to suggest, so those are "unknown"
+ * (nothing was checked) rather than "absent".
+ */
+export function globalProfileStatus(
+  catalog: Pick<BedrockModelOption, "id" | "kind">[],
+  modelId: string,
+): GlobalProfileStatus {
+  const m = modelId.match(/^(us|eu|apac|jp|au|ca)\.(.+)$/i);
+  if (!m) return "unknown";
+  const wanted = `global.${m[2]}`.toLowerCase();
+  return catalog.some(
+    (o) => o.kind === "inference-profile" && o.id.toLowerCase() === wanted,
+  )
+    ? "present"
+    : "absent";
+}

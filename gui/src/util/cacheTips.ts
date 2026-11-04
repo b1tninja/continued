@@ -68,6 +68,12 @@ export function cacheTips(
   ledger?: CacheLedgerEntry[],
   /** This conversation's failed requests; enables the throttling tip. */
   failures?: RequestFailure[],
+  /**
+   * Whether the account lists the global profile of this model, when it has
+   * been checked. Without it (or when "unknown") the regional-premium tip
+   * suggests the global ID as before.
+   */
+  globalProfile?: "present" | "absent" | "unknown",
 ): CacheTip[] {
   if (!model) return [];
   const tips: CacheTip[] = [];
@@ -80,16 +86,19 @@ export function cacheTips(
     const factor = bedrockRegionalPriceFactor(model.model);
     if (factor > 1) {
       const percent = Math.round((factor - 1) * 100);
+      const noGlobal = globalProfile === "absent";
       tips.push({
         id: "regional-premium",
-        severity: "warning",
+        severity: noGlobal ? "info" : "warning",
         title: `Regional endpoints cost ${percent}% more`,
-        body:
-          `This model ID uses a regional endpoint, which Anthropic prices ${percent}% above a global one, ` +
-          `on input, output and cache reads and writes. If your data does not have to stay in that geography, ` +
-          `try the global ID if one exists for this model. Global endpoints can route a request to any region, ` +
-          `so keep the regional one when data residency matters.`,
-        suggestion: globalModelId(model.model),
+        body: noGlobal
+          ? `This model ID uses a regional endpoint, which Anthropic prices ${percent}% above a global one, on input, output and cache reads and writes. ` +
+            `Your account does not list a global profile for this model, so there is nothing cheaper to switch to here.`
+          : `This model ID uses a regional endpoint, which Anthropic prices ${percent}% above a global one, ` +
+            `on input, output and cache reads and writes. If your data does not have to stay in that geography, ` +
+            `try the global ID if one exists for this model. Global endpoints can route a request to any region, ` +
+            `so keep the regional one when data residency matters.`,
+        ...(!noGlobal && { suggestion: globalModelId(model.model) }),
       });
     }
   }

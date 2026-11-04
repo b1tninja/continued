@@ -5,6 +5,7 @@ import {
   bedrockUsageToUsage,
   buildModelCatalog,
   getBedrockErrorHint,
+  globalProfileStatus,
   inferenceProfilePrefixForRegion,
 } from "./bedrockHelpers";
 
@@ -342,5 +343,49 @@ describe("bedrockCacheTtl", () => {
   it("omits the ttl for the default lifetime", () => {
     expect(bedrockCacheTtl(ok, "5m")).toBeUndefined();
     expect(bedrockCacheTtl(ok, undefined)).toBeUndefined();
+  });
+});
+
+describe("globalProfileStatus", () => {
+  const catalog = [
+    { id: "global.anthropic.claude-sonnet-4-6", kind: "inference-profile" },
+    { id: "us.anthropic.claude-sonnet-4-6", kind: "inference-profile" },
+    { id: "us.anthropic.claude-haiku-4-5", kind: "inference-profile" },
+    { id: "global.anthropic.claude-mine", kind: "application-profile" },
+  ] as const;
+
+  it("is present when the account lists the global profile", () => {
+    expect(
+      globalProfileStatus([...catalog], "us.anthropic.claude-sonnet-4-6"),
+    ).toBe("present");
+    expect(
+      globalProfileStatus([...catalog], "EU.anthropic.claude-sonnet-4-6"),
+    ).toBe("present");
+  });
+
+  it("is absent when the list has the regional profile but no global one", () => {
+    expect(
+      globalProfileStatus([...catalog], "us.anthropic.claude-haiku-4-5"),
+    ).toBe("absent");
+    expect(globalProfileStatus([], "us.anthropic.claude-sonnet-4-6")).toBe(
+      "absent",
+    );
+  });
+
+  it("does not count a user's application profile as the global one", () => {
+    expect(globalProfileStatus([...catalog], "us.anthropic.claude-mine")).toBe(
+      "absent",
+    );
+  });
+
+  it("is unknown for IDs it cannot ask about", () => {
+    for (const id of [
+      "global.anthropic.claude-sonnet-4-6",
+      "anthropic.claude-3-haiku-20240307-v1:0",
+      "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/x",
+      "",
+    ]) {
+      expect(globalProfileStatus([...catalog], id)).toBe("unknown");
+    }
   });
 });

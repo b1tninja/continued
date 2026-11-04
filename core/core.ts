@@ -24,6 +24,7 @@ import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
 import DocsService from "./indexing/docs/DocsService";
 import { countTokens } from "./llm/countTokens";
 import Bedrock from "./llm/llms/Bedrock";
+import { globalProfileStatus } from "./llm/llms/bedrockHelpers";
 import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
@@ -787,6 +788,26 @@ export class Core {
           ok: false as const,
           error: e instanceof Error ? e.message : String(e),
         };
+      }
+    });
+    // Does the account list the global profile of this configured Bedrock
+    // model? Lists models and profiles (control plane, no inference).
+    on("bedrock/globalProfile", async (msg) => {
+      try {
+        const { config } = await this.configHandler.loadConfig();
+        const model = config?.modelsByRole.chat.find(
+          (m) => m.title === msg.data.title,
+        );
+        if (!(model instanceof Bedrock)) return "unknown" as const;
+        if (globalProfileStatus([], model.model) === "unknown") {
+          return "unknown" as const;
+        }
+        return globalProfileStatus(
+          await model.listAvailableModels(),
+          model.model,
+        );
+      } catch {
+        return "unknown" as const;
       }
     });
     on("bedrock/testModel", async (msg) => {
