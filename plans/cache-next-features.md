@@ -234,6 +234,8 @@ What changed in the code because of these (branch `fix/cache-minimum-and-ttl-all
 - **The Bedrock 1-hour list follows the AWS table.** Sonnet 4.5 is out, since it is not in the table.
 - **The regional premium covers `us.`, `eu.`, `apac.`, `jp.`, `au.` and `ca.`** on the models Anthropic names.
 
+The tips icon (C21, `feat/cache-tips`) is where this advice reaches the user: `cacheTips(model, setting)` returns a list, the toolbar shows a triangle only when the list is not empty, and a dismissal is stored per model and tip. Candidates for more tips, each needing its own source and test: a first prompt under the model's cache minimum (the status already says it; the tip could say how to reach it), caching off on a long conversation (today a notice), and a model with a cheaper listed equivalent. Not built: a tip that needs data the app does not have, such as the region the AWS account can reach.
+
 Not done: Anthropic's automatic caching (a possible simplification, not a drop-in, since it takes a slot and
 is unsupported on some models), and a minimum-length check in the CLI adapters.
 
