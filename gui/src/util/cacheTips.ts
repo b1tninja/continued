@@ -1,12 +1,36 @@
 import type { ModelDescription } from "core";
 import { bedrockRegionalPriceFactor } from "core/llm/utils/calculateRequestCost";
 import {
+  replayAll,
+  type CacheLedgerEntry,
+  type ReplayPolicy,
+} from "./cacheLedger";
+import { NOTICE_MIN_EXTRA_USD } from "./cacheSafeguards";
+import { formatUsd } from "./cacheNotices";
+import {
   configEnablesPromptCaching,
   configTtlPolicy,
   modelSupportsOneHourCache,
   modelSupportsPromptCacheControl,
   type PromptCacheSetting,
 } from "./promptCache";
+
+/** Requests the session needs before its own history is worth advising from. */
+export const REPLAY_MIN_REQUESTS = 6;
+/** The saving must be at least this share of what the session cost. */
+export const REPLAY_MIN_SAVING_SHARE = 0.1;
+/**
+ * The replay of what really happened must land within this band of the cost
+ * computed from the recorded tokens, or it is not trusted for this session.
+ */
+export const REPLAY_FIDELITY_BAND = 0.15;
+
+const POLICY_LABEL: Record<ReplayPolicy, string> = {
+  off: "caching off",
+  "5m": "the 5-minute cache",
+  "1h": "the 1-hour cache",
+  auto: "Auto",
+};
 
 /**
  * Advice about the model and cache settings in use. Each tip comes from a
@@ -36,9 +60,12 @@ export function cacheTipKey(modelTitle: string, tipId: string): string {
 export function cacheTips(
   model: ModelDescription | null | undefined,
   setting: PromptCacheSetting | undefined,
+  /** This conversation's requests so far; enables the tips drawn from it. */
+  ledger?: CacheLedgerEntry[],
 ): CacheTip[] {
   if (!model) return [];
   const tips: CacheTip[] = [];
+  const fromSession = sessionReplayTip(ledger);
 
   // Anthropic's pricing page: "Regional and multi-region endpoints include a
   // 10 percent premium over global endpoints" (Sonnet 4.5, Haiku 4.5, Opus 4.5
@@ -89,5 +116,46 @@ export function cacheTips(
     }
   }
 
+  if (fromSession) tips.push(fromSession);
   return tips;
+}
+
+/**
+ * Replays this conversation's recorded requests under each lifetime and says
+ * so when a different one would have cost clearly less. The input side only
+ * (output tokens do not change with caching), from the tokens the API reported.
+ *
+ * Stays quiet unless the replay can be trusted: enough requests, a replay of
+ * what really happened that agrees with the recorded cost, a priced model, and
+ * a saving that is both worth a dollar figure and a real share of the bill.
+ */
+function sessionReplayTip(
+  ledger: CacheLedgerEntry[] | undefined,
+): CacheTip | undefined {
+  if (!ledger || ledger.length < REPLAY_MIN_REQUESTS) return undefined;
+  const r = replayAll(ledger);
+  if (!r) return undefined;
+  if (Math.abs(r.fidelity - 1) > REPLAY_FIDELITY_BAND) return undefined;
+
+  const bestUsd = r.usd[r.best];
+  if (bestUsd === undefined) return undefined;
+  const saving = r.actualUsd - bestUsd;
+  if (saving < NOTICE_MIN_EXTRA_USD) return undefined;
+  if (saving < r.actualUsd * REPLAY_MIN_SAVING_SHARE) return undefined;
+
+  const pct = Math.round((saving / r.actualUsd) * 100);
+  const how =
+    r.best === "off"
+      ? "Turn caching off for conversations like this one."
+      : `Choose ${POLICY_LABEL[r.best]} in the cache menu.`;
+  return {
+    id: `replay-best-${r.best}`,
+    severity: "info",
+    title: `${POLICY_LABEL[r.best][0].toUpperCase()}${POLICY_LABEL[r.best].slice(1)} would have cost about ${pct}% less here`,
+    body:
+      `Replaying this conversation's ${r.requests} requests (their sizes and the pauses between them), the input side cost ` +
+      `about ${formatUsd(r.actualUsd)} and would have cost about ${formatUsd(bestUsd)} with ${POLICY_LABEL[r.best]}. ${how} ` +
+      `This is an estimate from the token counts the provider reported. It assumes the same requests would have been sent, and it ` +
+      `ignores output tokens, which caching does not change.`,
+  };
 }

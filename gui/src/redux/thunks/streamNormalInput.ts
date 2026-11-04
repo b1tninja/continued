@@ -24,15 +24,18 @@ import {
   setPromptCacheKey,
   setPromptCacheState,
   recordCacheMiss,
+  recordCacheRequest,
   setToolGenerated,
   streamUpdate,
 } from "../slices/sessionSlice";
 import {
   resolvePromptCache,
   INITIAL_PROMPT_CACHE_STATE,
+  modelSupportsOneHourCache,
   modelSupportsPromptCacheControl,
   promptCacheStatus,
 } from "../../util/promptCache";
+import { buildLedgerEntry } from "../../util/cacheLedger";
 import { detectCacheMiss, promptCacheKey } from "../../util/cacheSafeguards";
 import { totalInputTokens } from "core/llm/utils/cacheStats";
 import { ThunkApiType } from "../store";
@@ -294,6 +297,7 @@ export const streamNormalInput = createAsyncThunk<
               message.usage,
             );
             if (total > 0) {
+              let missCauses: string[] | undefined;
               if (cachingWasOn) {
                 const miss = detectCacheMiss({
                   before: cacheStateBefore,
@@ -305,6 +309,7 @@ export const streamNormalInput = createAsyncThunk<
                   pruned: didPrune,
                 });
                 if (miss) {
+                  missCauses = miss.causes;
                   dispatch(
                     recordCacheMiss({
                       readTokens: miss.readTokens,
@@ -314,6 +319,24 @@ export const streamNormalInput = createAsyncThunk<
                   );
                 }
               }
+              // One in-memory record per request, for the session's own
+              // statistics. Counts and timings only.
+              dispatch(
+                recordCacheRequest(
+                  buildLedgerEntry({
+                    at: start,
+                    mode: state.session.mode,
+                    provider: selectedChatModel.provider,
+                    model: selectedChatModel.model,
+                    cachingOn: !!cachingWasOn,
+                    ttl: cacheResolution.nextState.lastTtl,
+                    oneHour: modelSupportsOneHourCache(selectedChatModel),
+                    usage: message.usage,
+                    pruned: didPrune,
+                    missCauses,
+                  }),
+                ),
+              );
               dispatch(setPromptCacheInputTokens(total));
               dispatch(setPromptCacheKey(cacheKey));
             }

@@ -301,4 +301,72 @@ describe("prompt cache options in the chat request", () => {
     // 12 uncached + 80,000 read + 4,000 written
     expect(cache()?.lastInputTokens).toBe(84_012);
   });
+
+  it("records one ledger entry per request, with counts only", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      mode: "agent",
+      lastRequestAgoMs: 60_000,
+      lastInputTokens: 80_000,
+      reply: [
+        {
+          role: "assistant",
+          content: "hi",
+          usage: {
+            promptTokens: 12,
+            completionTokens: 5,
+            promptTokensDetails: {
+              cachedTokens: 80_000,
+              cacheWriteTokens: 4_000,
+              cacheWriteTokens1h: 1_000,
+            },
+          },
+        },
+      ],
+    });
+    const ledger = cache()?.ledger;
+    expect(ledger).toHaveLength(1);
+    expect(ledger![0]).toMatchObject({
+      mode: "agent",
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      cachingOn: true,
+      ttl: "5m",
+      oneHour: true,
+      uncached: 12,
+      read: 80_000,
+      write5m: 3_000,
+      write1h: 1_000,
+      output: 5,
+    });
+    // No message text is kept
+    expect(JSON.stringify(ledger)).not.toContain("hello");
+    expect(JSON.stringify(ledger)).not.toContain('hi"');
+  });
+
+  it("notes that caching was off, and keeps recording", async () => {
+    const { cache } = await sentOptions({
+      setting: "off",
+      reply: [
+        {
+          role: "assistant",
+          content: "",
+          usage: { promptTokens: 9_000, completionTokens: 5 },
+        },
+      ],
+    });
+    expect(cache()?.ledger?.[0]).toMatchObject({
+      cachingOn: false,
+      uncached: 9_000,
+    });
+    expect(cache()?.ledger?.[0].ttl).toBeUndefined();
+  });
+
+  it("records nothing when the response carries no usage", async () => {
+    const { cache } = await sentOptions({
+      setting: "auto",
+      reply: [{ role: "assistant", content: "hi" }],
+    });
+    expect(cache()?.ledger).toBeUndefined();
+  });
 });

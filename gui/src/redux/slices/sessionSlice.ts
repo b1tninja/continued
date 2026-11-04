@@ -37,6 +37,7 @@ import { v4 as uuidv4 } from "uuid";
 import { type InlineErrorMessageType } from "../../components/mainInput/InlineErrorMessage";
 import { toolCallCtxItemToCtxItemWithId } from "../../pages/gui/ToolCallDiv/utils";
 import { addToolCallDeltaToState, isEditTool } from "../../util/toolCallState";
+import { appendLedger, type CacheLedgerEntry } from "../../util/cacheLedger";
 import {
   INITIAL_PROMPT_CACHE_STATE,
   type PromptCacheKey,
@@ -1025,6 +1026,13 @@ export const sessionSlice = createSlice({
         lastKey: action.payload,
       };
     },
+    recordCacheRequest: (state, action: PayloadAction<CacheLedgerEntry>) => {
+      const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
+      state.promptCache = {
+        ...current,
+        ledger: appendLedger(current.ledger, action.payload),
+      };
+    },
     recordCacheMiss: (state, action: PayloadAction<PromptCacheMiss>) => {
       const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
       state.promptCache = {
@@ -1170,6 +1178,7 @@ export const {
   setPromptCacheInputTokens,
   setPromptCacheKey,
   recordCacheMiss,
+  recordCacheRequest,
   acknowledgeCacheMisses,
   dismissColdCacheNotice,
   dismissCachingOffNotice,

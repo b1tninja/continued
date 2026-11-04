@@ -3,6 +3,7 @@ import { bedrockSupportsOneHourCache } from "core/llm/llms/bedrockHelpers";
 import { normalizeClaudeModelId } from "core/llm/utils/calculateRequestCost";
 import { minCacheableTokens } from "core/llm/utils/cacheMinimums";
 import { formatClockTime } from "./promptCacheCountdown";
+import type { CacheLedgerEntry } from "./cacheLedger";
 
 /** What the toolbar menu can set. `undefined` means "follow config.yaml". */
 export type PromptCacheSetting = "auto" | "5m" | "1h" | "off";
@@ -63,6 +64,11 @@ export interface PromptCacheSessionState {
   dismissedColdFor?: number;
   /** The user dismissed the "caching is off" suggestion for this session. */
   dismissedCachingOff?: boolean;
+  /**
+   * One entry per request this conversation, newest last. In memory only: it is
+   * not saved with the session and starts empty in every new conversation.
+   */
+  ledger?: CacheLedgerEntry[];
 }
 
 export const INITIAL_PROMPT_CACHE_STATE: PromptCacheSessionState = {
