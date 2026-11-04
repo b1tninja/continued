@@ -103,6 +103,7 @@ class MessageTypes {
             "config/previewMcpImport",
             "config/importMcpServers",
             "config/setSecret",
+            "config/removeEnvSecret",
             "mcp/reloadServer",
             "mcp/startAuthentication",
             "mcp/removeAuthentication",
