@@ -17,6 +17,13 @@ export interface PromptCacheKey {
   tools: string;
   /** Checksum of the system message. */
   system: string;
+  /**
+   * A checksum per message after the system message, in order. A conversation
+   * only grows, so the previous request's list should be the start of this
+   * one's; an earlier entry that differs means a message was edited or removed.
+   * Absent on keys made before this field existed, which are not compared.
+   */
+  messages?: string[];
 }
 
 /** A request that should have read the cache and mostly did not. */

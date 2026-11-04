@@ -273,3 +273,121 @@ export function replayAll(
     best,
   };
 }
+
+export interface CacheSummary {
+  requests: number;
+  /** Share of all input tokens that were read from the cache, 0 to 1. */
+  hitShare: number;
+  /** Requests that read little of a cache that should have been warm. */
+  misses: number;
+  /** The last miss: when it started and the causes the app could name. */
+  lastMiss?: { at: number; causes: string[]; tokens: number };
+  /**
+   * Requests that rebuilt the cache because of something the user or the app
+   * did on purpose (a compaction, a model switch), counted apart from misses.
+   */
+  expectedRebuilds: number;
+  /** Input tokens written to the cache, 5-minute and 1-hour. */
+  written: { m5: number; h1: number };
+}
+
+/** Causes that are the user's own doing; they are not faults in the cache. */
+const EXPECTED_CAUSES = [
+  /^the model changed/,
+  /^the oldest messages were dropped/,
+];
+
+function isExpected(causes: string[] | undefined): boolean {
+  return (
+    !!causes?.length &&
+    causes.every((c) => EXPECTED_CAUSES.some((r) => r.test(c)))
+  );
+}
+
+/**
+ * Counts for a one-line summary of the session. A request is a miss when the
+ * ledger recorded causes for it (the detector only records a request that read
+ * little of a cache that should have been warm), unless every cause is one the
+ * user or the app chose, which is an expected rebuild.
+ * */
+export function summarizeLedger(
+  entries: CacheLedgerEntry[],
+): CacheSummary | undefined {
+  const cached = entries.filter((e) => e.cachingOn);
+  if (cached.length === 0) return undefined;
+  let input = 0;
+  let read = 0;
+  let misses = 0;
+  let expectedRebuilds = 0;
+  let lastMiss: CacheSummary["lastMiss"];
+  const written = { m5: 0, h1: 0 };
+  for (const e of cached) {
+    input += entryInputTokens(e);
+    read += e.read;
+    written.m5 += e.write5m;
+    written.h1 += e.write1h;
+    if (e.missCauses !== undefined) {
+      if (isExpected(e.missCauses)) {
+        expectedRebuilds++;
+      } else {
+        misses++;
+        lastMiss = {
+          at: e.at,
+          causes: e.missCauses,
+          tokens: e.write5m + e.write1h,
+        };
+      }
+    }
+  }
+  return {
+    requests: cached.length,
+    hitShare: input > 0 ? read / input : 0,
+    misses,
+    lastMiss,
+    expectedRebuilds,
+    written,
+  };
+}
+
+/** "4m 10s", "2 h 5 min": how long ago, for a sentence. */
+function ago(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+function tokensShort(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+}
+
+/**
+ * The one line shown for a session: requests, the share of input read from
+ * the cache, and, when there were any, the misses with the last one and the
+ * expected rebuilds. Empty when caching was never on, so nothing is shown.
+ */
+export function formatCacheSummary(
+  summary: CacheSummary | undefined,
+  now: number,
+): string {
+  if (!summary) return "";
+  const parts = [
+    `${summary.requests} request${summary.requests === 1 ? "" : "s"}`,
+    `${Math.round(summary.hitShare * 100)}% of input from cache`,
+  ];
+  if (summary.misses > 0 && summary.lastMiss) {
+    const cause = summary.lastMiss.causes.length
+      ? `, ${summary.lastMiss.causes.join("; ")}`
+      : "";
+    parts.push(
+      `${summary.misses} miss${summary.misses === 1 ? "" : "es"} (last ${ago(now - summary.lastMiss.at)} ago, ${tokensShort(summary.lastMiss.tokens)} tokens rewritten${cause})`,
+    );
+  }
+  if (summary.expectedRebuilds > 0) {
+    parts.push(
+      `${summary.expectedRebuilds} expected rebuild${summary.expectedRebuilds === 1 ? "" : "s"}`,
+    );
+  }
+  return parts.join(" \u00b7 ");
+}

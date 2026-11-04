@@ -2,6 +2,7 @@ import { CircleStackIcon as CircleStackIconOutline } from "@heroicons/react/24/o
 import { CircleStackIcon as CircleStackIconSolid } from "@heroicons/react/24/solid";
 import { useCountdownNow } from "../../hooks/useCountdownNow";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { formatCacheSummary, summarizeLedger } from "../../util/cacheLedger";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { setPromptCacheSetting } from "../../redux/slices/uiSlice";
 import {
@@ -77,8 +78,10 @@ function tooltipText(
   status: ReturnType<typeof promptCacheStatus>,
   setting: PromptCacheSetting | undefined,
   reason?: "gap" | "requests",
+  summary?: string,
 ): string {
-  return promptCacheTooltip(status, setting, reason);
+  const text = promptCacheTooltip(status, setting, reason);
+  return summary ? `${text}\n\nThis session: ${summary}` : text;
 }
 
 /**
@@ -111,6 +114,10 @@ export function PromptCacheButton() {
   if (!model || !modelSupportsPromptCacheControl(model)) return null;
 
   const status = promptCacheStatus(model, setting, state, now);
+  const summaryLine = formatCacheSummary(
+    summarizeLedger(state.ledger ?? []),
+    now,
+  );
   const canOneHour = modelSupportsOneHourCache(model);
   const choices = CHOICES.filter((c) => canOneHour || c !== "1h");
 
@@ -136,7 +143,7 @@ export function PromptCacheButton() {
       <div className="relative">
         <ToolTip
           place="top"
-          content={tooltipText(status, setting, state.escalatedBy)}
+          content={tooltipText(status, setting, state.escalatedBy, summaryLine)}
         >
           <ListboxButton
             data-testid="prompt-cache-button"

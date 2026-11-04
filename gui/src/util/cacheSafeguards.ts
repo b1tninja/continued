@@ -1,4 +1,4 @@
-import type { ModelDescription } from "core";
+import type { ChatMessage, ModelDescription } from "core";
 import {
   findAnthropicPricing,
   type ModelPricing,
@@ -173,6 +173,23 @@ function hashString(text: string): string {
 }
 
 /**
+ * A checksum of what a message contributes to the prompt. Usage, metadata and
+ * IDs are left out: they are attached to a message after it is sent and are
+ * not part of what the model reads, so they must not look like an edit.
+ */
+export function messageChecksum(message: ChatMessage): string {
+  const { usage, metadata, id, ...sent } = message as ChatMessage & {
+    usage?: unknown;
+    metadata?: unknown;
+    id?: unknown;
+  };
+  void usage;
+  void metadata;
+  void id;
+  return hashString(JSON.stringify(sent));
+}
+
+/**
  * What the cached prefix is made of. The API caches tools, then the system
  * prompt, then messages, so a change to the model, the tools or the system
  * prompt rebuilds everything after it.
@@ -181,15 +198,33 @@ export function promptCacheKey(
   model: ModelDescription,
   toolNames: string[],
   systemMessage: string | undefined,
+  /** The messages after the system message, in the order they are sent. */
+  messages?: ChatMessage[],
 ): PromptCacheKey {
   return {
     model: `${model.provider}/${model.model}`,
     tools: hashString(toolNames.join("\u0000")),
     system: hashString(systemMessage ?? ""),
+    ...(messages && { messages: messages.map(messageChecksum) }),
   };
 }
 
 const MODEL_CHANGED = "the model changed";
+
+/**
+ * The first earlier message that is no longer the same, or undefined. Only the
+ * messages the previous request sent are compared: whatever follows them is
+ * the new turn.
+ */
+function firstChangedMessage(
+  before: string[],
+  after: string[],
+): number | undefined {
+  for (let i = 0; i < before.length; i++) {
+    if (after[i] !== before[i]) return i;
+  }
+  return undefined;
+}
 
 /** The parts of the key that differ, as words for a message. */
 export function keyChanges(
@@ -202,6 +237,14 @@ export function keyChanges(
   if (before.tools !== after.tools) changes.push("the tools changed");
   if (before.system !== after.system) {
     changes.push("the system prompt changed (a rule or a summary)");
+  }
+  if (before.messages && after.messages) {
+    const i = firstChangedMessage(before.messages, after.messages);
+    if (i !== undefined) {
+      changes.push(
+        `an earlier message was edited or removed (message ${i + 1} of ${after.messages.length})`,
+      );
+    }
   }
   return changes;
 }

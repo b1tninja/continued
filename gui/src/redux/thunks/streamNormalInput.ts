@@ -221,6 +221,9 @@ export const streamNormalInput = createAsyncThunk<
       selectedChatModel,
       activeTools.map((t) => t.function.name),
       finalSystem ? renderChatMessage(finalSystem) : undefined,
+      // Each message after the system one, so an edit or removal of an earlier
+      // message is told apart from a conversation that only grew.
+      messages.filter((m) => m.role !== "system"),
     );
 
     // TODO parallel tool calls will cause issues with this
