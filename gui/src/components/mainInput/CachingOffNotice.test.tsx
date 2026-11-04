@@ -7,9 +7,10 @@ import {
   setupNotice,
 } from "./noticeTestUtils";
 
-// Caching is off when the toolbar has no choice and config.yaml does not
-// turn it on, which is the default.
-const setup = () => setupNotice(<CachingOffNotice />, null);
+// Caching is off when the toolbar has no choice, config.yaml does not turn it
+// on and the session is in Chat. (In Agent, Plan and Background it is on by
+// default; see the last test.)
+const setup = () => setupNotice(<CachingOffNotice />, null, "chat");
 const big = { escalated: false, lastInputTokens: 200_000 };
 
 describe("CachingOffNotice", () => {

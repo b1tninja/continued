@@ -2,6 +2,7 @@ import type { ChatMessage, LLMFullCompletionOptions } from "core";
 import { buildChatRequest } from "../redux/util/buildChatRequest";
 import type { RootState } from "../redux/store";
 import {
+  effectiveCacheSetting,
   INITIAL_PROMPT_CACHE_STATE,
   modelSupportsPromptCacheControl,
   promptCacheStatus,
@@ -56,7 +57,11 @@ export function compactionPrefix(
   const { model } = request;
   if (!modelSupportsPromptCacheControl(model)) return undefined;
 
-  const setting = state.ui.promptCacheSettings?.[model.title];
+  const setting = effectiveCacheSetting(
+    model,
+    state.ui.promptCacheSettings?.[model.title],
+    state.session.mode,
+  );
   const cacheState = state.session.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
   const status = promptCacheStatus(model, setting, cacheState, now);
   if (!status.on || !status.warm) return undefined;

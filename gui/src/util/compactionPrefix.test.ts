@@ -128,13 +128,33 @@ describe("compactionPrefix: when it does not (the plain request is cheaper)", ()
     expect(
       compactionPrefix(stateWith({ setting: "off", agoMs: MIN }), LAST, NOW),
     ).toBeUndefined();
+    const configOff = {
+      ...claude,
+      completionOptions: { promptCaching: false },
+    } as ModelDescription;
+    expect(
+      compactionPrefix(
+        stateWith({ model: configOff, setting: undefined, agoMs: MIN }),
+        LAST,
+        NOW,
+      ),
+    ).toBeUndefined();
+  });
+
+  it("when nothing is chosen in Chat, where caching is not on by default", () => {
+    const s = stateWith({ setting: undefined, agoMs: MIN });
+    s.session.mode = "chat";
+    expect(compactionPrefix(s, LAST, NOW)).toBeUndefined();
+  });
+
+  it("in Agent when nothing is chosen and config is silent, where it is on by default", () => {
     expect(
       compactionPrefix(
         stateWith({ setting: undefined, agoMs: MIN }),
         LAST,
         NOW,
       ),
-    ).toBeUndefined();
+    ).toBeDefined();
   });
 
   it("when the last prompt was below the model's cache minimum", () => {

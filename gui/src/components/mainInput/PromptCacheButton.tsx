@@ -1,3 +1,7 @@
+import {
+  selectCacheSetting,
+  selectChosenCacheSetting,
+} from "../../redux/selectors/selectCacheSetting";
 import { CircleStackIcon as CircleStackIconOutline } from "@heroicons/react/24/outline";
 import { CircleStackIcon as CircleStackIconSolid } from "@heroicons/react/24/solid";
 import { useCountdownNow } from "../../hooks/useCountdownNow";
@@ -12,6 +16,7 @@ import { cacheExportText } from "../../util/cacheExport";
 import { dismissedTipCount } from "../../util/cacheTips";
 import {
   modelSupportsOneHourCache,
+  cachingIsDefaulted,
   modelSupportsPromptCacheControl,
   PROMPT_CACHE_SETTING_LABELS,
   promptCacheStatus,
@@ -89,9 +94,14 @@ function tooltipText(
   setting: PromptCacheSetting | undefined,
   reason?: "gap" | "requests",
   summary?: string,
+  defaulted?: boolean,
 ): string {
   const text = promptCacheTooltip(status, setting, reason);
-  return summary ? `${text}\n\nThis session: ${summary}` : text;
+  // Caching is on only because nothing said otherwise. Say so, and how to stop it.
+  const why = defaulted
+    ? "\n\nOn by default in this mode, because config.yaml does not say. Choose Off here, or set promptCaching: false in config.yaml, to turn it off."
+    : "";
+  return summary ? `${text}${why}\n\nThis session: ${summary}` : text + why;
 }
 
 /**
@@ -104,9 +114,12 @@ function tooltipText(
 export function PromptCacheButton() {
   const dispatch = useAppDispatch();
   const model = useAppSelector(selectSelectedChatModel);
-  const setting = useAppSelector((s) =>
-    model ? s.ui.promptCacheSettings?.[model.title] : undefined,
-  );
+  // What was picked in the menu, and what is in force (the default applies
+  // when nothing was picked and config says nothing).
+  const chosen = useAppSelector(selectChosenCacheSetting);
+  const setting = useAppSelector(selectCacheSetting);
+  const mode = useAppSelector((s) => s.session.mode);
+  const defaulted = cachingIsDefaulted(model, chosen, mode);
   const sessionState = useAppSelector((s) => s.session.promptCache);
   const isStreaming = useAppSelector((s) => s.session.isStreaming);
   const dismissedTips = useAppSelector((s) => s.ui.dismissedCacheTips);
@@ -142,7 +155,7 @@ export function PromptCacheButton() {
 
   return (
     <Listbox
-      value={setting ?? "config"}
+      value={chosen ?? "config"}
       onChange={(
         choice:
           | PromptCacheSetting
@@ -173,7 +186,13 @@ export function PromptCacheButton() {
       <div className="relative">
         <ToolTip
           place="top"
-          content={tooltipText(status, setting, state.escalatedBy, summaryLine)}
+          content={tooltipText(
+            status,
+            setting,
+            state.escalatedBy,
+            summaryLine,
+            defaulted,
+          )}
         >
           <ListboxButton
             data-testid="prompt-cache-button"

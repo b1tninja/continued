@@ -124,10 +124,37 @@ async function sentOptions(opts: {
 beforeEach(() => vi.clearAllMocks());
 
 describe("prompt cache options in the chat request", () => {
-  it("sends nothing when the toolbar has no choice and config is silent", async () => {
-    const { options } = await sentOptions({});
+  it("sends nothing in Chat when the toolbar has no choice and config is silent", async () => {
+    const { options } = await sentOptions({ mode: "chat" });
     expect(options.promptCaching).toBeUndefined();
     expect(options.promptCacheTtl).toBeUndefined();
+  });
+
+  it("turns caching on with Auto in Agent when the toolbar has no choice and config is silent", async () => {
+    const { options } = await sentOptions({ mode: "agent" });
+    expect(options).toMatchObject({
+      promptCaching: true,
+      promptCacheTtl: "5m",
+    });
+  });
+
+  it.each(["plan", "background"] as const)(
+    "does the same in %s mode",
+    async (mode) => {
+      const { options } = await sentOptions({ mode });
+      expect(options.promptCaching).toBe(true);
+    },
+  );
+
+  it("respects an explicit Off in Agent", async () => {
+    const { options } = await sentOptions({ mode: "agent", setting: "off" });
+    expect(options.promptCaching).toBe(false);
+  });
+
+  it("respects promptCaching: false in config, in Agent", async () => {
+    const off = { ...claude, completionOptions: { promptCaching: false } };
+    const { options } = await sentOptions({ mode: "agent", model: off as any });
+    expect(options.promptCaching).toBeUndefined();
   });
 
   it("sends the 5-minute lifetime for Auto on a fresh session", async () => {

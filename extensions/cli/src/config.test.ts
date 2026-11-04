@@ -75,10 +75,73 @@ describe("createLlmApi() prompt caching settings", () => {
     expect(config.cacheBehavior).toEqual({ cacheConversation: true });
   });
 
-  test("leaves them undefined when the model config sets nothing", async () => {
+  test("leaves them undefined for a model that is not Claude", async () => {
     const config = await make({ provider: "bedrock", model: "x" });
     expect(config.promptCaching).toBeUndefined();
     expect(config.cacheBehavior).toBeUndefined();
+  });
+
+  test("turns caching on with Auto for a Claude model on Bedrock when the config says nothing", async () => {
+    const config = await make({
+      provider: "bedrock",
+      model: "us.anthropic.claude-sonnet-4-6",
+    });
+    expect(config.promptCaching).toBe(true);
+    expect(config.cacheBehavior).toEqual({ ttl: "auto" });
+  });
+
+  test("keeps a lifetime the config names when it applies the default", async () => {
+    const config = await make({
+      provider: "bedrock",
+      model: "us.anthropic.claude-sonnet-4-6",
+      cacheBehavior: { ttl: "1h" },
+    });
+    expect(config.promptCaching).toBe(true);
+    expect(config.cacheBehavior).toEqual({ ttl: "1h" });
+  });
+
+  test.each([
+    [
+      "promptCaching: false",
+      { defaultCompletionOptions: { promptCaching: false } },
+    ],
+    [
+      "cacheConversation: false",
+      { cacheBehavior: { cacheConversation: false } },
+    ],
+    [
+      "cacheSystemMessage: false",
+      { cacheBehavior: { cacheSystemMessage: false } },
+    ],
+  ])(
+    "does not apply the default when the config says %s",
+    async (_n, extra) => {
+      const config = await make({
+        provider: "bedrock",
+        model: "us.anthropic.claude-sonnet-4-6",
+        ...(extra as object),
+      });
+      expect(config.promptCaching).not.toBe(true);
+      expect(config.cacheBehavior?.ttl).toBeUndefined();
+    },
+  );
+
+  test("gives the Anthropic adapter Auto when the config says nothing about caching", async () => {
+    const config = await make({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+    });
+    expect(config.cacheBehavior).toEqual({ ttl: "auto" });
+    expect("promptCaching" in config).toBe(false);
+  });
+
+  test("gives the Anthropic adapter no lifetime when the config turns caching off", async () => {
+    const config = await make({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      defaultCompletionOptions: { promptCaching: false },
+    });
+    expect("cacheBehavior" in config).toBe(false);
   });
 
   test("does not add them for other providers", async () => {

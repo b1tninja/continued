@@ -1,3 +1,4 @@
+import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import type { BedrockGlobalProfileStatus } from "core/protocol/core";
 import { useContext, useEffect, useMemo, useState } from "react";
@@ -19,9 +20,7 @@ import HoverItem from "./InputToolbar/HoverItem";
 export function CacheTipsButton() {
   const dispatch = useAppDispatch();
   const model = useAppSelector(selectSelectedChatModel);
-  const setting = useAppSelector((s) =>
-    model ? s.ui.promptCacheSettings?.[model.title] : undefined,
-  );
+  const setting = useAppSelector(selectCacheSetting);
   const dismissed = useAppSelector((s) => s.ui.dismissedCacheTips);
   const ledger = useAppSelector((s) => s.session.promptCache?.ledger);
   const failures = useAppSelector((s) => s.session.promptCache?.failures);

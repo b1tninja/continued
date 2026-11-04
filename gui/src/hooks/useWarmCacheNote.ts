@@ -1,3 +1,4 @@
+import { selectCacheSetting } from "../redux/selectors/selectCacheSetting";
 import { useNow } from "./useNow";
 import { useAppSelector } from "../redux/hooks";
 import { selectSelectedChatModel } from "../redux/slices/configSlice";
@@ -12,9 +13,7 @@ import { isSignificantLoss, warmCacheLoss } from "../util/cacheSafeguards";
  */
 export function useWarmCacheNote(): string {
   const model = useAppSelector(selectSelectedChatModel);
-  const setting = useAppSelector((s) =>
-    model ? s.ui.promptCacheSettings?.[model.title] : undefined,
-  );
+  const setting = useAppSelector(selectCacheSetting);
   const state = useAppSelector((s) => s.session.promptCache);
   const now = useNow();
   if (!model || !state) return "";

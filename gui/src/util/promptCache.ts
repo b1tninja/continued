@@ -161,6 +161,57 @@ export function configEnablesPromptCaching(model: ModelDescription): boolean {
 }
 
 /**
+ * True when config.yaml says nothing about whether to cache: no
+ * `promptCaching`, and neither `cacheConversation` nor `cacheSystemMessage`
+ * (an explicit `false` is saying something). Only then may a default apply.
+ */
+export function configSilentOnCaching(model: ModelDescription): boolean {
+  return (
+    model.completionOptions?.promptCaching === undefined &&
+    model.cacheBehavior?.cacheConversation === undefined &&
+    model.cacheBehavior?.cacheSystemMessage === undefined
+  );
+}
+
+/**
+ * The setting every cache calculation should use. It is the toolbar choice
+ * when there is one. With none, config.yaml decides if it says anything; when
+ * it says nothing, Agent, Plan and Background sessions on a Claude model that
+ * takes cache control run Auto (or the fixed lifetime `cacheBehavior.ttl`
+ * names), and Chat keeps caching off.
+ *
+ * Why only those modes: a week of real agent traffic (plans/cache-real-world-data.md)
+ * read 12 to 28 times per token written, which saved 85% of input cost, and
+ * Auto came within 0.7 points of the best lifetime for each conversation. In
+ * Chat a request is a human turn; the data does not cover it, and a
+ * conversation of one call pays the 25% write premium for nothing.
+ *
+ * To opt out: `promptCaching: false` in config, or Off in the toolbar.
+ */
+export function effectiveCacheSetting(
+  model: ModelDescription | null | undefined,
+  setting: PromptCacheSetting | undefined,
+  mode: string | undefined,
+): PromptCacheSetting | undefined {
+  if (setting !== undefined || !model) return setting;
+  if (!modelSupportsPromptCacheControl(model)) return setting;
+  if (!configSilentOnCaching(model) || !isAgentStyleMode(mode)) return setting;
+  return configTtlPolicy(model) ?? "auto";
+}
+
+/** True when the effective setting comes from this default and not from a choice. */
+export function cachingIsDefaulted(
+  model: ModelDescription | null | undefined,
+  setting: PromptCacheSetting | undefined,
+  mode: string | undefined,
+): boolean {
+  return (
+    setting === undefined &&
+    effectiveCacheSetting(model, setting, mode) !== undefined
+  );
+}
+
+/**
  * The lifetime policy config.yaml asks for when the toolbar says "Config
  * default": `cacheBehavior.ttl`, with anything unrecognised ignored.
  */
@@ -432,7 +483,8 @@ export const PROMPT_CACHE_SETTING_LABELS: Record<
 > = {
   config: {
     label: "Config default",
-    detail: "Follow config.yaml; off unless the model sets promptCaching",
+    detail:
+      "Follow config.yaml. If it says nothing: Auto in Agent, Plan and Background, off in Chat",
   },
   auto: {
     label: "Auto",

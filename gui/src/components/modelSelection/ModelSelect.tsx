@@ -1,3 +1,4 @@
+import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
 import {
   ArrowPathIcon,
   ChevronDownIcon,
@@ -240,11 +241,7 @@ function ModelSelect() {
     };
   }, [options, offeredOptions, selectedModel, mode, selectedProfile]);
 
-  const cacheSetting = useAppSelector((state) =>
-    config.selectedModelByRole.chat
-      ? state.ui.promptCacheSettings?.[config.selectedModelByRole.chat.title]
-      : undefined,
-  );
+  const cacheSetting = useAppSelector(selectCacheSetting);
   const cacheState = useAppSelector((state) => state.session.promptCache);
 
   /** Changes the chat or edit model, as a manual pick for this mode. */

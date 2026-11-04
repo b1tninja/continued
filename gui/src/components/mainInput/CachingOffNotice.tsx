@@ -1,3 +1,4 @@
+import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
 import { useNow } from "../../hooks/useNow";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
@@ -10,15 +11,13 @@ import { NoticeAction, NoticeBar } from "./NoticeBar";
 
 /**
  * Shown when prompt caching is off and the conversation is big enough that
- * every message pays full price for all of it. Caching is off by default, so
+ * every message pays full price for all of it. Caching is off in Chat unless turned on, so
  * these users are the ones with the most to gain and nothing else to tell them.
  */
 export function CachingOffNotice() {
   const dispatch = useAppDispatch();
   const model = useAppSelector(selectSelectedChatModel);
-  const setting = useAppSelector((s) =>
-    model ? s.ui.promptCacheSettings?.[model.title] : undefined,
-  );
+  const setting = useAppSelector(selectCacheSetting);
   const state = useAppSelector((s) => s.session.promptCache);
   const isStreaming = useAppSelector((s) => s.session.isStreaming);
   // Re-check as time passes so a cache that expires is not mistaken for off.

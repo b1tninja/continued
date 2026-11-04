@@ -1,3 +1,4 @@
+import { selectCacheSetting } from "../selectors/selectCacheSetting";
 import { createAsyncThunk, unwrapResult } from "@reduxjs/toolkit";
 import { LLMFullCompletionOptions, ModelDescription } from "core";
 import { getRuleId } from "core/llm/rules/getSystemMessageWithRules";
@@ -88,12 +89,12 @@ export const streamNormalInput = createAsyncThunk<
     } = buildChatRequest(state);
     let completionOptions: LLMFullCompletionOptions = builtOptions;
 
-    // Prompt caching: the toolbar choice for this model, or config.yaml when
-    // there is none. Auto learns from the pauses between requests this session.
+    // Prompt caching: the toolbar choice for this model, or when there is none
+    // the default for this mode (see effectiveCacheSetting). Auto learns from
+    // the pauses between requests this session.
     const cacheStateBefore =
       state.session.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
-    const cacheSetting =
-      state.ui.promptCacheSettings?.[selectedChatModel.title];
+    const cacheSetting = selectCacheSetting(state);
     const cachingWasOn =
       modelSupportsPromptCacheControl(selectedChatModel) &&
       promptCacheStatus(selectedChatModel, cacheSetting, cacheStateBefore, 0)

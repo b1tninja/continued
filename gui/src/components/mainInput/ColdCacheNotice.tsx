@@ -1,3 +1,4 @@
+import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
 import { useCompactConversation } from "../../util/compactConversation";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { useNow } from "../../hooks/useNow";
@@ -17,9 +18,7 @@ import { NoticeAction, NoticeBar } from "./NoticeBar";
 export function ColdCacheNotice() {
   const dispatch = useAppDispatch();
   const model = useAppSelector(selectSelectedChatModel);
-  const setting = useAppSelector((s) =>
-    model ? s.ui.promptCacheSettings?.[model.title] : undefined,
-  );
+  const setting = useAppSelector(selectCacheSetting);
   const state = useAppSelector((s) => s.session.promptCache);
   const history = useAppSelector((s) => s.session.history);
   const isStreaming = useAppSelector((s) => s.session.isStreaming);

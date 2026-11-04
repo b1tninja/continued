@@ -1,3 +1,4 @@
+import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
 import type { JSONContent } from "@tiptap/react";
 import { useEffect, useState } from "react";
 import { useNow } from "../../hooks/useNow";
@@ -42,9 +43,7 @@ export function LargeMessageNoticeView(props: {
   onDismiss: () => void;
 }) {
   const model = useAppSelector(selectSelectedChatModel);
-  const setting = useAppSelector((s) =>
-    model ? s.ui.promptCacheSettings?.[model.title] : undefined,
-  );
+  const setting = useAppSelector(selectCacheSetting);
   const state = useAppSelector((s) => s.session.promptCache);
   const now = useNow();
   if (!model) return null;

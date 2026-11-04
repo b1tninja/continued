@@ -1,3 +1,4 @@
+import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
 import { useMemo, useRef } from "react";
 import { useNow } from "../../hooks/useNow";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
@@ -42,9 +43,7 @@ const ContextStatus = () => {
 
   const compactConversation = useCompactConversation();
   const model = useAppSelector(selectSelectedChatModel);
-  const cacheSetting = useAppSelector((state) =>
-    model ? state.ui.promptCacheSettings?.[model.title] : undefined,
-  );
+  const cacheSetting = useAppSelector(selectCacheSetting);
   const cacheState = useAppSelector((state) => state.session.promptCache);
   const now = useNow();
 

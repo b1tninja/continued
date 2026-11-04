@@ -3,6 +3,7 @@ import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import { EMPTY_CONFIG, updateConfig } from "../../redux/slices/configSlice";
 import {
   newSession,
+  setMode,
   setPromptCacheState,
 } from "../../redux/slices/sessionSlice";
 import { setPromptCacheSetting } from "../../redux/slices/uiSlice";
@@ -25,6 +26,11 @@ export async function setupNotice(
   component: JSX.Element,
   /** The toolbar choice; null leaves it unset, as in a fresh install. */
   setting: "auto" | "5m" | "1h" | "off" | null = "5m",
+  /**
+   * The session's mode. A fresh session is in Agent, where caching is on by
+   * default when nothing is chosen; use "chat" for the case where it is off.
+   */
+  mode?: "chat" | "agent" | "plan" | "background",
 ) {
   const ideMessenger = new MockIdeMessenger();
   const store = setupStore({ ideMessenger });
@@ -61,6 +67,7 @@ export async function setupNotice(
         ],
       } as any),
     );
+    if (mode) store.dispatch(setMode(mode));
   });
   return { ...view, store, ideMessenger };
 }
