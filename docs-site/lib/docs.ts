@@ -1,3 +1,4 @@
+import { BASE_PATH } from "./basePath";
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
@@ -228,6 +229,14 @@ function preprocessMdx(content: string, slug: string[]): string {
 
   // Rewrite image paths: /images/... → /images/docs/...
   result = result.replace(/src=["']\/images\//g, 'src="/images/docs/');
+  // Raw <img src="/..."> in the source does not go through the img component,
+  // so it needs the deploy base path here (GitHub Pages serves under /<repo>/).
+  if (BASE_PATH) {
+    result = result.replace(
+      /\bsrc=(["'])\/(?!\/)/g,
+      (_m, q: string) => `src=${q}${BASE_PATH}/`,
+    );
+  }
 
   // Rewrite markdown image paths: ![alt](/images/...) → ![alt](/images/docs/...)
   result = result.replace(/\]\(\/images\//g, "](/images/docs/");
@@ -274,6 +283,21 @@ export function getHeadings(content: string): Heading[] {
 
 export function getAllDocSlugs(): string[] {
   const slugs: string[] = [];
+  // Every page in docs/, not only those in the navigation: pages link to
+  // provider and reference pages that the sidebar does not list.
+  (function walkFiles(dir: string, prefix: string[]) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+      if (entry.name === "snippets" || entry.name === "images") continue;
+      if (entry.isDirectory()) {
+        walkFiles(path.join(dir, entry.name), [...prefix, entry.name]);
+      } else if (entry.name.endsWith(".mdx")) {
+        const name = entry.name.slice(0, -".mdx".length);
+        if (name === "index" && prefix.length === 0) continue;
+        slugs.push([...prefix, name].join("/"));
+      }
+    }
+  })(DOCS_DIR, []);
   function walk(items: NavItem[]) {
     for (const item of items) {
       if (typeof item === "string") slugs.push(item);
