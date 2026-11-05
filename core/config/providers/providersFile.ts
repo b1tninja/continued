@@ -96,14 +96,31 @@ export async function loadProviderInstances(
     add(fs.readFileSync(globalPath, "utf8"), localPathToUri(globalPath));
   }
 
+  for (const file of await readWorkspaceProvidersFiles(ide)) {
+    add(file.content, file.uri);
+  }
+
+  return { providers: Array.from(byName.values()), errors };
+}
+
+/** Each workspace's .continue/providers.yaml that exists, read. */
+export async function readWorkspaceProvidersFiles(
+  ide: IDE,
+): Promise<{ uri: string; label: string; content: string }[]> {
+  const files: { uri: string; label: string; content: string }[] = [];
   try {
     for (const dir of await ide.getWorkspaceDirs()) {
       const uri = joinPathsToUri(dir, ".continue", PROVIDERS_FILE_NAME);
-      if (await ide.fileExists(uri)) add(await ide.readFile(uri), uri);
+      if (await ide.fileExists(uri)) {
+        files.push({
+          uri,
+          label: `${PROVIDERS_FILE_NAME} (workspace)`,
+          content: await ide.readFile(uri),
+        });
+      }
     }
   } catch (e) {
     console.warn("Could not read workspace providers.yaml", e);
   }
-
-  return { providers: Array.from(byName.values()), errors };
+  return files;
 }

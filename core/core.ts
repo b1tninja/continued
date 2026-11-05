@@ -4,6 +4,7 @@ import * as URI from "uri-js";
 import { v4 as uuidv4 } from "uuid";
 
 import { CompletionProvider } from "./autocomplete/CompletionProvider";
+import { localPathToUri } from "./util/pathToUri";
 import {
   openedFilesLruCache,
   prevFilepaths,
@@ -98,6 +99,18 @@ import {
   removeEnvSecret,
   storeSecret,
 } from "./config/secretStorage";
+import {
+  ConfigFileContent,
+  deleteProviderInstance,
+  findPlaintextKeys,
+  listProviderInstances,
+  movePlaintextKeys,
+  saveProviderInstance,
+} from "./config/providers/providerInstances";
+import {
+  getGlobalProvidersPath,
+  readWorkspaceProvidersFiles,
+} from "./config/providers/providersFile";
 import { setupLocalConfig } from "./config/onboarding";
 import {
   createNewGlobalRuleFile,
@@ -205,6 +218,7 @@ export class Core {
       );
 
       this.configHandler.onConfigUpdate((result) => {
+        void this.offerToMovePlaintextKeys();
         void (async () => {
           const serializedResult =
             await this.configHandler.getSerializedConfig();
@@ -562,6 +576,62 @@ export class Core {
 
     on("config/openProfile", async (msg) => {
       await this.configHandler.openConfigProfile(msg.data.profileId);
+    });
+
+    on("providers/list", async () => {
+      return listProviderInstances(this.ide, {
+        workspaceFiles: await readWorkspaceProvidersFiles(this.ide),
+        configFiles: await this.configHandler.getLocalConfigFiles(),
+        continueDir: getContinueGlobalPath(),
+        secureStorageAvailable: await isSecureStorageAvailable(this.ide),
+      });
+    });
+
+    on("providers/save", async (msg) => {
+      const result = await saveProviderInstance(this.ide, msg.data, {
+        continueDir: getContinueGlobalPath(),
+        configFiles: await this.configHandler.getLocalConfigFiles(),
+      });
+      if (result.saved) {
+        const storage = msg.data.key?.storage;
+        if (storage === "secure" || storage === "env") {
+          this.globalContext.update("preferredKeyStorage", storage);
+        }
+        await this.configHandler.reloadConfig(
+          "Provider instance saved (providers/save message)",
+        );
+      }
+      return result;
+    });
+
+    on("providers/delete", async (msg) => {
+      const result = deleteProviderInstance(msg.data.name);
+      if (result.deleted) {
+        await this.configHandler.reloadConfig(
+          "Provider instance deleted (providers/delete message)",
+        );
+      }
+      return result;
+    });
+
+    on("config/findPlaintextKeys", async () => {
+      return {
+        keys: findPlaintextKeys(await this.getKeyScanFiles()),
+        secureStorageAvailable: await isSecureStorageAvailable(this.ide),
+      };
+    });
+
+    on("config/movePlaintextKeys", async (msg) => {
+      const result = await movePlaintextKeys(this.ide, msg.data.ids, {
+        storage: msg.data.storage,
+        continueDir: getContinueGlobalPath(),
+      });
+      if (result.moved.length > 0) {
+        await this.configHandler.reloadConfig(
+          "Plaintext keys moved (config/movePlaintextKeys message)",
+        );
+      }
+      return result;
     });
 
     on("config/openSecretLocation", async (msg) => {
@@ -1604,6 +1674,82 @@ export class Core {
     }
 
     return false;
+  }
+
+  /** Local configs plus the providers files: where plaintext keys can be. */
+  private async getKeyScanFiles(): Promise<ConfigFileContent[]> {
+    const files = await this.configHandler.getLocalConfigFiles();
+    const globalProviders = getGlobalProvidersPath();
+    if (fs.existsSync(globalProviders)) {
+      files.push({
+        uri: localPathToUri(globalProviders),
+        label: "providers.yaml",
+        content: fs.readFileSync(globalProviders, "utf8"),
+      });
+    }
+    files.push(...(await readWorkspaceProvidersFiles(this.ide)));
+    return files;
+  }
+
+  private plaintextKeysOffered = new Set<string>();
+  private offeringPlaintextKeys = false;
+
+  /**
+   * After a config loads, offer once per session to move API keys written as
+   * plain text into secure storage. Only offered when the editor has secure
+   * storage; ~/.continue/.env would still be plain text.
+   */
+  private async offerToMovePlaintextKeys(): Promise<void> {
+    if (this.offeringPlaintextKeys) return;
+    if (this.globalContext.get("skipPlaintextKeyOffer")) return;
+    this.offeringPlaintextKeys = true;
+    try {
+      const keys = findPlaintextKeys(await this.getKeyScanFiles()).filter(
+        (k) => !this.plaintextKeysOffered.has(k.id),
+      );
+      if (keys.length === 0) return;
+      if (!(await isSecureStorageAvailable(this.ide))) return;
+      for (const k of keys) this.plaintextKeysOffered.add(k.id);
+
+      const files = [...new Set(keys.map((k) => k.fileLabel))].join(", ");
+      const move = "Move to secure storage";
+      const never = "Don't ask again";
+      const choice = await this.ide.showToast(
+        "warning",
+        `${keys.length === 1 ? "An API key is" : `${keys.length} API keys are`} written in plain text in ${files}. Move ${keys.length === 1 ? "it" : "them"} to the editor's secure storage? The config will refer to ${keys.length === 1 ? "it" : "them"} with \${{ secrets.NAME }}.`,
+        move,
+        "Not now",
+        never,
+      );
+      if (choice === never) {
+        this.globalContext.update("skipPlaintextKeyOffer", true);
+        return;
+      }
+      if (choice !== move) return;
+      const result = await movePlaintextKeys(
+        this.ide,
+        keys.map((k) => k.id),
+        { storage: "secure", continueDir: getContinueGlobalPath() },
+      );
+      if (result.failed.length > 0) {
+        void this.ide.showToast(
+          "error",
+          `${result.moved.length} key(s) moved; ${result.failed.length} could not be: ${result.failed[0].error}`,
+        );
+      } else {
+        void this.ide.showToast(
+          "info",
+          `${result.moved.length === 1 ? "The key is" : `${result.moved.length} keys are`} now in secure storage.`,
+        );
+      }
+      if (result.moved.length > 0) {
+        await this.configHandler.reloadConfig("Plaintext keys moved");
+      }
+    } catch (e) {
+      console.warn("Could not check for plaintext API keys", e);
+    } finally {
+      this.offeringPlaintextKeys = false;
+    }
   }
 
   private handleAddAutocompleteModel(

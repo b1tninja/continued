@@ -12,6 +12,13 @@ import {
 } from "../autocomplete/util/types";
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
+import type {
+  MovePlaintextKeysResult,
+  PlaintextKey,
+  ProviderInstancesInfo,
+  SaveProviderInstanceRequest,
+  SaveProviderInstanceResult,
+} from "../config/providers/types";
 import type { ModeModelsInput } from "../config/yaml/saveModeModels";
 import type { RulesByModeInput } from "../config/yaml/saveRulesByMode";
 import type {
@@ -288,6 +295,25 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "config/removeEnvSecret": [
     { secretName: string },
     { removed: boolean; error?: string },
+  ];
+  /** Provider instances (providers.yaml), with key state but no values. */
+  "providers/list": [undefined, ProviderInstancesInfo];
+  /** Add or edit an instance in ~/.continue/providers.yaml. */
+  "providers/save": [SaveProviderInstanceRequest, SaveProviderInstanceResult];
+  /** Remove an instance from ~/.continue/providers.yaml (its key is kept). */
+  "providers/delete": [{ name: string }, { deleted: boolean; error?: string }];
+  /** API keys written as plain text in local configs and providers files. */
+  "config/findPlaintextKeys": [
+    undefined,
+    { keys: PlaintextKey[]; secureStorageAvailable: boolean },
+  ];
+  /**
+   * Store the chosen plaintext keys as secrets and replace each with a
+   * `${{ secrets.NAME }}` reference. Values never leave core.
+   */
+  "config/movePlaintextKeys": [
+    { ids: string[]; storage: "secure" | "env" },
+    MovePlaintextKeysResult,
   ];
   "config/openSecretLocation": [
     { secretName: string; target: "env" | "configLine" },

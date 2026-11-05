@@ -25,6 +25,7 @@ import {
   validateConfigName,
 } from "./profileFiles.js";
 import LocalProfileLoader from "./profile/LocalProfileLoader.js";
+import type { ConfigFileContent } from "./providers/providerInstances.js";
 import {
   ProfileDescription,
   ProfileLifecycleManager,
@@ -317,6 +318,28 @@ export class ConfigHandler {
     await this.ide.removeFile(profile.profileDescription.uri);
     this.globalContext.moveProfileState(profileId, null);
     await this.cascadeInit("Config deleted");
+  }
+
+  /**
+   * The YAML files of the local configs, for scanning (provider usage,
+   * plaintext keys). Files that cannot be read are left out.
+   */
+  async getLocalConfigFiles(): Promise<ConfigFileContent[]> {
+    const files: ConfigFileContent[] = [];
+    for (const profile of this.profiles) {
+      const { uri, title } = profile.profileDescription;
+      if (!/\.ya?ml$/i.test(uri)) continue;
+      try {
+        files.push({
+          uri,
+          label: title,
+          content: await this.ide.readFile(uri),
+        });
+      } catch {
+        // Not readable (deleted since loading); nothing to scan.
+      }
+    }
+    return files;
   }
 
   /** Switch profiles; GUI edits follow the selected config's file. */
