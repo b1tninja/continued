@@ -83,6 +83,62 @@ export function requestedCacheTtl(
 }
 
 /**
+ * The lifetime an OpenAI-format chat body already asks for: "1h" when any
+ * `cache_control` in it says so (on a content part, on a tool message, or on a
+ * tool definition), else undefined. Core marks the body for OpenRouter before
+ * it reaches the adapter, and has already decided whether the model accepts a
+ * 1-hour lifetime, so the adapter keeps that decision and has no model list of
+ * its own for this.
+ */
+export function cacheTtlInOpenAIBody(body: {
+  messages?: unknown[];
+  tools?: unknown[];
+}): CacheTtl | undefined {
+  const asks = (control: unknown) =>
+    (control as { ttl?: unknown } | undefined)?.ttl === "1h";
+  for (const message of (body.messages ?? []) as {
+    cache_control?: unknown;
+    content?: unknown;
+  }[]) {
+    if (asks(message?.cache_control)) return "1h";
+    if (Array.isArray(message?.content)) {
+      for (const part of message.content as { cache_control?: unknown }[]) {
+        if (asks(part?.cache_control)) return "1h";
+      }
+    }
+  }
+  for (const tool of (body.tools ?? []) as { cache_control?: unknown }[]) {
+    if (asks(tool?.cache_control)) return "1h";
+  }
+  return undefined;
+}
+
+/**
+ * Put `ttl: "1h"` on every `cache_control` in an OpenAI-format chat body, the
+ * same places `cacheTtlInOpenAIBody` looks. Returns the body untouched for any
+ * other value. Changes the marks in place.
+ */
+export function applyOpenAIBodyCacheTtl<
+  T extends { messages?: unknown[]; tools?: unknown[] },
+>(body: T, ttl: CacheTtl | undefined): T {
+  if (ttl !== "1h") return body;
+  const mark = (holder: unknown) => {
+    const control = (holder as { cache_control?: Record<string, unknown> })
+      ?.cache_control;
+    if (control) control.ttl = "1h";
+  };
+  for (const message of (body.messages ?? []) as {
+    cache_control?: Record<string, unknown>;
+    content?: unknown;
+  }[]) {
+    mark(message);
+    if (Array.isArray(message?.content)) message.content.forEach(mark);
+  }
+  (body.tools ?? []).forEach(mark);
+  return body;
+}
+
+/**
  * Put `ttl: "1h"` on every `cache_control` in an Anthropic Messages body.
  * Anthropic's strategies mark the system prompt, the last tool and the last
  * two user messages with `{ type: "ephemeral" }`; the default lifetime is 5
