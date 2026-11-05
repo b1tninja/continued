@@ -132,3 +132,62 @@ describe("retryStreamOnDroppedConnection", () => {
     expect(calls).toBe(1);
   });
 });
+
+describe("transient error events inside a 200 stream", () => {
+  const overloaded = () => new Error("Error streaming response: Overloaded");
+
+  it("retries an overloaded event that arrives before any content", async () => {
+    let calls = 0;
+    const result = await collect(
+      retryStreamOnDroppedConnection(
+        async function* () {
+          calls++;
+          if (calls === 1) throw overloaded();
+          yield "ok";
+        },
+        undefined,
+        [0, 0],
+      ),
+    );
+    expect(result).toEqual(["ok"]);
+    expect(calls).toBe(2);
+  });
+
+  it("passes an overloaded event mid-reply through unchanged", async () => {
+    const err = overloaded();
+    let calls = 0;
+    const run = collect(
+      retryStreamOnDroppedConnection(
+        async function* () {
+          calls++;
+          yield "partial";
+          throw err;
+        },
+        undefined,
+        [0, 0],
+      ),
+    );
+    await expect(run).rejects.toBe(err);
+    expect(calls).toBe(1);
+  });
+
+  it("recognises network codes on the error or its cause", () => {
+    expect(
+      isDroppedConnectionError(
+        Object.assign(new Error("x"), { code: "EAI_AGAIN" }),
+      ),
+    ).toBe(true);
+    expect(
+      isDroppedConnectionError(
+        new Error("fetch failed", { cause: { code: "ENETUNREACH" } as any }),
+      ),
+    ).toBe(true);
+    expect(
+      isDroppedConnectionError(
+        new Error(
+          "The Anthropic stream ended before the response was complete (no message_stop).",
+        ),
+      ),
+    ).toBe(true);
+  });
+});

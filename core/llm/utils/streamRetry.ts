@@ -2,22 +2,40 @@
  * A dropped connection while a streamed response is being read (node-fetch:
  * "Invalid response body while trying to fetch ...: aborted", undici:
  * "terminated", a premature close, ECONNRESET) never reaches the fetch-level
- * retry, which only sees the request. This retries the whole request when the
- * connection drops before anything was handed to the caller, and otherwise
- * replaces node-fetch's wording with one that says what happened.
+ * retry, which only sees the request, and neither does an "overloaded" error
+ * event sent inside a 200 stream. This retries the whole request when either
+ * happens before anything was handed to the caller. A dropped connection after
+ * that is not retried (the caller already has part of the reply) but gets a
+ * message that says what happened instead of node-fetch's wording.
  */
 
 const RETRY_DELAYS_MS = [1000, 3000];
 
+const DROPPED_CODES = new Set([
+  "ECONNRESET",
+  "ECONNABORTED",
+  "EPIPE",
+  "ETIMEDOUT",
+  "EAI_AGAIN", // DNS not answering, e.g. right after a laptop wakes up
+  "ENETUNREACH",
+  "ENETDOWN",
+  "EHOSTUNREACH",
+  "ERR_STREAM_PREMATURE_CLOSE",
+  "UND_ERR_SOCKET",
+]);
+
 export function isDroppedConnectionError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
-  const e = error as { name?: string; code?: string; message?: string };
+  const e = error as {
+    name?: string;
+    code?: string;
+    message?: string;
+    cause?: { code?: string };
+  };
   if (e.name === "AbortError") return false;
   if (
-    e.code === "ECONNRESET" ||
-    e.code === "EPIPE" ||
-    e.code === "ERR_STREAM_PREMATURE_CLOSE" ||
-    e.code === "UND_ERR_SOCKET"
+    DROPPED_CODES.has(e.code ?? "") ||
+    DROPPED_CODES.has(e.cause?.code ?? "")
   ) {
     return true;
   }
@@ -26,7 +44,25 @@ export function isDroppedConnectionError(error: unknown): boolean {
     message.includes("invalid response body while trying to fetch") ||
     message.includes("premature close") ||
     message.includes("socket hang up") ||
+    message.includes("ended before the response was complete") ||
     message === "terminated"
+  );
+}
+
+/**
+ * An error event inside a 200 stream that says to try again: Anthropic sends
+ * `overloaded_error` and `api_error` ("Internal server error") this way, and
+ * they surface from parseDataLine as "Error streaming response: ...".
+ */
+export function isTransientStreamError(error: unknown): boolean {
+  const message = (
+    (error as { message?: string })?.message ?? ""
+  ).toLowerCase();
+  return (
+    message.startsWith("error streaming response:") &&
+    (message.includes("overloaded") ||
+      message.includes("internal server error") ||
+      message.includes("api_error"))
   );
 }
 
@@ -70,17 +106,22 @@ export async function* retryStreamOnDroppedConnection<T>(
       }
       return;
     } catch (error) {
-      if (signal?.aborted || !isDroppedConnectionError(error)) throw error;
+      if (signal?.aborted) throw error;
+      const dropped = isDroppedConnectionError(error);
+      const transient = !dropped && isTransientStreamError(error);
+      if (!dropped && !transient) throw error;
 
       if (!yielded && attempt < delaysMs.length) {
         console.warn(
-          `Connection dropped before the response started; retrying (${attempt + 1}/${delaysMs.length}).`,
+          `${dropped ? "Connection dropped" : "Server asked to retry"} before the response started; retrying (${attempt + 1}/${delaysMs.length}).`,
           error,
         );
         await sleep(delaysMs[attempt], signal);
         if (signal?.aborted) return;
         continue;
       }
+
+      if (transient) throw error;
 
       const host = hostOf(error);
       const where = host ? ` to ${host}` : "";
