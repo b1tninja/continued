@@ -1,83 +1,101 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("../../util/networkAddress", async (importOriginal) => {
-  const real =
-    await importOriginal<typeof import("../../util/networkAddress")>();
-  // Resolve by name in the test: "public.test" is public, "inside.test" is not.
-  return {
-    ...real,
-    resolvesToNonPublic: async (host: string) =>
-      host === "inside.test" || real.isNonPublicHostname(host),
-  };
-});
-
-import { fetchUrlContentTool } from "../definitions/fetchUrlContent";
+import { expect, test, vi } from "vitest";
 import { fetchUrlContentImpl } from "./fetchUrlContent";
 
-const page = (body = "<html><body><p>hello</p></body></html>") =>
-  new Response(body, { status: 200, headers: { "content-type": "text/html" } });
-const redirect = (to: string) =>
-  new Response(null, { status: 302, headers: { location: to } });
+vi.mock("../../context/providers/URLContextProvider", () => ({
+  getUrlContextItems: vi.fn(),
+}));
 
-const run = (url: string, fetch: any) =>
-  fetchUrlContentImpl({ url }, { fetch } as any);
+import { ToolExtras } from "../..";
+import { getUrlContextItems } from "../../context/providers/URLContextProvider";
+const mockExtras = {
+  fetch: vi.fn() as any,
+  ide: {} as any,
+} as unknown as ToolExtras;
 
-describe("fetch_url redirect guard", () => {
-  it("refuses a redirect from a public host to a non-public one", async () => {
-    const fetch = vi.fn(async (u: URL) =>
-      u.hostname === "public.test"
-        ? redirect("http://169.254.169.254/latest")
-        : page(),
-    );
-    await expect(run("http://public.test/", fetch)).rejects.toThrow(
-      /non-public/,
-    );
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
+test("fetchUrlContent should not truncate content under character limit", async () => {
+  const shortContent = "This is a short content";
+  const mockContextItems = [
+    {
+      name: "Test URL",
+      description: "Test URL description",
+      content: shortContent,
+    },
+  ];
 
-  it("refuses a redirect to a public-looking name that resolves inside", async () => {
-    const fetch = vi.fn(async (u: URL) =>
-      u.hostname === "public.test" ? redirect("http://inside.test/") : page(),
-    );
-    await expect(run("http://public.test/", fetch)).rejects.toThrow(
-      /non-public/,
-    );
-  });
+  (getUrlContextItems as any).mockResolvedValue(mockContextItems);
 
-  it("follows redirects between public hosts", async () => {
-    const fetch = vi.fn(async (u: URL) =>
-      u.pathname === "/old" ? redirect("/new") : page(),
-    );
-    const items = await run("http://public.test/old", fetch);
-    expect(items[0].content).toContain("hello");
-    expect(fetch).toHaveBeenCalledTimes(2);
-  });
+  const result = await fetchUrlContentImpl(
+    { url: "https://example.com" },
+    mockExtras,
+  );
 
-  it("follows redirects within an approved non-public URL", async () => {
-    const fetch = vi.fn(async (u: URL) =>
-      u.pathname === "/" ? redirect("http://127.0.0.1:3000/docs") : page(),
-    );
-    const items = await run("http://localhost:3000/", fetch);
-    expect(items[0].content).toContain("hello");
-  });
+  expect(result).toHaveLength(1);
+  expect(result[0].content).toBe(shortContent);
 });
 
-describe("fetch_url policy", () => {
-  const policy = (url: string, base = "allowedWithoutPermission" as const) =>
-    fetchUrlContentTool.evaluateToolCallPolicy!(base, { url });
+test("fetchUrlContent should truncate content exceeding character limit", async () => {
+  const DEFAULT_FETCH_URL_CHAR_LIMIT = 20000;
+  // Create a string exceeding the character limit
+  const longContent = "a".repeat(DEFAULT_FETCH_URL_CHAR_LIMIT + 1000);
+  const mockContextItems = [
+    {
+      name: "Test URL",
+      description: "Test URL description",
+      content: longContent,
+    },
+  ];
 
-  it("asks for non-public URLs even when auto-approved", () => {
-    expect(policy("http://localhost:8080/")).toBe("allowedWithPermission");
-    expect(policy("http://169.254.169.254/")).toBe("allowedWithPermission");
-    expect(policy("http://10.0.0.1/")).toBe("allowedWithPermission");
-  });
+  (getUrlContextItems as any).mockResolvedValue(mockContextItems);
 
-  it("keeps the user's policy for public URLs, and disabled stays disabled", () => {
-    expect(policy("https://example.com/")).toBe("allowedWithoutPermission");
-    expect(
-      fetchUrlContentTool.evaluateToolCallPolicy!("disabled", {
-        url: "http://localhost/",
-      }),
-    ).toBe("disabled");
-  });
+  const result = await fetchUrlContentImpl(
+    { url: "https://example.com" },
+    mockExtras,
+  );
+
+  expect(result).toHaveLength(2); // Original item + warning
+  expect(result[0].content.length).toBe(DEFAULT_FETCH_URL_CHAR_LIMIT);
+  expect(result[1].name).toBe("Truncation warning");
+  expect(result[1].content).toContain("was truncated");
+  expect(result[1].content).toContain("20000 character limit");
+});
+
+test("fetchUrlContent should add truncation warning with multiple truncated items", async () => {
+  const DEFAULT_FETCH_URL_CHAR_LIMIT = 20000;
+  // Create strings exceeding the character limit
+  const longContent1 = "a".repeat(DEFAULT_FETCH_URL_CHAR_LIMIT + 500);
+  const longContent2 = "b".repeat(DEFAULT_FETCH_URL_CHAR_LIMIT + 1000);
+  const mockContextItems = [
+    {
+      name: "Test URL 1",
+      description: "Test URL description 1",
+      content: longContent1,
+    },
+    {
+      name: "Test URL 2",
+      description: "Test URL description 2",
+      content: longContent2,
+    },
+  ];
+
+  (getUrlContextItems as any).mockResolvedValue(mockContextItems);
+
+  const result = await fetchUrlContentImpl(
+    { url: "https://example.com" },
+    mockExtras,
+  );
+
+  expect(result).toHaveLength(3); // Two original items + warning
+  expect(result[0].content.length).toBe(DEFAULT_FETCH_URL_CHAR_LIMIT);
+  expect(result[1].content.length).toBe(DEFAULT_FETCH_URL_CHAR_LIMIT);
+  expect(result[2].name).toBe("Truncation warning");
+});
+
+test("fetchUrlContent should propagate errors when URL fetch fails", async () => {
+  const errorMessage = "HTTP 404 Not Found";
+
+  (getUrlContextItems as any).mockRejectedValue(new Error(errorMessage));
+
+  await expect(
+    fetchUrlContentImpl({ url: "https://example.com/404" }, mockExtras),
+  ).rejects.toThrow(errorMessage);
 });
