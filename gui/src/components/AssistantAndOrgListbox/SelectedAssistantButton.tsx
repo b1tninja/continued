@@ -26,16 +26,16 @@ export function SelectedAssistantButton({
   return (
     <ListboxButton
       data-testid="assistant-select-button"
-      title={
-        selectedProfile
-          ? `Config: ${selectedProfile.title} (click to switch)`
-          : "Choose a config"
-      }
       className={`overflow-hidden border-none bg-transparent text-description hover:brightness-110 ${isSidebar ? "w-full justify-start" : "gap-1.5"} ${buttonPadding}`}
       style={buttonStyle}
     >
       <div
         className={`flex flex-row items-center ${isSidebar ? "w-full justify-between" : "gap-1.5"}`}
+        title={
+          selectedProfile
+            ? `Config: ${selectedProfile.title} (click to switch)`
+            : "Choose a config"
+        }
       >
         <div className="flex min-w-0 flex-1 flex-row items-center gap-2">
           {selectedProfile === null ? (
