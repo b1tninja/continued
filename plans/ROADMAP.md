@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-11-04 (merged with `origin/main` 0af7c2979, after #248). Track C was rebuilt from the cache work and audited against the code on 2026-11-04; Tracks D (hooks), E (upstream signals) and F (task planning) were added. Real-world cache data is in `cache-real-world-data.md`.
+Last updated: 2026-11-05 (merged with `origin/main` 0af7c2979, after #248). Track C was rebuilt from the cache work and audited against the code on 2026-11-04; Tracks D (hooks), E (upstream signals), F (task planning) and G (import from other tools) were added. Real-world cache data is in `cache-real-world-data.md`.
 
 This is the place to check what is done, what is in flight and what comes next. `fork-plan.md` stays as the original design record (why we forked, scope, risks, licensing, CI). Detailed plans for new work live next to this file.
 
@@ -42,7 +42,7 @@ Work under way with no pull request open yet. Numbers are added when the PRs exi
 
 ## Next
 
-Three independent tracks. They share no code, so different people can build them in parallel. Each track is a series of small PRs, one concern per PR.
+Seven tracks (A to G). They share little code, so different people can build them in parallel; where one needs another, the Depends on column says so. Each track is a series of small PRs, one concern per PR.
 
 ### Track A: model and provider setup
 
@@ -171,6 +171,20 @@ Problem: the CLI's `Checklist` tool keeps the list only as tool calls in the con
 | F4  | Plan files in `.continue/plans/`, seeding the list                                                                       | F1         |
 | F5  | New session with this plan; optional block-completion setting                                                            | F1, C6     |
 | F6  | Subtasks with their own conversation                                                                                     | F1, E1     |
+
+### Track G: import settings from other tools
+
+Plan: [`import-from-other-tools.md`](./import-from-other-tools.md). Builds on the Cline and Roo MCP importer ([`import-cline-mcp.md`](./import-cline-mcp.md), #193) and the setup flow (A4).
+
+Problem: people arrive with providers, a model per task and MCP servers already set up in Claude Code, Cursor, OpenCode, Cline or Roo Code, and retype them. The existing importer covers Cline and Roo MCP servers only, and scans for the file as soon as Settings > Tools opens. The import should be a wizard the user starts, with nothing read until a tool is chosen and nothing written until the review screen is confirmed. First scope: providers and model selection, and MCP servers. Rules, permissions and skills come later.
+
+| PR  | Scope                                                                                                                                                                                                      | Depends on | State       |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
+| G0  | Adapter interface and a neutral shape; Cline and Roo moved behind it; `importScan` and `importApply`; the scan on opening Settings > Tools removed                                                         | none       | Not started |
+| G1  | Adapters for Claude Code, Cursor and OpenCode, MCP servers only (Claude's three scopes with precedence, Cursor and OpenCode variable syntax)                                                               | G0         | Not started |
+| G2  | The wizard: pick a tool, pick items, review, result; entry from Settings and the command palette                                                                                                           | G0         | Not started |
+| G3  | Providers and models: Claude Code (Bedrock, Vertex, pins, overrides), OpenCode (providers, `model`, `small_model`), saved through `saveProviderModels`; keys from OpenCode's `auth.json` behind a checkbox | G0, G2, A4 | Not started |
+| G4  | Documentation for the wizard                                                                                                                                                                               | G3         | Not started |
 
 ## Later
 
