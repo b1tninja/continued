@@ -89,6 +89,7 @@ class MessageTypes {
             "providers/list",
             "providers/save",
             "providers/delete",
+            "config/addConnectedModel",
             "config/findPlaintextKeys",
             "config/movePlaintextKeys",
             "config/ideSettingsUpdate",

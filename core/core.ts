@@ -614,6 +614,55 @@ export class Core {
       return result;
     });
 
+    on("config/addConnectedModel", async (msg) => {
+      const { connection, model } = msg.data;
+      const name = msg.data.name?.trim() || model.trim();
+      if (!connection || !model.trim()) {
+        return { saved: false, error: "Choose a provider and a model." };
+      }
+      let edited = false;
+      let duplicate = false;
+      editConfigFile(
+        (c) => c,
+        (config) => {
+          edited = true;
+          const models = config.models ?? [];
+          if (models.some((m: any) => m?.name === name)) {
+            duplicate = true;
+            return config;
+          }
+          return {
+            ...config,
+            models: [
+              ...models,
+              {
+                name,
+                connection,
+                model: model.trim(),
+                ...(msg.data.roles?.length ? { roles: msg.data.roles } : {}),
+              } as any,
+            ],
+          };
+        },
+      );
+      if (!edited) {
+        return {
+          saved: false,
+          error: "The selected config is not a local YAML file.",
+        };
+      }
+      if (duplicate) {
+        return {
+          saved: false,
+          error: `This config already has a model named "${name}".`,
+        };
+      }
+      await this.configHandler.reloadConfig(
+        "Connected model added (config/addConnectedModel message)",
+      );
+      return { saved: true };
+    });
+
     on("config/findPlaintextKeys", async () => {
       return {
         keys: findPlaintextKeys(await this.getKeyScanFiles()),

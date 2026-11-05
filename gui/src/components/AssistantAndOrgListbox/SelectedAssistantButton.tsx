@@ -26,6 +26,11 @@ export function SelectedAssistantButton({
   return (
     <ListboxButton
       data-testid="assistant-select-button"
+      title={
+        selectedProfile
+          ? `Config: ${selectedProfile.title} (click to switch)`
+          : "Choose a config"
+      }
       className={`overflow-hidden border-none bg-transparent text-description hover:brightness-110 ${isSidebar ? "w-full justify-start" : "gap-1.5"} ${buttonPadding}`}
       style={buttonStyle}
     >

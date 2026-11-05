@@ -302,6 +302,11 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "providers/save": [SaveProviderInstanceRequest, SaveProviderInstanceResult];
   /** Remove an instance from ~/.continue/providers.yaml (its key is kept). */
   "providers/delete": [{ name: string }, { deleted: boolean; error?: string }];
+  /** Add a model that uses a provider instance to the selected config. */
+  "config/addConnectedModel": [
+    { connection: string; model: string; name?: string; roles?: string[] },
+    { saved: boolean; error?: string },
+  ];
   /** API keys written as plain text in local configs and providers files. */
   "config/findPlaintextKeys": [
     undefined,
