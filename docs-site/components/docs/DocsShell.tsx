@@ -48,7 +48,7 @@ function slugToLabel(slug: string, titleMap?: Record<string, string>) {
 
 const NAV_LINK_DEFS = [
   { label: "Docs", path: "/docs" },
-  { label: "Blog", path: "/blog" },
+  { label: "GitHub", path: "https://github.com/b1tninja/continued" },
 ];
 
 const NAV_LINKS = NAV_LINK_DEFS.map((d) => ({
@@ -109,7 +109,7 @@ function SidebarGroup({
   if (depth === 0) {
     return (
       <div>
-        <div className="py-2 text-[11px] font-semibold tracking-wider text-black/50 uppercase dark:text-white/50">
+        <div className="py-2 text-[11px] font-semibold uppercase tracking-wider text-black/50 dark:text-white/50">
           {group.group}
         </div>
         <div className="space-y-0.5">
@@ -299,7 +299,7 @@ export function DocsShell({
             </div>
           </div>
           {mobileMenuOpen && (
-            <div className="flex flex-col gap-4 px-5 pt-4 pb-2 md:hidden">
+            <div className="flex flex-col gap-4 px-5 pb-2 pt-4 md:hidden">
               {navLinks.map((link) => (
                 <Link
                   key={link.label}
@@ -329,7 +329,7 @@ export function DocsShell({
               >
                 {tab.tab}
                 {selectedTab === tab.tab && (
-                  <span className="absolute right-0 bottom-0 left-0 h-[2px] rounded-full bg-black/70 dark:bg-white/70" />
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-black/70 dark:bg-white/70" />
                 )}
               </button>
             ))}
@@ -341,7 +341,7 @@ export function DocsShell({
       <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1">
         {/* Desktop sidebar */}
         <aside
-          className={`hidden lg:block ${SIDEBAR_W} shrink-0 overflow-y-auto border-r border-black/[0.06] px-5 pt-5 pb-8 dark:border-white/[0.06]`}
+          className={`hidden lg:block ${SIDEBAR_W} shrink-0 overflow-y-auto border-r border-black/[0.06] px-5 pb-8 pt-5 dark:border-white/[0.06]`}
         >
           <nav className="space-y-5">
             {currentTab.groups.map((group, i) => (
@@ -357,7 +357,7 @@ export function DocsShell({
         </aside>
 
         {/* Main content */}
-        <main className="min-w-0 flex-1 overflow-y-auto px-8 pt-10 pb-8 lg:px-20">
+        <main className="min-w-0 flex-1 overflow-y-auto px-8 pb-8 pt-10 lg:px-20">
           {children}
         </main>
 
@@ -380,7 +380,7 @@ export function DocsShell({
             className="fixed inset-0 z-40 bg-black/20 lg:hidden dark:bg-black/50"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto border-r border-black/[0.06] bg-white px-4 pt-4 pb-8 shadow-xl lg:hidden dark:border-white/[0.06] dark:bg-[#0a0a0a]">
+          <aside className="fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto border-r border-black/[0.06] bg-white px-4 pb-8 pt-4 shadow-xl lg:hidden dark:border-white/[0.06] dark:bg-[#0a0a0a]">
             <div className="mb-4 flex gap-4 border-b border-black/[0.06] pb-2 dark:border-white/[0.06]">
               {docsNav.map((tab) => (
                 <button
@@ -394,7 +394,7 @@ export function DocsShell({
                 >
                   {tab.tab}
                   {selectedTab === tab.tab && (
-                    <span className="absolute right-0 bottom-0 left-0 h-[2px] rounded-full bg-black/70 dark:bg-white/70" />
+                    <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-black/70 dark:bg-white/70" />
                   )}
                 </button>
               ))}

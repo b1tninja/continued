@@ -22,10 +22,8 @@ Open the [latest release](https://github.com/b1tninja/continued/releases/latest)
 | macOS (Intel)         | `continued-darwin-x64-<version>.vsix`   |
 | Linux x64             | `continued-linux-x64-<version>.vsix`    |
 | Linux Arm64           | `continued-linux-arm64-<version>.vsix`  |
-| Linux armhf           | `continued-linux-armhf-<version>.vsix`  |
-| Alpine Linux x64      | `continued-alpine-x64-<version>.vsix`   |
 
-For 2.2.0, the Windows x64 file is `continued-win32-x64-2.2.0.vsix`.
+For 2.2.0, the Windows x64 file is `continued-win32-x64-2.2.0.vsix`. The 2.2.0 release also has `linux-armhf` and `alpine-x64` files: don't use them, because their native modules are built for other platforms. There are no 32-bit ARM or Alpine (musl) builds.
 
 With the [GitHub CLI](https://cli.github.com/), you can download the latest release's file and checksums in one command. Change `win32-x64` to your platform:
 
