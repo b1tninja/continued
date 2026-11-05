@@ -12,11 +12,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import {
+  By,
   EditorView,
   Key,
   VSBrowser,
   WebDriver,
   WebView,
+  Workbench,
 } from "vscode-extension-tester";
 
 import { GlobalActions } from "../actions/Global.actions";
@@ -77,11 +79,26 @@ describe("Docs screenshots", () => {
     }
   }
 
+  /**
+   * Run a command from the palette, then go back into the webview. The panel's
+   * title actions (New Session, Open Settings) are outside the webview and
+   * collapse into an overflow menu when the panel is narrow, so the shots use
+   * the commands instead of clicking them.
+   */
+  async function runCommand(title: string) {
+    await view.switchBack();
+    await new Workbench().executeCommand(title);
+    await TestUtils.waitForTimeout(500);
+    ({ view, driver } = await GUIActions.switchToReactIframe());
+  }
+
   async function newSession() {
-    const button = await TestUtils.waitForSuccess(() =>
-      GUISelectors.getNewSessionNavButton(view),
-    );
-    await button.click();
+    await runCommand("Continued: New Session");
+  }
+
+  async function openSettings() {
+    await runCommand("Continued: Open Settings");
+    await TestUtils.waitForTimeout(800);
   }
 
   async function send(text: string) {
@@ -107,7 +124,9 @@ describe("Docs screenshots", () => {
 
     await shot("mode-picker", async () => {
       const button = await GUISelectors.getModeDropdownButton(view);
-      await button.click();
+      // A neighbouring toolbar item overlaps it in a narrow panel, which makes
+      // a WebDriver click fail; a script click reaches the button itself.
+      await driver.executeScript("arguments[0].click()", button);
       await TestUtils.waitForSuccess(() =>
         GUISelectors.getModeDropdownOption(view, "Agent"),
       );
@@ -126,7 +145,19 @@ describe("Docs screenshots", () => {
     });
 
     await shot("agent-tool-approval", async () => {
-      await GUIActions.toggleToolPolicy(view, "view_diff", 2); // Ask first
+      await openSettings();
+      const tools = await TestUtils.waitForSuccess(() =>
+        GUISelectors.getToolsTab(view),
+      );
+      await tools.click();
+      const policy = await TestUtils.waitForSuccess(() =>
+        GUISelectors.getToolPolicyButton(view, "view_diff"),
+      );
+      // Cycle the policy until it reads "Ask" (Ask first).
+      for (let i = 0; i < 5 && !/ask/i.test(await policy.getText()); i++) {
+        await policy.click();
+        await TestUtils.waitForTimeout(300);
+      }
       const back = await TestUtils.waitForSuccess(() =>
         GUISelectors.getBackButton(view),
       );
@@ -142,18 +173,20 @@ describe("Docs screenshots", () => {
     });
 
     await shot("settings", async () => {
-      const button = await TestUtils.waitForSuccess(() =>
-        GUISelectors.getSettingsNavButton(view),
+      await openSettings();
+    });
+
+    await shot("settings-configs", async () => {
+      await openSettings();
+      const configs = await TestUtils.waitForSuccess(() =>
+        view.findWebElement(By.css("[data-testid='tab-configs']")),
       );
-      await button.click();
+      await configs.click();
       await TestUtils.waitForTimeout(800);
     });
 
     await shot("settings-tools", async () => {
-      const button = await TestUtils.waitForSuccess(() =>
-        GUISelectors.getSettingsNavButton(view),
-      );
-      await button.click();
+      await openSettings();
       const tools = await TestUtils.waitForSuccess(() =>
         GUISelectors.getToolsTab(view),
       );
