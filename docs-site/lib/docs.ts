@@ -133,6 +133,41 @@ function readDocFile(filePath: string, slug: string[]): DocFile {
  * 2. Inline the snippet content in place of <X /> usage
  * 3. Strip JSX component imports (handled via components map)
  */
+/**
+ * `./x.mdx#a`, `../y/z.mdx` and `../../images/p.png` in links, href= and src=
+ * become `/dir/x#a`, `/y/z` and `/images/p.png`, resolved against the page's
+ * own directory. Fenced code blocks are left alone.
+ */
+export function relativeLinksToSitePaths(
+  content: string,
+  slug: string[],
+): string {
+  const fileDir = slug.slice(0, -1).join("/");
+  const toSite = (rel: string): string => {
+    const [p, anchor] = rel.split("#", 2);
+    let resolved = path.posix.normalize(fileDir ? `${fileDir}/${p}` : p);
+    resolved = resolved.replace(/\.mdx?$/, "").replace(/(^|\/)index$/, "");
+    return `/${resolved}${anchor !== undefined ? `#${anchor}` : ""}`;
+  };
+  return content
+    .split(/(```[\s\S]*?```)/)
+    .map((part) =>
+      part.startsWith("```")
+        ? part
+        : part
+            .replace(
+              /\]\((\.{1,2}\/[^)\s]+)\)/g,
+              (_m, rel: string) => `](${toSite(rel)})`,
+            )
+            .replace(
+              /\b(href|src)=(["'])(\.{1,2}\/[^"']+)\2/g,
+              (_m, attr: string, q: string, rel: string) =>
+                `${attr}=${q}${toSite(rel)}${q}`,
+            ),
+    )
+    .join("");
+}
+
 function preprocessMdx(content: string, slug: string[]): string {
   // Collect MDX snippet imports: import Name from '/snippets/file.mdx'
   const mdxImportRegex =
@@ -184,6 +219,12 @@ function preprocessMdx(content: string, slug: string[]): string {
       return `${prev}\n\n---\n`;
     },
   );
+
+  // The pages link to each other with relative file paths (./x.mdx,
+  // ../../images/y.png) so they also work when read on GitHub. Turn those
+  // back into site paths here: a page link loses its .mdx (and a trailing
+  // /index), an image becomes /images/... and is rewritten below.
+  result = relativeLinksToSitePaths(result, slug);
 
   // Rewrite image paths: /images/... → /images/docs/...
   result = result.replace(/src=["']\/images\//g, 'src="/images/docs/');
