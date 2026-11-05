@@ -58,12 +58,15 @@ describe("Docs screenshots", () => {
    */
   async function widenPanel() {
     try {
-      await new Workbench().executeCommand("View: Close Primary Side Bar");
+      await TestUtils.waitForTimeout(1000);
+      await TestUtils.waitForSuccess(() =>
+        new Workbench().executeCommand("View: Close Primary Side Bar"),
+      );
       await GUIActions.toggleGui(); // focuses the panel
       await VSBrowser.instance.driver.switchTo().defaultContent();
       for (let i = 0; i < 8; i++) {
-        await new Workbench().executeCommand(
-          "View: Increase Current View Size",
+        await TestUtils.waitForSuccess(() =>
+          new Workbench().executeCommand("View: Increase Current View Size"),
         );
       }
     } catch (e) {
