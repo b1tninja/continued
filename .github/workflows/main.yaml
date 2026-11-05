@@ -10,6 +10,10 @@ on:
         description: "Whether or not to publish the built extension to the VS Code marketplace"
         required: true
         default: "false"
+      darwin_runner:
+        description: "Runner for the two macOS packages. ubuntu-latest builds them on Linux (prepackage is target-aware), as the tested builds were."
+        required: false
+        default: ubuntu-latest
 
 jobs:
   check_release_name:
@@ -32,10 +36,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # This ensures all tags are fetched
-
-      - name: Checkout tag
-        run: git checkout ${GITHUB_REF#refs/tags/}
+          fetch-depth: 0 # This ensures all tags are fetched (checks out the run's ref)
 
       - name: Make sure version isn't odd
         run: |
@@ -73,11 +74,11 @@ jobs:
             platform: alpine
             arch: x64
             npm_config_arch: x64
-          - os: macos-latest
+          - os: ${{ inputs.darwin_runner || 'ubuntu-latest' }}
             platform: darwin
             arch: x64
             npm_config_arch: x64
-          - os: macos-latest
+          - os: ${{ inputs.darwin_runner || 'ubuntu-latest' }}
             platform: darwin
             arch: arm64
             npm_config_arch: arm64
@@ -105,6 +106,10 @@ jobs:
           path: "extensions/vscode/*.vsix"
 
   release:
+    # Only a tag becomes a release. Run from a branch, the workflow builds
+    # every package and stops here (a dry run), instead of tagging a release
+    # with the branch name.
+    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -126,12 +131,33 @@ jobs:
           path: vsix-artifacts
           merge-multiple: true
 
+      - name: Checksums
+        working-directory: vsix-artifacts
+        run: |
+          sha256sum *.vsix > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Release notes
+        id: notes
+        run: |
+          notes=".github/release-notes/${{ github.ref_name }}.md"
+          if [ ! -f "$notes" ]; then
+            echo "::error::Missing $notes; write the release notes before tagging."
+            exit 1
+          fi
+          version=$(node -p "require('./extensions/vscode/package.json').version")
+          echo "path=$notes" >> "$GITHUB_OUTPUT"
+          echo "name=Continued $version" >> "$GITHUB_OUTPUT"
+
       - name: Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
+          name: ${{ steps.notes.outputs.name }}
+          body_path: ${{ steps.notes.outputs.path }}
           files: |
             vsix-artifacts/*.vsix
+            vsix-artifacts/SHA256SUMS.txt
           token: ${{ secrets.GITHUB_TOKEN }}
 
   publish:
