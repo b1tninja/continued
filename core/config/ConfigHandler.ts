@@ -18,6 +18,12 @@ import {
   getAllDotContinueDefinitionFiles,
   LoadAssistantFilesOptions,
 } from "./loadLocalAssistants.js";
+import {
+  ConfigLocation,
+  createConfigFile,
+  renameConfigFile,
+  validateConfigName,
+} from "./profileFiles.js";
 import LocalProfileLoader from "./profile/LocalProfileLoader.js";
 import {
   ProfileDescription,
@@ -228,6 +234,89 @@ export class ConfigHandler {
 
     this.setCurrentProfile(profile);
     await this.reloadConfig("Selected profile changed");
+  }
+
+  private findProfile(profileId: string): ProfileLifecycleManager {
+    const profile = this.profiles.find(
+      (p) => p.profileDescription.id === profileId,
+    );
+    if (!profile) throw new Error(`Config ${profileId} not found`);
+    return profile;
+  }
+
+  private async selectAfterRefresh(profileId: string) {
+    const workspaceId = await this.getWorkspaceId();
+    const selected =
+      this.globalContext.get("lastSelectedProfileForWorkspace") ?? {};
+    this.globalContext.update("lastSelectedProfileForWorkspace", {
+      ...selected,
+      [workspaceId]: profileId,
+    });
+  }
+
+  /**
+   * Create a config, empty or as a copy of another, and select it. Returns
+   * the new config's profile id.
+   */
+  async createProfile(opts: {
+    name: string;
+    location: ConfigLocation;
+    copyFrom?: string;
+  }): Promise<string> {
+    const invalid = validateConfigName(opts.name);
+    if (invalid) throw new Error(invalid);
+    let content: string | undefined;
+    if (opts.copyFrom) {
+      const source = this.findProfile(opts.copyFrom);
+      const uri = source.profileDescription.uri;
+      if (!/\.ya?ml$/i.test(uri)) {
+        throw new Error("Only a YAML config can be duplicated.");
+      }
+      content = await this.ide.readFile(uri);
+    }
+    const id = await createConfigFile(this.ide, {
+      name: opts.name,
+      location: opts.location,
+      content,
+    });
+    await this.selectAfterRefresh(id);
+    await this.cascadeInit("Config created");
+    return id;
+  }
+
+  /**
+   * Rename a config. The main config keeps its file; another config's file
+   * is renamed too, and its selection and model picks move with it.
+   */
+  async renameProfile(profileId: string, name: string): Promise<string> {
+    const invalid = validateConfigName(name);
+    if (invalid) throw new Error(invalid);
+    const profile = this.findProfile(profileId);
+    const isMain = profileId === LocalProfileLoader.ID;
+    const uri = profile.profileDescription.uri;
+    if (!/\.ya?ml$/i.test(uri)) {
+      throw new Error("Only a YAML config can be renamed here.");
+    }
+    const newUri = await renameConfigFile(this.ide, uri, name, {
+      moveFile: !isMain,
+    });
+    const newId = isMain ? profileId : newUri;
+    if (newId !== profileId) {
+      this.globalContext.moveProfileState(profileId, newId);
+    }
+    await this.cascadeInit("Config renamed");
+    return newId;
+  }
+
+  /** Delete a config file. The main config cannot be deleted. */
+  async deleteProfile(profileId: string): Promise<void> {
+    if (profileId === LocalProfileLoader.ID) {
+      throw new Error("The main config cannot be deleted.");
+    }
+    const profile = this.findProfile(profileId);
+    await this.ide.removeFile(profile.profileDescription.uri);
+    this.globalContext.moveProfileState(profileId, null);
+    await this.cascadeInit("Config deleted");
   }
 
   /** Switch profiles; GUI edits follow the selected config's file. */

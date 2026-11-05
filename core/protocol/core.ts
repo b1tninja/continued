@@ -121,6 +121,9 @@ export type BedrockTestModelResult =
   | { ok: true; modelId: string; latencyMs: number; reply: string }
   | { ok: false; error: string };
 
+export type ProfileFileResult =
+  { ok: true; profileId?: string } | { ok: false; error: string };
+
 export type ToCoreFromIdeOrWebviewProtocol = {
   // Special
   ping: [string, string];
@@ -151,6 +154,22 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "config/deleteRule": [{ filepath: string }, void];
   "config/newPromptFile": [undefined, void];
   "config/newAssistantFile": [undefined, void];
+  /** Create a config (or a copy of `copyFrom`) and select it. */
+  "config/createProfile": [
+    {
+      name: string;
+      location: "global" | "workspace";
+      copyFrom?: string;
+    },
+    ProfileFileResult,
+  ];
+  /** Rename a config; its id changes unless it is the main config. */
+  "config/renameProfile": [
+    { profileId: string; name: string },
+    ProfileFileResult,
+  ];
+  /** Delete a config file; the main config cannot be deleted. */
+  "config/deleteProfile": [{ profileId: string }, ProfileFileResult];
   "config/ideSettingsUpdate": [IdeSettings, void];
   "config/getSerializedProfileInfo": [
     undefined,

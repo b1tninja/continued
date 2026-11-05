@@ -184,4 +184,28 @@ export class GlobalContext {
     });
     return newSelections;
   }
+
+  /**
+   * Carry a profile's selection and per-role model picks over to its new id
+   * after a rename, or drop them (`newId` null) after it is deleted.
+   */
+  moveProfileState(oldId: string, newId: string | null): void {
+    const selected = this.get("lastSelectedProfileForWorkspace") ?? {};
+    const nextSelected = Object.fromEntries(
+      Object.entries(selected).map(([ws, id]) => [
+        ws,
+        id === oldId ? newId : id,
+      ]),
+    );
+    this.update("lastSelectedProfileForWorkspace", nextSelected);
+
+    const models = this.get("selectedModelsByProfileId") ?? {};
+    if (oldId in models) {
+      const { [oldId]: picks, ...rest } = models;
+      this.update(
+        "selectedModelsByProfileId",
+        newId ? { ...rest, [newId]: picks } : rest,
+      );
+    }
+  }
 }

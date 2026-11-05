@@ -478,6 +478,41 @@ export class Core {
       );
     });
 
+    const profileFileError = (e: unknown) => ({
+      ok: false as const,
+      error: e instanceof Error ? e.message : String(e),
+    });
+
+    on("config/createProfile", async (msg) => {
+      try {
+        const profileId = await this.configHandler.createProfile(msg.data);
+        return { ok: true as const, profileId };
+      } catch (e) {
+        return profileFileError(e);
+      }
+    });
+
+    on("config/renameProfile", async (msg) => {
+      try {
+        const profileId = await this.configHandler.renameProfile(
+          msg.data.profileId,
+          msg.data.name,
+        );
+        return { ok: true as const, profileId };
+      } catch (e) {
+        return profileFileError(e);
+      }
+    });
+
+    on("config/deleteProfile", async (msg) => {
+      try {
+        await this.configHandler.deleteProfile(msg.data.profileId);
+        return { ok: true as const };
+      } catch (e) {
+        return profileFileError(e);
+      }
+    });
+
     on("config/addLocalWorkspaceBlock", async (msg) => {
       await createNewWorkspaceBlockFile(
         this.ide,
