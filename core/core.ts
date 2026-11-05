@@ -323,6 +323,151 @@ export class Core {
     }
   }
 
+  /** Config files, provider accounts and plaintext key handling. */
+  private registerProfileAndProviderHandlers() {
+    const on = this.messenger.on.bind(this.messenger);
+
+    const profileFileError = (e: unknown) => ({
+      ok: false as const,
+      error: e instanceof Error ? e.message : String(e),
+    });
+
+    on("config/createProfile", async (msg) => {
+      try {
+        const profileId = await this.configHandler.createProfile(msg.data);
+        return { ok: true as const, profileId };
+      } catch (e) {
+        return profileFileError(e);
+      }
+    });
+
+    on("config/renameProfile", async (msg) => {
+      try {
+        const profileId = await this.configHandler.renameProfile(
+          msg.data.profileId,
+          msg.data.name,
+        );
+        return { ok: true as const, profileId };
+      } catch (e) {
+        return profileFileError(e);
+      }
+    });
+
+    on("config/deleteProfile", async (msg) => {
+      try {
+        await this.configHandler.deleteProfile(msg.data.profileId);
+        return { ok: true as const };
+      } catch (e) {
+        return profileFileError(e);
+      }
+    });
+
+    on("providers/list", async () => {
+      return listProviderInstances(this.ide, {
+        workspaceFiles: await readWorkspaceProvidersFiles(this.ide),
+        configFiles: await this.configHandler.getLocalConfigFiles(),
+        continueDir: getContinueGlobalPath(),
+        secureStorageAvailable: await isSecureStorageAvailable(this.ide),
+      });
+    });
+
+    on("providers/save", async (msg) => {
+      const result = await saveProviderInstance(this.ide, msg.data, {
+        continueDir: getContinueGlobalPath(),
+        configFiles: await this.configHandler.getLocalConfigFiles(),
+      });
+      if (result.saved) {
+        const storage = msg.data.key?.storage;
+        if (storage === "secure" || storage === "env") {
+          this.globalContext.update("preferredKeyStorage", storage);
+        }
+        await this.configHandler.reloadConfig(
+          "Provider instance saved (providers/save message)",
+        );
+      }
+      return result;
+    });
+
+    on("providers/delete", async (msg) => {
+      const result = deleteProviderInstance(msg.data.name);
+      if (result.deleted) {
+        await this.configHandler.reloadConfig(
+          "Provider instance deleted (providers/delete message)",
+        );
+      }
+      return result;
+    });
+
+    on("config/addConnectedModel", async (msg) => {
+      const { connection, model } = msg.data;
+      const name = msg.data.name?.trim() || model.trim();
+      if (!connection || !model.trim()) {
+        return { saved: false, error: "Choose a provider and a model." };
+      }
+      let edited = false;
+      let duplicate = false;
+      editConfigFile(
+        (c) => c,
+        (config) => {
+          edited = true;
+          const models = config.models ?? [];
+          if (models.some((m: any) => m?.name === name)) {
+            duplicate = true;
+            return config;
+          }
+          return {
+            ...config,
+            models: [
+              ...models,
+              {
+                name,
+                connection,
+                model: model.trim(),
+                ...(msg.data.roles?.length ? { roles: msg.data.roles } : {}),
+              } as any,
+            ],
+          };
+        },
+      );
+      if (!edited) {
+        return {
+          saved: false,
+          error: "The selected config is not a local YAML file.",
+        };
+      }
+      if (duplicate) {
+        return {
+          saved: false,
+          error: `This config already has a model named "${name}".`,
+        };
+      }
+      await this.configHandler.reloadConfig(
+        "Connected model added (config/addConnectedModel message)",
+      );
+      return { saved: true };
+    });
+
+    on("config/findPlaintextKeys", async () => {
+      return {
+        keys: findPlaintextKeys(await this.getKeyScanFiles()),
+        secureStorageAvailable: await isSecureStorageAvailable(this.ide),
+      };
+    });
+
+    on("config/movePlaintextKeys", async (msg) => {
+      const result = await movePlaintextKeys(this.ide, msg.data.ids, {
+        storage: msg.data.storage,
+        continueDir: getContinueGlobalPath(),
+      });
+      if (result.moved.length > 0) {
+        await this.configHandler.reloadConfig(
+          "Plaintext keys moved (config/movePlaintextKeys message)",
+        );
+      }
+      return result;
+    });
+  }
+
   /* eslint-disable max-lines-per-function */
   private registerMessageHandlers(ideSettingsPromise: Promise<IdeSettings>) {
     const on = this.messenger.on.bind(this.messenger);
@@ -492,40 +637,7 @@ export class Core {
       );
     });
 
-    const profileFileError = (e: unknown) => ({
-      ok: false as const,
-      error: e instanceof Error ? e.message : String(e),
-    });
-
-    on("config/createProfile", async (msg) => {
-      try {
-        const profileId = await this.configHandler.createProfile(msg.data);
-        return { ok: true as const, profileId };
-      } catch (e) {
-        return profileFileError(e);
-      }
-    });
-
-    on("config/renameProfile", async (msg) => {
-      try {
-        const profileId = await this.configHandler.renameProfile(
-          msg.data.profileId,
-          msg.data.name,
-        );
-        return { ok: true as const, profileId };
-      } catch (e) {
-        return profileFileError(e);
-      }
-    });
-
-    on("config/deleteProfile", async (msg) => {
-      try {
-        await this.configHandler.deleteProfile(msg.data.profileId);
-        return { ok: true as const };
-      } catch (e) {
-        return profileFileError(e);
-      }
-    });
+    this.registerProfileAndProviderHandlers();
 
     on("config/addLocalWorkspaceBlock", async (msg) => {
       await createNewWorkspaceBlockFile(
@@ -576,111 +688,6 @@ export class Core {
 
     on("config/openProfile", async (msg) => {
       await this.configHandler.openConfigProfile(msg.data.profileId);
-    });
-
-    on("providers/list", async () => {
-      return listProviderInstances(this.ide, {
-        workspaceFiles: await readWorkspaceProvidersFiles(this.ide),
-        configFiles: await this.configHandler.getLocalConfigFiles(),
-        continueDir: getContinueGlobalPath(),
-        secureStorageAvailable: await isSecureStorageAvailable(this.ide),
-      });
-    });
-
-    on("providers/save", async (msg) => {
-      const result = await saveProviderInstance(this.ide, msg.data, {
-        continueDir: getContinueGlobalPath(),
-        configFiles: await this.configHandler.getLocalConfigFiles(),
-      });
-      if (result.saved) {
-        const storage = msg.data.key?.storage;
-        if (storage === "secure" || storage === "env") {
-          this.globalContext.update("preferredKeyStorage", storage);
-        }
-        await this.configHandler.reloadConfig(
-          "Provider instance saved (providers/save message)",
-        );
-      }
-      return result;
-    });
-
-    on("providers/delete", async (msg) => {
-      const result = deleteProviderInstance(msg.data.name);
-      if (result.deleted) {
-        await this.configHandler.reloadConfig(
-          "Provider instance deleted (providers/delete message)",
-        );
-      }
-      return result;
-    });
-
-    on("config/addConnectedModel", async (msg) => {
-      const { connection, model } = msg.data;
-      const name = msg.data.name?.trim() || model.trim();
-      if (!connection || !model.trim()) {
-        return { saved: false, error: "Choose a provider and a model." };
-      }
-      let edited = false;
-      let duplicate = false;
-      editConfigFile(
-        (c) => c,
-        (config) => {
-          edited = true;
-          const models = config.models ?? [];
-          if (models.some((m: any) => m?.name === name)) {
-            duplicate = true;
-            return config;
-          }
-          return {
-            ...config,
-            models: [
-              ...models,
-              {
-                name,
-                connection,
-                model: model.trim(),
-                ...(msg.data.roles?.length ? { roles: msg.data.roles } : {}),
-              } as any,
-            ],
-          };
-        },
-      );
-      if (!edited) {
-        return {
-          saved: false,
-          error: "The selected config is not a local YAML file.",
-        };
-      }
-      if (duplicate) {
-        return {
-          saved: false,
-          error: `This config already has a model named "${name}".`,
-        };
-      }
-      await this.configHandler.reloadConfig(
-        "Connected model added (config/addConnectedModel message)",
-      );
-      return { saved: true };
-    });
-
-    on("config/findPlaintextKeys", async () => {
-      return {
-        keys: findPlaintextKeys(await this.getKeyScanFiles()),
-        secureStorageAvailable: await isSecureStorageAvailable(this.ide),
-      };
-    });
-
-    on("config/movePlaintextKeys", async (msg) => {
-      const result = await movePlaintextKeys(this.ide, msg.data.ids, {
-        storage: msg.data.storage,
-        continueDir: getContinueGlobalPath(),
-      });
-      if (result.moved.length > 0) {
-        await this.configHandler.reloadConfig(
-          "Plaintext keys moved (config/movePlaintextKeys message)",
-        );
-      }
-      return result;
     });
 
     on("config/openSecretLocation", async (msg) => {
