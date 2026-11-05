@@ -80,6 +80,30 @@ const on = (
   ...hooks: HookHandler[]
 ): HooksConfig => ({ [event]: [{ hooks }] });
 
+describe("a hook that leaves a background process", () => {
+  // The shell exits at once, but `sleep` holds the output pipe. The runner
+  // used to wait for the pipe, i.e. for the timeout, and then fail closed.
+  it.skipIf(process.platform === "win32")(
+    "finishes when the shell exits and does not block",
+    async () => {
+      const started = Date.now();
+      const r = await runHooks(
+        on("PreToolUse", {
+          type: "command",
+          command: "sleep 30 & echo started",
+          timeout: 20,
+        }),
+        preToolUse(),
+        dir,
+      );
+      expect(r.blocked).toBe(false);
+      expect(r.results[0].failed).toBeUndefined();
+      expect(Date.now() - started).toBeLessThan(10_000);
+    },
+    25_000,
+  );
+});
+
 describe("command hooks fail closed", () => {
   const exit = (code: number) => script(`exit${code}`, `process.exit(${code})`);
 

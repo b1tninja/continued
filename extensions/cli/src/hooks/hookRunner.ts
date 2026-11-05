@@ -29,6 +29,8 @@ const DEFAULT_COMMAND_TIMEOUT_SECONDS = 600;
 const DEFAULT_HTTP_TIMEOUT_SECONDS = 30;
 /** Output kept from a hook; the rest is dropped. */
 const MAX_CAPTURE_BYTES = 10 * 1024 * 1024;
+/** How long after the hook's shell exits to wait for its last output. */
+const EXIT_GRACE_MS = 100;
 
 function tryParseJson(str: string): HookOutput | null {
   const trimmed = str.trim();
@@ -160,7 +162,25 @@ function executeCommandHook(
       child.stdin.end();
     }
 
-    child.on("close", (code, signal) => {
+    // "close" waits for every holder of the output pipes, so a hook that
+    // backgrounds a process (`notify-send ... &`) would run into its timeout
+    // and fail closed. Finish shortly after the shell exits instead; the
+    // background process keeps running, its output drained but not collected.
+    child.on("exit", (code, signal) => {
+      setTimeout(() => {
+        if (settled) return;
+        for (const stream of [child.stdout, child.stderr]) {
+          stream?.removeAllListeners("data");
+          stream?.resume();
+          (stream as { unref?: () => void } | null)?.unref?.();
+        }
+        onDone(code, signal);
+      }, EXIT_GRACE_MS);
+    });
+
+    child.on("close", (code, signal) => onDone(code, signal));
+
+    function onDone(code: number | null, signal: NodeJS.Signals | null) {
       if (code === null) {
         // Killed from outside; a missing exit code is not success.
         finish(failure(`was stopped by ${signal ?? "a signal"}`));
@@ -196,7 +216,7 @@ function executeCommandHook(
         base.failureReason = `exited with code ${code}${detail ? `: ${detail}` : ""}`;
       }
       finish(base);
-    });
+    }
 
     child.on("error", (error) => {
       logger.warn(`Hook command failed: ${handler.command}`, error);
