@@ -9,62 +9,32 @@ const modelRecs: Record<
       "Devstral (27B)",
       "Kimi K2 (1T)",
     ],
-    closed: [
-      "Claude Opus 4.1",
-      "Claude Sonnet 4.6",
-      "GPT-5",
-      "Gemini 2.5 Pro",
-    ],
+    closed: ["Claude Opus 4.1", "Claude Sonnet 4.6", "GPT-5", "Gemini 2.5 Pro"],
     notes: "Closed models are slightly better than open models",
   },
   chat_edit: {
-    open: [
-      "Qwen3 Coder (480B)",
-      "Qwen3 Coder (30B)",
-    ],
-    closed: [
-      "Claude Opus 4.1",
-      "Claude Sonnet 4.6",
-      "GPT-5",
-      "Gemini 2.5 Pro",
-    ],
+    open: ["Qwen3 Coder (480B)", "Qwen3 Coder (30B)"],
+    closed: ["Claude Opus 4.1", "Claude Sonnet 4.6", "GPT-5", "Gemini 2.5 Pro"],
     notes: "Closed and open models have similar performance",
   },
   autocomplete: {
-    open: [
-      "QwenCoder2.5 (1.5B)",
-      "QwenCoder2.5 (7B)",
-    ],
-    closed: [
-      "Codestral",
-      "Mercury Coder",
-    ],
+    open: ["QwenCoder2.5 (1.5B)", "QwenCoder2.5 (7B)"],
+    closed: ["Codestral", "Mercury Coder"],
     notes: "Closed models are slightly better than open models",
   },
   apply: {
     open: ["FastApply"],
-    closed: [
-      "Relace Instant Apply",
-      "Morph Fast Apply",
-    ],
+    closed: ["Relace Instant Apply", "Morph Fast Apply"],
     notes: "Closed models are better than open models",
   },
   embed: {
-    open: [
-      "Nomic Embed Text",
-    ],
-    closed: [
-      "Voyage Code 3",
-      "Morph Embeddings",
-    ],
+    open: ["Nomic Embed Text"],
+    closed: ["Voyage Code 3", "Morph Embeddings"],
     notes: "Closed models are slightly better than open models",
   },
   rerank: {
     open: ["zerank-1", "zerank-1-small"],
-    closed: [
-      "Voyage Rerank 2.5",
-      "Morph Rerank",
-    ],
+    closed: ["Voyage Rerank 2.5", "Morph Rerank"],
     notes: "Open models are beginning to emerge for this model role",
   },
 };
