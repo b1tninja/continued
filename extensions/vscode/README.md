@@ -37,4 +37,4 @@ Source and issues: [github.com/b1tninja/continued](https://github.com/b1tninja/c
 ## License
 
 Apache 2.0. The original work is © 2023–2026 Continue Dev, Inc. Changes in this fork are © 2026 b1tninja.
-See [LICENSE](./LICENSE). This fork is not endorsed by or affiliated with Continue Dev, Inc.
+See [LICENSE](./LICENSE.txt). This fork is not endorsed by or affiliated with Continue Dev, Inc.
