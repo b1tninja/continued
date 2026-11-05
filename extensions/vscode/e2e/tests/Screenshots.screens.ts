@@ -17,6 +17,7 @@ import {
   Key,
   VSBrowser,
   WebDriver,
+  WebElement,
   WebView,
   Workbench,
 } from "vscode-extension-tester";
@@ -62,24 +63,44 @@ describe("Docs screenshots", () => {
       await TestUtils.waitForSuccess(() =>
         new Workbench().executeCommand("View: Close Primary Side Bar"),
       );
-      await GUIActions.toggleGui(); // focuses the panel
-      await VSBrowser.instance.driver.switchTo().defaultContent();
-      for (let i = 0; i < 8; i++) {
-        await TestUtils.waitForSuccess(() =>
-          new Workbench().executeCommand("View: Increase Current View Size"),
-        );
+      // Drag the secondary side bar's left edge (the vertical sash nearest
+      // to it) to the left. "Increase Current View Size" grows whatever has
+      // focus, which here was the editor.
+      const driver = VSBrowser.instance.driver;
+      const bar = await driver.findElement(By.css(".part.auxiliarybar"));
+      const barRect = await bar.getRect();
+      const sashes = await driver.findElements(By.css(".monaco-sash.vertical"));
+      let best: { sash: WebElement; dist: number } | undefined;
+      for (const sash of sashes) {
+        const r = await sash.getRect();
+        const dist = Math.abs(r.x + r.width / 2 - barRect.x);
+        if (r.height > 100 && (!best || dist < best.dist)) {
+          best = { sash, dist };
+        }
       }
+      if (!best || best.dist > 20) throw new Error("no sash next to the panel");
+      await driver
+        .actions({ async: true })
+        .move({ origin: best.sash })
+        .press()
+        .move({
+          x: -420,
+          y: 0,
+          // Origin.POINTER; vscode-extension-tester does not re-export Origin.
+          origin: "pointer" as any,
+          duration: 300,
+        })
+        .release()
+        .perform();
+      await TestUtils.waitForTimeout(500);
+      const after = await bar.getRect();
+      console.log(
+        `[screenshot] panel width ${barRect.width} -> ${after.width}`,
+      );
     } catch (e) {
       console.log(
         `[screenshot] could not widen the panel: ${(e as Error).message.split("\n")[0]}`,
       );
-    } finally {
-      try {
-        await VSBrowser.instance.driver.switchTo().defaultContent();
-        await GUIActions.toggleGui();
-      } catch {
-        // ignore
-      }
     }
   }
 
