@@ -47,7 +47,38 @@ describe("Docs screenshots", () => {
     await GlobalActions.openTestWorkspace();
     await GlobalActions.clearAllNotifications();
     await hideOnboardingCard();
+    await widenPanel();
   });
+
+  /**
+   * Settings needs the panel to be at least the GUI's `sm` width (330px) and
+   * shows "Screen width too small" below it; the default secondary side bar is
+   * narrower. Close the primary side bar and grow the panel. VS Code keeps the
+   * width when the panel is closed and opened again by each shot.
+   */
+  async function widenPanel() {
+    try {
+      await new Workbench().executeCommand("View: Close Primary Side Bar");
+      await GUIActions.toggleGui(); // focuses the panel
+      await VSBrowser.instance.driver.switchTo().defaultContent();
+      for (let i = 0; i < 8; i++) {
+        await new Workbench().executeCommand(
+          "View: Increase Current View Size",
+        );
+      }
+    } catch (e) {
+      console.log(
+        `[screenshot] could not widen the panel: ${(e as Error).message.split("\n")[0]}`,
+      );
+    } finally {
+      try {
+        await VSBrowser.instance.driver.switchTo().defaultContent();
+        await GUIActions.toggleGui();
+      } catch {
+        // ignore
+      }
+    }
+  }
 
   /**
    * The first-run onboarding card fills the empty chat. Mark onboarding as
