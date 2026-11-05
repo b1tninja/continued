@@ -43,8 +43,8 @@ export const ModelRecommendations = ({ role = "all" }) => {
   // Model recommendations data inside component scope
   const modelRecs = {
     agent_plan: {
-      open: 
-        "[Qwen3 Coder (480B)",
+      open: [
+        "Qwen3 Coder (480B)",
         "Qwen3 Coder (30B)",
         "Devstral (27B)",
         "Kimi K2 (1T)",
@@ -53,72 +53,42 @@ export const ModelRecommendations = ({ role = "all" }) => {
         "GLM 4.5 (355B)",
         "GLM 4.5 Air (106B)",
       ],
-      closed: 
-        "[Claude Opus 4.1",
-        "Claude Sonnet 4",
-        "GPT-5",
-        "Gemini 3.1 Pro",
-      ],
+      closed: ["Claude Opus 4.1", "Claude Sonnet 4", "GPT-5", "Gemini 3.1 Pro"],
       notes: "Closed models are slightly better than open models",
     },
     chat_edit: {
-      open: 
-        "[Qwen3 Coder (480B)",
+      open: [
+        "Qwen3 Coder (480B)",
         "Qwen3 Coder (30B)",
         "gpt-oss (120B)",
         "gpt-oss (20B)",
       ],
-      closed: 
-        "[Claude Opus 4.1",
-        "Claude Sonnet 4",
-        "GPT-5",
-        "Gemini 3.1 Pro",
-      ],
+      closed: ["Claude Opus 4.1", "Claude Sonnet 4", "GPT-5", "Gemini 3.1 Pro"],
       notes: "Closed and open models have pretty similar performance",
     },
     autocomplete: {
-      open: 
-        "[QwenCoder2.5 (1.5B)",
-        "QwenCoder2.5 (7B)",
-      ],
-      closed: 
-        "[Codestral",
-        "Mercury Coder",
-      ],
+      open: ["QwenCoder2.5 (1.5B)", "QwenCoder2.5 (7B)"],
+      closed: ["Codestral", "Mercury Coder"],
       notes: "Closed models are slightly better than open models",
     },
     apply: {
-      open: "[FastApply"],
-      closed: 
-        "[Relace Instant Apply",
-        "Morph Fast Apply",
-      ],
+      open: ["FastApply"],
+      closed: ["Relace Instant Apply", "Morph Fast Apply"],
       notes: "Closed models are better than open models",
     },
     embed: {
-      open: 
-        "[Nomic Embed Text",
-        "Qwen3 Embedding",
-      ],
-      closed: 
-        "[Voyage Code 3",
-        "Morph Embeddings",
-        "Codestral Embed",
-      ],
+      open: ["Nomic Embed Text", "Qwen3 Embedding"],
+      closed: ["Voyage Code 3", "Morph Embeddings", "Codestral Embed"],
       notes: "Closed models are slightly better than open models",
     },
     rerank: {
       open: ["zerank-1", "zerank-1-small", "Qwen3 Reranker"],
-      closed: 
-        "[Voyage Rerank 2.5",
-        "Relace Code Rerank",
-        "Morph Rerank",
-      ],
+      closed: ["Voyage Rerank 2.5", "Relace Code Rerank", "Morph Rerank"],
       notes: "Open models are beginning to emerge for this model role",
     },
     next_edit: {
-      open: "[Instinct"],
-      closed: "[Mercury Coder"],
+      open: ["Instinct"],
+      closed: ["Mercury Coder"],
       notes: "Closed models are better than open models",
     },
   };
