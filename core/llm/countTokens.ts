@@ -525,7 +525,8 @@ function compileChatMessages({
   // rounds after it instead.
   const protectedUser = toolSequence.some((m) => m.role === "user")
     ? undefined
-    : historyWithTokens.findLast((m) => m.role === "user");
+    : // A reverse search, not findLast: gui/vscode/binary compile core with ES2022 libs.
+      [...historyWithTokens].reverse().find((m) => m.role === "user");
 
   const removeAt = (index: number) => {
     const [message] = historyWithTokens.splice(index, 1);
