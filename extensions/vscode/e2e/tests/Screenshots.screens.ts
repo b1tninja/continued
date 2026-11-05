@@ -46,7 +46,39 @@ describe("Docs screenshots", () => {
     await GUIActions.moveContinueToSidebar(VSBrowser.instance.driver);
     await GlobalActions.openTestWorkspace();
     await GlobalActions.clearAllNotifications();
+    await hideOnboardingCard();
   });
+
+  /**
+   * The first-run onboarding card fills the empty chat. Mark onboarding as
+   * done in the webview's localStorage (the keys and JSON encoding that
+   * gui/src/util/localStorage.ts uses), then reload the webviews so the chat
+   * renders without it.
+   */
+  async function hideOnboardingCard() {
+    try {
+      await GUIActions.toggleGui();
+      ({ view, driver } = await GUIActions.switchToReactIframe());
+      await driver.executeScript(`
+        localStorage.setItem("onboardingStatus", JSON.stringify("Completed"));
+        localStorage.setItem("hasDismissedOnboardingCard", JSON.stringify(true));
+      `);
+      await view.switchBack();
+      await new Workbench().executeCommand("Developer: Reload Webviews");
+      await TestUtils.waitForTimeout(2000);
+    } catch (e) {
+      console.log(
+        `[screenshot] could not hide the onboarding card: ${(e as Error).message.split("\n")[0]}`,
+      );
+    } finally {
+      try {
+        await VSBrowser.instance.driver.switchTo().defaultContent();
+        await GUIActions.toggleGui(); // closed again; each shot opens it
+      } catch {
+        // ignore
+      }
+    }
+  }
 
   /** Opens the chat panel fresh, runs `body`, and screenshots the window. */
   async function shot(name: string, body: () => Promise<void>) {
