@@ -173,7 +173,7 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "config/setRulesByMode": [RulesByModeInput, { saved: boolean }];
   /**
    * Add one rule to `toolPermissions` in the global config.yaml (comments
-   * kept). "no-config" means there was no config.yaml to edit.
+   * kept). "no-config" means the selected config is not a local YAML file.
    */
   "config/addToolRule": [
     { decision: "allow" | "ask" | "deny"; rule: string },

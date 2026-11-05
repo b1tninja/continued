@@ -9,7 +9,7 @@ import {
   ILLMLogger,
 } from "../index.js";
 import { GlobalContext } from "../util/GlobalContext.js";
-import { getConfigYamlPath } from "../util/paths.js";
+import { getConfigYamlPath, setSelectedConfigFile } from "../util/paths.js";
 
 import EventEmitter from "node:events";
 import { Logger } from "../util/Logger.js";
@@ -122,7 +122,7 @@ export class ConfigHandler {
       }
 
       this.profiles = profiles;
-      this.currentProfile = selectedProfile;
+      this.setCurrentProfile(selectedProfile);
 
       await this.reloadConfig(reason, errors);
     } catch (e) {
@@ -226,8 +226,19 @@ export class ConfigHandler {
       [workspaceId]: profileId,
     });
 
-    this.currentProfile = profile;
+    this.setCurrentProfile(profile);
     await this.reloadConfig("Selected profile changed");
+  }
+
+  /** Switch profiles; GUI edits follow the selected config's file. */
+  private setCurrentProfile(profile: ProfileLifecycleManager | null) {
+    this.currentProfile = profile;
+    const id = profile?.profileDescription.id;
+    setSelectedConfigFile(
+      !id || id === LocalProfileLoader.ID
+        ? undefined
+        : profile!.profileDescription.uri,
+    );
   }
 
   // Bottom level of cascade: refresh the current profile

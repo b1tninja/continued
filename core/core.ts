@@ -406,7 +406,7 @@ export class Core {
       if (!saved) {
         void this.ide.showToast(
           "warning",
-          "Per-mode models are saved in config.yaml, and this profile has none.",
+          "Per-mode models can only be saved to a local YAML config, and the selected config is not one.",
         );
         return { saved: false };
       }
@@ -421,7 +421,7 @@ export class Core {
       if (!saved) {
         void this.ide.showToast(
           "warning",
-          "Per-mode rule switches are saved in config.yaml, and this profile has none.",
+          "Per-mode rule switches can only be saved to a local YAML config, and the selected config is not one.",
         );
         return { saved: false };
       }
@@ -457,7 +457,7 @@ export class Core {
       } else if (result === "no-config") {
         void this.ide.showToast(
           "warning",
-          "Tool rules are saved in config.yaml, and this profile has none.",
+          "Tool rules can only be saved to a local YAML config, and the selected config is not one.",
         );
       }
       return { result };
@@ -606,9 +606,12 @@ export class Core {
       if (!saved) {
         void this.ide.showToast(
           "warning",
-          "Models are saved in config.yaml, and this profile has none.",
+          "Models can only be saved to a local YAML config, and the selected config is not one.",
         );
-        return { saved: false, error: "There is no config.yaml to edit" };
+        return {
+          saved: false,
+          error: "The selected config is not a local YAML file",
+        };
       }
       await this.configHandler.reloadConfig(
         "Provider models changed (config/saveProviderModels message)",
@@ -634,7 +637,7 @@ export class Core {
         readConfig: readGlobalConfigYaml,
         editConfig: (cb) => {
           if (!fs.existsSync(getConfigYamlPath())) return false;
-          editConfigFile((c) => c, cb);
+          editConfigFile((c) => c, cb, "main");
           return true;
         },
       });
@@ -1716,7 +1719,7 @@ export class Core {
         editConfigYamlCallback = (config) => config;
     }
 
-    editConfigFile((c) => c, editConfigYamlCallback);
+    editConfigFile((c) => c, editConfigYamlCallback, "main");
 
     void this.configHandler.reloadConfig("Onboarding completed");
   }
