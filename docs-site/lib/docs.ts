@@ -147,6 +147,11 @@ export function relativeLinksToSitePaths(
   const toSite = (rel: string): string => {
     const [p, anchor] = rel.split("#", 2);
     let resolved = path.posix.normalize(fileDir ? `${fileDir}/${p}` : p);
+    // Images are copied to public/images/docs/ keeping their docs/ path
+    // (docs/images/x too, as images/x), and /images/... is mapped there below.
+    if (/\.(png|jpe?g|gif|svg|webp)$/i.test(resolved)) {
+      return `/images/${resolved.replace(/^images\//, "")}${anchor !== undefined ? `#${anchor}` : ""}`;
+    }
     resolved = resolved.replace(/\.mdx?$/, "").replace(/(^|\/)index$/, "");
     return `/${resolved}${anchor !== undefined ? `#${anchor}` : ""}`;
   };
