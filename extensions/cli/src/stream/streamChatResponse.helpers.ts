@@ -462,8 +462,14 @@ export function recordStreamTelemetry(options: {
   telemetryService.recordCost(cost, model.model);
   trackSessionUsage(cost, usage);
   // The session totals add up the providers' own counts; the cache tally
-  // normalises them per request so a hit share can be taken from it.
-  recordCacheTally(detectProvider(model.model), model.model, usage);
+  // normalises them per request so a hit share can be taken from it. The real
+  // provider is passed too, for the vendors' per-provider cache minimums.
+  recordCacheTally(
+    detectProvider(model.model),
+    model.model,
+    usage,
+    typeof model.provider === "string" ? model.provider : undefined,
+  );
 
   telemetryService.recordResponseTime(
     totalDuration,

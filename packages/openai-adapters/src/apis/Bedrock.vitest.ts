@@ -259,6 +259,72 @@ describe("BedrockApi usage", () => {
   });
 });
 
+describe("BedrockApi request ID", () => {
+  const stream = [
+    { contentBlockDelta: { delta: { text: "Hi" } } },
+    { metadata: { usage: { inputTokens: 1, outputTokens: 1 } } },
+  ];
+  const withMetadata = (metadata: any) => {
+    class IdApi extends TestApi {
+      async getClient() {
+        return {
+          send: async () => ({
+            $metadata: metadata,
+            stream: (async function* () {
+              for (const e of stream) yield e;
+            })(),
+          }),
+        } as any;
+      }
+    }
+    return new IdApi({ provider: "bedrock", env: {} } as any);
+  };
+  const body = {
+    model: "anthropic.claude-sonnet-4-6",
+    messages: [{ role: "user", content: "hi" }],
+    stream: true,
+  } as any;
+
+  it("puts Bedrock's request ID on every streamed chunk", async () => {
+    const api = withMetadata({ requestId: "req-abc-123" });
+    const ids: string[] = [];
+    for await (const c of api.chatCompletionStream(
+      body,
+      new AbortController().signal,
+    )) {
+      ids.push(c.id);
+    }
+    // a text chunk and the usage chunk
+    expect(ids).toEqual(["req-abc-123", "req-abc-123"]);
+  });
+
+  it("uses it as the ID of a non-streaming response", async () => {
+    const api = withMetadata({ requestId: "req-abc-123" });
+    const res = await api.chatCompletionNonStream(
+      { ...body, stream: false },
+      new AbortController().signal,
+    );
+    expect(res.id).toBe("req-abc-123");
+  });
+
+  it("falls back to a generated ID when Bedrock sends none", async () => {
+    const api = withMetadata(undefined);
+    const chunks: any[] = [];
+    for await (const c of api.chatCompletionStream(
+      body,
+      new AbortController().signal,
+    )) {
+      chunks.push(c);
+    }
+    expect(chunks.map((c) => c.id)).toEqual(["", ""]);
+    const res = await api.chatCompletionNonStream(
+      { ...body, stream: false },
+      new AbortController().signal,
+    );
+    expect(res.id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});
+
 describe("BedrockApi cache points", () => {
   const tool = {
     type: "function",

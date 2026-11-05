@@ -104,7 +104,7 @@ The tooltip of the cache button says whether the cache is warm, then ends with a
 
 It comes from a list Continued keeps for the current conversation: the last 200 requests, with token counts, timings and the provider's request ID. It holds no message text, is not saved with the session, and starts empty in every new conversation. Requests that failed are not in it.
 
-With `--verbose`, the CLI prints a "Prompt cache:" line when a session ends: requests, share of input read from the cache, and tokens read and written. It counts the requests of that run only, so a resumed session reports just the new ones.
+With `--verbose`, the CLI prints a "Prompt cache:" line when a session ends: requests, share of input read from the cache, and tokens read and written. It counts the requests of that run only, so a resumed session reports just the new ones. If some requests were shorter than the model's minimum cacheable prompt (for example 4,096 tokens for Claude Haiku 4.5), the line says so: those requests could not be cached whatever the settings, and the provider reports nothing when that happens. The minimums are the vendors' published figures, and a model that is not in their tables is never reported this way.
 
 ## Tips
 

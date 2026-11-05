@@ -586,6 +586,7 @@ export class BedrockApi implements BaseLlmApi {
   ): Promise<ChatCompletion> {
     let completion = "";
     let usage: ChatCompletion["usage"];
+    let requestId: string | undefined;
     const toolCalls: ChatCompletionMessageToolCall[] = [];
 
     for await (const chunk of this.chatCompletionStream(
@@ -598,6 +599,9 @@ export class BedrockApi implements BaseLlmApi {
       if (chunk.usage) {
         usage = chunk.usage;
       }
+      if (chunk.id) {
+        requestId = chunk.id;
+      }
       if (chunk.choices[0]?.delta?.content) {
         completion += chunk.choices[0].delta.content;
       }
@@ -605,7 +609,9 @@ export class BedrockApi implements BaseLlmApi {
     }
 
     return {
-      id: uuidv4(),
+      // Bedrock's own request ID when it sent one: it is the ID in the
+      // invocation log and the bill.
+      id: requestId ?? uuidv4(),
       object: "chat.completion",
       model: body.model,
       created: Date.now(),
@@ -644,6 +650,10 @@ export class BedrockApi implements BaseLlmApi {
         throw new Error("No stream received from Bedrock API");
       }
 
+      // The ID that identifies this call in Bedrock's invocation log and in
+      // billing. It is known before the first event, so every chunk carries it.
+      const id = response.$metadata?.requestId;
+
       for await (const chunk of response.stream) {
         if (chunk.contentBlockDelta?.delta) {
           const delta: any = chunk.contentBlockDelta.delta;
@@ -653,6 +663,7 @@ export class BedrockApi implements BaseLlmApi {
             yield chatChunk({
               content: delta.text,
               model: body.model,
+              id,
             });
             continue;
           }
@@ -669,6 +680,7 @@ export class BedrockApi implements BaseLlmApi {
           if (delta.toolUse) {
             yield chatChunkFromDelta({
               model: body.model,
+              id,
               delta: {
                 tool_calls: [
                   {
@@ -692,6 +704,7 @@ export class BedrockApi implements BaseLlmApi {
           if (start.toolUse) {
             yield chatChunkFromDelta({
               model: body.model,
+              id,
               delta: {
                 tool_calls: [
                   {
@@ -714,6 +727,7 @@ export class BedrockApi implements BaseLlmApi {
         if (chunk.metadata?.usage) {
           yield usageChatChunk({
             model: body.model,
+            id,
             usage: bedrockUsageToCompletionUsage(chunk.metadata.usage),
           });
         }
