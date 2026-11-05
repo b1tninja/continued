@@ -28,9 +28,12 @@ import {
 } from "../../../components/ui";
 import { useAuth } from "../../../context/Auth";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
+import { useWarmCacheNote } from "../../../hooks/useWarmCacheNote";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
 import { updateConfig } from "../../../redux/slices/configSlice";
 import { ConfigHeader } from "../components/ConfigHeader";
+import { ImportClineMcpButton } from "../components/ImportClineMcp";
+import { AutoApproveCard } from "../components/AutoApproveCard";
 import { ToolPoliciesGroup } from "../components/ToolPoliciesGroup";
 
 interface MCPServerStatusProps {
@@ -72,6 +75,7 @@ function MCPServerPreview({
   const editBlock = useEditBlock();
 
   const dispatch = useAppDispatch();
+  const warmCacheNote = useWarmCacheNote();
   const updateMCPServerStatus = (status: MCPServerStatus["status"]) => {
     // optimistic config update
     dispatch(
@@ -172,7 +176,7 @@ function MCPServerPreview({
     return (
       <div>
         <div
-          className="mx-2 flex cursor-pointer items-center justify-between rounded hover:bg-gray-50 hover:bg-opacity-5"
+          className="mx-2 flex cursor-pointer items-center justify-between rounded-sm hover:bg-gray-50/5"
           onClick={() => toggleSection(sectionKey)}
         >
           <div className="flex items-center gap-3">
@@ -197,7 +201,7 @@ function MCPServerPreview({
                   return (
                     <div
                       key={idx}
-                      className="rounded bg-gray-50 bg-opacity-5 px-2 py-1 text-xs text-description"
+                      className="rounded-sm bg-gray-50/5 px-2 py-1 text-xs text-description"
                     >
                       <code>{item.name}</code>
                       {item.description && (
@@ -210,7 +214,7 @@ function MCPServerPreview({
                 })}
               </div>
             ) : (
-              <div className="text-xs italic text-gray-500">
+              <div className="text-xs text-gray-500 italic">
                 No {title.toLowerCase()} available
               </div>
             )}
@@ -229,7 +233,7 @@ function MCPServerPreview({
               <h3 className="my-0 text-sm font-medium">{server.name}</h3>
               <ToolTip content={ServerStatusTooltip[server.status] ?? "Error"}>
                 <div
-                  className={`h-2 w-2 flex-shrink-0 rounded-full ${ServerStatusColor[server.status] ?? "bg-error"}`}
+                  className={`h-2 w-2 shrink-0 rounded-full ${ServerStatusColor[server.status] ?? "bg-error"}`}
                 />
               </ToolTip>
             </div>
@@ -256,16 +260,16 @@ function MCPServerPreview({
                 data-testid="mcp-sign-in"
               >
                 {server.status === "authenticating" ? (
-                  <GlobeAltIcon className="h-4 w-4 flex-shrink-0 animate-spin-slow" />
+                  <GlobeAltIcon className="h-4 w-4 shrink-0 animate-spin-slow" />
                 ) : (
-                  <UserCircleIcon className="h-4 w-4 flex-shrink-0" />
+                  <UserCircleIcon className="h-4 w-4 shrink-0" />
                 )}
               </Button>
             </ToolTip>
           )}
           <Listbox>
             <ListboxButton>
-              <EllipsisVerticalIcon className="h-4 w-4 flex-shrink-0" />
+              <EllipsisVerticalIcon className="h-4 w-4 shrink-0" />
             </ListboxButton>
             <ListboxOptions className="min-w-fit" anchor="bottom end">
               {isRemote && server.status !== "authenticating" && (
@@ -274,7 +278,7 @@ function MCPServerPreview({
                   onClick={onAuthenticate}
                   className="justify-start gap-x-1.5"
                 >
-                  <UserCircleIcon className="h-4 w-4 flex-shrink-0" /> Sign in
+                  <UserCircleIcon className="h-4 w-4 shrink-0" /> Sign in
                 </ListboxOption>
               )}
               {isRemote && server.isProtectedResource && (
@@ -283,7 +287,7 @@ function MCPServerPreview({
                   onClick={onRemoveAuth}
                   className="justify-start gap-x-1.5"
                 >
-                  <UserCircleIcon className="h-4 w-4 flex-shrink-0" /> Sign out
+                  <UserCircleIcon className="h-4 w-4 shrink-0" /> Sign out
                 </ListboxOption>
               )}
 
@@ -301,7 +305,7 @@ function MCPServerPreview({
               >
                 <PencilIcon
                   className={
-                    "h-3.5 w-3.5 flex-shrink-0 cursor-pointer text-gray-400 text-inherit hover:brightness-125"
+                    "h-3.5 w-3.5 shrink-0 cursor-pointer text-gray-400 text-inherit hover:brightness-125"
                   }
                 />
                 Edit
@@ -313,8 +317,17 @@ function MCPServerPreview({
                   onClick={onDisconnect}
                   className="justify-start gap-x-1.5"
                 >
-                  <StopCircleIcon className="h-4 w-4 flex-shrink-0" />{" "}
-                  Disconnect
+                  <span
+                    className="flex items-center gap-x-1.5"
+                    title={
+                      warmCacheNote
+                        ? `Removes this server's tools from the prompt. ${warmCacheNote}`
+                        : undefined
+                    }
+                  >
+                    <StopCircleIcon className="h-4 w-4 shrink-0" />
+                    Disconnect
+                  </span>
                 </ListboxOption>
               )}
 
@@ -324,12 +337,21 @@ function MCPServerPreview({
                   onClick={onRefresh}
                   className="justify-start gap-x-1.5"
                 >
-                  {server.status === "disabled" ? (
-                    <PlayCircleIcon className="h-4 w-4 flex-shrink-0" />
-                  ) : (
-                    <ArrowPathIcon className="h-4 w-4 flex-shrink-0" />
-                  )}
-                  Reload
+                  <span
+                    className="flex items-center gap-x-1.5"
+                    title={
+                      warmCacheNote
+                        ? `A server that comes back with different tools changes the prompt. ${warmCacheNote}`
+                        : undefined
+                    }
+                  >
+                    {server.status === "disabled" ? (
+                      <PlayCircleIcon className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <ArrowPathIcon className="h-4 w-4 shrink-0" />
+                    )}
+                    Reload
+                  </span>
                 </ListboxOption>
               )}
             </ListboxOptions>
@@ -351,7 +373,7 @@ function MCPServerPreview({
             title="Prompts"
             items={server.prompts}
             icon={
-              <CommandLineIcon className="h-4 w-4 flex-shrink-0 text-description" />
+              <CommandLineIcon className="h-4 w-4 shrink-0 text-description" />
             }
             sectionKey={`${server.id}-prompts`}
           />
@@ -362,7 +384,7 @@ function MCPServerPreview({
             title="Resources"
             items={[...server.resources, ...server.resourceTemplates]}
             icon={
-              <CircleStackIcon className="h-4 w-4 flex-shrink-0 text-description" />
+              <CircleStackIcon className="h-4 w-4 shrink-0 text-description" />
             }
             sectionKey={`${server.id}-resources`}
           />
@@ -492,6 +514,7 @@ export function ToolsSection() {
         </div>
       )}
       <div className="mb-4 space-y-6">
+        <AutoApproveCard />
         <ToolPoliciesGroup
           showIcon={false}
           groupName={BUILT_IN_GROUP_NAME}
@@ -521,6 +544,9 @@ export function ToolsSection() {
                 </span>
               </Alert>
             )}
+            <div className="flex justify-end">
+              <ImportClineMcpButton />
+            </div>
             {mergedBlocks.length > 0 ? (
               mergedBlocks.map(({ block, blockFromYaml }) => (
                 <MCPServerPreview

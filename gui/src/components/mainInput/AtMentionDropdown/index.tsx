@@ -59,7 +59,7 @@ function DropdownIcon(props: { className?: string; item: ComboBoxItem }) {
 
   const fallbackIcon = (
     <IconComponent
-      className={`${props.className} flex-shrink-0`}
+      className={`${props.className} shrink-0`}
       height="1.2em"
       width="1.2em"
     />
@@ -71,7 +71,7 @@ function DropdownIcon(props: { className?: string; item: ComboBoxItem }) {
 
   return (
     <SafeImg
-      className="flex-shrink-0 pr-2"
+      className="shrink-0 pr-2"
       src={props.item.icon}
       height="18em"
       width="18em"
@@ -524,7 +524,7 @@ const AtMentionDropdown = forwardRef((props: AtMentionDropdownProps, ref) => {
                     textAlign: "right",
                     minWidth: "30px",
                   }}
-                  className="ml-2 flex items-center overflow-hidden overflow-ellipsis whitespace-nowrap"
+                  className="ml-2 flex items-center overflow-hidden text-ellipsis whitespace-nowrap"
                 >
                   {loadingSubmenuItem.description}
                 </span>
@@ -537,7 +537,9 @@ const AtMentionDropdown = forwardRef((props: AtMentionDropdownProps, ref) => {
               return (
                 <ItemDiv
                   as="button"
-                  ref={(el) => (itemRefs.current[index] = el)}
+                  ref={(el) => {
+                    itemRefs.current[index] = el;
+                  }}
                   className={`item cursor-pointer ${isSelected ? "is-selected" : ""}`}
                   key={index}
                   onClick={(e) => {
@@ -576,13 +578,13 @@ const AtMentionDropdown = forwardRef((props: AtMentionDropdownProps, ref) => {
                               : 0,
                         minWidth: "30px",
                       }}
-                      className="ml-2 flex items-center overflow-hidden overflow-ellipsis whitespace-nowrap"
+                      className="ml-2 flex items-center overflow-hidden text-ellipsis whitespace-nowrap"
                     >
                       {item.description}
                       {item.type === "contextProvider" &&
                         item.contextProvider?.type === "submenu" && (
                           <ArrowRightIcon
-                            className="ml-2 flex-shrink-0"
+                            className="ml-2 shrink-0"
                             width="1.2em"
                             height="1.2em"
                           />

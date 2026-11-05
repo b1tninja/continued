@@ -1,3 +1,4 @@
+import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
 import {
   ArrowPathIcon,
   ChevronDownIcon,
@@ -8,8 +9,8 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/Auth";
-import { AddModelForm } from "../../forms/AddModelForm";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { useProviderSetupDialog } from "../ProviderSetup/useProviderSetupDialog";
 import {
   setDialogMessage,
   setModeModelOverride,
@@ -23,6 +24,7 @@ import {
   partitionModelsByMode,
 } from "../../util/modeModels";
 import { modelHasMissingSecret } from "../../util/missingSecrets";
+import { isSignificantLoss, warmCacheLoss } from "../../util/cacheSafeguards";
 import { CONFIG_ROUTES } from "../../util/navigation";
 import {
   Button,
@@ -34,6 +36,7 @@ import {
 } from "../ui";
 import { Divider } from "../ui/Divider";
 import { ModelSwitchCacheNotice } from "./ModelSwitchCacheNotice";
+import { ModelSwitchConfirm } from "./ModelSwitchConfirm";
 
 interface ModelOptionProps {
   option: Option;
@@ -102,11 +105,11 @@ function ModelOption({
     >
       <div className="flex w-full items-center justify-between gap-5">
         <div className="flex items-center gap-2 py-0.5">
-          <CubeIcon className="h-3 w-3 flex-shrink-0" />
+          <CubeIcon className="h-3 w-3 shrink-0" />
           <span className="line-clamp-1">
             {option.title}
             {option.isAutoDetected && (
-              <span className="ml-1.5 text-[10px] italic text-description-muted">
+              <span className="ml-1.5 text-[10px] text-description-muted italic">
                 (autodetected)
               </span>
             )}
@@ -117,7 +120,7 @@ function ModelOption({
             )}
             {option.missingSecret && (
               <span
-                className="ml-1.5 text-[10px] italic text-warning"
+                className="ml-1.5 text-[10px] text-warning italic"
                 data-testid="model-option-key-not-set"
               >
                 (Key not set)
@@ -128,7 +131,7 @@ function ModelOption({
         <Button
           variant="ghost"
           size="sm"
-          className="my-0 h-4 w-4 p-0 text-description-muted opacity-0 transition-opacity hover:enabled:text-foreground group-hover:opacity-100"
+          className="my-0 h-4 w-4 p-0 text-description-muted opacity-0 transition-opacity group-hover:opacity-100 hover:enabled:text-foreground"
           onClick={handleConfigureClick}
         >
           <Cog6ToothIcon className="h-3.5 w-3.5" />
@@ -140,6 +143,7 @@ function ModelOption({
 
 function ModelSelect() {
   const dispatch = useAppDispatch();
+  const { openSetup } = useProviderSetupDialog();
   const navigate = useNavigate();
 
   const isInEdit = useAppSelector((store) => store.session.isInEdit);
@@ -151,6 +155,9 @@ function ModelSelect() {
   const { selectedProfile } = useAuth();
   const mode = useAppSelector((state) => state.session.mode);
   const tinyFont = useFontSize(-4);
+  // The keyboard shortcut is bound once per change of its dependencies, so it
+  // reaches the current `chooseModel` (which reads the cache state) via a ref.
+  const chooseModelRef = useRef<(title: string) => void>(() => {});
 
   let selectedModel = null;
   let allModels = null;
@@ -225,14 +232,7 @@ function ModelSelect() {
         );
         if (!newModelTitle) return;
 
-        void dispatch(setModeModelOverride({ mode, title: newModelTitle }));
-        void dispatch(
-          updateSelectedModelByRole({
-            selectedProfile,
-            role: "chat",
-            modelTitle: newModelTitle,
-          }),
-        );
+        chooseModelRef.current(newModelTitle);
       }
     };
 
@@ -242,22 +242,67 @@ function ModelSelect() {
     };
   }, [options, offeredOptions, selectedModel, mode, selectedProfile]);
 
+  const cacheSetting = useAppSelector(selectCacheSetting);
+  const cacheState = useAppSelector((state) => state.session.promptCache);
+
+  /** Changes the chat or edit model, as a manual pick for this mode. */
+  function applyModelChoice(title: string) {
+    // A manual pick wins over `modeModels` for this mode until reload.
+    if (!isInEdit) {
+      void dispatch(setModeModelOverride({ mode, title }));
+    }
+    void dispatch(
+      updateSelectedModelByRole({
+        selectedProfile,
+        role: isInEdit ? "edit" : "chat",
+        modelTitle: title,
+      }),
+    );
+  }
+
+  /**
+   * Switches model, first asking when the prompt cache is warm and the
+   * conversation is big enough that re-reading it at full price is real money.
+   */
+  function chooseModel(title: string) {
+    if (title === config.selectedModelByRole.chat?.title && !isInEdit) return;
+    if (isInEdit && title === config.selectedModelByRole.edit?.title) return;
+    const pool = isInEdit ? config.modelsByRole.edit : config.modelsByRole.chat;
+    const target = (pool.length > 0 ? pool : config.modelsByRole.chat).find(
+      (m) => m.title === title,
+    );
+    const current = config.selectedModelByRole.chat;
+    const loss =
+      !isInEdit && current && target && cacheState
+        ? warmCacheLoss(current, cacheSetting, cacheState, Date.now(), target)
+        : undefined;
+    if (!loss || !isSignificantLoss(loss)) {
+      applyModelChoice(title);
+      return;
+    }
+    closeDropDown(buttonRef.current);
+    dispatch(
+      setDialogMessage(
+        <ModelSwitchConfirm
+          from={current!.title}
+          to={title}
+          loss={loss}
+          onSwitch={() => applyModelChoice(title)}
+          onSwitchInNewSession={() => applyModelChoice(title)}
+        />,
+      ),
+    );
+    dispatch(setShowDialog(true));
+  }
+  chooseModelRef.current = chooseModel;
+
   function onClickAddModel(e: MouseEvent) {
     e.stopPropagation();
     e.preventDefault();
 
     closeDropDown(buttonRef.current);
 
-    dispatch(setShowDialog(true));
-    dispatch(
-      setDialogMessage(
-        <AddModelForm
-          onDone={() => {
-            dispatch(setShowDialog(false));
-          }}
-        />,
-      ),
-    );
+    openSetup();
   }
 
   function onClickConfigureModels(e: React.MouseEvent) {
@@ -273,22 +318,7 @@ function ModelSelect() {
   const selectedKeyNotSet = modelHasMissingSecret(selectedModel);
 
   return (
-    <Listbox
-      onChange={async (val: string) => {
-        if (val === selectedModel?.title) return;
-        // A manual pick wins over `modeModels` for this mode until reload.
-        if (!isInEdit) {
-          void dispatch(setModeModelOverride({ mode, title: val }));
-        }
-        void dispatch(
-          updateSelectedModelByRole({
-            selectedProfile,
-            role: isInEdit ? "edit" : "chat",
-            modelTitle: val,
-          }),
-        );
-      }}
-    >
+    <Listbox onChange={(val: string) => chooseModel(val)}>
       <div className="relative flex">
         <ListboxButton
           data-testid="model-select-button"
@@ -299,7 +329,7 @@ function ModelSelect() {
             {modelSelectTitle(selectedModel) || "Select model"}
           </span>
           <ChevronDownIcon
-            className="hidden h-2 w-2 flex-shrink-0 hover:brightness-110 min-[200px]:flex"
+            className="hidden h-2 w-2 shrink-0 hover:brightness-110 min-[200px]:flex"
             aria-hidden="true"
           />
         </ListboxButton>
@@ -320,7 +350,7 @@ function ModelSelect() {
                 <Cog6ToothIcon className="h-3.5 w-3.5 text-description" />
                 {selectedKeyNotSet && (
                   <span
-                    className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-warning"
+                    className="absolute top-0 right-0 h-1.5 w-1.5 rounded-full bg-warning"
                     data-testid="model-select-key-not-set-dot"
                     title="Key not set on this machine"
                   />
@@ -331,7 +361,7 @@ function ModelSelect() {
 
           <div className="no-scrollbar max-h-[300px] overflow-y-auto">
             {isConfigLoading ? (
-              <div className="flex items-center gap-2 px-2 pb-2 pt-1 text-xs text-description">
+              <div className="flex items-center gap-2 px-2 pt-1 pb-2 text-xs text-description">
                 <ArrowPathIcon className="h-3 w-3 animate-spin-slow" />
                 <span>Loading config</span>
               </div>
@@ -342,7 +372,7 @@ function ModelSelect() {
             ) : offeredSorted.length > 0 ? (
               <>
                 <div
-                  className="px-2 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-description-muted"
+                  className="px-2 pt-1 pb-0.5 text-[10px] tracking-wide text-description-muted uppercase"
                   data-testid="model-group-mode"
                 >
                   {modeLabel} models
@@ -359,7 +389,7 @@ function ModelSelect() {
                 {otherSorted.length > 0 && (
                   <>
                     <div
-                      className="px-2 pb-0.5 pt-2 text-[10px] uppercase tracking-wide text-description-muted"
+                      className="px-2 pt-2 pb-0.5 text-[10px] tracking-wide text-description-muted uppercase"
                       data-testid="model-group-all"
                     >
                       All models
@@ -402,7 +432,7 @@ function ModelSelect() {
               >
                 <span className="flex flex-row items-center text-2xs text-description">
                   <PlusIcon className="mr-1.5 h-3.5 w-3.5" />
-                  Add Chat model
+                  Manage models...
                 </span>
               </ListboxOption>
 

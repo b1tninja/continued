@@ -102,16 +102,30 @@ export function addCacheControlToLastTwoUserMessages(messages: MessageParam[]) {
     const msg = messages[i];
     if (msg.role === "user") {
       userMessages++;
-      if (typeof msg.content === "string") {
-        continue;
-      }
-      for (let j = msg.content.length - 1; j >= 0; j--) {
-        const part = msg.content[j];
-        if (part.type === "text") {
-          part.cache_control = { type: "ephemeral" };
-          break;
+      if (typeof msg.content !== "string") {
+        // In an agent loop the user-role messages after the first are tool
+        // results, so the breakpoint cannot be limited to text blocks. Empty
+        // text and empty results cannot carry one; thinking blocks never can.
+        for (let j = msg.content.length - 1; j >= 0; j--) {
+          const part = msg.content[j];
+          if (part.type === "text" && part.text) {
+            part.cache_control = { type: "ephemeral" };
+            break;
+          }
+          if (
+            part.type === "tool_result" &&
+            part.content &&
+            part.content.length > 0
+          ) {
+            part.cache_control = { type: "ephemeral" };
+            break;
+          }
         }
       }
+      // Checked for string content too: a string message counts as one of the
+      // two even though it cannot carry a marker. Skipping this check let a
+      // third message be marked, which is a fifth breakpoint with the system
+      // prompt and the tools, and Anthropic allows four.
       if (userMessages >= 2) {
         break;
       }
@@ -161,6 +175,10 @@ export function openaiToolToAnthropicTool(tool: ChatCompletionTool): Tool {
       name: tool.function.name,
       description: tool.function.description,
       input_schema: tool.function.parameters as Tool.InputSchema, // TODO unsafe cast, may be differences between openai tool schema and anthropic tool schema,
+      // Set by callers that mark the tool list for prompt caching.
+      ...((tool as any).cache_control
+        ? { cache_control: (tool as any).cache_control }
+        : {}),
     };
   } else {
     throw new Error(`Unsupported tool type in Anthropic: ${tool.type}`);

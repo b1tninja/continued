@@ -13,16 +13,23 @@ import {
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type { ModeModelsInput } from "../config/yaml/saveModeModels";
+import type { RulesByModeInput } from "../config/yaml/saveRulesByMode";
 import type {
   AutoReviewReply,
   AutoReviewRequest,
 } from "../tools/permissions/auto/handler";
+import type {
+  McpImportPreview,
+  McpImportRequest,
+  McpImportResult,
+} from "../config/importClineMcp";
 import type {
   ProviderSetupInfo,
   SaveProviderModelsRequest,
   SaveProviderModelsResult,
 } from "../config/providerSetup";
 import type { DecisionSource as ToolDecisionSource } from "../tools/permissions/decide";
+import type { ApprovalSettings } from "../tools/permissions/approval";
 import { GlobalContextModelSelections } from "../util/GlobalContext";
 
 import {
@@ -103,6 +110,13 @@ export interface BedrockModelOptionInfo {
 export type BedrockListModelsResult =
   { ok: true; models: BedrockModelOptionInfo[] } | { ok: false; error: string };
 
+/**
+ * Whether the account lists the `global.` inference profile of a configured
+ * Bedrock model that uses a regional ID. "unknown" when nothing could be
+ * checked (not a Bedrock model, no regional prefix, or the listing failed).
+ */
+export type BedrockGlobalProfileStatus = "present" | "absent" | "unknown";
+
 export type BedrockTestModelResult =
   | { ok: true; modelId: string; latencyMs: number; reply: string }
   | { ok: false; error: string };
@@ -152,6 +166,11 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    * whether a config.yaml was edited; false means there was none to edit.
    */
   "config/setModeModels": [ModeModelsInput, { saved: boolean }];
+  /**
+   * Switch rules on or off per mode in the global config.yaml (comments kept).
+   * `null` removes a mode's entry. Returns false when there is no config.yaml.
+   */
+  "config/setRulesByMode": [RulesByModeInput, { saved: boolean }];
   /**
    * Add one rule to `toolPermissions` in the global config.yaml (comments
    * kept). "no-config" means there was no config.yaml to edit.
@@ -213,10 +232,43 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     SaveProviderModelsRequest,
     SaveProviderModelsResult,
   ];
+  /**
+   * Find Cline and Roo Code MCP settings files and say what importing each
+   * server would do. Lists secret names only, never values.
+   */
+  "config/previewMcpImport": [undefined, McpImportPreview];
+  /**
+   * Add the chosen servers from a detected Cline / Roo Code settings file to
+   * config.yaml. Credentials become ${{ secrets.NAME }} references.
+   */
+  "config/importMcpServers": [McpImportRequest, McpImportResult];
   /** Store one secret (secure storage or ~/.continue/.env) and reload. */
   "config/setSecret": [
     { secretName: string; value: string; storage: "secure" | "env" },
-    { stored: boolean; error?: string; warning?: string },
+    {
+      stored: boolean;
+      error?: string;
+      warning?: string;
+      /** The name also has a plaintext copy in ~/.continue/.env. */
+      envShadowed?: boolean;
+    },
+  ];
+  /**
+   * Remove a secret's line from ~/.continue/.env. Only sent after the user
+   * agreed, and only honored when the value is in secure storage.
+   */
+  /**
+   * Move a key from ~/.continue/.env to secure storage, then remove the .env
+   * line. The value is handled in core and never returned. config.yaml keeps
+   * its `${{ secrets.NAME }}` reference.
+   */
+  "config/moveKeyToSecureStorage": [
+    { secretName: string },
+    { moved: boolean; envRemoved?: boolean; error?: string },
+  ];
+  "config/removeEnvSecret": [
+    { secretName: string },
+    { removed: boolean; error?: string },
   ];
   "config/openSecretLocation": [
     { secretName: string; target: "env" | "configLine" },
@@ -321,6 +373,7 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   ];
   "llm/listModels": [{ title: string }, string[] | undefined];
   "bedrock/listModels": [BedrockConnectionParams, BedrockListModelsResult];
+  "bedrock/globalProfile": [{ title: string }, BedrockGlobalProfileStatus];
   "bedrock/testModel": [
     BedrockConnectionParams & { model: string },
     BedrockTestModelResult,
@@ -357,6 +410,14 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     {
       index: number;
       sessionId: string;
+      /**
+       * The conversation as the chat last sent it, so the summary request can
+       * read a warm prompt cache. Sent only when that is worth doing.
+       */
+      prefix?: {
+        messages: ChatMessage[];
+        options: LLMFullCompletionOptions;
+      };
     },
     string | undefined,
   ];
@@ -422,6 +483,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       basePolicy: ToolPolicy;
       parsedArgs: Record<string, unknown>;
       processedArgs?: Record<string, unknown>;
+      /** Approval mode and switches; absent means Manual. */
+      approval?: ApprovalSettings;
     },
     {
       policy: ToolPolicy;

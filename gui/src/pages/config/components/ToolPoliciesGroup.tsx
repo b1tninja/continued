@@ -8,6 +8,7 @@ import ToggleSwitch from "../../../components/gui/Switch";
 import { ToolTip } from "../../../components/gui/Tooltip";
 import { Card } from "../../../components/ui";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
+import { useWarmCacheNote } from "../../../hooks/useWarmCacheNote";
 import { toggleToolGroupSetting } from "../../../redux/slices/uiSlice";
 import { ToolPolicyItem } from "./ToolPolicyItem";
 
@@ -40,6 +41,7 @@ export function ToolPoliciesGroup({
     (state) => state.ui.toolGroupSettings,
   );
   const toolSettings = useAppSelector((state) => state.ui.toolSettings);
+  const warmCacheNote = useWarmCacheNote();
   const isGroupEnabled = useMemo(() => {
     return toolGroupSettings[groupName] !== "exclude";
   }, [toolGroupSettings, groupName]);
@@ -62,7 +64,7 @@ export function ToolPoliciesGroup({
   return (
     <Card className="flex flex-1 flex-col p-0">
       <div
-        className="flex cursor-pointer items-center justify-between gap-3 rounded px-2 py-2 hover:bg-gray-50 hover:bg-opacity-5"
+        className="flex cursor-pointer items-center justify-between gap-3 rounded-sm px-2 py-2 hover:bg-gray-50/5"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-3">
@@ -72,9 +74,7 @@ export function ToolPoliciesGroup({
             }`}
           />
           <div className="flex items-center gap-2">
-            {showIcon && (
-              <WrenchScrewdriverIcon className="h-4 w-4 flex-shrink-0" />
-            )}
+            {showIcon && <WrenchScrewdriverIcon className="h-4 w-4 shrink-0" />}
             <span className="text-sm font-semibold">{displayName}</span>
             <div className="flex h-5 min-w-5 items-center justify-center rounded-md bg-gray-600 px-1 text-xs font-medium text-white">
               {badgeText}
@@ -85,9 +85,12 @@ export function ToolPoliciesGroup({
           content={
             allToolsOff
               ? "Tools disabled in current mode"
-              : isGroupEnabled
-                ? `Disable all tools in ${groupName} group`
-                : `Enable all tools in ${groupName} group`
+              : (isGroupEnabled
+                  ? `Disable all tools in ${groupName} group`
+                  : `Enable all tools in ${groupName} group`) +
+                (warmCacheNote
+                  ? `. This changes the tool list. ${warmCacheNote}`
+                  : "")
           }
         >
           <div>

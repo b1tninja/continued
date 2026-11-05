@@ -127,6 +127,12 @@ export class HistoryManager {
     if (session.usage !== undefined) {
       orderedSession.usage = session.usage;
     }
+    if (session.promptCache !== undefined) {
+      orderedSession.promptCache = session.promptCache;
+    }
+    if (session.checkpoints?.length) {
+      orderedSession.checkpoints = session.checkpoints;
+    }
 
     fs.writeFileSync(
       getSessionFilePath(session.sessionId),

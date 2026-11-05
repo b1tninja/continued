@@ -11,6 +11,7 @@ import {
 } from "core/llm/autodetect";
 import { memo, useContext, useRef } from "react";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
+import { useWarmCacheNote } from "../../hooks/useWarmCacheNote";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectUseActiveFile } from "../../redux/selectors";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
@@ -20,12 +21,15 @@ import { exitEdit } from "../../redux/thunks/edit";
 import { getMetaKeyLabel, isMetaEquivalentKeyPressed } from "../../util";
 import { ToolTip } from "../gui/Tooltip";
 import ModelSelect from "../modelSelection/ModelSelect";
+import { ApprovalSelect } from "../ApprovalSelect";
 import { ModeSelect } from "../ModeSelect";
 import { Button } from "../ui";
 import { useFontSize } from "../ui/font";
 import ContextStatus from "./ContextStatus";
 import HoverItem from "./InputToolbar/HoverItem";
+import { CacheTipsButton } from "./CacheTipsButton";
 import { PromptCacheButton } from "./PromptCacheButton";
+import { UsageIndicator } from "./UsageIndicator";
 
 export interface ToolbarOptions {
   hideUseCodebase?: boolean;
@@ -71,6 +75,10 @@ function InputToolbar(props: InputToolbarProps) {
     );
 
   const supportsReasoning = modelSupportsReasoning(defaultModel);
+  // Changing the thinking settings rebuilds the message cache (measured live
+  // on Bedrock). Attaching an image to the new message does not, because it
+  // sits after everything already cached.
+  const warmCacheNote = useWarmCacheNote();
 
   const smallFont = useFontSize(-2);
   const tinyFont = useFontSize(-3);
@@ -79,7 +87,7 @@ function InputToolbar(props: InputToolbarProps) {
     <>
       <div
         onClick={props.onClick}
-        className={`find-widget-skip flex select-none flex-row items-center justify-between gap-1 bg-vsc-input-background pt-1 ${props.hidden ? "pointer-events-none h-0 cursor-default opacity-0" : "pointer-events-auto mt-2 cursor-text opacity-100"}`}
+        className={`find-widget-skip flex flex-row items-center justify-between gap-1 bg-vsc-input-background pt-1 select-none ${props.hidden ? "pointer-events-none h-0 cursor-default opacity-0" : "pointer-events-auto mt-2 cursor-text opacity-100"}`}
         style={{
           fontSize: smallFont,
         }}
@@ -92,6 +100,7 @@ function InputToolbar(props: InputToolbarProps) {
               </HoverItem>
             </ToolTip>
           )}
+          {!isInEdit && <ApprovalSelect />}
           <ToolTip place="top" content="Select Model">
             <HoverItem className="!p-0">
               <ModelSelect />
@@ -153,9 +162,10 @@ function InputToolbar(props: InputToolbarProps) {
                 <ToolTip
                   place="top"
                   content={
-                    hasReasoningEnabled
+                    (hasReasoningEnabled
                       ? "Disable model reasoning"
-                      : "Enable model reasoning"
+                      : "Enable model reasoning") +
+                    (warmCacheNote ? ` ${warmCacheNote}` : "")
                   }
                 >
                   {hasReasoningEnabled ? (
@@ -167,6 +177,8 @@ function InputToolbar(props: InputToolbarProps) {
               </HoverItem>
             )}
             <PromptCacheButton />
+            <CacheTipsButton />
+            <UsageIndicator />
           </div>
         </div>
 

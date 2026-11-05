@@ -42,6 +42,7 @@ import {
   buildChecklistRows,
   buildSaveRequest,
   connectionFromModel,
+  describeConnection,
   describeKeyPlan,
   diffSelection,
   findConnection,
@@ -49,6 +50,7 @@ import {
   KeyChoice,
   keyProblem,
   keyStorageOptions,
+  sameConnection,
   SetupStep,
 } from "./providerSetupUtils";
 import { ReviewStep } from "./ReviewStep";
@@ -134,6 +136,10 @@ export function ProviderSetupFlow({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const [warning, setWarning] = useState<string>();
+  // Set when the key went to secure storage and ~/.continue/.env still has a
+  // plaintext copy: the user is asked before anything is removed.
+  const [envCopy, setEnvCopy] = useState<string>();
+  const [removingEnvCopy, setRemovingEnvCopy] = useState(false);
 
   // What is configured today, and where keys can be kept.
   useEffect(() => {
@@ -145,6 +151,9 @@ export function ProviderSetupFlow({
         if (cancelled || res.status !== "success") return;
         setSetup(res.content);
         setStorage(res.content.preferredKeyStorage);
+      })
+      .catch(() => {
+        // The setup info only refines defaults; the flow works without it.
       });
     return () => {
       cancelled = true;
@@ -180,10 +189,14 @@ export function ProviderSetupFlow({
       ),
     [provider, values],
   );
+  // When editing, the connection in config.yaml is the one the form started
+  // from, even after its endpoint field is changed: that edit moves it.
+  const editing = !enterKey ? initialConnection : undefined;
+  const connectionMoved = !!editing && !sameConnection(editing, connection);
   const configured = findConnection(
     setup?.connections ?? [],
     provider.provider,
-    connection,
+    editing ?? connection,
   );
   const configuredModels = configured?.models ?? [];
   const hasStoredKey = (configured?.key.state ?? "none") !== "none";
@@ -203,7 +216,7 @@ export function ProviderSetupFlow({
 
   // Start from what is configured (or the popular models) when the target
   // connection changes.
-  const connectionId = `${provider.provider}|${JSON.stringify(connection)}|${!!setup}`;
+  const connectionId = `${provider.provider}|${JSON.stringify(editing ?? connection)}|${!!setup}`;
   useEffect(() => {
     setChecked(initialChecked(groups, configuredModels));
     setConfirmedRemoval(false);
@@ -233,7 +246,8 @@ export function ProviderSetupFlow({
   const keyForRequest = sendKey ? keyChoice : undefined;
 
   const diff = diffSelection(groups, configuredModels, checked);
-  const hasChanges = diff.add.length > 0 || diff.remove.length > 0 || sendKey;
+  const hasChanges =
+    diff.add.length > 0 || diff.remove.length > 0 || sendKey || connectionMoved;
   const needsConfirm = diff.remove.length > 0 && !confirmedRemoval;
 
   const canRefresh = isBedrock
@@ -314,7 +328,8 @@ export function ProviderSetupFlow({
       }
       formMethods.setValue("apiKey", "");
       if (res.content.warning) setWarning(res.content.warning);
-      onDone();
+      if (res.content.envShadowed) setEnvCopy(secretName);
+      else onDone();
     } finally {
       setSaving(false);
     }
@@ -326,6 +341,7 @@ export function ProviderSetupFlow({
     try {
       const request = buildSaveRequest({
         provider,
+        editing,
         values,
         diff,
         key: keyForRequest,
@@ -344,9 +360,34 @@ export function ProviderSetupFlow({
       }
       formMethods.setValue("apiKey", "");
       if (res.content.warning) setWarning(res.content.warning);
-      onDone();
+      if (res.content.envShadowedSecret) {
+        setEnvCopy(res.content.envShadowedSecret);
+      } else {
+        onDone();
+      }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function removeEnvCopy() {
+    if (!envCopy) return;
+    setRemovingEnvCopy(true);
+    setError(undefined);
+    try {
+      const res = await ideMessenger.request("config/removeEnvSecret", {
+        secretName: envCopy,
+      });
+      if (res.status !== "success" || !res.content.removed) {
+        setError(
+          (res.status === "success" ? res.content.error : undefined) ??
+            "Could not remove the line from ~/.continue/.env",
+        );
+        return;
+      }
+      onDone();
+    } finally {
+      setRemovingEnvCopy(false);
     }
   }
 
@@ -437,6 +478,39 @@ export function ProviderSetupFlow({
       )}
     </div>
   );
+
+  if (envCopy) {
+    return (
+      <div
+        className="mx-auto flex max-w-md flex-col gap-4 p-4"
+        data-testid="env-copy-prompt"
+      >
+        <h2 className="m-0 text-center text-lg">Key saved</h2>
+        <p className="m-0 text-sm">
+          The key is in secure storage, which Continue reads first.{" "}
+          <code>{envCopy}</code> is also set in plaintext in{" "}
+          <code>~/.continue/.env</code>. Remove that line?
+        </p>
+        {error && (
+          <div className="text-xs text-error" role="alert">
+            {error}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={onDone}>
+            Keep it
+          </Button>
+          <Button
+            className="flex-1"
+            disabled={removingEnvCopy}
+            onClick={removeEnvCopy}
+          >
+            Remove from .env
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -597,7 +671,7 @@ export function ProviderSetupFlow({
             </button>
           </div>
           {refreshError && (
-            <span className="whitespace-pre-wrap text-xs text-warning">
+            <span className="text-xs whitespace-pre-wrap text-warning">
               Couldn't refresh the model list: {refreshError}
             </span>
           )}
@@ -632,6 +706,15 @@ export function ProviderSetupFlow({
             providerTitle={provider.title}
             diff={diff}
             keyPlan={describeKeyPlan(keyForRequest, provider.title)}
+            connectionChange={
+              connectionMoved && editing
+                ? {
+                    from: describeConnection(editing),
+                    to: describeConnection(connection),
+                    modelCount: configuredModels.length,
+                  }
+                : undefined
+            }
             confirmedRemoval={confirmedRemoval}
             onConfirmRemoval={setConfirmedRemoval}
             error={error}

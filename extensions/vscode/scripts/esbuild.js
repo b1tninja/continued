@@ -1,6 +1,12 @@
 const fs = require("fs");
 
 const { writeBuildTimestamp } = require("./utils");
+const {
+  jsdomDefaultStylesheetPlugin,
+} = require("../../../scripts/util/esbuild-jsdom-stylesheet");
+const {
+  transformersJsPlugin,
+} = require("../../../scripts/util/esbuild-transformers-js");
 
 const esbuild = require("esbuild");
 
@@ -26,6 +32,8 @@ const esbuildConfig = {
   supported: { "dynamic-import": false },
   metafile: true,
   plugins: [
+    jsdomDefaultStylesheetPlugin,
+    transformersJsPlugin,
     {
       name: "on-end-plugin",
       setup(build) {

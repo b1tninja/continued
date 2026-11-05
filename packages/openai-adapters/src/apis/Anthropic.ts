@@ -47,6 +47,12 @@ import {
   openaiToolToAnthropicTool,
 } from "./AnthropicUtils.js";
 import {
+  applyAnthropicCacheTtl,
+  AutoCacheTtl,
+  optsOutOfPromptCache,
+  requestedCacheTtl,
+} from "./cacheTtl.js";
+import {
   BaseLlmApi,
   CreateRerankResponse,
   FimCreateParamsStreaming,
@@ -56,9 +62,16 @@ import {
 export class AnthropicApi implements BaseLlmApi {
   apiBase: string = "https://api.anthropic.com/v1/";
 
+  /** Counts this instance's cached requests for `cacheBehavior.ttl: auto`. */
+  private autoTtl = new AutoCacheTtl();
+
   constructor(
     protected config: AnthropicConfig & {
       cachingStrategy?: CachingStrategyName;
+      // Only `ttl` is read: "1h" puts a 1-hour lifetime on the cache points,
+      // "auto" decides per request (see AutoCacheTtl), anything else keeps the
+      // 5-minute default.
+      cacheBehavior?: { ttl?: "auto" | "5m" | "1h" };
     },
   ) {
     this.apiBase = config.apiBase ?? this.apiBase;
@@ -68,21 +81,35 @@ export class AnthropicApi implements BaseLlmApi {
   }
 
   private _convertBody(oaiBody: ChatCompletionCreateParams) {
+    // A side request (a session title) opts out of caching altogether
+    const noCache = optsOutOfPromptCache(oaiBody);
+
     // Step 1: Convert to clean Anthropic body (no caching)
     const cleanBody = this._convertToCleanAnthropicBody(oaiBody);
 
     // Step 2: Apply caching strategy
-    const cachingStrategy =
-      CACHING_STRATEGIES[this.config.cachingStrategy ?? "systemAndTools"];
+    const strategyName = noCache
+      ? "none"
+      : (this.config.cachingStrategy ?? "systemAndTools");
+    const cachingStrategy = CACHING_STRATEGIES[strategyName];
     const result = cachingStrategy(cleanBody);
 
     // Step 3: Cache last two user messages for conversation turn caching
     // Skip when caching is disabled
-    if ((this.config.cachingStrategy ?? "systemAndTools") !== "none") {
+    if (strategyName !== "none") {
       addCacheControlToLastTwoUserMessages(result.messages);
     }
 
-    return result;
+    // Step 4: ask for a longer lifetime if the config says so. Unset, the
+    // request is exactly what it was before.
+    return applyAnthropicCacheTtl(
+      result,
+      requestedCacheTtl(
+        this.config.cacheBehavior?.ttl,
+        this.autoTtl,
+        strategyName !== "none",
+      ),
+    );
   }
 
   private maxTokensForModel(model: string): number {
@@ -224,9 +251,13 @@ export class AnthropicApi implements BaseLlmApi {
         } else {
           const text = part.type === "text" ? part.text : part.refusal;
           if (text) {
+            // A caller (Vertex AI in core) may have marked the part with
+            // Anthropic's cache_control; keep it.
+            const cache_control = (part as any).cache_control;
             blocks.push({
               type: "text",
               text,
+              ...(cache_control ? { cache_control } : {}),
             });
           }
         }
@@ -246,6 +277,10 @@ export class AnthropicApi implements BaseLlmApi {
             type: "tool_result",
             tool_use_id: message.tool_call_id,
             content: message.content,
+            // Tool messages carry cache_control on the message itself.
+            ...((message as any).cache_control
+              ? { cache_control: (message as any).cache_control }
+              : {}),
           },
         ];
       case "user":
