@@ -73,6 +73,32 @@ dependencies {
     "testIntegrationRuntimeOnly"("org.junit.platform:junit-platform-launcher:6.1.3")
     testIntegrationImplementation("org.kodein.di:kodein-di-jvm:7.33.0")
     testIntegrationImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0")
+
+    // The IntelliJ Starter test framework (ide-starter-squashed 243.x, used by
+    // the integration tests only) brings Netty 4.2.0.Alpha4, Bouncy Castle
+    // 1.78.1, Jackson 2.17, Guava 33.3.0, protobuf 3.24.4, XStream 1.4.20 and
+    // lz4-java 1.8.0, all with known advisories. Raise them to fixed releases;
+    // newer Starter releases still carry some of them and need Java 21.
+    testIntegrationImplementation(platform("io.netty:netty-bom:4.2.18.Final"))
+    testIntegrationImplementation(platform("com.fasterxml.jackson:jackson-bom:2.21.7"))
+    constraints {
+        testIntegrationImplementation("org.bouncycastle:bcprov-jdk18on:1.86")
+        testIntegrationImplementation("org.bouncycastle:bcpkix-jdk18on:1.86")
+        testIntegrationImplementation("org.bouncycastle:bcutil-jdk18on:1.86")
+        testIntegrationImplementation("com.google.guava:guava:33.7.2-jre")
+        testIntegrationImplementation("com.google.protobuf:protobuf-java:3.25.5")
+        testIntegrationImplementation("com.thoughtworks.xstream:xstream:1.4.21")
+    }
+}
+
+// lz4-java moved from org.lz4 to at.yawk.lz4; the old coordinates have no
+// fixed release.
+configurations.matching { it.name.startsWith("testIntegration") }.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("org.lz4:lz4-java"))
+            .using(module("at.yawk.lz4:lz4-java:1.13.0"))
+            .because("org.lz4:lz4-java 1.8.0 has advisories fixed only in at.yawk.lz4")
+    }
 }
 
 kotlin {
