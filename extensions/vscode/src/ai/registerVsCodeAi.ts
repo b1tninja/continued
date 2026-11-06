@@ -2,6 +2,7 @@ import type { ContinueConfig } from "core";
 import type { ConfigHandler } from "core/config/ConfigHandler";
 import * as vscode from "vscode";
 
+import { registerAgentSessions } from "./agentSessions";
 import {
   ContinuedLanguageModelChatProvider,
   LM_VENDOR,
@@ -68,5 +69,8 @@ export function registerVsCodeAi(
   void configHandler.loadConfig().then(({ config }) => apply(config));
   configHandler.onConfigUpdate(({ config }) => apply(config));
 
-  return { models, mcp };
+  // Only in the "agents" build with the proposed API enabled; else a no-op.
+  const agentSessions = registerAgentSessions(context, configHandler);
+
+  return { models, mcp, agentSessions };
 }
