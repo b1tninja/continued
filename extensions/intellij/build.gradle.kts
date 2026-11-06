@@ -10,9 +10,21 @@ val pluginGroup: String by project
 val pluginVersion: String by project
 val isEap get() = environment("RELEASE_CHANNEL").orNull == "eap"
 
+// The IntelliJ Platform Gradle plugin (2.20.0, the latest) still brings
+// jackson 2.21.4 and jsoup 1.22.2 onto the build classpath, both with known
+// advisories. Raise them to fixed releases; drop these once the plugin does.
+buildscript {
+    dependencies {
+        classpath(platform("com.fasterxml.jackson:jackson-bom:2.21.7"))
+        constraints {
+            classpath("org.jsoup:jsoup:1.23.2")
+        }
+    }
+}
+
 plugins {
     kotlin("jvm") version "2.4.21"
-    id("org.jetbrains.intellij.platform") version "2.19.0"
+    id("org.jetbrains.intellij.platform") version "2.20.0"
     id("org.jetbrains.changelog") version "2.5.0"
     id("org.jetbrains.qodana") version "0.1.13"
 }
@@ -53,7 +65,6 @@ dependencies {
         // otherwise e2e tests (runIdeForUiTests) will have linkage errors
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
     }
-    testImplementation("com.automation-remarks:video-recorder-junit5:2.0")
     testRuntimeOnly("org.junit.vintage:junit-vintage-engine:6.1.3") // required to run both JUnit 5 and JUnit 3
     // Gradle 9 no longer supplies the JUnit Platform launcher itself
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
