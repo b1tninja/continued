@@ -10,7 +10,6 @@ permissions:
 jobs:
   dependency-submission:
     runs-on: ubuntu-latest
-    # Only run this workflow on the main repository (continuedev/continue)
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
@@ -24,3 +23,10 @@ jobs:
         with:
           # The gradle project is not in the root of the repository.
           build-root-directory: extensions/intellij
+          # Report only what the plugin ships. The plugin bundles no
+          # third-party libraries: the IntelliJ Platform (and the log4j 1.x,
+          # Netty, Jackson, Bouncy Castle, LZ4 ... inside it) is supplied by
+          # the IDE at runtime, and the test frameworks only run in CI.
+          # Submitting every resolved configuration raised dozens of alerts
+          # for jars this repository neither ships nor can upgrade.
+          dependency-graph-include-configurations: "^runtimeClasspath$"
