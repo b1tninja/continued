@@ -222,6 +222,19 @@ describe("Docs screenshots", () => {
   }
 
   /**
+   * A real click, or a script click when something on top intercepts it.
+   * Some menus (the model picker) only open on a real click.
+   */
+  async function click(el: WebElement) {
+    try {
+      await el.click();
+    } catch (e) {
+      if (!/intercepted|not clickable/i.test((e as Error).message)) throw e;
+      await scriptClick(el);
+    }
+  }
+
+  /**
    * Open a picker and choose an option. Right after New Session the input
    * takes focus and can close a menu that just opened, so the open is
    * retried until the option shows.
@@ -231,10 +244,10 @@ describe("Docs screenshots", () => {
     option: () => Promise<WebElement>,
   ) {
     const el = await TestUtils.waitForSuccess(async () => {
-      await scriptClick(await button());
+      await click(await button());
       return TestUtils.waitForSuccess(option, 2000);
     });
-    await scriptClick(el);
+    await click(el);
   }
 
   async function selectMode(mode: string) {
@@ -318,7 +331,7 @@ describe("Docs screenshots", () => {
       const back = await TestUtils.waitForSuccess(() =>
         GUISelectors.getBackButton(view),
       );
-      await back.click();
+      await click(back);
       await newSession();
       await selectModel("Claude Sonnet 4.5");
       await selectMode("Agent");
