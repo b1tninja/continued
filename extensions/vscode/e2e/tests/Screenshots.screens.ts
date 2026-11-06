@@ -174,9 +174,14 @@ describe("Docs screenshots", () => {
    */
   async function runCommand(title: string) {
     await view.switchBack();
-    await new Workbench().executeCommand(title);
+    await TestUtils.waitForSuccess(() => new Workbench().executeCommand(title));
     await TestUtils.waitForTimeout(500);
-    ({ view, driver } = await GUIActions.switchToReactIframe());
+    // Reloading the webviews leaves hidden copies around; without
+    // requireDisplayed the first, hidden one can be picked, and every lookup
+    // after the command then times out.
+    ({ view, driver } = await TestUtils.waitForSuccess(() =>
+      GUIActions.switchToReactIframe({ requireDisplayed: true }),
+    ));
   }
 
   async function newSession() {
