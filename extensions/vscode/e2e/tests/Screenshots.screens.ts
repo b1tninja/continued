@@ -150,6 +150,21 @@ describe("Docs screenshots", () => {
       results.push(`ok      ${name}`);
     } catch (e) {
       results.push(`FAILED  ${name}: ${(e as Error).message.split("\n")[0]}`);
+      // Save what the driver was looking at, to tell a wrong frame from a
+      // missing element.
+      try {
+        const html = await VSBrowser.instance.driver.getPageSource();
+        const url = await VSBrowser.instance.driver
+          .executeScript("return location.href")
+          .catch(() => "?");
+        fs.mkdirSync(OUT_DIR, { recursive: true });
+        fs.writeFileSync(
+          path.join(OUT_DIR, `${name}.FAILED.html`),
+          `<!-- ${url} -->\n${html}`,
+        );
+      } catch {
+        // nothing to save
+      }
       try {
         await VSBrowser.instance.driver.switchTo().defaultContent();
         await save(VSBrowser.instance.driver, `${name}.FAILED`);
