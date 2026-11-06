@@ -264,6 +264,18 @@ describe("Docs screenshots", () => {
     );
   }
 
+  /** Wait for text anywhere in the chat, e.g. the end of a scripted reply. */
+  async function waitForText(text: string) {
+    await TestUtils.waitForSuccess(
+      () =>
+        view.findWebElement(
+          By.xpath(`//*[contains(normalize-space(.), "${text}")][not(*)]`),
+        ),
+      DEFAULT_TIMEOUT.MD,
+    );
+    await TestUtils.waitForTimeout(500);
+  }
+
   async function send(text: string) {
     const [input] = await GUISelectors.getMessageInputFields(view);
     await input.sendKeys(text);
@@ -300,46 +312,16 @@ describe("Docs screenshots", () => {
       await selectMode("Chat");
       await selectModel("GPT-5");
       await send("Explain what this project does");
-      await TestUtils.waitForSuccess(
-        () => GUISelectors.getThreadMessageByText(view, "Explain what"),
-        DEFAULT_TIMEOUT.SM,
-      );
-      await TestUtils.waitForTimeout(1500); // the reply streams in
+      await waitForText("npm test"); // the end of the scripted reply
     });
 
-    await shot("agent-tool-approval", async () => {
-      await openSettings();
-      const tools = await TestUtils.waitForSuccess(() =>
-        GUISelectors.getToolsTab(view),
-      );
-      await tools.click();
-      // Tool groups start collapsed; expand Built-in Tools.
-      const group = await TestUtils.waitForSuccess(() =>
-        view.findWebElement(
-          By.xpath("//span[normalize-space(text())='Built-in Tools']"),
-        ),
-      );
-      await scriptClick(group);
-      const policy = await TestUtils.waitForSuccess(() =>
-        GUISelectors.getToolPolicyButton(view, "view_diff"),
-      );
-      // Cycle the policy until it reads "Ask" (Ask first).
-      for (let i = 0; i < 5 && !/ask/i.test(await policy.getText()); i++) {
-        await policy.click();
-        await TestUtils.waitForTimeout(300);
-      }
-      const back = await TestUtils.waitForSuccess(() =>
-        GUISelectors.getBackButton(view),
-      );
-      await click(back);
+    await shot("agent-response", async () => {
       await newSession();
       await selectModel("Claude Sonnet 4.5");
       await selectMode("Agent");
       await send("What changed on this branch?");
-      await TestUtils.waitForSuccess(
-        () => GUISelectors.getAcceptToolCallButton(view),
-        DEFAULT_TIMEOUT.SM,
-      );
+      // The scripted agent views the diff, then summarises it.
+      await waitForText("No other files are touched");
     });
 
     await shot("settings", async () => {
