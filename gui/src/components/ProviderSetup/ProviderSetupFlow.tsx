@@ -15,6 +15,7 @@ import {
   buildModelFromForm,
   getBedrockConnectionParams,
   getRenderableFields,
+  providerTakesApiKey,
 } from "../../forms/addModelFormUtils";
 import { listBedrockModelsFor } from "../../forms/bedrockModels";
 import { BedrockConnectionTester } from "../../forms/BedrockConnectionTester";
@@ -179,7 +180,14 @@ export function ProviderSetupFlow({
   }, [provider]);
 
   const isBedrock = isBedrockProvider(provider.provider);
-  const hasKeyField = !!provider.apiKeyUrl;
+  // Bedrock has no key page, so this also looks at whether its own `apiKey` input
+  // is shown (API-key mode); a profile or access-key setup takes no key.
+  const hasKeyField = providerTakesApiKey(provider, values);
+  // The generic form already draws the input when the provider declares one
+  // with a condition (Bedrock); the key block then adds only where to keep it.
+  const keyInputInForm = !!provider.collectInputFor?.some(
+    (f) => f.key === "apiKey" && !!f.showWhen,
+  );
 
   // The connection the form describes, as core will match it.
   const connection = useMemo(
@@ -400,34 +408,38 @@ export function ProviderSetupFlow({
 
   const keySection = hasKeyField && (
     <div className="flex flex-col gap-2">
-      <div>
-        <label className="mb-1 block text-sm font-medium" htmlFor="apiKey">
-          API key
-        </label>
-        <Input
-          id="apiKey"
-          className="w-full"
-          type="password"
-          autoComplete="off"
-          placeholder={
-            hasStoredKey && !enterKey
-              ? "saved - leave blank to keep"
-              : `Enter your ${provider.title} API key`
-          }
-          {...formMethods.register("apiKey")}
-        />
-        {provider.apiKeyUrl && (
-          <span className="mt-1 block text-xs text-description-muted">
-            <a
-              className="cursor-pointer text-inherit underline"
-              onClick={() => ideMessenger.post("openUrl", provider.apiKeyUrl!)}
-            >
-              Click here
-            </a>{" "}
-            to create a {provider.title} API key
-          </span>
-        )}
-      </div>
+      {!keyInputInForm && (
+        <div>
+          <label className="mb-1 block text-sm font-medium" htmlFor="apiKey">
+            API key
+          </label>
+          <Input
+            id="apiKey"
+            className="w-full"
+            type="password"
+            autoComplete="off"
+            placeholder={
+              hasStoredKey && !enterKey
+                ? "saved - leave blank to keep"
+                : `Enter your ${provider.title} API key`
+            }
+            {...formMethods.register("apiKey")}
+          />
+          {provider.apiKeyUrl && (
+            <span className="mt-1 block text-xs text-description-muted">
+              <a
+                className="cursor-pointer text-inherit underline"
+                onClick={() =>
+                  ideMessenger.post("openUrl", provider.apiKeyUrl!)
+                }
+              >
+                Click here
+              </a>{" "}
+              to create a {provider.title} API key
+            </span>
+          )}
+        </div>
+      )}
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="keyStorage">
           Keep the key in

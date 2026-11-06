@@ -82,4 +82,58 @@ describe("ProviderSetupFlow - Amazon Bedrock", () => {
     // No key is sent for profile auth.
     expect(saves[0].add[0]).not.toHaveProperty("apiKey");
   });
+
+  // Regression: the default "Bedrock API key" option saved the models but never
+  // sent the pasted key to core, so nothing was stored and no secret reference
+  // was written. The provider has no apiKeyUrl, which the flow used to decide
+  // whether the provider takes a key at all.
+  it("sends the pasted API key to core as the connection's key", async () => {
+    const messenger = new MockIdeMessenger();
+    const saves: any[] = [];
+    messenger.responseHandlers["config/getProviderSetup"] = async () => ({
+      connections: [],
+      secureStorageAvailable: true,
+      preferredKeyStorage: "secure",
+      editable: true,
+    });
+    messenger.responseHandlers["config/saveProviderModels"] = async (req) => {
+      saves.push(req);
+      return { saved: true };
+    };
+    messenger.responseHandlers["bedrock/listModels"] = async () => ({
+      ok: true,
+      models: [
+        {
+          id: "amazon.nova-pro-v1:0",
+          name: "Nova Pro",
+          provider: "Amazon",
+          kind: "on-demand",
+        },
+      ],
+    });
+
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="bedrock" onDone={vi.fn()} />,
+      { mockIdeMessenger: messenger },
+    );
+
+    await user.type(
+      screen.getByLabelText("Bedrock API key"),
+      "not-a-real-key-for-tests",
+    );
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    await screen.findByText(/1 model available/);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(await screen.findByLabelText(/Nova Pro/));
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0].key).toMatchObject({
+      storage: "secure",
+      value: "not-a-real-key-for-tests",
+    });
+    // The key travels in `key`, never on the model description.
+    expect(saves[0].add[0]).not.toHaveProperty("apiKey");
+  });
 });

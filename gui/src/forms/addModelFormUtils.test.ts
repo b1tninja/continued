@@ -4,6 +4,7 @@ import {
   areRequiredFieldsFilled,
   buildModelFromForm,
   getBedrockConnectionParams,
+  providerTakesApiKey,
   getRenderableFields,
 } from "./addModelFormUtils";
 
@@ -191,5 +192,28 @@ describe("Amazon Bedrock (Mantle) wizard entry", () => {
   it("does not mark standard Bedrock connections as Mantle", () => {
     const params = getBedrockConnectionParams(bedrock, sonnet, { apiKey: "k" });
     expect(params).not.toHaveProperty("endpoint");
+  });
+});
+
+describe("providerTakesApiKey", () => {
+  it("is true for a provider with an API key page", () => {
+    expect(providerTakesApiKey(providers["anthropic"]!, {})).toBe(true);
+  });
+
+  it("is true for Bedrock in API-key mode, which has no key page", () => {
+    expect(bedrock.apiKeyUrl).toBeUndefined();
+    expect(providerTakesApiKey(bedrock, {})).toBe(true); // authMode defaults to apiKey
+    expect(providerTakesApiKey(bedrock, { authMode: "apiKey" })).toBe(true);
+  });
+
+  it.each(["profile", "keys", "default"])(
+    "is false for Bedrock in %s mode",
+    (authMode) => {
+      expect(providerTakesApiKey(bedrock, { authMode })).toBe(false);
+    },
+  );
+
+  it("is false for a provider with no key at all", () => {
+    expect(providerTakesApiKey(providers["ollama"]!, {})).toBe(false);
   });
 });

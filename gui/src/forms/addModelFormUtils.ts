@@ -32,6 +32,21 @@ export function isFieldVisible(
 }
 
 /**
+ * True when the provider takes an API key with the form in its current state.
+ * A provider with an `apiKeyUrl` always does. One without (Amazon Bedrock) does
+ * only while its own `apiKey` input is shown, so a profile or access-key
+ * setup is not asked for a key.
+ */
+export function providerTakesApiKey(
+  provider: ProviderInfo,
+  values: FormValues,
+): boolean {
+  if (provider.apiKeyUrl) return true;
+  const all = provider.collectInputFor ?? [];
+  const field = all.find((f) => f.key === "apiKey");
+  return !!field && isFieldVisible(field, values, all);
+}
+/**
  * Fields the generic part of the form renders (the legacy API key block and the
  * completion-parameter inputs are handled elsewhere). Optional fields only
  * appear when they are selects, conditional, or marked `showAlways`.

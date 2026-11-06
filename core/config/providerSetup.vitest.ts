@@ -289,6 +289,22 @@ describe("validateSaveRequest", () => {
     ).toBeUndefined();
   });
 
+  it("rejects a key on a model description instead of dropping it", () => {
+    // The key belongs in `key`. Core strips `apiKey` from descriptions, so a
+    // caller that put it there would see a successful save with nothing stored.
+    const withKey = { ...desc("openai", "gpt"), apiKey: "sk-not-a-real-key" };
+    expect(validateSaveRequest({ ...ok, add: [withKey] })).toMatch(
+      /key.*not.*model/i,
+    );
+    // Allowed when the request also carries a key section.
+    expect(
+      validateSaveRequest({
+        ...ok,
+        add: [withKey],
+        key: { storage: "secure", secretName: "OPENAI_KEY", value: "v" },
+      }),
+    ).toBeUndefined();
+  });
   it("rejects models of another provider", () => {
     expect(
       validateSaveRequest({ ...ok, add: [desc("anthropic", "opus")] }),

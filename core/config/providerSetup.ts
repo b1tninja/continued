@@ -209,6 +209,11 @@ export function validateSaveRequest(
       return `${model.title} belongs to a different provider`;
     }
     if (!model.model || !model.title) return "A model needs a name and an id";
+    // `apiKey` on a description is ignored when the models are written, so
+    // accepting it would report success with nothing stored.
+    if (model.apiKey && !req.key) {
+      return `${model.title} carries a key; send the key in the request's key section, not on the model`;
+    }
   }
   return undefined;
 }
