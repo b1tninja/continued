@@ -144,6 +144,13 @@ describe("Docs screenshots", () => {
         requireDisplayed: true,
       }).catch(() => GUIActions.switchToReactIframe()));
       await body();
+      // Park the pointer in a corner so no hover tooltip (e.g. "Select
+      // Model") covers the input; open menus stay open.
+      await driver
+        .actions()
+        .move({ x: 1, y: 1, origin: "viewport" as any })
+        .perform()
+        .catch(() => {});
       await TestUtils.waitForTimeout(800); // let animations settle
       await view.switchBack();
       await save(VSBrowser.instance.driver, name);
@@ -201,6 +208,7 @@ describe("Docs screenshots", () => {
 
   async function newSession() {
     await runCommand("Continued: New Session");
+    await TestUtils.waitForTimeout(1000); // the new session takes focus
   }
 
   async function openSettings() {
@@ -213,21 +221,33 @@ describe("Docs screenshots", () => {
     await driver.executeScript("arguments[0].click()", el);
   }
 
+  /**
+   * Open a picker and choose an option. Right after New Session the input
+   * takes focus and can close a menu that just opened, so the open is
+   * retried until the option shows.
+   */
+  async function pick(
+    button: () => Promise<WebElement>,
+    option: () => Promise<WebElement>,
+  ) {
+    const el = await TestUtils.waitForSuccess(async () => {
+      await scriptClick(await button());
+      return TestUtils.waitForSuccess(option, 2000);
+    });
+    await scriptClick(el);
+  }
+
   async function selectMode(mode: string) {
-    await scriptClick(await GUISelectors.getModeDropdownButton(view));
-    await scriptClick(
-      await TestUtils.waitForSuccess(() =>
-        GUISelectors.getModeDropdownOption(view, mode),
-      ),
+    await pick(
+      () => GUISelectors.getModeDropdownButton(view),
+      () => GUISelectors.getModeDropdownOption(view, mode),
     );
   }
 
   async function selectModel(model: string) {
-    await scriptClick(await GUISelectors.getModelDropdownButton(view));
-    await scriptClick(
-      await TestUtils.waitForSuccess(() =>
-        GUISelectors.getModelDropdownOption(view, model),
-      ),
+    await pick(
+      () => GUISelectors.getModelDropdownButton(view),
+      () => GUISelectors.getModelDropdownOption(view, model),
     );
   }
 
@@ -280,6 +300,13 @@ describe("Docs screenshots", () => {
         GUISelectors.getToolsTab(view),
       );
       await tools.click();
+      // Tool groups start collapsed; expand Built-in Tools.
+      const group = await TestUtils.waitForSuccess(() =>
+        view.findWebElement(
+          By.xpath("//span[normalize-space(text())='Built-in Tools']"),
+        ),
+      );
+      await scriptClick(group);
       const policy = await TestUtils.waitForSuccess(() =>
         GUISelectors.getToolPolicyButton(view, "view_diff"),
       );
