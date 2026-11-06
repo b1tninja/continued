@@ -248,7 +248,7 @@ describe("Docs screenshots", () => {
       const button = await GUISelectors.getModelDropdownButton(view);
       await button.click();
       await TestUtils.waitForSuccess(() =>
-        GUISelectors.getModelDropdownOption(view, "TEST LLM"),
+        GUISelectors.getModelDropdownOption(view, "GPT-5"),
       );
     });
 
@@ -265,7 +265,7 @@ describe("Docs screenshots", () => {
     await shot("chat-response", async () => {
       await newSession();
       await selectMode("Chat");
-      await selectModel("TEST LLM");
+      await selectModel("GPT-5");
       await send("Explain what this project does");
       await TestUtils.waitForSuccess(
         () => GUISelectors.getThreadMessageByText(view, "Explain what"),
@@ -293,7 +293,7 @@ describe("Docs screenshots", () => {
       );
       await back.click();
       await newSession();
-      await selectModel("TOOL MOCK LLM");
+      await selectModel("Claude Sonnet 4.5");
       await selectMode("Agent");
       await send("What changed on this branch?");
       await TestUtils.waitForSuccess(
