@@ -208,6 +208,29 @@ describe("Docs screenshots", () => {
     await TestUtils.waitForTimeout(800);
   }
 
+  /** Script clicks: a neighbouring toolbar item can intercept a real click. */
+  async function scriptClick(el: WebElement) {
+    await driver.executeScript("arguments[0].click()", el);
+  }
+
+  async function selectMode(mode: string) {
+    await scriptClick(await GUISelectors.getModeDropdownButton(view));
+    await scriptClick(
+      await TestUtils.waitForSuccess(() =>
+        GUISelectors.getModeDropdownOption(view, mode),
+      ),
+    );
+  }
+
+  async function selectModel(model: string) {
+    await scriptClick(await GUISelectors.getModelDropdownButton(view));
+    await scriptClick(
+      await TestUtils.waitForSuccess(() =>
+        GUISelectors.getModelDropdownOption(view, model),
+      ),
+    );
+  }
+
   async function send(text: string) {
     const [input] = await GUISelectors.getMessageInputFields(view);
     await input.sendKeys(text);
@@ -241,8 +264,8 @@ describe("Docs screenshots", () => {
 
     await shot("chat-response", async () => {
       await newSession();
-      await GUIActions.selectModeFromDropdown(view, "Chat");
-      await GUIActions.selectModelFromDropdown(view, "TEST LLM");
+      await selectMode("Chat");
+      await selectModel("TEST LLM");
       await send("Explain what this project does");
       await TestUtils.waitForSuccess(
         () => GUISelectors.getThreadMessageByText(view, "Explain what"),
@@ -270,8 +293,8 @@ describe("Docs screenshots", () => {
       );
       await back.click();
       await newSession();
-      await GUIActions.selectModelFromDropdown(view, "TOOL MOCK LLM");
-      await GUIActions.selectModeFromDropdown(view, "Agent");
+      await selectModel("TOOL MOCK LLM");
+      await selectMode("Agent");
       await send("What changed on this branch?");
       await TestUtils.waitForSuccess(
         () => GUISelectors.getAcceptToolCallButton(view),
