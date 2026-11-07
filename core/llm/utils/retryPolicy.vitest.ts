@@ -114,7 +114,9 @@ describe("withRetryPolicy", () => {
 
   it("throws the last failure, with the count, when tries run out", async () => {
     const fn = vi.fn().mockRejectedValue(httpError(429));
-    const err = await withRetryPolicy(fn, { policy: fast }).catch((e) => e);
+    const err: any = await withRetryPolicy(fn, { policy: fast }).catch(
+      (e: any) => e,
+    );
     expect(err.message).toMatch(/after 4 retries: HTTP 429/);
     expect(err.cause.message).toBe("HTTP 429");
     expect(fn).toHaveBeenCalledTimes(4);
@@ -122,7 +124,9 @@ describe("withRetryPolicy", () => {
 
   it("reports a long Retry-After at once instead of hanging", async () => {
     const fn = vi.fn().mockRejectedValue(httpError(429, "3600"));
-    const err = await withRetryPolicy(fn, { policy: fast }).catch((e) => e);
+    const err: any = await withRetryPolicy(fn, { policy: fast }).catch(
+      (e: any) => e,
+    );
     expect(err).toBeInstanceOf(RetryWaitTooLongError);
     expect(err.message).toContain("3600 s");
     expect(fn).toHaveBeenCalledTimes(1);
