@@ -4,6 +4,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useAppSelector } from "../../redux/hooks";
+import { selectCurrentToolCalls } from "../../redux/selectors/selectToolCalls";
 import { QueuedMessage } from "../../redux/slices/sessionSlice";
 import { queuedMessagePreview } from "./util/queuedMessages";
 
@@ -28,11 +29,16 @@ export function QueuedMessages(props: QueuedMessagesProps) {
   const queued = useAppSelector((s) => s.session.queuedMessages);
   const isPaused = useAppSelector((s) => s.session.isQueuePaused);
   const isStreaming = useAppSelector((s) => s.session.isStreaming);
+  // Nothing streams while an approved tool runs, but the agent is working
+  const isToolRunning = useAppSelector((s) =>
+    selectCurrentToolCalls(s).some((tc) => tc.status === "calling"),
+  );
+  const isWorking = isStreaming || isToolRunning;
 
   if (queued.length === 0) return null;
 
   const steered = queued.filter((m) => m.steer).length;
-  const sendNowTitle = isStreaming
+  const sendNowTitle = isWorking
     ? "Send after the running tool calls, in this turn (Stop interrupts now)"
     : "Send this now";
 
@@ -49,7 +55,7 @@ export function QueuedMessages(props: QueuedMessagesProps) {
               ? `${queued.length} queued, sent after the running tools`
               : `${queued.length} queued, sent when this turn ends`}
         </span>
-        {isPaused && !isStreaming && (
+        {isPaused && !isWorking && (
           <button
             type="button"
             data-testid="queued-messages-send-all"
