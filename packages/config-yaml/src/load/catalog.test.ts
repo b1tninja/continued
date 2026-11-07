@@ -262,4 +262,39 @@ modeModels:
       roles: ["chat"],
     });
   });
+
+  it("keeps every from: entry, the model and its variants side by side", async () => {
+    // Found in the Windows Sandbox check: entries with no name of their own
+    // collided in the duplicate check, and only the first one was kept.
+    const yaml = `name: Variants
+version: 1.0.0
+schema: v1
+models:
+  - from: Qwen3.8 Flash
+  - from: Qwen3.8 Flash#act
+    roles: [subagent]
+  - from: Claude Sonnet
+    roles: [chat]
+`;
+    const result = await unrollAssistantFromContent(id, yaml, registry, {
+      renderSecrets: true,
+      currentUserSlug: "",
+      platformClient,
+      catalog: [qwen, sonnet],
+      providers: [
+        {
+          name: "strata",
+          provider: "openai",
+          apiBase: "http://127.0.0.1:8080/v1/",
+        },
+      ],
+    });
+    expect(
+      (result.config?.models ?? []).map((m) => [m?.name, m?.roles]),
+    ).toEqual([
+      ["Qwen3.8 Flash", undefined],
+      ["Qwen3.8 Flash#act", ["subagent"]],
+      ["Claude Sonnet", ["chat"]],
+    ]);
+  });
 });
