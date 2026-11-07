@@ -141,6 +141,30 @@ With both in place:
 
 Today the nearest thing is a multi-root workspace built folder by folder, where sessions and rules are workspace-wide and nothing is bound per root.
 
+#### Workspace folders: a view, not the registry
+
+Adding folders to the workspace is the right building block for looking at a project, but it should not be the person's job, and it should not be what makes a folder a project:
+
+- **The first folder restarts extensions.** VS Code's API notes that `workspace.updateWorkspaceFolders` can terminate and restart the running extensions, the caller included, for example when the first workspace folder is added, removed or changed (the deprecated `rootPath` follows it). Moving from a single-folder window to a multi-root one is reported to restart them too, since the workspace changes (microsoft/vscode#69335). A restart would cut off every agent the extension runs.
+- **Every root costs.** Each one adds file watchers, search scope and language servers. Slowdowns with many roots are reported, but VS Code documents no limit.
+- **Nested repositories.** When the opened folder is itself a git repository, the repositories inside it are reported to be hidden from Source Control (microsoft/vscode#327119; `git.repositoryScanMaxDepth` defaults to 1). A folder of many repositories is exactly the case that leads people to add them one by one.
+
+So:
+
+- The registry is kept apart from the workspace folders. Agents run through `cn serve` on any registered path, and a folder joins the workspace only when the person wants to see it.
+- **Open project** and **Close project** add or remove a root with `updateWorkspaceFolders`, appending and removing but never touching the first folder. A stable first root, the workspace's hub, means opening or closing a project never restarts the extension host or its agents.
+- A project's root is closed again when its sessions finish, to keep the watcher and language-server cost down.
+- The registry finds git roots itself, including repositories nested inside another, which Source Control may not show.
+
+#### A rolling plan
+
+Build in multi-repo mode is not fire-and-forget. The plan is looked at again as work completes:
+
+- **When**: a step's task list completes; a session reports done, blocked or failed; a run turns up new work, such as a failing test, a bug or a missing prerequisite.
+- **Where**: a re-planning pass in the overview's own context, read-only, never inside the sessions doing the work, which carry on.
+- **What it reads**: each project's step statuses and task lists, and what is left according to a next-work provider: a command or MCP tool that returns what remains, such as ROADMAP rows, issues or plan-file todos. "What is left" comes from that answer, not from the model's memory.
+- **What it produces**: a plan diff, with steps added, dropped, reordered or re-scoped and a reason for each. The person accepts it as with Build / Keep planning today, or Auto mode applies it within limits. Each accepted diff is saved in the plan file, so the plan keeps its history.
+
 ## Open questions
 
 1. Is `cn serve` per agent the right host, or should the extension host run sessions in process? `cn serve` exists and already steers; in process avoids a second copy of config loading.
