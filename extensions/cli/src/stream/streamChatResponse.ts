@@ -2,7 +2,6 @@ import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
 import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
-import { formatTaskPlanBlock } from "core/util/taskPlan.js";
 import * as dotenv from "dotenv";
 import type {
   ChatCompletionMessageParam,
@@ -11,11 +10,9 @@ import type {
 
 import { pruneLastMessage } from "../compaction.js";
 import { services } from "../services/index.js";
-import { getSessionTaskPlan } from "../session.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { applyChatCompletionToolOverrides } from "../tools/applyToolOverrides.js";
 import { ToolCall } from "../tools/index.js";
-import { TASK_LIST_TOOL_NAME } from "../tools/taskList.js";
 import {
   chatCompletionStreamWithBackoff,
   isContextLengthError,
@@ -195,17 +192,6 @@ interface ProcessStreamingResponseOptions {
   isHeadless?: boolean;
   tools?: ChatCompletionTool[];
   systemMessage: string;
-}
-
-/**
- * The task list block for this request (core/util/taskPlan.ts), or "" when
- * the TaskList tool is not offered or there is no list.
- */
-export function taskListBlockForRequest(tools?: ChatCompletionTool[]): string {
-  const offered = tools?.some(
-    (t) => t.type === "function" && t.function.name === TASK_LIST_TOOL_NAME,
-  );
-  return offered ? formatTaskPlanBlock(getSessionTaskPlan()) : "";
 }
 
 // Process a single streaming response and return whether we need to continue
