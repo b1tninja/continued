@@ -46,7 +46,15 @@ import {
   bedrockUsageToUsage,
   buildModelCatalog,
   getBedrockErrorHint,
+  isStopSequencesUnsupportedError,
 } from "./bedrockHelpers.js";
+
+/**
+ * Models that refused `stopSequences` in this process. They get requests
+ * without it from then on; callers that need stops (autocomplete) also cut the
+ * output at the stop tokens themselves.
+ */
+const modelsWithoutStopSequences = new Set<string>();
 
 interface ModelConfig {
   formatPayload: (text: string) => any;
@@ -68,6 +76,12 @@ class Bedrock extends BaseLLM {
     model: "anthropic.claude-3-sonnet-20240229-v1:0",
     profile: "bedrock",
   };
+
+  /**
+   * Bedrock's first token takes roughly 0.5-1 s, so autocomplete's 150 ms
+   * default would cut every suggestion to one line and cancel it at 375 ms.
+   */
+  providerAutocompleteDefaults = { modelTimeout: 1000 };
 
   private _promptCachingMetrics: PromptCachingMetrics = {
     cacheReadInputTokens: 0,
@@ -279,6 +293,9 @@ class Bedrock extends BaseLLM {
   ): AsyncGenerator<string> {
     const messages = [{ role: "user" as const, content: prompt }];
     for await (const update of this._streamChat(messages, signal, options)) {
+      // A completion is the answer only: reasoning (gpt-oss, thinking models)
+      // would otherwise be pasted into the editor as code.
+      if (update.role !== "assistant") continue;
       yield renderChatMessage(update);
     }
   }
@@ -342,11 +359,34 @@ class Bedrock extends BaseLLM {
       ...options,
       stream: true,
     });
-    const command = new ConverseStreamCommand(input);
+    const send = async () =>
+      (await client.send(new ConverseStreamCommand(input), {
+        abortSignal: signal,
+      })) as ConverseStreamCommandOutput;
+    const withoutStops = () => {
+      input.inferenceConfig = {
+        ...input.inferenceConfig,
+        stopSequences: undefined,
+      };
+    };
 
-    const response = (await client.send(command, {
-      abortSignal: signal,
-    })) as ConverseStreamCommandOutput;
+    const modelKey = input.modelId ?? "";
+    if (modelsWithoutStopSequences.has(modelKey)) withoutStops();
+
+    let response: ConverseStreamCommandOutput;
+    try {
+      response = await send();
+    } catch (e) {
+      if (
+        !input.inferenceConfig?.stopSequences?.length ||
+        !isStopSequencesUnsupportedError(e)
+      ) {
+        throw e;
+      }
+      modelsWithoutStopSequences.add(modelKey);
+      withoutStops();
+      response = await send();
+    }
 
     if (!response?.stream) {
       throw new Error("No stream received from Bedrock API");
