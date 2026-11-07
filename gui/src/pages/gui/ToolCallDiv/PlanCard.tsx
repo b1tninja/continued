@@ -61,9 +61,9 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       data-testid="plan-card"
       className="mx-2 my-1 rounded border border-solid border-border px-3 py-2"
     >
-      <div className="flex min-w-0 items-center gap-1.5 text-sm">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
         <ClipboardDocumentListIcon className="h-4 w-4 shrink-0 text-description" />
-        <span className="min-w-0 flex-1 truncate font-medium">
+        <span className="min-w-0 flex-1 basis-32 font-medium break-words">
           {args.ok ? args.title : output?.name}
         </span>
         <button
@@ -71,7 +71,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
           data-testid="plan-card-open"
           title="Open the plan file to edit it"
           onClick={() => void ideMessenger.ide.openFile(fileUri)}
-          className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+          className="max-w-full min-w-0 cursor-pointer truncate border-none bg-transparent p-0 text-left text-xs text-link hover:underline"
         >
           {relativePath ?? "Open plan"}
         </button>
