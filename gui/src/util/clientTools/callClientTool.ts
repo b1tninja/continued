@@ -5,6 +5,7 @@ import { IIdeMessenger } from "../../context/IdeMessenger";
 import { AppThunkDispatch, RootState } from "../../redux/store";
 import { editToolImpl } from "./editImpl";
 import { multiEditImpl } from "./multiEditImpl";
+import { runSubagentTool } from "../subagents/runSubagent";
 import { singleFindAndReplaceImpl } from "./singleFindAndReplaceImpl";
 
 export interface ClientToolExtras {
@@ -48,6 +49,9 @@ export async function callClientTool(
         break;
       case BuiltInToolNames.MultiEdit:
         output = await multiEditImpl(parsedArgs, toolCall.id, extras);
+        break;
+      case BuiltInToolNames.Subagent:
+        output = await runSubagentTool(parsedArgs, toolCall.id, extras);
         break;
       default:
         throw new Error(`Invalid client tool name ${toolCall.function.name}`);
