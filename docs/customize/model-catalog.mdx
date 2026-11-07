@@ -77,7 +77,9 @@ A chat request moves on to the next route when the one before fails before any o
 - the model being unavailable, overloaded or throttled;
 - a prompt that does not fit, when the next route has a larger window.
 
-Any other error would fail on every route, so it is shown as it is. Once a route has answered, the conversation stays on it until the config reloads: each account has its own prompt cache, and going back would rebuild it. The usage readout in the input toolbar says `via anthropic-work` when a fallback answered, and the prompt cache warnings count a change of route as a change of model.
+Any other error would fail on every route, so it is shown as it is. Once a route has answered, the conversation stays on it while its prompt cache is warm: each account has its own cache, and going back would rebuild it. After 5 minutes without a request the cache has most likely expired, so the next request starts on the first route again.
+
+An account that failed (unreachable, refusing the key, throttled or unavailable) is skipped for 5 minutes when another route follows it, including after the config reloads; after that the next request tries it again. The usage readout in the input toolbar says `via anthropic-work` when a fallback answered, its tokens and cost are counted for that account's model, and the prompt cache warnings count a change of route as a change of model.
 
 A route takes `connection`, and optionally `model`, `apiBase`, `env` and `requestOptions`; the rest of the model's settings apply on every route.
 

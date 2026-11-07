@@ -96,3 +96,86 @@ export function shouldTryNextRoute(
   }
   return isConnectionFailure(error) || isUnavailable(error);
 }
+
+/**
+ * How long an account that failed (unreachable, refusing the credentials,
+ * throttled or unavailable) is skipped when it has a route after it. Kept
+ * for the life of the process, so a config reload, which rebuilds the
+ * models, does not try a dead account again first. After this the next
+ * request tries it again, which serves as the check that it is back.
+ */
+export const FAILED_ROUTE_COOLDOWN_MS = 5 * 60_000;
+
+/**
+ * After this long without a request, a conversation that moved to a later
+ * route goes back to the first one: the later account's prompt cache has
+ * most likely expired (5 minutes is the shortest common lifetime, and a
+ * local server evicts idle slots), so going back costs no cache, and the
+ * first route is the one the person chose first (often the local or cheaper
+ * one).
+ */
+export const ROUTE_RETURN_AFTER_IDLE_MS = 5 * 60_000;
+
+const failedAt = new Map<string, number>();
+
+/** An account and model: the same account is the same route in any config. */
+export function routeKey(llm: {
+  providerName: string;
+  apiBase?: string;
+  model: string;
+  region?: string;
+}): string {
+  return [
+    llm.providerName,
+    llm.apiBase ?? "",
+    llm.region ?? "",
+    llm.model,
+  ].join("|");
+}
+
+export function markRouteFailed(key: string, now: number = Date.now()) {
+  failedAt.set(key, now);
+}
+
+export function markRouteOk(key: string) {
+  failedAt.delete(key);
+}
+
+export function routeRecentlyFailed(
+  key: string,
+  now: number = Date.now(),
+  cooldownMs: number = FAILED_ROUTE_COOLDOWN_MS,
+): boolean {
+  const at = failedAt.get(key);
+  return at !== undefined && now - at < cooldownMs;
+}
+
+/** For tests. */
+export function clearRouteFailures() {
+  failedAt.clear();
+}
+
+/**
+ * The route a request starts on: where the conversation answered last,
+ * back to the first once it has been idle long enough, and past accounts
+ * that failed recently (never past the last route).
+ */
+export function firstRouteToTry(args: {
+  active: number;
+  keys: string[];
+  lastRequestAt?: number;
+  now?: number;
+}): number {
+  const now = args.now ?? Date.now();
+  const last = args.keys.length - 1;
+  let start = Math.min(args.active, last);
+  if (
+    start > 0 &&
+    args.lastRequestAt !== undefined &&
+    now - args.lastRequestAt > ROUTE_RETURN_AFTER_IDLE_MS
+  ) {
+    start = 0;
+  }
+  while (start < last && routeRecentlyFailed(args.keys[start], now)) start++;
+  return start;
+}

@@ -241,9 +241,14 @@ export const streamNormalInput = createAsyncThunk<
                 }),
               );
             }
+            // A model with routes: the account that answered, priced as
+            // that account's provider and model id
+            const usageProvider =
+              message.routeProvider ?? selectedChatModel.provider;
+            const usageModel = message.routeModel ?? selectedChatModel.model;
             const total = totalInputTokens(
-              selectedChatModel.provider,
-              selectedChatModel.model,
+              usageProvider,
+              usageModel,
               message.usage,
             );
             if (total > 0) {
@@ -281,8 +286,8 @@ export const streamNormalInput = createAsyncThunk<
                   buildLedgerEntry({
                     at: start,
                     mode: state.session.mode,
-                    provider: selectedChatModel.provider,
-                    model: selectedChatModel.model,
+                    provider: usageProvider,
+                    model: usageModel,
                     cachingOn: !!cachingWasOn,
                     ttl: cacheResolution.nextState.lastTtl,
                     oneHour: modelSupportsOneHourCache(selectedChatModel),
@@ -300,8 +305,8 @@ export const streamNormalInput = createAsyncThunk<
             }
             dispatch(
               addRequestUsageToSession({
-                provider: selectedChatModel.provider,
-                model: selectedChatModel.model,
+                provider: usageProvider,
+                model: usageModel,
                 usage: message.usage,
               }),
             );

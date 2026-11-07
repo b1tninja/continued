@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ChatMessage,
   CompletionOptions,
@@ -6,7 +6,13 @@ import type {
   PromptLog,
 } from "../index.js";
 import { BaseLLM } from "./index.js";
-import { isContextLengthError, shouldTryNextRoute } from "./routes.js";
+import {
+  clearRouteFailures,
+  FAILED_ROUTE_COOLDOWN_MS,
+  isContextLengthError,
+  ROUTE_RETURN_AFTER_IDLE_MS,
+  shouldTryNextRoute,
+} from "./routes.js";
 
 /** One route: replies, or fails with the given error before replying. */
 class RouteLLM extends BaseLLM {
@@ -14,7 +20,7 @@ class RouteLLM extends BaseLLM {
   calls = 0;
   constructor(
     options: LLMOptions,
-    private readonly fail?: unknown,
+    public fail?: unknown,
     private readonly failAfterFirstChunk = false,
   ) {
     super(options);
@@ -68,6 +74,58 @@ const throttled = Object.assign(new Error("Too many requests"), {
 });
 
 describe("routes", () => {
+  beforeEach(() => clearRouteFailures());
+  afterEach(() => vi.useRealTimers());
+
+  it("prices the usage as the answering route's provider and model", async () => {
+    const llm = withRoutes(route("us.sonnet", throttled), [
+      "anthropic-work",
+      route("claude-sonnet-4-6"),
+    ]);
+    const { chunks } = await run(llm);
+    expect(chunks.find((c) => (c as any).usage)).toMatchObject({
+      route: "anthropic-work",
+      routeProvider: "test-route",
+      routeModel: "claude-sonnet-4-6",
+    });
+  });
+
+  it("skips an account that failed recently, after a config reload too", async () => {
+    vi.useFakeTimers();
+    const first = route("us.sonnet", throttled);
+    await run(withRoutes(first, ["anthropic-work", route("sonnet")]));
+    expect(first.calls).toBe(1);
+    // A reload builds new models for the same accounts
+    const again = route("us.sonnet", throttled);
+    const second = route("sonnet");
+    await run(withRoutes(again, ["anthropic-work", second]));
+    expect(again.calls).toBe(0);
+    expect(second.calls).toBe(1);
+    // After the cooldown the account is tried again, and is back
+    vi.advanceTimersByTime(FAILED_ROUTE_COOLDOWN_MS + 1);
+    const later = route("us.sonnet");
+    const { log } = await run(
+      withRoutes(later, ["anthropic-work", route("sonnet")]),
+    );
+    expect(later.calls).toBe(1);
+    expect(log.route).toBe("bedrock-us");
+  });
+
+  it("goes back to the first route once the conversation has been idle", async () => {
+    vi.useFakeTimers();
+    const first = route("us.sonnet", throttled);
+    const second = route("sonnet");
+    const llm = withRoutes(first, ["anthropic-work", second]);
+    await run(llm); // fails over
+    first.fail = undefined; // the first account recovers
+    vi.advanceTimersByTime(60_000);
+    expect((await run(llm)).log.route).toBe("anthropic-work"); // stays: cache warm
+    vi.advanceTimersByTime(
+      Math.max(ROUTE_RETURN_AFTER_IDLE_MS, FAILED_ROUTE_COOLDOWN_MS) + 1,
+    );
+    expect((await run(llm)).log.route).toBe("bedrock-us"); // idle: back
+  });
+
   it("answers on the first route and names it", async () => {
     const llm = withRoutes(route("us.sonnet"), [
       "anthropic-work",

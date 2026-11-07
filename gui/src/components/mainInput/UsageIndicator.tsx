@@ -42,7 +42,10 @@ export function UsageIndicator() {
       ) ??
       (selected?.model === last.model && selected.provider === last.provider
         ? selected
-        : undefined);
+        : undefined) ??
+      // A model with routes: the last request may have used another
+      // route's id for it; the window is the model's
+      (selected?.routes?.length ? selected : undefined);
     return match?.contextLength;
   }, [last, chatModels, selected]);
   const context = contextUsage(usage, contextLength);

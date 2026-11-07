@@ -601,6 +601,9 @@ export interface AssistantChatMessage {
    * on the message that carries the usage.
    */
   route?: string;
+  /** That account's provider and its id for the model, for pricing. */
+  routeProvider?: string;
+  routeModel?: string;
   /** Arbitrary per-message metadata (IDs, provider-specific info, etc.) */
   metadata?: Record<string, unknown>;
 }

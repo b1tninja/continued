@@ -73,7 +73,14 @@ import {
   toFimBody,
 } from "./openaiTypeConverters.js";
 import { applyToolOverrides } from "../tools/applyToolOverrides.js";
-import { shouldTryNextRoute } from "./routes.js";
+import {
+  firstRouteToTry,
+  isContextLengthError,
+  markRouteFailed,
+  markRouteOk,
+  routeKey,
+  shouldTryNextRoute,
+} from "./routes.js";
 
 export class LLMError extends Error {
   constructor(
@@ -168,6 +175,8 @@ export abstract class BaseLLM implements ILLM {
    * moved; a config reload starts again from the first.
    */
   private activeRoute = 0;
+  /** When this model last sent a chat request (see firstRouteToTry). */
+  private lastRouteRequestAt?: number;
   /**
    * Waits between retries of a request whose connection dropped before the
    * reply started (see retryStreamOnDroppedConnection); undefined for the
@@ -1220,7 +1229,16 @@ export abstract class BaseLLM implements ILLM {
       { name: this.routeName ?? this.providerName, llm: this },
       ...this.fallbackRoutes,
     ];
-    for (let i = Math.min(this.activeRoute, routes.length - 1); ; i++) {
+    const keys = routes.map((r) =>
+      routeKey(r.llm as BaseLLM & { region?: string }),
+    );
+    const start = firstRouteToTry({
+      active: this.activeRoute,
+      keys,
+      lastRequestAt: this.lastRouteRequestAt,
+    });
+    this.lastRouteRequestAt = Date.now();
+    for (let i = start; ; i++) {
       const { name, llm } = routes[i];
       if (routes[i + 1]) llm.failOverQuickly();
       const gen =
@@ -1233,15 +1251,28 @@ export abstract class BaseLLM implements ILLM {
         while (!next.done) {
           started = true;
           const chunk = next.value;
+          // The usage is the answering account's: its provider and its own
+          // id for the model, so the cost is priced for that route
           yield chunk.role === "assistant" && chunk.usage
-            ? { ...chunk, route: name }
+            ? {
+                ...chunk,
+                route: name,
+                routeProvider: llm.providerName,
+                routeModel: llm.model,
+              }
             : chunk;
           next = await gen.next();
         }
         this.activeRoute = i;
+        markRouteOk(keys[i]);
         return { ...next.value, route: name };
       } catch (e) {
         const following = routes[i + 1];
+        // An account that could not serve (not one whose window was too
+        // small) is skipped for a while, across config reloads too
+        if (!started && !signal.aborted && !isContextLengthError(e)) {
+          markRouteFailed(keys[i]);
+        }
         if (
           started ||
           signal.aborted ||
