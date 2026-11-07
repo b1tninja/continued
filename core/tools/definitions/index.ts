@@ -12,10 +12,12 @@ export { readFileTool } from "./readFile";
 
 export { readFileRangeTool } from "./readFileRange";
 export { readSkillTool } from "./readSkill";
+export { presentPlanTool } from "./presentPlan";
 export { requestRuleTool } from "./requestRule";
 export { runTerminalCommandTool } from "./runTerminalCommand";
 export { searchWebTool } from "./searchWeb";
 export { singleFindAndReplaceTool } from "./singleFindAndReplace";
+export { taskListTool } from "./taskList";
 export { viewDiffTool } from "./viewDiff";
 export { viewRepoMapTool } from "./viewRepoMap";
 export { viewSubdirectoryTool } from "./viewSubdirectory";

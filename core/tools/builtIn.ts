@@ -18,6 +18,8 @@ export enum BuiltInToolNames {
   CodebaseTool = "codebase",
   ReadSkill = "read_skill",
   Subagent = "subagent",
+  TaskList = "task_list",
+  PresentPlan = "present_plan",
 
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",
@@ -33,4 +35,8 @@ export const CLIENT_TOOLS_IMPLS = [
   // Runs in the gui, which drives the child conversation (see
   // gui/src/util/subagents/runSubagent.ts).
   BuiltInToolNames.Subagent,
+  // The task list lives in the session, which the gui holds
+  BuiltInToolNames.TaskList,
+  // Writes the plan file and seeds the task list, both through the gui
+  BuiltInToolNames.PresentPlan,
 ];

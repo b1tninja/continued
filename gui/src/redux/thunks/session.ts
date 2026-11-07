@@ -257,6 +257,10 @@ export const saveCurrentSession = createAsyncThunk<
       chatModelTitle: selectedChatModel?.title ?? null,
       ...(session.usage && { usage: session.usage }),
       checkpoints: session.checkpoints,
+      ...(session.taskPlan && { taskPlan: session.taskPlan }),
+      ...(session.planFile && { planFile: session.planFile }),
+      // Saving an empty list removes queued messages from the file
+      queuedMessages: session.queuedMessages ?? [],
       // Enough for a resumed session to know its cache has expired and what
       // re-reading the conversation will cost.
       ...(cache?.lastRequestAt !== undefined && {

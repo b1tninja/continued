@@ -230,6 +230,23 @@ describe("resolveSubagentTools", () => {
     expect(names(tools)).toContain(BuiltInToolNames.RunTerminalCommand);
   });
 
+  it("never gives a subagent the session's task list or plan tools", () => {
+    const parent = [
+      ...PARENT_TOOLS,
+      tool(BuiltInToolNames.TaskList),
+      tool(BuiltInToolNames.PresentPlan),
+    ];
+    const { tools, excluded } = resolveSubagentTools({}, parent);
+    expect(names(tools)).not.toContain(BuiltInToolNames.TaskList);
+    expect(names(tools)).not.toContain(BuiltInToolNames.PresentPlan);
+    expect(excluded).toEqual(
+      expect.arrayContaining([
+        { name: BuiltInToolNames.TaskList, reason: "task-list" },
+        { name: BuiltInToolNames.PresentPlan, reason: "task-list" },
+      ]),
+    );
+  });
+
   it("cannot be granted a tool the parent does not have", () => {
     const parent = PARENT_TOOLS.filter(
       (t) => t.function.name !== BuiltInToolNames.RunTerminalCommand,

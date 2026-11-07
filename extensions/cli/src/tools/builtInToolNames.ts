@@ -12,6 +12,7 @@ export const BUILT_IN_TOOL_NAMES = [
   "Fetch",
   "List",
   "MultiEdit",
+  "PresentPlan",
   "Read",
   "ReportFailure",
   "Bash",
@@ -22,5 +23,6 @@ export const BUILT_IN_TOOL_NAMES = [
   "UploadArtifact",
   "Diff",
   "Checklist",
+  "TaskList",
   "Write",
 ] as const;

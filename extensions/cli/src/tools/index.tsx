@@ -25,12 +25,14 @@ import { exitTool } from "./exit.js";
 import { fetchTool } from "./fetch.js";
 import { listFilesTool } from "./listFiles.js";
 import { multiEditTool } from "./multiEdit.js";
+import { presentPlanTool } from "./presentPlan.js";
 import { readFileTool } from "./readFile.js";
 import { reportFailureTool } from "./reportFailure.js";
 import { runTerminalCommandTool } from "./runTerminalCommand.js";
 import { checkIfRipgrepIsInstalled, searchCodeTool } from "./searchCode.js";
 import { skillsTool } from "./skills.js";
 import { subagentTool } from "./subagent.js";
+import { taskListTool } from "./taskList.js";
 import {
   isBetaSubagentToolEnabled,
   isBetaUploadArtifactToolEnabled,
@@ -68,7 +70,7 @@ const BASE_BUILTIN_TOOLS: Tool[] = [
   listFilesTool,
   runTerminalCommandTool,
   fetchTool,
-  writeChecklistTool,
+  taskListTool,
   checkBackgroundJobTool,
   askQuestionTool,
 ];
@@ -128,6 +130,11 @@ export async function getAllAvailableTools(
     tools.push(exitTool);
   }
 
+  // Presenting a plan is how plan mode ends, so only plan mode offers it.
+  if (services.toolPermissions.getCurrentMode() === "plan") {
+    tools.push(presentPlanTool);
+  }
+
   if (isBetaSubagentToolEnabled()) {
     tools.push(await subagentTool());
   }
@@ -141,6 +148,13 @@ export async function getAllAvailableTools(
 
   return tools;
 }
+
+/**
+ * Tools that are not offered to the model but still run when it calls them by
+ * name: `Checklist` maps its markdown list onto `TaskList`, for prompts, rules
+ * and resumed sessions that still name it.
+ */
+export const TOOL_ALIASES: Tool[] = [writeChecklistTool];
 
 export function getToolDisplayName(toolName: string): string {
   const tool = ALL_BUILT_IN_TOOLS.find((t) => t.name === toolName);
@@ -213,7 +227,7 @@ export function convertMcpToolToContinueTool(mcpTool: MCPTool): Tool {
 
 export async function executeToolCall(
   toolCall: PreprocessedToolCall,
-  options: { parallelToolCallCount: number } = { parallelToolCallCount: 1 },
+  options: Omit<ToolRunContext, "toolCallId"> = { parallelToolCallCount: 1 },
 ): Promise<string> {
   const startTime = Date.now();
 
@@ -230,6 +244,8 @@ export async function executeToolCall(
     const context: ToolRunContext = {
       toolCallId: toolCall.id,
       parallelToolCallCount: options.parallelToolCallCount,
+      abortSignal: options.abortSignal,
+      onToolPermissionRequest: options.onToolPermissionRequest,
     };
 
     // IMPORTANT: if preprocessed args are present, uses preprocessed args instead of original args

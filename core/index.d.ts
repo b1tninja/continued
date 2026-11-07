@@ -342,6 +342,52 @@ export interface Session {
   promptCache?: SessionPromptCache;
   /** Optional: file snapshots taken before agent edits, used by "Restore to here" */
   checkpoints?: TurnCheckpoint[];
+  /**
+   * Optional: the agent's task list. Kept outside the history so compaction and
+   * pruning cannot lose it; sent at the tail of each request. See
+   * core/util/taskPlan.ts.
+   */
+  taskPlan?: TaskPlan;
+  /**
+   * Optional: URI of the plan file this session is working from
+   * (`.continue/plans/<slug>.md`), written by the plan tool in Plan mode. See
+   * core/util/planFile.ts.
+   */
+  planFile?: string;
+  /**
+   * Optional: messages typed while the agent was working and not yet sent.
+   * Saved as soon as they change, so a reload or crash does not lose them.
+   */
+  queuedMessages?: SessionQueuedMessage[];
+}
+
+/** A message queued in the chat input; `editorState` is the editor's JSON. */
+export interface SessionQueuedMessage {
+  id: string;
+  editorState: any;
+  modifiers: InputModifiers;
+}
+
+export type TaskStatus =
+  "pending" | "in_progress" | "completed" | "cancelled" | "blocked";
+
+export interface TaskItem {
+  /** Stable across updates, so a person's edit and a model update meet */
+  id: string;
+  text: string;
+  status: TaskStatus;
+  /** Why the item is blocked or cancelled */
+  note?: string;
+  /** Present-tense label shown while the item is in progress ("Running migrations") */
+  activeForm?: string;
+}
+
+export interface TaskPlan {
+  items: TaskItem[];
+  /** ISO timestamp of the last change */
+  updatedAt: string;
+  /** Who made the last change; "user" tells the model to keep the person's edits */
+  updatedBy?: "model" | "user";
 }
 
 /**

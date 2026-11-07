@@ -47,6 +47,10 @@ export const callToolById = createAsyncThunk<
     throw new Error("No model selected");
   }
 
+  // Stop (or a new session) aborts this signal while the tool runs. The tool
+  // itself is not interrupted, but its result must not restart the agent loop.
+  const streamAbortSignal = state.session.streamAborter.signal;
+
   dispatch(
     setToolCallCalling({
       toolCallId,
@@ -63,6 +67,7 @@ export const callToolById = createAsyncThunk<
   let mcpUiState: McpUiState | undefined = undefined;
   let error: ContinueError | undefined = undefined;
   let streamResponse: boolean;
+  let endTurn = false;
 
   // IMPORTANT:
   // Errors that occur while calling tool call implementations
@@ -79,6 +84,7 @@ export const callToolById = createAsyncThunk<
       output: clientToolOutput,
       respondImmediately,
       error: clientToolError,
+      endTurn: clientEndTurn,
     } = await callClientTool(toolCallState, {
       dispatch,
       ideMessenger: extra.ideMessenger,
@@ -87,6 +93,7 @@ export const callToolById = createAsyncThunk<
     output = clientToolOutput;
     error = clientToolError;
     streamResponse = respondImmediately;
+    endTurn = !!clientEndTurn && !clientToolError;
   } else {
     // Tool is called on core side
     const result = await extra.ideMessenger.request("tools/call", {
@@ -154,14 +161,24 @@ export const callToolById = createAsyncThunk<
       );
     }
 
+    // The result stays on the tool call and is sent with the next request;
+    // after Stop, do not start that request now
+    if (streamAbortSignal.aborted) {
+      return;
+    }
+
     // Send to the LLM to continue the conversation
     const wrapped = await dispatch(
       streamResponseAfterToolCall({
         toolCallId,
         depth: depth + 1,
+        ...(endTurn && { endTurn }),
       }),
     );
     unwrapResult(wrapped);
+    if (endTurn) {
+      dispatch(setInactive());
+    }
   } else {
     dispatch(setInactive());
   }

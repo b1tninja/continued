@@ -22,6 +22,7 @@ import {
   setPromptCacheState,
   recordCacheMiss,
   recordCacheRequest,
+  requestQueuedMessagesSend,
   setToolGenerated,
   streamUpdate,
 } from "../slices/sessionSlice";
@@ -91,6 +92,7 @@ export const streamNormalInput = createAsyncThunk<
       activeTools,
       completionOptions: builtOptions,
       messages,
+      taskListMessage,
       appliedRules,
       appliedRuleIndex,
       systemToolsFramework,
@@ -145,8 +147,11 @@ export const streamNormalInput = createAsyncThunk<
     dispatch(setActive());
     dispatch(setInlineErrorMessage(undefined));
 
+    // The task list goes last, after the history and after the conversation's
+    // cache point, so a change to it leaves the cached prefix untouched (see
+    // core/util/taskPlan.ts). It is not part of the cache key above.
     const precompiledRes = await extra.ideMessenger.request("llm/compileChat", {
-      messages,
+      messages: taskListMessage ? [...messages, taskListMessage] : messages,
       options: completionOptions,
     });
 
@@ -382,6 +387,9 @@ export const streamNormalInput = createAsyncThunk<
     // 4. Execute remaining tool calls
     if (originalToolCalls.length === 0) {
       dispatch(setInactive());
+      // A reply without tool calls ends the agent's turn: messages queued
+      // while it worked can go now (waiting for approval is not an end)
+      dispatch(requestQueuedMessagesSend());
     } else if (needsApprovalPolicies.length > 0) {
       const builtInReadonlyAutoApproved = autoApprovedPolicies.filter(
         ({ toolCallState }) =>

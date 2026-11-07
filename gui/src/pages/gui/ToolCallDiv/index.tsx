@@ -7,6 +7,7 @@ import { RootState } from "../../../redux/store";
 import FunctionSpecificToolCallDiv from "./FunctionSpecificToolCallDiv";
 import { GroupedToolCallHeader } from "./GroupedToolCallHeader";
 import { McpAppRenderer } from "./MCPAppRenderer";
+import { PlanCard } from "./PlanCard";
 import { SimpleToolCallUI } from "./SimpleToolCallUI";
 import { SubagentCard } from "./SubagentCard";
 import { ToolCallDisplay } from "./ToolCallDisplay";
@@ -61,6 +62,17 @@ export function ToolCallDiv({
         >
           <McpAppRenderer toolCallState={toolCallState} />
         </ToolCallDisplay>
+      );
+    }
+
+    // A failed or cancelled plan shows like any other tool call, with its error.
+    if (
+      functionName === BuiltInToolNames.PresentPlan &&
+      toolCallState.status !== "errored" &&
+      toolCallState.status !== "canceled"
+    ) {
+      return (
+        <PlanCard toolCallState={toolCallState} historyIndex={historyIndex} />
       );
     }
 

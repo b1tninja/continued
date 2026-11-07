@@ -16,6 +16,10 @@ export const TASK_LIST_TOOL_NAMES = [
   "task_list",
   "update_task_list",
   "todo_write",
+  // Writes the plan file and replaces the task list (Plan mode)
+  "present_plan",
+  "PresentPlan",
+  "ExitPlanMode",
 ];
 
 /**

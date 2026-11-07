@@ -6,7 +6,9 @@ import { AppThunkDispatch, RootState } from "../../redux/store";
 import { editToolImpl } from "./editImpl";
 import { multiEditImpl } from "./multiEditImpl";
 import { runSubagentTool } from "../subagents/runSubagent";
+import { presentPlanImpl } from "./presentPlanImpl";
 import { singleFindAndReplaceImpl } from "./singleFindAndReplaceImpl";
+import { taskListImpl } from "./taskListImpl";
 
 export interface ClientToolExtras {
   getState: () => RootState;
@@ -17,6 +19,11 @@ export interface ClientToolExtras {
 export interface ClientToolOutput {
   output: ContextItem[] | undefined;
   respondImmediately: boolean;
+  /**
+   * With respondImmediately: record the result and end the turn instead of
+   * sending it to the model (present_plan waits for the person's Build).
+   */
+  endTurn?: boolean;
 }
 
 export interface ClientToolResult extends ClientToolOutput {
@@ -52,6 +59,12 @@ export async function callClientTool(
         break;
       case BuiltInToolNames.Subagent:
         output = await runSubagentTool(parsedArgs, toolCall.id, extras);
+        break;
+      case BuiltInToolNames.TaskList:
+        output = await taskListImpl(parsedArgs, toolCall.id, extras);
+        break;
+      case BuiltInToolNames.PresentPlan:
+        output = await presentPlanImpl(parsedArgs, toolCall.id, extras);
         break;
       default:
         throw new Error(`Invalid client tool name ${toolCall.function.name}`);
