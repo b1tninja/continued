@@ -3,6 +3,10 @@ import * as followRedirects from "follow-redirects";
 import { HttpProxyAgent } from "http-proxy-agent";
 import { BodyInit, RequestInit, Response } from "node-fetch";
 import { HttpsProxyAgentWithTls } from "./agent.js";
+import {
+  DEFAULT_CONNECT_TIMEOUT_SECONDS,
+  withConnectTimeout,
+} from "./connectTimeout.js";
 import { getAgentOptions } from "./getAgentOptions.js";
 import patchedFetch from "./node-fetch-patch.js";
 import { getProxy, shouldBypassProxy } from "./util.js";
@@ -114,7 +118,11 @@ export async function fetchwithRequestOptions(
       ? protocol === https
         ? new HttpsProxyAgentWithTls(proxy, agentOptions)
         : new HttpProxyAgent(proxy, agentOptions)
-      : new protocol.Agent(agentOptions);
+      : withConnectTimeout(
+          new protocol.Agent(agentOptions),
+          (requestOptions?.connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_SECONDS) *
+            1000,
+        );
 
   let headers: { [key: string]: string } = {};
 

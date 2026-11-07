@@ -1298,6 +1298,8 @@ export type TemplateType =
 
 export interface RequestOptions {
   timeout?: number;
+  /** Seconds to wait for a connection to the server (default 10). */
+  connectTimeout?: number;
   verifySsl?: boolean;
   /** Also trust the operating system certificate store (default: on for Windows and macOS). */
   useSystemCa?: boolean;
