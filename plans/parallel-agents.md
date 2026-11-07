@@ -1,6 +1,6 @@
 # Parallel agents: an Agents panel, worktrees, Build in parallel
 
-Last updated: 2026-11-07. Status: research and design; nothing built. Folds in the Multi Project mode proposal (`D:\code\sdk-forge\docs\multi-project-mode.md`, not in this repository, now superseded by this file). Multi-repo mode is a later phase, entered once plans can be dispatched and checkpoints are bound to a run or a repository ([Later](#later)).
+Last updated: 2026-11-07. Status: research and design; nothing built. Target: 2.6, on the `next/2.6` branch; not part of 2.4. Folds in the Multi Project mode proposal (`D:\code\sdk-forge\docs\multi-project-mode.md`, not in this repository, now superseded by this file). Multi-repo mode is a later phase, entered once plans can be dispatched and checkpoints are bound to a run or a repository ([Later](#later)).
 
 Run several agents at once, see them all in one place, and keep their edits apart, as Cursor's Agents Window does, on the pieces this fork already has.
 
