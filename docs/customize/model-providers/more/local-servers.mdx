@@ -28,9 +28,15 @@ The API key is optional: enter one only if your server was started with a key. I
 | KoboldCpp | `http://127.0.0.1:5001/v1/` |
 | Jan | `http://127.0.0.1:1337/v1/` |
 
-## Context window
+## What is read from the server
 
-The model list sets each model's `contextLength` from what the server reports: `meta.n_ctx` (llama.cpp, Strata), `max_model_len` (vLLM), `loaded_context_length` or `max_context_length` (LM Studio), or `context_length`. When a server reports none, set it yourself.
+The model list fills in what the server reports, so a saved model needs no editing:
+
+- **Context window** (`contextLength`): `meta.n_ctx` (llama.cpp, Strata), `max_model_len` (vLLM), the loaded context from LM Studio's `/api/v0/models`, or `context_length`. For Ollama, only the context of a model that is loaded now (`/api/ps`): the trained maximum in `/api/show` is often larger than what Ollama runs with, and a larger window would have prompts cut short.
+- **Tool calls** (`capabilities: [tool_use]`, for agent mode): `chat_template_caps.supports_tools` in `/props` (llama.cpp, Strata), `capabilities` in Ollama's `/api/show`, or LM Studio's `tool_use`. A template that takes tools does not guarantee a model that uses them well.
+- **Images** (`image_input`): `modalities.vision` in `/props`, `architecture.input_modalities`, Ollama's `vision`, or LM Studio's `vlm` type.
+
+When a server reports none of these, set them yourself.
 
 ## Configuration
 

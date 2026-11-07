@@ -16,6 +16,8 @@ const STRATA_MODEL = {
   name: "qwen3.8-flash-next-nvfp4-nvfp4",
   modelId: "qwen3.8-flash-next-nvfp4-nvfp4",
   contextLength: 524288,
+  supportsTools: true,
+  supportsImages: true,
 };
 
 function messengerWith(setup: ProviderSetupInfo = EMPTY_SETUP) {
@@ -86,6 +88,8 @@ describe("ProviderSetupFlow: local server", () => {
       provider: "openai",
       apiBase: "http://127.0.0.1:8083/v1/",
       contextLength: 524288,
+      // From /props: agent mode and images work without editing the config
+      capabilities: { tools: true, uploadImage: true },
     });
   });
 

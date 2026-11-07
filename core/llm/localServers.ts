@@ -71,6 +71,55 @@ function producesText(entry: any): boolean {
   return !Array.isArray(outputs) || outputs.includes("text");
 }
 
+/** True when an entry says it takes images (Strata, OpenRouter-style `architecture`). */
+function takesImages(entry: any): boolean {
+  const inputs = entry?.architecture?.input_modalities;
+  return Array.isArray(inputs) && inputs.includes("image");
+}
+
+/** What a llama.cpp-style server's `/props` says the loaded model can do. */
+export interface ServerCapabilities {
+  /** The chat template takes tools (`chat_template_caps`). */
+  tools?: boolean;
+  /** The server has a vision projector loaded (`modalities.vision`). */
+  images?: boolean;
+}
+
+/**
+ * Read `/props` at the server's root, as llama.cpp's `llama-server` and
+ * Strata serve it. `chat_template_caps` comes from rendering the template
+ * with tools, so it says whether tool calls can work, not whether the model
+ * is good at them. Servers without `/props` (vLLM, LM Studio, Ollama) answer
+ * nothing usable, and nothing is assumed.
+ */
+export async function serverCapabilities(
+  apiBase: string,
+  apiKey?: string,
+  fetchFn: FetchFn = fetch,
+  timeoutMs = 3000,
+): Promise<ServerCapabilities> {
+  try {
+    const response = await fetchFn(new URL("/props", apiBase), {
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return {};
+    const props = await response.json();
+    const caps = props?.chat_template_caps;
+    const result: ServerCapabilities = {};
+    if (caps && typeof caps === "object") {
+      const tools = caps.supports_tools ?? caps.supports_tool_calls;
+      if (typeof tools === "boolean") result.tools = tools;
+    }
+    if (typeof props?.modalities?.vision === "boolean") {
+      result.images = props.modalities.vision;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 function withSlash(apiBase: string): string {
   return apiBase.endsWith("/") ? apiBase : `${apiBase}/`;
 }
@@ -85,6 +134,131 @@ class LocalServerError extends Error {
 }
 
 async function getModels(
+  apiBase: string,
+  apiKey: string | undefined,
+  fetchFn: FetchFn,
+  timeoutMs?: number,
+): Promise<FetchedModel[]> {
+  const listed = await getListedModels(apiBase, apiKey, fetchFn, timeoutMs);
+  if (listed.length === 0) return listed;
+  const [caps, native] = await Promise.all([
+    serverCapabilities(apiBase, apiKey, fetchFn, timeoutMs),
+    nativeModelInfo(apiBase, listed, fetchFn, timeoutMs),
+  ]);
+  return listed.map((m) => {
+    const info = native.get(m.name) ?? {};
+    const tools = info.tools ?? caps.tools;
+    const contextLength = m.contextLength ?? info.contextLength;
+    return {
+      ...m,
+      ...(contextLength ? { contextLength } : {}),
+      ...(tools === undefined ? {} : { supportsTools: tools }),
+      ...(m.supportsImages || caps.images || info.images
+        ? { supportsImages: true }
+        : {}),
+    };
+  });
+}
+
+interface NativeInfo {
+  contextLength?: number;
+  tools?: boolean;
+  images?: boolean;
+}
+
+async function getJson(
+  url: URL,
+  fetchFn: FetchFn,
+  timeoutMs: number,
+  init: RequestInit = {},
+): Promise<any> {
+  try {
+    const response = await fetchFn(url, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return response.ok ? await response.json() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Most models one Detect or refresh asks Ollama about, one request each. */
+const OLLAMA_SHOW_LIMIT = 20;
+
+/**
+ * What a server's own API adds to its OpenAI-compatible list, keyed by model
+ * id. LM Studio (`/api/v0/models`): the context it loaded the model with, a
+ * vision model (`type: "vlm"`) and tool use. Ollama (`/api/show`, `/api/ps`):
+ * its `capabilities`, and the context of a model that is loaded. Ollama's
+ * `model_info` context length is the trained maximum, not what Ollama will
+ * run with (`num_ctx` is often much smaller), so it is not used: a window
+ * larger than the server's would have prompts cut short without notice.
+ */
+async function nativeModelInfo(
+  apiBase: string,
+  models: FetchedModel[],
+  fetchFn: FetchFn,
+  timeoutMs = 3000,
+): Promise<Map<string, NativeInfo>> {
+  const info = new Map<string, NativeInfo>();
+  const lmStudio = await getJson(
+    new URL("/api/v0/models", apiBase),
+    fetchFn,
+    timeoutMs,
+  );
+  if (Array.isArray(lmStudio?.data)) {
+    for (const m of lmStudio.data) {
+      if (typeof m?.id !== "string") continue;
+      const loaded = Number(m.loaded_context_length);
+      const caps = Array.isArray(m.capabilities) ? m.capabilities : [];
+      info.set(m.id, {
+        ...(loaded > 0 ? { contextLength: loaded } : {}),
+        ...(caps.includes("tool_use") ? { tools: true } : {}),
+        ...(m.type === "vlm" ? { images: true } : {}),
+      });
+    }
+    return info;
+  }
+
+  const running = await getJson(
+    new URL("/api/ps", apiBase),
+    fetchFn,
+    timeoutMs,
+  );
+  if (!Array.isArray(running?.models)) return info; // not Ollama
+  const loaded = new Map<string, number>();
+  for (const m of running.models) {
+    const n = Number(m?.context_length);
+    if (typeof m?.name === "string" && n > 0) loaded.set(m.name, n);
+  }
+  await Promise.all(
+    models.slice(0, OLLAMA_SHOW_LIMIT).map(async (m) => {
+      const shown = await getJson(
+        new URL("/api/show", apiBase),
+        fetchFn,
+        timeoutMs,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: m.name }),
+        },
+      );
+      const caps: unknown[] = Array.isArray(shown?.capabilities)
+        ? shown.capabilities
+        : [];
+      const contextLength = loaded.get(m.name);
+      info.set(m.name, {
+        ...(contextLength ? { contextLength } : {}),
+        ...(shown ? { tools: caps.includes("tools") } : {}),
+        ...(caps.includes("vision") ? { images: true } : {}),
+      });
+    }),
+  );
+  return info;
+}
+
+async function getListedModels(
   apiBase: string,
   apiKey: string | undefined,
   fetchFn: FetchFn,
@@ -110,13 +284,15 @@ async function getModels(
         name: m.id,
         modelId: m.id,
         ...(contextLength ? { contextLength } : {}),
+        ...(takesImages(m) ? { supportsImages: true } : {}),
       };
     });
 }
 
 /**
  * The models an OpenAI-compatible server lists at `<apiBase>models`, with the
- * context window it reports for each.
+ * context window it reports for each, and tool and image support where the
+ * server reports them (`/props` on llama.cpp-style servers).
  */
 export async function listOpenAICompatibleModels(
   apiBase: string,

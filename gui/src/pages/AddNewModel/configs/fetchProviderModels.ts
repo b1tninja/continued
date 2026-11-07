@@ -13,6 +13,7 @@ interface FetchedModel {
   contextLength?: number;
   maxTokens?: number;
   supportsTools?: boolean;
+  supportsImages?: boolean;
   createdAt?: string;
   deprecated?: boolean;
 }
@@ -23,8 +24,11 @@ function modelParams(model: FetchedModel): Record<string, any> {
   if (model.maxTokens) {
     params.completionOptions = { maxTokens: model.maxTokens };
   }
-  if (model.supportsTools) {
-    params.capabilities = { tools: true };
+  if (model.supportsTools || model.supportsImages) {
+    params.capabilities = {
+      ...(model.supportsTools ? { tools: true } : {}),
+      ...(model.supportsImages ? { uploadImage: true } : {}),
+    };
   }
   return params;
 }

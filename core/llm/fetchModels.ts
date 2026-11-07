@@ -10,6 +10,8 @@ export interface FetchedModel {
   contextLength?: number;
   maxTokens?: number;
   supportsTools?: boolean;
+  /** The model takes images, when the provider says so. */
+  supportsImages?: boolean;
   /** ISO release date, when the provider reports one (used to rank by recency). */
   createdAt?: string;
   /** True when the provider reports the model as deprecated or retired. */

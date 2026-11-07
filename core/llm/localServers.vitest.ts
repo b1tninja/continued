@@ -67,6 +67,7 @@ describe("listOpenAICompatibleModels", () => {
         name: "qwen3.8-flash-next-nvfp4-nvfp4",
         modelId: "qwen3.8-flash-next-nvfp4-nvfp4",
         contextLength: 524288,
+        supportsImages: true,
       },
     ]);
     const [url, init] = fetchFn.mock.calls[0] as unknown as [URL, RequestInit];
@@ -173,6 +174,7 @@ describe("detectLocalServers", () => {
             name: "qwen3.8-flash-next-nvfp4-nvfp4",
             modelId: "qwen3.8-flash-next-nvfp4-nvfp4",
             contextLength: 524288,
+            supportsImages: true,
           },
         ],
       },
@@ -186,5 +188,124 @@ describe("detectLocalServers", () => {
     expect(
       await detectLocalServers({ fetchFn: fetchFn as unknown as typeof fetch }),
     ).toEqual([]);
+  });
+});
+
+describe("capabilities from the server's own API", () => {
+  const list =
+    (
+      routes: Record<string, unknown>,
+    ): ((url: URL | string, init?: RequestInit) => Promise<Response>) =>
+    async (url, init) => {
+      const u = new URL(String(url));
+      const key =
+        init?.method === "POST"
+          ? `POST ${u.pathname} ${String(init.body)}`
+          : u.pathname;
+      return key in routes
+        ? json(routes[key])
+        : json({ error: "not found" }, 404);
+    };
+
+  it("llama.cpp and Strata: tools and vision from /props", async () => {
+    const fetchFn = vi.fn(
+      list({
+        "/v1/models": { data: [{ id: "qwen", meta: { n_ctx: 32768 } }] },
+        "/props": {
+          chat_template_caps: { supports_tools: true },
+          modalities: { vision: true },
+        },
+      }),
+    );
+    const [m] = await listOpenAICompatibleModels(
+      "http://127.0.0.1:8080/v1/",
+      undefined,
+      fetchFn as unknown as typeof fetch,
+    );
+    expect(m).toMatchObject({
+      contextLength: 32768,
+      supportsTools: true,
+      supportsImages: true,
+    });
+  });
+
+  it("a template without tools says so", async () => {
+    const fetchFn = vi.fn(
+      list({
+        "/v1/models": { data: [{ id: "base" }] },
+        "/props": { chat_template_caps: { supports_tools: false } },
+      }),
+    );
+    const [m] = await listOpenAICompatibleModels(
+      "http://127.0.0.1:8080/v1/",
+      undefined,
+      fetchFn as unknown as typeof fetch,
+    );
+    expect(m.supportsTools).toBe(false);
+  });
+
+  it("LM Studio: the loaded context, vision and tool use from /api/v0/models", async () => {
+    const fetchFn = vi.fn(
+      list({
+        "/v1/models": { data: [{ id: "qwen2-vl-7b" }, { id: "llama-3.2" }] },
+        "/api/v0/models": {
+          data: [
+            {
+              id: "qwen2-vl-7b",
+              type: "vlm",
+              max_context_length: 32768,
+              loaded_context_length: 8192,
+            },
+            { id: "llama-3.2", type: "llm", capabilities: ["tool_use"] },
+          ],
+        },
+      }),
+    );
+    const models = await listOpenAICompatibleModels(
+      "http://127.0.0.1:1234/v1/",
+      undefined,
+      fetchFn as unknown as typeof fetch,
+    );
+    expect(models[0]).toMatchObject({
+      name: "qwen2-vl-7b",
+      contextLength: 8192,
+      supportsImages: true,
+    });
+    expect(models[1]).toMatchObject({ name: "llama-3.2", supportsTools: true });
+  });
+
+  it("Ollama: capabilities from /api/show, the context only of a loaded model", async () => {
+    const show = (model: string) =>
+      `POST /api/show ${JSON.stringify({ model })}`;
+    const fetchFn = vi.fn(
+      list({
+        "/v1/models": { data: [{ id: "qwen3:8b" }, { id: "llava:7b" }] },
+        "/api/ps": { models: [{ name: "qwen3:8b", context_length: 8192 }] },
+        [show("qwen3:8b")]: {
+          capabilities: ["completion", "tools", "thinking"],
+          model_info: { "qwen3.context_length": 40960 },
+        },
+        [show("llava:7b")]: {
+          capabilities: ["completion", "vision"],
+          model_info: { "llama.context_length": 32768 },
+        },
+      }),
+    );
+    const models = await listOpenAICompatibleModels(
+      "http://127.0.0.1:11434/v1/",
+      undefined,
+      fetchFn as unknown as typeof fetch,
+    );
+    expect(models[0]).toMatchObject({
+      name: "qwen3:8b",
+      contextLength: 8192,
+      supportsTools: true,
+    });
+    // Not loaded: the trained maximum is not what Ollama runs with
+    expect(models[1].contextLength).toBeUndefined();
+    expect(models[1]).toMatchObject({
+      supportsTools: false,
+      supportsImages: true,
+    });
   });
 });
