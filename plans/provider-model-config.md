@@ -170,6 +170,8 @@ Like Claude Code's chain, at most three routes. The cache warnings treat a route
 | C7    | Accounts from VS Code's Language Models editor (`languageModelChatProviders[].configuration`), behind a setting until microsoft/vscode#291012 lands.                                      | C6                     |
 | C8    | `cn` as an Agent Host Protocol server on the same catalog.                                                                                                                                | C1, parallel-agents A2 |
 
+Status (2026-11-07): C1 to C5 are built on `claude/plan-provider-model-config` for 2.4. C6 and C7 (VS Code and its Agents window) are built on `next/2.6`, with parallel agents. C8 is blocked: parallel-agents A2 (agents that run without the webview through `cn serve`) does not exist yet, and A2 waits on A1. `cn` already reads the same `providers.yaml` and `models.yaml` (C1), so the catalog is ready for it once A2 lands.
+
 C1 to C4 are the core of the request: providers configured once, models defined once, mixed by role.
 
 ## Open questions
