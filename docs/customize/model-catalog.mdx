@@ -50,6 +50,10 @@ A model is built from four layers, each over the one before: the account (`provi
 
 A variant changes a model's settings, never which model it is or where it is served from: `name`, `model`, `provider`, `connection`, `apiKey` and `apiBase` cannot be set in a variant. Use variants for reasoning effort, sampling, `contextManagement` and similar.
 
+**Set up models** adds a variant for each reasoning effort the server reports: llama.cpp when the model's chat template takes `reasoning_effort` (the levels from `/props`), and Strata (`none`, `low`, `medium`, `high`). Each one sets `reasoning_effort` in the request body, so `Qwen3.8 Flash#high` is the model at high effort.
+
+Switching between variants of one model, on the same server, does not warn about losing the prompt cache: the server sees the same model, and only the request settings change.
+
 ## Workspace catalog
 
 A workspace's `.continue/models.yaml` adds models for that workspace, and a model there replaces a global model with the same name. The CLI (`cn`) reads the same files, `~/.continue/models.yaml` and `.continue/models.yaml` in the working directory, and `providers.yaml` in both places.

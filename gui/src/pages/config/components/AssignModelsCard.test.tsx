@@ -1,4 +1,5 @@
 import { act, screen, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { MockIdeMessenger } from "../../../context/MockIdeMessenger";
 import { EMPTY_CONFIG, updateConfig } from "../../../redux/slices/configSlice";
@@ -32,7 +33,7 @@ const CATALOG = [
   },
 ];
 
-async function setup(component: JSX.Element, catalog = CATALOG) {
+async function setup(component: ReactElement, catalog = CATALOG) {
   const ideMessenger = new MockIdeMessenger();
   const saves: any[] = [];
   ideMessenger.responseHandlers["models/catalog"] = async () => catalog;

@@ -595,6 +595,7 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       maxTokens?: number;
       supportsTools?: boolean;
       supportsImages?: boolean;
+      reasoningEfforts?: string[];
       createdAt?: string;
       deprecated?: boolean;
     }[],

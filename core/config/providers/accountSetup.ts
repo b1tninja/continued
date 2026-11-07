@@ -151,6 +151,23 @@ export function catalogEntryFor(
     connection: account,
     model: yaml.model,
   };
+  // One variant per reasoning effort the server reported: Name#low, Name#high
+  const efforts = (description as { reasoningEfforts?: unknown })
+    .reasoningEfforts;
+  if (Array.isArray(efforts) && efforts.length > 0) {
+    entry.variants = Object.fromEntries(
+      efforts
+        .filter((e): e is string => typeof e === "string" && /^[\w-]+$/.test(e))
+        .map((effort) => [
+          effort,
+          {
+            requestOptions: {
+              extraBodyProperties: { reasoning_effort: effort },
+            },
+          },
+        ]),
+    );
+  }
   for (const [key, value] of Object.entries(yaml)) {
     if (
       value === undefined ||

@@ -14,6 +14,7 @@ interface FetchedModel {
   maxTokens?: number;
   supportsTools?: boolean;
   supportsImages?: boolean;
+  reasoningEfforts?: string[];
   createdAt?: string;
   deprecated?: boolean;
 }
@@ -23,6 +24,10 @@ function modelParams(model: FetchedModel): Record<string, any> {
   if (model.contextLength) params.contextLength = model.contextLength;
   if (model.maxTokens) {
     params.completionOptions = { maxTokens: model.maxTokens };
+  }
+  // Saved as catalog variants, one per effort (see catalogEntryFor)
+  if (model.reasoningEfforts && model.reasoningEfforts.length > 0) {
+    params.reasoningEfforts = model.reasoningEfforts;
   }
   if (model.supportsTools || model.supportsImages) {
     params.capabilities = {

@@ -4,6 +4,7 @@ import { formatRereadCost } from "./cacheNotices";
 import {
   isSignificantLoss,
   NOTICE_MIN_TOKENS_LOCAL,
+  sameServedModel,
   warmCacheLoss,
 } from "./cacheSafeguards";
 import {
@@ -113,5 +114,21 @@ describe("formatRereadCost", () => {
     expect(formatRereadCost({ tokens: 366_000 })).toBe(
       "366k tokens at full price",
     );
+  });
+});
+
+describe("sameServedModel", () => {
+  it("is true for variants of one model on one server, false otherwise", () => {
+    const plan = { ...strata, title: "Qwen#plan" };
+    const act = {
+      ...strata,
+      title: "Qwen#act",
+      apiBase: "http://127.0.0.1:8083/v1",
+    };
+    expect(sameServedModel(plan, act)).toBe(true);
+    expect(sameServedModel(plan, { ...act, model: "other" })).toBe(false);
+    expect(
+      sameServedModel(plan, { ...act, apiBase: "http://127.0.0.1:8086/v1/" }),
+    ).toBe(false);
   });
 });

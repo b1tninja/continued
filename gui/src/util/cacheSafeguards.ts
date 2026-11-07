@@ -69,6 +69,25 @@ function lossOf(
   };
 }
 
+/**
+ * Whether two model entries are the same model on the same server, such as
+ * two variants of one catalog model (`Name#plan`, `Name#act`) that differ
+ * only in settings. Switching between them keeps the prompt cache, unless
+ * a setting changes the prompt itself (a server that puts the reasoning
+ * effort at the start of the prompt, as Strata does unless
+ * `effort_position` is "end").
+ */
+export function sameServedModel(
+  a: ModelDescription,
+  b: ModelDescription,
+): boolean {
+  const base = (m: ModelDescription) =>
+    (m.apiBase ?? "").trim().replace(/\/+$/, "");
+  return (
+    a.provider === b.provider && a.model === b.model && base(a) === base(b)
+  );
+}
+
 /** Whether a loss is big enough to interrupt the user about. */
 export function isSignificantLoss(loss: CacheLoss | undefined): boolean {
   if (!loss) return false;

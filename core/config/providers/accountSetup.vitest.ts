@@ -214,3 +214,23 @@ describe("describeAccountConnections", () => {
     ]);
   });
 });
+
+describe("catalogEntryFor with reported reasoning efforts", () => {
+  it("adds one variant per effort", () => {
+    const entry = catalogEntryFor(
+      { ...strataModel, reasoningEfforts: ["none", "low", "high"] },
+      "strata",
+    );
+    expect(entry.variants).toEqual({
+      none: {
+        requestOptions: { extraBodyProperties: { reasoning_effort: "none" } },
+      },
+      low: {
+        requestOptions: { extraBodyProperties: { reasoning_effort: "low" } },
+      },
+      high: {
+        requestOptions: { extraBodyProperties: { reasoning_effort: "high" } },
+      },
+    });
+  });
+});
