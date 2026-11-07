@@ -94,6 +94,15 @@ describe("routes", () => {
     expect(second.calls).toBe(2);
   });
 
+  it("tells a route with a fallback not to retry its own connection", async () => {
+    const first = route("us.sonnet", throttled);
+    const second = route("sonnet");
+    const llm = withRoutes(first, ["anthropic-work", second]);
+    await run(llm);
+    expect(first.connectionRetryDelaysMs).toEqual([]);
+    expect(second.connectionRetryDelaysMs).toBeUndefined();
+  });
+
   it("does not move on for an error every route would give", async () => {
     const llm = withRoutes(
       route(
@@ -142,6 +151,22 @@ describe("shouldTryNextRoute", () => {
     ]) {
       expect(shouldTryNextRoute(e, {}, {})).toBe(true);
     }
+  });
+
+  it("on a dropped connection after the stream retry wrapped it", () => {
+    // What the Windows Sandbox check got from an account that drops packets
+    const timedOut = Object.assign(new Error("Request timed out."), {
+      name: "APIConnectionTimeoutError",
+    });
+    const wrapped = new Error(
+      "The connection closed before the response arrived (tried 3 times). Check your network or proxy and resubmit. (Request timed out.)",
+      { cause: timedOut },
+    );
+    expect(shouldTryNextRoute(wrapped, {}, {})).toBe(true);
+    const refused = new Error("wrapped", {
+      cause: Object.assign(new Error("connect"), { code: "ECONNREFUSED" }),
+    });
+    expect(shouldTryNextRoute(refused, {}, {})).toBe(true);
   });
 
   it("on a context-length error only when the next window is larger", () => {

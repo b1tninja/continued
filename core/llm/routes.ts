@@ -5,6 +5,21 @@
  * the same way on every route, so it is reported as it is.
  */
 
+import { isDroppedConnectionError } from "./utils/streamRetry.js";
+
+/** The error and the errors it wraps (`cause`), outermost first. */
+function chain(error: unknown): unknown[] {
+  const out: unknown[] = [];
+  for (
+    let e = error;
+    e && out.length < 5;
+    e = (e as { cause?: unknown }).cause
+  ) {
+    out.push(e);
+  }
+  return out;
+}
+
 const statusOf = (error: unknown): number | undefined => {
   const e = error as {
     status?: unknown;
@@ -35,8 +50,17 @@ const messageOf = (error: unknown): string => {
 function isConnectionFailure(error: unknown): boolean {
   const status = statusOf(error);
   if (status === 401 || status === 403) return true;
-  return /ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|fetch failed|socket hang up|UnrecognizedClientException|ExpiredToken|InvalidSignature|AccessDenied|CredentialsProviderError|Could not load credentials/i.test(
-    messageOf(error),
+  // The stream retry wraps a dropped connection in its own message, with the
+  // original as the cause
+  return chain(error).some(
+    (e) =>
+      isDroppedConnectionError(e) ||
+      /ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|fetch failed|socket hang up|timed out|closed before the response arrived|UnrecognizedClientException|ExpiredToken|InvalidSignature|AccessDenied|CredentialsProviderError|Could not load credentials/i.test(
+        messageOf(e),
+      ) ||
+      /ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ENETUNREACH|ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT/.test(
+        String((e as { code?: unknown })?.code ?? ""),
+      ),
   );
 }
 

@@ -168,6 +168,13 @@ export abstract class BaseLLM implements ILLM {
    * moved; a config reload starts again from the first.
    */
   private activeRoute = 0;
+  /**
+   * Waits between retries of a request whose connection dropped before the
+   * reply started (see retryStreamOnDroppedConnection); undefined for the
+   * defaults. A route with another route after it does not retry: the next
+   * account is tried instead, without waiting out this one's timeouts again.
+   */
+  connectionRetryDelaysMs?: number[];
 
   get routeNames(): string[] | undefined {
     if (!this.fallbackRoutes?.length) return undefined;
@@ -1196,6 +1203,7 @@ export abstract class BaseLLM implements ILLM {
     ];
     for (let i = Math.min(this.activeRoute, routes.length - 1); ; i++) {
       const { name, llm } = routes[i];
+      llm.connectionRetryDelaysMs = routes[i + 1] ? [] : undefined;
       const gen =
         llm === this
           ? this.streamChatOnRoute(messages, signal, options, messageOptions)
@@ -1378,6 +1386,7 @@ export abstract class BaseLLM implements ILLM {
           const iterable = retryStreamOnDroppedConnection(
             startIterable,
             signal,
+            this.connectionRetryDelaysMs,
           );
 
           for await (const chunk of iterable) {
@@ -1405,6 +1414,7 @@ export abstract class BaseLLM implements ILLM {
           for await (const chunk of retryStreamOnDroppedConnection(
             () => this._streamChat(messages, signal, completionOptions),
             signal,
+            this.connectionRetryDelaysMs,
           )) {
             const result = this.processChatChunk(chunk, interaction);
             completion.push(...result.completion);
