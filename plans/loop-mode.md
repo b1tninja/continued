@@ -87,6 +87,34 @@ The harnesses ask early, then assume during the run:
 
 None of the harnesses records an assumption as something the person can confirm or overrule later. No harness verified here has a first-class "assumption ledger".
 
+### The Ralph loop
+
+Added on 2026-11-07 after a suggestion to look at it. Sources: Geoffrey Huntley's post (https://ghuntley.com/ralph/), his playbook repository (https://github.com/ghuntley/how-to-ralph-wiggum: `PROMPT_build.md`, `PROMPT_plan.md`, `AGENTS.md`, `loop.sh`), and the `ralph-loop` plugin in https://github.com/anthropics/claude-plugins-official/tree/main/plugins/ralph-loop (its README and `hooks/stop-hook.sh`).
+
+In its plainest form Ralph is a shell loop that feeds the same prompt file to a headless agent forever (`while :; do cat PROMPT.md | claude ; done`). Each iteration is a fresh process, so a fresh context. Everything that carries over is on disk:
+
+- the specs;
+- `IMPLEMENTATION_PLAN.md` (earlier `fix_plan.md`), a prioritised list the agent keeps current;
+- `AGENTS.md`, kept short and "operational only": how to build and test, and what was learned about running the project.
+
+The five questions:
+
+1. **Who picks the next item:** the model, "choose the most important item", one item per iteration.
+2. **Non-blocking questions:** none. The playbook runs with `--dangerously-skip-permissions`, so a sandbox is the only boundary.
+3. **Re-plan:** a separate planning prompt (`./loop.sh plan`) compares the specs with the code and rewrites the plan without implementing anything. "The plan is disposable": regenerate it when the loop goes off track, the plan is stale, or nobody is sure what is done.
+4. **Stop:** the operator, `max_iterations` in `loop.sh`, or the plugin's exact `<promise>` string. The plugin's README notes that one string cannot tell "SUCCESS" from "BLOCKED".
+5. **Budgets:** iterations only.
+
+The plugin runs the loop inside one session: a Stop hook blocks the exit and feeds the same prompt back. A secondhand report says Huntley advised against it because it keeps every iteration in one context window (UNVERIFIED; from a Reddit summary).
+
+What the playbook's prompts insist on:
+
+- "don't assume not implemented": search before adding. A search that misses existing code, and then a duplicate implementation, is what the post calls Ralph's "Achilles' heel".
+- No placeholders or stubs.
+- **Backpressure:** run the tests, type checks and lints for the unit changed before committing. `AGENTS.md` names the exact commands, so the prompt can say "run the tests" generically.
+- Record learnings so later iterations do not repeat mistakes, keeping them brief: a bloated file "pollutes every future loop's context".
+- The operator tunes the loop by adding "signs", short instructions that every later iteration sees, when Ralph fails in a particular way.
+
 ## Design
 
 ### What the research changed
@@ -100,6 +128,19 @@ None of the harnesses records an assumption as something the person can confirm 
 | Verification                                | Done should be confirmed by something other than the worker: about 17% of failed traces in MAST                                                                                      | Not built (phase L4)                                                                                                            |
 | Assumption questions                        | No harness records them for later. Overruling should redo the work                                                                                                                   | Assumptions are recorded. Overruling one on a done item reopens it as redo                                                      |
 | Reload                                      | Kiro reopens an interrupted run paused                                                                                                                                               | A loop saved mid-run comes back stopped, with the item pending                                                                  |
+
+### What the Ralph loop changed
+
+| Ralph                                                                            | Built here                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A fresh context every iteration, with state on disk                              | Each item run and re-plan is sent without the turns before it (`freshContext`, on by default). The chat still shows every turn. What carries over: the plan file, the loop's notes, the person's answers and standing instructions |
+| `AGENTS.md` learnings, kept brief                                                | `finish_item` takes optional `notes` ("a command that works, a trap you hit"). The last 12, at most 300 characters each, go with every later item and with the re-plan                                                             |
+| "Don't assume not implemented"                                                   | The contract says to search before adding anything and not to conclude something is missing from one search. The re-plan prompt says the plan may be wrong and to check open items against the code                                |
+| No placeholders; backpressure from tests, type checks and lints                  | The contract says to implement fully and to run the project's checks for what changed before reporting done, naming them in the summary. A check the harness runs itself is still L4                                               |
+| "Signs" the operator adds                                                        | A note in the inbox can be marked **For every item**. It goes with every item prompt from then on instead of waiting for the re-plan, and the inbox lists the ones in force                                                        |
+| The plan is disposable                                                           | Already the re-plan turn and "Re-plan now"                                                                                                                                                                                         |
+| Model picks the item; `--dangerously-skip-permissions`; one exact promise string | Not taken. The extension picks the item, a call that would ask is held as a question, and `finish_item` reports done, waiting or stuck                                                                                             |
+| A commit per item                                                                | Not taken for now: committing is outward-facing, and checkpoints (#185) already give per-turn restore                                                                                                                              |
 
 ### Shape
 
@@ -140,10 +181,13 @@ The item prompt (`loopItemPrompt`) contains:
 - the item;
 - the plan file's path;
 - the person's answers that belong to this item;
+- the person's standing instructions and the notes earlier runs left;
 - whether this is a redo or a repeat attempt;
-- the contract.
+- the contract: search before adding, implement fully, run the checks before reporting, report with `finish_item`, and ask with `hold_question`.
 
 It never explains the loop or asks the model what comes next. A unit test checks that it does not mention a next item or the loop.
+
+**Fresh context.** The run's request starts at its own prompt (`buildChatRequest` slices the history at `LoopState.current.historyIndex`). The system message and tools stay the same, so that part of the prompt cache still hits. The conversation part starts over with each item, which is the point: the item does not pay for, or get confused by, every earlier item's tool output. What it needs from earlier work is in the files, the plan, the notes and the answers. `freshContext: false` keeps the old behaviour, one growing conversation.
 
 While an item runs, the model is offered `hold_question` and `finish_item` and not the task list tool, because the loop owns the list. `finish_item` records the report and ends the turn without another model request.
 
@@ -185,6 +229,7 @@ The rules, protected paths and Auto's reviewer still decide first. Only what the
 | running                         | steer              | Queued as a steered message (#303) tagged with the answer's id, delivered at the next tool boundary in the same run. If the run ends first, the answer goes with the next run, and an item that finished anyway is redone. |
 | done                            | redo, or confirmed | Confirming an assumption changes nothing; anything else reopens the item as redo                                                                                                                                           |
 | no item (a note about the plan) | replan             | Read at the next re-plan, or at once when marked "Re-plan now" (after the running item ends)                                                                                                                               |
+| no item, marked For every item  | standing           | Sent with every item prompt from then on, like Ralph's "signs"; it does not wait for a re-plan and does not resume a paused loop                                                                                           |
 
 Answers are stored on the loop, so several can be given at once and each is routed on its own. They persist across reloads with the session. A steered answer's queued message is never sent as a turn of its own: the turn-end send skips it. On reload the message is dropped, and the loop's record of the answer gives it to the item's next run.
 
@@ -193,6 +238,7 @@ Answers are stored on the loop, so several can be given at once and each is rout
 When nothing can run, some items are not done, and not every open item waits on the person, the loop re-plans. It sends one turn in Plan mode, whose tool filter (#309) keeps it read-only. The prompt carries:
 
 - each item's status and summary;
+- the notes the runs left;
 - the questions items wait on;
 - the person's notes about the plan;
 - the assumptions not yet confirmed.
@@ -236,7 +282,7 @@ The decisions and prompts come from core, so it is mostly wiring.
 - Re-plans are read-only, and anything the rules would ask about is refused during them.
 - A call repeated 4 times in one item's run is refused, and the model is told to try another way or report stuck.
 - A turn that ends without `finish_item` is not counted as done. After 2 such runs the item is failed.
-- Caps apply to questions per item and per loop, to answer and question length, and to summaries.
+- Caps apply to questions per item and per loop, to answer and question length, to summaries, and to the notes carried between items (12, at most 300 characters each), so the item prompt cannot bloat.
 - Subagents cannot use `hold_question` or `finish_item`: they would report the parent's item.
 
 ## Phases
@@ -249,11 +295,11 @@ The decisions and prompts come from core, so it is mostly wiring.
 - **L4:**
   - Verification: an acceptance check per item, run by the harness before an item counts as done (a command from the plan, or a separate evaluator).
   - Parallel items as subagents, only for items the plan marks independent with disjoint files, at most 2 or 3, and ideally each in its own worktree (#314's Agents panel).
-  - Each item in a fresh context carrying a short summary, rather than one growing conversation.
+  - Checks the project names once (Ralph's `AGENTS.md` validation commands), run by the harness after each item as backpressure.
 
 ## Open questions
 
-1. **One conversation or a fresh context per item?** Items now run in one session, which keeps the transcript readable and the prompt cache warm, but the conversation grows and compaction has to carry it. Claude Code's guidance and Reflexion favour a fresh context with a short note. A subagent per item would give that, but subagents cannot ask the person. Decide with L4.
+1. **Notes or a file?** Ralph keeps its learnings in `AGENTS.md`, where they outlive the loop and any later session reads them. Here they live on the loop, so they end with it. Should accepting the last round offer to append them to the project's rules or AGENTS.md?
 2. **Dependencies between items.** To-dos have no dependency field, so "not blocked" means "not waiting on the person". Kiro and LLMCompiler schedule a DAG. A `depends:` note in the plan file would need a format change, which the brief rules out for now.
 3. **Overruled assumptions downstream.** Overruling reopens only the item that made the assumption. Items built on it are not marked stale; the re-plan prompt lists unconfirmed assumptions so the model can rework them. Should a commit or push wait until the assumptions it depends on are confirmed?
 4. **Budget defaults.** The 2,000,000-token and 2-hour defaults are guesses. They are fields on `LoopState.budget`, but there is no setting yet.
@@ -265,8 +311,14 @@ The decisions and prompts come from core, so it is mostly wiring.
 3. **`finish_item` is the one addition to "say when it's done".** A structured report is what makes "done" checkable, and no report never counts as done. It also ends the turn without another request.
 4. **Answers are routed when given, by the item's state, and kept on the loop.** A running item gets its answer by steering. The person's own messages keep the usual queue: they are sent at turn end as an ordinary turn, and the loop waits for that turn.
 5. **Parallel items, verification and the CLI are later phases.** Each is a separable change, and the research argues against parallel items by default.
+6. **Each run gets a fresh context, in the same session.** Ralph, Claude Code's best practices and Reflexion all favour a fresh context with a short note over one growing conversation. A subagent per item would also give one, but subagents cannot ask the person. Slicing the request keeps the transcript in one chat, and the system and tools prefix stays cached. This replaces the earlier open question "one conversation or a fresh context per item".
 
 ## Sources
+
+- **The Ralph loop** (fetched 2026-11-07):
+  - https://ghuntley.com/ralph/
+  - https://github.com/ghuntley/how-to-ralph-wiggum
+  - https://github.com/anthropics/claude-plugins-official/tree/main/plugins/ralph-loop
 
 All fetched on 2026-11-07 by the research pass.
 

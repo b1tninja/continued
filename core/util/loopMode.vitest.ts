@@ -18,6 +18,7 @@ import {
   reconcileLoop,
   restoreLoop,
   settleSteeredAnswers,
+  standingInstructions,
   requestStop,
   resumeLoop,
   startItemRun,
@@ -623,4 +624,113 @@ test("the status line", () => {
   let loop = runItem(loopOn(), "1", { outcome: "done" });
   loop = runItem(loop, "2", { outcome: "waiting" });
   expect(formatLoopStatus(loop)).toBe("Round 1 · 1/3 done · 1 waiting on you");
+});
+
+describe("ideas from the Ralph loop", () => {
+  test("notes from a run go with every later item, newest last and capped", () => {
+    let loop = runItem(loopOn(), "1", {
+      outcome: "done",
+      notes: "Tests run with\n  `npx vitest run`",
+    } as any);
+    expect(loop.notes).toEqual(["Tests run with `npx vitest run`"]);
+    for (let i = 0; i < 20; i++) {
+      loop = runItem(loop, "2", { outcome: "stuck", notes: `n${i}` } as any);
+      loop = {
+        ...loop,
+        items: loop.items.map((it) =>
+          it.id === "2" ? { ...it, status: "pending", attempts: 0 } : it,
+        ),
+      };
+    }
+    expect(loop.notes).toHaveLength(12);
+    expect(loop.notes?.at(-1)).toBe("n19");
+    const long = runItem(loopOn(), "1", {
+      outcome: "done",
+      notes: "x".repeat(900),
+    } as any);
+    expect(long.notes?.[0]).toHaveLength(300);
+
+    const prompt = loopItemPrompt({
+      item: PLAN.items[1],
+      answers: [],
+      questions: [],
+      attempt: 1,
+      notes: ["Tests run with `npx vitest run`"],
+    });
+    expect(prompt).toContain(
+      "Notes from earlier items:\n- Tests run with `npx vitest run`",
+    );
+    expect(loopReplanPrompt({ loop, plan: PLAN })).toContain(
+      "Notes from the runs:",
+    );
+  });
+
+  test("a standing instruction goes with every item and does not wait for a re-plan", () => {
+    const r = answerLoop(
+      loopOn(),
+      { text: "Never edit generated files", standing: true },
+      T0,
+    );
+    if (!r.ok) throw new Error(r.error);
+    expect(r.answer.route).toBe("standing");
+    expect(standingInstructions(r.loop)).toEqual([
+      "Never edit generated files",
+    ]);
+    // It is not a plan note: no re-plan is owed for it
+    let loop = runItem(r.loop, "1", { outcome: "done" });
+    loop = runItem(loop, "2", { outcome: "done" });
+    loop = runItem(loop, "3", { outcome: "done" });
+    expect(decideNext(loop, PLAN, ctx())).toMatchObject({
+      kind: "stop",
+      reason: "done",
+    });
+    const prompt = loopItemPrompt({
+      item: PLAN.items[0],
+      answers: answersToDeliver(loop, "1"),
+      questions: [],
+      attempt: 1,
+      standing: standingInstructions(loop),
+    });
+    expect(prompt).toContain(
+      "instructions for every item:\n- Never edit generated files",
+    );
+  });
+
+  test("a standing instruction does not resume a loop waiting on an answer", () => {
+    const waiting = { ...loopOn(), status: "waiting" as const };
+    const r = answerLoop(waiting, { text: "Use tabs", standing: true }, T0);
+    expect(r.ok && r.loop.status).toBe("waiting");
+  });
+
+  test("the contract asks to search first, finish fully and run the checks", () => {
+    const prompt = loopItemPrompt({
+      item: PLAN.items[0],
+      answers: [],
+      questions: [],
+      attempt: 1,
+      planFile: "p.md",
+      freshContext: true,
+    });
+    expect(prompt).toMatch(/Search the code before you add anything/);
+    expect(prompt).toMatch(/no placeholders or stubs/);
+    expect(prompt).toMatch(/run the checks the project has/);
+    expect(prompt).toMatch(
+      /their work is in the files, not in this conversation/,
+    );
+    expect(prompt).toMatch(/in `notes`/);
+  });
+
+  test("a loop runs each item in a fresh context unless told otherwise", () => {
+    expect(loopOn().freshContext).toBe(true);
+    expect(
+      createLoop(PLAN, { now: T0, sessionTokens: 0, freshContext: false })
+        .freshContext,
+    ).toBe(false);
+  });
+
+  test("the re-plan treats the plan as possibly wrong", () => {
+    expect(loopReplanPrompt({ loop: loopOn(), plan: PLAN })).toMatch(
+      /The plan may be wrong/,
+    );
+  });
 });

@@ -357,6 +357,69 @@ describe("Loop mode", () => {
     expect(h.loop().grants).toEqual([]);
   });
 
+  test("each item starts in a fresh context, with the earlier items' notes and the person's standing instructions", async () => {
+    const h = await setup(["Write the lexer", "Add tests"]);
+    let release = () => {};
+    let readStarted = () => {};
+    const reading = new Promise<void>((r) => (readStarted = r));
+    h.ideMessenger.responseHandlers["tools/call"] = async () => {
+      readStarted();
+      await new Promise<void>((r) => (release = r));
+      return {
+        contextItems: [{ name: "a.ts", description: "a.ts", content: "src" }],
+      };
+    };
+    h.turns.push(
+      calls({ name: BuiltInToolNames.ReadFile, args: { filepath: "a.ts" } }),
+      calls({
+        name: BuiltInToolNames.FinishItem,
+        args: {
+          outcome: "done",
+          summary: "lexer written",
+          notes: "Run the tests with npm test -- --run",
+        },
+      }),
+      finish("done", "tests added"),
+    );
+    await h.start();
+    await reading;
+
+    // A note for every item, given while item 1 runs
+    await act(async () => {
+      fireEvent.change(
+        document.querySelector("[data-testid=loop-plan-note]")!,
+        { target: { value: "Never edit generated files" } },
+      );
+      fireEvent.click(document.querySelector("[data-testid=loop-standing]")!);
+    });
+    await act(async () => {
+      fireEvent.click(
+        document.querySelector("[data-testid=loop-plan-note-send]")!,
+      );
+    });
+    expect(h.loop().answers[0].route).toBe("standing");
+    expect(
+      document.querySelector("[data-testid=loop-standing-list]")!.textContent,
+    ).toContain("Never edit generated files");
+
+    await act(async () => release());
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+
+    // Item 2's request: none of item 1's turns, but its notes and the instruction
+    const all = h.requests[2].messages.map(text).join(" ");
+    expect(h.prompt(2)).toContain("only this item: Add tests");
+    expect(all).not.toContain("only this item: Write the lexer");
+    expect(h.prompt(2)).toContain("Run the tests with npm test -- --run");
+    expect(h.prompt(2)).toContain("Never edit generated files");
+    // The chat still shows every turn
+    const shown = h.store
+      .getState()
+      .session.history.map((i) => text(i.message))
+      .join(" ");
+    expect(shown).toContain("only this item: Write the lexer");
+  });
+
   test("Stop stops the loop with the item back to pending, and Resume goes on", async () => {
     const h = await setup(["Write the lexer"]);
     h.turns.push(async function* (signal) {

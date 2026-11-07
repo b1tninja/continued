@@ -410,7 +410,8 @@ export type LoopAnswerRoute =
   | "steer" // the item was running: steered in at its next tool boundary
   | "redo" // the item was done on an overruled assumption: it runs again
   | "confirmed" // the assumption stands: nothing to do
-  | "replan"; // about the plan as a whole: read at the next re-plan
+  | "replan" // about the plan as a whole: read at the next re-plan
+  | "standing"; // an instruction for every item from now on (a "sign")
 
 export interface LoopAnswer {
   id: string;
@@ -476,7 +477,12 @@ export interface LoopState {
     historyIndex: number;
     startedAt: string;
     /** What finish_item reported during this run */
-    report?: { outcome: "done" | "stuck" | "waiting"; summary?: string };
+    report?: {
+      outcome: "done" | "stuck" | "waiting";
+      summary?: string;
+      /** What a later item should know (finish_item notes) */
+      notes?: string;
+    };
     /** A re-plan: the to-dos it started from, to tell whether it adds scope */
     planTexts?: string[];
   };
@@ -489,6 +495,16 @@ export interface LoopState {
   grants: string[];
   /** A plan-wide answer asked to re-plan now */
   replanRequested?: boolean;
+  /**
+   * Each item and re-plan is sent without the turns before it: the plan
+   * file, the notes and the answers carry what it needs. On unless false.
+   */
+  freshContext?: boolean;
+  /**
+   * What runs learned that later items should know (finish_item notes),
+   * newest last, capped; sent with every item prompt.
+   */
+  notes?: string[];
   /** The person asked to stop once the running item or re-plan ends */
   stopRequested?: boolean;
   stopReason?: LoopStopReason;

@@ -41,6 +41,9 @@ export const LOOP_LIMITS = {
   maxOpenQuestionsPerItem: 4,
   /** Questions the whole loop may hold before new ones are refused */
   maxQuestions: 40,
+  /** Notes carried to later items; kept short, as they go with every run */
+  maxNoteLength: 300,
+  maxNotes: 12,
 } as const;
 
 /**
@@ -129,6 +132,8 @@ export function createLoop(
     now: Date;
     sessionTokens: number;
     budget?: Partial<LoopBudget>;
+    /** false: items share the session's conversation (default: a fresh context) */
+    freshContext?: boolean;
   },
 ): LoopState {
   return {
@@ -143,6 +148,8 @@ export function createLoop(
     doneThisRound: 0,
     noProgressRounds: 0,
     grants: [],
+    freshContext: options.freshContext ?? true,
+    notes: [],
   };
 }
 
@@ -369,7 +376,8 @@ function hasOpenBlocking(loop: LoopState, itemId: string): boolean {
  */
 export function finishItemRun(
   loop: LoopState,
-  report: { outcome: FinishOutcome; summary?: string } | undefined,
+  report:
+    { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
 ): LoopState {
   const itemId = loop.current?.itemId;
   if (!itemId || loop.current?.kind !== "item") return loop;
@@ -392,10 +400,17 @@ export function finishItemRun(
       summary ??
       (report ? state?.summary : "The turn ended without finish_item."),
   });
+  const note = report?.notes?.trim().replace(/\s+/g, " ");
+  const notes = note
+    ? [...(loop.notes ?? []), note.slice(0, LOOP_LIMITS.maxNoteLength)].slice(
+        -LOOP_LIMITS.maxNotes,
+      )
+    : loop.notes;
   return {
     ...next,
     current: undefined,
     doneThisRound: loop.doneThisRound + (status === "done" ? 1 : 0),
+    ...(notes ? { notes } : {}),
   };
 }
 
@@ -503,7 +518,8 @@ export type AnswerResult =
  * - running: steered in at its next tool boundary (steer);
  * - done: a confirmed assumption changes nothing; anything else reopens it as
  *   redo;
- * - no item: read at the next re-plan, or at once with replanNow.
+ * - no item: read at the next re-plan, or at once with replanNow; or, with
+ *   standing, sent with every item from now on (Ralph's "signs").
  *
  * An approval answer that allows the call adds its grant, so the call runs
  * without asking when the item tries it again.
@@ -515,6 +531,8 @@ export interface LoopAnswerInput {
   confirm?: boolean;
   approve?: boolean;
   replanNow?: boolean;
+  /** For a note with no item: an instruction for every item from now on */
+  standing?: boolean;
 }
 
 /** The answer's text: what the person wrote, or what their button means. */
@@ -540,7 +558,7 @@ function routeAnswer(
   question: LoopQuestion | undefined,
   input: LoopAnswerInput,
 ): { route: LoopAnswerRoute; itemChange?: Partial<LoopItemState> } {
-  if (!state) return { route: "replan" };
+  if (!state) return { route: input.standing ? "standing" : "replan" };
   const confirmsAssumption = !!input.confirm && question?.kind === "assumption";
   switch (state.status) {
     case "waiting":
@@ -632,10 +650,19 @@ export function answerLoop(
   }
   if (answer.replanNow) next = { ...next, replanRequested: true };
   // An answer to a loop that waited on the person resumes it.
-  if (next.status === "waiting" && route !== "confirmed") {
+  if (
+    next.status === "waiting" &&
+    route !== "confirmed" &&
+    route !== "standing"
+  ) {
     next = { ...next, status: "running" };
   }
   return { ok: true, loop: next, answer };
+}
+
+/** The person's standing instructions, for every item prompt. */
+export function standingInstructions(loop: LoopState): string[] {
+  return loop.answers.filter((a) => a.route === "standing").map((a) => a.text);
 }
 
 /** Answers for an item that its next run's prompt should carry. */
@@ -809,6 +836,12 @@ export function loopItemPrompt(input: {
   questions: LoopQuestion[];
   redo?: boolean;
   attempt: number;
+  /** What earlier runs learned (LoopState.notes) */
+  notes?: string[];
+  /** The person's instructions for every item (standingInstructions) */
+  standing?: string[];
+  /** The run starts without the conversation before it */
+  freshContext?: boolean;
 }): string {
   const { item } = input;
   const lines = [
@@ -816,7 +849,7 @@ export function loopItemPrompt(input: {
   ];
   if (input.planFile) {
     lines.push(
-      `The plan is in ${input.planFile}; read it for context. Other items are handled separately.`,
+      `The plan is in ${input.planFile}; read it for context. Other items are handled separately${input.freshContext ? ", and their work is in the files, not in this conversation" : ""}.`,
     );
   }
   if (input.redo) {
@@ -827,6 +860,14 @@ export function loopItemPrompt(input: {
     lines.push(
       "An earlier run of this item ended without reporting. Check what is already done before you change anything.",
     );
+  }
+  if (input.standing?.length) {
+    lines.push("", "The person's instructions for every item:");
+    for (const s of input.standing) lines.push(`- ${quote(s)}`);
+  }
+  if (input.notes?.length) {
+    lines.push("", "Notes from earlier items:");
+    for (const n of input.notes) lines.push(`- ${quote(n)}`);
   }
   if (input.answers.length > 0) {
     lines.push("", "The person's answers:");
@@ -841,7 +882,11 @@ export function loopItemPrompt(input: {
   }
   lines.push(
     "",
-    `When the item is done, call ${FINISH_ITEM_TOOL_NAME} with outcome "done" and a one-line summary. If you cannot finish it, call ${FINISH_ITEM_TOOL_NAME} with outcome "stuck" and say why.`,
+    "Search the code before you add anything: do not assume something is missing because one search did not find it. Implement the item fully, with no placeholders or stubs.",
+    "",
+    "Before you report it done, run the checks the project has for what you changed (tests, type check, lint) and fix what fails; name them in your summary, or say there was nothing to run.",
+    "",
+    `When the item is done, call ${FINISH_ITEM_TOOL_NAME} with outcome "done" and a one-line summary. If you cannot finish it, call ${FINISH_ITEM_TOOL_NAME} with outcome "stuck" and say why. Put anything a later item should know (a command that works, a trap you hit) in \`notes\`: one or two lines, not progress.`,
     "",
     `Ask, rather than decide silently: whenever the person might want a say (a choice between approaches, scope, naming, an irreversible step, or anything the plan does not settle), call ${HOLD_QUESTION_TOOL_NAME}. Use kind "assumption" by default: state the choice you are making in \`assumption\` and keep working; the person can overrule it later. Use kind "blocking" only when there is no reasonable default, then stop and call ${FINISH_ITEM_TOOL_NAME} with outcome "waiting". Write each question so it can be answered without this conversation: name the item, the options and your default.`,
   );
@@ -891,6 +936,10 @@ export function loopReplanPrompt(input: {
   const assumptions = loop.questions.filter(
     (q) => q.kind === "assumption" && !q.answerId,
   );
+  if (loop.notes?.length) {
+    lines.push("", "Notes from the runs:");
+    for (const n of loop.notes) lines.push(`- ${quote(n)}`);
+  }
   if (planAnswers.length > 0) {
     lines.push("", "What the person said about the plan:");
     for (const a of planAnswers) lines.push(`- ${quote(a.text)}`);
@@ -904,6 +953,8 @@ export function loopReplanPrompt(input: {
     }
   }
   lines.push(
+    "",
+    "The plan may be wrong. Check its open items against the code before you keep them: drop what is already done, and do not add what already exists.",
     "",
     `Read what you need, then call present_plan${input.planTitle ? ` with the title "${quote(input.planTitle)}"` : ""} with the updated to-dos. Keep finished to-dos word for word so they stay done. Reword or split items that failed, drop what is no longer needed, and add only work the plan's goal requires. Leave items that wait on the person in the list as they are.`,
   );

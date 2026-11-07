@@ -74,6 +74,10 @@ export const finishItemTool: Tool = {
           type: "string",
           description: `One line: what you did, or why it is not done. At most ${LOOP_LIMITS.maxSummaryLength} characters.`,
         },
+        notes: {
+          type: "string",
+          description: `Optional. What a later item should know: a command that works, a trap you hit. One or two lines, at most ${LOOP_LIMITS.maxNoteLength} characters; not progress.`,
+        },
       },
     },
   },

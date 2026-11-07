@@ -17,6 +17,7 @@ import {
   resumeLoop,
   settleSteeredAnswers,
   startItemRun,
+  standingInstructions,
   startReplan,
   stopLoop,
 } from "core/util/loopMode";
@@ -184,6 +185,7 @@ export interface LoopAnswerInput {
   confirm?: boolean;
   approve?: boolean;
   replanNow?: boolean;
+  standing?: boolean;
 }
 
 /**
@@ -339,6 +341,9 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           questions: loop.questions,
           redo: itemState?.status === "redo",
           attempt: (itemState?.attempts ?? 0) + 1,
+          notes: loop.notes,
+          standing: standingInstructions(loop),
+          freshContext: loop.freshContext !== false,
         });
         loop = markDelivered(
           loop,

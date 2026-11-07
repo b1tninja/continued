@@ -1,6 +1,10 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import type { LoopQuestion } from "core";
-import { formatLoopStatus, LOOP_LIMITS } from "core/util/loopMode";
+import {
+  formatLoopStatus,
+  LOOP_LIMITS,
+  standingInstructions,
+} from "core/util/loopMode";
 import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import {
@@ -130,10 +134,12 @@ export function LoopInbox() {
   const taskPlan = useAppSelector((s) => s.session.taskPlan);
   const [note, setNote] = useState("");
   const [replanNow, setReplanNow] = useState(false);
+  const [standing, setStanding] = useState(false);
   const [noteError, setNoteError] = useState<string>();
   if (!loop) return null;
 
   const open = loop.questions.filter((q) => !q.answerId);
+  const standingNotes = standingInstructions(loop);
   const itemText = (id?: string) =>
     taskPlan?.items.find((i) => i.id === id)?.text;
   const onAnswer = async (input: LoopAnswerInput) => {
@@ -200,12 +206,24 @@ export function LoopInbox() {
           ))}
         </ul>
       )}
+      {standingNotes.length > 0 && (
+        <ul
+          data-testid="loop-standing-list"
+          className="m-0 mt-1 list-none p-0 text-description"
+        >
+          {standingNotes.map((text, i) => (
+            <li key={i} className="break-words">
+              For every item: {text}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
         <input
           data-testid="loop-plan-note"
           value={note}
           maxLength={LOOP_LIMITS.maxAnswerLength}
-          placeholder="A note about the whole plan (read at the next re-plan)"
+          placeholder="A note about the whole plan (read at the next re-plan, or by every item)"
           onChange={(e) => setNote(e.target.value)}
           className="min-w-0 flex-1 basis-40 rounded border border-solid border-border bg-transparent px-1 text-xs text-foreground placeholder:text-description-muted"
         />
@@ -214,9 +232,27 @@ export function LoopInbox() {
             type="checkbox"
             data-testid="loop-replan-now"
             checked={replanNow}
-            onChange={(e) => setReplanNow(e.target.checked)}
+            onChange={(e) => {
+              setReplanNow(e.target.checked);
+              if (e.target.checked) setStanding(false);
+            }}
           />
           Re-plan now
+        </label>
+        <label
+          className="flex shrink-0 items-center gap-0.5 text-description"
+          title="Send this with every item from now on, instead of waiting for the re-plan"
+        >
+          <input
+            type="checkbox"
+            data-testid="loop-standing"
+            checked={standing}
+            onChange={(e) => {
+              setStanding(e.target.checked);
+              if (e.target.checked) setReplanNow(false);
+            }}
+          />
+          For every item
         </label>
         <button
           type="button"
@@ -224,11 +260,12 @@ export function LoopInbox() {
           disabled={!note.trim()}
           className="shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input disabled:cursor-default disabled:opacity-50"
           onClick={async () => {
-            const failed = await onAnswer({ text: note, replanNow });
+            const failed = await onAnswer({ text: note, replanNow, standing });
             setNoteError(failed);
             if (!failed) {
               setNote("");
               setReplanNow(false);
+              setStanding(false);
             }
           }}
         >

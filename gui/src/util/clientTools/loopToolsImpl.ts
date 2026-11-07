@@ -74,11 +74,19 @@ export const finishItemImpl: ClientToolImpl = async (
     typeof args?.summary === "string"
       ? args.summary.trim().slice(0, LOOP_LIMITS.maxSummaryLength)
       : undefined;
+  const notes =
+    typeof args?.notes === "string"
+      ? args.notes.trim().slice(0, LOOP_LIMITS.maxNoteLength)
+      : undefined;
   commitLoop(extras.dispatch, extras.getState, {
     ...loop,
     current: loop.current && {
       ...loop.current,
-      report: { outcome, ...(summary ? { summary } : {}) },
+      report: {
+        outcome,
+        ...(summary ? { summary } : {}),
+        ...(notes ? { notes } : {}),
+      },
     },
   });
   return {
