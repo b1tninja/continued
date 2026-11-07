@@ -601,6 +601,16 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   ];
   /** OpenAI-compatible servers answering on this machine's common ports. */
   "models/detectLocal": [undefined, DetectedLocalServer[]];
+  /** The model catalog (models.yaml): each model and each variant. */
+  "models/catalog": [
+    undefined,
+    import("../config/yaml/saveModelRoles").CatalogListEntry[],
+  ];
+  /** Set the roles of catalog references and config models in the selected config. */
+  "config/setModelRoles": [
+    { updates: import("../config/yaml/saveModelRoles").ModelRolesUpdate[] },
+    { saved: boolean },
+  ];
   /** Requests the server of this chat model serves at once, when it says. */
   "models/serverConcurrency": [{ title: string }, number | undefined];
 };

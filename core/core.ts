@@ -35,7 +35,11 @@ import {
   convertConnectionToAccount,
   saveProviderModelsToAccount,
 } from "./config/providers/accountSetup";
-import { getGlobalModelsPath } from "./config/providers/modelsFile";
+import {
+  getGlobalModelsPath,
+  loadModelCatalog,
+} from "./config/providers/modelsFile";
+import { listCatalog, saveModelRoles } from "./config/yaml/saveModelRoles";
 import { detectLocalServers, serverConcurrency } from "./llm/localServers";
 import Ollama from "./llm/llms/Ollama";
 import { EditAggregator } from "./nextEdit/context/aggregateEdits";
@@ -115,6 +119,7 @@ import {
 } from "./config/providers/providerInstances";
 import {
   getGlobalProvidersPath,
+  loadProviderInstances,
   readWorkspaceProvidersFiles,
 } from "./config/providers/providersFile";
 import { setupLocalConfig } from "./config/onboarding";
@@ -357,6 +362,24 @@ export class Core {
     });
 
     on("models/detectLocal", async () => detectLocalServers());
+
+    on("models/catalog", async () => {
+      const [catalog, accounts] = await Promise.all([
+        loadModelCatalog(this.ide),
+        loadProviderInstances(this.ide),
+      ]);
+      return listCatalog(catalog.models, accounts.providers);
+    });
+
+    on("config/setModelRoles", async ({ data: { updates } }) => {
+      const saved = saveModelRoles(updates);
+      if (saved) {
+        await this.configHandler.reloadConfig(
+          "Model roles changed (config/setModelRoles message)",
+        );
+      }
+      return { saved };
+    });
 
     // How many requests a chat model's own server takes at once (subagents)
     on("models/serverConcurrency", async ({ data: { title } }) => {

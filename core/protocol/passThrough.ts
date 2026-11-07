@@ -115,6 +115,8 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "process/killTerminalProcess",
     "models/fetch",
     "models/detectLocal",
+    "models/catalog",
+    "config/setModelRoles",
     "models/serverConcurrency",
   ];
 
