@@ -1242,6 +1242,13 @@ export const sessionSlice = createSlice({
         lastRequestAt: action.payload,
       };
     },
+    /** A local server's last reported prompt-reading speed (tokens/s). */
+    setPromptReadSpeed: (state, action: PayloadAction<number>) => {
+      state.promptCache = {
+        ...(state.promptCache ?? INITIAL_PROMPT_CACHE_STATE),
+        promptTokensPerSecond: action.payload,
+      };
+    },
     setPromptCacheKey: (state, action: PayloadAction<PromptCacheKey>) => {
       state.promptCache = {
         ...(state.promptCache ?? INITIAL_PROMPT_CACHE_STATE),
@@ -1427,6 +1434,7 @@ export const {
   setPromptCacheState,
   setPromptCacheInputTokens,
   setPromptCacheRequestAt,
+  setPromptReadSpeed,
   setPromptProgress,
   setAnsweredRoute,
   addRequestUsageToSession,
