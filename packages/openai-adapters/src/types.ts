@@ -21,6 +21,13 @@ export const RequestOptionsSchema = z.object({
 export const BaseConfig = z.object({
   provider: z.string(),
   requestOptions: RequestOptionsSchema.optional(),
+  /**
+   * Retries of a failed request (connection errors, 429, 5xx) by the
+   * provider's SDK, where it has them; its default when unset. Continue sets
+   * 0 for a model route with another after it, so the next account is tried
+   * instead.
+   */
+  maxRetries: z.number().int().min(0).optional(),
 });
 
 export const BasePlusConfig = BaseConfig.extend({

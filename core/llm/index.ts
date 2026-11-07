@@ -390,7 +390,24 @@ export abstract class BaseLLM implements ILLM {
       requestOptions: this.requestOptions,
       env: this._llmOptions.env,
       useResponsesApi: this._llmOptions.useResponsesApi,
+      ...(this.failsOverQuickly ? { maxRetries: 0 } : {}),
     });
+  }
+
+  /** See failOverQuickly. */
+  private failsOverQuickly = false;
+
+  /**
+   * For a route with another route after it: a failed request is not retried
+   * on this account (neither a dropped connection nor the SDK's retries of
+   * 429 and 5xx); the next route is tried instead, without waiting out this
+   * account's timeouts and backoff first.
+   */
+  failOverQuickly() {
+    if (this.failsOverQuickly) return;
+    this.failsOverQuickly = true;
+    this.connectionRetryDelaysMs = [];
+    if (this.openaiAdapter) this.openaiAdapter = this.createOpenAiAdapter();
   }
 
   listModels(): Promise<string[]> {
@@ -1203,7 +1220,7 @@ export abstract class BaseLLM implements ILLM {
     ];
     for (let i = Math.min(this.activeRoute, routes.length - 1); ; i++) {
       const { name, llm } = routes[i];
-      llm.connectionRetryDelaysMs = routes[i + 1] ? [] : undefined;
+      if (routes[i + 1]) llm.failOverQuickly();
       const gen =
         llm === this
           ? this.streamChatOnRoute(messages, signal, options, messageOptions)
