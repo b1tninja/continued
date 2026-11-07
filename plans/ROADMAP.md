@@ -43,7 +43,7 @@ Work that is open, unmeasured or not finished. A row leaves this table when its 
 
 ## Next
 
-Seven tracks (A to G). They share little code, so different people can build them in parallel; where one needs another, the Depends on column says so. Each track is a series of small PRs, one concern per PR.
+Eight tracks (A to H). They share little code, so different people can build them in parallel; where one needs another, the Depends on column says so. Each track is a series of small PRs, one concern per PR.
 
 ### Track A: model and provider setup
 
@@ -188,6 +188,24 @@ Problem: people arrive with providers, a model per task and MCP servers already 
 | G2  | The wizard: pick a tool, pick items, review, result; entry from Settings and the command palette                                                                                                           | G0         | Not started |
 | G3  | Providers and models: Claude Code (Bedrock, Vertex, pins, overrides), OpenCode (providers, `model`, `small_model`), saved through `saveProviderModels`; keys from OpenCode's `auth.json` behind a checkbox | G0, G2, A4 | Not started |
 | G4  | Documentation for the wizard                                                                                                                                                                               | G3         | Not started |
+
+### Track H: parallel agents and agent interop (2.6)
+
+Plans: [`parallel-agents.md`](./parallel-agents.md), [`agent-interop.md`](./agent-interop.md). Target: 2.6, on `next/2.6`. Version 2.4 keeps to Tracks A and C (models, providers, the catalog, Strata and the cache).
+
+Problem: one window runs one agent at a time; agents that edit the same repository share a checkout; and one agent cannot hand work to another, message it, or wait for it except through a synchronous subagent with no mode.
+
+| PR  | Scope                                                                                                                                                                        | Depends on       | State       |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ----------- |
+| H1  | Agents panel (parallel-agents A1)                                                                                                                                            | none             | Not started |
+| H2  | Agents without the webview through `cn serve`; New agent; approvals on rows; Stop all (A2)                                                                                   | H1               | Not started |
+| H3  | Worktree service: create, apply by merge, discard, cleanup, one writer per checkout (A3)                                                                                     | H2               | Not started |
+| H4  | A `mode` for subagents and agent definitions (chat, plan, agent); a plan subagent returns a plan file (interop M1)                                                           | S2, F4           | Not started |
+| H5  | `list_sessions`, `send_message`, `cancel` between sessions, marked as from an agent, rate-limited, never an approval (M2)                                                    | H2               | Not started |
+| H6  | `start_session`, `wait_for`, `get_result` with Task-shaped states, budgets and depth 1 (M3)                                                                                  | H2, H3, H4       | Not started |
+| H7  | `ask_parent`, and loop as a mode for `cn serve` sessions (M4, M5)                                                                                                            | H6, loop mode    | Not started |
+| H8  | The rest of parallel-agents (A4 to A8: background and worktree subagents, Build in parallel, best of N, local concurrency, bound checkpoints), and of agent-interop (M6, M7) | H3, H6           | Not started |
+| H9  | `cn` as an Agent Host Protocol server on the model catalog (provider-model-config C8)                                                                                        | H2, catalog (C1) | Not started |
 
 ## Later
 
