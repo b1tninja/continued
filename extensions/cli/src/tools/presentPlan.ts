@@ -18,8 +18,8 @@ import {
 import { TASK_PLAN_LIMITS, taskPlanToMarkdown } from "core/util/taskPlan.js";
 
 import { safeStderr } from "../init.js";
-import { quizService } from "../services/QuizService.js";
 import { services } from "../services/index.js";
+import { quizService } from "../services/QuizService.js";
 import {
   getSessionPlanFile,
   getSessionTaskPlan,
