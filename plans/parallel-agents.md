@@ -1,6 +1,6 @@
 # Parallel agents: an Agents panel, worktrees, Build in parallel
 
-Last updated: 2026-11-07. Status: research and design; nothing built. Folds in the Multi Project mode proposal (`D:\code\sdk-forge\docs\multi-project-mode.md`, not in this repository).
+Last updated: 2026-11-07. Status: research and design; nothing built. Folds in the Multi Project mode proposal (`D:\code\sdk-forge\docs\multi-project-mode.md`, not in this repository, now superseded by this file). Multi-repo mode is a later phase, entered once plans can be dispatched and checkpoints are bound to a run or a repository ([Later](#later)).
 
 Run several agents at once, see them all in one place, and keep their edits apart, as Cursor's Agents Window does, on the pieces this fork already has.
 
@@ -54,7 +54,7 @@ A list of agents, each a session:
 - Its model, tokens and cost.
 - A line from its last turn.
 
-Rows are grouped by folder, and they can be pinned. Opening a row switches the chat to that session. Approvals from any agent show on its row, so a waiting agent is visible without opening it. **New agent** starts a session with a prompt, a model and where to run: here, a new worktree, or in the background.
+Rows are grouped by folder, and they can be pinned. In a multi-root workspace each root is its own group, which is the first step towards a session, rules and checkpoints per root. Opening a row switches the chat to that session. Approvals from any agent show on its row, so a waiting agent is visible without opening it. **New agent** starts a session with a prompt, a model and where to run: here, a new worktree, or in the background.
 
 ### 2. Agents that run without the webview
 
@@ -83,7 +83,7 @@ Cursor's `readonly` maps to the read-only tool set, and `.cursor/agents/` joins 
 
 ### 5. Build in parallel
 
-Plan files (F4) mark each step's dependencies. **Build in parallel** starts one agent per independent step, each in a worktree, and starts a dependent step only after the steps it depends on are applied. Steps tagged with a project folder go to that folder's agent (Multi Project mode). `/multitask` does the same for a list of requests typed together.
+Plan files (F4) mark each step's dependencies. **Build in parallel** starts one agent per independent step, each in a worktree, and starts a dependent step only after the steps it depends on are applied. A step can name the folder it runs in, and goes to that folder's agent; across repositories this is [Later](#later). `/multitask` does the same for a list of requests typed together.
 
 ### 6. Best of N
 
@@ -96,6 +96,12 @@ Plan files (F4) mark each step's dependencies. **Build in parallel** starts one 
   - Strata reports `concurrency.serving` in `/v1/status`. Its replicas route each conversation back to the replica that holds its cache.
   - llama.cpp lists one entry per slot in `/slots`.
   - Above that, agents queue rather than evict each other's cache. Strata holds one conversation per slot, so two agents on a one-slot Strata would rebuild each other's prompt every turn.
+
+### 8. Checkpoints bound to an agent run or a repository
+
+Today's checkpoints are file snapshots per turn of one session (#185). With several agents in one workspace, restoring one turn would also undo files that another agent changed in the meantime. Cline turns checkpoints off in multi-root workspaces for this reason ([docs](https://docs.cline.bot/features/multiroot-workspace)).
+
+Each checkpoint records the agent run that made it (a session or a subagent run) and the repository root its files are in. Restoring one restores only that run's files in that root, and refuses, listing the files, when another run has changed them since. In a worktree a checkpoint is a commit on the worktree's branch.
 
 ## Safeguards
 
@@ -116,7 +122,24 @@ Plan files (F4) mark each step's dependencies. **Build in parallel** starts one 
 | A5    | Build in parallel from plan files, and `/multitask`.                                                                                                     | A3, F4     |
 | A6    | Best of N with a side-by-side comparison.                                                                                                                | A3         |
 | A7    | Concurrency from local servers (Strata `/v1/status`, llama.cpp `/slots`).                                                                                | A2         |
-| A8    | Multi Project mode: a project registry (`.continue/projects.yaml` or discovered roots), one agent per project, steps tagged with a project.              | A2, A5     |
+| A8    | Checkpoints bound to an agent run or a repository root: restore one run's files in one root, refuse when another run changed them since.                 | A3, A4     |
+
+## Later
+
+### Multi-repo mode
+
+A project or workspace that spans several repositories, with one plan dispatched across them. It is worth building only on two things, so these are its entry condition:
+
+1. **Dispatchable plans** (A5): plan-file steps carry `depends_on` and the folder they run in, and Build sends them to agents.
+2. **Checkpoints bound to a run or a repository** (A8), so restoring one repository's step does not touch the others.
+
+With both in place:
+
+- **A project registry.** It imports what is already there: the roots of an open `.code-workspace` and the git roots under the workspace folders, so adding a folder to the workspace makes it a project without listing it twice. A `.continue/projects.yaml` adds or names projects.
+- **One long-lived session per repository**, with that repository's rules, model and checkpoints, writing only under its root.
+- **One plan across repositories.** Each step runs in its repository's session or a worktree of it, and independent steps run in parallel.
+
+Today the nearest thing is a multi-root workspace built folder by folder, where sessions and rules are workspace-wide and nothing is bound per root.
 
 ## Open questions
 
@@ -124,4 +147,4 @@ Plan files (F4) mark each step's dependencies. **Build in parallel** starts one 
 2. Where should worktrees live? `~/.continue/worktrees` keeps them out of the repository; Cursor does not document its path.
 3. Apply by merge, or by squashing the branch into one change?
 4. Should the panel also show the CLI's sessions, so `cn` agents and IDE agents are one list?
-5. For Multi Project mode, should a subproject that shares git with its parent share the parent's writer lock?
+5. For multi-repo mode, should a subproject that shares git with its parent share the parent's writer lock and checkpoints?
