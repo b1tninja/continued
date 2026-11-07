@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ChatMessage } from "../../index.js";
+import { ChatMessage, Tool } from "../../index.js";
 import { CANCELLED_TOOL_CALL_MESSAGE } from "../../tools/constants.js";
 import Bedrock from "./Bedrock";
 
@@ -28,8 +28,11 @@ const MODELS = (
   .map((m) => m.trim())
   .filter(Boolean);
 
-const tool = {
-  type: "function" as const,
+const tool: Tool = {
+  type: "function",
+  displayTitle: "Read file",
+  readonly: true,
+  group: "test",
   function: {
     name: "read_file",
     description: "Read a file in the workspace.",
