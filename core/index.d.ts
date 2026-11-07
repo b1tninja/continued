@@ -344,6 +344,12 @@ export interface Session {
    * core/util/taskPlan.ts.
    */
   taskPlan?: TaskPlan;
+  /**
+   * Optional: URI of the plan file this session is working from
+   * (`.continue/plans/<slug>.md`), written by the plan tool in Plan mode. See
+   * core/util/planFile.ts.
+   */
+  planFile?: string;
 }
 
 export type TaskStatus =
