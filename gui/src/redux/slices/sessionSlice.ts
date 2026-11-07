@@ -246,6 +246,8 @@ type SessionState = {
   checkpoints: TurnCheckpoint[];
   /** The agent's task list, saved with the session; see core/util/taskPlan.ts */
   taskPlan?: TaskPlan;
+  /** URI of the plan file this session works from; see core/util/planFile.ts */
+  planFile?: string;
 };
 
 export const INITIAL_SESSION_STATE: SessionState = {
@@ -483,6 +485,9 @@ export const sessionSlice = createSlice({
     },
     setTaskPlan: (state, { payload }: PayloadAction<TaskPlan | undefined>) => {
       state.taskPlan = payload?.items.length ? payload : undefined;
+    },
+    setPlanFile: (state, { payload }: PayloadAction<string | undefined>) => {
+      state.planFile = payload || undefined;
     },
     deleteCompaction: (state, action: PayloadAction<number>) => {
       // Removes the conversation summary from the specified message
@@ -767,6 +772,8 @@ export const sessionSlice = createSlice({
         state.taskPlan = isTaskPlan(payload.taskPlan)
           ? payload.taskPlan
           : undefined;
+        state.planFile =
+          typeof payload.planFile === "string" ? payload.planFile : undefined;
         if (payload.mode) {
           state.mode = payload.mode;
         }
@@ -776,6 +783,7 @@ export const sessionSlice = createSlice({
         state.id = uuidv4();
         state.checkpoints = [];
         state.taskPlan = undefined;
+        state.planFile = undefined;
       }
     },
     updateSessionTitle: (state, { payload }: PayloadAction<string>) => {
@@ -1224,6 +1232,7 @@ export const {
   addCheckpointSnapshot,
   setCheckpoints,
   setTaskPlan,
+  setPlanFile,
   setIsGatheringContext,
   resetNextCodeBlockToApplyIndex,
   updateApplyState,

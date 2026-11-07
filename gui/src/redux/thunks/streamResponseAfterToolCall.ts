@@ -36,11 +36,12 @@ function areAllToolsDoneStreaming(
 
 export const streamResponseAfterToolCall = createAsyncThunk<
   void,
-  { toolCallId: string; depth?: number },
+  /** endTurn: record the tool result but do not send it to the model yet */
+  { toolCallId: string; depth?: number; endTurn?: boolean },
   ThunkApiType
 >(
   "chat/streamAfterToolCall",
-  async ({ toolCallId, depth = 0 }, { dispatch, getState }) => {
+  async ({ toolCallId, depth = 0, endTurn }, { dispatch, getState }) => {
     await dispatch(
       streamThunkWrapper(async () => {
         const state = getState();
@@ -64,6 +65,9 @@ export const streamResponseAfterToolCall = createAsyncThunk<
           toolCallId,
         };
         dispatch(streamUpdate([newMessage]));
+        if (endTurn) {
+          return;
+        }
 
         // Check if we should continue streaming based on tool call completion
         const history = getState().session.history;

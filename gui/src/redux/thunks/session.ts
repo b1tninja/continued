@@ -258,6 +258,7 @@ export const saveCurrentSession = createAsyncThunk<
       ...(session.usage && { usage: session.usage }),
       checkpoints: session.checkpoints,
       ...(session.taskPlan && { taskPlan: session.taskPlan }),
+      ...(session.planFile && { planFile: session.planFile }),
       // Enough for a resumed session to know its cache has expired and what
       // re-reading the conversation will cost.
       ...(cache?.lastRequestAt !== undefined && {
