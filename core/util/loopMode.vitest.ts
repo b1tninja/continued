@@ -6,6 +6,12 @@ import {
   answersToDeliver,
   consumeLoopGrant,
   createLoop,
+  enterWait,
+  LOOP_AUTONOMY,
+  loopAutonomyFor,
+  proceedUnanswered,
+  replanDecision,
+  setLoopAutonomy,
   decideNext,
   finishItemRun,
   formatLoopStatus,
@@ -623,7 +629,9 @@ describe("the item prompt", () => {
 test("the status line", () => {
   let loop = runItem(loopOn(), "1", { outcome: "done" });
   loop = runItem(loop, "2", { outcome: "waiting" });
-  expect(formatLoopStatus(loop)).toBe("Round 1 · 1/3 done · 1 waiting on you");
+  expect(formatLoopStatus(loop)).toBe(
+    "Auto · Round 1 · 1/3 done · 1 waiting on you",
+  );
 });
 
 describe("ideas from the Ralph loop", () => {
@@ -732,5 +740,172 @@ describe("ideas from the Ralph loop", () => {
     expect(loopReplanPrompt({ loop: loopOn(), plan: PLAN })).toMatch(
       /The plan may be wrong/,
     );
+  });
+});
+
+describe("autonomy levels", () => {
+  test("the level follows the approval mode", () => {
+    expect(loopAutonomyFor("manual")).toBe("supervised");
+    expect(loopAutonomyFor(undefined)).toBe("supervised");
+    expect(loopAutonomyFor("autoApprove")).toBe("auto");
+    expect(loopAutonomyFor("auto")).toBe("auto");
+    expect(loopAutonomyFor("yolo")).toBe("unattended");
+  });
+
+  test("each level brings its budgets, and changing level changes them", () => {
+    const loop = createLoop(PLAN, {
+      now: T0,
+      sessionTokens: 0,
+      autonomy: "unattended",
+    });
+    expect(loop.budget.maxRounds).toBe(10);
+    expect(
+      createLoop(PLAN, { now: T0, sessionTokens: 0, autonomy: "supervised" })
+        .budget.maxWallMs,
+    ).toBe(60 * 60_000);
+    // A budget given explicitly wins over the level's
+    expect(
+      createLoop(PLAN, {
+        now: T0,
+        sessionTokens: 0,
+        autonomy: "unattended",
+        budget: { maxRounds: 2 },
+      }).budget.maxRounds,
+    ).toBe(2);
+    const changed = setLoopAutonomy(loop, "supervised");
+    expect(changed.autonomy).toBe("supervised");
+    expect(changed.budget).toEqual(LOOP_AUTONOMY.supervised.budget);
+  });
+
+  test("which re-plans go on by themselves", () => {
+    const before = PLAN.items.map((i) => i.text);
+    const same = plan("Write the parser", "Add tests");
+    const twoNew = plan(
+      "Write the parser",
+      "Install vitest",
+      "Add a runner",
+      "Add tests",
+    );
+    const sixNew = plan("a", "b", "c", "d", "e", "f");
+    const at = (autonomy: any) =>
+      createLoop(PLAN, { now: T0, sessionTokens: 0, autonomy });
+    expect(replanDecision(at("supervised"), before, same).accept).toBe(false);
+    expect(replanDecision(at("auto"), before, same).accept).toBe(true);
+    expect(replanDecision(at("auto"), before, twoNew)).toMatchObject({
+      accept: false,
+      reason: "The re-plan adds 2 new to-dos.",
+    });
+    expect(replanDecision(at("unattended"), before, twoNew).accept).toBe(true);
+    expect(replanDecision(at("unattended"), before, sixNew).accept).toBe(false);
+  });
+
+  test("three failed items in a row stop the loop, at every level; one done resets the count", () => {
+    const five = plan("A", "B", "C", "D", "E");
+    for (const autonomy of ["supervised", "auto", "unattended"] as const) {
+      let loop = createLoop(five, { now: T0, sessionTokens: 0, autonomy });
+      loop = runItem(loop, "1", { outcome: "stuck" });
+      loop = runItem(loop, "2", { outcome: "stuck" });
+      loop = runItem(loop, "3", { outcome: "done" });
+      expect(loop.consecutiveFailures).toBe(0);
+      loop = runItem(loop, "4", { outcome: "stuck" });
+      loop = runItem(loop, "5", { outcome: "stuck" });
+      expect(decideNext(loop, five, ctx()).kind).not.toBe("stop");
+      // Item 1 failed before; one more failed run makes three in a row
+      loop = runItem(loop, "1", undefined);
+      expect(loop.consecutiveFailures).toBe(3);
+      expect(decideNext(loop, five, ctx())).toMatchObject({
+        kind: "stop",
+        reason: "failures",
+      });
+    }
+  });
+
+  test("unattended: when everything waits, the items go on after the timeout without confirming anything", () => {
+    let loop = createLoop(plan("A", "B"), {
+      now: T0,
+      sessionTokens: 0,
+      autonomy: "unattended",
+    });
+    loop = runItem(loop, "1", { outcome: "done" });
+    loop = startItemRun(loop, "2", 0, T0);
+    const held = holdQuestion(
+      loop,
+      { itemId: "2", question: "Which DB?", kind: "blocking" },
+      T0,
+    );
+    if (!held.ok) throw new Error(held.error);
+    loop = finishItemRun(held.loop, { outcome: "waiting" });
+
+    const waiting = decideNext(loop, plan("A", "B"), ctx(0));
+    expect(waiting).toEqual({ kind: "wait", until: at(15).toISOString() });
+    loop = enterWait(loop, at(0));
+    expect(enterWait(loop, at(5)).waitingSince).toBe(at(0).toISOString());
+    expect(decideNext(loop, plan("A", "B"), ctx(14)).kind).toBe("wait");
+    expect(decideNext(loop, plan("A", "B"), ctx(15))).toEqual({
+      kind: "proceed",
+    });
+
+    loop = proceedUnanswered(loop);
+    expect(loop.status).toBe("running");
+    expect(loop.items[1]).toMatchObject({
+      status: "pending",
+      unanswered: ["q1"],
+    });
+    expect(loop.questions[0].answerId).toBeUndefined();
+    const prompt = loopItemPrompt({
+      item: { id: "2", text: "B", status: "pending" },
+      answers: [],
+      questions: loop.questions,
+      attempt: 1,
+      unanswered: loop.questions,
+    });
+    expect(prompt).toContain("Nobody answered these questions in time");
+    expect(prompt).toContain("- Which DB?");
+    expect(prompt).toMatch(/cannot be undone/);
+
+    // The item finishes on its default; the person answers later: it is redone
+    loop = runItem(loop, "2", { outcome: "done" });
+    expect(loop.items[1].unanswered).toBeUndefined();
+    const late = answerLoop(loop, { questionId: "q1", text: "Postgres" }, T0);
+    expect(late.ok && late.answer.route).toBe("redo");
+  });
+
+  test("supervised and auto wait for as long as it takes", () => {
+    for (const autonomy of ["supervised", "auto"] as const) {
+      let loop = createLoop(plan("A"), { now: T0, sessionTokens: 0, autonomy });
+      loop = enterWait(runItem(loop, "1", { outcome: "waiting" }), at(0));
+      expect(decideNext(loop, plan("A"), ctx(50))).toEqual({ kind: "wait" });
+    }
+  });
+
+  test("an answer ends the wait", () => {
+    let loop = createLoop(plan("A"), {
+      now: T0,
+      sessionTokens: 0,
+      autonomy: "unattended",
+    });
+    loop = startItemRun(loop, "1", 0, T0);
+    const held = holdQuestion(
+      loop,
+      { itemId: "1", question: "Which?", kind: "blocking" },
+      T0,
+    );
+    if (!held.ok) throw new Error(held.error);
+    loop = enterWait(finishItemRun(held.loop, undefined), T0);
+    const r = answerLoop(loop, { questionId: "q1", text: "This" }, T0);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.loop.status).toBe("running");
+    expect(r.loop.waitingSince).toBeUndefined();
+  });
+
+  test("a loop saved before autonomy levels counts as auto", () => {
+    const { autonomy: _drop, ...old } = loopOn();
+    expect(formatLoopStatus(old as LoopState)).toMatch(/^Auto · /);
+    const unattended = setLoopAutonomy(loopOn(), "unattended");
+    expect(
+      formatLoopStatus(
+        enterWait(runItem(unattended, "1", { outcome: "waiting" }), T0),
+      ),
+    ).toMatch(/goes on without answers at/);
   });
 });

@@ -13,7 +13,8 @@ import {
 import { renderChatMessage } from "core/util/messageContent";
 import { serializePlanFile } from "core/util/planFile";
 import { selectActiveTools } from "../../../redux/selectors/selectActiveTools";
-import { setPlanFile } from "../../../redux/slices/sessionSlice";
+import { setLoop, setPlanFile } from "../../../redux/slices/sessionSlice";
+import { setApprovalMode } from "../../../redux/slices/uiSlice";
 import { startLoopFromPlan } from "../../../redux/thunks/loop";
 import { triggerConfigUpdate } from "../../../util/test/config";
 import { renderWithProviders } from "../../../util/test/render";
@@ -418,6 +419,101 @@ describe("Loop mode", () => {
       .session.history.map((i) => text(i.message))
       .join(" ");
     expect(shown).toContain("only this item: Write the lexer");
+  });
+
+  test("in YOLO the loop starts unattended and a bounded re-plan starts the next round without the card", async () => {
+    const h = await setup(["Write the lexer", "Add tests"]);
+    await act(async () => {
+      h.store.dispatch(setApprovalMode("yolo"));
+    });
+    h.turns.push(
+      finish("done", "lexer written"),
+      finish("stuck", "no test runner installed"),
+      calls({
+        name: BuiltInToolNames.PresentPlan,
+        args: {
+          title: "Build the parser",
+          plan: "Parse the grammar.",
+          todos: ["Write the lexer", "Install vitest", "Add tests"],
+        },
+      }),
+      finish("done", "vitest installed"),
+      finish("done", "tests added"),
+    );
+    await h.start();
+    expect(h.loop().autonomy).toBe("unattended");
+    expect(h.loop().budget.maxRounds).toBe(10);
+
+    // Nobody clicks Continue the loop
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    expect(h.loop().round).toBe(2);
+    expect(h.loop().replanReason).toBe(
+      "The re-plan adds 1 new to-do, within 5.",
+    );
+    expect(h.prompt(3)).toContain("only this item: Install vitest");
+  });
+
+  test("unattended: when the wait for an answer runs out, the item goes on with its default and the question stays open", async () => {
+    const h = await setup(["Pick the database"]);
+    await act(async () => {
+      h.store.dispatch(setApprovalMode("yolo"));
+    });
+    h.turns.push(
+      ask("Item 'Pick the database': Postgres or SQLite?", "blocking"),
+      finish("waiting", "needs the database choice"),
+      finish("done", "picked SQLite as the default"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+    expect(
+      document.querySelector("[data-testid=loop-status]")!.textContent,
+    ).toContain("goes on without answers at");
+
+    // As if 16 minutes had passed: the driver's timer fires at once
+    await act(async () => {
+      h.store.dispatch(
+        setLoop({
+          ...h.loop(),
+          waitingSince: new Date(Date.now() - 16 * 60_000).toISOString(),
+        }),
+      );
+    });
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    expect(h.prompt(2)).toContain("Nobody answered these questions in time");
+    expect(h.prompt(2)).toContain("Postgres or SQLite?");
+    // Not confirmed on the person's behalf: still in the inbox
+    expect(h.loop().questions[0].answerId).toBeUndefined();
+    expect(
+      document.querySelector("[data-testid=loop-question-q1]"),
+    ).not.toBeNull();
+  });
+
+  test("the level picker changes how much the running loop does alone", async () => {
+    const h = await setup(["Pick the grammar"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
+      finish("waiting", "needs the grammar"),
+    );
+    await h.start();
+    // Manual approval mode: supervised
+    expect(h.loop().autonomy).toBe("supervised");
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+    expect(
+      document.querySelector("[data-testid=loop-status]")!.textContent,
+    ).toContain("paused until you answer");
+
+    await act(async () => {
+      fireEvent.change(document.querySelector("[data-testid=loop-autonomy]")!, {
+        target: { value: "unattended" },
+      });
+    });
+    expect(h.loop().autonomy).toBe("unattended");
+    expect(h.loop().budget.maxRounds).toBe(10);
+    expect(
+      document.querySelector("[data-testid=loop-status]")!.textContent,
+    ).toContain("goes on without answers at");
   });
 
   test("Stop stops the loop with the item back to pending, and Resume goes on", async () => {

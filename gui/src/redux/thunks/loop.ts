@@ -1,5 +1,5 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { LoopState } from "core";
+import { LoopAutonomy, LoopState } from "core";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import {
   acceptReplan,
@@ -11,8 +11,12 @@ import {
   loopItemPrompt,
   loopReplanPrompt,
   markDelivered,
-  planAddsScope,
+  enterWait,
+  loopAutonomyFor,
+  proceedUnanswered,
   reconcileLoop,
+  replanDecision,
+  setLoopAutonomy,
   requestStop,
   resumeLoop,
   settleSteeredAnswers,
@@ -23,7 +27,7 @@ import {
 } from "core/util/loopMode";
 import { parsePlanFile, taskPlanFromPlanFile } from "core/util/planFile";
 import { findUriInDirs } from "core/util/uri";
-import { selectAutoApproval } from "../selectors/selectAutoApproval";
+import { selectEffectiveApprovalMode } from "../selectors/selectAutoApproval";
 import {
   enqueueMessage,
   removeQueuedMessage,
@@ -115,6 +119,8 @@ export const startLoopFromPlan = createAsyncThunk<
   const loop = createLoop(plan, {
     now: new Date(),
     sessionTokens: sessionTokens(getState()),
+    // How much it does alone follows the approval mode in force
+    autonomy: loopAutonomyFor(selectEffectiveApprovalMode(getState())),
   });
   dispatch(setMode("agent"));
   commitLoop(dispatch, getState, loop);
@@ -171,6 +177,17 @@ export const resumeLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
 );
 
 /** Ends the loop and forgets it (the task list stays). */
+/** The inbox's level picker: change how much the running loop does alone. */
+export const setLoopAutonomyThunk = createAsyncThunk<
+  void,
+  LoopAutonomy,
+  ThunkApiType
+>("loop/setAutonomy", async (autonomy, { dispatch, getState }) => {
+  const { loop } = getState().session;
+  if (!loop) return;
+  commitLoop(dispatch, getState, setLoopAutonomy(loop, autonomy));
+});
+
 export const endLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
   "loop/end",
   async (_, { dispatch }) => {
@@ -281,16 +298,20 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
         );
         return;
       }
-      loop = { ...loop, current: undefined, status: "awaiting_plan" };
-      commitLoop(dispatch, getState, loop);
       const plan = getState().session.taskPlan;
-      // Auto accepts a re-plan that adds no new work; anything else waits
-      // for the person on the plan card.
-      if (
-        plan &&
-        selectAutoApproval(getState()).active &&
-        !planAddsScope(planTexts, plan)
-      ) {
+      // The loop's autonomy level says which re-plans start the next round
+      // by themselves; anything else waits for the person on the plan card.
+      const decision = plan
+        ? replanDecision(loop, planTexts, plan)
+        : { accept: false, reason: "The re-plan left no to-dos." };
+      loop = {
+        ...loop,
+        current: undefined,
+        status: "awaiting_plan",
+        replanReason: decision.reason,
+      };
+      commitLoop(dispatch, getState, loop);
+      if (decision.accept) {
         await dispatch(acceptLoopPlan());
       }
       return;
@@ -321,7 +342,12 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
         commitLoop(dispatch, getState, loop);
         return;
       case "wait":
-        commitLoop(dispatch, getState, { ...loop, status: "waiting" });
+        // useLoopDriver wakes the loop at action.until (unattended)
+        commitLoop(dispatch, getState, enterWait(loop, now));
+        return;
+      case "proceed":
+        // Unattended and nobody answered in time: the items go on
+        commitLoop(dispatch, getState, proceedUnanswered(loop));
         return;
       case "stop":
         commitLoop(
@@ -344,6 +370,9 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           notes: loop.notes,
           standing: standingInstructions(loop),
           freshContext: loop.freshContext !== false,
+          unanswered: loop.questions.filter((q) =>
+            itemState?.unanswered?.includes(q.id),
+          ),
         });
         loop = markDelivered(
           loop,

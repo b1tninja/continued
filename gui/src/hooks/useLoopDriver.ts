@@ -1,3 +1,4 @@
+import { LOOP_AUTONOMY } from "core/util/loopMode";
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "react-redux";
 import { useAppDispatch, useAppSelector } from "../redux/hooks";
@@ -31,6 +32,9 @@ export function useLoopDriver() {
       !s.session.isQueuePaused &&
       s.session.queuedMessages.some((m) => !m.loopAnswerId),
   );
+  // Unattended: when the wait for answers runs out, take a step anyway
+  const waitingSince = useAppSelector((s) => s.session.loop?.waitingSince);
+  const autonomy = useAppSelector((s) => s.session.loop?.autonomy);
   const busy = useRef(false);
   const [tick, setTick] = useState(0);
 
@@ -48,4 +52,23 @@ export function useLoopDriver() {
       if (store.getState().session.loop !== before) setTick((t) => t + 1);
     });
   }, [ready, loopCurrent, tick, dispatch, store]);
+
+  useEffect(() => {
+    if (loopStatus !== "waiting" || !waitingSince) return;
+    const wait = LOOP_AUTONOMY[autonomy ?? "auto"].waitTimeoutMs;
+    if (wait <= 0) return;
+    const due = new Date(waitingSince).getTime() + wait - Date.now();
+    const timer = setTimeout(
+      () => {
+        if (busy.current) return;
+        busy.current = true;
+        void dispatch(advanceLoop()).finally(() => {
+          busy.current = false;
+          setTick((t) => t + 1);
+        });
+      },
+      Math.max(0, due),
+    );
+    return () => clearTimeout(timer);
+  }, [loopStatus, waitingSince, autonomy, dispatch]);
 }

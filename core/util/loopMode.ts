@@ -1,6 +1,7 @@
 import type {
   LoopAnswer,
   LoopAnswerRoute,
+  LoopAutonomy,
   LoopBudget,
   LoopItemState,
   LoopItemStatus,
@@ -31,7 +32,110 @@ export const DEFAULT_LOOP_BUDGET: LoopBudget = {
   maxWallMs: 2 * 60 * 60 * 1000,
   maxAttempts: 2,
   maxNoProgressRounds: 2,
+  maxConsecutiveFailures: 3,
 };
+
+const HOUR = 60 * 60 * 1000;
+
+export interface LoopAutonomyPreset {
+  label: string;
+  /** One line for the picker */
+  description: string;
+  /**
+   * Which re-plans start the next round without the person:
+   * - ask: none, the plan card waits for Continue the loop;
+   * - no-new-scope: one whose to-dos were all in the previous list;
+   * - bounded: one that adds at most maxNewItemsPerReplan to-dos.
+   */
+  replan: "ask" | "no-new-scope" | "bounded";
+  maxNewItemsPerReplan: number;
+  /**
+   * When every open item waits on the person this long with no answer, the
+   * items go on with their best default (0: wait for as long as it takes).
+   * The questions stay open, so a late answer still redoes the item.
+   */
+  waitTimeoutMs: number;
+  budget: LoopBudget;
+}
+
+/**
+ * The autonomy levels. Whatever the level, these hold: deny rules, protected
+ * paths and ask rules still decide; a call left for the person is held as a
+ * question, never run; nothing is ever confirmed on the person's behalf; and
+ * the budgets, the no-progress and failure limits and the repeat limit stop
+ * the loop. Design: plans/loop-mode.md, "Autonomy".
+ */
+export const LOOP_AUTONOMY: Record<LoopAutonomy, LoopAutonomyPreset> = {
+  supervised: {
+    label: "Supervised",
+    description: "Every re-plan waits for you; questions wait for you.",
+    replan: "ask",
+    maxNewItemsPerReplan: 0,
+    waitTimeoutMs: 0,
+    budget: {
+      ...DEFAULT_LOOP_BUDGET,
+      maxRounds: 3,
+      maxTokens: 1_000_000,
+      maxWallMs: HOUR,
+    },
+  },
+  auto: {
+    label: "Auto",
+    description:
+      "Re-plans that add no new work go on by themselves; questions wait for you.",
+    replan: "no-new-scope",
+    maxNewItemsPerReplan: 0,
+    waitTimeoutMs: 0,
+    budget: DEFAULT_LOOP_BUDGET,
+  },
+  unattended: {
+    label: "Unattended",
+    description:
+      "Re-plans that add up to 5 to-dos go on by themselves; after 15 minutes without an answer, items go on with their best default.",
+    replan: "bounded",
+    maxNewItemsPerReplan: 5,
+    waitTimeoutMs: 15 * 60 * 1000,
+    budget: {
+      ...DEFAULT_LOOP_BUDGET,
+      maxRounds: 10,
+      maxTokens: 5_000_000,
+      maxWallMs: 8 * HOUR,
+    },
+  },
+};
+
+export const LOOP_AUTONOMY_LEVELS: readonly LoopAutonomy[] = [
+  "supervised",
+  "auto",
+  "unattended",
+];
+
+/** The level a loop starts at, from the approval mode in force. */
+export function loopAutonomyFor(
+  approvalMode: "manual" | "autoApprove" | "auto" | "yolo" | undefined,
+): LoopAutonomy {
+  switch (approvalMode) {
+    case "yolo":
+      return "unattended";
+    case "auto":
+    case "autoApprove":
+      return "auto";
+    default:
+      return "supervised";
+  }
+}
+
+export function loopAutonomy(loop: LoopState): LoopAutonomyPreset {
+  return LOOP_AUTONOMY[loop.autonomy ?? "auto"];
+}
+
+/** Changes the level of a running loop; the budgets become that level's. */
+export function setLoopAutonomy(
+  loop: LoopState,
+  autonomy: LoopAutonomy,
+): LoopState {
+  return { ...loop, autonomy, budget: { ...LOOP_AUTONOMY[autonomy].budget } };
+}
 
 export const LOOP_LIMITS = {
   maxQuestionLength: 1000,
@@ -77,7 +181,10 @@ export type FinishOutcome = "done" | "stuck" | "waiting";
 export type LoopAction =
   | { kind: "run"; itemId: string }
   | { kind: "replan" }
-  | { kind: "wait" }
+  /** until: when an unattended loop stops waiting and goes on without answers */
+  | { kind: "wait"; until?: string }
+  /** Unattended: the wait ran out; the waiting items go on (proceedUnanswered) */
+  | { kind: "proceed" }
   | { kind: "stop"; reason: LoopStopReason; detail: string }
   | { kind: "none" };
 
@@ -132,6 +239,8 @@ export function createLoop(
     now: Date;
     sessionTokens: number;
     budget?: Partial<LoopBudget>;
+    /** Default auto; see loopAutonomyFor */
+    autonomy?: LoopAutonomy;
     /** false: items share the session's conversation (default: a fresh context) */
     freshContext?: boolean;
   },
@@ -141,7 +250,11 @@ export function createLoop(
     round: 1,
     startedAt: iso(options.now),
     tokensAtStart: options.sessionTokens,
-    budget: { ...DEFAULT_LOOP_BUDGET, ...options.budget },
+    budget: {
+      ...LOOP_AUTONOMY[options.autonomy ?? "auto"].budget,
+      ...options.budget,
+    },
+    autonomy: options.autonomy ?? "auto",
     items: plan.items.map(fromTask),
     questions: [],
     answers: [],
@@ -241,6 +354,16 @@ export function decideNext(
   if (overBudget) {
     return { kind: "stop", ...overBudget };
   }
+  const maxFailures =
+    loop.budget.maxConsecutiveFailures ??
+    DEFAULT_LOOP_BUDGET.maxConsecutiveFailures;
+  if (maxFailures > 0 && (loop.consecutiveFailures ?? 0) >= maxFailures) {
+    return {
+      kind: "stop",
+      reason: "failures",
+      detail: `${loop.consecutiveFailures} items in a row failed.`,
+    };
+  }
 
   const live = loop.items.filter((i) => plan.items.some((t) => t.id === i.id));
   if (loop.replanRequested) {
@@ -262,7 +385,11 @@ export function decideNext(
   }
   const open = live.filter((i) => i.status !== "done");
   if (open.every((i) => i.status === "waiting")) {
-    return { kind: "wait" };
+    const { waitTimeoutMs } = loopAutonomy(loop);
+    if (waitTimeoutMs <= 0) return { kind: "wait" };
+    const since = new Date(loop.waitingSince ?? ctx.now).getTime();
+    if (ctx.now.getTime() - since >= waitTimeoutMs) return { kind: "proceed" };
+    return { kind: "wait", until: iso(new Date(since + waitTimeoutMs)) };
   }
   return replanOrStop(loop);
 }
@@ -307,6 +434,7 @@ export function stopLoop(
     current: undefined,
     status: "stopped",
     stopRequested: undefined,
+    waitingSince: undefined,
     stopReason: reason,
     stopDetail: detail,
   };
@@ -322,7 +450,75 @@ export function resumeLoop(loop: LoopState, ctx: LoopContext): LoopState {
     startedAt: iso(ctx.now),
     tokensAtStart: ctx.sessionTokens,
     noProgressRounds: 0,
+    consecutiveFailures: 0,
+    waitingSince: undefined,
   };
+}
+
+/** Every open item waits on the person: pause, remembering since when. */
+export function enterWait(loop: LoopState, now: Date): LoopState {
+  return {
+    ...loop,
+    status: "waiting",
+    waitingSince: loop.waitingSince ?? iso(now),
+  };
+}
+
+/**
+ * Unattended, and the wait ran out: each waiting item goes on with its best
+ * default. Its questions stay open, so an answer that comes later is still
+ * routed (a done item is then redone). Nothing is confirmed.
+ */
+export function proceedUnanswered(loop: LoopState): LoopState {
+  const items = loop.items.map((item) => {
+    if (item.status !== "waiting") return item;
+    const unanswered = openQuestions(loop, item.id).map((q) => q.id);
+    return {
+      ...item,
+      status: "pending" as const,
+      attempts: 0,
+      ...(unanswered.length ? { unanswered } : {}),
+    };
+  });
+  return { ...loop, items, status: "running", waitingSince: undefined };
+}
+
+/**
+ * A re-plan ended with a plan: may it start the next round by itself? That
+ * depends on the loop's autonomy level; anything else waits on the plan card.
+ */
+export function replanDecision(
+  loop: LoopState,
+  previousTexts: string[],
+  plan: TaskPlan,
+): { accept: boolean; reason: string } {
+  const preset = loopAutonomy(loop);
+  const known = new Set(previousTexts);
+  const added = plan.items.filter((i) => !known.has(i.text)).length;
+  switch (preset.replan) {
+    case "ask":
+      return {
+        accept: false,
+        reason: "Supervised: every re-plan waits for you.",
+      };
+    case "no-new-scope":
+      return added === 0
+        ? { accept: true, reason: "The re-plan adds no new to-dos." }
+        : {
+            accept: false,
+            reason: `The re-plan adds ${added} new to-do${added === 1 ? "" : "s"}.`,
+          };
+    case "bounded":
+      return added <= preset.maxNewItemsPerReplan
+        ? {
+            accept: true,
+            reason: `The re-plan adds ${added} new to-do${added === 1 ? "" : "s"}, within ${preset.maxNewItemsPerReplan}.`,
+          }
+        : {
+            accept: false,
+            reason: `The re-plan adds ${added} new to-do${added === 1 ? "" : "s"}, more than ${preset.maxNewItemsPerReplan}.`,
+          };
+  }
 }
 
 export function startItemRun(
@@ -406,10 +602,17 @@ export function finishItemRun(
         -LOOP_LIMITS.maxNotes,
       )
     : loop.notes;
+  const failures =
+    status === "failed"
+      ? (loop.consecutiveFailures ?? 0) + 1
+      : status === "done"
+        ? 0
+        : (loop.consecutiveFailures ?? 0);
   return {
-    ...next,
+    ...withItem(next, itemId, { unanswered: undefined }),
     current: undefined,
     doneThisRound: loop.doneThisRound + (status === "done" ? 1 : 0),
+    consecutiveFailures: failures,
     ...(notes ? { notes } : {}),
   };
 }
@@ -655,7 +858,7 @@ export function answerLoop(
     route !== "confirmed" &&
     route !== "standing"
   ) {
-    next = { ...next, status: "running" };
+    next = { ...next, status: "running", waitingSince: undefined };
   }
   return { ok: true, loop: next, answer };
 }
@@ -842,6 +1045,8 @@ export function loopItemPrompt(input: {
   standing?: string[];
   /** The run starts without the conversation before it */
   freshContext?: boolean;
+  /** Questions of this item nobody answered in time (unattended) */
+  unanswered?: LoopQuestion[];
 }): string {
   const { item } = input;
   const lines = [
@@ -859,6 +1064,16 @@ export function loopItemPrompt(input: {
   } else if (input.attempt > 1) {
     lines.push(
       "An earlier run of this item ended without reporting. Check what is already done before you change anything.",
+    );
+  }
+  if (input.unanswered?.length) {
+    lines.push(
+      "",
+      "Nobody answered these questions in time, so go on without the answers:",
+    );
+    for (const q of input.unanswered) lines.push(`- ${quote(q.question)}`);
+    lines.push(
+      `For each, take your best default and record it with ${HOLD_QUESTION_TOOL_NAME} kind "assumption". Do not do anything that cannot be undone on such a default; leave that part and say so in the summary.`,
     );
   }
   if (input.standing?.length) {
@@ -962,11 +1177,18 @@ export function loopReplanPrompt(input: {
 }
 
 /** One line for the loop's state, for the inbox header and the CLI. */
-export function formatLoopStatus(loop: LoopState): string {
+export function formatLoopStatus(
+  loop: LoopState,
+  options: { level?: boolean } = {},
+): string {
   const done = loop.items.filter((i) => i.status === "done").length;
   const waiting = loop.items.filter((i) => i.status === "waiting").length;
   const open = loop.questions.filter((q) => !q.answerId).length;
-  const parts = [`Round ${loop.round}`, `${done}/${loop.items.length} done`];
+  const parts = [
+    ...(options.level === false ? [] : [loopAutonomy(loop).label]),
+    `Round ${loop.round}`,
+    `${done}/${loop.items.length} done`,
+  ];
   if (waiting) parts.push(`${waiting} waiting on you`);
   if (open) parts.push(`${open} open question${open === 1 ? "" : "s"}`);
   if (loop.stopRequested) parts.push("stopping after this step");
@@ -977,9 +1199,18 @@ export function formatLoopStatus(loop: LoopState): string {
     case "awaiting_plan":
       parts.push("new plan to accept");
       break;
-    case "waiting":
-      parts.push("paused until you answer");
+    case "waiting": {
+      const wait = loopAutonomy(loop).waitTimeoutMs;
+      if (wait > 0 && loop.waitingSince) {
+        const at = new Date(new Date(loop.waitingSince).getTime() + wait);
+        parts.push(
+          `goes on without answers at ${at.toTimeString().slice(0, 5)}`,
+        );
+      } else {
+        parts.push("paused until you answer");
+      }
       break;
+    }
     case "stopped":
       parts.push(`stopped: ${loop.stopDetail ?? loop.stopReason}`);
       break;

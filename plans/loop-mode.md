@@ -1,6 +1,6 @@
 # Loop mode
 
-Last updated: 2026-11-07. Status: L1 (core state machine) and L2 (IDE) built, with unit and gui integration tests, and a sandbox run on a local model (see the PR). L3 (CLI and `cn serve`) and L4 (parallel items, verification) are not built.
+Last updated: 2026-11-07. Status: L1 (core state machine) and L2 (IDE, with autonomy levels) built, with unit and gui integration tests. The sandbox run on a local model is pending; its report goes in the PR. L3 (CLI and `cn serve`) and L4 (parallel items, verification) are not built.
 
 Build a plan item by item without the person driving each step. Questions go to an inbox the person can answer while the work continues.
 
@@ -243,7 +243,7 @@ When nothing can run, some items are not done, and not every open item waits on 
 - the person's notes about the plan;
 - the assumptions not yet confirmed.
 
-The model presents the updated plan with `present_plan` under the same title. Finished to-dos kept word for word keep their ids and stay done. The plan card then shows **Continue the loop**, which reads the file again (the person may edit it first) and starts the next round. In Auto mode, a re-plan whose to-dos are all already in the previous list (nothing reworded, nothing new) is accepted without asking. Anything that adds scope waits for the person.
+The model presents the updated plan with `present_plan` under the same title. Finished to-dos kept word for word keep their ids and stay done. The plan card then shows **Continue the loop**, which reads the file again (the person may edit it first) and starts the next round. Whether a re-plan starts the next round without the person depends on the loop's autonomy level (below). The inbox says why one is waiting on its card.
 
 ### Stop
 
@@ -254,12 +254,39 @@ The loop stops when:
 - its own token use reaches `maxTokens` (default 2,000,000, counted from the session's usage when the loop started);
 - it has run for `maxWallMs` (default 2 hours);
 - two rounds in a row finish no item, checked before paying for another re-plan;
+- three items in a row fail (`maxConsecutiveFailures`), like Claude Code auto mode pausing after 3 refusals in a row;
 - a re-plan ends without presenting a plan;
 - the person presses Stop (the item goes back to pending) or Stop loop (the loop stops after the running item).
 
-When every open item waits on the person, the loop pauses instead. An answer resumes it.
+When every open item waits on the person, the loop pauses instead. An answer resumes it. An unattended loop stops waiting after 15 minutes (below).
 
 Resume restarts the budgets from that moment.
+
+### Autonomy
+
+How much the loop does without the person is one setting with three levels. It is not a second switch next to the approval mode: the loop starts at the level the approval mode implies, so "YOLO" means one thing. The inbox has a picker to change the level while the loop runs. Changing it gives the loop that level's budgets.
+
+|                                           | Supervised                                  | Auto                         | Unattended                                                                          |
+| ----------------------------------------- | ------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------- |
+| Starts from approval mode                 | Manual                                      | Auto-approve, Auto           | YOLO                                                                                |
+| A re-plan starts the next round by itself | Never: the card waits for Continue the loop | When it adds no new to-dos   | When it adds at most 5 new to-dos                                                   |
+| Every open item waits on the person       | Pause until an answer                       | Pause until an answer        | After 15 minutes without an answer, the waiting items go on with their best default |
+| Default budgets                           | 3 rounds, 1M tokens, 1 hour                 | 5 rounds, 2M tokens, 2 hours | 10 rounds, 5M tokens, 8 hours                                                       |
+
+Whatever the level:
+
+- Deny rules, protected paths and ask rules decide first. A call they leave for the person is held as a question, never run. In YOLO, nothing else asks, so only those are held.
+- Nothing is confirmed on the person's behalf. When an unattended wait runs out, the questions stay open in the inbox. The item's prompt names them and says to take its best default, to record it as an assumption, and to leave anything that cannot be undone. An answer that comes later is routed as usual, so a done item is redone. This follows the research: a timeout means "keep going", never "confirmed".
+- The budgets, the no-progress stop, the three-failures stop and the repeat limit apply.
+
+What this takes from the research and from Ralph:
+
+- **Ralph** runs every iteration with permissions skipped and relies on a sandbox.
+- **Claude Code** pauses auto mode after 3 refusals in a row or 20 in total.
+- **Roo** has a follow-up timer that proceeds on its own.
+- **Kiro**'s gated steps block even in YOLO mode.
+
+Unattended is the hands-off level here, but it keeps the person's rules and records what it did not ask.
 
 ### Surfaces and modes
 
@@ -284,6 +311,7 @@ The decisions and prompts come from core, so it is mostly wiring.
 - A turn that ends without `finish_item` is not counted as done. After 2 such runs the item is failed.
 - Caps apply to questions per item and per loop, to answer and question length, to summaries, and to the notes carried between items (12, at most 300 characters each), so the item prompt cannot bloat.
 - Subagents cannot use `hold_question` or `finish_item`: they would report the parent's item.
+- No autonomy level loosens the person's rules or confirms an answer for them; Unattended only stops waiting.
 
 ## Phases
 
@@ -302,7 +330,8 @@ The decisions and prompts come from core, so it is mostly wiring.
 1. **Notes or a file?** Ralph keeps its learnings in `AGENTS.md`, where they outlive the loop and any later session reads them. Here they live on the loop, so they end with it. Should accepting the last round offer to append them to the project's rules or AGENTS.md?
 2. **Dependencies between items.** To-dos have no dependency field, so "not blocked" means "not waiting on the person". Kiro and LLMCompiler schedule a DAG. A `depends:` note in the plan file would need a format change, which the brief rules out for now.
 3. **Overruled assumptions downstream.** Overruling reopens only the item that made the assumption. Items built on it are not marked stale; the re-plan prompt lists unconfirmed assumptions so the model can rework them. Should a commit or push wait until the assumptions it depends on are confirmed?
-4. **Budget defaults.** The 2,000,000-token and 2-hour defaults are guesses. They are fields on `LoopState.budget`, but there is no setting yet.
+4. **Budget defaults.** The budgets of each autonomy level are guesses. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet.
+5. **The 15-minute wait.** Unattended's wait is fixed. It could be a setting, or follow how long the person usually takes to answer.
 
 ## Decisions
 
@@ -312,6 +341,7 @@ The decisions and prompts come from core, so it is mostly wiring.
 4. **Answers are routed when given, by the item's state, and kept on the loop.** A running item gets its answer by steering. The person's own messages keep the usual queue: they are sent at turn end as an ordinary turn, and the loop waits for that turn.
 5. **Parallel items, verification and the CLI are later phases.** Each is a separable change, and the research argues against parallel items by default.
 6. **Each run gets a fresh context, in the same session.** Ralph, Claude Code's best practices and Reflexion all favour a fresh context with a short note over one growing conversation. A subagent per item would also give one, but subagents cannot ask the person. Slicing the request keeps the transcript in one chat, and the system and tools prefix stays cached. This replaces the earlier open question "one conversation or a fresh context per item".
+7. **Autonomy is one setting that follows the approval mode.** Several options (re-plan acceptance, what happens when everything waits, budgets) need a hands-off setting. Separate switches would let a loop be "YOLO" in one place and supervised in another. So there are three levels, the approval mode picks the starting one, and the hard limits are the same in all of them.
 
 ## Sources
 

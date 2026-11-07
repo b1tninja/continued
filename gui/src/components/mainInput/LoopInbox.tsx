@@ -1,7 +1,9 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
-import type { LoopQuestion } from "core";
+import type { LoopAutonomy, LoopQuestion } from "core";
 import {
   formatLoopStatus,
+  LOOP_AUTONOMY,
+  LOOP_AUTONOMY_LEVELS,
   LOOP_LIMITS,
   standingInstructions,
 } from "core/util/loopMode";
@@ -12,6 +14,7 @@ import {
   endLoopThunk,
   LoopAnswerInput,
   resumeLoopThunk,
+  setLoopAutonomyThunk,
   stopLoopThunk,
 } from "../../redux/thunks/loop";
 
@@ -159,8 +162,23 @@ export function LoopInbox() {
           data-testid="loop-status"
           className="min-w-0 flex-1 basis-40 break-words text-description"
         >
-          Loop · {formatLoopStatus(loop)}
+          Loop · {formatLoopStatus(loop, { level: false })}
         </span>
+        <select
+          data-testid="loop-autonomy"
+          value={loop.autonomy ?? "auto"}
+          title={LOOP_AUTONOMY[loop.autonomy ?? "auto"].description}
+          onChange={(e) =>
+            void dispatch(setLoopAutonomyThunk(e.target.value as LoopAutonomy))
+          }
+          className="shrink-0 cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+        >
+          {LOOP_AUTONOMY_LEVELS.map((level) => (
+            <option key={level} value={level}>
+              {LOOP_AUTONOMY[level].label}
+            </option>
+          ))}
+        </select>
         {stopped ? (
           <>
             {loop.stopReason !== "done" && (
@@ -194,6 +212,14 @@ export function LoopInbox() {
           </button>
         )}
       </div>
+      {loop.status === "awaiting_plan" && loop.replanReason && (
+        <div
+          data-testid="loop-replan-reason"
+          className="mt-0.5 text-description"
+        >
+          New plan waiting on its card: {loop.replanReason}
+        </div>
+      )}
       {open.length > 0 && (
         <ul className="m-0 max-h-64 list-none overflow-y-auto p-0">
           {open.map((q) => (

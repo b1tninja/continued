@@ -379,6 +379,11 @@ export interface LoopItemState {
   attempts: number;
   /** What the run said it did (finish_item), or why it stopped */
   summary?: string;
+  /**
+   * Unattended: questions that got no answer in time, so the item went on
+   * with its best default. The questions stay open in the inbox.
+   */
+  unanswered?: string[];
 }
 
 /**
@@ -444,6 +449,7 @@ export type LoopStopReason =
   | "tokens"
   | "time"
   | "no_progress"
+  | "failures"
   | "stopped"
   | "replan_failed";
 
@@ -458,7 +464,17 @@ export interface LoopBudget {
   maxAttempts: number;
   /** Rounds in a row that finish no item before the loop stops */
   maxNoProgressRounds: number;
+  /** Items in a row that fail before the loop stops */
+  maxConsecutiveFailures: number;
 }
+
+/**
+ * How much the loop does without the person. It follows the approval mode
+ * the person picked when the loop starts (Manual: supervised; Auto-approve
+ * and Auto: auto; YOLO: unattended) and can be changed while it runs. See
+ * LOOP_AUTONOMY in core/util/loopMode.ts.
+ */
+export type LoopAutonomy = "supervised" | "auto" | "unattended";
 
 export interface LoopState {
   status: LoopStatus;
@@ -468,6 +484,8 @@ export interface LoopState {
   /** Session tokens when the loop started, so the budget counts only its own */
   tokensAtStart: number;
   budget: LoopBudget;
+  /** Missing on loops saved before autonomy levels: treated as "auto" */
+  autonomy?: LoopAutonomy;
   items: LoopItemState[];
   /** What is running: one item, or the re-plan turn */
   current?: {
@@ -491,6 +509,12 @@ export interface LoopState {
   /** Items finished in this round, for the no-progress check */
   doneThisRound: number;
   noProgressRounds: number;
+  /** Items in a row that ended failed; reset by one that is done */
+  consecutiveFailures?: number;
+  /** When every open item started waiting on the person (status waiting) */
+  waitingSince?: string;
+  /** Why the last re-plan did or did not start the next round by itself */
+  replanReason?: string;
   /** Tool calls the person allowed from an approval question (grantKey) */
   grants: string[];
   /** A plan-wide answer asked to re-plan now */
