@@ -3,10 +3,7 @@ import * as followRedirects from "follow-redirects";
 import { HttpProxyAgent } from "http-proxy-agent";
 import { BodyInit, RequestInit, Response } from "node-fetch";
 import { HttpsProxyAgentWithTls } from "./agent.js";
-import {
-  DEFAULT_CONNECT_TIMEOUT_SECONDS,
-  withConnectTimeout,
-} from "./connectTimeout.js";
+import { DEFAULT_CONNECT_TIMEOUT_SECONDS } from "./connectTimeout.js";
 import { getAgentOptions } from "./getAgentOptions.js";
 import patchedFetch from "./node-fetch-patch.js";
 import { getProxy, shouldBypassProxy } from "./util.js";
@@ -118,11 +115,7 @@ export async function fetchwithRequestOptions(
       ? protocol === https
         ? new HttpsProxyAgentWithTls(proxy, agentOptions)
         : new HttpProxyAgent(proxy, agentOptions)
-      : withConnectTimeout(
-          new protocol.Agent(agentOptions),
-          (requestOptions?.connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_SECONDS) *
-            1000,
-        );
+      : new protocol.Agent(agentOptions);
 
   let headers: { [key: string]: string } = {};
 
@@ -194,7 +187,11 @@ export async function fetchwithRequestOptions(
           body: finalBody,
           headers: headers,
           agent: agent,
-        });
+          // Read by node-fetch-patch.js (milliseconds)
+          connectTimeout:
+            (requestOptions?.connectTimeout ??
+              DEFAULT_CONNECT_TIMEOUT_SECONDS) * 1000,
+        } as RequestInit);
 
     // Verbose logging for debugging - log response details
     if (process.env.VERBOSE_FETCH) {

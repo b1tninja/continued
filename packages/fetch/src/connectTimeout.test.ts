@@ -1,76 +1,77 @@
 import { EventEmitter } from "node:events";
 import * as http from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { withConnectTimeout } from "./connectTimeout.js";
+import { armConnectTimeout } from "./connectTimeout.js";
+import { fetchwithRequestOptions } from "./fetch.js";
 
-/** A socket still connecting, as for a server whose packets are dropped. */
-function pendingSocket() {
-  const socket = Object.assign(new EventEmitter(), {
-    connecting: true,
+/** A request and the socket it is given, still connecting. */
+function pendingRequest() {
+  const socket = Object.assign(new EventEmitter(), { connecting: true });
+  const request = Object.assign(new EventEmitter(), {
+    host: "172.27.144.1",
     destroyed: undefined as Error | undefined,
     destroy: (error?: Error) => {
-      socket.destroyed = error;
+      request.destroyed = error;
       socket.emit("close");
     },
   });
-  return socket;
+  return { socket, request };
 }
 
-function agentReturning(socket: unknown) {
-  const agent = new http.Agent();
-  (agent as any).createConnection = vi.fn(() => socket);
-  return agent;
-}
-
-describe("withConnectTimeout", () => {
+describe("armConnectTimeout", () => {
   afterEach(() => vi.useRealTimers());
 
-  it("destroys a socket that does not connect in time, with ETIMEDOUT", () => {
+  it("destroys a request whose socket does not connect in time, with ETIMEDOUT", () => {
     vi.useFakeTimers();
-    const socket = pendingSocket();
-    const agent = withConnectTimeout(agentReturning(socket), 10_000);
-    (agent as any).createConnection({ host: "172.27.144.1", port: 18092 });
+    const { socket, request } = pendingRequest();
+    armConnectTimeout(request as any, 10_000);
+    request.emit("socket", socket);
     vi.advanceTimersByTime(9_999);
-    expect(socket.destroyed).toBeUndefined();
+    expect(request.destroyed).toBeUndefined();
     vi.advanceTimersByTime(1);
-    expect(socket.destroyed).toMatchObject({
+    expect(request.destroyed).toMatchObject({
       code: "ETIMEDOUT",
-      message: expect.stringContaining("172.27.144.1:18092"),
+      message: expect.stringContaining("no answer within 10 s"),
     });
   });
 
-  it("leaves a socket alone once it has connected", () => {
+  it("leaves it alone once connected, and a reused socket at once", () => {
     vi.useFakeTimers();
-    const socket = pendingSocket();
-    const agent = withConnectTimeout(agentReturning(socket), 1_000);
-    (agent as any).createConnection({ host: "h", port: 1 });
-    socket.emit("connect");
+    const a = pendingRequest();
+    armConnectTimeout(a.request as any, 1_000);
+    a.request.emit("socket", a.socket);
+    a.socket.emit("connect");
+    const b = pendingRequest();
+    b.socket.connecting = false;
+    armConnectTimeout(b.request as any, 1_000);
+    b.request.emit("socket", b.socket);
     vi.advanceTimersByTime(5_000);
-    expect(socket.destroyed).toBeUndefined();
+    expect(a.request.destroyed).toBeUndefined();
+    expect(b.request.destroyed).toBeUndefined();
   });
 
-  it("does nothing with a timeout of 0", () => {
-    const agent = agentReturning(pendingSocket());
-    const before = (agent as any).createConnection;
-    expect((withConnectTimeout(agent, 0) as any).createConnection).toBe(before);
+  it("does nothing without a timeout", () => {
+    vi.useFakeTimers();
+    const { socket, request } = pendingRequest();
+    armConnectTimeout(request as any, 0);
+    request.emit("socket", socket);
+    vi.advanceTimersByTime(60_000);
+    expect(request.destroyed).toBeUndefined();
   });
+});
 
-  it("fails a real request to a closed port quickly, and connects to an open one", async () => {
+describe("fetchwithRequestOptions with a connect timeout", () => {
+  it("still reaches a server that answers", async () => {
     const server = http.createServer((_, res) => res.end("ok"));
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const port = (server.address() as { port: number }).port;
     try {
-      const agent = withConnectTimeout(new http.Agent(), 2_000);
-      const body = await new Promise<string>((resolve, reject) => {
-        http
-          .get({ host: "127.0.0.1", port, agent }, (res) => {
-            let data = "";
-            res.on("data", (c) => (data += c));
-            res.on("end", () => resolve(data));
-          })
-          .on("error", reject);
-      });
-      expect(body).toBe("ok");
+      const res = await fetchwithRequestOptions(
+        `http://127.0.0.1:${port}/`,
+        {},
+        { connectTimeout: 2 } as any,
+      );
+      expect(await res.text()).toBe("ok");
     } finally {
       server.close();
     }
