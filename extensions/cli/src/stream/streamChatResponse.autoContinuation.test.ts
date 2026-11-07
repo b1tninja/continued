@@ -206,9 +206,8 @@ describe("streamChatResponse - auto-continuation after compaction", () => {
   });
 
   it("stops when every request compacts, instead of continuing forever", async () => {
-    const { handlePreApiCompaction } = await import(
-      "./streamChatResponse.compactionHelpers.js"
-    );
+    const { handlePreApiCompaction } =
+      await import("./streamChatResponse.compactionHelpers.js");
     const { logger } = await import("../util/logger.js");
 
     // A budget below the fixed prompt: compaction never makes room
