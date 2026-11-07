@@ -304,6 +304,19 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "providers/save": [SaveProviderInstanceRequest, SaveProviderInstanceResult];
   /** Remove an instance from ~/.continue/providers.yaml (its key is kept). */
   "providers/delete": [{ name: string }, { deleted: boolean; error?: string }];
+  /**
+   * Turn the selected config's models of one connection set up the old way
+   * into a provider account, catalog models (models.yaml) and `from:`
+   * entries. `converted` is how many models moved.
+   */
+  "config/convertConnectionToAccount": [
+    {
+      provider: string;
+      connection: import("../config/providerSetup").ProviderConnectionKey;
+      accountName?: string;
+    },
+    { account?: string; converted: number; error?: string },
+  ];
   /** Add a model that uses a provider instance to the selected config. */
   "config/addConnectedModel": [
     { connection: string; model: string; name?: string; roles?: string[] },

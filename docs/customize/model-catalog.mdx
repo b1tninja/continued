@@ -54,6 +54,16 @@ A variant changes a model's settings, never which model it is or where it is ser
 
 A workspace's `.continue/models.yaml` adds models for that workspace, and a model there replaces a global model with the same name. The CLI (`cn`) reads the same files, `~/.continue/models.yaml` and `.continue/models.yaml` in the working directory, and `providers.yaml` in both places.
 
+## Set up in the GUI
+
+**Set up models** (onboarding, **Manage models**, and **Local server**) writes all three for a new provider:
+
+- the connection as an account in `~/.continue/providers.yaml`, with its key in secure storage or `~/.continue/.env` (the file has only the reference). A server found with **Detect** gives the account its name, such as `strata`;
+- each chosen model in `~/.continue/models.yaml`, with the context window, tools and image support the provider reported;
+- a `from:` entry in the selected config.
+
+Setting up the same endpoint again reuses its account and catalog models. A connection set up before this, with its provider, address and key on every model, keeps working and is edited as it is. **Settings > Models > Providers > Turn into an account** converts it: the connection becomes an account, the models move to the catalog, and each model keeps its place, name and roles in the config.
+
 ## Errors
 
 A `from:` name or variant that the catalog does not have skips that model with a message; the rest of the config still loads. Model names cannot contain `#`, which picks a variant.

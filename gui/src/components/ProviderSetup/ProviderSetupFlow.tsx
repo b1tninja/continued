@@ -228,6 +228,15 @@ export function ProviderSetupFlow({
     editing ?? connection,
   );
   const configuredModels = configured?.models ?? [];
+  // A new connection is saved as a provider account with catalog models;
+  // one already set up the old way (models with their own connection) is
+  // edited as it is. A server found by Detect suggests the account's name.
+  const [detectedName, setDetectedName] = useState<string>();
+  const accountForSave = configured?.account
+    ? { name: configured.account }
+    : configured
+      ? undefined
+      : { name: isLocal ? detectedName : undefined };
   const hasStoredKey = (configured?.key.state ?? "none") !== "none";
 
   // Reuse the secret name the connection already refers to.
@@ -383,6 +392,7 @@ export function ProviderSetupFlow({
         diff,
         key: keyForRequest,
         useLiveTitles: isBedrock && modelLists.isLive,
+        account: accountForSave,
       });
       const res = await ideMessenger.request(
         "config/saveProviderModels",
@@ -598,6 +608,7 @@ export function ProviderSetupFlow({
               apiBase={connection.apiBase}
               onPick={(apiBase, server) => {
                 formMethods.setValue("apiBase", apiBase);
+                setDetectedName(server?.title);
                 setRefreshError(undefined);
                 setLiveModels(
                   server && server.models.length > 0

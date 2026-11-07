@@ -81,6 +81,8 @@ describe("ProviderSetupFlow: local server", () => {
       apiBase: "http://127.0.0.1:8083/v1/",
     });
     expect(saves[0].key).toBeUndefined();
+    // A new connection becomes a provider account, named after the server
+    expect(saves[0].account).toEqual({ name: "Strata" });
     const added = saves[0].add.find(
       (m: any) => m.model === STRATA_MODEL.modelId,
     );

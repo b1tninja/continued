@@ -31,6 +31,11 @@ import { globalProfileStatus } from "./llm/llms/bedrockHelpers";
 import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
+import {
+  convertConnectionToAccount,
+  saveProviderModelsToAccount,
+} from "./config/providers/accountSetup";
+import { getGlobalModelsPath } from "./config/providers/modelsFile";
 import { detectLocalServers, serverConcurrency } from "./llm/localServers";
 import Ollama from "./llm/llms/Ollama";
 import { EditAggregator } from "./nextEdit/context/aggregateEdits";
@@ -437,6 +442,28 @@ export class Core {
       return result;
     });
 
+    on("config/convertConnectionToAccount", async (msg) => {
+      const { provider, connection, accountName } = msg.data;
+      try {
+        const result = convertConnectionToAccount(
+          provider,
+          connection,
+          accountName,
+        );
+        if (result.converted > 0) {
+          await this.configHandler.reloadConfig(
+            "Connection turned into an account (config/convertConnectionToAccount message)",
+          );
+        }
+        return result;
+      } catch (e) {
+        return {
+          converted: 0,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    });
+
     on("config/addConnectedModel", async (msg) => {
       const { connection, model } = msg.data;
       const name = msg.data.name?.trim() || model.trim();
@@ -742,7 +769,10 @@ export class Core {
     on("config/getProviderSetup", async () => {
       const secureStorageAvailable = await isSecureStorageAvailable(this.ide);
       const remembered = this.globalContext.get("preferredKeyStorage");
-      const { connections, editable } = readProviderConnections();
+      const { connections, editable } = readProviderConnections({
+        providers: getGlobalProvidersPath(),
+        models: getGlobalModelsPath(),
+      });
       return {
         connections: await annotateKeyStorage(connections, {
           ide: this.ide,
@@ -796,7 +826,14 @@ export class Core {
           : req;
       let saved: boolean;
       try {
-        saved = saveProviderModels(toSave);
+        // A setup that names an account becomes an account, catalog models
+        // and `from:` entries; one without keeps writing models inline
+        saved = toSave.account
+          ? saveProviderModelsToAccount({
+              ...toSave,
+              accountName: toSave.account.name,
+            }) !== undefined
+          : saveProviderModels(toSave);
       } catch (e) {
         if (e instanceof ProviderSetupError) {
           return { saved: false, error: e.message };
