@@ -193,4 +193,75 @@ describe("Queued messages", () => {
     await new Promise((r) => setTimeout(r, 300));
     expect(userMessages(store)).toEqual(["earlier"]);
   });
+
+  test("A session saved while a tool ran restores the tool as interrupted, and its queue can be sent", async () => {
+    const { ideMessenger, store } = await setup();
+    const queued = {
+      id: "saved-1",
+      editorState: {
+        type: "doc",
+        content: [
+          { type: "paragraph", content: [{ type: "text", text: "next step" }] },
+        ],
+      },
+      modifiers: { useCodebase: false, noContext: false },
+    };
+
+    await act(async () => {
+      store.dispatch(
+        newSession({
+          sessionId: "restored",
+          title: "Restored",
+          workspaceDirectory: "",
+          history: [
+            {
+              message: { role: "user", content: "run it" },
+              contextItems: [],
+            },
+            {
+              message: {
+                role: "assistant",
+                content: "",
+                toolCalls: [
+                  {
+                    id: "tc-1",
+                    type: "function",
+                    function: { name: "run_terminal_command", arguments: "{}" },
+                  },
+                ],
+              },
+              contextItems: [],
+              toolCallStates: [
+                {
+                  toolCallId: "tc-1",
+                  status: "calling",
+                  parsedArgs: {},
+                  toolCall: {
+                    id: "tc-1",
+                    type: "function",
+                    function: { name: "run_terminal_command", arguments: "{}" },
+                  },
+                },
+              ],
+            } as any,
+          ],
+          queuedMessages: [queued],
+        }),
+      );
+    });
+
+    const toolCall = store.getState().session.history[1].toolCallStates![0];
+    expect(toolCall.status).toBe("errored");
+    expect(toolCall.output?.[0]?.name).toBe("Interrupted");
+
+    // Nothing looks busy, so Send all sends rather than waiting on the tool
+    ideMessenger.chatStreamDelay = 0;
+    const sendAll = await getElementByTestId("queued-messages-send-all");
+    await act(async () => {
+      sendAll.click();
+    });
+    await waitFor(() =>
+      expect(userMessages(store)).toEqual(["run it", "next step"]),
+    );
+  });
 });

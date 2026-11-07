@@ -825,6 +825,28 @@ export const sessionSlice = createSlice({
 
       if (payload) {
         state.history = payload.history as any;
+        // A session saved mid-turn (the queue saves it at once) can hold a
+        // tool call that was running or still being generated. Nothing
+        // finishes it after a reload or crash, and a tool that looks running
+        // holds the input in the queue, so end it as interrupted.
+        for (const item of state.history) {
+          for (const toolCall of item.toolCallStates ?? []) {
+            if (toolCall.status === "generating") {
+              toolCall.status = "canceled";
+            } else if (toolCall.status === "calling") {
+              toolCall.status = "errored";
+              toolCall.output = [
+                {
+                  icon: "problems",
+                  name: "Interrupted",
+                  description: "The tool's run was interrupted",
+                  content:
+                    "The tool was running when the window closed or reloaded, so its result is unknown.",
+                },
+              ];
+            }
+          }
+        }
         state.title = payload.title;
         state.id = payload.sessionId;
         state.checkpoints = payload.checkpoints ?? [];
