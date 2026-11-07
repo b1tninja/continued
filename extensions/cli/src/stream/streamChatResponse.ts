@@ -536,6 +536,7 @@ export async function streamChatResponse(
       callbacks,
       isHeadless,
       usage,
+      abortSignal: abortController.signal,
     });
 
     if (shouldReturn) {
