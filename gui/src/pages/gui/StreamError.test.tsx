@@ -1,5 +1,5 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import { MissingSecretError } from "core/util/unresolvedSecrets";
@@ -70,5 +70,17 @@ describe("stream error for a failure that should pass", () => {
       "asked to wait 1 h",
     );
     expect(screen.queryByTestId("retry-countdown")).toBeNull();
+  });
+
+  it("waits for the network when the computer is offline", async () => {
+    const spy = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    try {
+      await render(new Error("fetch failed"));
+      expect(screen.getByTestId("retry-countdown").textContent).toContain(
+        "offline",
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -35,7 +35,9 @@ interface StreamErrorProps {
 
 /**
  * Tries again by itself after a visible countdown, unless cancelled; then
- * nothing happens until the person chooses.
+ * nothing happens until the person chooses. While the machine is offline
+ * (the webview's navigator.onLine; it knows about the network, not about the
+ * server) it waits for the network to return and tries again then.
  */
 function RetryCountdown({
   seconds,
@@ -46,15 +48,34 @@ function RetryCountdown({
 }) {
   const [left, setLeft] = useState(seconds);
   const [cancelled, setCancelled] = useState(false);
+  const [online, setOnline] = useState(
+    typeof navigator === "undefined" ? true : navigator.onLine !== false,
+  );
   useEffect(() => {
-    if (cancelled) return;
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+  // Back online: try again straight away
+  const [wasOffline, setWasOffline] = useState(!online);
+  useEffect(() => {
+    if (!online) setWasOffline(true);
+    else if (wasOffline && !cancelled) onRetry();
+  }, [online]);
+  useEffect(() => {
+    if (cancelled || !online) return;
     if (left <= 0) {
       onRetry();
       return;
     }
     const timer = setTimeout(() => setLeft((l) => l - 1), 1000);
     return () => clearTimeout(timer);
-  }, [left, cancelled]);
+  }, [left, cancelled, online]);
   if (cancelled) {
     return (
       <span className="text-description-muted" data-testid="retry-cancelled">
@@ -64,7 +85,11 @@ function RetryCountdown({
   }
   return (
     <span className="flex items-center gap-2" data-testid="retry-countdown">
-      <span>Trying again in {formatWait(left)}.</span>
+      <span>
+        {online
+          ? `Trying again in ${formatWait(left)}.`
+          : "This computer is offline. Trying again when the network is back."}
+      </span>
       <GhostButton onClick={() => setCancelled(true)}>Cancel</GhostButton>
     </span>
   );

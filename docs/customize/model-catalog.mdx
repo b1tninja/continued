@@ -90,7 +90,9 @@ A rate limit (HTTP 429), an overloaded or unavailable server (503, 529) and a dr
 - A server that asks for a longer wait is reported straight away, with how long it asked for, instead of the request hanging.
 - A route with another route after it is not retried at all: the next account is tried at once, and its own retries apply only on the last route.
 
-When the tries run out, the chat says what happened and that your message is kept. It tries again by itself after a short countdown, which you can cancel, or you can try again now or change the model. A wait of more than 10 minutes is left to you.
+A server that does not answer at all fails after 10 seconds (`requestOptions.connectTimeout`) instead of the operating system's TCP timeout.
+
+When the tries run out, the chat says what happened and that your message is kept. It tries again by itself after a short countdown, which you can cancel, or you can try again now or change the model. A wait of more than 10 minutes is left to you. While the computer is offline, the countdown waits for the network to come back and tries again then.
 
 ## Workspace catalog
 
