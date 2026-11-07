@@ -28,6 +28,9 @@ export interface SubagentPermissionOptions {
  *
  * Policies are first-match, so the order of the parent's policies is kept.
  */
+/** Tools that write the session's task list (TaskList, and its alias) */
+export const TASK_LIST_TOOLS = ["TaskList", "Checklist"];
+
 export function subagentPermissions(
   parent: ToolPermissions,
   { canPrompt = false }: SubagentPermissionOptions = {},
@@ -36,6 +39,12 @@ export function subagentPermissions(
   return {
     policies: [
       { tool: SUBAGENT_TOOL_META.name, permission: "exclude" },
+      // The task list belongs to the parent's session, which a subagent
+      // shares: its own list would replace the parent's.
+      ...TASK_LIST_TOOLS.map((tool) => ({
+        tool,
+        permission: "exclude" as const,
+      })),
       ...parent.policies.map((p) =>
         p.permission === "ask" && !canPrompt
           ? { ...p, permission: "exclude" as const }

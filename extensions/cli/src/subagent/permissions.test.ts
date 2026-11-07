@@ -110,4 +110,19 @@ describe("subagentPermissions", () => {
       check("Subagent", {}, { policies: [{ tool: "*", permission: "allow" }] }),
     ).toBe("exclude");
   });
+
+  it("never lets a subagent write the parent's task list", () => {
+    const allowAll: ToolPermissions = {
+      policies: [{ tool: "*", permission: "allow" }],
+    };
+    for (const tool of ["TaskList", "Checklist"]) {
+      expect(check(tool, {}, allowAll)).toBe("exclude");
+      expect(
+        checkToolPermission(
+          { name: tool, arguments: {} },
+          subagentPermissions(allowAll, { canPrompt: true }),
+        ).permission,
+      ).toBe("exclude");
+    }
+  });
 });
