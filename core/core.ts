@@ -31,6 +31,7 @@ import { globalProfileStatus } from "./llm/llms/bedrockHelpers";
 import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
+import { detectLocalServers } from "./llm/localServers";
 import Ollama from "./llm/llms/Ollama";
 import { EditAggregator } from "./nextEdit/context/aggregateEdits";
 import { createNewPromptFileV2 } from "./promptFiles/createNewPromptFile";
@@ -1678,6 +1679,8 @@ export class Core {
         return [];
       }
     });
+
+    on("models/detectLocal", async () => detectLocalServers());
   }
 
   private async handleToolCall(toolCall: ToolCall) {

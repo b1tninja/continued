@@ -113,6 +113,7 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "process/isBackgrounded",
     "process/killTerminalProcess",
     "models/fetch",
+    "models/detectLocal",
   ];
 
 // Message types to pass through from core to webview

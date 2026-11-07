@@ -21,6 +21,7 @@ import type {
 } from "../config/providers/types";
 import type { ModeModelsInput } from "../config/yaml/saveModeModels";
 import type { SubagentLoadResult } from "../subagents/loadSubagents";
+import type { DetectedLocalServer } from "../llm/localServers";
 import type { RulesByModeInput } from "../config/yaml/saveRulesByMode";
 import type {
   AutoReviewReply,
@@ -584,4 +585,6 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       deprecated?: boolean;
     }[],
   ];
+  /** OpenAI-compatible servers answering on this machine's common ports. */
+  "models/detectLocal": [undefined, DetectedLocalServer[]];
 };

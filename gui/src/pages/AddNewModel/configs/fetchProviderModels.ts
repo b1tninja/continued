@@ -99,6 +99,16 @@ async function fetchModels(
   return response.content.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Checklist entries for the chat models in a fetched list. */
+export function fetchedToPackages(
+  models: FetchedModel[],
+  provider: string,
+): ModelPackage[] {
+  return models
+    .filter((m) => isLikelyChatModelId(m.modelId ?? m.name))
+    .map((m) => toGenericPackage(m, provider));
+}
+
 export async function fetchProviderModels(
   ideMessenger: IIdeMessenger,
   provider: string,
@@ -106,9 +116,7 @@ export async function fetchProviderModels(
   apiBase?: string,
 ): Promise<ModelPackage[]> {
   const models = await fetchModels(ideMessenger, provider, apiKey, apiBase);
-  return models
-    .filter((m) => isLikelyChatModelId(m.modelId ?? m.name))
-    .map((m) => toGenericPackage(m, provider));
+  return fetchedToPackages(models, provider);
 }
 
 export async function initializeDynamicModels(ideMessenger: IIdeMessenger) {
