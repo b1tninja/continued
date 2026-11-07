@@ -26,6 +26,9 @@ import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
 import { TaskListPanel } from "../../components/mainInput/TaskListPanel";
 import { LargeMessageNotice } from "../../components/mainInput/LargeMessageNotice";
+import { QueuedMessages } from "../../components/mainInput/QueuedMessages";
+import { useMainEditor } from "../../components/mainInput/TipTapEditor";
+import { mergeQueuedMessages } from "../../components/mainInput/util/queuedMessages";
 import { useOnboardingCard } from "../../components/OnboardingCard";
 import StepContainer from "../../components/StepContainer";
 import { TabBar } from "../../components/TabBar/TabBar";
@@ -40,7 +43,11 @@ import {
 import {
   cancelToolCall,
   ChatHistoryItemWithMessageId,
+  enqueueMessage,
   newSession,
+  QueuedMessage,
+  removeQueuedMessage,
+  takeQueuedMessages,
   updateToolCallOutput,
 } from "../../redux/slices/sessionSlice";
 import { streamEditThunk } from "../../redux/thunks/edit";
@@ -179,6 +186,16 @@ export function Chat() {
         stateSnapshot.config.config.selectedModelByRole;
       const currentMode = stateSnapshot.session.mode;
 
+      // Typed while the agent works: queue it for when the turn ends, and
+      // leave the running turn alone
+      if (stateSnapshot.session.isStreaming) {
+        if (index === undefined && !isCurrentlyInEdit) {
+          dispatch(enqueueMessage({ editorState, modifiers }));
+          editorToClearOnSend?.commands.clearContent(false);
+        }
+        return;
+      }
+
       // Cancel all pending tool calls
       latestPendingToolCalls.forEach((toolCallState) => {
         dispatch(
@@ -234,6 +251,58 @@ export function Chat() {
       }
     },
     [dispatch, ideMessenger, reduxStore],
+  );
+
+  // Messages queued while the agent worked (see QueuedMessages)
+  const { mainEditor } = useMainEditor();
+  const isQueueSendRequested = useAppSelector(
+    (state) => state.session.isQueueSendRequested,
+  );
+
+  const sendQueuedMessages = useCallback(
+    async (ids?: string[]) => {
+      if (reduxStore.getState().session.isStreaming) {
+        await dispatch(cancelStream());
+      }
+      const { queuedMessages } = reduxStore.getState().session;
+      const chosen = ids
+        ? queuedMessages.filter((m) => ids.includes(m.id))
+        : queuedMessages;
+      const merged = mergeQueuedMessages(chosen);
+      if (!merged) return;
+
+      if (chosen.length === queuedMessages.length) {
+        dispatch(takeQueuedMessages());
+      } else {
+        chosen.forEach((m) => dispatch(removeQueuedMessage(m.id)));
+      }
+      sendInput(merged.editorState, merged.modifiers);
+    },
+    [dispatch, reduxStore, sendInput],
+  );
+
+  useEffect(() => {
+    if (isQueueSendRequested && !isStreaming) {
+      void sendQueuedMessages();
+    }
+  }, [isQueueSendRequested, isStreaming, sendQueuedMessages]);
+
+  const editQueuedMessage = useCallback(
+    (message: QueuedMessage) => {
+      dispatch(removeQueuedMessage(message.id));
+      if (!mainEditor) return;
+      if (mainEditor.isEmpty) {
+        mainEditor.chain().setContent(message.editorState).focus("end").run();
+      } else {
+        // Ahead of anything already typed, as the queue was written first
+        mainEditor
+          .chain()
+          .insertContentAt(0, message.editorState.content ?? [])
+          .focus("end")
+          .run();
+      }
+    },
+    [dispatch, mainEditor],
   );
 
   useWebviewListener(
@@ -422,6 +491,11 @@ export function Chat() {
         <CachingOffNotice />
         <LargeMessageNotice />
         <TaskListPanel />
+        <QueuedMessages
+          onSendNow={(ids) => void sendQueuedMessages(ids)}
+          onEdit={editQueuedMessage}
+          onRemove={(id) => dispatch(removeQueuedMessage(id))}
+        />
         <ContinueInputBox
           isMainInput
           isLastUserInput={false}

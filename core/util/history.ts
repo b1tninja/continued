@@ -136,6 +136,9 @@ export class HistoryManager {
     if (session.taskPlan?.items.length) {
       orderedSession.taskPlan = session.taskPlan;
     }
+    if (session.queuedMessages?.length) {
+      orderedSession.queuedMessages = session.queuedMessages;
+    }
 
     fs.writeFileSync(
       getSessionFilePath(session.sessionId),
