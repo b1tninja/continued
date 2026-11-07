@@ -154,8 +154,8 @@ export const contextManagementSchema = z.object({
    */
   requestBodyHints: z
     .object({
-      oneShot: z.record(z.any()).optional(),
-      conversation: z.record(z.any()).optional(),
+      oneShot: z.record(z.string(), z.any()).optional(),
+      conversation: z.record(z.string(), z.any()).optional(),
     })
     .optional(),
 });
