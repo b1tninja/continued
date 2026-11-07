@@ -2,16 +2,9 @@ import type { CatalogModel, ConfigYaml } from "@continuedev/config-yaml";
 
 import { editConfigFile } from "../../util/paths";
 
-/** The roles the Assign table edits. Others (embed, rerank) are kept as they are. */
-export const ASSIGNABLE_ROLES = [
-  "chat",
-  "edit",
-  "apply",
-  "autocomplete",
-  "subagent",
-  "summarize",
-] as const;
-export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
+import { ASSIGNABLE_ROLES, type AssignableRole } from "./modelRoles";
+
+export { ASSIGNABLE_ROLES, type AssignableRole } from "./modelRoles";
 
 export interface ModelRolesUpdate {
   /** A catalog reference (`Name` or `Name#variant`) or a config model's name. */

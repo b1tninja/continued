@@ -1,8 +1,8 @@
 import {
   ASSIGNABLE_ROLES,
-  AssignableRole,
-  CatalogListEntry,
-} from "core/config/yaml/saveModelRoles";
+  type AssignableRole,
+} from "core/config/yaml/modelRoles";
+import type { CatalogListEntry } from "core/config/yaml/saveModelRoles";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { Button, Card } from "../../../components/ui";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
