@@ -341,7 +341,12 @@ export function ProviderSetupFlow({
         );
         return;
       }
-      if (providerRef.current === forProvider) setLiveModels(fetched);
+      if (providerRef.current === forProvider) {
+        setLiveModels(fetched);
+        // A server that names itself names the account, as Detect does
+        const server = fetched.find((p) => p.server)?.server;
+        if (isLocal && server) setDetectedName((d) => d ?? server);
+      }
     } catch (e) {
       setRefreshError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -802,6 +807,7 @@ export function ProviderSetupFlow({
             }
             confirmedRemoval={confirmedRemoval}
             onConfirmRemoval={setConfirmedRemoval}
+            account={accountForSave}
             error={error}
             warning={warning}
           />

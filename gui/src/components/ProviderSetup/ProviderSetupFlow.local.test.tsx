@@ -118,6 +118,27 @@ describe("ProviderSetupFlow: local server", () => {
     ]);
   });
 
+  it("names the account after a server that says what it is, without Detect", async () => {
+    const { messenger, saves } = messengerWith();
+    messenger.responseHandlers["models/fetch"] = async () => [
+      { ...STRATA_MODEL, server: "Strata" },
+    ];
+    const onDone = vi.fn();
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="openai-compatible" onDone={onDone} />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await checkModel(STRATA_MODEL.name);
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    expect((await screen.findByTestId("review-account")).textContent).toContain(
+      'the account "Strata"',
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(saves[0].account).toEqual({ name: "Strata" });
+  });
+
   it("lists the models at the default address (port 8080) on Next", async () => {
     const { messenger, fetches } = messengerWith();
     const { user } = await renderWithProviders(

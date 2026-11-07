@@ -15,6 +15,7 @@ interface FetchedModel {
   supportsTools?: boolean;
   supportsImages?: boolean;
   reasoningEfforts?: string[];
+  server?: string;
   createdAt?: string;
   deprecated?: boolean;
 }
@@ -88,6 +89,7 @@ function toGenericPackage(model: FetchedModel, provider: string): ModelPackage {
     ...(model.icon ? { icon: model.icon } : {}),
     ...(model.createdAt ? { createdAt: model.createdAt } : {}),
     ...(model.deprecated ? { deprecated: true } : {}),
+    ...(model.server ? { server: model.server } : {}),
   };
 }
 

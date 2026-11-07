@@ -261,6 +261,7 @@ async function getModels(
         ? { supportsImages: true }
         : {}),
       ...(efforts && efforts.length > 0 ? { reasoningEfforts: efforts } : {}),
+      ...(strata ? { server: "Strata" } : {}),
     };
   });
 }

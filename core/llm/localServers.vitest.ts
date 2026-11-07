@@ -177,6 +177,7 @@ describe("detectLocalServers", () => {
             contextLength: 524288,
             supportsImages: true,
             reasoningEfforts: ["none", "low", "medium", "high"],
+            server: "Strata",
           },
         ],
       },
@@ -412,6 +413,7 @@ describe("reasoning efforts from the server", () => {
       fetchFn as unknown as typeof fetch,
     );
     expect(m.reasoningEfforts).toEqual(["none", "low", "medium", "high"]);
+    expect(m.server).toBe("Strata");
   });
 
   it("none for a server that does not say", async () => {
