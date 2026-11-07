@@ -1896,6 +1896,13 @@ export class Core {
           );
           continue;
         }
+        // Accounts and the model catalog are read by every config
+        if (/[\\/]\.continue[\\/](providers|models)\.yaml$/.test(uri)) {
+          await this.configHandler.reloadConfig(
+            "providers.yaml or models.yaml updated",
+          );
+          continue;
+        }
         if (isColocatedRulesFile(uri)) {
           try {
             const codebaseRulesCache = CodebaseRulesCache.getInstance();

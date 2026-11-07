@@ -260,3 +260,63 @@ export const providersFileSchema = z.object({
   providers: z.array(providerInstanceSchema).default([]),
 });
 export type ProvidersFile = z.infer<typeof providersFileSchema>;
+
+/**
+ * What a variant of a catalog model may change: its settings, never which
+ * model it is or where it is served from. Picked as `Name#variant`.
+ */
+export const catalogVariantSchema = partialModelSchema.omit({
+  name: true,
+  model: true,
+  provider: true,
+  connection: true,
+  apiKey: true,
+  apiBase: true,
+});
+export type CatalogVariant = z.infer<typeof catalogVariantSchema>;
+
+/**
+ * Another account that serves the same model, tried when the one before it
+ * fails. `model` is that account's own id for it (a Bedrock inference
+ * profile, an OpenRouter slug), when it differs.
+ */
+export const catalogRouteSchema = z.object({
+  connection: z.string().min(1),
+  model: z.string().optional(),
+  apiBase: z.string().optional(),
+  env: z
+    .record(z.string(), z.union([z.string(), z.boolean(), z.number()]))
+    .optional(),
+  requestOptions: requestOptionsSchema.optional(),
+});
+export type CatalogRoute = z.infer<typeof catalogRouteSchema>;
+
+/**
+ * A model in the catalog (~/.continue/models.yaml, or a workspace's
+ * .continue/models.yaml): defined once and used from any config with
+ * `from: <name>`. It names its account with `connection:` (or gives its own
+ * provider), as a model in a config can.
+ */
+export const catalogModelSchema = z.object({
+  ...baseModelFields,
+  provider: z.string().optional(),
+  /** Named settings changes, picked as `Name#variant`. */
+  variants: z.record(z.string().min(1), catalogVariantSchema).optional(),
+  /** Further accounts for the same model, in the order they are tried. */
+  routes: z.array(catalogRouteSchema).optional(),
+});
+export type CatalogModel = z.infer<typeof catalogModelSchema>;
+
+export const modelsFileSchema = z.object({
+  models: z.array(catalogModelSchema).default([]),
+});
+export type ModelsFile = z.infer<typeof modelsFileSchema>;
+
+/**
+ * A config's use of a catalog model: `from: Name` or `from: Name#variant`,
+ * with roles and any field to change for this config.
+ */
+export const catalogModelRefSchema = partialModelSchema.extend({
+  from: z.string().min(1),
+});
+export type CatalogModelRef = z.infer<typeof catalogModelRefSchema>;

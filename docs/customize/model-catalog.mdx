@@ -1,0 +1,59 @@
+---
+title: "Model Catalog"
+description: "Define each model once in models.yaml, with variants, and use it from any config."
+---
+
+A model catalog defines each model once: which [provider account](./providers) serves it, its context window, capabilities and settings, and named variants. Any config then uses it with `from:`, so models from several accounts mix freely, for example a local server for Agent mode and Claude on Bedrock for Plan mode.
+
+```yaml ~/.continue/models.yaml
+models:
+  - name: Qwen3.8 Flash
+    connection: strata # an account in providers.yaml
+    model: qwen3.8-flash-next-nvfp4-nvfp4
+    contextLength: 524288
+    capabilities: [tool_use, image_input]
+    defaultCompletionOptions: { maxTokens: 8192, temperature: 1.0 }
+    variants:
+      plan:
+        requestOptions:
+          extraBodyProperties: { reasoning_effort: xhigh }
+      act:
+        requestOptions:
+          extraBodyProperties: { reasoning_effort: low }
+  - name: Claude Sonnet
+    connection: bedrock-us
+    model: us.anthropic.claude-sonnet-4-6
+```
+
+## Use a catalog model in a config
+
+```yaml ~/.continue/config.yaml
+models:
+  - from: Qwen3.8 Flash#act
+    roles: [chat, edit, apply]
+modeModels:
+  plan:
+    model: Claude Sonnet
+  agent:
+    model: Qwen3.8 Flash#act
+```
+
+- `from: Name` uses the catalog model as it is, and `from: Name#variant` with that variant's changes.
+- The config entry can add `roles` and change any field for this config. Its name is the reference (`Qwen3.8 Flash#act`) unless it sets `name`.
+- A model or variant that `modeModels` picks but the config's `models` list does not have is added as a chat model, so a model assigned to a mode does not need to be listed twice.
+
+## How the settings combine
+
+A model is built from four layers, each over the one before: the account (`providers.yaml`), the catalog model, the variant, then the config entry. Objects merge key by key, so a variant can change one completion option and keep the others; plain values and lists replace.
+
+## Variants
+
+A variant changes a model's settings, never which model it is or where it is served from: `name`, `model`, `provider`, `connection`, `apiKey` and `apiBase` cannot be set in a variant. Use variants for reasoning effort, sampling, `contextManagement` and similar.
+
+## Workspace catalog
+
+A workspace's `.continue/models.yaml` adds models for that workspace, and a model there replaces a global model with the same name. The CLI (`cn`) reads the same files, `~/.continue/models.yaml` and `.continue/models.yaml` in the working directory, and `providers.yaml` in both places.
+
+## Errors
+
+A `from:` name or variant that the catalog does not have skips that model with a message; the rest of the config still loads. Model names cannot contain `#`, which picks a variant.

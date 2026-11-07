@@ -99,9 +99,9 @@ modeModels:
   plan: { model: Claude Sonnet }
   agent: { model: Qwen3.8 Flash#act }
 models:
-  - uses: Qwen3.8 Flash # a catalog entry, used as is
+  - from: Qwen3.8 Flash # a catalog entry, used as is
     roles: [chat, edit, apply]
-  - uses: Claude Sonnet
+  - from: Claude Sonnet
     roles: [chat]
 ```
 
@@ -113,7 +113,7 @@ models:
 - `variants` holds only what differs: completion options, request options, reasoning effort, `contextManagement`. A variant is picked as `Name#variant`.
 - `routes` lists accounts that serve the same model, each with its own wire id, tried in order.
 
-**A config** keeps today's format. A model entry can now be `uses: <catalog name>` (with `roles` and any overrides), next to inline models.
+**A config** keeps today's format. A model entry can now be `from: <catalog name>` (with `roles` and any overrides), next to inline models.
 
 - `modeModels` and roles name catalog models or variants.
 - Merge order: account, then catalog model, then variant, then the config entry's own fields. Objects merge; scalars and lists replace.
@@ -130,7 +130,7 @@ The setup flow becomes the editor for all three layers:
   - Re-detecting finds the existing account by address.
 - **Models** adds catalog entries with what the provider reported: context window, tools, images, and the variants a model's reasoning efforts allow (as opencode generates them).
 - **Assign** is a new step, and also a page of its own. It is one table of every catalog model from every account against the roles and modes (Plan, Agent, Chat, Edit, Autocomplete, Subagents, Compaction), so local and cloud models are picked side by side.
-- **Migration:** inline models that share a provider, address and key are offered as one "Turn into an account" action, which writes the account and catalog entries and replaces the inline models with `uses:`. Comments and key order are kept, as config saving already does.
+- **Migration:** inline models that share a provider, address and key are offered as one "Turn into an account" action, which writes the account and catalog entries and replaces the inline models with `from:`. Comments and key order are kept, as config saving already does.
 
 ### 3. One model, several routes
 
@@ -161,7 +161,7 @@ Like Claude Code's chain, at most three routes. The cache warnings treat a route
 
 | Phase | Scope                                                                                                                                                                                     | Depends on             |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| C1    | Catalog: `models.yaml` (global and workspace), `uses:` in configs, `Name#variant`, the merge order, errors. Schema in `packages/config-yaml`, resolver in core, used by the IDE and `cn`. | none                   |
+| C1    | Catalog: `models.yaml` (global and workspace), `from:` in configs, `Name#variant`, the merge order, errors. Schema in `packages/config-yaml`, resolver in core, used by the IDE and `cn`. | none                   |
 | C2    | Setup writes accounts and catalog entries; Detect creates local accounts; "Turn into an account" migration.                                                                               | C1                     |
 | C3    | The Assign page: every catalog model against roles and modes, including Subagents and Compaction.                                                                                         | C1                     |
 | C4    | Variants generated from reported reasoning efforts; switching between variants of one model does not count as a model change in the cache warnings.                                       | C1                     |
@@ -175,7 +175,7 @@ C1 to C4 are the core of the request: providers configured once, models defined 
 ## Open questions
 
 1. Should the catalog be its own file (`models.yaml`), or a `models:` section in `providers.yaml`? A separate file keeps accounts (with key references) apart from models that are safe to share in a repository.
-2. Should `uses:` also accept a file path (`uses: ./models/strata.yaml`), as Continue's blocks did?
+2. Should `from:` also accept a file path (`from: ./models/strata.yaml`)? Configs already use `uses:` for blocks (file paths and hub slugs), which is why catalog references use their own key.
 3. Variants generated from reported reasoning efforts: all of them, or only the ones the user picks?
 4. Should a route change keep the conversation on the new route, or go back to the first route on the next request?
 5. How should Continued and VS Code's Language Models editor stay in step once both can add accounts: one-way import, or two-way?
