@@ -145,6 +145,9 @@ function ModelOption({
   );
 }
 
+/** Dispatch on window to open the chat model picker. */
+export const OPEN_MODEL_SELECT_EVENT = "continued:openModelSelect";
+
 function ModelSelect() {
   const dispatch = useAppDispatch();
   const { openSetup } = useProviderSetupDialog();
@@ -154,6 +157,12 @@ function ModelSelect() {
   const config = useAppSelector((state) => state.config.config);
   const isConfigLoading = useAppSelector((state) => state.config.loading);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  // Opened from elsewhere, e.g. "Change model" after a failed request
+  useEffect(() => {
+    const open = () => buttonRef.current?.click();
+    window.addEventListener(OPEN_MODEL_SELECT_EVENT, open);
+    return () => window.removeEventListener(OPEN_MODEL_SELECT_EVENT, open);
+  }, []);
   const [options, setOptions] = useState<Option[]>([]);
   const [sortedOptions, setSortedOptions] = useState<Option[]>([]);
   const { selectedProfile } = useAuth();
