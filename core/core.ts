@@ -320,6 +320,7 @@ export class Core {
 
       this.registerMessageHandlers(ideSettingsPromise);
       this.registerSubagentHandlers();
+      this.registerModelListHandlers();
     } catch (error) {
       Logger.error(error);
       throw error; // Re-throw to prevent partially initialized core
@@ -331,6 +332,26 @@ export class Core {
     this.messenger.on("subagents/list", async () =>
       loadSubagentDefinitions(this.ide),
     );
+  }
+
+  /** Live model lists, and the local servers running on this machine. */
+  private registerModelListHandlers() {
+    const on = this.messenger.on.bind(this.messenger);
+
+    on("models/fetch", async (msg) => {
+      try {
+        return await fetchModels(
+          msg.data.provider,
+          msg.data.apiKey,
+          msg.data.apiBase,
+        );
+      } catch (error: any) {
+        void this.ide.showToast("error", error.message);
+        return [];
+      }
+    });
+
+    on("models/detectLocal", async () => detectLocalServers());
   }
 
   /** Config files, provider accounts and plaintext key handling. */
@@ -1666,21 +1687,6 @@ export class Core {
     on("process/killTerminalProcess", async ({ data: { toolCallId } }) => {
       await killTerminalProcess(toolCallId);
     });
-
-    on("models/fetch", async (msg) => {
-      try {
-        return await fetchModels(
-          msg.data.provider,
-          msg.data.apiKey,
-          msg.data.apiBase,
-        );
-      } catch (error: any) {
-        void this.ide.showToast("error", error.message);
-        return [];
-      }
-    });
-
-    on("models/detectLocal", async () => detectLocalServers());
   }
 
   private async handleToolCall(toolCall: ToolCall) {
