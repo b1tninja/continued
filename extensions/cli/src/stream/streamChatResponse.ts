@@ -41,6 +41,7 @@ import {
   getDefaultCompletionOptions,
   StreamCallbacks,
 } from "./streamChatResponse.types.js";
+import { taskListBlockForRequest } from "./taskListBlock.js";
 
 dotenv.config();
 
@@ -208,7 +209,7 @@ export function taskListBlockForRequest(tools?: ChatCompletionTool[]): string {
 }
 
 // Process a single streaming response and return whether we need to continue
-// eslint-disable-next-line max-statements, complexity
+// eslint-disable-next-line max-statements
 export async function processStreamingResponse(
   options: ProcessStreamingResponseOptions,
 ): Promise<{
@@ -549,6 +550,7 @@ export async function streamChatResponse(
       callbacks,
       isHeadless,
       usage,
+      abortSignal: abortController.signal,
     });
 
     if (shouldReturn) {
