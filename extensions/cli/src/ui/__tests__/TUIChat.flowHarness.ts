@@ -220,7 +220,9 @@ export async function resetFlowState() {
   await services.chatHistory.initialize(undefined);
 }
 
-export function renderFlow() {
+export function renderFlow(): ReturnType<typeof render> & {
+  allOutput: () => string;
+} {
   const result = render(React.createElement(AppRoot));
   /** Everything written so far, static output included. */
   const allOutput = () => result.frames.join("\n");
