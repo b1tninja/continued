@@ -17,7 +17,13 @@ const path = require("path");
 const file = path.join(__dirname, "..", "package.json");
 const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
 
-pkg.enabledApiProposals = ["chatSessionsProvider", "chatParticipantPrivate"];
+pkg.enabledApiProposals = [
+  "chatSessionsProvider",
+  "chatParticipantPrivate",
+  // isBYOK on the models of the "continued" language model provider, which
+  // the Agents window needs to hand them to agent sessions
+  "chatProvider",
+];
 pkg.contributes.chatSessions = [
   {
     // Must match SESSION_TYPE in src/ai/agentSessions.ts.

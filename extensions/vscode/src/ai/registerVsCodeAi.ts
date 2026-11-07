@@ -16,8 +16,8 @@ const SHARE_MODELS = "continue.shareModelsWithVSCode";
 const SHARE_MCP = "continue.shareMcpServersWithVSCode";
 
 /**
- * Offer the selected Continued config's chat models and MCP servers to VS
- * Code's own chat and agents, through the stable language model and MCP
+ * Offer the selected Continued config's chat models (then the rest of the
+ * model catalog) and MCP servers to VS Code's own chat and agents, through the stable language model and MCP
  * provider APIs. Each can be turned off in settings.
  */
 export function registerVsCodeAi(
@@ -63,7 +63,7 @@ export function registerVsCodeAi(
   );
 
   const apply = (config: ContinueConfig | undefined) => {
-    models.update(config?.modelsByRole?.chat);
+    models.update(config?.modelsByRole?.chat, config?.offeredModels);
     mcp.update(config?.mcpServerStatuses);
   };
   void configHandler.loadConfig().then(({ config }) => apply(config));

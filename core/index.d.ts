@@ -2145,6 +2145,11 @@ export interface ContinueConfig {
   mcpServerStatuses: MCPServerStatus[];
   rules: RuleWithSource[];
   modelsByRole: Record<ModelRole, ILLM[]>;
+  /**
+   * Catalog models (and variants) that this config does not use for any
+   * role, offered to VS Code's model picker next to the config's chat models.
+   */
+  offeredModels?: ILLM[];
   selectedModelByRole: Record<ModelRole, ILLM | null>;
   modeModels?: ModeModelsConfig;
   /** Per-mode rules switch from `rulesByMode:` in config.yaml; a missing mode is on. */

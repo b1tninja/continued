@@ -169,6 +169,30 @@ describe("language model provider", () => {
     expect(p.provideLanguageModelChatInformation()).toEqual([]);
   });
 
+  it("adds the catalog models the config does not use, after its own", () => {
+    const p = new ContinuedLanguageModelChatProvider();
+    p.update(
+      [llm()],
+      [
+        llm({ title: "Qwen#high", model: "qwen" }),
+        llm(), // also in the config: listed once
+      ],
+    );
+    expect(p.provideLanguageModelChatInformation().map((m) => m.id)).toEqual([
+      "Claude Sonnet",
+      "Qwen#high",
+    ]);
+  });
+
+  it("marks models as the user's own (BYOK) and names their routes", () => {
+    const info = modelInfo(
+      llm({ routeNames: ["bedrock-us", "anthropic-work"] }),
+      "Claude Sonnet",
+    ) as any;
+    expect(info.isBYOK).toBe(true);
+    expect(info.tooltip).toContain("routes: bedrock-us, anthropic-work");
+  });
+
   it("streams text and reports tool calls at the end", async () => {
     async function* stream() {
       yield { role: "assistant", content: "Let me look. " };

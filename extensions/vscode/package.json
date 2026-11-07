@@ -26,6 +26,11 @@
     "node": ">=20.20.1"
   },
   "engine-strict": true,
+  "capabilities": {
+    "agentsWindow": {
+      "supported": true
+    }
+  },
   "galleryBanner": {
     "color": "#1E1E1E",
     "theme": "dark"

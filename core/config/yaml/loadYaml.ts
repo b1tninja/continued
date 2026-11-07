@@ -125,6 +125,7 @@ async function loadConfigYaml(options: {
         injectBlocks: localPackageIdentifiers,
         providers: providerInstances.providers,
         catalog: modelCatalog.models,
+        offerCatalog: true,
       },
     );
     config = unrollResult.config;
@@ -306,6 +307,10 @@ export async function configYamlToContinueConfig(options: {
         config: continueConfig,
       });
 
+      // No role: a catalog model offered to VS Code only (offerCatalog)
+      if (model.roles.length === 0) {
+        (continueConfig.offeredModels ??= []).push(...llms);
+      }
       if (model.roles?.includes("chat")) {
         continueConfig.modelsByRole.chat.push(...llms);
       }

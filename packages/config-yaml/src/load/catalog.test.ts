@@ -298,3 +298,37 @@ models:
     ]);
   });
 });
+
+describe("offering the whole catalog", () => {
+  it("adds every model and variant the config does not use, with no roles", () => {
+    const { models } = resolveCatalogModels(
+      [{ from: "Qwen#act", roles: ["chat"] }],
+      [
+        {
+          name: "Qwen",
+          model: "qwen",
+          connection: "strata",
+          variants: { act: {}, plan: {} },
+        },
+        {
+          name: "Sonnet",
+          model: "claude-sonnet-4-6",
+          connection: "bedrock-us",
+        },
+      ],
+      undefined,
+      true,
+    );
+    expect(
+      (models as unknown as { name: string; roles: string[] }[]).map((m) => [
+        m.name,
+        m.roles,
+      ]),
+    ).toEqual([
+      ["Qwen#act", ["chat"]],
+      ["Qwen", []],
+      ["Qwen#plan", []],
+      ["Sonnet", []],
+    ]);
+  });
+});

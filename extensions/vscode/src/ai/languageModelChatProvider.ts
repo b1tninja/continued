@@ -22,10 +22,11 @@ interface ContinuedModelInfo extends vscode.LanguageModelChatInformation {
 }
 
 /**
- * Offers the chat models of the selected Continued config to VS Code's chat
- * and agents. Requests run through Continued's own LLM classes, so they use
- * the keys and settings from the config and providers.yaml; keys never pass
- * to VS Code.
+ * Offers the chat models of the selected Continued config, then the rest of
+ * the model catalog (models.yaml, each variant too), to VS Code's chat and
+ * agents. Requests run through Continued's own LLM classes, so they use the
+ * keys and settings from the config and providers.yaml; keys never pass to
+ * VS Code.
  */
 export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelChatProvider<ContinuedModelInfo> {
   private readonly changed = new vscode.EventEmitter<void>();
@@ -34,9 +35,12 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
   private models: ILLM[] = [];
   private enabled = true;
 
-  /** Called when the config reloads. */
-  update(chatModels: ILLM[] | undefined) {
-    const next = chatModels ?? [];
+  /**
+   * Called when the config reloads: the config's chat models, and the
+   * catalog models it does not use (ContinueConfig.offeredModels).
+   */
+  update(chatModels: ILLM[] | undefined, offeredModels?: ILLM[]) {
+    const next = [...(chatModels ?? []), ...(offeredModels ?? [])];
     const key = (list: ILLM[]) =>
       list.map((m) => `${m.title}|${m.providerName}|${m.model}`).join(",");
     if (key(next) === key(this.models)) {
@@ -158,6 +162,7 @@ export function modelInfo(llm: ILLM, title: string): ContinuedModelInfo {
     model: llm.model,
     capabilities: llm.capabilities,
   } as any);
+  const routes = llm.routeNames;
   return {
     id: title,
     llmTitle: title,
@@ -165,10 +170,17 @@ export function modelInfo(llm: ILLM, title: string): ContinuedModelInfo {
     family: llm.providerName,
     version: llm.model,
     detail: "Continued",
-    tooltip: `${llm.providerName} · ${llm.model} (from your Continued config)`,
+    tooltip: `${llm.providerName} · ${llm.model}${
+      routes ? ` (routes: ${routes.join(", ")})` : ""
+    } (from your Continued setup)`,
     maxInputTokens: Math.max(1, contextLength - maxOutputTokens),
     maxOutputTokens,
     capabilities: { toolCalling: !!toolCalling, imageInput: false },
+    // Proposed chatProvider API (the agents build declares it; elsewhere
+    // VS Code ignores these): the model runs on the user's own accounts,
+    // which is what the Agents window forwards to its agent sessions, and
+    // it can be picked in the model picker.
+    ...({ isBYOK: true, isUserSelectable: true } as object),
   };
 }
 

@@ -2,13 +2,15 @@
 title: "VS Code Chat and Agents"
 ---
 
-Continued shares the selected config's chat models and MCP servers with VS Code's own chat, agent mode and Agents window. Its keys stay with Continued.
+Continued shares its models (the selected config's chat models and the rest of the [model catalog](/customize/model-catalog)) and the config's MCP servers with VS Code's own chat, agent mode and Agents window. Its keys stay with Continued.
 
 ## Models in VS Code's model picker
 
-The chat models of the selected config appear in VS Code's model picker under **Continued**. Requests from VS Code's chat and agents run through Continued with the keys from your config and [provider accounts](/customize/providers); VS Code never receives the keys. Models that support tool calling can be used in agent mode.
+The chat models of the selected config appear in VS Code's model picker under **Continued**, followed by every other model in your [model catalog](/customize/model-catalog), each variant on its own (`Qwen3.8 Flash#high`). Requests from VS Code's chat and agents run through Continued with the keys from your config and [provider accounts](/customize/providers); VS Code never receives the keys. Models that support tool calling can be used in agent mode, and a model with [routes](/customize/model-catalog#routes) falls back between its accounts as it does in Continued.
 
 Switching configs changes the list. Turn it off with the `continue.shareModelsWithVSCode` setting.
+
+The agents build (below) also declares VS Code's proposed `chatProvider` API, and marks each model as one that runs on your own account (`isBYOK`). The Agents window passes only such models to its agent sessions.
 
 <Note>
   VS Code only shows models from extensions to users on an individual GitHub Copilot plan, and Copilot Business or Enterprise administrators can turn them off with the "Bring Your Own Language Model Key" policy.
@@ -39,11 +41,7 @@ These sessions are expected to appear in editor chat and its sessions list, not 
 
 ## Agents window: current state
 
-In VS Code 1.145, an extension with code runs in the Agents window only if its `package.json` declares `capabilities.agentsWindow.supported`. Continued does not declare it yet, so its models and MCP servers are available in editor chat and agent mode, not in the Agents window. To try it anyway, enable Continued there in your user settings and reload the Agents window. Continued's sidebar and status bar do not exist in the Agents window, and this is untested:
-
-```json
-"extensions.supportAgentsWindow": { "b1tninja.continued": true }
-```
+In VS Code 1.145, an extension with code runs in the Agents window only if its `package.json` declares `capabilities.agentsWindow.supported`. Continued declares it, so its models and MCP servers are offered there too. The Agents window has its own extension host, without Continued's sidebar and status bar; Continued reads its models from `providers.yaml`, `models.yaml` and the config files, which both windows share, so the same models appear in each. This has not been tested in the Agents window yet.
 
 ## Roadmap
 
@@ -52,7 +50,7 @@ These are possible next steps. None is scheduled; most wait on VS Code APIs beco
 | Item | What it would do | Status |
 | :-- | :-- | :-- |
 | Agent sessions in the Agents window | Continued as an agent next to Copilot, Claude and Codex | **Blocked.** The agents there are built into VS Code, and the session API (`chatSessionsProvider`) is proposed with no plan to finalize it ([microsoft/vscode#340045](https://github.com/microsoft/vscode/issues/340045)). Stable VS Code allows it only for Copilot Chat, GitHub Pull Requests and OpenAI's Codex extension. |
-| Run in the Agents window | Make the shared models and MCP servers available there | Possible with the stable `capabilities.agentsWindow.supported` field, but the whole extension would load there, where its sidebar and status bar do not exist. Needs testing first. |
+| Run in the Agents window | Make the shared models and MCP servers available there | **Declared** with `capabilities.agentsWindow.supported`; not yet tested there. |
 | Your rules and prompts in VS Code chat | Continued rules as instructions, prompts as slash commands, skills and custom agents | The `chatInstructions`, `chatPromptFiles`, `chatSkills`, `chatAgents` and `chatPlugins` contribution points are stable but only ship files bundled in the extension. Providing each user's own rules and prompts needs the proposed `chatPromptFiles` provider API. |
 | Codebase search as a tool | Let any VS Code agent search Continued's codebase index and docs | Possible with the stable language model tools API (`vscode.lm.registerTool`). |
 | Provider accounts from VS Code's Language Models settings | Set up `providers.yaml` accounts where VS Code manages models | Possible with the stable configuration schema for model providers. |
