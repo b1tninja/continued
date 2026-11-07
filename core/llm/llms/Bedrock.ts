@@ -7,6 +7,7 @@ import {
   ConverseCommand,
   ConversationRole,
   ConverseStreamCommand,
+  ConverseStreamCommandInput,
   ConverseStreamCommandOutput,
   ImageFormat,
   InvokeModelCommand,
@@ -327,6 +328,45 @@ class Bedrock extends BaseLLM {
     return e;
   }
 
+  /**
+   * Sends a ConverseStream request. A model that refuses `stopSequences` is
+   * retried once without them and remembered, so later requests skip the
+   * failing attempt.
+   */
+  private async _sendConverseStream(
+    client: BedrockRuntimeClient,
+    input: ConverseStreamCommandInput,
+    signal: AbortSignal,
+  ): Promise<ConverseStreamCommandOutput> {
+    const send = async () =>
+      (await client.send(new ConverseStreamCommand(input), {
+        abortSignal: signal,
+      })) as ConverseStreamCommandOutput;
+    const withoutStops = () => {
+      input.inferenceConfig = {
+        ...input.inferenceConfig,
+        stopSequences: undefined,
+      };
+    };
+
+    const modelKey = input.modelId ?? "";
+    if (modelsWithoutStopSequences.has(modelKey)) withoutStops();
+
+    try {
+      return await send();
+    } catch (e) {
+      if (
+        !input.inferenceConfig?.stopSequences?.length ||
+        !isStopSequencesUnsupportedError(e)
+      ) {
+        throw e;
+      }
+      modelsWithoutStopSequences.add(modelKey);
+      withoutStops();
+      return await send();
+    }
+  }
+
   private async *_streamChatInner(
     messages: ChatMessage[],
     signal: AbortSignal,
@@ -359,34 +399,7 @@ class Bedrock extends BaseLLM {
       ...options,
       stream: true,
     });
-    const send = async () =>
-      (await client.send(new ConverseStreamCommand(input), {
-        abortSignal: signal,
-      })) as ConverseStreamCommandOutput;
-    const withoutStops = () => {
-      input.inferenceConfig = {
-        ...input.inferenceConfig,
-        stopSequences: undefined,
-      };
-    };
-
-    const modelKey = input.modelId ?? "";
-    if (modelsWithoutStopSequences.has(modelKey)) withoutStops();
-
-    let response: ConverseStreamCommandOutput;
-    try {
-      response = await send();
-    } catch (e) {
-      if (
-        !input.inferenceConfig?.stopSequences?.length ||
-        !isStopSequencesUnsupportedError(e)
-      ) {
-        throw e;
-      }
-      modelsWithoutStopSequences.add(modelKey);
-      withoutStops();
-      response = await send();
-    }
+    const response = await this._sendConverseStream(client, input, signal);
 
     if (!response?.stream) {
       throw new Error("No stream received from Bedrock API");
