@@ -1,0 +1,383 @@
+# Loop mode
+
+Last updated: 2026-11-07. Status: L1 (core state machine) and L2 (IDE) built, with unit and gui integration tests, and a sandbox run on a local model (see the PR). L3 (CLI and `cn serve`) and L4 (parallel items, verification) are not built.
+
+Build a plan item by item without the person driving each step. Questions go to an inbox the person can answer while the work continues.
+
+## The problem
+
+Driving an agent through a plan with instructions (`.clinerules`, a long AGENTS.md that describes a process) does not work well. The model gets caught up in the process. Each turn it re-derives what comes next, re-reads the rules, and spends its effort on the process instead of the work. When it needs a decision, it either stops and waits, which stalls everything, or decides silently.
+
+A "Multi Project mode" with a project registry and per-project sessions was proposed and set aside. Inventing a project format or new plan persistence is too specific for a general extension.
+
+What is wanted is a loop run by the extension, not described to the model. The model gets one item at a time with a short contract. It can hold a question without stopping, and the person can answer at any time while the loop goes on.
+
+## What other harnesses do
+
+A research pass on 2026-11-07 read each tool's docs, repositories and papers. The notes, with every URL, are summarised here. **UNVERIFIED** marks a claim that came only from a search snippet or a secondary page.
+
+The questions asked of each harness:
+
+1. Who picks the next item?
+2. Can it ask the person something without blocking other work?
+3. When does it re-plan?
+4. What stops it?
+5. What budgets apply?
+
+| Harness                    | Who picks the next item                                                                  | Non-blocking questions                                                                                   | Re-plan                                                                                    | Stop                                                                                                  | Budgets                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Claude Code `/loop`        | The model, within a fixed priority list (unfinished work, then the PR, then cleanup)     | No                                                                                                       | Every iteration                                                                            | The model stops; a fallback wakeup about 20 minutes later ends a silent loop; 7-day expiry            | Expiry only                                                                   |
+| Claude Code `/goal`        | The model                                                                                | No                                                                                                       | Every turn                                                                                 | A separate small model judges the condition after each turn; "no tool use for several turns" stops it | Turn or time limits written into the condition                                |
+| Claude Code agent teams    | A teammate claims "the next unassigned, unblocked task"; the harness unblocks dependents | Permission prompts from background subagents surface in the main session; subagents cannot ask questions | By the lead                                                                                | `TaskCompleted` hooks can veto completion                                                             | 3 to 5 teammates recommended                                                  |
+| Claude Code headless       | The model                                                                                | `--permission-prompts none` removes questions                                                            | —                                                                                          | `--max-turns`                                                                                         | `--max-budget-usd` ("spend can pass the cap")                                 |
+| Claude Code auto mode      | —                                                                                        | A blocked action is skipped in `-p` runs                                                                 | —                                                                                          | Pauses after 3 blocks in a row or 20 in total                                                         | —                                                                             |
+| Cline Plan/Act             | The model                                                                                | `ask_followup_question` blocks                                                                           | The person switches back to Plan                                                           | `attempt_completion`                                                                                  | Not documented on the fetched pages (UNVERIFIED)                              |
+| Roo Code Orchestrator      | The orchestrator model, after each subtask result                                        | No; the parent is paused while a subtask runs. A follow-up question can proceed on a timer               | After each subtask                                                                         | `attempt_completion`                                                                                  | "Max Requests" (consecutive API calls)                                        |
+| Kiro specs and Task Runner | The harness: a dependency graph run in waves, then the first pending task                | Only steps marked `force_approval` wait, even in YOLO mode                                               | After 3 failed attempts (up to 2 re-plans per step), or when the spec changes (Sync Files) | All steps pass; re-plans exhausted; 50-task cap                                                       | Retries, re-plans, task cap, stall warning at 60 minutes and reset at 2 hours |
+| OpenHands                  | The model (one ReAct loop)                                                               | No                                                                                                       | Every step                                                                                 | Finish action; a stuck detector; max iterations                                                       | Iterations and USD (defaults UNVERIFIED)                                      |
+| Devin                      | The model                                                                                | Not documented; a session waiting for the user waits as a whole                                          | UNVERIFIED                                                                                 | Finished, suspended, the person                                                                       | Usage caps; no usage while waiting                                            |
+| Codex cloud                | The model, one task per workspace                                                        | Parallel tasks are independent; questions inside a task UNVERIFIED                                       | UNVERIFIED                                                                                 | Task completion                                                                                       | UNVERIFIED                                                                    |
+| Cursor cloud agents        | The model, each agent on its own branch                                                  | UNVERIFIED                                                                                               | UNVERIFIED                                                                                 | Completion                                                                                            | A spend limit                                                                 |
+| Aider                      | The person                                                                               | No                                                                                                       | The person                                                                                 | After each request                                                                                    | None documented                                                               |
+
+### Patterns from the papers
+
+- **ReAct** interleaves reasoning and acting, so it re-plans implicitly at every step.
+- **Plan-and-Execute** (LangChain) runs a re-plan prompt after execution that either answers or emits a new plan.
+- **LLMCompiler** has the planner write a task DAG. A fetching unit "needs only a fetching and queuing mechanism, not a dedicated LLM" to dispatch ready tasks. A joiner model decides whether to finish or re-plan.
+- **ADaPT** decomposes an item only when the executor fails at it.
+- **Reflexion** keeps a short verbal note of what went wrong for the next trial.
+- **BabyAGI** re-prioritises its whole list every cycle in an infinite loop with no stop condition. It is the standard example of a runaway loop.
+- **MAST** classified 1,642 failed multi-agent traces:
+
+  | Failure mode                                  | Share of traces    |
+  | --------------------------------------------- | ------------------ |
+  | Step repetition                               | 15.7%              |
+  | Unaware of termination conditions             | 12.4%              |
+  | Incorrect, missing or incomplete verification | about 17% together |
+  | Failing to ask for clarification              | 6.8%               |
+
+### Stalls and runaway loops
+
+OpenHands' stuck detector is on by default. It compares calls by tool name and arguments, ignoring call ids, and counts parallel calls in one response as one attempt:
+
+| Pattern                                   | Threshold        |
+| ----------------------------------------- | ---------------- |
+| Same call with the same result            | 4 or more        |
+| Same call ending in an error              | 3 or more        |
+| Agent messages in a row with no tool call | 3 or more        |
+| Two calls alternating                     | 6 or more cycles |
+
+Kiro marks a step "Loop detected" after the same error three times. Claude Code overrides a Stop hook after it blocks eight times in a row. Its best-practices page says to clear the context after two failed corrections rather than try a third.
+
+### How often to ask
+
+- **Ambig-SWE** (ICLR 2026) found that asking can raise success by up to 74% on underspecified SWE-bench tasks. Models still "struggle to distinguish between well-specified and underspecified instructions", and unwarranted assumptions lead to worse outcomes.
+- **Ask or Assume?** (2026) got better calibration by giving underspecification detection to a separate role from the coder. It asks little on simple tasks and early on complex ones.
+- **LHAW** (2026) sorts missing information into outcome-critical, divergent and benign. Not every gap is worth a question. Over-clarification and compound questions are failure modes (UNVERIFIED).
+- **MAST** counts failing to ask in 6.8% of failed traces.
+
+The harnesses ask early, then assume during the run:
+
+- **Kiro** analyses requirements before design.
+- **Claude Code** suggests "interview me until you could write the spec".
+- **Roo** shows 2 to 4 suggested answers with an optional countdown.
+- **Claude Code**'s optional `askUserQuestionTimeout` submits the current selection. The model is told the person may be away and can re-ask later.
+- **Devin** reportedly proceeds with a plan after 30 seconds unless told to wait (UNVERIFIED).
+
+None of the harnesses records an assumption as something the person can confirm or overrule later. No harness verified here has a first-class "assumption ledger".
+
+### The Ralph loop
+
+Added on 2026-11-07 after a suggestion to look at it. Sources: Geoffrey Huntley's post (https://ghuntley.com/ralph/), his playbook repository (https://github.com/ghuntley/how-to-ralph-wiggum: `PROMPT_build.md`, `PROMPT_plan.md`, `AGENTS.md`, `loop.sh`), and the `ralph-loop` plugin in https://github.com/anthropics/claude-plugins-official/tree/main/plugins/ralph-loop (its README and `hooks/stop-hook.sh`).
+
+In its plainest form Ralph is a shell loop that feeds the same prompt file to a headless agent forever (`while :; do cat PROMPT.md | claude ; done`). Each iteration is a fresh process, so a fresh context. Everything that carries over is on disk:
+
+- the specs;
+- `IMPLEMENTATION_PLAN.md` (earlier `fix_plan.md`), a prioritised list the agent keeps current;
+- `AGENTS.md`, kept short and "operational only": how to build and test, and what was learned about running the project.
+
+The five questions:
+
+1. **Who picks the next item:** the model, "choose the most important item", one item per iteration.
+2. **Non-blocking questions:** none. The playbook runs with `--dangerously-skip-permissions`, so a sandbox is the only boundary.
+3. **Re-plan:** a separate planning prompt (`./loop.sh plan`) compares the specs with the code and rewrites the plan without implementing anything. "The plan is disposable": regenerate it when the loop goes off track, the plan is stale, or nobody is sure what is done.
+4. **Stop:** the operator, `max_iterations` in `loop.sh`, or the plugin's exact `<promise>` string. The plugin's README notes that one string cannot tell "SUCCESS" from "BLOCKED".
+5. **Budgets:** iterations only.
+
+The plugin runs the loop inside one session: a Stop hook blocks the exit and feeds the same prompt back. A secondhand report says Huntley advised against it because it keeps every iteration in one context window (UNVERIFIED; from a Reddit summary).
+
+What the playbook's prompts insist on:
+
+- "don't assume not implemented": search before adding. A search that misses existing code, and then a duplicate implementation, is what the post calls Ralph's "Achilles' heel".
+- No placeholders or stubs.
+- **Backpressure:** run the tests, type checks and lints for the unit changed before committing. `AGENTS.md` names the exact commands, so the prompt can say "run the tests" generically.
+- Record learnings so later iterations do not repeat mistakes, keeping them brief: a bloated file "pollutes every future loop's context".
+- The operator tunes the loop by adding "signs", short instructions that every later iteration sees, when Ralph fails in a particular way.
+
+## Design
+
+### What the research changed
+
+| Brief                                       | Research                                                                                                                                                                             | Built                                                                                                                           |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| The extension picks the next unblocked item | Supported. The systems that schedule in the harness (LLMCompiler, Kiro, agent teams) behave. BabyAGI, which lets the model re-prioritise each cycle, runs away                       | As briefed. Ties go by plan order, and only the re-plan turn changes the order                                                  |
+| "Say when it's done"                        | A turn should end with a structured result, and no result must not count as done (Anthropic's long-running harness, `/goal`, agent teams' status lag)                                | A `finish_item` tool with outcome done, waiting or stuck. A turn that ends without it runs the item again, then marks it failed |
+| Independent items as parallel subagents     | Cognition: parallel agents make conflicting hidden decisions. Agent teams: two agents on one file overwrite each other. About 15x tokens. Claude Code subagents cannot ask questions | Not built. Items run one at a time (phase L4)                                                                                   |
+| Stop on no progress                         | Cheap counters per item work (OpenHands, Kiro)                                                                                                                                       | Rounds that finish nothing stop the loop. A call repeated 4 times in one item's run is refused                                  |
+| Verification                                | Done should be confirmed by something other than the worker: about 17% of failed traces in MAST                                                                                      | Not built (phase L4)                                                                                                            |
+| Assumption questions                        | No harness records them for later. Overruling should redo the work                                                                                                                   | Assumptions are recorded. Overruling one on a done item reopens it as redo                                                      |
+| Reload                                      | Kiro reopens an interrupted run paused                                                                                                                                               | A loop saved mid-run comes back stopped, with the item pending                                                                  |
+
+### What the Ralph loop changed
+
+| Ralph                                                                            | Built here                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A fresh context every iteration, with state on disk                              | Each item run and re-plan is sent without the turns before it (`freshContext`, on by default). The chat still shows every turn. What carries over: the plan file, the loop's notes, the person's answers and standing instructions |
+| `AGENTS.md` learnings, kept brief                                                | `finish_item` takes optional `notes` ("a command that works, a trap you hit"). The last 12, at most 300 characters each, go with every later item and with the re-plan                                                             |
+| "Don't assume not implemented"                                                   | The contract says to search before adding anything and not to conclude something is missing from one search. The re-plan prompt says the plan may be wrong and to check open items against the code                                |
+| No placeholders; backpressure from tests, type checks and lints                  | The contract says to implement fully and to run the project's checks for what changed before reporting done, naming them in the summary. A check the harness runs itself is still L4                                               |
+| "Signs" the operator adds                                                        | A note in the inbox can be marked **For every item**. It goes with every item prompt from then on instead of waiting for the re-plan, and the inbox lists the ones in force                                                        |
+| The plan is disposable                                                           | Already the re-plan turn and "Re-plan now"                                                                                                                                                                                         |
+| Model picks the item; `--dangerously-skip-permissions`; one exact promise string | Not taken. The extension picks the item, a call that would ask is held as a question, and `finish_item` reports done, waiting or stuck                                                                                             |
+| A commit per item                                                                | Not taken for now: committing is outward-facing, and checkpoints (#185) already give per-turn restore                                                                                                                              |
+
+### Shape
+
+All of the logic is in `core/util/loopMode.ts`: pure functions, no I/O. The gui applies their results. The CLI can use the same functions later.
+
+The loop state is `Session.loop` (`LoopState` in `core/index.d.ts`), saved with the session like the task list and the queue. The task list (`Session.taskPlan`, #306) is still the list of items. The loop keeps its own status for each item, by task id, and writes it back to the list:
+
+| Loop status   | Task list status               |
+| ------------- | ------------------------------ |
+| running       | in_progress                    |
+| done          | completed                      |
+| waiting       | blocked ("Waiting on you: q2") |
+| failed        | blocked ("Failed: …")          |
+| pending, redo | pending                        |
+
+No new file formats: the plan is the existing plan file (`present_plan`, #308) and its to-dos.
+
+### Entry
+
+The plan card gets a third button, **Build in a loop**, next to Build and Keep planning. It reads the plan file back, because the person may have edited it, makes its to-dos the task list, creates the loop, and switches to Agent mode.
+
+### Act
+
+When nothing is running (no stream, no tool call in flight, no message of the person's about to go), `useLoopDriver` calls `advanceLoop`:
+
+1. **Finish what ran.** Record the item's report: done, waiting, stuck, or nothing.
+2. **Decide** (`decideNext`), in this order:
+   1. Budgets.
+   2. A plan-wide answer that asked to re-plan now.
+   3. The first runnable item in plan order.
+   4. Done.
+   5. Wait.
+   6. Re-plan.
+3. **Start** the item's run in the session: an ordinary user turn in Agent mode with the item prompt.
+
+The item prompt (`loopItemPrompt`) contains:
+
+- the item;
+- the plan file's path;
+- the person's answers that belong to this item;
+- the person's standing instructions and the notes earlier runs left;
+- whether this is a redo or a repeat attempt;
+- the contract: search before adding, implement fully, run the checks before reporting, report with `finish_item`, and ask with `hold_question`.
+
+It never explains the loop or asks the model what comes next. A unit test checks that it does not mention a next item or the loop.
+
+**Fresh context.** The run's request starts at its own prompt (`buildChatRequest` slices the history at `LoopState.current.historyIndex`). The system message and tools stay the same, so that part of the prompt cache still hits. The conversation part starts over with each item, which is the point: the item does not pay for, or get confused by, every earlier item's tool output. What it needs from earlier work is in the files, the plan, the notes and the answers. `freshContext: false` keeps the old behaviour, one growing conversation.
+
+While an item runs, the model is offered `hold_question` and `finish_item` and not the task list tool, because the loop owns the list. `finish_item` records the report and ends the turn without another model request.
+
+### Questions
+
+`hold_question(question, kind, assumption?)` puts a question in the inbox and returns at once. The item is the running one, so the model does not name it.
+
+- **assumption** (the default the prompt recommends): the item goes on with the stated default. The question stays open; the person can confirm it ("Keep the default") or overrule it.
+- **blocking**: only when there is no reasonable default. The item does what it can, then reports `waiting`. It is parked while other items run.
+
+The contract asks the model to surface decisions instead of settling them silently: a choice between approaches, scope, naming, an irreversible step, or anything the plan does not settle. It recommends assumption first, and blocking only when there is no reasonable default. Each question must stand on its own (the item, the options, the default), so the person can answer from the inbox without reading the transcript. A unit test checks that the prompt says all of this.
+
+**Question fatigue** pulls the other way. The research found models bad at telling when to ask, and both over-asking and silent assumptions are failure modes. So the prompt pushes towards asking, the assumption kind makes asking free for the loop, and caps keep the inbox readable:
+
+- at most 4 open questions per item, after which the model is told to continue on its assumptions or report waiting;
+- at most 40 in a loop;
+- the same open question asked again is not added twice.
+
+The inbox lists open questions together, not one notification each.
+
+### Approvals
+
+A tool call that would wait for approval would stall the loop. Under the loop, in `applyLoopHolds` (`gui/src/redux/thunks/loopHolds.ts`), such a call is not run:
+
+- It becomes an approval question, which counts as blocking, and the model is told to do what it can and report waiting.
+- "Allow once" in the inbox grants that exact call (tool name plus arguments) once, and the item runs again.
+- During a re-plan, which only reads, such a call is refused outright.
+
+The rules, protected paths and Auto's reviewer still decide first. Only what they leave for the person is held.
+
+### Answers are routed by the item's state
+
+`answerLoop` decides where an answer goes when it is given:
+
+| Item state                      | Route              | What happens                                                                                                                                                                                                               |
+| ------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| waiting (or failed)             | requeue            | The item is pending again, and its next run's prompt carries the answer. If another blocking question of the item is still open, it stays waiting.                                                                         |
+| pending                         | next-run           | The answer goes with its run                                                                                                                                                                                               |
+| running                         | steer              | Queued as a steered message (#303) tagged with the answer's id, delivered at the next tool boundary in the same run. If the run ends first, the answer goes with the next run, and an item that finished anyway is redone. |
+| done                            | redo, or confirmed | Confirming an assumption changes nothing; anything else reopens the item as redo                                                                                                                                           |
+| no item (a note about the plan) | replan             | Read at the next re-plan, or at once when marked "Re-plan now" (after the running item ends)                                                                                                                               |
+| no item, marked For every item  | standing           | Sent with every item prompt from then on, like Ralph's "signs"; it does not wait for a re-plan and does not resume a paused loop                                                                                           |
+
+Answers are stored on the loop, so several can be given at once and each is routed on its own. They persist across reloads with the session. A steered answer's queued message is never sent as a turn of its own: the turn-end send skips it. On reload the message is dropped, and the loop's record of the answer gives it to the item's next run.
+
+### Re-evaluate
+
+When nothing can run, some items are not done, and not every open item waits on the person, the loop re-plans. It sends one turn in Plan mode, whose tool filter (#309) keeps it read-only. The prompt carries:
+
+- each item's status and summary;
+- the notes the runs left;
+- the questions items wait on;
+- the person's notes about the plan;
+- the assumptions not yet confirmed.
+
+The model presents the updated plan with `present_plan` under the same title. Finished to-dos kept word for word keep their ids and stay done. The plan card then shows **Continue the loop**, which reads the file again (the person may edit it first) and starts the next round. In Auto mode, a re-plan whose to-dos are all already in the previous list (nothing reworded, nothing new) is accepted without asking. Anything that adds scope waits for the person.
+
+### Stop
+
+The loop stops when:
+
+- every item is done and no note about the plan is waiting;
+- it has run `maxRounds` rounds (default 5);
+- its own token use reaches `maxTokens` (default 2,000,000, counted from the session's usage when the loop started);
+- it has run for `maxWallMs` (default 2 hours);
+- two rounds in a row finish no item, checked before paying for another re-plan;
+- a re-plan ends without presenting a plan;
+- the person presses Stop (the item goes back to pending) or Stop loop (the loop stops after the running item).
+
+When every open item waits on the person, the loop pauses instead. An answer resumes it.
+
+Resume restarts the budgets from that moment.
+
+### Surfaces and modes
+
+**No new `MessageModes` value.** The loop is a controller over two existing modes: item runs are Agent mode and re-plans are Plan mode. A new mode would have meant threading a value through `selectActiveTools`, ModeSelect, ToolPolicyItem, promptCache and the CLI's mode handling, and every one of those would have to treat it as Agent or Plan anyway. The smallest correct change is a session field the selectors read: `selectActiveTools` offers the loop tools while an item runs, and hides the task list tool.
+
+The IDE is wired first. The CLI is the next phase (L3). It has its own streaming loop and tool set, so it needs:
+
+- its own driver around `streamChatResponse`;
+- `HoldQuestion` and `FinishItem` tools;
+- a TUI inbox;
+- for `cn serve`, `GET /state` to include the loop and `POST /message` to take `{loopAnswer: {questionId, text}}`.
+
+The decisions and prompts come from core, so it is mostly wiring.
+
+## Safeguards
+
+- The loop never starts by itself after a reload: a loop saved mid-run comes back stopped.
+- Every turn the loop sends is visible in the chat, and Stop works as usual.
+- Item runs keep Agent mode's permissions. A call that would ask is held, never run.
+- Re-plans are read-only, and anything the rules would ask about is refused during them.
+- A call repeated 4 times in one item's run is refused, and the model is told to try another way or report stuck.
+- A turn that ends without `finish_item` is not counted as done. After 2 such runs the item is failed.
+- Caps apply to questions per item and per loop, to answer and question length, to summaries, and to the notes carried between items (12, at most 300 characters each), so the item prompt cannot bloat.
+- Subagents cannot use `hold_question` or `finish_item`: they would report the parent's item.
+
+## Phases
+
+- **L1 (built):** `core/util/loopMode.ts` and `core/tools/definitions/loopTools.ts`, with unit tests in `core/util/loopMode.vitest.ts`.
+- **L2 (built):**
+  - IDE wiring: the plan card buttons, `LoopInbox`, `useLoopDriver`, `gui/src/redux/thunks/loop.ts`, `loopHolds.ts`, the client tools, persistence and the Stop path.
+  - Integration tests in `gui/src/pages/gui/chat-tests/LoopMode.test.tsx` and `gui/src/redux/slices/sessionSlice.loop.test.ts`.
+- **L3:** CLI and `cn serve`, as above.
+- **L4:**
+  - Verification: an acceptance check per item, run by the harness before an item counts as done (a command from the plan, or a separate evaluator).
+  - Parallel items as subagents, only for items the plan marks independent with disjoint files, at most 2 or 3, and ideally each in its own worktree (#314's Agents panel).
+  - Checks the project names once (Ralph's `AGENTS.md` validation commands), run by the harness after each item as backpressure.
+
+## Open questions
+
+1. **Notes or a file?** Ralph keeps its learnings in `AGENTS.md`, where they outlive the loop and any later session reads them. Here they live on the loop, so they end with it. Should accepting the last round offer to append them to the project's rules or AGENTS.md?
+2. **Dependencies between items.** To-dos have no dependency field, so "not blocked" means "not waiting on the person". Kiro and LLMCompiler schedule a DAG. A `depends:` note in the plan file would need a format change, which the brief rules out for now.
+3. **Overruled assumptions downstream.** Overruling reopens only the item that made the assumption. Items built on it are not marked stale; the re-plan prompt lists unconfirmed assumptions so the model can rework them. Should a commit or push wait until the assumptions it depends on are confirmed?
+4. **Budget defaults.** The 2,000,000-token and 2-hour defaults are guesses. They are fields on `LoopState.budget`, but there is no setting yet.
+
+## Decisions
+
+1. **The extension runs the loop, not the model.** This is the brief, and the research supports it: harness scheduling works, and model-driven re-prioritisation runs away.
+2. **No new mode, no new format.** Item runs are Agent mode and re-plans are Plan mode. Items come from the plan file and the task list. The new state is one session field.
+3. **`finish_item` is the one addition to "say when it's done".** A structured report is what makes "done" checkable, and no report never counts as done. It also ends the turn without another request.
+4. **Answers are routed when given, by the item's state, and kept on the loop.** A running item gets its answer by steering. The person's own messages keep the usual queue: they are sent at turn end as an ordinary turn, and the loop waits for that turn.
+5. **Parallel items, verification and the CLI are later phases.** Each is a separable change, and the research argues against parallel items by default.
+6. **Each run gets a fresh context, in the same session.** Ralph, Claude Code's best practices and Reflexion all favour a fresh context with a short note over one growing conversation. A subagent per item would also give one, but subagents cannot ask the person. Slicing the request keeps the transcript in one chat, and the system and tools prefix stays cached. This replaces the earlier open question "one conversation or a fresh context per item".
+
+## Sources
+
+- **The Ralph loop** (fetched 2026-11-07):
+  - https://ghuntley.com/ralph/
+  - https://github.com/ghuntley/how-to-ralph-wiggum
+  - https://github.com/anthropics/claude-plugins-official/tree/main/plugins/ralph-loop
+
+All fetched on 2026-11-07 by the research pass.
+
+- **Claude Code:**
+  - https://code.claude.com/docs/en/scheduled-tasks
+  - https://code.claude.com/docs/en/goal
+  - https://code.claude.com/docs/en/permission-modes
+  - https://code.claude.com/docs/en/sub-agents
+  - https://code.claude.com/docs/en/agent-teams
+  - https://code.claude.com/docs/en/headless
+  - https://code.claude.com/docs/en/tools-reference
+  - https://code.claude.com/docs/en/hooks-guide
+  - https://code.claude.com/docs/en/best-practices
+- **Anthropic engineering:**
+  - https://www.anthropic.com/engineering/building-effective-agents
+  - https://www.anthropic.com/engineering/multi-agent-research-system
+  - https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
+- **Cline:**
+  - https://docs.cline.bot/features/plan-and-act
+  - https://docs.cline.bot/features/auto-approve
+- **Roo Code:**
+  - https://roocodeinc.github.io/Roo-Code/features/boomerang-tasks
+  - https://roocodeinc.github.io/Roo-Code/advanced-usage/available-tools/ask-followup-question
+  - https://roocodeinc.github.io/Roo-Code/update-notes/v3.22.6
+  - https://roocodeinc.github.io/Roo-Code/advanced-usage/rate-limits-costs
+- **Kiro:**
+  - https://kiro.dev/docs/specs/
+  - https://kiro.dev/docs/specs/best-practices/
+  - https://kiro.dev/docs/ide/chat/autopilot/
+  - https://kiro.dev/docs/hooks/
+  - https://kiro.dev/docs/crew/features/task-runner/
+- **OpenHands:**
+  - https://docs.openhands.dev/sdk/guides/agent-stuck-detector
+  - https://github.com/OpenHands/software-agent-sdk/blob/main/openhands-sdk/openhands/sdk/conversation/stuck_detector.py
+- **Devin and Cognition:**
+  - https://docs.devin.ai/admin/billing/usage.md
+  - https://docs.devin.ai/api-reference/v3/sessions/post-enterprise-sessions-messages.md
+  - https://docs.devin.ai/use-cases/best-practices.md
+  - https://cognition.com/blog/dont-build-multi-agents
+- **OpenAI Codex:**
+  - https://learn.chatgpt.com/docs/cloud
+  - https://learn.chatgpt.com/docs/non-interactive-mode
+  - https://learn.chatgpt.com/docs/agent-configuration/agents-md
+- **Cursor:** https://cursor.com/docs/cloud-agent
+- **Aider:**
+  - https://aider.chat/docs/usage/modes.html
+  - https://aider.chat/docs/usage/lint-test.html
+- **Papers:**
+  - ReAct, https://arxiv.org/abs/2210.03629
+  - Plan-and-Solve, https://arxiv.org/abs/2305.04091
+  - LangChain planning agents, https://www.langchain.com/blog/planning-agents
+  - LLMCompiler, https://arxiv.org/abs/2312.04511
+  - ADaPT, https://arxiv.org/abs/2311.05772
+  - Reflexion, https://arxiv.org/abs/2303.11366
+  - MAST, https://arxiv.org/html/2503.13657
+  - Ambig-SWE, https://arxiv.org/abs/2502.13069
+  - Ask or Assume?, https://arxiv.org/abs/2603.26233
+  - LHAW, https://arxiv.org/abs/2602.10525
+- **Runaway loops and budgets:**
+  - BabyAGI, https://github.com/yoheinakajima/babyagi_archive
+  - AutoGPT classic, https://github.com/Significant-Gravitas/AutoGPT/blob/master/classic/original_autogpt/README.md
+  - SWE-agent, https://swe-agent.com/latest/reference/model_config/

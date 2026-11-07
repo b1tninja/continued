@@ -50,6 +50,7 @@ import {
   selectPendingToolCalls,
 } from "../selectors/selectToolCalls";
 import { callToolById } from "./callToolById";
+import { applyLoopHolds } from "./loopHolds";
 import {
   selectApprovalSettings,
   selectAutoApproval,
@@ -362,7 +363,7 @@ export const streamNormalInput = createAsyncThunk<
     }
     const generatedCalls3 = selectPendingToolCalls(state3);
     const toolPolicies = state3.ui.toolSettings;
-    const policies = await evaluateToolPolicies(
+    const evaluated = await evaluateToolPolicies(
       dispatch,
       extra.ideMessenger,
       activeTools,
@@ -378,6 +379,8 @@ export const streamNormalInput = createAsyncThunk<
       selectApprovalSettings(state3),
       state3.session.mode,
     );
+    // Loop mode holds calls that would ask instead of waiting (loopHolds.ts)
+    const policies = applyLoopHolds(dispatch, getState, evaluated);
     const autoApprovedPolicies = policies.filter(
       ({ policy }) => policy === "allowedWithoutPermission",
     );
