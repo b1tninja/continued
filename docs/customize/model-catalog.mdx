@@ -81,6 +81,17 @@ Any other error would fail on every route, so it is shown as it is. Once a route
 
 A route takes `connection`, and optionally `model`, `apiBase`, `env` and `requestOptions`; the rest of the model's settings apply on every route.
 
+## Retries
+
+A rate limit (HTTP 429), an overloaded or unavailable server (503, 529) and a dropped connection are tried again, by one policy:
+
+- When the server sends `Retry-After`, as seconds or as a date, Continue waits that long.
+- Otherwise the waits double from about a second, with some randomness so that several agents do not retry at the same moment. No single wait is longer than 30 seconds, and the waits together stay under 90 seconds.
+- A server that asks for a longer wait is reported straight away, with how long it asked for, instead of the request hanging.
+- A route with another route after it is not retried at all: the next account is tried at once, and its own retries apply only on the last route.
+
+When the tries run out, the chat says what happened and that your message is kept. It tries again by itself after a short countdown, which you can cancel, or you can try again now or change the model. A wait of more than 10 minutes is left to you.
+
 ## Workspace catalog
 
 A workspace's `.continue/models.yaml` adds models for that workspace, and a model there replaces a global model with the same name. The CLI (`cn`) reads the same files, `~/.continue/models.yaml` and `.continue/models.yaml` in the working directory, and `providers.yaml` in both places.

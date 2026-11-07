@@ -31,3 +31,44 @@ describe("stream error for a key that is not set on this machine", () => {
     expect(screen.queryByTestId("missing-secret-error")).toBeNull();
   });
 });
+
+describe("stream error for a failure that should pass", () => {
+  async function render(error: Error) {
+    const ideMessenger = new MockIdeMessenger();
+    const store = setupStore({ ideMessenger });
+    return renderWithProviders(<StreamErrorDialog error={error} />, {
+      store,
+      mockIdeMessenger: ideMessenger,
+    });
+  }
+
+  it("says the message is kept and counts down to trying again, which can be cancelled", async () => {
+    const { user } = await render(
+      new Error(
+        "The connection closed before the response arrived (tried 1 times). Check your network or proxy and resubmit. (Request timed out.)",
+      ),
+    );
+    expect(screen.getByTestId("transient-failure").textContent).toContain(
+      "Your message is kept",
+    );
+    expect(screen.getByTestId("retry-countdown").textContent).toContain(
+      "Trying again in 15 s",
+    );
+    expect(screen.getByText("Try again now")).toBeTruthy();
+    expect(screen.getByText("Change model")).toBeTruthy();
+    await user.click(screen.getByText("Cancel"));
+    expect(screen.getByTestId("retry-cancelled")).toBeTruthy();
+  });
+
+  it("does not wait on its own for an hour; it says how long the server asked for", async () => {
+    await render(
+      new Error(
+        "The server asked to wait 3600 s before trying again (rate limit or overload), longer than Continue waits on its own.",
+      ),
+    );
+    expect(screen.getByTestId("transient-failure").textContent).toContain(
+      "asked to wait 1 h",
+    );
+    expect(screen.queryByTestId("retry-countdown")).toBeNull();
+  });
+});
