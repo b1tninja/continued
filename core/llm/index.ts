@@ -73,6 +73,7 @@ import {
   toFimBody,
 } from "./openaiTypeConverters.js";
 import { applyToolOverrides } from "../tools/applyToolOverrides.js";
+import { shouldTryNextRoute } from "./routes.js";
 
 export class LLMError extends Error {
   constructor(
@@ -152,6 +153,29 @@ export abstract class BaseLLM implements ILLM {
 
   uniqueId: string;
   model: string;
+
+  /** The account this model is served through, when it has routes. */
+  routeName?: string;
+  /**
+   * The model's further routes: the same model on other accounts, tried in
+   * order when a request fails in a way another account may not (see
+   * shouldTryNextRoute). Set by the config loader.
+   */
+  fallbackRoutes?: { name: string; llm: BaseLLM }[];
+  /**
+   * The route that answered last. Later requests start there, so a
+   * conversation stays on one account (and one prompt cache) once it has
+   * moved; a config reload starts again from the first.
+   */
+  private activeRoute = 0;
+
+  get routeNames(): string[] | undefined {
+    if (!this.fallbackRoutes?.length) return undefined;
+    return [
+      this.routeName ?? this.providerName,
+      ...this.fallbackRoutes.map((r) => r.name),
+    ];
+  }
 
   title?: string;
   baseChatSystemMessage?: string;
@@ -1146,8 +1170,69 @@ export abstract class BaseLLM implements ILLM {
     yield msg as ChatMessage;
   }
 
-  // Update the streamChat method:
+  /**
+   * A chat request, on the model's routes in turn when it has more than one:
+   * a failure before any of the reply arrived moves on to the next route if
+   * shouldTryNextRoute says another account may succeed. The message with
+   * the usage, and the prompt log, name the route that answered.
+   */
   async *streamChat(
+    messages: ChatMessage[],
+    signal: AbortSignal,
+    options: LLMFullCompletionOptions = {},
+    messageOptions?: MessageOption,
+  ): AsyncGenerator<ChatMessage, PromptLog> {
+    if (!this.fallbackRoutes?.length) {
+      return yield* this.streamChatOnRoute(
+        messages,
+        signal,
+        options,
+        messageOptions,
+      );
+    }
+    const routes: { name: string; llm: BaseLLM }[] = [
+      { name: this.routeName ?? this.providerName, llm: this },
+      ...this.fallbackRoutes,
+    ];
+    for (let i = Math.min(this.activeRoute, routes.length - 1); ; i++) {
+      const { name, llm } = routes[i];
+      const gen =
+        llm === this
+          ? this.streamChatOnRoute(messages, signal, options, messageOptions)
+          : llm.streamChat(messages, signal, options, messageOptions);
+      let started = false;
+      try {
+        let next = await gen.next();
+        while (!next.done) {
+          started = true;
+          const chunk = next.value;
+          yield chunk.role === "assistant" && chunk.usage
+            ? { ...chunk, route: name }
+            : chunk;
+          next = await gen.next();
+        }
+        this.activeRoute = i;
+        return { ...next.value, route: name };
+      } catch (e) {
+        const following = routes[i + 1];
+        if (
+          started ||
+          signal.aborted ||
+          !following ||
+          !shouldTryNextRoute(e, llm, following.llm)
+        ) {
+          throw e;
+        }
+        console.warn(
+          `${this.title ?? this.model}: route "${name}" failed (${
+            (e as Error)?.message ?? e
+          }); trying "${following.name}"`,
+        );
+      }
+    }
+  }
+
+  private async *streamChatOnRoute(
     _messages: ChatMessage[],
     signal: AbortSignal,
     options: LLMFullCompletionOptions = {},

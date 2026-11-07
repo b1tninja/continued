@@ -21,6 +21,16 @@ export function UsageIndicator() {
   const selected = useAppSelector(
     (s) => s.config.config.selectedModelByRole.chat,
   );
+  const answered = useAppSelector((s) => s.session.answeredRoute);
+  // For a model with routes: the account that answered, and whether it is
+  // a fallback rather than the model's first route
+  const route =
+    answered && selected?.routes && answered.model === selected.title
+      ? {
+          name: answered.route,
+          fallback: answered.route !== selected.routes[0],
+        }
+      : undefined;
 
   const summary = useMemo(() => summarizeSessionUsage(usage), [usage]);
   const last = usage?.lastRequest;
@@ -47,6 +57,14 @@ export function UsageIndicator() {
       className="flex flex-col gap-1 text-left text-xs"
       data-testid="usage-tooltip"
     >
+      {route && (
+        <span data-testid="usage-route">
+          Answered through {route.name}
+          {route.fallback
+            ? ` (a fallback: ${selected?.routes?.[0]} did not answer)`
+            : ""}
+        </span>
+      )}
       {context ? (
         <span>
           Context: {formatTokens(context.tokens)} of{" "}
@@ -103,6 +121,7 @@ export function UsageIndicator() {
             ? `${percent}%`
             : formatTokens(summary.inputTokens + summary.outputTokens)}
           {summary.cost !== undefined ? ` · ${formatCost(summary.cost)}` : ""}
+          {route?.fallback ? ` · via ${route.name}` : ""}
         </span>
       </span>
     </ToolTip>

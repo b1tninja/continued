@@ -1,0 +1,175 @@
+import { describe, expect, it } from "vitest";
+import type {
+  ChatMessage,
+  CompletionOptions,
+  LLMOptions,
+  PromptLog,
+} from "../index.js";
+import { BaseLLM } from "./index.js";
+import { isContextLengthError, shouldTryNextRoute } from "./routes.js";
+
+/** One route: replies, or fails with the given error before replying. */
+class RouteLLM extends BaseLLM {
+  static providerName = "test-route";
+  calls = 0;
+  constructor(
+    options: LLMOptions,
+    private readonly fail?: unknown,
+    private readonly failAfterFirstChunk = false,
+  ) {
+    super(options);
+    this.templateMessages = undefined;
+  }
+  protected async *_streamChat(
+    _messages: ChatMessage[],
+    _signal: AbortSignal,
+    _options: CompletionOptions,
+  ): AsyncGenerator<ChatMessage> {
+    this.calls++;
+    if (this.fail && !this.failAfterFirstChunk) throw this.fail;
+    yield { role: "assistant", content: `from ${this.model}` };
+    if (this.fail) throw this.fail;
+    yield {
+      role: "assistant",
+      content: "",
+      usage: { promptTokens: 10, completionTokens: 2 },
+    };
+  }
+}
+
+const route = (model: string, fail?: unknown, opts: Partial<LLMOptions> = {}) =>
+  new RouteLLM({ model, title: "Claude Sonnet", ...opts }, fail);
+
+async function run(llm: BaseLLM) {
+  const chunks: ChatMessage[] = [];
+  const gen = llm.streamChat(
+    [{ role: "user", content: "hi" }],
+    new AbortController().signal,
+    {},
+    { precompiled: true },
+  );
+  let next = await gen.next();
+  while (!next.done) {
+    chunks.push(next.value);
+    next = await gen.next();
+  }
+  return { chunks, log: next.value as PromptLog };
+}
+
+function withRoutes(first: RouteLLM, ...others: [string, RouteLLM][]) {
+  first.routeName = "bedrock-us";
+  first.fallbackRoutes = others.map(([name, llm]) => ({ name, llm }));
+  return first;
+}
+
+const throttled = Object.assign(new Error("Too many requests"), {
+  name: "ThrottlingException",
+  $metadata: { httpStatusCode: 429 },
+});
+
+describe("routes", () => {
+  it("answers on the first route and names it", async () => {
+    const llm = withRoutes(route("us.sonnet"), [
+      "anthropic-work",
+      route("sonnet"),
+    ]);
+    expect(llm.routeNames).toEqual(["bedrock-us", "anthropic-work"]);
+    const { chunks, log } = await run(llm);
+    expect(chunks[0].content).toBe("from us.sonnet");
+    expect(chunks.find((c) => (c as any).usage)).toMatchObject({
+      route: "bedrock-us",
+    });
+    expect(log.route).toBe("bedrock-us");
+  });
+
+  it("moves on when the first route is throttled, and stays there", async () => {
+    const first = route("us.sonnet", throttled);
+    const second = route("sonnet");
+    const llm = withRoutes(first, ["anthropic-work", second]);
+    const { chunks, log } = await run(llm);
+    expect(chunks[0].content).toBe("from sonnet");
+    expect(log.route).toBe("anthropic-work");
+    await run(llm);
+    expect(first.calls).toBe(1);
+    expect(second.calls).toBe(2);
+  });
+
+  it("does not move on for an error every route would give", async () => {
+    const llm = withRoutes(
+      route(
+        "us.sonnet",
+        Object.assign(new Error("tool schema invalid"), { status: 400 }),
+      ),
+      ["anthropic-work", route("sonnet")],
+    );
+    await expect(run(llm)).rejects.toThrow("tool schema invalid");
+  });
+
+  it("does not move on once part of the reply has arrived", async () => {
+    const first = new RouteLLM(
+      { model: "us.sonnet", title: "Claude Sonnet" },
+      throttled,
+      true,
+    );
+    const second = route("sonnet");
+    await expect(
+      run(withRoutes(first, ["anthropic-work", second])),
+    ).rejects.toThrow("Too many requests");
+    expect(second.calls).toBe(0);
+  });
+
+  it("a model without routes is unchanged", async () => {
+    const llm = route("sonnet");
+    expect(llm.routeNames).toBeUndefined();
+    const { log } = await run(llm);
+    expect(log.route).toBeUndefined();
+  });
+});
+
+describe("shouldTryNextRoute", () => {
+  it("on connection, credential and availability failures", () => {
+    for (const e of [
+      new TypeError("fetch failed"),
+      Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:8083"), {
+        code: "ECONNREFUSED",
+      }),
+      Object.assign(new Error("bad key"), { status: 401 }),
+      throttled,
+      Object.assign(new Error("The model is not available in this region"), {
+        name: "ResourceNotFoundException",
+      }),
+      Object.assign(new Error("Overloaded"), { status: 529 }),
+    ]) {
+      expect(shouldTryNextRoute(e, {}, {})).toBe(true);
+    }
+  });
+
+  it("on a context-length error only when the next window is larger", () => {
+    const e = new Error("prompt is too long: 250000 tokens > 200000 maximum");
+    expect(isContextLengthError(e)).toBe(true);
+    expect(
+      shouldTryNextRoute(
+        e,
+        { contextLength: 200_000 },
+        { contextLength: 1_000_000 },
+      ),
+    ).toBe(true);
+    expect(
+      shouldTryNextRoute(
+        e,
+        { contextLength: 200_000 },
+        { contextLength: 200_000 },
+      ),
+    ).toBe(false);
+  });
+
+  it("not on a bad request", () => {
+    expect(
+      shouldTryNextRoute(
+        Object.assign(new Error("invalid tool name"), { status: 400 }),
+        {},
+        {},
+      ),
+    ).toBe(false);
+  });
+});

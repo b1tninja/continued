@@ -181,6 +181,23 @@ const promptTemplatesSchema = z.object({
 });
 export type PromptTemplates = z.infer<typeof promptTemplatesSchema>;
 
+/**
+ * Another account that serves the same model, tried when the one before it
+ * fails. `model` is that account's own id for it (a Bedrock inference
+ * profile, an OpenRouter slug), when it differs. Once connections are
+ * resolved a route also carries its account's provider, key and address.
+ */
+export const catalogRouteSchema = z.object({
+  connection: z.string().min(1),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  apiKey: z.string().optional(),
+  apiBase: z.string().optional(),
+  env: z
+    .record(z.string(), z.union([z.string(), z.boolean(), z.number()]))
+    .optional(),
+  requestOptions: requestOptionsSchema.optional(),
+});
 const baseModelFields = {
   name: z.string(),
   model: z.string(),
@@ -209,6 +226,12 @@ const baseModelFields = {
     .record(z.string(), z.union([z.string(), z.boolean(), z.number()]))
     .optional(),
   autocompleteOptions: autocompleteOptionsSchema.optional(),
+  /**
+   * Further accounts serving the same model, tried in order when the one
+   * before fails (at most three routes in all). A model with no connection
+   * of its own is served by the first.
+   */
+  routes: z.array(catalogRouteSchema).optional(),
 };
 
 export const modelSchema = z.object({
@@ -272,23 +295,10 @@ export const catalogVariantSchema = partialModelSchema.omit({
   connection: true,
   apiKey: true,
   apiBase: true,
+  routes: true,
 });
 export type CatalogVariant = z.infer<typeof catalogVariantSchema>;
 
-/**
- * Another account that serves the same model, tried when the one before it
- * fails. `model` is that account's own id for it (a Bedrock inference
- * profile, an OpenRouter slug), when it differs.
- */
-export const catalogRouteSchema = z.object({
-  connection: z.string().min(1),
-  model: z.string().optional(),
-  apiBase: z.string().optional(),
-  env: z
-    .record(z.string(), z.union([z.string(), z.boolean(), z.number()]))
-    .optional(),
-  requestOptions: requestOptionsSchema.optional(),
-});
 export type CatalogRoute = z.infer<typeof catalogRouteSchema>;
 
 /**
@@ -302,8 +312,6 @@ export const catalogModelSchema = z.object({
   provider: z.string().optional(),
   /** Named settings changes, picked as `Name#variant`. */
   variants: z.record(z.string().min(1), catalogVariantSchema).optional(),
-  /** Further accounts for the same model, in the order they are tried. */
-  routes: z.array(catalogRouteSchema).optional(),
 });
 export type CatalogModel = z.infer<typeof catalogModelSchema>;
 

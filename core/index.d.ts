@@ -107,6 +107,12 @@ export interface ILLM
   get providerName(): string;
   get underlyingProviderName(): string;
 
+  /**
+   * The accounts this model is served through, in the order they are tried,
+   * when it has routes (models.yaml). The first is the model's own.
+   */
+  readonly routeNames?: string[];
+
   autocompleteOptions?: Partial<TabAutocompleteOptions>;
 
   /**
@@ -590,6 +596,11 @@ export interface AssistantChatMessage {
    * long prompt; such a message has no content and is not part of the reply.
    */
   promptProgress?: PromptProgress;
+  /**
+   * The account that answered, for a model with routes (models.yaml). Set
+   * on the message that carries the usage.
+   */
+  route?: string;
   /** Arbitrary per-message metadata (IDs, provider-specific info, etc.) */
   metadata?: Record<string, unknown>;
 }
@@ -652,6 +663,8 @@ export type FileSymbolMap = Record<string, SymbolWithRange[]>;
 export interface PromptLog {
   modelTitle: string;
   modelProvider: string;
+  /** The account that answered, for a model with routes. */
+  route?: string;
   prompt: string;
   completion: string;
 }
@@ -1490,6 +1503,12 @@ export interface ModelDescription {
 
   sourceFile?: string;
   isFromAutoDetect?: boolean;
+
+  /**
+   * For a model with routes: the accounts serving it, in the order they are
+   * tried. Each has its own prompt cache.
+   */
+  routes?: string[];
 
   /** Tool overrides for this model */
   toolOverrides?: ToolOverride[];

@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { formatRereadCost } from "./cacheNotices";
 import {
   isSignificantLoss,
+  expectedRoute,
   NOTICE_MIN_TOKENS_LOCAL,
+  promptCacheKey,
   sameServedModel,
   warmCacheLoss,
 } from "./cacheSafeguards";
@@ -130,5 +132,31 @@ describe("sameServedModel", () => {
     expect(
       sameServedModel(plan, { ...act, apiBase: "http://127.0.0.1:8086/v1/" }),
     ).toBe(false);
+  });
+});
+
+describe("routes in the cache key", () => {
+  const sonnet: ModelDescription = {
+    title: "Claude Sonnet",
+    provider: "bedrock",
+    model: "us.anthropic.claude-sonnet-4-6",
+    underlyingProviderName: "bedrock",
+    routes: ["bedrock-us", "anthropic-work"],
+  };
+
+  it("a different route is a different model", () => {
+    const a = promptCacheKey(sonnet, [], "sys", [], "bedrock-us");
+    const b = promptCacheKey(sonnet, [], "sys", [], "anthropic-work");
+    expect(a.model).not.toBe(b.model);
+    expect(promptCacheKey(model("openai"), [], "sys").model).toBe(
+      "openai/qwen3.8-flash-next-nvfp4-nvfp4",
+    );
+  });
+
+  it("expects the route that answered last, else the first", () => {
+    expect(expectedRoute(sonnet)).toBe("bedrock-us");
+    const last = promptCacheKey(sonnet, [], "sys", [], "anthropic-work");
+    expect(expectedRoute(sonnet, last)).toBe("anthropic-work");
+    expect(expectedRoute(model("openai"), last)).toBeUndefined();
   });
 });

@@ -240,13 +240,36 @@ export function promptCacheKey(
   systemMessage: string | undefined,
   /** The messages after the system message, in the order they are sent. */
   messages?: ChatMessage[],
+  /**
+   * For a model with routes, the account serving the request: each account
+   * has its own cache, so a different route is a different model here.
+   */
+  route?: string,
 ): PromptCacheKey {
   return {
-    model: `${model.provider}/${model.model}`,
+    model: `${model.provider}/${model.model}${route ? ` via ${route}` : ""}`,
     tools: hashString(toolNames.join("\u0000")),
     system: hashString(systemMessage ?? ""),
     ...(messages && { messages: messages.map(messageChecksum) }),
   };
+}
+
+/**
+ * The route a request to this model will most likely take: the one the
+ * previous request was answered on (core stays on it), else the first.
+ */
+export function expectedRoute(
+  model: ModelDescription,
+  lastKey?: PromptCacheKey,
+): string | undefined {
+  const routes = model.routes;
+  if (!routes?.length) return undefined;
+  const base = `${model.provider}/${model.model} via `;
+  if (lastKey?.model.startsWith(base)) {
+    const last = lastKey.model.slice(base.length);
+    if (routes.includes(last)) return last;
+  }
+  return routes[0];
 }
 
 /** The cause named when the model differs from the previous request's. */

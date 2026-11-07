@@ -54,6 +54,33 @@ A variant changes a model's settings, never which model it is or where it is ser
 
 Switching between variants of one model, on the same server, does not warn about losing the prompt cache: the server sees the same model, and only the request settings change.
 
+## Routes
+
+One model can be served by several accounts, each with its own id for it. List them under `routes`, in the order to try them:
+
+```yaml ~/.continue/models.yaml
+models:
+  - name: Claude Sonnet
+    model: claude-sonnet-4-6
+    contextLength: 200000
+    routes:
+      - connection: bedrock-us
+        model: us.anthropic.claude-sonnet-4-6
+      - connection: anthropic-work
+```
+
+It is one model in the pickers. A model with no `connection` of its own is served by its first route; one with a `connection` tries that account first and the routes after it. At most three routes are used.
+
+A chat request moves on to the next route when the one before fails before any of the reply arrived, and only for:
+
+- a connection or authorization failure;
+- the model being unavailable, overloaded or throttled;
+- a prompt that does not fit, when the next route has a larger window.
+
+Any other error would fail on every route, so it is shown as it is. Once a route has answered, the conversation stays on it until the config reloads: each account has its own prompt cache, and going back would rebuild it. The usage readout in the input toolbar says `via anthropic-work` when a fallback answered, and the prompt cache warnings count a change of route as a change of model.
+
+A route takes `connection`, and optionally `model`, `apiBase`, `env` and `requestOptions`; the rest of the model's settings apply on every route.
+
 ## Workspace catalog
 
 A workspace's `.continue/models.yaml` adds models for that workspace, and a model there replaces a global model with the same name. The CLI (`cn`) reads the same files, `~/.continue/models.yaml` and `.continue/models.yaml` in the working directory, and `providers.yaml` in both places.
