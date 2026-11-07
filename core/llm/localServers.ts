@@ -83,6 +83,12 @@ export interface ServerCapabilities {
   tools?: boolean;
   /** The server has a vision projector loaded (`modalities.vision`). */
   images?: boolean;
+  /**
+   * One slot's context (`default_generation_settings.n_ctx`). A server with
+   * several slots (`-np`) gives each a share of `-c`, so this, not the
+   * model's or the server's whole window, is what one conversation gets.
+   */
+  contextLength?: number;
 }
 
 /**
@@ -114,6 +120,8 @@ export async function serverCapabilities(
     if (typeof props?.modalities?.vision === "boolean") {
       result.images = props.modalities.vision;
     }
+    const slotContext = Number(props?.default_generation_settings?.n_ctx);
+    if (slotContext > 0) result.contextLength = slotContext;
     return result;
   } catch {
     return {};
@@ -148,7 +156,9 @@ async function getModels(
   return listed.map((m) => {
     const info = native.get(m.name) ?? {};
     const tools = info.tools ?? caps.tools;
-    const contextLength = m.contextLength ?? info.contextLength;
+    // One slot's context first: what a conversation gets on that server
+    const contextLength =
+      caps.contextLength ?? m.contextLength ?? info.contextLength;
     return {
       ...m,
       ...(contextLength ? { contextLength } : {}),
@@ -374,4 +384,39 @@ export async function detectLocalServers(
     found.push(server);
   }
   return found;
+}
+
+/**
+ * How many requests the server at this address serves at once, when it says:
+ * Strata's `/v1/status` (`concurrency.serving`), else llama.cpp's `/props`
+ * (`total_slots`). Requests past that wait in the server's queue, and on a
+ * server whose cache holds one conversation per slot they also push each
+ * other's prompts out of the cache. Undefined when the server does not say
+ * (vLLM, LM Studio, Ollama, cloud APIs).
+ */
+export async function serverConcurrency(
+  apiBase: string,
+  apiKey?: string,
+  fetchFn: FetchFn = fetch,
+  timeoutMs = 2000,
+): Promise<number | undefined> {
+  const init: RequestInit = apiKey
+    ? { headers: { Authorization: `Bearer ${apiKey}` } }
+    : {};
+  const status = await getJson(
+    new URL("status", withSlash(apiBase)),
+    fetchFn,
+    timeoutMs,
+    init,
+  );
+  const serving = Number(status?.concurrency?.serving);
+  if (status?.service === "strata" && serving > 0) return serving;
+  const props = await getJson(
+    new URL("/props", apiBase),
+    fetchFn,
+    timeoutMs,
+    init,
+  );
+  const slots = Number(props?.total_slots);
+  return slots > 0 ? slots : undefined;
 }

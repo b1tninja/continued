@@ -588,4 +588,6 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   ];
   /** OpenAI-compatible servers answering on this machine's common ports. */
   "models/detectLocal": [undefined, DetectedLocalServer[]];
+  /** Requests the server of this chat model serves at once, when it says. */
+  "models/serverConcurrency": [{ title: string }, number | undefined];
 };

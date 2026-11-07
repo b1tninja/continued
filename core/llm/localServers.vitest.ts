@@ -5,6 +5,7 @@ import {
   contextLengthOf,
   detectLocalServers,
   listOpenAICompatibleModels,
+  serverConcurrency,
 } from "./localServers";
 
 const json = (body: unknown, status = 200) =>
@@ -229,6 +230,24 @@ describe("capabilities from the server's own API", () => {
     });
   });
 
+  it("llama.cpp with several slots: one slot's context from /props", async () => {
+    const fetchFn = vi.fn(
+      list({
+        "/v1/models": { data: [{ id: "qwen", meta: { n_ctx: 65536 } }] },
+        "/props": {
+          default_generation_settings: { n_ctx: 16384 },
+          total_slots: 4,
+        },
+      }),
+    );
+    const [m] = await listOpenAICompatibleModels(
+      "http://127.0.0.1:8080/v1/",
+      undefined,
+      fetchFn as unknown as typeof fetch,
+    );
+    expect(m.contextLength).toBe(16384);
+  });
+
   it("a template without tools says so", async () => {
     const fetchFn = vi.fn(
       list({
@@ -307,5 +326,50 @@ describe("capabilities from the server's own API", () => {
       supportsTools: false,
       supportsImages: true,
     });
+  });
+});
+
+describe("serverConcurrency", () => {
+  const routes =
+    (body: Record<string, unknown>) =>
+    async (url: URL | string): Promise<Response> => {
+      const path = new URL(String(url)).pathname;
+      return path in body ? json(body[path]) : json({ error: "no" }, 404);
+    };
+
+  it("Strata: concurrency.serving from /v1/status", async () => {
+    const fetchFn = routes({
+      "/v1/status": { service: "strata", concurrency: { serving: 1 } },
+      "/props": { total_slots: 4 },
+    });
+    expect(
+      await serverConcurrency(
+        "http://127.0.0.1:8083/v1/",
+        undefined,
+        fetchFn as unknown as typeof fetch,
+      ),
+    ).toBe(1);
+  });
+
+  it("llama.cpp: total_slots from /props", async () => {
+    const fetchFn = routes({ "/props": { total_slots: 4 } });
+    expect(
+      await serverConcurrency(
+        "http://127.0.0.1:8080/v1/",
+        undefined,
+        fetchFn as unknown as typeof fetch,
+      ),
+    ).toBe(4);
+  });
+
+  it("is undefined when the server does not say", async () => {
+    const fetchFn = routes({ "/v1/models": { data: [] } });
+    expect(
+      await serverConcurrency(
+        "http://127.0.0.1:8000/v1/",
+        undefined,
+        fetchFn as unknown as typeof fetch,
+      ),
+    ).toBeUndefined();
   });
 });

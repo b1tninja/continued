@@ -31,7 +31,7 @@ import { globalProfileStatus } from "./llm/llms/bedrockHelpers";
 import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
-import { detectLocalServers } from "./llm/localServers";
+import { detectLocalServers, serverConcurrency } from "./llm/localServers";
 import Ollama from "./llm/llms/Ollama";
 import { EditAggregator } from "./nextEdit/context/aggregateEdits";
 import { createNewPromptFileV2 } from "./promptFiles/createNewPromptFile";
@@ -352,6 +352,14 @@ export class Core {
     });
 
     on("models/detectLocal", async () => detectLocalServers());
+
+    // How many requests a chat model's own server takes at once (subagents)
+    on("models/serverConcurrency", async ({ data: { title } }) => {
+      const { config } = await this.configHandler.loadConfig();
+      const llm = config?.modelsByRole.chat.find((m) => m.title === title);
+      if (!llm?.apiBase) return undefined;
+      return serverConcurrency(llm.apiBase, llm.apiKey);
+    });
   }
 
   /** Config files, provider accounts and plaintext key handling. */
