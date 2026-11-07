@@ -2,6 +2,7 @@ import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
 import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
+import { formatTaskPlanBlock } from "core/util/taskPlan.js";
 import * as dotenv from "dotenv";
 import type {
   ChatCompletionMessageParam,
@@ -10,9 +11,11 @@ import type {
 
 import { pruneLastMessage } from "../compaction.js";
 import { services } from "../services/index.js";
+import { getSessionTaskPlan } from "../session.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { applyChatCompletionToolOverrides } from "../tools/applyToolOverrides.js";
 import { ToolCall } from "../tools/index.js";
+import { TASK_LIST_TOOL_NAME } from "../tools/taskList.js";
 import {
   chatCompletionStreamWithBackoff,
   isContextLengthError,
@@ -192,6 +195,17 @@ interface ProcessStreamingResponseOptions {
   systemMessage: string;
 }
 
+/**
+ * The task list block for this request (core/util/taskPlan.ts), or "" when
+ * the TaskList tool is not offered or there is no list.
+ */
+export function taskListBlockForRequest(tools?: ChatCompletionTool[]): string {
+  const offered = tools?.some(
+    (t) => t.type === "function" && t.function.name === TASK_LIST_TOOL_NAME,
+  );
+  return offered ? formatTaskPlanBlock(getSessionTaskPlan()) : "";
+}
+
 // Process a single streaming response and return whether we need to continue
 // eslint-disable-next-line max-statements, complexity
 export async function processStreamingResponse(
@@ -215,15 +229,23 @@ export async function processStreamingResponse(
 
   let chatHistory = options.chatHistory;
 
+  // The session's task list, sent last when the TaskList tool is offered.
+  const taskListBlock = taskListBlockForRequest(tools);
+
   // Safety buffer to account for tokenization estimation errors
   const SAFETY_BUFFER = 100;
 
   // Validate context length INCLUDING system message and tools
+  // The task list block is counted with the system message: it is sent with
+  // every request and is never pruned.
+  const fixedText = taskListBlock
+    ? `${systemMessage}\n${taskListBlock}`
+    : systemMessage;
   let validation = validateContextLength({
     chatHistory,
     model,
     safetyBuffer: SAFETY_BUFFER,
-    systemMessage,
+    systemMessage: fixedText,
     tools,
   });
 
@@ -240,7 +262,7 @@ export async function processStreamingResponse(
       chatHistory,
       model,
       safetyBuffer: SAFETY_BUFFER,
-      systemMessage,
+      systemMessage: fixedText,
       tools,
     });
   }
@@ -254,6 +276,11 @@ export async function processStreamingResponse(
     chatHistory,
     systemMessage,
   ) as ChatCompletionMessageParam[];
+  // Last, after the history: a change to the list then changes only the tail
+  // of the request, and Bedrock puts its cache point before it.
+  if (taskListBlock) {
+    openaiChatHistory.push({ role: "user", content: taskListBlock });
+  }
   const requestStartTime = Date.now();
 
   const streamFactory = async (retryAbortSignal: AbortSignal) => {
