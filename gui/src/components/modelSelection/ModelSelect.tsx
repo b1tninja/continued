@@ -26,7 +26,7 @@ import {
 import { modelHasMissingSecret } from "../../util/missingSecrets";
 import {
   isSignificantLoss,
-  sameServedModel,
+  switchKeepsCache,
   warmCacheLoss,
 } from "../../util/cacheSafeguards";
 import { CONFIG_ROUTES } from "../../util/navigation";
@@ -283,7 +283,7 @@ function ModelSelect() {
       current &&
       target &&
       cacheState &&
-      !sameServedModel(current, target)
+      !switchKeepsCache(current, target)
         ? warmCacheLoss(current, cacheSetting, cacheState, Date.now(), target)
         : undefined;
     if (!loss || !isSignificantLoss(loss)) {
