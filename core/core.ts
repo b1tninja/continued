@@ -318,10 +318,18 @@ export class Core {
       );
 
       this.registerMessageHandlers(ideSettingsPromise);
+      this.registerSubagentHandlers();
     } catch (error) {
       Logger.error(error);
       throw error; // Re-throw to prevent partially initialized core
     }
+  }
+
+  /** Subagent definitions, read fresh for each run (see core/subagents). */
+  private registerSubagentHandlers() {
+    this.messenger.on("subagents/list", async () =>
+      loadSubagentDefinitions(this.ide),
+    );
   }
 
   /** Config files, provider accounts and plaintext key handling. */
@@ -1556,8 +1564,6 @@ export class Core {
     on("tools/call", async ({ data: { toolCall } }) =>
       this.handleToolCall(toolCall),
     );
-
-    on("subagents/list", async () => loadSubagentDefinitions(this.ide));
 
     on(
       "tools/evaluatePolicy",
