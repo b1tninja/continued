@@ -133,6 +133,7 @@ import type { FromCoreProtocol, ToCoreProtocol } from "./protocol";
 import { OnboardingModes } from "./protocol/core";
 import type { IMessenger, Message } from "./protocol/messenger";
 import { ContinueError, ContinueErrorReason } from "./util/errors";
+import { loadSubagentDefinitions } from "./subagents/loadSubagents";
 import { shareSession } from "./util/historyUtils";
 import { Logger } from "./util/Logger.js";
 
@@ -1555,6 +1556,8 @@ export class Core {
     on("tools/call", async ({ data: { toolCall } }) =>
       this.handleToolCall(toolCall),
     );
+
+    on("subagents/list", async () => loadSubagentDefinitions(this.ide));
 
     on(
       "tools/evaluatePolicy",

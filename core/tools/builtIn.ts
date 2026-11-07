@@ -17,6 +17,7 @@ export enum BuiltInToolNames {
   FetchUrlContent = "fetch_url_content",
   CodebaseTool = "codebase",
   ReadSkill = "read_skill",
+  Subagent = "subagent",
 
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",
@@ -29,4 +30,7 @@ export const CLIENT_TOOLS_IMPLS = [
   BuiltInToolNames.EditExistingFile,
   BuiltInToolNames.SingleFindAndReplace,
   BuiltInToolNames.MultiEdit,
+  // Runs in the gui, which drives the child conversation (see
+  // gui/src/util/subagents/runSubagent.ts).
+  BuiltInToolNames.Subagent,
 ];
