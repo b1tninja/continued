@@ -395,13 +395,13 @@ export abstract class BaseLLM implements ILLM {
   }
 
   /** See failOverQuickly. */
-  private failsOverQuickly = false;
+  protected failsOverQuickly = false;
 
   /**
    * For a route with another route after it: a failed request is not retried
-   * on this account (neither a dropped connection nor the SDK's retries of
-   * 429 and 5xx); the next route is tried instead, without waiting out this
-   * account's timeouts and backoff first.
+   * on this account (not a dropped connection, not a rate limit, not the
+   * SDKs' own retries of 429 and 5xx); the next route is tried instead,
+   * without waiting out this account's timeouts and backoff first.
    */
   failOverQuickly() {
     if (this.failsOverQuickly) return;
@@ -610,10 +610,12 @@ export abstract class BaseLLM implements ILLM {
         throw e;
       }
     };
+    // A route with another after it fails over instead of backing off
     return withExponentialBackoff<Response>(
       () => customFetch(url, init) as any,
-      5,
+      this.failsOverQuickly ? 1 : 5,
       0.5,
+      init?.signal ?? undefined,
     );
   }
 

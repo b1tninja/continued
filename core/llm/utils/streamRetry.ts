@@ -33,6 +33,11 @@ export function isDroppedConnectionError(error: unknown): boolean {
     cause?: { code?: string };
   };
   if (e.name === "AbortError") return false;
+  // The OpenAI and Anthropic SDKs retry a failed connection themselves
+  // before throwing these (see retryPolicy.ts); retrying the whole request
+  // again here multiplied the tries, up to nine, each waiting out a timeout
+  if (e.name === "APIConnectionError" || e.name === "APIConnectionTimeoutError")
+    return false;
   if (
     DROPPED_CODES.has(e.code ?? "") ||
     DROPPED_CODES.has(e.cause?.code ?? "")
