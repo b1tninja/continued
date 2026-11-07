@@ -12,6 +12,7 @@ import { IDE } from "../..";
 import { getContinueGlobalPath } from "../../util/paths";
 import { localPathToUri } from "../../util/pathToUri";
 import { joinPathsToUri } from "../../util/uri";
+import { externalCatalogModels } from "./externalAccounts";
 
 export const MODELS_FILE_NAME = "models.yaml";
 
@@ -92,6 +93,8 @@ export async function loadModelCatalog(
 ): Promise<{ models: CatalogModel[]; errors: ConfigValidationError[] }> {
   const errors: ConfigValidationError[] = [];
   const byName = new Map<string, CatalogModel>();
+  // Models of accounts from the IDE's own settings first; the files win
+  for (const m of externalCatalogModels()) byName.set(m.name, m);
 
   const add = (content: string, source: string) => {
     const parsed = parseModelsFile(content, source);

@@ -16,6 +16,19 @@ The agents build (below) also declares VS Code's proposed `chatProvider` API, an
   VS Code only shows models from extensions to users on an individual GitHub Copilot plan, and Copilot Business or Enterprise administrators can turn them off with the "Bring Your Own Language Model Key" policy.
 </Note>
 
+## Accounts from VS Code's Language Models editor
+
+<Warning>
+  Experimental, and off by default: VS Code's API for provider settings in the Language Models editor is not final yet ([microsoft/vscode#291012](https://github.com/microsoft/vscode/issues/291012)).
+</Warning>
+
+With the `continue.accountsFromVSCode` setting on, an account can be added where VS Code manages models, including the Agents window, where Continued's own setup is not available:
+
+1. In the Language Models editor, add models for **Continued**.
+2. Give the group a name (the account name), the provider, and its key, address, region and model ids as needed.
+
+VS Code keeps the key in its secret storage. Continued uses the group as an [account](/customize/providers), held in memory and never written to a file, and offers the group's model ids, and the [catalog](/customize/model-catalog) models that name the account with `connection:`, under that group. `providers.yaml` and `models.yaml` stay the source: an entry there with the same name wins. Turning the setting off removes these accounts.
+
 ## MCP servers in VS Code
 
 The MCP servers of the selected config appear in VS Code's MCP server list under **Continued**, so they are set up once for both. Stdio servers and HTTP (streamable HTTP and SSE) servers are shared; websocket servers are not, as VS Code has no equivalent. Servers disabled in Continued are left out.
@@ -53,6 +66,6 @@ These are possible next steps. None is scheduled; most wait on VS Code APIs beco
 | Run in the Agents window | Make the shared models and MCP servers available there | **Declared** with `capabilities.agentsWindow.supported`; not yet tested there. |
 | Your rules and prompts in VS Code chat | Continued rules as instructions, prompts as slash commands, skills and custom agents | The `chatInstructions`, `chatPromptFiles`, `chatSkills`, `chatAgents` and `chatPlugins` contribution points are stable but only ship files bundled in the extension. Providing each user's own rules and prompts needs the proposed `chatPromptFiles` provider API. |
 | Codebase search as a tool | Let any VS Code agent search Continued's codebase index and docs | Possible with the stable language model tools API (`vscode.lm.registerTool`). |
-| Provider accounts from VS Code's Language Models settings | Set up `providers.yaml` accounts where VS Code manages models | Possible with the stable configuration schema for model providers. |
+| Provider accounts from VS Code's Language Models settings | Set up accounts where VS Code manages models | **Experimental**, behind `continue.accountsFromVSCode` (see above), until the configuration API is final. |
 | System messages and model settings | Pass Continued's system message as a real system role; per-model settings in VS Code | **Blocked** on the proposed `languageModelSystem` and `chatProvider` APIs, the two AI APIs closest to being finalized ([microsoft/vscode#255286](https://github.com/microsoft/vscode/issues/255286), [#291012](https://github.com/microsoft/vscode/issues/291012)). |
 | The `cn` CLI as an Agent Host | Serve Continued agents over the open Agent Host Protocol, which VS Code's Agents window speaks | Exploratory. The protocol is open, but VS Code does not document connecting to an Agent Host other than its own. |

@@ -66,6 +66,7 @@ import * as vscode from "vscode";
 
 import {
   ContinuedLanguageModelChatProvider,
+  groupToAccount,
   modelInfo,
   toChatMessages,
   ToolCallCollector,
@@ -158,18 +159,17 @@ describe("language model provider", () => {
     expect(JSON.stringify(info)).not.toContain("sk-secret");
   });
 
-  it("lists each title once, and nothing when turned off", () => {
+  it("lists each title once, and nothing when turned off", async () => {
     const p = new ContinuedLanguageModelChatProvider();
     p.update([llm(), llm(), llm({ title: "GPT-5", model: "gpt-5" })]);
-    expect(p.provideLanguageModelChatInformation().map((m) => m.id)).toEqual([
-      "Claude Sonnet",
-      "GPT-5",
-    ]);
+    expect(
+      (await p.provideLanguageModelChatInformation()).map((m) => m.id),
+    ).toEqual(["Claude Sonnet", "GPT-5"]);
     p.setEnabled(false);
-    expect(p.provideLanguageModelChatInformation()).toEqual([]);
+    expect(await p.provideLanguageModelChatInformation()).toEqual([]);
   });
 
-  it("adds the catalog models the config does not use, after its own", () => {
+  it("adds the catalog models the config does not use, after its own", async () => {
     const p = new ContinuedLanguageModelChatProvider();
     p.update(
       [llm()],
@@ -178,10 +178,9 @@ describe("language model provider", () => {
         llm(), // also in the config: listed once
       ],
     );
-    expect(p.provideLanguageModelChatInformation().map((m) => m.id)).toEqual([
-      "Claude Sonnet",
-      "Qwen#high",
-    ]);
+    expect(
+      (await p.provideLanguageModelChatInformation()).map((m) => m.id),
+    ).toEqual(["Claude Sonnet", "Qwen#high"]);
   });
 
   it("marks models as the user's own (BYOK) and names their routes", () => {
@@ -191,6 +190,37 @@ describe("language model provider", () => {
     ) as any;
     expect(info.isBYOK).toBe(true);
     expect(info.tooltip).toContain("routes: bedrock-us, anthropic-work");
+  });
+
+  it("lists a Language Models editor group's models when accounts from VS Code are on", async () => {
+    const p = new ContinuedLanguageModelChatProvider();
+    p.update([
+      llm(),
+      llm({
+        title: "GPT-5 (openai-work)",
+        model: "gpt-5",
+        routeName: "openai-work",
+      }),
+    ]);
+    const configuration = {
+      name: "openai-work",
+      provider: "openai",
+      apiKey: "sk-x",
+    };
+    // Off: a group lists nothing
+    expect(
+      await p.provideLanguageModelChatInformation({ configuration } as any),
+    ).toEqual([]);
+    const seen: unknown[] = [];
+    p.onGroupConfiguration = async (c) => {
+      seen.push(c);
+      return "openai-work";
+    };
+    const infos = await p.provideLanguageModelChatInformation({
+      configuration,
+    } as any);
+    expect(infos.map((m) => m.id)).toEqual(["GPT-5 (openai-work)"]);
+    expect(seen).toEqual([configuration]);
   });
 
   it("streams text and reports tool calls at the end", async () => {
@@ -206,7 +236,7 @@ describe("language model provider", () => {
     const model = llm({ streamChat: vi.fn(() => stream()) });
     const p = new ContinuedLanguageModelChatProvider();
     p.update([model]);
-    const [info] = p.provideLanguageModelChatInformation();
+    const [info] = await p.provideLanguageModelChatInformation();
     const parts: any[] = [];
     await p.provideLanguageModelChatResponse(
       info,
@@ -299,5 +329,40 @@ describe("MCP provider", () => {
     p.update([stdio] as any);
     p.update([{ ...stdio }] as any);
     expect(fired).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("groupToAccount", () => {
+  it("makes a group an account with its models, key in memory", () => {
+    expect(
+      groupToAccount({
+        name: "Work Bedrock",
+        provider: "bedrock",
+        region: "us-east-1",
+        models: ["us.anthropic.claude-sonnet-4-6", ""],
+      }),
+    ).toEqual({
+      name: "Work-Bedrock",
+      account: {
+        name: "Work-Bedrock",
+        provider: "bedrock",
+        env: { region: "us-east-1" },
+      },
+      models: [
+        {
+          name: "us.anthropic.claude-sonnet-4-6 (Work-Bedrock)",
+          model: "us.anthropic.claude-sonnet-4-6",
+          connection: "Work-Bedrock",
+        },
+      ],
+    });
+    expect(
+      groupToAccount({ provider: "openai", apiKey: "sk" })?.account,
+    ).toEqual({
+      name: "openai-vscode",
+      provider: "openai",
+      apiKey: "sk",
+    });
+    expect(groupToAccount({ name: "x" })).toBeUndefined();
   });
 });

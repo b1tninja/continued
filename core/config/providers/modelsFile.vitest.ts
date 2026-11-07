@@ -94,4 +94,47 @@ describe("loadModelCatalog", () => {
       ["b", "global-b"],
     ]);
   });
+
+  it("adds models and accounts from the IDE, which the files override", async () => {
+    fs.writeFileSync(
+      path.join(dir, "models.yaml"),
+      "models:\n  - { name: a, model: file-a }\n",
+    );
+    fs.writeFileSync(
+      path.join(dir, "providers.yaml"),
+      "providers:\n  - { name: work, provider: openai, apiBase: https://file/ }\n",
+    );
+    vi.doMock("../../util/paths", () => ({ getContinueGlobalPath: () => dir }));
+    const { setExternalAccount } = await import("./externalAccounts");
+    setExternalAccount("work", {
+      account: { name: "work", provider: "openai", apiKey: "sk-vscode" },
+      models: [
+        { name: "a", model: "vscode-a", connection: "work" },
+        { name: "b", model: "vscode-b", connection: "work" },
+      ],
+    });
+    setExternalAccount("other", {
+      account: { name: "other", provider: "anthropic", apiKey: "sk-a" },
+      models: [],
+    });
+    const { loadModelCatalog } = await import("./modelsFile");
+    const { loadProviderInstances } = await import("./providersFile");
+    const ide = {
+      getWorkspaceDirs: async () => [],
+      fileExists: async () => false,
+      readFile: async () => "",
+    };
+    const { models } = await loadModelCatalog(ide as any);
+    expect(models.map((m) => [m.name, m.model])).toEqual([
+      ["a", "file-a"],
+      ["b", "vscode-b"],
+    ]);
+    const { providers } = await loadProviderInstances(ide as any);
+    expect(providers.map((p) => [p.name, p.apiBase ?? p.apiKey])).toEqual([
+      ["work", "https://file/"],
+      ["other", "sk-a"],
+    ]);
+    expect(setExternalAccount("other", undefined)).toBe(true);
+    expect(setExternalAccount("other", undefined)).toBe(false);
+  });
 });

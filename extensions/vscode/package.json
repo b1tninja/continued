@@ -64,7 +64,51 @@
     "languageModelChatProviders": [
       {
         "vendor": "continued",
-        "displayName": "Continued"
+        "displayName": "Continued",
+        "configuration": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Account name: what models.yaml uses as `connection:`. Used only when the continue.accountsFromVSCode setting is on."
+            },
+            "provider": {
+              "type": "string",
+              "description": "Provider type, as in providers.yaml.",
+              "enum": [
+                "anthropic",
+                "openai",
+                "bedrock",
+                "gemini",
+                "mistral",
+                "openrouter",
+                "azure",
+                "ollama",
+                "lmstudio",
+                "vllm"
+              ]
+            },
+            "apiBase": {
+              "type": "string",
+              "description": "Address of the API, when it is not the provider's default."
+            },
+            "apiKey": {
+              "type": "string",
+              "description": "API key. VS Code keeps it in its secret storage; Continued holds it in memory only.",
+              "secret": true
+            },
+            "region": {
+              "type": "string",
+              "description": "Region (Bedrock)."
+            },
+            "models": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Model ids on this account to offer. Models in models.yaml with this account as `connection:` are offered as well."
+            }
+          }
+        }
       }
     ],
     "mcpServerDefinitionProviders": [
@@ -106,6 +150,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Offer the chat models of the selected Continued config to VS Code's own chat and agents (model picker vendor: Continued). Requests still go through Continued with your Continued keys."
+        },
+        "continue.accountsFromVSCode": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Experimental. Use the accounts added for Continued in VS Code's Language Models editor as provider accounts, next to `providers.yaml` (which wins on a name). Their keys stay in VS Code's secret storage and are never written to a file. The editor's configuration API is not final yet."
         },
         "continue.shareMcpServersWithVSCode": {
           "type": "boolean",
