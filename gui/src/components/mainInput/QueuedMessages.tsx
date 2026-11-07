@@ -8,7 +8,10 @@ import { QueuedMessage } from "../../redux/slices/sessionSlice";
 import { queuedMessagePreview } from "./util/queuedMessages";
 
 interface QueuedMessagesProps {
-  /** Send these now; while the agent works this stops the current turn first */
+  /**
+   * Send these now. While the agent works they are delivered after the
+   * running tool calls finish (steering), without stopping the turn.
+   */
   onSendNow: (ids: string[]) => void;
   /** Move the message back into the input for editing */
   onEdit: (message: QueuedMessage) => void;
@@ -17,8 +20,9 @@ interface QueuedMessagesProps {
 
 /**
  * Messages typed while the agent was working, shown above the input in the
- * order they will be sent. They go as one message when the turn ends; after
- * Stop, an error or a new session they wait until sent by hand.
+ * order they will be sent. They go as one message when the turn ends, or
+ * after the running tool calls with "Send now"; after Stop, an error or a new
+ * session they wait until sent by hand.
  */
 export function QueuedMessages(props: QueuedMessagesProps) {
   const queued = useAppSelector((s) => s.session.queuedMessages);
@@ -27,8 +31,9 @@ export function QueuedMessages(props: QueuedMessagesProps) {
 
   if (queued.length === 0) return null;
 
+  const steered = queued.filter((m) => m.steer).length;
   const sendNowTitle = isStreaming
-    ? "Stop the current response and send this now"
+    ? "Send after the running tool calls, in this turn (Stop interrupts now)"
     : "Send this now";
 
   return (
@@ -40,7 +45,9 @@ export function QueuedMessages(props: QueuedMessagesProps) {
         <span>
           {isPaused
             ? `${queued.length} queued, paused`
-            : `${queued.length} queued, sent when this turn ends`}
+            : steered === queued.length
+              ? `${queued.length} queued, sent after the running tools`
+              : `${queued.length} queued, sent when this turn ends`}
         </span>
         {isPaused && !isStreaming && (
           <button
@@ -63,6 +70,15 @@ export function QueuedMessages(props: QueuedMessagesProps) {
           <span className="line-clamp-1 min-w-0 flex-1 wrap-anywhere">
             {queuedMessagePreview(message.editorState) || "(empty)"}
           </span>
+          {message.steer && (
+            <span
+              data-testid="queued-message-steer"
+              title="Sent after the running tool calls finish"
+              className="shrink-0 text-description-muted"
+            >
+              next
+            </span>
+          )}
           <QueueButton
             testId="queued-message-edit"
             title="Edit: move back into the input"
@@ -70,13 +86,15 @@ export function QueuedMessages(props: QueuedMessagesProps) {
           >
             <PencilIcon className="h-3.5 w-3.5" />
           </QueueButton>
-          <QueueButton
-            testId="queued-message-send"
-            title={sendNowTitle}
-            onClick={() => props.onSendNow([message.id])}
-          >
-            <PaperAirplaneIcon className="h-3.5 w-3.5" />
-          </QueueButton>
+          {!message.steer && (
+            <QueueButton
+              testId="queued-message-send"
+              title={sendNowTitle}
+              onClick={() => props.onSendNow([message.id])}
+            >
+              <PaperAirplaneIcon className="h-3.5 w-3.5" />
+            </QueueButton>
+          )}
           <QueueButton
             testId="queued-message-remove"
             title="Remove from the queue"
