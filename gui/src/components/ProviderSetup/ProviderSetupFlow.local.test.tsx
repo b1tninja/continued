@@ -95,6 +95,29 @@ describe("ProviderSetupFlow: local server", () => {
     });
   });
 
+  it("selects the server's own models, not the provider's presets", async () => {
+    const { messenger, saves } = messengerWith();
+    const onDone = vi.fn();
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="openai-compatible" onDone={onDone} />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    const box = (await screen.findByLabelText(
+      STRATA_MODEL.name,
+    )) as HTMLInputElement;
+    await waitFor(() => expect(box.checked).toBe(true));
+    expect(screen.getByTestId("model-checklist").textContent).toContain(
+      "1 model selected",
+    );
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(saves[0].add.map((m: any) => m.model)).toEqual([
+      STRATA_MODEL.modelId,
+    ]);
+  });
+
   it("lists the models at the default address (port 8080) on Next", async () => {
     const { messenger, fetches } = messengerWith();
     const { user } = await renderWithProviders(

@@ -255,10 +255,25 @@ export function ProviderSetupFlow({
   // Start from what is configured (or the popular models) when the target
   // connection changes.
   const connectionId = `${provider.provider}|${JSON.stringify(editing ?? connection)}|${!!setup}`;
+  // Until a box is changed by hand, the selection follows the list: the
+  // provider's own model list replaces the presets when it arrives, and
+  // presets the server does not have must not stay selected (and be saved).
+  const selectionTouched = useRef(false);
   useEffect(() => {
+    selectionTouched.current = false;
     setChecked(initialChecked(groups, configuredModels));
     setConfirmedRemoval(false);
   }, [connectionId]);
+  const listKey = JSON.stringify(
+    [groups.configuredOnly, groups.top, groups.other].map((rows) =>
+      rows.map((r) => r.model),
+    ),
+  );
+  useEffect(() => {
+    if (!selectionTouched.current) {
+      setChecked(initialChecked(groups, configuredModels));
+    }
+  }, [listKey]);
 
   const keyChoice: KeyChoice = {
     storage,
@@ -347,6 +362,7 @@ export function ProviderSetupFlow({
   }
 
   function toggle(model: string) {
+    selectionTouched.current = true;
     setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(model)) next.delete(model);
