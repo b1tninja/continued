@@ -350,6 +350,18 @@ export interface Session {
    * core/util/planFile.ts.
    */
   planFile?: string;
+  /**
+   * Optional: messages typed while the agent was working and not yet sent.
+   * Saved as soon as they change, so a reload or crash does not lose them.
+   */
+  queuedMessages?: SessionQueuedMessage[];
+}
+
+/** A message queued in the chat input; `editorState` is the editor's JSON. */
+export interface SessionQueuedMessage {
+  id: string;
+  editorState: any;
+  modifiers: InputModifiers;
 }
 
 export type TaskStatus =

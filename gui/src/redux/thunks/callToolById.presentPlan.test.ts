@@ -48,6 +48,14 @@ describe("callToolById with present_plan", () => {
         ],
       },
     ];
+    // A message queued while the plan was written goes once the turn ends
+    state.session.queuedMessages = [
+      {
+        id: "q1",
+        editorState: { type: "doc", content: [] },
+        modifiers: { useCodebase: false, noContext: false },
+      },
+    ];
     const store = createMockStore(state);
     const messenger = store.mockIdeMessenger;
     messenger.responses.fileExists = false;
@@ -80,5 +88,6 @@ describe("callToolById with present_plan", () => {
     });
     expect(stream).not.toHaveBeenCalled();
     expect(session.isStreaming).toBe(false);
+    expect(session.isQueueSendRequested).toBe(true);
   });
 });
