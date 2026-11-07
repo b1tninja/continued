@@ -133,6 +133,9 @@ export class HistoryManager {
     if (session.checkpoints?.length) {
       orderedSession.checkpoints = session.checkpoints;
     }
+    if (session.taskPlan?.items.length) {
+      orderedSession.taskPlan = session.taskPlan;
+    }
 
     fs.writeFileSync(
       getSessionFilePath(session.sessionId),
