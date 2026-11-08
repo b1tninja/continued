@@ -616,7 +616,7 @@ Added on 2026-11-07 from the owner. In their words: "use some sort of base promp
 - `conversation` fields go on requests that continue the conversation: an item's turns.
 - `oneShot` fields go on requests nothing continues: the compaction summary today, and the verifier, a scout and a check-in's evaluation under this proposal.
 
-The block and the reminder need no new hint: they make the prefix stable, and the server's own prefix matching does the rest. A server-specific prefix hint, if Strata gains one, would be one more field under `conversation`.
+The block and the reminder need no new mechanism: they make the prefix stable, and the server's own prefix matching does the rest. A prefix hint already has a worked example: `extensions/cli/src/contextManagement.test.ts` configures `conversation: { strata_prefix: { messages: 1 } }` beside `oneShot: { strata_checkpoint: false }`, and checks that each lands only on its kind of request. `strata_prefix` is not a field the CLI knows; it is whatever the config passes through. A hint naming the block, for a server that takes one, would be one more such `conversation` field.
 
 ## Safeguards
 
