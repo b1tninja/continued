@@ -7,6 +7,7 @@ import {
 
 import { IIdeMessenger } from "../../context/IdeMessenger";
 import {
+  clearToolCallArguments,
   errorToolCall,
   setProcessedToolCallArgs,
   updateToolCallOutput,
@@ -26,6 +27,7 @@ export function refuseTruncatedToolCalls(
   for (const { toolCall, toolCallId } of generatedToolCalls) {
     if (!isTruncatedJson(toolCall.function.arguments ?? "")) continue;
     dispatch(errorToolCall({ toolCallId }));
+    dispatch(clearToolCallArguments({ toolCallId }));
     dispatch(
       updateToolCallOutput({
         toolCallId,

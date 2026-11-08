@@ -532,6 +532,33 @@ export const sessionSlice = createSlice({
     setPlanFile: (state, { payload }: PayloadAction<string | undefined>) => {
       state.planFile = payload || undefined;
     },
+    /**
+     * A tool call cut off at the output limit: drop its partial arguments. The
+     * history is sent back with every request, and invalid JSON there can fail
+     * a provider's template, besides re-sending text that was never used.
+     */
+    clearToolCallArguments: (
+      state,
+      { payload }: PayloadAction<{ toolCallId: string }>,
+    ) => {
+      for (let i = state.history.length - 1; i >= 0; i--) {
+        const item = state.history[i];
+        const toolCallState = item.toolCallStates?.find(
+          (tc) => tc.toolCallId === payload.toolCallId,
+        );
+        if (!toolCallState) continue;
+        toolCallState.toolCall.function.arguments = "{}";
+        toolCallState.parsedArgs = {};
+        if (item.message.role === "assistant") {
+          for (const call of item.message.toolCalls ?? []) {
+            if (call.id === payload.toolCallId && call.function) {
+              call.function.arguments = "{}";
+            }
+          }
+        }
+        return;
+      }
+    },
     setLoop: (state, { payload }: PayloadAction<LoopState | undefined>) => {
       state.loop = payload;
     },
@@ -1455,6 +1482,7 @@ export const {
   setCheckpoints,
   setTaskPlan,
   setPlanFile,
+  clearToolCallArguments,
   setLoop,
   setIsGatheringContext,
   resetNextCodeBlockToApplyIndex,

@@ -662,6 +662,15 @@ describe("Loop mode", () => {
     expect(h.requests[1].messages.map(text).join(" ")).toContain(
       "cut off at the output limit",
     );
+    // The partial arguments are not kept or sent back: invalid JSON there can
+    // fail a provider, and they would be re-sent with every later request
+    const stored = h.store
+      .getState()
+      .session.history.flatMap((i) => i.toolCallStates ?? [])
+      .find((tc) => tc.toolCallId === "cut-off")!;
+    expect(stored.toolCall.function.arguments).toBe("{}");
+    expect(stored.parsedArgs).toEqual({});
+    expect(h.requests[1].messages.map(text).join(" ")).not.toContain("line 1");
   });
 
   test("Stop stops the loop with the item back to pending, and Resume goes on", async () => {
