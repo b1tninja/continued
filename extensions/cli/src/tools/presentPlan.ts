@@ -9,6 +9,7 @@ import {
   planKeepPlanningResult,
   PLANS_DIR,
   PRESENT_PLAN_CLI_TOOL_NAME,
+  PRESENT_PLAN_TODO_DETAILS_PARAMETER,
   PRESENT_PLAN_TOOL_DESCRIPTION,
   serializePlanFile,
   taskPlanForProposal,
@@ -43,6 +44,7 @@ interface PresentPlanArgs {
   title?: unknown;
   plan?: unknown;
   todos?: unknown;
+  todo_details?: unknown;
 }
 
 function checkedArgs(args: PresentPlanArgs) {
@@ -137,6 +139,7 @@ export const presentPlanTool: Tool = {
         description: `The implementation steps in order, at most ${TASK_PLAN_LIMITS.maxItems}, each at most ${TASK_PLAN_LIMITS.maxTextLength} characters.`,
         items: { type: "string" },
       },
+      todo_details: PRESENT_PLAN_TODO_DETAILS_PARAMETER as any,
     },
   },
   preprocess: async (args: PresentPlanArgs) => {

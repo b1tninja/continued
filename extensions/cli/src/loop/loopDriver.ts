@@ -15,6 +15,7 @@ import {
   reconcileLoop,
   settleSteeredAnswers,
   standingInstructions,
+  startCheck,
   startItemRun,
   startReplan,
   stopLoop,
@@ -28,6 +29,7 @@ import { services } from "../services/index.js";
 import { getSessionLoop, getSessionTaskPlan } from "../session.js";
 import { logger } from "../util/logger.js";
 
+import { type LoopCheckStep, runLoopCheck } from "./loopChecks.js";
 import {
   acceptLoopPlan,
   CLI_LOOP_TOOL_NAMES,
@@ -53,6 +55,9 @@ export interface LoopTurn {
   /** The user message to send; it starts the run's fresh context */
   prompt: string;
 }
+
+/** What the loop does next: a model turn to send, or an item's check to run. */
+export type LoopStep = LoopTurn | LoopCheckStep;
 
 function historyNow(): ChatHistoryItem[] {
   try {
@@ -92,8 +97,12 @@ function finishRun(loop: LoopState): LoopState | "accepted" | "awaiting" {
     const delivered = loop.answers
       .filter((a) => a.route === "steer" && !a.delivered && !pending.has(a.id))
       .map((a) => a.id);
+    // A done item with a check waits for it (core's "checking")
+    const check = getSessionTaskPlan()?.items.find(
+      (t) => t.id === loop.current?.itemId,
+    )?.check;
     return settleSteeredAnswers(
-      finishItemRun(loop, loop.current.report),
+      finishItemRun(loop, loop.current.report, { check }),
       delivered,
     );
   }
@@ -126,7 +135,7 @@ function finishRun(loop: LoopState): LoopState | "accepted" | "awaiting" {
 export function nextLoopTurn(
   historyLength: number,
   now = new Date(),
-): LoopTurn | undefined {
+): LoopStep | undefined {
   for (let guard = 0; guard < 4; guard++) {
     const saved = getSessionLoop();
     if (
@@ -174,6 +183,15 @@ export function nextLoopTurn(
       case "stop":
         commitLoop(stopLoop(loop, action.reason, action.detail));
         return undefined;
+      case "check":
+        // The harness runs the item's check (runLoopCheck); no model turn
+        loop = startCheck(loop, action.itemId, historyLength, now);
+        commitLoop(loop);
+        return {
+          kind: "check",
+          itemId: action.itemId,
+          command: action.command,
+        };
       case "run": {
         const item = plan.items.find((i) => i.id === action.itemId)!;
         const itemState = loop.items.find((i) => i.id === action.itemId);
@@ -195,6 +213,7 @@ export function nextLoopTurn(
             itemState?.unanswered?.includes(q.id),
           ),
           toolNames: CLI_LOOP_TOOL_NAMES,
+          lastCheck: itemState?.check,
         });
         loop = markDelivered(
           loop,
@@ -273,9 +292,10 @@ export class LoopRunner {
     this.stepping = true;
     try {
       while (!this.disposed && this.host.isIdle()) {
-        const turn = nextLoopTurn(this.host.historyLength());
-        if (!turn) break;
-        await this.host.send(turn);
+        const step = nextLoopTurn(this.host.historyLength());
+        if (!step) break;
+        if (step.kind === "check") await runLoopCheck(step);
+        else await this.host.send(step);
       }
     } catch (error) {
       logger.error("Loop step failed", { error });

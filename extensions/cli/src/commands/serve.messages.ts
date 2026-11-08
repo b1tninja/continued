@@ -4,6 +4,7 @@ import {
   describePromptBlocked,
   runUserPromptSubmitHooks,
 } from "../hooks/promptHook.js";
+import { runLoopCheck } from "../loop/loopChecks.js";
 import { loopWakeDelay, nextLoopTurn } from "../loop/loopDriver.js";
 import { getSessionLoop, interruptRunningLoop } from "../loop/loopSession.js";
 import { services } from "../services/index.js";
@@ -327,12 +328,21 @@ async function drainMessages(ctx: ServeMessageContext) {
     const queuedMessage = mergeQueuedMessages(messageQueue.takeNextBatch());
     if (!queuedMessage) {
       // Nothing of the person's is waiting: the loop's next step, if any
-      const turn = nextLoopTurn(historyLength(state));
-      if (!turn) break;
+      const step = nextLoopTurn(historyLength(state));
+      if (!step) break;
       state.isProcessing = true;
       state.lastActivity = Date.now();
       processedMessage = true;
-      await runTurn(ctx, turn.prompt);
+      if (step.kind === "check") {
+        // An item's check: the harness runs the command, no model turn
+        try {
+          await runLoopCheck(step);
+        } finally {
+          state.isProcessing = false;
+        }
+        continue;
+      }
+      await runTurn(ctx, step.prompt);
       continue;
     }
 
