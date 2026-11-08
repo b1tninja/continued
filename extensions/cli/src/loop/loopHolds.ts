@@ -1,9 +1,12 @@
+import path from "path";
+
 import {
   approvalHeldResult,
   consumeLoopGrant,
   holdQuestion,
   LOOP_REPEAT_LIMIT,
   loopCallKey,
+  loopGrantKey,
   repeatCount,
   repeatedCallResult,
   replanHoldResult,
@@ -80,7 +83,11 @@ export function holdLoopCall(
     };
   }
 
-  const key = loopCallKey(call.name, call.arguments);
+  // A grant covers what the question names (the file, the command), so a
+  // write repeated with slightly different content is still allowed
+  const key = loopGrantKey(call.name, call.arguments, (p) =>
+    path.resolve(process.cwd(), p),
+  );
   const grant = consumeLoopGrant(loop, key);
   if (grant.granted) {
     commitLoop(grant.loop);

@@ -63,6 +63,34 @@ export function loopCallKey(toolName: string, args: unknown): string {
   return `${toolName}\u0000${stableStringify(args ?? {})}`;
 }
 
+/**
+ * The key an "Allow once" grant is kept under: the tool and what its
+ * approval question names (the command, or the file), not every argument.
+ * A model that writes the file again with slightly different content still
+ * gets the write the person allowed. `resolvePath` makes a relative path
+ * absolute, so "src/a.ts" and its absolute form are one file.
+ */
+export function loopGrantKey(
+  toolName: string,
+  args: unknown,
+  resolvePath: (path: string) => string = (path) => path,
+): string {
+  const a = (args ?? {}) as Record<string, unknown>;
+  if (typeof a.command === "string" && a.command.trim()) {
+    return loopCallKey(toolName, { command: a.command.trim() });
+  }
+  for (const key of ["filepath", "file_path", "path"]) {
+    const value = a[key];
+    if (typeof value === "string" && value.trim()) {
+      const path = resolvePath(value.trim())
+        .replace(/[\\/]+/g, "/")
+        .replace(/^([a-z]):/, (_, d: string) => `${d.toUpperCase()}:`);
+      return loopCallKey(toolName, { path });
+    }
+  }
+  return loopCallKey(toolName, args);
+}
+
 export const DEFAULT_LOOP_BUDGET: LoopBudget = {
   maxRounds: 5,
   maxTokens: 2_000_000,
@@ -399,20 +427,29 @@ function waitsOnPerson(
   loop: LoopState,
   plan: TaskPlan,
   state: LoopItemState,
-  seen: Set<string> = new Set(),
+  memo: Map<string, boolean> = new Map(),
 ): boolean {
-  if (state.status === "waiting") return true;
-  if (state.status === "checking") return hasOpenBlocking(loop, state.id);
-  if (state.status !== "pending" && state.status !== "redo") return false;
-  const task = plan.items.find((t) => t.id === state.id);
-  const unmet = task ? unmetDependencies(loop, plan, task) : [];
-  if (unmet.length === 0) return false;
-  return unmet.every((id) => {
-    if (seen.has(id)) return false;
-    seen.add(id);
-    const dep = itemState(loop, id);
-    return !!dep && waitsOnPerson(loop, plan, dep, seen);
-  });
+  const known = memo.get(state.id);
+  if (known !== undefined) return known;
+  // While it is being worked out, a circle counts as not waiting
+  memo.set(state.id, false);
+  let result = false;
+  if (state.status === "waiting") {
+    result = true;
+  } else if (state.status === "checking") {
+    result = hasOpenBlocking(loop, state.id);
+  } else if (state.status === "pending" || state.status === "redo") {
+    const task = plan.items.find((t) => t.id === state.id);
+    const unmet = task ? unmetDependencies(loop, plan, task) : [];
+    result =
+      unmet.length > 0 &&
+      unmet.every((id) => {
+        const dep = itemState(loop, id);
+        return !!dep && waitsOnPerson(loop, plan, dep, memo);
+      });
+  }
+  memo.set(state.id, result);
+  return result;
 }
 
 /** Item state for a task list item the loop has not seen. */
@@ -1041,8 +1078,17 @@ export function finishItemRun(
   const state = itemState(loop, itemId);
   const summary = report?.summary?.slice(0, LOOP_LIMITS.maxSummaryLength);
   let status: LoopItemStatus;
+  const answeredMeanwhile =
+    report?.outcome === "waiting" &&
+    !hasOpenBlocking(loop, itemId) &&
+    loop.answers.some((a) => a.itemId === itemId && !a.delivered);
   if (report?.outcome === "done") {
     status = options.check ? "checking" : "done";
+  } else if (answeredMeanwhile) {
+    // It waited on a question the person answered while it ran: it runs
+    // again, and its next prompt carries the answer
+    status =
+      (state?.attempts ?? 0) >= loop.budget.maxAttempts ? "failed" : "pending";
   } else if (hasOpenBlocking(loop, itemId) || report?.outcome === "waiting") {
     status = "waiting";
   } else if (report?.outcome === "stuck") {

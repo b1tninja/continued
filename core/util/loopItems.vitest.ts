@@ -8,6 +8,8 @@ import {
   finishItemRun,
   holdCheck,
   holdQuestion,
+  loopCallKey,
+  loopGrantKey,
   loopItemPrompt,
   loopPlanBlock,
   recordCheck,
@@ -374,5 +376,72 @@ describe("checks", () => {
       kind: "run",
       itemId: "2",
     });
+  });
+});
+
+describe("found by the real-model run (2026-11-07)", () => {
+  test("items that all come after one waiting item wait, however many share it", () => {
+    const p = plan(
+      { text: "Helper" },
+      { text: "Tests A", after: ["1"] },
+      { text: "Tests B", after: ["1"] },
+      { text: "Docs", after: ["1"] },
+      { text: "Suite", after: ["2", "3", "4"] },
+    );
+    const loop = run(loopOn(p), p, "1", "waiting");
+    expect(decideNext(loop, p, ctx)).toEqual({ kind: "wait" });
+  });
+
+  test("waiting on a question the person answered during the run runs the item again", () => {
+    const p = plan({ text: "Helper" });
+    let loop = startItemRun(loopOn(p), "1", 0, T0);
+    const held = holdQuestion(
+      loop,
+      {
+        itemId: "1",
+        question: "Allow this call? Write: src/a.ts",
+        kind: "approval",
+        approval: {
+          toolName: "Write",
+          summary: "Write: src/a.ts",
+          grantKey: "k",
+        },
+      },
+      T0,
+    );
+    if (!held.ok) throw new Error(held.error);
+    const answered = answerLoop(
+      held.loop,
+      { questionId: "q1", text: "", approve: true },
+      T0,
+    );
+    if (!answered.ok) throw new Error(answered.error);
+    expect(answered.answer.route).toBe("steer");
+    loop = finishItemRun(answered.loop, { outcome: "waiting" });
+    expect(status(loop, "1")).toBe("pending");
+    expect(decideNext(loop, p, ctx)).toEqual({ kind: "run", itemId: "1" });
+  });
+
+  test("a grant covers the file or command the question names, not the exact arguments", () => {
+    // A relative path and its absolute form, with either slash, are one file
+    const resolve = (p: string) => (p.startsWith("D:") ? p : `D:/repo/${p}`);
+    expect(
+      loopGrantKey("Write", { filepath: "src/a.ts", content: "one" }, resolve),
+    ).toBe(
+      loopGrantKey(
+        "Write",
+        { filepath: String.raw`D:\repo\src\a.ts`, content: "two" },
+        resolve,
+      ),
+    );
+    expect(loopGrantKey("Bash", { command: " npm test ", timeout: 5 })).toBe(
+      loopGrantKey("Bash", { command: "npm test" }),
+    );
+    expect(loopGrantKey("Write", { filepath: "a.ts" })).not.toBe(
+      loopGrantKey("Edit", { filepath: "a.ts" }),
+    );
+    expect(loopGrantKey("Fetch", { url: "x" })).toBe(
+      loopCallKey("Fetch", { url: "x" }),
+    );
   });
 });
