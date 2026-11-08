@@ -72,7 +72,7 @@ describe("TUIChat - plan mode", () => {
     return ui;
   }
 
-  it("PresentPlan saves the plan, and Build leaves plan mode without a checklist", async () => {
+  it("PresentPlan saves the plan, and Build leaves plan mode with the to-dos as the task list", async () => {
     const llm = new ScriptedLlm([
       toolTurn("PresentPlan", planArgs),
       textTurn("building now"),
@@ -89,7 +89,9 @@ describe("TUIChat - plan mode", () => {
         "Retry failed fetches with backoff.",
       );
       expect(getSessionPlanFile()).toMatch(/add-retry\.md$/);
-      expect(getSessionTaskPlan()).toBeUndefined();
+      expect(getSessionTaskPlan()?.items.map((i) => i.text)).toEqual(
+        planArgs.todos,
+      );
 
       const result = llm.requests[1].messages.find((m) => m.role === "tool");
       expect(messageText(result!)).toContain("The user approved the plan");
@@ -98,6 +100,8 @@ describe("TUIChat - plan mode", () => {
       const nextTools = llm.requests[1].tools.map((t) => t.function.name);
       expect(nextTools).not.toContain("PresentPlan");
       expect(nextTools).toContain("Write");
+      // The plan's checklist goes on being used
+      expect(nextTools).toContain("TaskList");
 
       await waitUntil(
         () => ui.allOutput().includes("building now"),
@@ -106,8 +110,8 @@ describe("TUIChat - plan mode", () => {
       );
       const frame = ui.lastFrame() ?? "";
       expect(frame).not.toContain("plan]");
-      expect(frame).not.toContain("0/2 Add a retry helper");
-      expect(frame).not.toContain("plan add-retry.md");
+      expect(frame).toContain("0/2 Add a retry helper");
+      expect(frame).toContain("plan add-retry.md");
     } finally {
       ui.unmount();
     }

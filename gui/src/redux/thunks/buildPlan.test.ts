@@ -51,16 +51,41 @@ function sentText(s: ReturnType<typeof store>): string {
 }
 
 describe("buildPlan", () => {
-  it("switches to Agent mode, sends the build message and clears the checklist", async () => {
-    const s = store("# Add retry");
+  it("switches to Agent mode and sends the build message", async () => {
+    const s = store(
+      "# Add retry\n\n## To-dos\n\n- [ ] Add a helper <!-- id: 1 -->\n- [ ] Use it <!-- id: 2 -->\n",
+    );
     await s.dispatch(buildPlan({ planFile: PLAN_URI }) as any);
 
     expect(session(s).mode).toBe("agent");
     const text = sentText(s);
     expect(text).toContain(".continuous/plans/add-retry.md");
     expect(text).toContain("Read the file first");
-    expect(text).not.toMatch(/task list/i);
-    // Only Plan mode makes a checklist: Agent mode just does the work
-    expect(session(s).taskPlan).toBeUndefined();
+    expect(text).toContain("task list current");
+    // Unchanged file: the list is the same and still the model's.
+    expect(session(s).taskPlan?.items).toEqual(seeded.items);
+    expect(session(s).taskPlan?.updatedBy).toBe("model");
+  });
+
+  it("takes the person's edits to the file into the task list", async () => {
+    const s = store(
+      "# Add retry\n\n## To-dos\n\n- [x] Add a helper <!-- id: 1 -->\n- [ ] Use it everywhere\n- [ ] Add tests\n",
+    );
+    await s.dispatch(buildPlan({ planFile: PLAN_URI }) as any);
+    const plan = session(s).taskPlan;
+    expect(plan?.updatedBy).toBe("user");
+    expect(plan?.items).toEqual([
+      { id: "1", text: "Add a helper", status: "completed" },
+      { id: "2", text: "Use it everywhere", status: "pending" },
+      { id: "3", text: "Add tests", status: "pending" },
+    ]);
+  });
+
+  it("still builds when the file cannot be read, keeping the list", async () => {
+    const s = store(new Error("gone"));
+    await s.dispatch(buildPlan({ planFile: PLAN_URI }) as any);
+    expect(session(s).taskPlan).toEqual(seeded);
+    expect(session(s).mode).toBe("agent");
+    expect(sentText(s)).toContain("Build the plan");
   });
 });
