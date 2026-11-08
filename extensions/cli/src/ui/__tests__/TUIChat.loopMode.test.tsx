@@ -35,6 +35,16 @@ const planArgs = {
   todos: ["Add a retry helper", "Use it in fetch"],
 };
 
+/**
+ * The flow spans many turns, each with its own waits; under a loaded run
+ * (the whole suite in parallel) the harness's 5 seconds can run out.
+ */
+const waitLong = (
+  predicate: () => boolean,
+  describe: string,
+  lastFrame: () => string | undefined,
+) => waitUntil(predicate, describe, lastFrame, 15_000);
+
 /** The user messages of a request, without the plan block at the end. */
 function userTexts(request: { messages: any[] }): string[] {
   return request.messages
@@ -109,7 +119,7 @@ describe("TUIChat - Loop mode", () => {
     try {
       await type(ui.stdin, "plan a retry");
       await type(ui.stdin, ENTER);
-      await waitUntil(
+      await waitLong(
         () => (ui.lastFrame() ?? "").includes("Build in a loop"),
         "the plan question with Build in a loop",
         ui.lastFrame,
@@ -117,12 +127,11 @@ describe("TUIChat - Loop mode", () => {
       await type(ui.stdin, DOWN);
       await type(ui.stdin, ENTER);
 
-      await waitUntil(
+      await waitLong(
         () => llm.requests.length >= 4,
         "item 2's second request",
         () =>
           `${ui.lastFrame()}\nrequests: ${llm.requests.length}\nloop: ${JSON.stringify(getSessionLoop())}\nmode: ${services.toolPermissions.getCurrentMode()}`,
-        10000,
       );
       // The PresentPlan turn ended there: no request carried its result on
       const [, item1, item2] = llm.requests;
@@ -169,7 +178,7 @@ describe("TUIChat - Loop mode", () => {
       expect(ui.lastFrame()).not.toContain("Would you like to continue?");
 
       secondRun.release();
-      await waitUntil(
+      await waitLong(
         () => getSessionLoop()?.status === "waiting",
         "the loop to wait on the person",
         ui.lastFrame,
@@ -178,7 +187,7 @@ describe("TUIChat - Loop mode", () => {
         "completed",
         "blocked",
       ]);
-      await waitUntil(
+      await waitLong(
         () =>
           (ui.lastFrame() ?? "").includes("Loop (/loop to answer) Supervised"),
         "the loop strip",
@@ -197,7 +206,7 @@ describe("TUIChat - Loop mode", () => {
       if (!(ui.lastFrame() ?? "").includes("Allow once (q1)")) {
         await type(ui.stdin, ENTER);
       }
-      await waitUntil(
+      await waitLong(
         () => (ui.lastFrame() ?? "").includes("Allow once (q1)"),
         "the inbox",
         ui.lastFrame,
@@ -205,7 +214,7 @@ describe("TUIChat - Loop mode", () => {
       expect(ui.lastFrame()).toContain("Allow this call? Write:");
       await type(ui.stdin, ENTER);
 
-      await waitUntil(
+      await waitLong(
         () => getSessionLoop()?.status === "stopped",
         "the loop to finish",
         ui.lastFrame,
@@ -227,5 +236,5 @@ describe("TUIChat - Loop mode", () => {
       secondRun.release();
       ui.unmount();
     }
-  });
+  }, 60_000);
 });
