@@ -36,6 +36,7 @@ import {
   answerLoopQuestion,
   commitLoop,
   consumeLoopTurnEnd,
+  loopPlanBlockForRequest,
   loopRequestHistory,
   requestLoopTurnEnd,
   resetLoopMemory,
@@ -317,6 +318,21 @@ describe("Loop mode's driver in the CLI", () => {
     expect(consumeLoopTurnEnd(true)).toBe(false);
     expect(consumeLoopTurnEnd()).toBe(true);
     expect(consumeLoopTurnEnd()).toBe(false);
+  });
+
+  it("sends the plan block with an item's requests, not with a subagent's or compaction's", async () => {
+    await planOf("One", "Two");
+    startLoopFromPlan("normal");
+    expect(loopPlanBlockForRequest()).toBe("");
+    nextLoopTurn(history().length);
+    const block = loopPlanBlockForRequest();
+    expect(block).toContain("[>] 1. One  <- this item");
+    expect(block).toContain("report it with FinishItem");
+    expect(loopPlanBlockForRequest(true)).toBe("");
+    const ready = services.chatHistory.isReady;
+    services.chatHistory.isReady = () => false;
+    expect(loopPlanBlockForRequest()).toBe("");
+    services.chatHistory.isReady = ready;
   });
 
   it("an unattended loop wakes when its wait runs out", async () => {

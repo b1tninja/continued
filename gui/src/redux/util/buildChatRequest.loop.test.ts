@@ -91,3 +91,33 @@ describe("a loop item's request", () => {
     expect(texts(idle)).toHaveLength(3);
   });
 });
+
+describe("a loop item's plan block", () => {
+  const withPlan = (state: RootState): RootState => ({
+    ...state,
+    session: { ...state.session, taskPlan: plan },
+  });
+
+  it("goes last, with every slot and the running item marked", () => {
+    const { taskListMessage } = buildChatRequest(withPlan(stateWith()));
+    const block = renderChatMessage(taskListMessage!);
+    expect(taskListMessage?.role).toBe("user");
+    expect(block.startsWith("<task_list>")).toBe(true);
+    expect(block).toContain("[x] 1. Write the lexer");
+    expect(block).toContain("[>] 2. Add tests  <- this item");
+    expect(block).toContain("report it with finish_item");
+  });
+
+  it("is not sent outside an item's run", () => {
+    const state = withPlan(stateWith());
+    const idle = {
+      ...state,
+      session: {
+        ...state.session,
+        loop: { ...state.session.loop!, current: undefined },
+      },
+    };
+    // The task list tool is not among this state's tools either
+    expect(buildChatRequest(idle).taskListMessage).toBeUndefined();
+  });
+});

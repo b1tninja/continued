@@ -83,6 +83,11 @@ describe("cn serve: Loop mode", () => {
     });
     return { status: res.status, body: (await res.json()) as any };
   };
+  /** A request's user messages, without the plan block at the end. */
+  const userMessages = (request: { messages: any[] }) =>
+    request.messages.filter(
+      (m) => m.role === "user" && !messageText(m).startsWith("<task_list>"),
+    );
   const getState = async () =>
     (await (await fetch(`${base}/state`)).json()) as any;
 
@@ -156,7 +161,7 @@ describe("cn serve: Loop mode", () => {
 
     await midRun.started;
     // Item 1 runs from its own prompt: the earlier chat is not sent
-    const first = llm.requests[0].messages.filter((m) => m.role === "user");
+    const first = userMessages(llm.requests[0]);
     expect(first).toHaveLength(1);
     expect(messageText(first[0])).toContain(
       "only this item: Add a retry helper",
@@ -192,12 +197,12 @@ describe("cn serve: Loop mode", () => {
       "the loop to wait on the approval",
       () => JSON.stringify(getSessionLoop()),
     );
-    const steered = llm.requests[2].messages.filter((m) => m.role === "user");
+    const steered = userMessages(llm.requests[2]);
     expect(messageText(steered[steered.length - 1])).toContain(
       'The person answered your question q1 ("Name the helper retry or withRetry? Default retry."): Call it withRetry',
     );
     // Item 2 starts fresh: item 1's run is not in its request
-    const second = llm.requests[3].messages.filter((m) => m.role === "user");
+    const second = userMessages(llm.requests[3]);
     expect(second).toHaveLength(1);
     expect(messageText(second[0])).toContain("only this item: Use it in fetch");
     expect(fs.existsSync(target)).toBe(false);

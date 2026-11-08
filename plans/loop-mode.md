@@ -317,7 +317,7 @@ The IDE was wired first. The CLI (L3) has its own streaming loop and tool set, s
 
 ## Next: Loop as a mode, plan slots, strategies and controls (proposed, L5)
 
-Proposed on 2026-11-07, after L3. Nothing in this section is built. It changes decision 2 (no new mode, no new format), so it needs the owner's go-ahead before code.
+Proposed on 2026-11-07, after L3. Only the plan slots are built. It changes decision 2 (no new mode, no new format), so it needs the owner's go-ahead before code.
 
 ### Loop as a mode
 
@@ -335,20 +335,29 @@ Open:
 - What switching away from Loop does while a loop runs. Proposed: stop after the running item.
 - Whether a message typed mid-loop can start a new loop. Proposed: no; it is a note about the plan.
 
-### Plan slots
+### Plan slots (built)
 
-Today an item run sees only its own prompt and the plan file's path. The task list block is sent only when the TaskList tool is offered, and the loop hides that tool while an item runs. The proposal is a **loop plan block**: a read-only checklist sent at the end of every request the loop makes, item runs and re-plans alike, where the task list block goes today. Each line is a slot holding the item's text, status, summary, notes and open questions, with the current item marked:
+Built on 2026-11-07. Before, an item run saw only its own prompt and the plan file's path: the task list block is sent only when the TaskList tool is offered, and the loop hides that tool while an item runs. Now every request of an item's run ends with a **plan block** (`loopPlanBlock` in core): a read-only checklist with one slot per item, the running item marked, then the notes earlier runs left and the person's standing instructions.
 
 ```
-[x] Add a retry helper: added withRetry (notes: npm test works)
-[>] Use it in fetch  <- this item
-[?] Update the docs: waiting on q3
+<task_list>
+The plan, kept for you and read-only. Work only on the item marked "<- this item"; ...
+[x] 1. Add a retry helper: Added withRetry
+[>] 2. Use it in fetch  <- this item
+    q1 (approval): Allow this call? Write: src/fetch.ts
+[ ] 3. Update the docs
+
+Notes from earlier items:
+- npm test works
+</task_list>
 ```
 
-- **Built from existing state:** `LoopState.items`, the summaries, notes and questions, and `STATUS_MARK`, which the re-plan prompt already uses. That is one core formatter plus a hook in the gui and the CLI.
-- **Placement:** last in the request, so a change touches only the tail and the cached system message and tools still hit.
-- **Shorter prompt:** the item prompt shrinks to "work on the item marked in the plan below" plus the contract. Notes and answers move into their slots.
-- **Order stays with the harness:** the model is still never asked what comes next; the marker picks the item.
+- **Where:** last in the request, where the task list block goes, with the same `<task_list>` tag. A change touches only the tail, and Bedrock's cache point and the token counter treat it as they treat the task list. The gui puts it in `buildChatRequest`'s `taskListMessage`, the CLI in `taskListBlockForRequest`. Neither sends it for a subagent's or compaction's request.
+- **What a slot shows:** the item's status and number. A done or failed item adds its run's summary (clipped to 160 characters); a waiting or redo item says so. Below the item go its open questions, each with the assumption it was made on.
+- **The prompt is shorter:** with the block, `loopItemPrompt` (`planBlock: true`) leaves out the notes and the standing instructions, which ride in the block. The answers for the item stay in the prompt, as they are delivered once.
+- **Order stays with the harness:** the block marks the item. It never asks the model to choose one, and a test checks it does not mention a next item or the loop.
+- **Re-plans keep their own prompt,** which already lists every item with its state, so they do not get the block.
+- **In the TUI:** while a loop runs, the plan shows above the prompt as a checklist in place of the one-line task strip, like the queued messages. Finished items but the last fold into a count, at most 8 lines are shown, and an item that waits says what it waits on. `/loop` shows the whole plan with each item's summary.
 
 ### Strategies
 
@@ -401,7 +410,7 @@ In `cn serve`, these are more `loopAction` values (`skip`, `again`) and a `loopB
 
 ### Order of work
 
-1. **Plan slots.** Small, and they close the gap where item runs never see the checklist.
+1. **Plan slots** (built).
 2. **Controls and editable limits.** Mostly UI over core functions that exist.
 3. **Strategies,** as a field on `LoopState` that `decideNext` and `replanDecision` read, with unit tests in core. Both surfaces get them through those functions.
 4. **Loop as a mode.**
@@ -435,7 +444,7 @@ The sources are listed under Sources below, under "Strategies".
   - Verification: an acceptance check per item, run by the harness before an item counts as done (a command from the plan, or a separate evaluator).
   - Parallel items as subagents, only for items the plan marks independent with disjoint files, at most 2 or 3, and ideally each in its own worktree (#314's Agents panel).
   - Checks the project names once (Ralph's `AGENTS.md` validation commands), run by the harness after each item as backpressure.
-- **L5 (proposed):** Loop as a mode, plan slots, strategies and controls, in the order given in "Order of work" above.
+- **L5 (proposed; plan slots built):** Loop as a mode, plan slots, strategies and controls, in the order given in "Order of work" above.
 
 ## Open questions
 

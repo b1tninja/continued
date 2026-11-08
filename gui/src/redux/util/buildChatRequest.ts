@@ -6,6 +6,7 @@ import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { SystemMessageToolCodeblocksFramework } from "core/tools/systemMessageTools/toolCodeblocks";
 import { BuiltInToolNames } from "core/tools/builtIn";
+import { loopPlanBlock } from "core/util/loopMode";
 import { taskPlanTailMessage } from "core/util/taskPlan";
 import {
   getModeReasoningEffort,
@@ -189,11 +190,20 @@ export function buildChatRequest(
   const appliedRuleIndex =
     runRuleIndex >= 0 ? runRuleIndex + contextStart : runRuleIndex;
 
-  const taskListMessage = activeTools.some(
-    (t) => t.function.name === BuiltInToolNames.TaskList,
-  )
-    ? taskPlanTailMessage(state.session.taskPlan)
-    : undefined;
+  // Loop mode: an item's run gets the plan block instead (its slots, the
+  // notes and the person's standing instructions), in the same place, while
+  // the task list tool is hidden from it.
+  const loopBlock =
+    history === state.session.history &&
+    loop?.current?.kind === "item" &&
+    state.session.taskPlan
+      ? loopPlanBlock({ loop, plan: state.session.taskPlan })
+      : "";
+  const taskListMessage: ChatMessage | undefined = loopBlock
+    ? { role: "user", content: loopBlock }
+    : activeTools.some((t) => t.function.name === BuiltInToolNames.TaskList)
+      ? taskPlanTailMessage(state.session.taskPlan)
+      : undefined;
 
   return {
     model,

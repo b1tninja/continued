@@ -196,6 +196,8 @@ export function nextLoopTurn(
           notes: loop.notes,
           standing: standingInstructions(loop),
           freshContext: loop.freshContext !== false,
+          // The request carries the plan block (loopPlanBlock)
+          planBlock: true,
           unanswered: loop.questions.filter((q) =>
             itemState?.unanswered?.includes(q.id),
           ),

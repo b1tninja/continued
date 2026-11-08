@@ -1,14 +1,22 @@
 import { formatTaskPlanBlock } from "core/util/taskPlan.js";
 import type { ChatCompletionTool } from "openai/resources.mjs";
 
+import { loopPlanBlockForRequest } from "../loop/loopSession.js";
 import { getSessionTaskPlan } from "../session.js";
 import { TASK_LIST_TOOL_NAME } from "../tools/taskList.js";
 
 /**
  * The task list block for this request (core/util/taskPlan.ts), or "" when
- * the TaskList tool is not offered or there is no list.
+ * the TaskList tool is not offered or there is no list. While Loop mode runs
+ * an item, the item gets the loop's plan block in the same place instead
+ * (core's loopPlanBlock), though the TaskList tool is hidden from it.
  */
-export function taskListBlockForRequest(tools?: ChatCompletionTool[]): string {
+export function taskListBlockForRequest(
+  tools?: ChatCompletionTool[],
+  isCompacting = false,
+): string {
+  const loopBlock = loopPlanBlockForRequest(isCompacting);
+  if (loopBlock) return loopBlock;
   const offered = tools?.some(
     (t) => t.type === "function" && t.function.name === TASK_LIST_TOOL_NAME,
   );

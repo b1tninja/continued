@@ -1,10 +1,17 @@
-import type { LoopQuestion, LoopState } from "core/index.js";
+import type {
+  LoopQuestion,
+  LoopState,
+  TaskItem,
+  TaskPlan,
+} from "core/index.js";
 import {
   formatLoopStatus,
+  taskPlanWithLoop,
   LOOP_AUTONOMY,
   LOOP_AUTONOMY_LEVELS,
   standingInstructions,
 } from "core/util/loopMode.js";
+import { TASK_STATUS_MARKERS } from "core/util/taskPlan.js";
 import { Box, Text, useInput } from "ink";
 import React, { useEffect, useState } from "react";
 
@@ -21,6 +28,9 @@ import {
   onLoopChange,
 } from "../../session.js";
 import { defaultBoxStyles } from "../styles.js";
+
+import { ChecklistDisplay } from "./ChecklistDisplay.js";
+import { useTaskPlan } from "./TaskProgressStrip.js";
 
 /** The session's loop, re-rendering when it changes. */
 export function useLoopState(): LoopState | undefined {
@@ -41,25 +51,73 @@ export function useLoopState(): LoopState | undefined {
  */
 export const LoopStrip: React.FC = () => {
   const loop = useLoopState();
+  const plan = useTaskPlan();
   if (!loop) return null;
   const open = loop.questions.some((q) => !q.answerId);
   const needsYou =
     open || loop.status === "awaiting_plan" || loop.status === "stopped";
   return (
-    <Box paddingLeft={1}>
-      <Text wrap="truncate-end">
-        <Text color="dim">Loop </Text>
-        <Text color={needsYou ? "yellow" : "dim"}>
-          {needsYou ? "(/loop to answer)" : "(/loop)"}
+    <Box flexDirection="column" paddingBottom={plan ? 1 : 0}>
+      <Box paddingLeft={1}>
+        <Text wrap="truncate-end">
+          <Text color="dim">Loop </Text>
+          <Text color={needsYou ? "yellow" : "dim"}>
+            {needsYou ? "(/loop to answer)" : "(/loop)"}
+          </Text>
+          <Text color={needsYou ? "yellow" : "cyan"}>
+            {" "}
+            {formatLoopStatus(loop)}
+          </Text>
         </Text>
-        <Text color={needsYou ? "yellow" : "cyan"}>
-          {" "}
-          {formatLoopStatus(loop)}
-        </Text>
-      </Text>
+      </Box>
+      {plan && (
+        <ChecklistDisplay
+          content={loopChecklist(loop, plan, { compact: true })}
+        />
+      )}
     </Box>
   );
 };
+
+/** How many lines the checklist above the prompt shows before folding. */
+export const LOOP_CHECKLIST_LINES = 8;
+
+/**
+ * The loop's items as a checklist (the task list's markers): what the TUI
+ * shows above the prompt while a loop runs, and in full in the inbox.
+ * Compact folds the finished items but the last into a count and shows the
+ * next open items up to LOOP_CHECKLIST_LINES, with notes only for items
+ * that wait on the person or failed. In full, every item has its note: what
+ * its run reported, or the questions it waits on.
+ */
+export function loopChecklist(
+  loop: LoopState,
+  plan: TaskPlan,
+  { compact = false }: { compact?: boolean } = {},
+): string {
+  const items: TaskItem[] = taskPlanWithLoop(plan, loop).items;
+  const line = (item: TaskItem) => {
+    const showNote = !!item.note && (!compact || item.status === "blocked");
+    return `- ${TASK_STATUS_MARKERS[item.status]} ${item.text}${showNote ? ` (${item.note})` : ""}`;
+  };
+  if (!compact) return items.map(line).join("\n");
+
+  const finished = items.filter(
+    (i) => i.status === "completed" || i.status === "cancelled",
+  );
+  const folded = new Set(finished.slice(0, -1).map((i) => i.id));
+  const shown = items.filter((i) => !folded.has(i.id));
+  const lines: string[] = [];
+  if (folded.size > 0) {
+    lines.push(
+      `${folded.size} earlier item${folded.size === 1 ? "" : "s"} done`,
+    );
+  }
+  const room = Math.max(1, LOOP_CHECKLIST_LINES - lines.length);
+  for (const item of shown.slice(0, room)) lines.push(line(item));
+  if (shown.length > room) lines.push(`… ${shown.length - room} more`);
+  return lines.join("\n");
+}
 
 type InboxAction =
   | { kind: "answer"; question: LoopQuestion }
@@ -150,6 +208,7 @@ const KIND_LABEL: Record<LoopQuestion["kind"], string> = {
  */
 export const LoopInbox: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const loop = useLoopState();
+  const plan = useTaskPlan();
   const [mode, setMode] = useState<InboxMode>({ kind: "menu" });
   const [selected, setSelected] = useState(0);
   const [text, setText] = useState("");
@@ -298,6 +357,13 @@ export const LoopInbox: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <Text color="yellow">
           A new plan waits for you: {loop.replanReason}
         </Text>
+      )}
+
+      {plan && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="dim">Plan</Text>
+          <ChecklistDisplay content={loopChecklist(loop, plan)} />
+        </Box>
       )}
 
       <Box flexDirection="column" marginTop={1}>

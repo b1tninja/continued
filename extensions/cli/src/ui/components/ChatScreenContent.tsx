@@ -8,7 +8,7 @@ import type {
 } from "../hooks/useChat.types.js";
 import { UserInput } from "../UserInput.js";
 
-import { LoopStrip } from "./LoopInbox.js";
+import { LoopStrip, useLoopState } from "./LoopInbox.js";
 import { QuizPrompt } from "./QuizPrompt.js";
 import { TaskProgressStrip } from "./TaskProgressStrip.js";
 import { ToolPermissionSelector } from "./ToolPermissionSelector.js";
@@ -55,6 +55,7 @@ export const ChatScreenContent: React.FC<ChatScreenContentProps> = ({
   onImageInClipboardChange,
   onShowEditSelector,
 }) => {
+  const loop = useLoopState();
   if (activeQuizQuestion) {
     return (
       <QuizPrompt
@@ -103,8 +104,8 @@ export const ChatScreenContent: React.FC<ChatScreenContentProps> = ({
   }
   return (
     <Box flexDirection="column">
-      <LoopStrip />
-      <TaskProgressStrip />
+      {/* A loop shows its checklist; otherwise the one-line task strip */}
+      {loop ? <LoopStrip /> : <TaskProgressStrip />}
       {input}
     </Box>
   );

@@ -13,6 +13,7 @@ import type {
   TaskPlan,
 } from "../index.js";
 import { stableStringify } from "../tools/permissions/auto/state.js";
+import { TASK_LIST_BLOCK_CLOSE, TASK_LIST_BLOCK_OPEN } from "./taskPlan.js";
 
 /**
  * Loop mode: build a plan item by item without the person driving each step.
@@ -1090,12 +1091,22 @@ export function loopItemPrompt(input: {
   unanswered?: LoopQuestion[];
   /** The names the model knows the tools by (default the IDE's) */
   toolNames?: LoopToolNames;
+  /**
+   * The request carries loopPlanBlock: the notes and the standing
+   * instructions are in it, so the prompt leaves them out.
+   */
+  planBlock?: boolean;
 }): string {
   const { item } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
   const lines = [
     `Work on this item of the plan, and only this item: ${quote(item.text)}`,
   ];
+  if (input.planBlock) {
+    lines.push(
+      "The task list at the end shows every item's state, with the notes earlier items left; it is kept for you, so do not change it.",
+    );
+  }
   if (input.planFile) {
     lines.push(
       `The plan is in ${input.planFile}; read it for context. Other items are handled separately${input.freshContext ? ", and their work is in the files, not in this conversation" : ""}.`,
@@ -1120,11 +1131,11 @@ export function loopItemPrompt(input: {
       `For each, take your best default and record it with ${names.holdQuestion} kind "assumption". Do not do anything that cannot be undone on such a default; leave that part and say so in the summary.`,
     );
   }
-  if (input.standing?.length) {
+  if (input.standing?.length && !input.planBlock) {
     lines.push("", "The person's instructions for every item:");
     for (const s of input.standing) lines.push(`- ${quote(s)}`);
   }
-  if (input.notes?.length) {
+  if (input.notes?.length && !input.planBlock) {
     lines.push("", "Notes from earlier items:");
     for (const n of input.notes) lines.push(`- ${quote(n)}`);
   }
@@ -1160,6 +1171,77 @@ const STATUS_MARK: Record<LoopItemStatus, string> = {
   waiting: "[?]",
   failed: "[!]",
 };
+
+/** How long a slot's summary and questions may be in the plan block. */
+export const LOOP_PLAN_BLOCK_LIMITS = {
+  summaryLength: 160,
+  questionLength: 160,
+} as const;
+
+function clip(text: string, max: number): string {
+  const flat = quote(text).trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+/**
+ * The plan as a running item sees it: one slot per item with its state, what
+ * its run reported and the questions it holds, the running item marked, then
+ * the notes earlier runs left and the person's standing instructions. It is
+ * sent last in every request of an item's run, where the task list block goes
+ * (the same <task_list> tag, so prompt caching treats it the same way): the
+ * run starts without the earlier turns but never without the plan. It
+ * marks the item; it never asks the model to choose one. Empty without items.
+ */
+export function loopPlanBlock(input: {
+  loop: LoopState;
+  plan: TaskPlan;
+  toolNames?: LoopToolNames;
+}): string {
+  const { loop, plan } = input;
+  if (plan.items.length === 0) return "";
+  const names = input.toolNames ?? LOOP_TOOL_NAMES;
+  const currentId =
+    loop.current?.kind === "item" ? loop.current.itemId : undefined;
+  const lines = [
+    TASK_LIST_BLOCK_OPEN,
+    `The plan, kept for you and read-only. Work only on the item marked "<- this item"; report it with ${names.finishItem} and ask with ${names.holdQuestion}. Markers: [ ] to do, [>] this item, [x] done, [?] waiting on the person, [!] failed.`,
+  ];
+  for (const task of plan.items) {
+    const state = itemState(loop, task.id);
+    const status = state?.status ?? "pending";
+    let line = `${STATUS_MARK[status]} ${task.id}. ${quote(task.text)}`;
+    if (task.id === currentId) {
+      line += "  <- this item";
+    } else if (status === "redo") {
+      line += " (to be redone: an assumption was overruled)";
+    } else if (status === "waiting") {
+      line += " (waiting on the person)";
+    }
+    if ((status === "done" || status === "failed") && state?.summary) {
+      line += `: ${clip(state.summary, LOOP_PLAN_BLOCK_LIMITS.summaryLength)}`;
+    }
+    lines.push(line);
+    for (const q of openQuestions(loop, task.id)) {
+      const assumed = q.assumption
+        ? ` Assumed: ${clip(q.assumption, LOOP_PLAN_BLOCK_LIMITS.questionLength)}`
+        : "";
+      lines.push(
+        `    ${q.id} (${q.kind}): ${clip(q.question, LOOP_PLAN_BLOCK_LIMITS.questionLength)}${assumed}`,
+      );
+    }
+  }
+  if (loop.notes?.length) {
+    lines.push("", "Notes from earlier items:");
+    for (const n of loop.notes) lines.push(`- ${quote(n)}`);
+  }
+  const standing = standingInstructions(loop);
+  if (standing.length) {
+    lines.push("", "The person's instructions for every item:");
+    for (const s of standing) lines.push(`- ${quote(s)}`);
+  }
+  lines.push(TASK_LIST_BLOCK_CLOSE);
+  return lines.join("\n");
+}
 
 /** The prompt for a re-plan turn (sent in Plan mode, so it can only read). */
 export function loopReplanPrompt(input: {

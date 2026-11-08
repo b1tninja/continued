@@ -35,11 +35,19 @@ const planArgs = {
   todos: ["Add a retry helper", "Use it in fetch"],
 };
 
-/** The user messages of a request, without the system message. */
+/** The user messages of a request, without the plan block at the end. */
 function userTexts(request: { messages: any[] }): string[] {
   return request.messages
     .filter((m) => m.role === "user")
-    .map((m) => messageText(m));
+    .map((m) => messageText(m))
+    .filter((text) => !text.startsWith("<task_list>"));
+}
+
+/** The plan block a loop request ends with. */
+function planBlock(request: { messages: any[] }): string {
+  const last = request.messages[request.messages.length - 1];
+  const text = last?.role === "user" ? messageText(last) : "";
+  return text.startsWith("<task_list>") ? text : "";
 }
 
 /**
@@ -137,13 +145,26 @@ describe("TUIChat - Loop mode", () => {
       // Item 2 starts fresh too, and carries item 1's note
       expect(userTexts(item2)).toHaveLength(1);
       expect(userTexts(item2)[0]).toContain("only this item: Use it in fetch");
-      expect(userTexts(item2)[0]).toContain("- run npm test");
+      // The plan rides at the end of every request of a run: its slots, the
+      // running item marked, and the notes earlier items left
+      expect(planBlock(item1)).toContain(
+        "[>] 1. Add a retry helper  <- this item",
+      );
+      const block2 = planBlock(item2);
+      expect(block2).toContain("[x] 1. Add a retry helper: Added the helper");
+      expect(block2).toContain("[>] 2. Use it in fetch  <- this item");
+      expect(block2).toContain("Notes from earlier items:\n- run npm test");
+      expect(userTexts(item2)[0]).not.toContain("run npm test");
 
       // The Write call did not prompt: it is held as an approval question
       const held = llm.requests[3].messages.find(
         (m) => m.role === "tool" && m.tool_call_id === "call_write_1",
       );
       expect(messageText(held!)).toContain("held as question q1");
+      // The item's slot shows the held question in the next request
+      expect(planBlock(llm.requests[3])).toContain(
+        "    q1 (approval): Allow this call? Write:",
+      );
       expect(fs.existsSync(target)).toBe(false);
       expect(ui.lastFrame()).not.toContain("Would you like to continue?");
 
@@ -163,6 +184,12 @@ describe("TUIChat - Loop mode", () => {
         "the loop strip",
         () => (ui.lastFrame() ?? "").split("\n").slice(-15).join("\n"),
       );
+      // Above the prompt: the plan as a checklist, the waiting item with
+      // what it waits on, in place of the one-line task strip
+      const strip = ui.lastFrame() ?? "";
+      expect(strip).toContain("✓ Add a retry helper");
+      expect(strip).toContain("! Use it in fetch (Waiting on you: q1)");
+      expect(strip).not.toContain("Tasks 1/2");
 
       // The inbox: Allow once on the held call
       await type(ui.stdin, "/loop");

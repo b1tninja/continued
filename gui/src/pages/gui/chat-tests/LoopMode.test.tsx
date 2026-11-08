@@ -411,8 +411,16 @@ describe("Loop mode", () => {
     const all = h.requests[2].messages.map(text).join(" ");
     expect(h.prompt(2)).toContain("only this item: Add tests");
     expect(all).not.toContain("only this item: Write the lexer");
-    expect(h.prompt(2)).toContain("Run the tests with npm test -- --run");
-    expect(h.prompt(2)).toContain("Never edit generated files");
+    // The notes and the instruction ride in the plan block at the end, with
+    // every item's slot and the running item marked
+    const messages = h.requests[2].messages;
+    const block = text(messages[messages.length - 1]);
+    expect(block.startsWith("<task_list>")).toBe(true);
+    expect(block).toContain("[x] 1. Write the lexer");
+    expect(block).toContain("[>] 2. Add tests  <- this item");
+    expect(block).toContain("Run the tests with npm test -- --run");
+    expect(block).toContain("Never edit generated files");
+    expect(h.prompt(2)).not.toContain("Run the tests with npm test -- --run");
     // The chat still shows every turn
     const shown = h.store
       .getState()

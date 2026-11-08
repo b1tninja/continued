@@ -20,6 +20,7 @@ import {
   holdQuestionResult,
   LOOP_CLI_TOOL_NAMES,
   loopCallKey,
+  loopPlanBlock,
   repeatedCallResult,
   replanHoldResult,
   REPLAN_HOLD_RESULT,
@@ -996,8 +997,10 @@ describe("tool names for the CLI", () => {
     expect(loopCallKey("Bash", { a: 1, b: [2, { c: 3, d: 4 }] })).toBe(
       loopCallKey("Bash", { b: [2, { d: 4, c: 3 }], a: 1 }),
     );
-    expect(loopCallKey("Bash", { command: "ls" })).toBe('Bash {"command":"ls"}');
-    expect(loopCallKey("Bash", undefined)).toBe("Bash {}");
+    expect(loopCallKey("Bash", { command: "ls" })).toBe(
+      'Bash\u0000{"command":"ls"}',
+    );
+    expect(loopCallKey("Bash", undefined)).toBe("Bash\u0000{}");
   });
 
   test("finish_item's arguments become its report", () => {
@@ -1018,5 +1021,94 @@ describe("tool names for the CLI", () => {
       ok: true,
       report: { outcome: "stuck" },
     });
+  });
+});
+
+describe("the plan block", () => {
+  function midRun(): LoopState {
+    let loop = runItem(loopOn(), "1", {
+      outcome: "done",
+      summary: "Parser written; see parse.ts",
+    });
+    loop = finishItemRun(
+      { ...startItemRun(loop, "1", 0, T0) },
+      { outcome: "done", summary: "Parser written", notes: "npm test works" },
+    );
+    const answered = answerLoop(
+      loop,
+      { text: "Keep the public API", standing: true },
+      T0,
+    );
+    if (!answered.ok) throw new Error(answered.error);
+    loop = startItemRun(answered.loop, "2", 3, T0);
+    const held = holdQuestion(
+      loop,
+      {
+        itemId: "2",
+        question: "Use vitest or jest?",
+        kind: "assumption",
+        assumption: "vitest",
+      },
+      T0,
+    );
+    if (!held.ok) throw new Error(held.error);
+    return held.loop;
+  }
+
+  test("shows every slot, marks the running item, and carries notes and signs", () => {
+    const block = loopPlanBlock({ loop: midRun(), plan: PLAN });
+    expect(block.startsWith("<task_list>")).toBe(true);
+    expect(block.endsWith("</task_list>")).toBe(true);
+    expect(block).toContain("[x] 1. Write the parser: Parser written");
+    expect(block).toContain("[>] 2. Add tests  <- this item");
+    expect(block).toContain("[ ] 3. Update the docs");
+    expect(block).toContain(
+      "    q1 (assumption): Use vitest or jest? Assumed: vitest",
+    );
+    expect(block).toContain("Notes from earlier items:\n- npm test works");
+    expect(block).toContain(
+      "The person's instructions for every item:\n- Keep the public API",
+    );
+    expect(block).toContain("report it with finish_item");
+    // It marks the item; it never asks the model to pick one or explains the loop
+    expect(block).not.toMatch(/next item|choose|loop/i);
+  });
+
+  test("uses the CLI's names, clips long summaries, and is empty without items", () => {
+    let loop = startItemRun(loopOn(), "1", 0, T0);
+    loop = finishItemRun(loop, { outcome: "stuck", summary: "x".repeat(400) });
+    const block = loopPlanBlock({
+      loop,
+      plan: PLAN,
+      toolNames: LOOP_CLI_TOOL_NAMES,
+    });
+    expect(block).toContain(
+      "report it with FinishItem and ask with HoldQuestion",
+    );
+    const failed = block.split("\n").find((l) => l.startsWith("[!] 1."))!;
+    expect(failed.length).toBeLessThan(200);
+    expect(failed.endsWith("…")).toBe(true);
+    expect(loopPlanBlock({ loop, plan: plan() })).toBe("");
+  });
+
+  test("with the block, the item prompt leaves the notes and signs to it", () => {
+    const base = {
+      item: PLAN.items[1],
+      answers: [],
+      questions: [],
+      attempt: 1,
+      notes: ["npm test works"],
+      standing: ["Keep the public API"],
+    };
+    const withBlock = loopItemPrompt({ ...base, planBlock: true });
+    expect(withBlock).toContain("only this item: Add tests");
+    expect(withBlock).toContain(
+      "The task list at the end shows every item's state",
+    );
+    expect(withBlock).not.toContain("npm test works");
+    expect(withBlock).not.toContain("Keep the public API");
+    const without = loopItemPrompt(base);
+    expect(without).toContain("- npm test works");
+    expect(without).toContain("- Keep the public API");
   });
 });

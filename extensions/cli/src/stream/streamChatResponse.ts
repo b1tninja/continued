@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
@@ -193,6 +194,7 @@ interface ProcessStreamingResponseOptions {
   isHeadless?: boolean;
   tools?: ChatCompletionTool[];
   systemMessage: string;
+  isCompacting?: boolean; // compaction: no Loop mode plan block
 }
 
 // Process a single streaming response and return whether we need to continue
@@ -219,7 +221,7 @@ export async function processStreamingResponse(
   let chatHistory = options.chatHistory;
 
   // The session's task list, sent last when the TaskList tool is offered.
-  const taskListBlock = taskListBlockForRequest(tools);
+  const taskListBlock = taskListBlockForRequest(tools, options.isCompacting);
 
   // Safety buffer to account for tokenization estimation errors
   const SAFETY_BUFFER = 100;
@@ -499,12 +501,12 @@ export async function streamChatResponse(
       toolNames: tools.map((t) => t.function.name),
     });
 
-    // Get response from LLM. Loop mode sends each run without the turns
-    // before it (loopRequestHistory); the history keeps them.
+    // Get response from LLM (Loop mode: each run without the turns before it)
     const { content, toolCalls, shouldContinue, usage } =
       await processStreamingResponse({
         isHeadless,
         chatHistory: loopRequestHistory(chatHistory, isCompacting),
+        isCompacting,
         model,
         llmApi,
         abortController,
@@ -545,9 +547,8 @@ export async function streamChatResponse(
       return finalResponse || content || fullResponse;
     }
 
-    // Loop mode: FinishItem (or a plan the loop asked for) ends the turn;
-    // the loop decides what comes next, so there is no further request.
-    // Steered answers not delivered yet go with the item's next run.
+    // Loop mode: FinishItem (or a plan the loop asked for) ends the turn
+    // with no further request; undelivered steered answers go with the next run.
     if (consumeLoopTurnEnd(isCompacting)) {
       break;
     }

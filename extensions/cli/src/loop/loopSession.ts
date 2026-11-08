@@ -18,6 +18,7 @@ import {
   requestStop,
   resumeLoop,
   setLoopAutonomy,
+  loopPlanBlock,
   stopLoop,
   taskPlanWithLoop,
   type LoopAnswerInput,
@@ -356,6 +357,22 @@ export function loopRequestHistory(
 /** Whether the loop is running an item in the main session. */
 export function loopItemRunning(): boolean {
   return getSessionLoop()?.current?.kind === "item";
+}
+
+/**
+ * The plan block for a request of the running item (core's loopPlanBlock):
+ * every slot, the notes and the standing instructions, sent where the task
+ * list block goes. "" outside an item's run, and for a subagent's or
+ * compaction's request.
+ */
+export function loopPlanBlockForRequest(isCompacting = false): string {
+  const loop = getSessionLoop();
+  if (loop?.current?.kind !== "item" || !isMainHistory(isCompacting)) {
+    return "";
+  }
+  const plan = getSessionTaskPlan();
+  if (!plan) return "";
+  return loopPlanBlock({ loop, plan, toolNames: CLI_LOOP_TOOL_NAMES });
 }
 
 /** For tests: forget what lives only in memory. */
