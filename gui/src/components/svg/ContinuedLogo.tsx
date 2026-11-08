@@ -6,8 +6,8 @@ interface ContinuedLogoProps {
 }
 
 /**
- * The Continuous mark (brand-src/mark.svg: a forward chevron trailing off into
- * dots) with the "Continuous" wordmark in the editor's foreground colour.
+ * The Continuous mark (brand-src/mark.svg: an endless loop with a dot
+ * travelling along it) with the "Continuous" wordmark in the editor's foreground colour.
  */
 export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
   return (
@@ -20,9 +20,9 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
       aria-label="Continuous"
     >
       <defs>
-        <linearGradient id="continued-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#0D9488" />
-          <stop offset="1" stopColor="#115E59" />
+        <linearGradient id="continuous-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#6366F1" />
+          <stop offset="1" stopColor="#312E81" />
         </linearGradient>
       </defs>
       <rect
@@ -31,18 +31,17 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
         width="464"
         height="464"
         rx="108"
-        fill="url(#continued-bg)"
+        fill="url(#continuous-bg)"
       />
       <path
-        d="M142 150 L248 256 L142 362"
+        d="M256 256 C300 172 412 172 412 256 C412 340 300 340 256 256 C212 172 100 172 100 256 C100 340 212 340 256 256 Z"
         fill="none"
-        stroke="#F0FDFA"
-        strokeWidth="54"
+        stroke="#EEF2FF"
+        strokeWidth="44"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="324" cy="256" r="30" fill="#99F6E4" />
-      <circle cx="400" cy="256" r="21" fill="#99F6E4" fillOpacity="0.6" />
+      <circle cx="350.5" cy="193" r="32" fill="#A5F3FC" />
       <text
         x="560"
         y="330"

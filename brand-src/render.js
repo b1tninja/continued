@@ -69,8 +69,48 @@ async function main() {
         .toBuffer(),
     ),
   );
-  write("gui/public/favicon.ico", buildIco(sizes, frames));
-  console.log("wrote gui/public/favicon.ico");
+  const ico = buildIco(sizes, frames);
+  for (const rel of ["gui/public/favicon.ico", "docs-site/app/favicon.ico"]) {
+    write(rel, ico);
+    console.log(`wrote ${rel}`);
+  }
+
+  // Docs-site header logos: the mark and the "Continuous" wordmark.
+  for (const [rel, color] of [
+    ["docs-site/public/images/continuous-logo-light.svg", "#111827"],
+    ["docs-site/public/images/continuous-logo-dark.svg", "#CED0D6"],
+  ]) {
+    write(rel, wordmark(color));
+    console.log(`wrote ${rel}`);
+  }
+
+  // JetBrains tool-window icons: the monochrome mark in the IDE's icon greys.
+  for (const [rel, color] of [
+    ["extensions/intellij/src/main/resources/icons/continue.svg", "#6C707E"],
+    [
+      "extensions/intellij/src/main/resources/icons/continue_dark.svg",
+      "#CED0D6",
+    ],
+  ]) {
+    write(
+      rel,
+      MONO.toString("utf8")
+        .replace(/currentColor/g, color)
+        .replace('width="24" height="24"', 'width="13" height="13"'),
+    );
+    console.log(`wrote ${rel}`);
+  }
+}
+
+/** The mark (its drawing, without the outer <svg>) beside the wordmark. */
+function wordmark(textColor) {
+  const inner = MARK.toString("utf8")
+    .replace(/^[\s\S]*?<svg[^>]*>/, "")
+    .replace(/<\/svg>\s*$/, "")
+    .replace(/<!--[\s\S]*?-->/g, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1700 512" width="1700" height="512" role="img" aria-label="Continuous">${inner}  <text x="560" y="330" fill="${textColor}" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="210" font-weight="600">Continuous</text>
+</svg>
+`;
 }
 
 // ICO container with PNG frames (Windows Vista+ format).
