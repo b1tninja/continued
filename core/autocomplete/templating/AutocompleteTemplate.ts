@@ -514,8 +514,33 @@ function hypothenuse(a, b) {
   },
 };
 
+/**
+ * Bedrock (and Bedrock Mantle) model IDs: an optional geography prefix for
+ * cross-region inference, then the vendor, then a dot, as in
+ * `us.amazon.nova-micro-v1:0` or `mistral.devstral-2-123b`.
+ */
+const BEDROCK_MODEL_ID =
+  /^(?:(?:us|eu|apac|global|jp|au|ca|us-gov)\.)?(amazon|mistral|meta|cohere|ai21|deepseek|openai|writer|google|minimax|moonshot|moonshotai|nvidia|zai|anthropic|qwen)\./;
+
+/**
+ * Bedrock serves these models through chat only: FIM tokens in the prompt
+ * reach the model inside a chat turn, and it answers with prose ("Here's the
+ * implementation..."). The hole-filler prompt is written for chat models.
+ * Qwen coder models answer their own FIM prompt with code, but wrapped in a
+ * Markdown fence, and "```" is an autocomplete stop token, so the editor
+ * showed nothing (measured in Bedrock.tab.live.vitest.ts). They get the
+ * hole-filler prompt too.
+ */
+export function isBedrockChatOnlyModel(model: string): boolean {
+  return BEDROCK_MODEL_ID.test(model.toLowerCase());
+}
+
 export function getTemplateForModel(model: string): AutocompleteTemplate {
   const lowerCaseModel = model.toLowerCase();
+
+  if (isBedrockChatOnlyModel(lowerCaseModel)) {
+    return holeFillerTemplate;
+  }
 
   // if (lowerCaseModel.includes("starcoder2")) {
   //   return starcoder2FimTemplate;
@@ -526,6 +551,13 @@ export function getTemplateForModel(model: string): AutocompleteTemplate {
 
   if (lowerCaseModel.includes("qwen") && lowerCaseModel.includes("coder")) {
     return qwenMultifileFimTemplate;
+  }
+
+  // Qwen 3 and later chat models (Qwen3.8-Flash-Next on Strata, qwen3:8b)
+  // are not FIM-trained, and Strata serves them over chat only, so the FIM
+  // tokens below would reach them as plain text.
+  if (/qwen3/.test(lowerCaseModel)) {
+    return holeFillerTemplate;
   }
 
   if (lowerCaseModel.includes("granite") && lowerCaseModel.includes("4")) {

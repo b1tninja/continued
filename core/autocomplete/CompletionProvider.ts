@@ -19,6 +19,7 @@ import { AutocompleteLoggingService } from "./util/AutocompleteLoggingService.js
 import AutocompleteLruCache from "./util/AutocompleteLruCache.js";
 import { HelperVars } from "./util/HelperVars.js";
 import { AutocompleteInput, AutocompleteOutcome } from "./util/types.js";
+import { markOwnRequest, serverBusyElsewhere } from "../llm/localServers.js";
 
 const autocompleteCachePromise = AutocompleteLruCache.get();
 
@@ -135,6 +136,7 @@ export class CompletionProvider {
     const { config } = await this.configHandler.loadConfig();
     const options = {
       ...DEFAULT_AUTOCOMPLETE_OPTS,
+      ...llm.providerAutocompleteDefaults,
       ...config?.tabAutocompleteOptions,
       ...llm.autocompleteOptions,
     };
@@ -226,6 +228,12 @@ export class CompletionProvider {
         cacheHit = true;
         completion = cachedCompletion;
       } else {
+        // A local server whose slots are all busy with other work (an agent
+        // turn) would answer long after Tab gives up: skip this one
+        if (await serverBusyElsewhere(llm.apiBase, llm.apiKey)) {
+          return undefined;
+        }
+
         const multiline =
           !helper.options.transform || shouldCompleteMultiline(helper);
 
@@ -241,8 +249,14 @@ export class CompletionProvider {
             helper,
           );
 
-        for await (const update of completionStream) {
-          completion += update;
+        // Tab's own requests do not make the server count as busy
+        const releaseOwnRequest = markOwnRequest(llm.apiBase);
+        try {
+          for await (const update of completionStream) {
+            completion += update;
+          }
+        } finally {
+          releaseOwnRequest();
         }
 
         // Don't postprocess if aborted

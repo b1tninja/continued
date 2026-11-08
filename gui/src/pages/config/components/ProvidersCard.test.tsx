@@ -17,7 +17,7 @@ function setupWith(
         models: [{ name: "Opus", model: "claude-opus" }],
         key: {
           state: "secret",
-          secretName: "CONTINUED_ANTHROPIC_API_KEY",
+          secretName: "CONTINUOUS_ANTHROPIC_API_KEY",
           storedIn,
         },
       },
@@ -44,7 +44,7 @@ function messengerWith(setup: ProviderSetupInfo) {
 }
 
 describe("ProvidersCard key storage actions", () => {
-  it("moves a key that is only in ~/.continue/.env after confirmation", async () => {
+  it("moves a key that is only in ~/.continuous/.env after confirmation", async () => {
     const { m, calls } = messengerWith(setupWith({ secure: false, env: true }));
     const { user } = await renderWithProviders(<ProvidersCard />, {
       mockIdeMessenger: m,
@@ -63,7 +63,7 @@ describe("ProvidersCard key storage actions", () => {
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]).toEqual({
       type: "move",
-      data: { secretName: "CONTINUED_ANTHROPIC_API_KEY" },
+      data: { secretName: "CONTINUOUS_ANTHROPIC_API_KEY" },
     });
   });
 
@@ -131,5 +131,42 @@ describe("ProvidersCard key storage actions", () => {
     expect((await screen.findByRole("alert")).textContent).toMatch(
       /did not keep the key/,
     );
+  });
+});
+
+describe("ProvidersCard: provider accounts", () => {
+  it("turns a connection set up the old way into an account", async () => {
+    const { m, calls } = messengerWith(setupWith(undefined));
+    m.responseHandlers["config/convertConnectionToAccount"] = async (req) => {
+      calls.push({ type: "convert", data: req });
+      return { account: "anthropic", converted: 1 };
+    };
+    const { user } = await renderWithProviders(<ProvidersCard />, {
+      mockIdeMessenger: m,
+    });
+    await user.click(
+      await screen.findByRole("button", { name: "Turn into an account" }),
+    );
+    await waitFor(() =>
+      expect(calls).toContainEqual({
+        type: "convert",
+        data: { provider: "anthropic", connection: {} },
+      }),
+    );
+  });
+
+  it("names the account of a connection that already is one, without the action", async () => {
+    const setup = setupWith(undefined);
+    setup.connections[0] = {
+      ...setup.connections[0],
+      account: "anthropic-work",
+    };
+    const { m } = messengerWith(setup);
+    await renderWithProviders(<ProvidersCard />, { mockIdeMessenger: m });
+    const row = await screen.findByTestId("provider-row-anthropic");
+    expect(row.textContent).toContain("account anthropic-work");
+    expect(
+      screen.queryByRole("button", { name: "Turn into an account" }),
+    ).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ import { getCleanUriPath } from "../../util/uri";
 import { extractContentFromCodeBlock } from "../utils/extractContentFromCodeBlocks";
 import { extractPathsFromCodeBlocks } from "../utils/extractPathsFromCodeBlocks";
 import { RulePolicies } from "./types";
+import { isInWorkspaceConfigDir } from "../../util/workspaceDirs";
 
 /**
  * Checks if a path matches any of the provided globs
@@ -130,10 +131,11 @@ const isFileInDirectory = (
 };
 
 /**
- * Checks if a rule is a root-level rule (.continue directory or no file path)
+ * Checks if a rule is a root-level rule (.continuous or .continue directory, or no file path)
  */
 const isRootLevelRule = (rule: RuleWithSource): boolean => {
-  return !rule.sourceFile || rule.sourceFile.includes(".continue/"); // sourceFile path is absolute - hence we need to check for it in between
+  // sourceFile path is absolute - hence we need to check for it in between
+  return !rule.sourceFile || isInWorkspaceConfigDir(rule.sourceFile);
 };
 
 /**
@@ -227,7 +229,7 @@ export const shouldApplyRule = (
     return false;
   }
 
-  // Check if this is a root-level rule (in .continue directory or no file path)
+  // Check if this is a root-level rule (in .continuous directory or no file path)
   const isRootRule = isRootLevelRule(rule);
 
   // For non-root rules, we need to check if any files are in the rule's directory
@@ -329,28 +331,53 @@ export function getRuleId(rule: RuleMetadata): string {
   return rule.slug ?? rule.sourceFile ?? rule.name ?? rule.source;
 }
 
+/** A user or tool message and the context items that came with it. */
+export interface RuleMatchTurn {
+  userMessage: UserChatMessage | ToolResultChatMessage | undefined;
+  contextItems: ContextItemWithId[];
+}
+
 export const getSystemMessageWithRules = ({
   baseSystemMessage,
   userMessage,
   availableRules,
   contextItems,
   rulePolicies = {},
+  earlierTurns = [],
 }: {
   baseSystemMessage?: string;
   userMessage: UserChatMessage | ToolResultChatMessage | undefined;
   availableRules: RuleWithSource[];
   contextItems: ContextItemWithId[];
   rulePolicies?: RulePolicies;
+  /**
+   * The conversation's earlier turns, oldest first. A rule that matched one
+   * of them stays applied, so a file-specific rule does not leave the system
+   * message when the agent moves on to other files: the system message comes
+   * before the conversation, and each change to it makes a prompt cache read
+   * the whole conversation again. Rules are kept in the order they first
+   * matched, so a newly matched rule is added at the end.
+   */
+  earlierTurns?: RuleMatchTurn[];
 }): {
   systemMessage: string;
   appliedRules: RuleMetadata[];
 } => {
-  const appliedRules = getApplicableRules(
-    userMessage,
-    availableRules,
-    contextItems,
-    rulePolicies,
-  );
+  const appliedRules: RuleWithSource[] = [];
+  const seen = new Set<string>();
+  for (const turn of [...earlierTurns, { userMessage, contextItems }]) {
+    for (const rule of getApplicableRules(
+      turn.userMessage,
+      availableRules,
+      turn.contextItems,
+      rulePolicies,
+    )) {
+      const id = getRuleId(rule);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      appliedRules.push(rule);
+    }
+  }
   let systemMessage = baseSystemMessage ?? "";
 
   for (const rule of appliedRules) {

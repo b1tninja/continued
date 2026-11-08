@@ -107,7 +107,20 @@ export interface ILLM
   get providerName(): string;
   get underlyingProviderName(): string;
 
+  /**
+   * The accounts this model is served through, in the order they are tried,
+   * when it has routes (models.yaml). The first is the model's own.
+   */
+  readonly routeNames?: string[];
+
   autocompleteOptions?: Partial<TabAutocompleteOptions>;
+
+  /**
+   * Autocomplete defaults that suit this provider, applied below the user's
+   * `tabAutocompleteOptions` and the model's own `autocompleteOptions`, so
+   * either can still override them.
+   */
+  providerAutocompleteDefaults?: Partial<TabAutocompleteOptions>;
 
   lastRequestId?: string;
 
@@ -350,7 +363,7 @@ export interface Session {
   taskPlan?: TaskPlan;
   /**
    * Optional: URI of the plan file this session is working from
-   * (`.continue/plans/<slug>.md`), written by the plan tool in Plan mode. See
+   * (`.continuous/plans/<slug>.md`), written by the plan tool in Plan mode. See
    * core/util/planFile.ts.
    */
   planFile?: string;
@@ -703,6 +716,11 @@ export interface Usage {
   completionTokens: number;
   promptTokens: number;
   /**
+   * How fast the server read the part of the prompt it did not have cached,
+   * in tokens per second (llama.cpp's and Strata's `timings.prompt_per_second`).
+   */
+  promptTokensPerSecond?: number;
+  /**
    * What the provider said about the response itself, apart from token counts.
    * Each field is set only when the provider sends it.
    */
@@ -736,11 +754,36 @@ export interface Usage {
   };
 }
 
+/**
+ * How far a server is in reading the prompt (llama.cpp's `prompt_progress`,
+ * also sent by Strata): `processed` of `total` tokens, of which `cache` came
+ * from its cache, after `timeMs` of reading.
+ */
+export interface PromptProgress {
+  total: number;
+  cache: number;
+  processed: number;
+  timeMs: number;
+}
+
 export interface AssistantChatMessage {
   role: "assistant";
   content: MessageContent;
   toolCalls?: ToolCallDelta[];
   usage?: Usage;
+  /**
+   * Set only on the progress updates a local server sends while it reads a
+   * long prompt; such a message has no content and is not part of the reply.
+   */
+  promptProgress?: PromptProgress;
+  /**
+   * The account that answered, for a model with routes (models.yaml). Set
+   * on the message that carries the usage.
+   */
+  route?: string;
+  /** That account's provider and its id for the model, for pricing. */
+  routeProvider?: string;
+  routeModel?: string;
   /** Arbitrary per-message metadata (IDs, provider-specific info, etc.) */
   metadata?: Record<string, unknown>;
 }
@@ -803,6 +846,8 @@ export type FileSymbolMap = Record<string, SymbolWithRange[]>;
 export interface PromptLog {
   modelTitle: string;
   modelProvider: string;
+  /** The account that answered, for a model with routes. */
+  route?: string;
   prompt: string;
   completion: string;
 }
@@ -1436,6 +1481,8 @@ export type TemplateType =
 
 export interface RequestOptions {
   timeout?: number;
+  /** Seconds to wait for a connection to the server (default 10). */
+  connectTimeout?: number;
   verifySsl?: boolean;
   /** Also trust the operating system certificate store (default: on for Windows and macOS). */
   useSystemCa?: boolean;
@@ -1641,6 +1688,12 @@ export interface ModelDescription {
 
   sourceFile?: string;
   isFromAutoDetect?: boolean;
+
+  /**
+   * For a model with routes: the accounts serving it, in the order they are
+   * tried. Each has its own prompt cache.
+   */
+  routes?: string[];
 
   /** Tool overrides for this model */
   toolOverrides?: ToolOverride[];
@@ -2178,11 +2231,11 @@ export type ContinueRcJson = Partial<SerializedContinueConfig> & {
 
 // config.ts - give users simplified interfaces
 export interface Config {
-  /** Has no effect: Continued collects no telemetry. Kept so existing configs stay valid. */
+  /** Has no effect: Continuous collects no telemetry. Kept so existing configs stay valid. */
   allowAnonymousTelemetry?: boolean;
   /** Each entry in this array will originally be a JSONModelDescription, the same object from your config.json, but you may add CustomLLMs.
    * A CustomLLM requires you only to define an AsyncGenerator that calls the LLM and yields string updates. You can choose to define either `streamCompletion` or `streamChat` (or both).
-   * Continue will do the rest of the work to construct prompt templates, handle context items, prune context, etc.
+   * Continuous will do the rest of the work to construct prompt templates, handle context items, prune context, etc.
    */
   models: (CustomLLM | JSONModelDescription)[];
   /** A system message to be followed by all of your models */
@@ -2194,18 +2247,18 @@ export interface Config {
   /** The list of slash commands that will be available in the sidebar */
   slashCommands?: (SlashCommand | SlashCommandWithSource)[];
   /** Each entry in this array will originally be a ContextProviderWithParams, the same object from your config.json, but you may add CustomContextProviders.
-   * A CustomContextProvider requires you only to define a title and getContextItems function. When you type '@title <query>', Continue will call `getContextItems(query)`.
+   * A CustomContextProvider requires you only to define a title and getContextItems function. When you type '@title <query>', Continuous will call `getContextItems(query)`.
    */
   contextProviders?: (CustomContextProvider | ContextProviderWithParams)[];
-  /** If set to true, Continue will not index your codebase for retrieval */
+  /** If set to true, Continuous will not index your codebase for retrieval */
   disableIndexing?: boolean;
-  /** If set to true, Continue will not make extra requests to the LLM to generate a summary title of each session. */
+  /** If set to true, Continuous will not make extra requests to the LLM to generate a summary title of each session. */
   disableSessionTitles?: boolean;
-  /** An optional token to identify a user. Not used by Continue unless you write custom coniguration that requires such a token */
+  /** An optional token to identify a user. Not used by Continuous unless you write custom coniguration that requires such a token */
   userToken?: string;
-  /** The provider used to calculate embeddings. If left empty, Continue will use transformers.js to calculate the embeddings with all-MiniLM-L6-v2 */
+  /** The provider used to calculate embeddings. If left empty, Continuous will use transformers.js to calculate the embeddings with all-MiniLM-L6-v2 */
   embeddingsProvider?: EmbeddingsProviderDescription | ILLM;
-  /** The model that Continue will use for tab autocompletions. */
+  /** The model that Continuous will use for tab autocompletions. */
   tabAutocompleteModel?:
     CustomLLM | JSONModelDescription | (CustomLLM | JSONModelDescription)[];
   /** Options for tab autocomplete */
@@ -2222,7 +2275,7 @@ export interface Config {
   data?: DataDestination[];
 }
 
-// in the actual Continue source code
+// in the actual Continuous source code
 /** Reasoning effort requested for a chat mode. */
 export type ModeReasoningEffort = "off" | "low" | "medium" | "high";
 

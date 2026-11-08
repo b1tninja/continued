@@ -43,6 +43,11 @@ export interface PromptCacheSessionState {
   /** When the last request in this session started (ms since epoch). */
   lastRequestAt?: number;
   /**
+   * How fast a local server last read the uncached part of a prompt, in
+   * tokens per second, as it reported it. For estimates of a re-read.
+   */
+  promptTokensPerSecond?: number;
+  /**
    * Auto has moved this conversation to the 1-hour lifetime: it saw a gap that
    * a 1-hour entry would have covered, or the conversation reached
    * `AUTO_ESCALATE_AT_REQUEST` requests in an agent-style mode.
@@ -143,6 +148,69 @@ export function modelSupportsPromptCacheControl(
     normalizeClaudeModelId(model.model) !== undefined
   );
 }
+
+/** Providers that talk to a model server the user runs, by default locally. */
+const LOCAL_SERVER_PROVIDERS = new Set([
+  "openai",
+  "llama.cpp",
+  "llamafile",
+  "lmstudio",
+  "vllm",
+  "ollama",
+  "lemonade",
+]);
+/** Of those, the ones whose default address is this machine. */
+const LOCAL_BY_DEFAULT = new Set([
+  "llama.cpp",
+  "llamafile",
+  "lmstudio",
+  "ollama",
+  "lemonade",
+]);
+
+function isLocalHostname(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host === "host.docker.internal" ||
+    host === "::1" ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  );
+}
+
+/**
+ * Whether the model runs on a server the user hosts (Strata, llama.cpp,
+ * vLLM, LM Studio, Ollama on this machine or the local network). Such a
+ * server keeps the start of the last prompt (llama.cpp's slot cache,
+ * Strata's conversation cache) with no request field to control it: there is
+ * nothing to pay, but a prompt it must read again can take minutes.
+ */
+export function modelUsesLocalPrefixCache(
+  model: ModelDescription | null | undefined,
+): boolean {
+  if (!model || modelSupportsPromptCacheControl(model)) return false;
+  const provider = model.provider?.toLowerCase() ?? "";
+  if (!LOCAL_SERVER_PROVIDERS.has(provider)) return false;
+  if (!model.apiBase) return LOCAL_BY_DEFAULT.has(provider);
+  try {
+    return isLocalHostname(new URL(model.apiBase).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * How long after its last request a local server's cache is taken to still
+ * hold the conversation. Local servers keep it until another conversation
+ * or an unload pushes it out, which the client cannot see, so this is a
+ * guess on the safe side for a warning.
+ */
+export const LOCAL_CACHE_WARM_MS = 15 * 60 * 1000;
 
 /**
  * Whether a 1-hour lifetime would actually be sent for this model. Anthropic

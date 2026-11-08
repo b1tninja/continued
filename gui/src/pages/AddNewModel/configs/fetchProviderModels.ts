@@ -13,6 +13,9 @@ interface FetchedModel {
   contextLength?: number;
   maxTokens?: number;
   supportsTools?: boolean;
+  supportsImages?: boolean;
+  reasoningEfforts?: string[];
+  server?: string;
   createdAt?: string;
   deprecated?: boolean;
 }
@@ -23,8 +26,15 @@ function modelParams(model: FetchedModel): Record<string, any> {
   if (model.maxTokens) {
     params.completionOptions = { maxTokens: model.maxTokens };
   }
-  if (model.supportsTools) {
-    params.capabilities = { tools: true };
+  // Saved as catalog variants, one per effort (see catalogEntryFor)
+  if (model.reasoningEfforts && model.reasoningEfforts.length > 0) {
+    params.reasoningEfforts = model.reasoningEfforts;
+  }
+  if (model.supportsTools || model.supportsImages) {
+    params.capabilities = {
+      ...(model.supportsTools ? { tools: true } : {}),
+      ...(model.supportsImages ? { uploadImage: true } : {}),
+    };
   }
   return params;
 }
@@ -79,6 +89,7 @@ function toGenericPackage(model: FetchedModel, provider: string): ModelPackage {
     ...(model.icon ? { icon: model.icon } : {}),
     ...(model.createdAt ? { createdAt: model.createdAt } : {}),
     ...(model.deprecated ? { deprecated: true } : {}),
+    ...(model.server ? { server: model.server } : {}),
   };
 }
 
@@ -99,6 +110,16 @@ async function fetchModels(
   return response.content.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Checklist entries for the chat models in a fetched list. */
+export function fetchedToPackages(
+  models: FetchedModel[],
+  provider: string,
+): ModelPackage[] {
+  return models
+    .filter((m) => isLikelyChatModelId(m.modelId ?? m.name))
+    .map((m) => toGenericPackage(m, provider));
+}
+
 export async function fetchProviderModels(
   ideMessenger: IIdeMessenger,
   provider: string,
@@ -106,9 +127,7 @@ export async function fetchProviderModels(
   apiBase?: string,
 ): Promise<ModelPackage[]> {
   const models = await fetchModels(ideMessenger, provider, apiKey, apiBase);
-  return models
-    .filter((m) => isLikelyChatModelId(m.modelId ?? m.name))
-    .map((m) => toGenericPackage(m, provider));
+  return fetchedToPackages(models, provider);
 }
 
 export async function initializeDynamicModels(ideMessenger: IIdeMessenger) {

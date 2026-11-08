@@ -11,6 +11,12 @@ export type ClientCertificateOptions = z.infer<
 
 export const requestOptionsSchema = z.object({
   timeout: z.number().optional(),
+  /**
+   * Seconds to wait for a connection to the server (default 10), apart from
+   * `timeout` for the whole response. An unreachable server then fails in
+   * seconds, and a model's next route is tried.
+   */
+  connectTimeout: z.number().optional(),
   verifySsl: z.boolean().optional(),
   useSystemCa: z.boolean().optional(),
   caBundlePath: z.union([z.string(), z.array(z.string())]).optional(),
@@ -129,6 +135,38 @@ export const chatOptionsSchema = z.object({
 });
 export type ChatOptions = z.infer<typeof chatOptionsSchema>;
 
+/** When to auto-compact, as a fraction of the input space and/or a token cap */
+const autoCompactFields = {
+  /** Compact once input reaches this fraction of (contextLength - maxTokens) */
+  autoCompactRatio: z.number().gt(0).lte(1).optional(),
+  /** Compact once input reaches this many tokens */
+  autoCompactTokens: z.number().int().positive().optional(),
+};
+
+export const contextManagementSchema = z.object({
+  ...autoCompactFields,
+  /** Budget applied when this model runs as a sub-agent */
+  subagent: z
+    .object({
+      /** Context limit for the sub-agent's own history (capped at the model's) */
+      contextLength: z.number().int().positive().optional(),
+      ...autoCompactFields,
+    })
+    .optional(),
+  /**
+   * Extra request body fields by request kind. `oneShot` is sent on requests
+   * that no later request continues (the compaction summary), `conversation`
+   * on every other chat request.
+   */
+  requestBodyHints: z
+    .object({
+      oneShot: z.record(z.string(), z.any()).optional(),
+      conversation: z.record(z.string(), z.any()).optional(),
+    })
+    .optional(),
+});
+export type ContextManagement = z.infer<typeof contextManagementSchema>;
+
 const templateSchema = z.enum([
   "llama2",
   "alpaca",
@@ -181,6 +219,23 @@ const promptTemplatesSchema = z.object({
 });
 export type PromptTemplates = z.infer<typeof promptTemplatesSchema>;
 
+/**
+ * Another account that serves the same model, tried when the one before it
+ * fails. `model` is that account's own id for it (a Bedrock inference
+ * profile, an OpenRouter slug), when it differs. Once connections are
+ * resolved a route also carries its account's provider, key and address.
+ */
+export const catalogRouteSchema = z.object({
+  connection: z.string().min(1),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  apiKey: z.string().optional(),
+  apiBase: z.string().optional(),
+  env: z
+    .record(z.string(), z.union([z.string(), z.boolean(), z.number()]))
+    .optional(),
+  requestOptions: requestOptionsSchema.optional(),
+});
 const baseModelFields = {
   name: z.string(),
   model: z.string(),
@@ -202,6 +257,7 @@ const baseModelFields = {
   requestOptions: requestOptionsSchema.optional(),
   embedOptions: embedOptionsSchema.optional(),
   chatOptions: chatOptionsSchema.optional(),
+  contextManagement: contextManagementSchema.optional(),
   promptTemplates: promptTemplatesSchema.optional(),
   useLegacyCompletionsEndpoint: z.boolean().optional(),
   useResponsesApi: z.boolean().optional(),
@@ -209,6 +265,12 @@ const baseModelFields = {
     .record(z.string(), z.union([z.string(), z.boolean(), z.number()]))
     .optional(),
   autocompleteOptions: autocompleteOptionsSchema.optional(),
+  /**
+   * Further accounts serving the same model, tried in order when the one
+   * before fails (at most three routes in all). A model with no connection
+   * of its own is served by the first.
+   */
+  routes: z.array(catalogRouteSchema).optional(),
 };
 
 export const modelSchema = z.object({
@@ -240,7 +302,7 @@ export const connectedModelSchema = z.object({
 /**
  * A named provider instance: the connection settings shared by every model
  * that names it with `connection:` (in any config). Written in
- * ~/.continue/providers.yaml (or a workspace's .continue/providers.yaml).
+ * ~/.continuous/providers.yaml (or a workspace's .continuous/providers.yaml).
  */
 export const providerInstanceSchema = z.object({
   /** Referenced by models as `connection: <name>`. */
@@ -260,3 +322,48 @@ export const providersFileSchema = z.object({
   providers: z.array(providerInstanceSchema).default([]),
 });
 export type ProvidersFile = z.infer<typeof providersFileSchema>;
+
+/**
+ * What a variant of a catalog model may change: its settings, never which
+ * model it is or where it is served from. Picked as `Name#variant`.
+ */
+export const catalogVariantSchema = partialModelSchema.omit({
+  name: true,
+  model: true,
+  provider: true,
+  connection: true,
+  apiKey: true,
+  apiBase: true,
+  routes: true,
+});
+export type CatalogVariant = z.infer<typeof catalogVariantSchema>;
+
+export type CatalogRoute = z.infer<typeof catalogRouteSchema>;
+
+/**
+ * A model in the catalog (~/.continuous/models.yaml, or a workspace's
+ * .continuous/models.yaml): defined once and used from any config with
+ * `from: <name>`. It names its account with `connection:` (or gives its own
+ * provider), as a model in a config can.
+ */
+export const catalogModelSchema = z.object({
+  ...baseModelFields,
+  provider: z.string().optional(),
+  /** Named settings changes, picked as `Name#variant`. */
+  variants: z.record(z.string().min(1), catalogVariantSchema).optional(),
+});
+export type CatalogModel = z.infer<typeof catalogModelSchema>;
+
+export const modelsFileSchema = z.object({
+  models: z.array(catalogModelSchema).default([]),
+});
+export type ModelsFile = z.infer<typeof modelsFileSchema>;
+
+/**
+ * A config's use of a catalog model: `from: Name` or `from: Name#variant`,
+ * with roles and any field to change for this config.
+ */
+export const catalogModelRefSchema = partialModelSchema.extend({
+  from: z.string().min(1),
+});
+export type CatalogModelRef = z.infer<typeof catalogModelRefSchema>;
