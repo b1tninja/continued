@@ -247,6 +247,8 @@ This is a design choice. No study tests a reminder tool, and models tend to unde
 
 There is no measured evidence for deferral itself. It is a design choice, and the runs should count how often items are deferred and whether they succeed when they return.
 
+**Measured in run 6** (one run, one model, a small task, so this says little in general). The model called `remind_me` 7 times over 6 items without being prompted beyond the one line in the item prompt. It used `next_items` four times, `item` twice and `retry` once, with notes of 294 to 896 characters, past the 300-character cap of `notes` in six of the seven. Five were delivered. The other two were a `retry` for an item that did not run again and a `next_items` from the last item, which had nothing after it. No item used `later`, so deferral has still not been exercised by a real model.
+
 ### Answers are routed by the item's state
 
 `answerLoop` decides where an answer goes when it is given:
@@ -718,13 +720,14 @@ Run on 2026-11-07 against Strata, a single-slot OpenAI-compatible server on this
 
 `cn serve` did the work, from the built CLI. A driver script played the person over `/state` and `POST /message`: it allowed held approvals, kept assumptions, answered blocking questions, and started the loop once the plan was presented.
 
-| Run | Result                                                                                                                 | Approvals held | Cached share of prompt tokens                                          |
-| --- | ---------------------------------------------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------- |
-| 1   | Stopped on no progress: 0 of 5 done, 1 waiting                                                                         | 19             | not counted yet                                                        |
-| 2   | 5 of 5 done, every check passed, the repository's 19 tests pass, about 5 minutes                                       | 4              | not counted yet                                                        |
-| 3   | 5 of 5 done, every check passed                                                                                        | 4              | 41% over 45 requests (first request of a turn 64%, later ones 39%)     |
-| 4   | stopped early, through a logging proxy that saved each request                                                         | 3              | 33% over 28 requests                                                   |
-| 5   | 5 of 5 done, every check passed, the repository's 20 tests pass, about 6 minutes, with the plan block in its new place | 6              | **89%** over 51 requests (first request of a turn 53%, later ones 91%) |
+| Run | Result                                                                                                                                              | Approvals held | Cached share of prompt tokens                                          |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------- |
+| 1   | Stopped on no progress: 0 of 5 done, 1 waiting                                                                                                      | 19             | not counted yet                                                        |
+| 2   | 5 of 5 done, every check passed, the repository's 19 tests pass, about 5 minutes                                                                    | 4              | not counted yet                                                        |
+| 3   | 5 of 5 done, every check passed                                                                                                                     | 4              | 41% over 45 requests (first request of a turn 64%, later ones 39%)     |
+| 4   | stopped early, through a logging proxy that saved each request                                                                                      | 3              | 33% over 28 requests                                                   |
+| 5   | 5 of 5 done, every check passed, the repository's 20 tests pass, about 6 minutes, with the plan block in its new place                              | 6              | **89%** over 51 requests (first request of a turn 53%, later ones 91%) |
+| 6   | 6 of 6 done, every check passed, the repository's 14 tests pass, about 13 minutes while other work shared the machine, with `remind_me` and `later` | 8              | 92% over 82 requests (first request of a turn 54%, later ones 94%)     |
 
 **Bugs run 1 found, fixed before run 2:**
 
