@@ -6,6 +6,7 @@ import {
   problemsAfterEdit,
   rememberProblemsBeforeEdit,
 } from "../../util/problemsAfterEdit";
+import { selectEffectiveApprovalMode } from "../selectors/selectAutoApproval";
 import {
   selectApplyStateByToolCallId,
   selectToolCallById,
@@ -56,8 +57,9 @@ export const handleApplyStateUpdate = createAsyncThunk<
         if (
           applyState.status === "done" &&
           toolCallState?.toolCall.function.name &&
-          getState().ui.toolSettings[toolCallState.toolCall.function.name] ===
-            "allowedWithoutPermission"
+          (selectEffectiveApprovalMode(getState()) === "yolo" ||
+            getState().ui.toolSettings[toolCallState.toolCall.function.name] ===
+              "allowedWithoutPermission")
         ) {
           extra.ideMessenger.post("acceptDiff", {
             streamId: applyState.streamId,

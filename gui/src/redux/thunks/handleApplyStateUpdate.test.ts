@@ -163,6 +163,44 @@ describe("handleApplyStateUpdate", () => {
     });
   });
 
+  describe("accepting a finished edit", () => {
+    const done: ApplyState = {
+      streamId: "chat-stream",
+      toolCallId: "call",
+      status: "done",
+      filepath: "test.txt",
+      numDiffs: 1,
+    };
+
+    async function finish(approvalMode: string, setting: string) {
+      vi.mocked(findToolCallById).mockReturnValue({
+        ...UNUSED_TOOL_CALL_PARAMS,
+        toolCallId: "call",
+        status: "calling",
+      } as ToolCallState);
+      mockGetState.mockReturnValue({
+        session: { history: [] },
+        ui: { approvalMode, toolSettings: { unused: setting } },
+      });
+      await handleApplyStateUpdate(done)(mockDispatch, mockGetState, mockExtra);
+      return mockExtra.ideMessenger.post.mock.calls.filter(
+        ([name]: [string]) => name === "acceptDiff",
+      ).length;
+    }
+
+    it("YOLO accepts it without waiting for a click", async () => {
+      expect(await finish("yolo", "allowedWithPermission")).toBe(1);
+    });
+
+    it("Approve most leaves the diff for review", async () => {
+      expect(await finish("most", "allowedWithPermission")).toBe(0);
+    });
+
+    it("a tool set to run without asking still accepts it", async () => {
+      expect(await finish("manual", "allowedWithoutPermission")).toBe(1);
+    });
+  });
+
   describe("closed status handling", () => {
     it("should handle accepted tool call closure", async () => {
       const toolCallState: ToolCallState = {
