@@ -455,6 +455,8 @@ export interface LoopItemState {
 export type LoopQuestionKind = "blocking" | "assumption" | "approval";
 
 export interface LoopQuestion {
+  /** IDGAF: the agent decided this itself; it never reached the inbox */
+  decidedAlone?: boolean;
   id: string;
   /** The item it is about; none for a question about the whole plan */
   itemId?: string;
@@ -546,7 +548,7 @@ export interface LoopBudget {
  * and Auto: auto; YOLO: unattended) and can be changed while it runs. See
  * LOOP_AUTONOMY in core/util/loopMode.ts.
  */
-export type LoopAutonomy = "supervised" | "auto" | "unattended";
+export type LoopAutonomy = "supervised" | "auto" | "unattended" | "idgaf";
 
 /**
  * How the loop moves through the plan, next to the autonomy level (how much

@@ -181,12 +181,29 @@ export const LOOP_AUTONOMY: Record<LoopAutonomy, LoopAutonomyPreset> = {
       maxWallMs: 8 * HOUR,
     },
   },
+  idgaf: {
+    label: "IDGAF",
+    description:
+      "The agent answers every question itself, even important decisions, and never waits for you. Re-plans that add up to 5 to-dos go on by themselves.",
+    replan: "bounded",
+    maxNewItemsPerReplan: 5,
+    // Approvals are the approval mode's business (YOLO runs them all). One
+    // that is held anyway must not stop the loop.
+    waitTimeoutMs: 1000,
+    budget: {
+      ...DEFAULT_LOOP_BUDGET,
+      maxRounds: 10,
+      maxTokens: 20_000_000,
+      maxWallMs: 8 * HOUR,
+    },
+  },
 };
 
 export const LOOP_AUTONOMY_LEVELS: readonly LoopAutonomy[] = [
   "supervised",
   "auto",
   "unattended",
+  "idgaf",
 ];
 
 /** The level a loop starts at, from the approval mode in force. */
@@ -1222,6 +1239,10 @@ function statusAfterRun(
     // again, and its next prompt carries the answer
     return outOfAttempts ? "failed" : "pending";
   }
+  // IDGAF: there is nobody to wait for
+  if (outcome === "waiting" && !blocked && loop.autonomy === "idgaf") {
+    return outOfAttempts ? "failed" : "pending";
+  }
   if (blocked || outcome === "waiting") return "waiting";
   if (outcome === "stuck" || run.overDeferred) return "failed";
   if (run.deferred) return "pending";
@@ -1566,6 +1587,40 @@ export type HoldResult =
   | { ok: false; error: string };
 
 /** Records a question the running item holds for the person. */
+/**
+ * IDGAF: nobody answers, so the question never reaches the inbox. It is kept,
+ * already closed, as a record of what the agent decided for itself.
+ */
+function decideAlone(
+  loop: LoopState,
+  itemId: string | undefined,
+  question: string,
+  assumption: unknown,
+  now: Date,
+): HoldResult {
+  const decided: LoopQuestion = {
+    id: nextId("q", loop.questions),
+    ...(itemId ? { itemId } : {}),
+    question,
+    kind: "assumption",
+    askedAt: iso(now),
+    decidedAlone: true,
+    answerId: "self",
+    ...(typeof assumption === "string" && assumption.trim()
+      ? { assumption: assumption.trim() }
+      : {}),
+  };
+  return {
+    ok: true,
+    loop:
+      loop.questions.length < LOOP_LIMITS.maxQuestions
+        ? { ...loop, questions: [...loop.questions, decided] }
+        : loop,
+    question: decided,
+    duplicate: false,
+  };
+}
+
 export function holdQuestion(
   loop: LoopState,
   input: {
@@ -1592,6 +1647,9 @@ export function holdQuestion(
   const kind = input.kind as LoopQuestionKind;
   if (kind !== "blocking" && kind !== "assumption" && kind !== "approval") {
     return { ok: false, error: 'kind must be "blocking" or "assumption"' };
+  }
+  if (loop.autonomy === "idgaf" && kind !== "approval") {
+    return decideAlone(loop, input.itemId, question, input.assumption, now);
   }
   const assumption =
     typeof input.assumption === "string" ? input.assumption.trim() : "";
@@ -2133,6 +2191,8 @@ export function loopItemPrompt(input: {
   reminders?: LoopDeliveredReminder[];
   /** A run set this item aside before (finish_item outcome "later") */
   returning?: boolean;
+  /** IDGAF: nobody answers, so the agent makes every decision itself */
+  decideAlone?: boolean;
 }): string {
   const { item } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
@@ -2221,7 +2281,9 @@ export function loopItemPrompt(input: {
     "",
     `If you learn something a later item or a retry will need, save it with ${names.remindMe} now.`,
     "",
-    `Ask, rather than decide silently: whenever the person might want a say (a choice between approaches, scope, naming, an irreversible step, or anything the plan does not settle), call ${names.holdQuestion}. Use kind "assumption" by default: state the choice you are making in \`assumption\` and keep working; the person can overrule it later. Use kind "blocking" only when there is no reasonable default, then stop and call ${names.finishItem} with outcome "waiting". Write each question so it can be answered without this conversation: name the item, the options and your default.`,
+    input.decideAlone
+      ? "Nobody will answer questions on this run. Make every decision yourself, even important ones, and say what you chose in your summary."
+      : `Ask, rather than decide silently: whenever the person might want a say (a choice between approaches, scope, naming, an irreversible step, or anything the plan does not settle), call ${names.holdQuestion}. Use kind "assumption" by default: state the choice you are making in \`assumption\` and keep working; the person can overrule it later. Use kind "blocking" only when there is no reasonable default, then stop and call ${names.finishItem} with outcome "waiting". Write each question so it can be answered without this conversation: name the item, the options and your default.`,
   );
   return lines.join("\n");
 }
@@ -2653,6 +2715,9 @@ export function holdQuestionResult(
   duplicate: boolean,
   names: LoopToolNames = LOOP_TOOL_NAMES,
 ): string {
+  if (question.decidedAlone) {
+    return `Nobody will answer this: this loop decides for itself. Go on with your best judgment, even if the decision is important, and say what you chose in your summary. Do not report "waiting".`;
+  }
   const prefix = duplicate
     ? `You already asked this (${question.id}).`
     : `Question ${question.id} is in the person's inbox.`;

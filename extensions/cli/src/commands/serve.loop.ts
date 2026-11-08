@@ -37,7 +37,7 @@ import {
  *   and Run it again. `skip` and `again` need `itemId` in the body; core's
  *   skipItem and runItemAgain refuse the running item. Stop now is
  *   `POST /pause`.
- * - `loopAutonomy: "supervised" | "auto" | "unattended"` is the level picker;
+ * - `loopAutonomy: "supervised" | "auto" | "unattended" | "idgaf"` is the level picker;
  *   it resets the limits to the level's.
  * - `loopStrategy: "finish" | "check-in" | "fix-forward"` is the strategy
  *   picker; a picked strategy stays when the level changes.

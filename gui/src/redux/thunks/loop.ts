@@ -517,6 +517,7 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           planBlock: true,
           reminders: taken.reminders,
           returning: itemState?.setAside,
+          decideAlone: loop.autonomy === "idgaf",
           unanswered: loop.questions.filter((q) =>
             itemState?.unanswered?.includes(q.id),
           ),

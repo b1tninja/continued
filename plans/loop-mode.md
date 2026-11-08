@@ -249,6 +249,12 @@ There is no measured evidence for deferral itself. It is a design choice, and th
 
 **Measured in run 6** (one run, one model, a small task, so this says little in general). The model called `remind_me` 7 times over 6 items without being prompted beyond the one line in the item prompt. It used `next_items` four times, `item` twice and `retry` once, with notes of 294 to 896 characters, past the 300-character cap of `notes` in six of the seven. Five were delivered. The other two were a `retry` for an item that did not run again and a `next_items` from the last item, which had nothing after it. No item used `later`, so deferral has still not been exercised by a real model.
 
+### IDGAF
+
+A fourth level beside Supervised, Auto and Unattended, picked explicitly. It controls whether questions reach the person. The agent answers every question itself, including important decisions: `hold_question` records what it decided and tells it to go on, an item that reports `waiting` runs again, and the item prompt says to decide. Approvals are separate, and belong to the approval mode: with YOLO none are asked at all, and one held under another mode cannot stop the loop.
+
+At the other levels a held question does not stop other work. An item that waits on an answer is set aside and the next runnable item runs; the loop pauses only when every open item is waiting on the person.
+
 ### Answers are routed by the item's state
 
 `answerLoop` decides where an answer goes when it is given:

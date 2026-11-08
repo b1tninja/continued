@@ -234,6 +234,7 @@ export function nextLoopTurn(
           lastCheck: itemState?.check,
           reminders: taken.reminders,
           returning: itemState?.setAside,
+          decideAlone: loop.autonomy === "idgaf",
         });
         loop = markDelivered(
           loop,
