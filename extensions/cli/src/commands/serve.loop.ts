@@ -1,7 +1,8 @@
-import type { LoopAutonomy, LoopState } from "core/index.js";
+import type { LoopAutonomy, LoopState, LoopStrategy } from "core/index.js";
 import {
   formatLoopStatus,
   LOOP_AUTONOMY_LEVELS,
+  LOOP_STRATEGY_ORDER,
   type LoopAnswerInput,
 } from "core/util/loopMode.js";
 
@@ -12,6 +13,7 @@ import {
   requestLoopStop,
   resumeStoppedLoop,
   setRunningLoopAutonomy,
+  setRunningLoopStrategy,
   startLoopFromPlan,
 } from "../loop/loopSession.js";
 
@@ -29,6 +31,8 @@ import {
  *   it without asking), Stop loop, Resume, and Continue the loop with a
  *   re-plan that waits for the person.
  * - `loopAutonomy: "supervised" | "auto" | "unattended"` is the level picker.
+ * - `loopStrategy: "finish" | "check-in" | "fix-forward"` is the strategy
+ *   picker; a picked strategy stays when the level changes.
  */
 
 /** Loop mode's fields in `GET /state`. */
@@ -106,11 +110,12 @@ export interface LoopMessageResponse {
 export function handleLoopMessage(
   body: Record<string, unknown>,
 ): LoopMessageResponse | undefined {
-  const { loopAnswer, loopAction, loopAutonomy } = body;
+  const { loopAnswer, loopAction, loopAutonomy, loopStrategy } = body;
   if (
     loopAnswer === undefined &&
     loopAction === undefined &&
-    loopAutonomy === undefined
+    loopAutonomy === undefined &&
+    loopStrategy === undefined
   ) {
     return undefined;
   }
@@ -130,6 +135,14 @@ export function handleLoopMessage(
       `loopAutonomy must be one of ${LOOP_AUTONOMY_LEVELS.join(", ")}`,
     );
   }
+  if (
+    loopStrategy !== undefined &&
+    !LOOP_STRATEGY_ORDER.includes(loopStrategy as LoopStrategy)
+  ) {
+    return fail(
+      `loopStrategy must be one of ${LOOP_STRATEGY_ORDER.join(", ")}`,
+    );
+  }
   const parsed =
     loopAnswer === undefined ? undefined : parseLoopAnswer(loopAnswer);
   if (parsed && !parsed.ok) return fail(parsed.error);
@@ -141,6 +154,12 @@ export function handleLoopMessage(
   if (
     loopAutonomy !== undefined &&
     !setRunningLoopAutonomy(loopAutonomy as LoopAutonomy)
+  ) {
+    return fail("No loop in this session");
+  }
+  if (
+    loopStrategy !== undefined &&
+    !setRunningLoopStrategy(loopStrategy as LoopStrategy)
   ) {
     return fail("No loop in this session");
   }

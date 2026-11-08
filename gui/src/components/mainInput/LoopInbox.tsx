@@ -1,10 +1,13 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
-import type { LoopAutonomy, LoopQuestion } from "core";
+import type { LoopAutonomy, LoopQuestion, LoopStrategy } from "core";
 import {
   formatLoopStatus,
   LOOP_AUTONOMY,
   LOOP_AUTONOMY_LEVELS,
   LOOP_LIMITS,
+  LOOP_STRATEGIES,
+  LOOP_STRATEGY_ORDER,
+  loopStrategy,
   standingInstructions,
 } from "core/util/loopMode";
 import { useState } from "react";
@@ -15,6 +18,7 @@ import {
   LoopAnswerInput,
   resumeLoopThunk,
   setLoopAutonomyThunk,
+  setLoopStrategyThunk,
   stopLoopThunk,
 } from "../../redux/thunks/loop";
 
@@ -176,6 +180,21 @@ export function LoopInbox() {
           {LOOP_AUTONOMY_LEVELS.map((level) => (
             <option key={level} value={level}>
               {LOOP_AUTONOMY[level].label}
+            </option>
+          ))}
+        </select>
+        <select
+          data-testid="loop-strategy"
+          value={loopStrategy(loop)}
+          title={LOOP_STRATEGIES[loopStrategy(loop)].description}
+          onChange={(e) =>
+            void dispatch(setLoopStrategyThunk(e.target.value as LoopStrategy))
+          }
+          className="shrink-0 cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+        >
+          {LOOP_STRATEGY_ORDER.map((strategy) => (
+            <option key={strategy} value={strategy}>
+              {LOOP_STRATEGIES[strategy].label}
             </option>
           ))}
         </select>

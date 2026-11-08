@@ -1,5 +1,5 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { LoopAutonomy, LoopState } from "core";
+import { LoopAutonomy, LoopState, LoopStrategy } from "core";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import {
   acceptReplan,
@@ -7,16 +7,17 @@ import {
   answersToDeliver,
   createLoop,
   decideNext,
+  endReplan,
   finishItemRun,
   loopItemPrompt,
-  loopReplanPrompt,
+  loopReplanTurnPrompt,
   markDelivered,
   enterWait,
   loopAutonomyFor,
   proceedUnanswered,
   reconcileLoop,
-  replanDecision,
   setLoopAutonomy,
+  setLoopStrategy,
   requestStop,
   resumeLoop,
   settleSteeredAnswers,
@@ -188,6 +189,17 @@ export const setLoopAutonomyThunk = createAsyncThunk<
   commitLoop(dispatch, getState, setLoopAutonomy(loop, autonomy));
 });
 
+/** The inbox's strategy picker: how the running loop moves through the plan. */
+export const setLoopStrategyThunk = createAsyncThunk<
+  void,
+  LoopStrategy,
+  ThunkApiType
+>("loop/setStrategy", async (strategy, { dispatch, getState }) => {
+  const { loop } = getState().session;
+  if (!loop) return;
+  commitLoop(dispatch, getState, setLoopStrategy(loop, strategy));
+});
+
 export const endLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
   "loop/end",
   async (_, { dispatch }) => {
@@ -285,7 +297,6 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
         loop.current.historyIndex,
         BuiltInToolNames.PresentPlan,
       ).some((tc) => tc.status === "done");
-      const planTexts = loop.current.planTexts ?? [];
       if (!presented) {
         commitLoop(
           dispatch,
@@ -298,20 +309,11 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
         );
         return;
       }
-      const plan = getState().session.taskPlan;
-      // The loop's autonomy level says which re-plans start the next round
-      // by themselves; anything else waits for the person on the plan card.
-      const decision = plan
-        ? replanDecision(loop, planTexts, plan)
-        : { accept: false, reason: "The re-plan left no to-dos." };
-      loop = {
-        ...loop,
-        current: undefined,
-        status: "awaiting_plan",
-        replanReason: decision.reason,
-      };
-      commitLoop(dispatch, getState, loop);
-      if (decision.accept) {
+      // The loop's autonomy level (and, for a repair, its scope) says which
+      // re-plans start by themselves; anything else waits on the plan card.
+      const ended = endReplan(loop, getState().session.taskPlan);
+      commitLoop(dispatch, getState, ended.loop);
+      if (ended.accept) {
         await dispatch(acceptLoopPlan());
       }
       return;
@@ -402,15 +404,18 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
             // the prompt goes without a title
           }
         }
-        const prompt = loopReplanPrompt({ loop, plan, planFile, planTitle });
-        const next = startReplan(loop, state.session.history.length, now);
-        loop = {
-          ...next,
-          current: next.current && {
-            ...next.current,
-            planTexts: plan.items.map((i) => i.text),
-          },
-        };
+        // A round's re-plan, a check-in, or a repair of one failed item
+        const prompt = loopReplanTurnPrompt(action, {
+          loop,
+          plan,
+          planFile,
+          planTitle,
+        });
+        loop = startReplan(loop, state.session.history.length, now, {
+          plan,
+          checkIn: action.checkIn,
+          itemId: action.itemId,
+        });
         dispatch(setMode("plan"));
         commitLoop(dispatch, getState, loop);
         await sendLoopTurn(dispatch, prompt);

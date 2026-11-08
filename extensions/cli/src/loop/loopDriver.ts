@@ -4,15 +4,15 @@ import type { ChatHistoryItem, LoopState } from "core/index.js";
 import {
   answersToDeliver,
   decideNext,
+  endReplan,
   enterWait,
   finishItemRun,
   LOOP_AUTONOMY,
   loopItemPrompt,
-  loopReplanPrompt,
+  loopReplanTurnPrompt,
   markDelivered,
   proceedUnanswered,
   reconcileLoop,
-  replanDecision,
   settleSteeredAnswers,
   standingInstructions,
   startItemRun,
@@ -108,19 +108,11 @@ function finishRun(loop: LoopState): LoopState | "accepted" | "awaiting" {
       );
       return "awaiting";
     }
-    const plan = getSessionTaskPlan();
-    // The loop's level says which re-plans start the next round by
-    // themselves; anything else waits for "Continue the loop" in the inbox.
-    const decision = plan
-      ? replanDecision(loop, loop.current.planTexts ?? [], plan)
-      : { accept: false, reason: "The re-plan left no to-dos." };
-    commitLoop({
-      ...loop,
-      current: undefined,
-      status: "awaiting_plan",
-      replanReason: decision.reason,
-    });
-    return decision.accept && acceptLoopPlan() ? "accepted" : "awaiting";
+    // The loop's level (and, for a repair, its scope) says which re-plans
+    // start by themselves; anything else waits for "Continue the loop".
+    const ended = endReplan(loop, getSessionTaskPlan());
+    commitLoop(ended.loop);
+    return ended.accept && acceptLoopPlan() ? "accepted" : "awaiting";
   }
   return loop;
 }
@@ -213,21 +205,19 @@ export function nextLoopTurn(
         return { kind: "item", prompt };
       }
       case "replan": {
-        const prompt = loopReplanPrompt({
+        // A round's re-plan, a check-in, or a repair of one failed item
+        const prompt = loopReplanTurnPrompt(action, {
           loop,
           plan,
           planFile,
           planTitle: planTitle(),
           toolNames: CLI_LOOP_TOOL_NAMES,
         });
-        const next = startReplan(loop, historyLength, now);
-        loop = {
-          ...next,
-          current: next.current && {
-            ...next.current,
-            planTexts: plan.items.map((i) => i.text),
-          },
-        };
+        loop = startReplan(loop, historyLength, now, {
+          plan,
+          checkIn: action.checkIn,
+          itemId: action.itemId,
+        });
         enterReplanMode();
         commitLoop(loop);
         return { kind: "replan", prompt };

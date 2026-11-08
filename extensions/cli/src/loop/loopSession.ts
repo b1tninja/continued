@@ -6,6 +6,7 @@ import type {
   LoopAutonomy,
   LoopQuestion,
   LoopState,
+  LoopStrategy,
   TaskPlan,
 } from "core/index.js";
 import {
@@ -18,6 +19,7 @@ import {
   requestStop,
   resumeLoop,
   setLoopAutonomy,
+  setLoopStrategy,
   loopPlanBlock,
   stopLoop,
   taskPlanWithLoop,
@@ -199,6 +201,14 @@ export function setRunningLoopAutonomy(autonomy: LoopAutonomy): boolean {
   const loop = getSessionLoop();
   if (!loop) return false;
   commitLoop(setLoopAutonomy(loop, autonomy));
+  return true;
+}
+
+/** The strategy picker: how the running loop moves through the plan. */
+export function setRunningLoopStrategy(strategy: LoopStrategy): boolean {
+  const loop = getSessionLoop();
+  if (!loop) return false;
+  commitLoop(setLoopStrategy(loop, strategy));
   return true;
 }
 

@@ -249,9 +249,26 @@ describe("cn serve: Loop mode", () => {
     expect((await post({ loopAction: "stop" })).body.loop.stopRequested).toBe(
       true,
     );
-    expect(
-      (await post({ loopAutonomy: "unattended" })).body.loop.autonomy,
-    ).toBe("unattended");
+    const unattended = (await post({ loopAutonomy: "unattended" })).body;
+    expect(unattended.loop.autonomy).toBe("unattended");
+    // Not picked yet, so the strategy follows the level
+    expect(unattended.loop.strategy).toBe("fix-forward");
+    expect(await post({ loopStrategy: "ralph" })).toEqual({
+      status: 400,
+      body: {
+        error: "loopStrategy must be one of finish, check-in, fix-forward",
+      },
+    });
+    const picked = (await post({ loopStrategy: "check-in" })).body;
+    expect(picked.loop).toMatchObject({
+      strategy: "check-in",
+      strategyPicked: true,
+    });
+    expect(picked.loopStatus).toMatch(/^Unattended · Check in · /);
+    // A pick stays when the level changes
+    expect((await post({ loopAutonomy: "auto" })).body.loop.strategy).toBe(
+      "check-in",
+    );
     run.release();
     await waitUntil(
       () => getSessionLoop()?.status === "stopped",

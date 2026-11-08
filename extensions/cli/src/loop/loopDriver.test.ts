@@ -9,6 +9,7 @@ import {
   createLoop,
   finishItemRun,
   LOOP_AUTONOMY,
+  setLoopStrategy,
   startItemRun,
 } from "core/util/loopMode.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -156,6 +157,46 @@ describe("Loop mode's driver in the CLI", () => {
     expect(next?.prompt).toContain("only this item: Two");
     expect(loopNow().round).toBe(2);
     expect(loopNow().replanReason).toBe("The re-plan adds no new to-dos.");
+    expect(services.toolPermissions.getCurrentMode()).toBe("normal");
+  });
+
+  it("fix forward: a failed item gets a repair turn, and a split goes on by itself (Auto)", async () => {
+    await planOf("One", "Two", "Three");
+    const loop = startLoopFromPlan("normal")!;
+    commitLoop(setLoopStrategy({ ...loop, autonomy: "auto" }, "fix-forward"));
+
+    runItem("done");
+    runItem("stuck");
+    const repair = nextLoopTurn(history().length);
+    expect(repair?.kind).toBe("replan");
+    expect(repair?.prompt).toContain("failed: Two");
+    expect(repair?.prompt).toContain("What its run reported: stuck it");
+    expect(repair?.prompt).toContain('call PresentPlan with the title "Work"');
+    expect(services.toolPermissions.getCurrentMode()).toBe("plan");
+    expect(loopNow().current).toMatchObject({
+      kind: "replan",
+      itemId: "2",
+      itemText: "Two",
+    });
+    expect(loopNow().items[1].repairs).toBe(1);
+
+    // The repair splits the item; every other to-do stays as it was
+    append(user(repair!.prompt));
+    await planOf("One", "Two, first half", "Two, second half", "Three");
+    append(toolCallItem("PresentPlan", {}, "call_plan"));
+    const next = nextLoopTurn(history().length);
+    expect(next?.kind).toBe("item");
+    expect(next?.prompt).toContain("only this item: Two, first half");
+    expect(loopNow().replanReason).toBe(
+      "The repair replaces the failed item with 2 to-dos.",
+    );
+    expect(loopNow().round).toBe(2);
+    expect(loopNow().items.map((i) => [i.status, i.repairs])).toEqual([
+      ["done", undefined],
+      ["running", 1],
+      ["pending", 1],
+      ["pending", undefined],
+    ]);
     expect(services.toolPermissions.getCurrentMode()).toBe("normal");
   });
 

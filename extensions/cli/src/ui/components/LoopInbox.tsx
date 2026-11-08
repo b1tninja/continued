@@ -9,6 +9,9 @@ import {
   taskPlanWithLoop,
   LOOP_AUTONOMY,
   LOOP_AUTONOMY_LEVELS,
+  LOOP_STRATEGIES,
+  LOOP_STRATEGY_ORDER,
+  loopStrategy,
   standingInstructions,
 } from "core/util/loopMode.js";
 import { TASK_STATUS_MARKERS } from "core/util/taskPlan.js";
@@ -21,6 +24,7 @@ import {
   requestLoopStop,
   resumeStoppedLoop,
   setRunningLoopAutonomy,
+  setRunningLoopStrategy,
 } from "../../loop/loopSession.js";
 import {
   getSessionLoop,
@@ -127,6 +131,7 @@ type InboxAction =
   | { kind: "continue" }
   | { kind: "resume" }
   | { kind: "level" }
+  | { kind: "strategy" }
   | { kind: "stop" }
   | { kind: "close" };
 
@@ -164,6 +169,8 @@ function actionLabel(action: InboxAction, loop: LoopState): string {
       return "Resume the loop";
     case "level":
       return `Level: ${LOOP_AUTONOMY[loop.autonomy ?? "auto"].label} (Enter to change)`;
+    case "strategy":
+      return `Strategy: ${LOOP_STRATEGIES[loopStrategy(loop)].label} (Enter to change)`;
     case "stop":
       return "Stop loop";
     case "close":
@@ -186,6 +193,7 @@ function inboxActions(loop: LoopState): InboxAction[] {
   if (loop.status === "awaiting_plan") actions.push({ kind: "continue" });
   if (loop.status === "stopped") actions.push({ kind: "resume" });
   actions.push({ kind: "level" });
+  actions.push({ kind: "strategy" });
   if (loop.status !== "stopped" && !loop.stopRequested) {
     actions.push({ kind: "stop" });
   }
@@ -203,8 +211,8 @@ const KIND_LABEL: Record<LoopQuestion["kind"], string> = {
  * Loop mode's inbox (`/loop`): the open questions, answered while the loop
  * goes on. Core routes each answer by the state of its item; a note with no
  * item is about the plan, read at the next re-plan, at once ("Re-plan now"),
- * or sent with every item ("For every item"). The level picker and Stop loop
- * are here too.
+ * or sent with every item ("For every item"). The level and strategy
+ * pickers and Stop loop are here too.
  */
 export const LoopInbox: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const loop = useLoopState();
@@ -270,6 +278,15 @@ export const LoopInbox: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           ];
         setRunningLoopAutonomy(next);
         setFeedback(LOOP_AUTONOMY[next].description);
+        return;
+      }
+      case "strategy": {
+        if (!loop) return;
+        const order = LOOP_STRATEGY_ORDER;
+        const next =
+          order[(order.indexOf(loopStrategy(loop)) + 1) % order.length];
+        setRunningLoopStrategy(next);
+        setFeedback(LOOP_STRATEGIES[next].description);
         return;
       }
       case "stop":
