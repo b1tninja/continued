@@ -410,6 +410,11 @@ export interface LoopItemState {
    * when that run ends.
    */
   again?: boolean;
+  /**
+   * Fix forward: re-plans scoped to this item after it failed (at most
+   * LOOP_MAX_REPAIRS_PER_ITEM). To-dos a repair splits it into inherit it.
+   */
+  repairs?: number;
 }
 
 /**
@@ -510,6 +515,16 @@ export interface LoopBudget {
  */
 export type LoopAutonomy = "supervised" | "auto" | "unattended";
 
+/**
+ * How the loop moves through the plan, next to the autonomy level (how much
+ * it does without the person). See LOOP_STRATEGIES in core/util/loopMode.ts.
+ * - finish: plan order; re-plan only when nothing can run;
+ * - check-in: also re-plan every few finished items, and at once when an
+ *   assumption is overruled or an item fails;
+ * - fix-forward: a failed item gets a re-plan of just that item.
+ */
+export type LoopStrategy = "finish" | "check-in" | "fix-forward";
+
 export interface LoopState {
   status: LoopStatus;
   /** 1 for the plan the loop started with, +1 at each accepted re-plan */
@@ -520,10 +535,18 @@ export interface LoopState {
   budget: LoopBudget;
   /** Missing on loops saved before autonomy levels: treated as "auto" */
   autonomy?: LoopAutonomy;
+  /** Missing on loops saved before strategies: treated as "finish" */
+  strategy?: LoopStrategy;
+  /**
+   * The person picked the strategy; otherwise changing the level changes it
+   * to the new level's default.
+   */
+  strategyPicked?: boolean;
   items: LoopItemState[];
   /** What is running: one item, or the re-plan turn */
   current?: {
     kind: "item" | "replan";
+    /** The item that runs; for a repair re-plan, the failed item it is about */
     itemId?: string;
     /** History length when it started; its messages come after */
     historyIndex: number;
@@ -537,7 +560,28 @@ export interface LoopState {
     };
     /** A re-plan: the to-dos it started from, to tell whether it adds scope */
     planTexts?: string[];
+    /** A check-in re-plan (check-in strategy): why it was due */
+    checkIn?: string;
+    /** A repair re-plan (fix forward): the failed item's text */
+    itemText?: string;
   };
+  /**
+   * The re-plan whose plan waits to be accepted: what it was for, so
+   * acceptReplan can tell a check-in or a repair from a round's re-plan.
+   * For a repair (fix forward), itemId is the failed item.
+   */
+  replanned?: {
+    planTexts: string[];
+    checkIn?: string;
+    itemId?: string;
+    itemText?: string;
+  };
+  /** Check in: items done since the start or the last accepted re-plan */
+  doneSinceReplan?: number;
+  /** Check in: an event (a redo, a failed item) asks for a check-in now */
+  checkInDue?: string;
+  /** Fix forward: the failed item waiting for its scoped re-plan */
+  repairItemId?: string;
   questions: LoopQuestion[];
   answers: LoopAnswer[];
   /** Items finished in this round, for the no-progress check */

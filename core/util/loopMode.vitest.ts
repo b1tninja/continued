@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import type { LoopState, TaskPlan } from "../index.js";
+import type {
+  LoopAutonomy,
+  LoopBudget,
+  LoopState,
+  LoopStrategy,
+  TaskPlan,
+} from "../index.js";
 import {
   acceptReplan,
   answerLoop,
@@ -21,6 +27,15 @@ import {
   replanDecision,
   setLoopAutonomy,
   decideNext,
+  defaultLoopStrategy,
+  endReplan,
+  LOOP_STRATEGIES,
+  LOOP_STRATEGY_ORDER,
+  loopItemRepairPrompt,
+  loopReplanTurnPrompt,
+  loopStrategy,
+  repairDecision,
+  setLoopStrategy,
   approvalHeldResult,
   finishItemReport,
   finishItemRun,
@@ -1423,5 +1438,434 @@ describe("controls: skip, run again and the limits", () => {
     expect(loopReplanPrompt({ loop, plan: PLAN })).toContain(
       "- [x] Add tests (skipped by the person)",
     );
+  });
+});
+
+describe("strategies", () => {
+  function loopWith(
+    strategy: LoopStrategy | undefined,
+    p: TaskPlan = PLAN,
+    options: { autonomy?: LoopAutonomy; budget?: Partial<LoopBudget> } = {},
+  ): LoopState {
+    return createLoop(p, {
+      now: T0,
+      sessionTokens: 0,
+      autonomy: options.autonomy ?? "auto",
+      budget: options.budget,
+      ...(strategy ? { strategy } : {}),
+    });
+  }
+
+  /** A re-plan turn for `action` that presents `presented`, accepted when allowed. */
+  function replanTurn(
+    loop: LoopState,
+    before: TaskPlan,
+    action: { checkIn?: string; itemId?: string },
+    presented: TaskPlan,
+  ) {
+    const started = startReplan(loop, 0, T0, { plan: before, ...action });
+    const ended = endReplan(started, presented);
+    return {
+      ...ended,
+      loop: ended.accept
+        ? acceptReplan(ended.loop, presented, ctx())
+        : ended.loop,
+    };
+  }
+
+  const four = plan("A", "B", "C", "D");
+  const five = plan("A", "B", "C", "D", "E");
+
+  test("every strategy has a label and a one-line description", () => {
+    for (const s of LOOP_STRATEGY_ORDER) {
+      expect(LOOP_STRATEGIES[s].label).toBeTruthy();
+      expect(LOOP_STRATEGIES[s].description).not.toContain("\n");
+    }
+  });
+
+  test("the default follows the level; a pick stays when the level changes", () => {
+    const at = (autonomy: LoopAutonomy) =>
+      createLoop(PLAN, { now: T0, sessionTokens: 0, autonomy });
+    expect(at("supervised").strategy).toBe("finish");
+    expect(at("auto").strategy).toBe("fix-forward");
+    expect(at("unattended").strategy).toBe("fix-forward");
+    expect(defaultLoopStrategy("supervised")).toBe("finish");
+
+    // Not picked: the strategy follows the level
+    expect(setLoopAutonomy(at("auto"), "supervised").strategy).toBe("finish");
+    expect(setLoopAutonomy(at("supervised"), "unattended").strategy).toBe(
+      "fix-forward",
+    );
+    // Picked, at the start or later: it stays
+    const picked = loopWith("check-in");
+    expect(picked.strategyPicked).toBe(true);
+    expect(setLoopAutonomy(picked, "supervised").strategy).toBe("check-in");
+    const later = setLoopStrategy(at("supervised"), "check-in");
+    expect(setLoopAutonomy(later, "unattended").strategy).toBe("check-in");
+  });
+
+  test("a loop without a strategy finishes what it started, as before", () => {
+    // No level named, or saved before strategies
+    expect(loopOn().strategy).toBeUndefined();
+    const { strategy: _drop, ...old } = loopWith("fix-forward");
+    const saved = old as LoopState;
+    expect(loopStrategy(saved)).toBe("finish");
+    // Changing the level does not give it one
+    expect(setLoopAutonomy(saved, "supervised").strategy).toBeUndefined();
+
+    let loop = runItem(saved, "1", { outcome: "done" });
+    loop = runItem(loop, "2", { outcome: "stuck" });
+    // No repair: the next item runs, and the round's re-plan comes at the end
+    expect(decideNext(loop, PLAN, ctx())).toEqual({ kind: "run", itemId: "3" });
+    loop = runItem(loop, "3", { outcome: "done" });
+    expect(decideNext(loop, PLAN, ctx())).toEqual({ kind: "replan" });
+    expect(loop.repairItemId).toBeUndefined();
+    expect(loop.doneSinceReplan).toBeUndefined();
+    expect(formatLoopStatus(loop)).toMatch(/^Auto · Round 1/);
+  });
+
+  test("the status names a strategy that is not the level's default", () => {
+    expect(formatLoopStatus(loopWith("fix-forward"))).toMatch(
+      /^Auto · Round 1/,
+    );
+    expect(formatLoopStatus(loopWith("check-in"))).toMatch(
+      /^Auto · Check in · Round 1/,
+    );
+    expect(
+      formatLoopStatus(loopWith("finish", PLAN, { autonomy: "unattended" })),
+    ).toMatch(/^Unattended · Finish what you started · /);
+    expect(formatLoopStatus(loopWith("check-in"), { level: false })).toMatch(
+      /^Round 1/,
+    );
+  });
+
+  describe("check in", () => {
+    test("re-plans after every 3 finished items, between items", () => {
+      let loop = loopWith("check-in", five);
+      loop = runItem(loop, "1", { outcome: "done" });
+      loop = runItem(loop, "2", { outcome: "done" });
+      expect(decideNext(loop, five, ctx())).toEqual({
+        kind: "run",
+        itemId: "3",
+      });
+      // Not while an item runs
+      const running = startItemRun(loop, "3", 0, T0);
+      expect(decideNext(running, five, ctx())).toEqual({ kind: "none" });
+      loop = finishItemRun(running, { outcome: "done" });
+      expect(decideNext(loop, five, ctx())).toEqual({
+        kind: "replan",
+        checkIn: "3 items were done since the last check-in.",
+      });
+      const prompt = loopReplanTurnPrompt(
+        { checkIn: "3 items were done since the last check-in." },
+        { loop, plan: five, toolNames: LOOP_CLI_TOOL_NAMES },
+      );
+      expect(prompt).toContain(
+        "Check in on the plan before the next item: 3 items were done",
+      );
+      expect(prompt).toContain("present it unchanged");
+      expect(prompt).toContain("PresentPlan");
+      expect(prompt).not.toContain("No item of the plan can run now");
+    });
+
+    test("a check-in that keeps the plan is not a round", () => {
+      let loop = loopWith("check-in", five);
+      for (const id of ["1", "2", "3"]) {
+        loop = runItem(loop, id, { outcome: "done" });
+      }
+      const action = decideNext(loop, five, ctx());
+      if (action.kind !== "replan") throw new Error(action.kind);
+      const turn = replanTurn(loop, five, action, five);
+      expect(turn.accept).toBe(true);
+      expect(turn.loop.round).toBe(1);
+      expect(turn.loop.noProgressRounds).toBe(0);
+      expect(turn.loop.doneThisRound).toBe(3);
+      expect(turn.loop.doneSinceReplan).toBe(0);
+      expect(decideNext(turn.loop, five, ctx())).toEqual({
+        kind: "run",
+        itemId: "4",
+      });
+    });
+
+    test("a check-in that changes the plan is a round", () => {
+      let loop = loopWith("check-in", five, { autonomy: "unattended" });
+      for (const id of ["1", "2", "3"]) {
+        loop = runItem(loop, id, { outcome: "done" });
+      }
+      const action = decideNext(loop, five, ctx());
+      if (action.kind !== "replan") throw new Error(action.kind);
+      const changed: TaskPlan = {
+        ...five,
+        items: [
+          ...five.items.slice(0, 4),
+          { id: "6", text: "E, smaller", status: "pending" },
+        ],
+      };
+      const turn = replanTurn(loop, five, action, changed);
+      expect(turn.accept).toBe(true);
+      expect(turn.loop.round).toBe(2);
+      expect(turn.loop.doneThisRound).toBe(0);
+    });
+
+    test("a failed item or an overruled assumption asks for a check-in at once", () => {
+      let loop = loopWith("check-in", four);
+      loop = runItem(loop, "1", { outcome: "stuck", summary: "no runner" });
+      expect(decideNext(loop, four, ctx())).toEqual({
+        kind: "replan",
+        checkIn: "Item 1 failed.",
+      });
+      // Kept as it was: the failed item stays failed and the loop goes on
+      let turn = replanTurn(loop, four, { checkIn: "Item 1 failed." }, four);
+      expect(turn.loop.round).toBe(1);
+      expect(status(turn.loop, "1")).toBe("failed");
+      expect(decideNext(turn.loop, four, ctx())).toEqual({
+        kind: "run",
+        itemId: "2",
+      });
+
+      // An overruled assumption of a done item
+      loop = startItemRun(turn.loop, "2", 0, T0);
+      const q = holdQuestion(
+        loop,
+        {
+          itemId: "2",
+          question: "Tabs?",
+          kind: "assumption",
+          assumption: "spaces",
+        },
+        T0,
+      );
+      if (!q.ok) throw new Error(q.error);
+      loop = finishItemRun(q.loop, { outcome: "done" });
+      expect(decideNext(loop, four, ctx())).toEqual({
+        kind: "run",
+        itemId: "3",
+      });
+      const a = answerLoop(
+        loop,
+        { questionId: q.question.id, text: "tabs" },
+        T0,
+      );
+      if (!a.ok) throw new Error(a.error);
+      expect(decideNext(a.loop, four, ctx())).toMatchObject({
+        kind: "replan",
+        checkIn: expect.stringContaining("overruled an assumption of item 2"),
+      });
+      turn = replanTurn(a.loop, four, { checkIn: "x" }, four);
+      expect(decideNext(turn.loop, four, ctx())).toEqual({
+        kind: "run",
+        itemId: "2",
+      });
+    });
+
+    test("check-ins keep the limits: none past maxRounds or the no-progress limit, and budgets stop", () => {
+      let loop = loopWith("check-in", five, { budget: { maxRounds: 1 } });
+      for (const id of ["1", "2", "3"]) {
+        loop = runItem(loop, id, { outcome: "done" });
+      }
+      // No re-plan is left, so the items go on
+      expect(decideNext(loop, five, ctx())).toEqual({
+        kind: "run",
+        itemId: "4",
+      });
+
+      let stuck = loopWith("check-in", four, {
+        budget: { maxNoProgressRounds: 1 },
+      });
+      stuck = runItem(stuck, "1", { outcome: "stuck" });
+      expect(decideNext(stuck, four, ctx())).toEqual({
+        kind: "run",
+        itemId: "2",
+      });
+
+      loop = loopWith("check-in", five, { budget: { maxTokens: 100 } });
+      for (const id of ["1", "2", "3"]) {
+        loop = runItem(loop, id, { outcome: "done" });
+      }
+      expect(decideNext(loop, five, ctx(0, 100))).toMatchObject({
+        kind: "stop",
+        reason: "tokens",
+      });
+    });
+  });
+
+  describe("fix forward", () => {
+    test("a failed item gets a re-plan of just that item", () => {
+      let loop = loopWith(undefined, PLAN, { autonomy: "auto" });
+      expect(loop.strategy).toBe("fix-forward");
+      loop = runItem(loop, "1", { outcome: "done" });
+      loop = runItem(loop, "2", { outcome: "stuck", summary: "no runner" });
+      expect(loop.consecutiveFailures).toBe(1);
+      const action = decideNext(loop, PLAN, ctx());
+      expect(action).toEqual({ kind: "replan", itemId: "2" });
+      if (action.kind !== "replan") throw new Error(action.kind);
+
+      const prompt = loopReplanTurnPrompt(action, {
+        loop,
+        plan: PLAN,
+        planFile: ".continue/plans/p.md",
+        planTitle: "Parser",
+      });
+      expect(prompt).toContain("failed: Add tests");
+      expect(prompt).toContain("What its run reported: no runner");
+      expect(prompt).toMatch(/reword the item/);
+      expect(prompt).toMatch(/split it into at most 3 smaller to-dos/);
+      expect(prompt).toMatch(/drop it/);
+      expect(prompt).toContain('present_plan with the title "Parser"');
+      expect(prompt).toContain("Do not change, add or drop any other to-do.");
+      expect(
+        loopItemRepairPrompt({
+          loop,
+          plan: PLAN,
+          itemId: "2",
+          toolNames: LOOP_CLI_TOOL_NAMES,
+        }),
+      ).toContain("call PresentPlan");
+
+      // The repair turn records the item and counts against it
+      const started = startReplan(loop, 7, T0, { plan: PLAN, ...action });
+      expect(started.current).toMatchObject({
+        kind: "replan",
+        itemId: "2",
+        itemText: "Add tests",
+        planTexts: PLAN.items.map((i) => i.text),
+      });
+      expect(started.items.find((i) => i.id === "2")?.repairs).toBe(1);
+      expect(started.repairItemId).toBeUndefined();
+    });
+
+    test("a split of the item goes on under Auto and counts a round; the parts inherit its repairs", () => {
+      let loop = loopWith("fix-forward");
+      loop = runItem(loop, "1", { outcome: "done" });
+      loop = runItem(loop, "2", { outcome: "stuck" });
+      const split: TaskPlan = {
+        ...PLAN,
+        items: [
+          PLAN.items[0],
+          { id: "4", text: "Install vitest", status: "pending" },
+          { id: "5", text: "Add parser tests", status: "pending" },
+          PLAN.items[2],
+        ],
+      };
+      const turn = replanTurn(loop, PLAN, { itemId: "2" }, split);
+      expect(turn.accept).toBe(true);
+      expect(turn.loop.replanReason).toBe(
+        "The repair replaces the failed item with 2 to-dos.",
+      );
+      expect(turn.loop.round).toBe(2);
+      expect(turn.loop.items.map((i) => [i.id, i.status, i.repairs])).toEqual([
+        ["1", "done", undefined],
+        ["4", "pending", 1],
+        ["5", "pending", 1],
+        ["3", "pending", undefined],
+      ]);
+      expect(decideNext(turn.loop, split, ctx())).toEqual({
+        kind: "run",
+        itemId: "4",
+      });
+    });
+
+    test("a repair that changes other to-dos is judged as a re-plan; Supervised waits", () => {
+      const loop = runItem(loopWith("fix-forward"), "1", { outcome: "stuck" });
+      const before = PLAN.items.map((i) => i.text);
+      const item = "Write the parser";
+      const reworded = plan("Parse in steps", "Add tests", "Update the docs");
+      expect(repairDecision(loop, before, item, reworded)).toEqual({
+        accept: true,
+        reason: "The repair replaces the failed item with 1 to-do.",
+      });
+      expect(
+        repairDecision(
+          loop,
+          before,
+          item,
+          plan("Add tests", "Update the docs"),
+        ),
+      ).toEqual({ accept: true, reason: "The repair drops the failed item." });
+      expect(
+        repairDecision(loop, before, item, plan("Parse", "Add tests", "Docs")),
+      ).toMatchObject({
+        accept: false,
+        reason: "The re-plan adds 2 new to-dos.",
+      });
+      const tooMany = plan("a", "b", "c", "d", "Add tests", "Update the docs");
+      expect(repairDecision(loop, before, item, tooMany).accept).toBe(false);
+      const supervised = setLoopAutonomy(loop, "supervised");
+      expect(repairDecision(supervised, before, item, reworded).accept).toBe(
+        false,
+      );
+    });
+
+    test("at most 2 repairs per item, then it stays failed and the loop moves on", () => {
+      const p = plan("A", "B");
+      let loop = loopWith("fix-forward", p, {
+        budget: { maxConsecutiveFailures: 5 },
+      });
+      for (let repair = 1; repair <= 2; repair++) {
+        loop = runItem(loop, "1", { outcome: "stuck" });
+        expect(decideNext(loop, p, ctx())).toEqual({
+          kind: "replan",
+          itemId: "1",
+        });
+        // The model keeps the item as it was
+        loop = replanTurn(loop, p, { itemId: "1" }, p).loop;
+        expect(loop.items[0]).toMatchObject({
+          status: "pending",
+          repairs: repair,
+        });
+      }
+      expect(loop.round).toBe(3);
+      loop = runItem(loop, "1", { outcome: "stuck" });
+      expect(status(loop, "1")).toBe("failed");
+      expect(loop.repairItemId).toBeUndefined();
+      expect(decideNext(loop, p, ctx())).toEqual({ kind: "run", itemId: "2" });
+    });
+
+    test("repairs keep the limits: rounds, the three-failures stop and the budgets", () => {
+      const p = plan("A", "B");
+      // A repair counts toward maxRounds: none is left after round 2
+      let loop = loopWith("fix-forward", p, { budget: { maxRounds: 2 } });
+      loop = runItem(loop, "1", { outcome: "stuck" });
+      loop = replanTurn(loop, p, { itemId: "1" }, p).loop;
+      expect(loop.round).toBe(2);
+      loop = runItem(loop, "1", { outcome: "stuck" });
+      expect(decideNext(loop, p, ctx())).toEqual({ kind: "run", itemId: "2" });
+
+      // Every failed run counts toward three in a row
+      loop = loopWith("fix-forward", p);
+      for (let i = 0; i < 2; i++) {
+        loop = runItem(loop, "1", { outcome: "stuck" });
+        loop = replanTurn(loop, p, { itemId: "1" }, p).loop;
+      }
+      loop = runItem(loop, "1", undefined);
+      loop = runItem(loop, "1", undefined);
+      expect(loop.consecutiveFailures).toBe(3);
+      expect(decideNext(loop, p, ctx())).toMatchObject({
+        kind: "stop",
+        reason: "failures",
+      });
+
+      // Budgets come first
+      loop = runItem(
+        loopWith("fix-forward", p, { budget: { maxWallMs: 60_000 } }),
+        "1",
+        { outcome: "stuck" },
+      );
+      expect(decideNext(loop, p, ctx(1))).toMatchObject({
+        kind: "stop",
+        reason: "time",
+      });
+    });
+
+    test("an item requeued by an answer before its repair just runs again", () => {
+      let loop = loopWith("fix-forward", plan("A"));
+      loop = runItem(loop, "1", { outcome: "stuck" });
+      const a = answerLoop(loop, { itemId: "1", text: "Use the old API" }, T0);
+      if (!a.ok) throw new Error(a.error);
+      expect(decideNext(a.loop, plan("A"), ctx())).toEqual({
+        kind: "run",
+        itemId: "1",
+      });
+    });
   });
 });

@@ -1,8 +1,9 @@
-import type { LoopAutonomy, LoopState } from "core/index.js";
+import type { LoopAutonomy, LoopState, LoopStrategy } from "core/index.js";
 import {
   formatLoopStatus,
   LOOP_AUTONOMY_LEVELS,
   setLoopBudget,
+  LOOP_STRATEGY_ORDER,
   type LoopAnswerInput,
 } from "core/util/loopMode.js";
 
@@ -16,6 +17,7 @@ import {
   setRunningLoopAutonomy,
   setRunningLoopBudget,
   skipLoopItem,
+  setRunningLoopStrategy,
   startLoopFromPlan,
 } from "../loop/loopSession.js";
 
@@ -37,6 +39,8 @@ import {
  *   `POST /pause`.
  * - `loopAutonomy: "supervised" | "auto" | "unattended"` is the level picker;
  *   it resets the limits to the level's.
+ * - `loopStrategy: "finish" | "check-in" | "fix-forward"` is the strategy
+ *   picker; a picked strategy stays when the level changes.
  * - `loopBudget: {maxRounds?, maxTokens?, maxWallMs?, maxAttempts?,
  *   maxConsecutiveFailures?}` changes the limits while the loop runs, checked
  *   by core's setLoopBudget: maxRounds 1 is "never re-plan" and N + 1 is "up
@@ -139,11 +143,19 @@ export interface LoopMessageResponse {
 export function handleLoopMessage(
   body: Record<string, unknown>,
 ): LoopMessageResponse | undefined {
-  const { loopAnswer, loopAction, loopAutonomy, loopBudget, itemId } = body;
+  const {
+    loopAnswer,
+    loopAction,
+    loopAutonomy,
+    loopStrategy,
+    loopBudget,
+    itemId,
+  } = body;
   if (
     loopAnswer === undefined &&
     loopAction === undefined &&
     loopAutonomy === undefined &&
+    loopStrategy === undefined &&
     loopBudget === undefined
   ) {
     return undefined;
@@ -164,6 +176,14 @@ export function handleLoopMessage(
       `loopAutonomy must be one of ${LOOP_AUTONOMY_LEVELS.join(", ")}`,
     );
   }
+  if (
+    loopStrategy !== undefined &&
+    !LOOP_STRATEGY_ORDER.includes(loopStrategy as LoopStrategy)
+  ) {
+    return fail(
+      `loopStrategy must be one of ${LOOP_STRATEGY_ORDER.join(", ")}`,
+    );
+  }
   const parsed =
     loopAnswer === undefined ? undefined : parseLoopAnswer(loopAnswer);
   if (parsed && !parsed.ok) return fail(parsed.error);
@@ -182,6 +202,12 @@ export function handleLoopMessage(
   if (
     loopAutonomy !== undefined &&
     !setRunningLoopAutonomy(loopAutonomy as LoopAutonomy)
+  ) {
+    return fail("No loop in this session");
+  }
+  if (
+    loopStrategy !== undefined &&
+    !setRunningLoopStrategy(loopStrategy as LoopStrategy)
   ) {
     return fail("No loop in this session");
   }

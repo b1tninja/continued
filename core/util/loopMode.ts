@@ -9,6 +9,7 @@ import type {
   LoopQuestionKind,
   LoopState,
   LoopStopReason,
+  LoopStrategy,
   TaskItem,
   TaskPlan,
 } from "../index.js";
@@ -21,8 +22,10 @@ import { TASK_LIST_BLOCK_CLOSE, TASK_LIST_BLOCK_OPEN } from "./taskPlan.js";
  * not waiting, runs it with a short one-item prompt, records questions the
  * model holds for the person, routes the person's answers by the state of the
  * item they are about, and re-plans in a read-only Plan-mode turn when no
- * item is left to run. Everything here is pure; the gui (and later the CLI)
- * applies the results. Design: plans/loop-mode.md.
+ * item is left to run. The loop's strategy (LOOP_STRATEGIES) adds re-plans
+ * of its own: check-ins between items, or a repair of one failed item.
+ * Everything here is pure; the gui and the CLI apply the results. Design:
+ * plans/loop-mode.md.
  */
 
 export const HOLD_QUESTION_TOOL_NAME = "hold_question";
@@ -162,12 +165,97 @@ export function loopAutonomy(loop: LoopState): LoopAutonomyPreset {
   return LOOP_AUTONOMY[loop.autonomy ?? "auto"];
 }
 
-/** Changes the level of a running loop; the budgets become that level's. */
+/**
+ * Changes the level of a running loop; the budgets become that level's. The
+ * strategy follows the level (defaultLoopStrategy) unless the person picked
+ * one, so a pick is never overridden. A loop saved before strategies keeps
+ * "finish", as it had no default to follow.
+ */
 export function setLoopAutonomy(
   loop: LoopState,
   autonomy: LoopAutonomy,
 ): LoopState {
-  return { ...loop, autonomy, budget: { ...LOOP_AUTONOMY[autonomy].budget } };
+  const changed = {
+    ...loop,
+    autonomy,
+    budget: { ...LOOP_AUTONOMY[autonomy].budget },
+  };
+  if (!loop.strategy || loop.strategyPicked) return changed;
+  return withStrategy(changed, defaultLoopStrategy(autonomy));
+}
+
+export interface LoopStrategyPreset {
+  label: string;
+  /** One line for the picker */
+  description: string;
+}
+
+/** Items finished between two check-ins (check-in strategy). */
+export const LOOP_CHECK_IN_EVERY = 3;
+
+/** Re-plans scoped to one failed item before it stays failed (fix forward). */
+export const LOOP_MAX_REPAIRS_PER_ITEM = 2;
+
+/** To-dos a repair may split a failed item into and still go on by itself. */
+export const LOOP_REPAIR_MAX_TODOS = 3;
+
+/**
+ * How the loop moves through the plan: the second setting next to the
+ * autonomy level. Whatever the strategy, the person's rules, held approvals,
+ * the repeat limit, the budgets (rounds, tokens, time), the no-progress stop
+ * and the three-failures stop all hold. Design: plans/loop-mode.md,
+ * "Strategies".
+ */
+export const LOOP_STRATEGIES: Record<LoopStrategy, LoopStrategyPreset> = {
+  finish: {
+    label: "Finish what you started",
+    description:
+      "Items in plan order; a failed item runs again once, and the plan is re-evaluated only when nothing can run.",
+  },
+  "check-in": {
+    label: "Check in",
+    description: `Items in plan order; the plan is also re-evaluated after every ${LOOP_CHECK_IN_EVERY} finished items, and at once when an item fails or an assumption is overruled.`,
+  },
+  "fix-forward": {
+    label: "Fix forward",
+    description: `A failed item gets a re-plan of just that item (reworded, split or dropped), at most ${LOOP_MAX_REPAIRS_PER_ITEM} times, then the loop moves on.`,
+  },
+};
+
+export const LOOP_STRATEGY_ORDER: readonly LoopStrategy[] = [
+  "finish",
+  "check-in",
+  "fix-forward",
+];
+
+/** The strategy a level starts with: Supervised finishes, the others fix forward. */
+export function defaultLoopStrategy(autonomy: LoopAutonomy): LoopStrategy {
+  return autonomy === "supervised" ? "finish" : "fix-forward";
+}
+
+/** The loop's strategy; a loop saved before strategies finishes what it started. */
+export function loopStrategy(loop: LoopState): LoopStrategy {
+  return loop.strategy ?? "finish";
+}
+
+/** Switches strategy, dropping what the old one had pending. */
+function withStrategy(loop: LoopState, strategy: LoopStrategy): LoopState {
+  if (strategy === loopStrategy(loop)) return { ...loop, strategy };
+  return {
+    ...loop,
+    strategy,
+    checkInDue: undefined,
+    repairItemId: undefined,
+    doneSinceReplan: strategy === "check-in" ? 0 : undefined,
+  };
+}
+
+/** The person picked a strategy: it stays when the level changes. */
+export function setLoopStrategy(
+  loop: LoopState,
+  strategy: LoopStrategy,
+): LoopState {
+  return { ...withStrategy(loop, strategy), strategyPicked: true };
 }
 
 export const LOOP_LIMITS = {
@@ -219,7 +307,12 @@ export type FinishOutcome = "done" | "stuck" | "waiting";
 /** What the loop should do next; see decideNext. */
 export type LoopAction =
   | { kind: "run"; itemId: string }
-  | { kind: "replan" }
+  /**
+   * A re-plan turn. checkIn: a check-in between items (check-in strategy),
+   * with why it is due. itemId: a repair of that failed item only (fix
+   * forward). Neither: the round's re-plan, as before strategies.
+   */
+  | { kind: "replan"; checkIn?: string; itemId?: string }
   /** until: when an unattended loop stops waiting and goes on without answers */
   | { kind: "wait"; until?: string }
   /** Unattended: the wait ran out; the waiting items go on (proceedUnanswered) */
@@ -282,9 +375,20 @@ export function createLoop(
     autonomy?: LoopAutonomy;
     /** false: items share the session's conversation (default: a fresh context) */
     freshContext?: boolean;
+    /**
+     * Given: the person's pick. Otherwise the level's default
+     * (defaultLoopStrategy), or "finish" when no level is named either.
+     */
+    strategy?: LoopStrategy;
   },
 ): LoopState {
+  const strategy =
+    options.strategy ??
+    (options.autonomy ? defaultLoopStrategy(options.autonomy) : undefined);
   return {
+    ...(strategy ? { strategy } : {}),
+    ...(options.strategy ? { strategyPicked: true } : {}),
+    ...(strategy === "check-in" ? { doneSinceReplan: 0 } : {}),
     status: "running",
     round: 1,
     startedAt: iso(options.now),
@@ -370,7 +474,8 @@ function hasUndeliveredPlanAnswers(loop: LoopState): boolean {
 
 /**
  * What to do when nothing is running. In order: budgets; a plan-wide answer
- * that asked to re-plan now; the next runnable item; done when every item is
+ * that asked to re-plan now; the strategy's own re-plan (strategyReplan:
+ * none for "finish"); the next runnable item; done when every item is
  * done and no plan-wide answer is waiting; wait when every open item waits on
  * the person; otherwise re-plan, unless the rounds or the no-progress limit
  * say stop.
@@ -408,6 +513,8 @@ export function decideNext(
   if (loop.replanRequested) {
     return replanOrStop(loop);
   }
+  const strategic = strategyReplan(loop, plan);
+  if (strategic) return strategic;
   const next = nextRunnableItem(loop, plan);
   if (next) {
     return { kind: "run", itemId: next.id };
@@ -432,6 +539,53 @@ export function decideNext(
     return { kind: "wait", until: iso(new Date(since + waitTimeoutMs)) };
   }
   return replanOrStop(loop);
+}
+
+/**
+ * The re-plans a strategy adds before the next item runs; undefined leaves
+ * the decision to decideNext as before strategies (so "finish" adds none).
+ * They come after the budgets and the failures stop, and only when a round's
+ * re-plan would be allowed now (the rounds and no-progress limits): a
+ * strategy's re-plan never stops the loop; when the limits forbid it, the
+ * items simply go on.
+ *
+ * - check-in: with an item left to run, a check-in when an event asked for
+ *   one (an item failed, an assumption was overruled) or LOOP_CHECK_IN_EVERY
+ *   items were done since the last re-plan.
+ * - fix-forward: a repair of the item that just failed, if it is still
+ *   failed and in the plan (an answer may have requeued it meanwhile).
+ */
+function strategyReplan(
+  loop: LoopState,
+  plan: TaskPlan,
+): LoopAction | undefined {
+  switch (loopStrategy(loop)) {
+    case "finish":
+      return undefined;
+    case "check-in": {
+      if (!nextRunnableItem(loop, plan)) return undefined;
+      const done = loop.doneSinceReplan ?? 0;
+      const reason =
+        loop.checkInDue ??
+        (done >= LOOP_CHECK_IN_EVERY
+          ? `${done} items were done since the last check-in.`
+          : undefined);
+      if (!reason || replanOrStop(loop).kind !== "replan") return undefined;
+      return { kind: "replan", checkIn: reason };
+    }
+    case "fix-forward": {
+      const id = loop.repairItemId;
+      if (
+        !id ||
+        itemState(loop, id)?.status !== "failed" ||
+        !plan.items.some((t) => t.id === id) ||
+        replanOrStop(loop).kind !== "replan"
+      ) {
+        return undefined;
+      }
+      return { kind: "replan", itemId: id };
+    }
+  }
 }
 
 function replanOrStop(loop: LoopState): LoopAction {
@@ -561,6 +715,88 @@ export function replanDecision(
   }
 }
 
+function todos(n: number): string {
+  return `${n} to-do${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * A repair re-plan (fix forward) ended with a plan: may the loop go on with
+ * it by itself? Supervised: never, as for any re-plan. Auto and Unattended:
+ * when it touched only the failed item (every other to-do kept word for
+ * word) and replaced it with at most LOOP_REPAIR_MAX_TODOS to-dos, which
+ * includes rewording it (one new to-do) and dropping it (none). A repair that
+ * changed more is judged as a round's re-plan (replanDecision).
+ */
+export function repairDecision(
+  loop: LoopState,
+  previousTexts: string[],
+  itemText: string,
+  plan: TaskPlan,
+): { accept: boolean; reason: string } {
+  if (loopAutonomy(loop).replan === "ask") {
+    return replanDecision(loop, previousTexts, plan);
+  }
+  const texts = new Set(plan.items.map((i) => i.text));
+  const othersKept = previousTexts
+    .filter((t) => t !== itemText)
+    .every((t) => texts.has(t));
+  const known = new Set(previousTexts);
+  const added = plan.items.filter((i) => !known.has(i.text)).length;
+  if (!othersKept || added > LOOP_REPAIR_MAX_TODOS) {
+    return replanDecision(loop, previousTexts, plan);
+  }
+  if (added > 0) {
+    return {
+      accept: true,
+      reason: texts.has(itemText)
+        ? `The repair keeps the failed item and adds ${todos(added)} for it.`
+        : `The repair replaces the failed item with ${todos(added)}.`,
+    };
+  }
+  return {
+    accept: true,
+    reason: texts.has(itemText)
+      ? "The repair keeps the failed item as it was."
+      : "The repair drops the failed item.",
+  };
+}
+
+/**
+ * A re-plan turn ended and presented `plan`: the loop waits on it
+ * (awaiting_plan), remembering what the re-plan was for, and `accept` says
+ * whether it may start by itself (then call acceptReplan).
+ */
+export function endReplan(
+  loop: LoopState,
+  plan: TaskPlan | undefined,
+): { loop: LoopState; accept: boolean } {
+  const current = loop.current;
+  const planTexts = current?.planTexts ?? [];
+  const repairOf =
+    current?.kind === "replan" && current.itemId
+      ? { itemId: current.itemId, itemText: current.itemText ?? "" }
+      : undefined;
+  const decision = !plan
+    ? { accept: false, reason: "The re-plan left no to-dos." }
+    : repairOf
+      ? repairDecision(loop, planTexts, repairOf.itemText, plan)
+      : replanDecision(loop, planTexts, plan);
+  return {
+    loop: {
+      ...loop,
+      current: undefined,
+      status: "awaiting_plan",
+      replanReason: decision.reason,
+      replanned: {
+        planTexts,
+        ...(current?.checkIn ? { checkIn: current.checkIn } : {}),
+        ...repairOf,
+      },
+    },
+    accept: decision.accept,
+  };
+}
+
 export function startItemRun(
   loop: LoopState,
   itemId: string,
@@ -578,19 +814,50 @@ export function startItemRun(
   };
 }
 
+/**
+ * A re-plan turn starts. `scope` comes from the replan action: `plan` is the
+ * list it starts from (to tell later what it changed), `checkIn` marks a
+ * check-in, and `itemId` a repair of that failed item, which counts toward
+ * its LOOP_MAX_REPAIRS_PER_ITEM. A repair leaves the person's notes about
+ * the plan for the round's re-plan, as its prompt does not carry them.
+ */
 export function startReplan(
   loop: LoopState,
   historyIndex: number,
   now: Date,
+  scope: { plan?: TaskPlan; checkIn?: string; itemId?: string } = {},
 ): LoopState {
+  const { plan, checkIn, itemId } = scope;
+  const itemText = itemId
+    ? plan?.items.find((t) => t.id === itemId)?.text
+    : undefined;
+  const base: LoopState = itemId
+    ? {
+        ...withItem(loop, itemId, {
+          repairs: (itemState(loop, itemId)?.repairs ?? 0) + 1,
+        }),
+        repairItemId: undefined,
+      }
+    : {
+        ...loop,
+        replanRequested: false,
+        answers: loop.answers.map((a) =>
+          a.route === "replan" ? { ...a, delivered: true } : a,
+        ),
+      };
   return {
-    ...loop,
+    ...base,
+    ...(checkIn ? { checkInDue: undefined } : {}),
     status: "replanning",
-    replanRequested: false,
-    current: { kind: "replan", historyIndex, startedAt: iso(now) },
-    answers: loop.answers.map((a) =>
-      a.route === "replan" ? { ...a, delivered: true } : a,
-    ),
+    current: {
+      kind: "replan",
+      historyIndex,
+      startedAt: iso(now),
+      ...(plan ? { planTexts: plan.items.map((i) => i.text) } : {}),
+      ...(checkIn ? { checkIn } : {}),
+      ...(itemId ? { itemId } : {}),
+      ...(itemText !== undefined ? { itemText } : {}),
+    },
   };
 }
 
@@ -654,7 +921,48 @@ export function finishItemRun(
     doneThisRound: loop.doneThisRound + (status === "done" ? 1 : 0),
     consecutiveFailures: failures,
     ...(notes ? { notes } : {}),
+    ...strategyAfterRun(loop, state, status),
   };
+}
+
+/**
+ * What the strategy keeps from a finished run. Check in: count the items
+ * done, and ask for a check-in when one failed. Fix forward: a failed item
+ * with repairs left waits for its repair. Either way the failure counts
+ * toward the three-failures stop, so that stop still means three failed
+ * runs in a row: with the default of 3, an item that fails after both its
+ * repairs stops the loop unless something finished in between.
+ */
+function strategyAfterRun(
+  loop: LoopState,
+  state: LoopItemState | undefined,
+  status: LoopItemStatus,
+): Partial<LoopState> {
+  switch (loopStrategy(loop)) {
+    case "finish":
+      return {};
+    case "check-in":
+      return {
+        doneSinceReplan:
+          (loop.doneSinceReplan ?? 0) + (status === "done" ? 1 : 0),
+        ...(status === "failed" && state
+          ? { checkInDue: `Item ${state.id} failed.` }
+          : {}),
+      };
+    case "fix-forward":
+      return status === "failed" &&
+        state &&
+        (state.repairs ?? 0) < LOOP_MAX_REPAIRS_PER_ITEM
+        ? { repairItemId: state.id }
+        : {};
+  }
+}
+
+/** Check in: a done item reopened as redo asks for a check-in at once. */
+function checkInOnRedo(loop: LoopState, reason: string): LoopState {
+  return loopStrategy(loop) === "check-in"
+    ? { ...loop, checkInDue: reason }
+    : loop;
 }
 
 /**
@@ -1100,6 +1408,12 @@ export function answerLoop(
     ),
   };
   if (itemId && itemChange) next = withItem(next, itemId, itemChange);
+  if (route === "redo") {
+    next = checkInOnRedo(
+      next,
+      `The person overruled an assumption of item ${itemId}, so it is to be redone.`,
+    );
+  }
   if (question?.kind === "approval" && input.approve && question.approval) {
     next = {
       ...next,
@@ -1246,34 +1560,78 @@ export function settleSteeredAnswers(
       ),
     };
     if (redo && item) {
-      next = withItem(next, item.id, { status: "redo", attempts: 0 });
+      next = checkInOnRedo(
+        withItem(next, item.id, { status: "redo", attempts: 0 }),
+        `The person's answer reached item ${item.id} after it finished, so it is to be redone.`,
+      );
     }
   }
   return next;
+}
+
+function sameTexts(previous: string[], plan: TaskPlan): boolean {
+  return (
+    previous.length === plan.items.length &&
+    plan.items.every((task, i) => task.text === previous[i])
+  );
 }
 
 /**
  * A re-plan was accepted: the new list is the next round. Items that kept
  * their id keep their state (finished work stays done); new ones are pending;
  * failed ones that the plan kept run again.
+ *
+ * What the re-plan was for (LoopState.replanned, from endReplan) changes
+ * that:
+ * - a check-in that kept every to-do as it was is not a round: the round,
+ *   the no-progress count and the failed items stay as they were;
+ * - a repair counts toward maxRounds but leaves the round's progress count
+ *   alone; only the repaired item runs again (other failed items stay
+ *   failed), and the to-dos it was split into inherit its repairs.
  */
 export function acceptReplan(
   loop: LoopState,
   plan: TaskPlan,
   ctx: LoopContext,
 ): LoopState {
+  const scope = loop.replanned;
+  const unchangedCheckIn = !!scope?.checkIn && sameTexts(scope.planTexts, plan);
+  const repairOf = scope?.itemId ? itemState(loop, scope.itemId) : undefined;
   const items = plan.items.map((task) => {
     const known = itemState(loop, task.id);
-    if (!known) return fromTask(task);
-    if (known.status === "failed") {
+    if (!known) {
+      const fresh = fromTask(task);
+      return repairOf?.repairs
+        ? { ...fresh, repairs: repairOf.repairs }
+        : fresh;
+    }
+    const rerun = repairOf ? known.id === repairOf.id : !unchangedCheckIn;
+    if (known.status === "failed" && rerun) {
       return { ...known, status: "pending" as const, attempts: 0 };
     }
     return known;
   });
+  const strategyState: Partial<LoopState> = {
+    replanned: undefined,
+    ...(loopStrategy(loop) === "check-in"
+      ? { doneSinceReplan: 0, checkInDue: undefined }
+      : {}),
+  };
+  if (unchangedCheckIn || repairOf) {
+    return {
+      ...loop,
+      ...strategyState,
+      status: "running",
+      current: undefined,
+      round: unchangedCheckIn ? loop.round : loop.round + 1,
+      items,
+    };
+  }
   const noProgressRounds =
     loop.doneThisRound === 0 ? loop.noProgressRounds + 1 : 0;
   return {
     ...loop,
+    ...strategyState,
     status: "running",
     current: undefined,
     round: loop.round + 1,
@@ -1475,30 +1833,13 @@ export function loopPlanBlock(input: {
   return lines.join("\n");
 }
 
-/** The prompt for a re-plan turn (sent in Plan mode, so it can only read). */
-export function loopReplanPrompt(input: {
-  loop: LoopState;
-  plan: TaskPlan;
-  planFile?: string;
-  planTitle?: string;
-  /** The names the model knows the tools by (default the IDE's) */
-  toolNames?: LoopToolNames;
-}): string {
-  const { loop, plan } = input;
-  const names = input.toolNames ?? LOOP_TOOL_NAMES;
-  const lines = [
-    `No item of the plan can run now. Re-evaluate the plan${input.planFile ? ` in ${input.planFile}` : ""} against what has happened, and propose the next round.`,
-    "",
-    "Items:",
-  ];
-  for (const task of plan.items) {
+/** One line per item with its state, for the re-plan prompts. */
+function itemLines(loop: LoopState, plan: TaskPlan): string[] {
+  return plan.items.map((task) => {
     const state = itemState(loop, task.id);
     const status = state?.status ?? "pending";
     if (state?.skipped) {
-      lines.push(
-        `- ${STATUS_MARK[status]} ${quote(task.text)} (skipped by the person)`,
-      );
-      continue;
+      return `- ${STATUS_MARK[status]} ${quote(task.text)} (skipped by the person)`;
     }
     const detail =
       status === "waiting"
@@ -1508,10 +1849,98 @@ export function loopReplanPrompt(input: {
         : state?.summary
           ? quote(state.summary)
           : "";
-    lines.push(
-      `- ${STATUS_MARK[status]} ${quote(task.text)} (${status}${detail ? `: ${detail}` : ""})`,
-    );
+    return `- ${STATUS_MARK[status]} ${quote(task.text)} (${status}${detail ? `: ${detail}` : ""})`;
+  });
+}
+
+/**
+ * The prompt for a repair (fix forward): a re-plan of one failed item only,
+ * sent in Plan mode like any re-plan. It asks to reword, split or drop that
+ * item and to keep every other to-do as it is (see repairDecision).
+ */
+export function loopItemRepairPrompt(input: {
+  loop: LoopState;
+  plan: TaskPlan;
+  itemId: string;
+  planFile?: string;
+  planTitle?: string;
+  /** The names the model knows the tools by (default the IDE's) */
+  toolNames?: LoopToolNames;
+}): string {
+  const { loop, plan } = input;
+  const names = input.toolNames ?? LOOP_TOOL_NAMES;
+  const task = plan.items.find((t) => t.id === input.itemId);
+  const state = itemState(loop, input.itemId);
+  const lines = [
+    `This item of the plan${input.planFile ? ` in ${input.planFile}` : ""} failed: ${quote(task?.text ?? input.itemId)}`,
+    `What its run reported: ${quote(state?.summary ?? "nothing")}`,
+    "",
+    "Re-plan this item only, so the plan can go on. The plan:",
+    ...itemLines(loop, plan),
+  ];
+  const assumptions = openQuestions(loop, input.itemId).filter(
+    (q) => q.kind === "assumption",
+  );
+  if (assumptions.length > 0) {
+    lines.push("", "Assumptions it made:");
+    for (const q of assumptions) {
+      lines.push(
+        `- ${quote(q.question)} Assumed: ${quote(q.assumption ?? "")}`,
+      );
+    }
   }
+  if (loop.notes?.length) {
+    lines.push("", "Notes from the runs:");
+    for (const n of loop.notes) lines.push(`- ${quote(n)}`);
+  }
+  lines.push(
+    "",
+    `Find out why it failed: read the code and what the run left. Then do one of these: reword the item so a run can finish it; split it into at most ${LOOP_REPAIR_MAX_TODOS} smaller to-dos that replace it, in its place; or drop it if the plan's goal does not need it, or it is already done.`,
+    "",
+    `Then call ${names.presentPlan}${input.planTitle ? ` with the title "${quote(input.planTitle)}"` : ""} with the whole list: every other to-do word for word and in its place, with this one reworded, split or left out. Do not change, add or drop any other to-do.`,
+  );
+  return lines.join("\n");
+}
+
+/** The prompt for the turn of a replan action: a repair, a check-in or a round's re-plan. */
+export function loopReplanTurnPrompt(
+  action: { checkIn?: string; itemId?: string },
+  input: {
+    loop: LoopState;
+    plan: TaskPlan;
+    planFile?: string;
+    planTitle?: string;
+    toolNames?: LoopToolNames;
+  },
+): string {
+  return action.itemId
+    ? loopItemRepairPrompt({ ...input, itemId: action.itemId })
+    : loopReplanPrompt({ ...input, checkIn: action.checkIn });
+}
+
+/** The prompt for a re-plan turn (sent in Plan mode, so it can only read). */
+export function loopReplanPrompt(input: {
+  loop: LoopState;
+  plan: TaskPlan;
+  planFile?: string;
+  planTitle?: string;
+  /** The names the model knows the tools by (default the IDE's) */
+  toolNames?: LoopToolNames;
+  /** A check-in between items (check-in strategy): why it is due */
+  checkIn?: string;
+}): string {
+  const { loop, plan } = input;
+  const names = input.toolNames ?? LOOP_TOOL_NAMES;
+  const where = input.planFile ? ` in ${input.planFile}` : "";
+  const lines = input.checkIn
+    ? [
+        `Check in on the plan${where} before the next item: ${quote(input.checkIn)} Re-evaluate the plan against what has happened.`,
+        "If it still holds, present it unchanged, every to-do word for word and in the same order; then the loop goes on without starting a new round.",
+      ]
+    : [
+        `No item of the plan can run now. Re-evaluate the plan${where} against what has happened, and propose the next round.`,
+      ];
+  lines.push("", "Items:", ...itemLines(loop, plan));
   const planAnswers = loop.answers.filter(
     (a) => a.route === "replan" && !a.delivered,
   );
@@ -1552,8 +1981,17 @@ export function formatLoopStatus(
   const done = loop.items.filter((i) => i.status === "done").length - skipped;
   const waiting = loop.items.filter((i) => i.status === "waiting").length;
   const open = loop.questions.filter((q) => !q.answerId).length;
+  // A strategy is named when it is not the level's default (and a loop saved
+  // before strategies names none); with level: false the pickers show both.
+  const strategy =
+    options.level !== false &&
+    loop.strategy &&
+    loop.strategy !== defaultLoopStrategy(loop.autonomy ?? "auto")
+      ? [LOOP_STRATEGIES[loop.strategy].label]
+      : [];
   const parts = [
     ...(options.level === false ? [] : [loopAutonomy(loop).label]),
+    ...strategy,
     `Round ${loop.round}`,
     `${done}/${loop.items.length} done`,
   ];

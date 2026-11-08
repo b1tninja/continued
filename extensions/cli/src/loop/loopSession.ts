@@ -6,6 +6,7 @@ import type {
   LoopAutonomy,
   LoopQuestion,
   LoopState,
+  LoopStrategy,
   TaskPlan,
 } from "core/index.js";
 import {
@@ -21,6 +22,7 @@ import {
   setLoopAutonomy,
   setLoopBudget,
   skipItem,
+  setLoopStrategy,
   loopPlanBlock,
   stopLoop,
   taskPlanWithLoop,
@@ -232,6 +234,14 @@ export function runLoopItemAgain(itemId: string): LoopControlResult {
 /** Change the limits; core checks the bounds (setLoopBudget). */
 export function setRunningLoopBudget(input: unknown): LoopControlResult {
   return applyControl((loop) => setLoopBudget(loop, input));
+}
+
+/** The strategy picker: how the running loop moves through the plan. */
+export function setRunningLoopStrategy(strategy: LoopStrategy): boolean {
+  const loop = getSessionLoop();
+  if (!loop) return false;
+  commitLoop(setLoopStrategy(loop, strategy));
+  return true;
 }
 
 // --- Answers ---

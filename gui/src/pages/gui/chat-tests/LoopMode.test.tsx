@@ -429,7 +429,7 @@ describe("Loop mode", () => {
     expect(shown).toContain("only this item: Write the lexer");
   });
 
-  test("in YOLO the loop starts unattended and a bounded re-plan starts the next round without the card", async () => {
+  test("in YOLO the loop starts unattended, fixing forward: a failed item's repair starts the next round without the card", async () => {
     const h = await setup(["Write the lexer", "Add tests"]);
     await act(async () => {
       h.store.dispatch(setApprovalMode("yolo"));
@@ -451,13 +451,17 @@ describe("Loop mode", () => {
     await h.start();
     expect(h.loop().autonomy).toBe("unattended");
     expect(h.loop().budget.maxRounds).toBe(10);
+    expect(h.loop().strategy).toBe("fix-forward");
 
     // Nobody clicks Continue the loop
     await waitFor(() => expect(h.loop().status).toBe("stopped"));
     expect(h.loop().stopReason).toBe("done");
+    // The failed item got a re-plan of its own, which counts as a round
+    expect(h.prompt(2)).toContain("failed: Add tests");
+    expect(h.prompt(2)).toContain("Re-plan this item only");
     expect(h.loop().round).toBe(2);
     expect(h.loop().replanReason).toBe(
-      "The re-plan adds 1 new to-do, within 5.",
+      "The repair keeps the failed item and adds 1 to-do for it.",
     );
     expect(h.prompt(3)).toContain("only this item: Install vitest");
   });
@@ -522,6 +526,19 @@ describe("Loop mode", () => {
     expect(
       document.querySelector("[data-testid=loop-status]")!.textContent,
     ).toContain("goes on without answers at");
+
+    // The strategy picker sits next to the level picker
+    const strategy = document.querySelector<HTMLSelectElement>(
+      "[data-testid=loop-strategy]",
+    )!;
+    expect(strategy.value).toBe("fix-forward");
+    await act(async () => {
+      fireEvent.change(strategy, { target: { value: "check-in" } });
+    });
+    expect(h.loop()).toMatchObject({
+      strategy: "check-in",
+      strategyPicked: true,
+    });
   });
 
   test("Stop stops the loop with the item back to pending, and Resume goes on", async () => {
