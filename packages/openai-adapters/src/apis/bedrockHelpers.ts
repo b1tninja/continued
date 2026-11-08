@@ -108,10 +108,11 @@ export function getBedrockErrorHint(
 
 /**
  * The message to show when Bedrock refuses a call because the AWS account has
- * not been granted the model, or undefined for any other error. AWS's own text
- * sends people to its sales team, while the usual cause is a step in the
- * Bedrock console. The error alone can't prove which step, so this says
- * "usually".
+ * not been granted the model, or undefined for any other error. AWS uses this
+ * refusal for an unfinished console step and for a tokens-per-minute quota of
+ * 0, which is how a newer model can look available and still be refused. The
+ * error alone can't say which, so this lists what to check (seen live: form and
+ * agreement done, quota 0).
  *
  * Core's Bedrock provider uses this too. The lines are joined by single
  * newlines because the chat window shows only what follows the first blank
@@ -131,7 +132,7 @@ export function bedrockModelAccessMessage(
   }
   return [
     `Amazon Bedrock refused ${modelId}: this AWS account has not been given access to that model.`,
-    "For Anthropic models, this usually means the Anthropic use-case form or the model agreement has not been completed in the Bedrock console (https://console.aws.amazon.com/bedrock/). Finish any step still open there, then try again.",
+    "Check the model's tokens-per-minute quota in Service Quotas: AWS can leave it at 0 for newer models until it grants the account access, and only AWS can raise it. For Anthropic models, also check that the use-case form and the model agreement are complete in the Bedrock console (https://console.aws.amazon.com/bedrock/).",
     `AWS said: ${message}`,
   ].join("\n");
 }

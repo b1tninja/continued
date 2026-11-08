@@ -121,7 +121,7 @@ describe("bedrockModelAccessMessage", () => {
     expect(message).toContain(
       "this AWS account has not been given access to that model",
     );
-    expect(message).toContain("usually means");
+    expect(message).toContain("tokens-per-minute quota");
     expect(message).toContain("use-case form");
     expect(message).toContain("model agreement");
     expect(message).toContain("https://console.aws.amazon.com/bedrock/");
