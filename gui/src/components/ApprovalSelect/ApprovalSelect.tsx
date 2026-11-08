@@ -15,7 +15,7 @@ export const APPROVAL_LABELS: Record<ApprovalMode, string> = {
   manual: "Manual",
   autoApprove: "Auto-approve",
   auto: "Auto",
-  most: "Approve most",
+  review: "Review",
   yolo: "YOLO",
 };
 
@@ -25,7 +25,8 @@ export const APPROVAL_DESCRIPTIONS: Record<ApprovalMode, string> = {
   autoApprove:
     "Tool calls in the categories you switched on (Settings > Tools) run without asking. Rules and protected paths still apply.",
   auto: "Like Auto-approve, and a reviewer model decides what is left: it allows, asks you, or refuses. Experimental.",
-  most: "Everything runs without asking, except what a deny rule, an ask rule, a protected path or the safety check stops. Dangerous.",
+  review:
+    "Everything runs without asking, except what a deny rule, an ask rule, a protected path or the safety check stops. Dangerous.",
   yolo: "Absolutely everything runs without asking. Deny rules, ask rules, protected paths and the safety check are all ignored. Very dangerous.",
 };
 
@@ -41,9 +42,9 @@ export function ApprovalSelect() {
 
   const options: ApprovalMode[] = ["manual", "autoApprove"];
   if (status.offered) options.push("auto");
-  options.push("most", "yolo");
+  options.push("review", "yolo");
 
-  const yolo = effective === "yolo" || effective === "most";
+  const yolo = effective === "yolo" || effective === "review";
   // A saved Auto that cannot run shows as Manual, which is what is in force.
   const shown = saved === "auto" && effective === "manual" ? "manual" : saved;
 
@@ -77,7 +78,7 @@ export function ApprovalSelect() {
                 <div className="flex flex-col">
                   <span
                     className={
-                      mode === "yolo" || mode === "most" ? "text-error" : ""
+                      mode === "yolo" || mode === "review" ? "text-error" : ""
                     }
                   >
                     {APPROVAL_LABELS[mode]}
@@ -107,7 +108,7 @@ export function ApprovalSelect() {
 export function YoloBanner() {
   const dispatch = useAppDispatch();
   const mode = useAppSelector(selectEffectiveApprovalMode);
-  if (mode !== "yolo" && mode !== "most") return null;
+  if (mode !== "yolo" && mode !== "review") return null;
   return (
     <div
       role="alert"
@@ -118,7 +119,7 @@ export function YoloBanner() {
       <span className="flex-1">
         {mode === "yolo"
           ? "YOLO: every tool call runs without asking. Deny rules, ask rules, protected paths and the safety check are ignored."
-          : "Approve most: tool calls run without asking. Deny rules, ask rules, protected paths and the safety check still apply."}
+          : "Review mode: tool calls run without asking. Deny rules, ask rules, protected paths and the safety check still apply."}
       </span>
       <button
         type="button"

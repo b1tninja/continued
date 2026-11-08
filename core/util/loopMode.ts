@@ -191,10 +191,11 @@ export const LOOP_AUTONOMY_LEVELS: readonly LoopAutonomy[] = [
 
 /** The level a loop starts at, from the approval mode in force. */
 export function loopAutonomyFor(
-  approvalMode: "manual" | "autoApprove" | "auto" | "most" | "yolo" | undefined,
+  approvalMode:
+    "manual" | "autoApprove" | "auto" | "review" | "yolo" | undefined,
 ): LoopAutonomy {
   switch (approvalMode) {
-    case "most":
+    case "review":
     case "yolo":
       return "unattended";
     case "auto":

@@ -8,7 +8,7 @@ import { canonicalRuleName } from "./names";
  * - manual: today's behaviour; only the user's rules loosen anything.
  * - autoApprove: the category switches below also loosen calls.
  * - auto: autoApprove, and a reviewer model decides what is left.
- * - most: every call that is not refused, protected, or asked about by a rule
+ * - review: every call that is not refused, protected, or asked about by a rule
  *   is allowed.
  * - yolo: every call is allowed, whatever a rule, a protected path or the
  *   safety floor says. Only a tool switched off stays off.
@@ -18,13 +18,13 @@ import { canonicalRuleName } from "./names";
  * a call that would otherwise be left to the user's tool setting.
  */
 export type ApprovalModeName =
-  "manual" | "autoApprove" | "auto" | "most" | "yolo";
+  "manual" | "autoApprove" | "auto" | "review" | "yolo";
 
 export const APPROVAL_MODES: readonly ApprovalModeName[] = [
   "manual",
   "autoApprove",
   "auto",
-  "most",
+  "review",
   "yolo",
 ];
 
@@ -64,7 +64,7 @@ export const CATEGORY_LABELS: Record<ApprovalCategoryName, string> = {
 
 /** What a mode or switch decided, for the decision chip. */
 export interface Loosening {
-  source: "category" | "most" | "yolo";
+  source: "category" | "review" | "yolo";
   reason: string;
   /** Allows the call whatever else applies (YOLO). */
   absolute?: boolean;
@@ -145,11 +145,11 @@ export function approvalLoosening(
     return { source: "yolo", reason: "Allowed by YOLO mode.", absolute: true };
   }
 
-  if (approval.mode === "most") {
+  if (approval.mode === "review") {
     return {
-      source: "most",
+      source: "review",
       reason:
-        "Allowed by Approve most (no deny rule or protected path applies).",
+        "Allowed by Review mode (no deny rule or protected path applies).",
     };
   }
 

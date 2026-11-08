@@ -24,7 +24,7 @@ export type DecisionSource =
   | "protected-path"
   | "safety-floor"
   | "category"
-  | "most"
+  | "review"
   | "yolo"
   | "tool-setting"
   | "default";

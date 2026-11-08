@@ -7,7 +7,7 @@ import { parsePermissions } from "./names";
 const denyRm = parsePermissions({ deny: ["runTerminalCommand(rm *)"] });
 const askGit = parsePermissions({ ask: ["runTerminalCommand(git *)"] });
 
-function looseningFor(mode: "yolo" | "most") {
+function looseningFor(mode: "yolo" | "review") {
   return approvalLoosening({
     approval: { mode },
     toolName: "run_terminal_command",
@@ -41,21 +41,21 @@ describe.each([
     });
   });
 
-  test("Approve most leaves it as it was", () => {
+  test("Review mode leaves it as it was", () => {
     const decided = decideToolCall(
-      call({ ...over, loosening: looseningFor("most") }),
+      call({ ...over, loosening: looseningFor("review") }),
     );
-    expect(decided.source).not.toBe("most");
+    expect(decided.source).not.toBe("review");
     expect(decided.policy).not.toBe("allowedWithoutPermission");
   });
 });
 
-test("Approve most allows a call nothing has settled", () => {
+test("Review mode allows a call nothing has settled", () => {
   expect(
-    decideToolCall(call({ loosening: looseningFor("most") })),
+    decideToolCall(call({ loosening: looseningFor("review") })),
   ).toMatchObject({
     policy: "allowedWithoutPermission",
-    source: "most",
+    source: "review",
   });
 });
 

@@ -309,40 +309,40 @@ describe("YOLO", () => {
   });
 });
 
-describe("Approve most", () => {
-  const most: ApprovalSettings = { mode: "most" };
+describe("Review", () => {
+  const review: ApprovalSettings = { mode: "review" };
 
   it("allows what would have asked, naming the mode", () => {
-    const r = cmd("git push origin main", most);
+    const r = cmd("git push origin main", review);
     expect(r.policy).toBe(ALLOW);
-    expect(r.source).toBe("most");
+    expect(r.source).toBe("review");
   });
   it("still refuses what the safety floor refuses", () => {
-    const r = cmd("rm -rf /", most);
+    const r = cmd("rm -rf /", review);
     expect(r.policy).toBe(OFF);
-    expect(r.source).not.toBe("most");
+    expect(r.source).not.toBe("review");
   });
   it("still honours deny rules", () => {
-    const r = cmd("terraform apply", most, {
+    const r = cmd("terraform apply", review, {
       permissions: { deny: ["runTerminalCommand(terraform apply*)"] },
     });
     expect(r.policy).toBe(OFF);
     expect(r.source).toBe("deny-rule");
   });
   it("still honours protected paths for commands and files", () => {
-    expect(cmd("cat ~/.aws/credentials", most).source).toBe("protected-path");
-    expect(cmd("cat .env", most).policy).toBe(ASK);
+    expect(cmd("cat ~/.aws/credentials", review).source).toBe("protected-path");
+    expect(cmd("cat .env", review).policy).toBe(ASK);
     const e = approve(
       "edit_existing_file",
       plain,
       { filepath: ".git/hooks/pre-commit" },
-      most,
+      review,
     );
     expect(e.policy).toBe(ASK);
     expect(e.source).toBe("protected-path");
   });
   it("still honours ask rules", () => {
-    const r = cmd("git push", most, {
+    const r = cmd("git push", review, {
       permissions: { ask: ["runTerminalCommand(git push*)"] },
     });
     expect(r.policy).toBe(ASK);

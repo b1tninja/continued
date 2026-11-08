@@ -54,7 +54,7 @@ type UIState = {
 
 /**
  * manual: ask as today. autoApprove: the switches allow. auto: the switches,
- * then a reviewer model (experimental). most: allow everything that no deny
+ * then a reviewer model (experimental). review: allow everything that no deny
  * rule, protected path or ask rule stops. yolo: allow absolutely everything.
  */
 export type ApprovalMode = ApprovalModeName;

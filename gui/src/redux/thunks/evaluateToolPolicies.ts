@@ -169,7 +169,7 @@ async function evaluateBasePolicy(
     // call no rule, protected path or safety check has settled.
     details.source !== "allow-rule" &&
     details.source !== "category" &&
-    details.source !== "most" &&
+    details.source !== "review" &&
     details.source !== "yolo"
   ) {
     return { ...details, policy: "allowedWithPermission", toolCallState }; // Cannot make more lenient
@@ -408,7 +408,7 @@ export async function evaluateToolPolicies(
         source === "auto" ||
         source === "once" ||
         source === "category" ||
-        source === "most" ||
+        source === "review" ||
         source === "yolo")
     ) {
       dispatch(

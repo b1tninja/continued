@@ -192,8 +192,8 @@ describe("handleApplyStateUpdate", () => {
       expect(await finish("yolo", "allowedWithPermission")).toBe(1);
     });
 
-    it("Approve most leaves the diff for review", async () => {
-      expect(await finish("most", "allowedWithPermission")).toBe(0);
+    it("Review mode leaves the diff for review", async () => {
+      expect(await finish("review", "allowedWithPermission")).toBe(0);
     });
 
     it("a tool set to run without asking still accepts it", async () => {
