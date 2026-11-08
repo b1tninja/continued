@@ -14,7 +14,7 @@
 
 Continuous is not published to the VS Code Marketplace or Open VSX. Install it from a GitHub release. It needs VS Code 1.105 or newer.
 
-1. Download the `.vsix` for your platform from the [latest release](https://github.com/b1tninja/continued/releases/latest) ([Continuous 2.4.2](https://github.com/b1tninja/continued/releases/tag/v2.4.2-vscode)). There are builds for Windows (x64, Arm64), macOS (Apple Silicon, Intel), and Linux (x64, Arm64). Each release has a `SHA256SUMS.txt` to check the download against.
+1. Download the `.vsix` for your platform from the [latest release](https://github.com/b1tninja/continuous/releases/latest) ([Continuous 2.4.2](https://github.com/b1tninja/continuous/releases/tag/v2.4.2-vscode)). There are builds for Windows (x64, Arm64), macOS (Apple Silicon, Intel), and Linux (x64, Arm64). Each release has a `SHA256SUMS.txt` to check the download against.
 2. Install it, then reload VS Code (**Developer: Reload Window**):
 
    ```bash
@@ -24,7 +24,7 @@ Continuous is not published to the VS Code Marketplace or Open VSX. Install it f
 Or, with the GitHub CLI (change `win32-x64` to your platform):
 
 ```bash
-gh release download --repo b1tninja/continued --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continuous-vsix
+gh release download --repo b1tninja/continuous --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continuous-vsix
 ```
 
 Continuous (`b1tninja.continuous`) installs alongside the original Continue extension and reads your existing `~/.continue` configuration. To update, install the next release's `.vsix` the same way. Releases up to 2.4.1 used the ID `b1tninja.continued`; after installing 2.4.2, uninstall that one ([details](docs/continuous-install.md#4-reload-vs-code)).
@@ -40,7 +40,7 @@ The [install guide](docs/continuous-install.md) has every platform's file name, 
 
 ## Documentation
 
-The documentation is at [b1tninja.github.io/continued](https://b1tninja.github.io/continued/), built from `docs/`. It still describes upstream Continue in places and is being revised. What changed in each release is in the [release notes](https://github.com/b1tninja/continued/releases).
+The documentation is at [b1tninja.github.io/continuous](https://b1tninja.github.io/continuous/), built from `docs/`. It still describes upstream Continue in places and is being revised. What changed in each release is in the [release notes](https://github.com/b1tninja/continuous/releases).
 
 ## Upstream
 

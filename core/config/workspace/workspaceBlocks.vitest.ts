@@ -28,7 +28,7 @@ describe("getFileContent", () => {
     expect(docsResult).toContain("name: New doc");
     expect(docsResult).toContain("docs:");
     expect(docsResult).toContain(
-      "startUrl: https://b1tninja.github.io/continued/",
+      "startUrl: https://b1tninja.github.io/continuous/",
     );
 
     const promptsResult = getFileContent("prompts");

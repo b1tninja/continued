@@ -1,18 +1,18 @@
 # Installing Continuous
 
-Continuous is an unofficial, community-maintained fork of the Continue VS Code extension. It is **not** published to the VS Code Marketplace or Open VSX. You install it from a `.vsix` file attached to each [GitHub release](https://github.com/b1tninja/continued/releases).
+Continuous is an unofficial, community-maintained fork of the Continue VS Code extension. It is **not** published to the VS Code Marketplace or Open VSX. You install it from a `.vsix` file attached to each [GitHub release](https://github.com/b1tninja/continuous/releases).
 
 Continuous is not affiliated with Continue Dev, Inc.
 
 **Requirements:** VS Code 1.105 or newer (or a VS Code-based editor built on it). Older versions cannot load the extension and will refuse to install it, so they keep the previously installed version.
 
-The current release is [Continuous 2.4.2](https://github.com/b1tninja/continued/releases/tag/v2.4.2-vscode).
+The current release is [Continuous 2.4.2](https://github.com/b1tninja/continuous/releases/tag/v2.4.2-vscode).
 
 ## Option 1: install the latest release
 
 ### 1. Download the `.vsix` for your platform
 
-Open the [latest release](https://github.com/b1tninja/continued/releases/latest) and download the file for your platform, plus `SHA256SUMS.txt`:
+Open the [latest release](https://github.com/b1tninja/continuous/releases/latest) and download the file for your platform, plus `SHA256SUMS.txt`:
 
 | Platform              | File                                     |
 | --------------------- | ---------------------------------------- |
@@ -28,7 +28,7 @@ For 2.4.2, the Windows x64 file is `continuous-win32-x64-2.4.2.vsix`. There are 
 With the [GitHub CLI](https://cli.github.com/), you can download the latest release's file and checksums in one command. Change `win32-x64` to your platform:
 
 ```bash
-gh release download --repo b1tninja/continued --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continuous-vsix
+gh release download --repo b1tninja/continuous --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continuous-vsix
 ```
 
 ### 2. Verify the download (optional, recommended)
@@ -73,7 +73,7 @@ To check which version is installed, run `code --list-extensions --show-versions
 
 Fixes land on `main` before they are released. To try them, install a build from GitHub Actions. Builds are created on request, so you may need to trigger one:
 
-1. Open **Actions** → **PR Build And Upload VSIX** on `b1tninja/continued`.
+1. Open **Actions** → **PR Build And Upload VSIX** on `b1tninja/continuous`.
 2. Select **Run workflow**, choose `main`, and run it.
 3. When the run finishes, open it and download the artifact for your platform: `win32-x64-vsix`, `linux-x64-vsix` or `darwin-arm64-vsix`.
 4. Unzip the artifact and install the `.vsix` as in Option 1.
@@ -83,7 +83,7 @@ You need to be signed in to GitHub with access to the repository to download art
 With the GitHub CLI you can download the latest Windows build in one command:
 
 ```powershell
-gh run download --repo b1tninja/continued --name win32-x64-vsix --dir "$env:TEMP\continuous-vsix"
+gh run download --repo b1tninja/continuous --name win32-x64-vsix --dir "$env:TEMP\continuous-vsix"
 code --install-extension (Get-ChildItem "$env:TEMP\continuous-vsix" -Filter *.vsix | Select-Object -First 1).FullName --force
 ```
 
@@ -91,11 +91,11 @@ Replace `win32-x64-vsix` with `darwin-arm64-vsix` on a Mac and use `bash`/`zsh` 
 
 ## Updating
 
-VS Code does not update side-loaded `.vsix` files automatically. To hear about new releases, select **Watch** → **Custom** → **Releases** on the [repository](https://github.com/b1tninja/continued).
+VS Code does not update side-loaded `.vsix` files automatically. To hear about new releases, select **Watch** → **Custom** → **Releases** on the [repository](https://github.com/b1tninja/continuous).
 
 To update, download the new release's `.vsix` and run the install command again with `--force`. Your settings and `~/.continue` configuration are kept.
 
-To go back to an earlier version, install that release's `.vsix` the same way. Older releases are on the [releases page](https://github.com/b1tninja/continued/releases).
+To go back to an earlier version, install that release's `.vsix` the same way. Older releases are on the [releases page](https://github.com/b1tninja/continuous/releases).
 
 ## Troubleshooting
 
@@ -111,8 +111,8 @@ To go back to an earlier version, install that release's `.vsix` the same way. O
 ## Building from source
 
 ```bash
-git clone https://github.com/b1tninja/continued.git
-cd continued
+git clone https://github.com/b1tninja/continuous.git
+cd continuous
 node ./scripts/build-packages.js
 cd gui && npm ci && npm run build && cd ..
 cd extensions/vscode && npm ci && npm run prepackage && npm run package

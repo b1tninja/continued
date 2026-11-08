@@ -2126,7 +2126,7 @@ export class Core {
         //     .then((userSelection) => {
         //       if (userSelection === toastOption) {
         //         void this.ide.openUrl(
-        //           "https://b1tninja.github.io/continued/customize/model-roles/embeddings",
+        //           "https://b1tninja.github.io/continuous/customize/model-roles/embeddings",
         //         );
         //       }
         //     });

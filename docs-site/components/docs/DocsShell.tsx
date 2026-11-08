@@ -48,7 +48,7 @@ function slugToLabel(slug: string, titleMap?: Record<string, string>) {
 
 const NAV_LINK_DEFS = [
   { label: "Docs", path: "/docs" },
-  { label: "GitHub", path: "https://github.com/b1tninja/continued" },
+  { label: "GitHub", path: "https://github.com/b1tninja/continuous" },
 ];
 
 const NAV_LINKS = NAV_LINK_DEFS.map((d) => ({

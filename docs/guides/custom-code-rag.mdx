@@ -22,7 +22,7 @@ If you use `voyage-code-3`, it has a maximum context length of 16,000 tokens, wh
 
 1. Truncate the file when it goes over the context length: in this case you will always have 1 chunk per file.
 2. Split the file into chunks of a fixed length: starting at the top of the file, add lines in your current chunk until it reaches the limit, then start a new chunk.
-3. Use a recursive, abstract syntax tree (AST)-based strategy: this is the most exact, but most complex. In most cases you can achieve high quality results by using (1) or (2), but if you'd like to try this you can find a reference example in [our code chunker](https://github.com/b1tninja/continued/blob/main/core/indexing/chunk/code.ts) or in [LlamaIndex](https://docs.llamaindex.ai/en/stable/api_reference/node_parsers/code/).
+3. Use a recursive, abstract syntax tree (AST)-based strategy: this is the most exact, but most complex. In most cases you can achieve high quality results by using (1) or (2), but if you'd like to try this you can find a reference example in [our code chunker](https://github.com/b1tninja/continuous/blob/main/core/indexing/chunk/code.ts) or in [LlamaIndex](https://docs.llamaindex.ai/en/stable/api_reference/node_parsers/code/).
 
 As usual in this guide, we recommend starting with the strategy that gives 80% of the benefit with 20% of the effort.
 

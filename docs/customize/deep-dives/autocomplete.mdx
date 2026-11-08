@@ -167,7 +167,7 @@ The `config.json` configuration format offers configuration options through `tab
 
 ### I want better completions, should I use GPT-5?
 
-Perhaps surprisingly, the answer is no. The models that we suggest for autocomplete are trained with a highly specific prompt format, which allows them to respond to requests for completing code (see examples of these prompts [here](https://github.com/b1tninja/continued/blob/main/core/autocomplete/templating/AutocompleteTemplate.ts)). Some of the best commercial models like GPT-5 or Claude are not trained with this prompt format, which means that they won't generate useful completions. Luckily, a huge model is not required for great autocomplete. Most of the state-of-the-art autocomplete models are no more than 10b parameters, and increasing beyond this does not significantly improve performance.
+Perhaps surprisingly, the answer is no. The models that we suggest for autocomplete are trained with a highly specific prompt format, which allows them to respond to requests for completing code (see examples of these prompts [here](https://github.com/b1tninja/continuous/blob/main/core/autocomplete/templating/AutocompleteTemplate.ts)). Some of the best commercial models like GPT-5 or Claude are not trained with this prompt format, which means that they won't generate useful completions. Luckily, a huge model is not required for great autocomplete. Most of the state-of-the-art autocomplete models are no more than 10b parameters, and increasing beyond this does not significantly improve performance.
 
 ### Autocomplete Not Working – How to Fix It
 
@@ -179,7 +179,7 @@ Follow these steps to ensure that everything is set up correctly:
 4. Make sure that any other completion providers are disabled (e.g. Copilot), as they may interfere.
 5. Check the output of the logs to find any potential errors: <kbd>cmd/ctrl</kbd> + <kbd>shift</kbd> + <kbd>P</kbd> -> "Toggle Developer Tools" -> "Console" tab.
 6. Check VS Code settings to make sure that `"editor.inlineSuggest.enabled"` is set to `true` (use <kbd>cmd/ctrl</kbd> + <kbd>,</kbd> then search for this and check the box)
-7. If you are still having issues, please file an issue on [GitHub](https://github.com/b1tninja/continued/issues).
+7. If you are still having issues, please file an issue on [GitHub](https://github.com/b1tninja/continuous/issues).
 
 ### Why Are My Completions Only Single-Line?
 
@@ -218,4 +218,4 @@ You can also use the default shortcut to disable autocomplete directly using a c
 
 #### Feedback
 
-If you're turning off autocomplete, we'd love to hear how we can improve! Please file an issue on [GitHub](https://github.com/b1tninja/continued/issues).
+If you're turning off autocomplete, we'd love to hear how we can improve! Please file an issue on [GitHub](https://github.com/b1tninja/continuous/issues).

@@ -3,13 +3,13 @@ title: "Install"
 description: "Install Continuous in VS Code from a GitHub release."
 ---
 
-Continuous is installed from a `.vsix` file attached to each [GitHub release](https://github.com/b1tninja/continued/releases); it is not on the VS Code Marketplace or Open VSX. It needs VS Code 1.105 or newer.
+Continuous is installed from a `.vsix` file attached to each [GitHub release](https://github.com/b1tninja/continuous/releases); it is not on the VS Code Marketplace or Open VSX. It needs VS Code 1.105 or newer.
 The full instructions, with checksum commands, unreleased builds and troubleshooting, are in the
-[install guide](https://github.com/b1tninja/continued/blob/main/docs/continuous-install.md).
+[install guide](https://github.com/b1tninja/continuous/blob/main/docs/continuous-install.md).
 
 <Steps>
 <Step title="Download the build for your platform">
-Open the [latest release](https://github.com/b1tninja/continued/releases/latest) and download the `.vsix` for your platform, plus `SHA256SUMS.txt` to check it against:
+Open the [latest release](https://github.com/b1tninja/continuous/releases/latest) and download the `.vsix` for your platform, plus `SHA256SUMS.txt` to check it against:
 
 | Platform              | File                                    |
 | --------------------- | --------------------------------------- |
@@ -18,7 +18,7 @@ Open the [latest release](https://github.com/b1tninja/continued/releases/latest)
 | macOS (Intel)         | `continuous-darwin-x64-<version>.vsix`   |
 | Linux x64 / Arm64     | `continuous-linux-x64-<version>.vsix`, `continuous-linux-arm64-<version>.vsix` |
 
-With the GitHub CLI: `gh release download --repo b1tninja/continued --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt` (change `win32-x64` to your platform).
+With the GitHub CLI: `gh release download --repo b1tninja/continuous --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt` (change `win32-x64` to your platform).
 </Step>
 
 <Step title="Install it in VS Code">

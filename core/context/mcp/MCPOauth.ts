@@ -233,7 +233,7 @@ export class MCPConnectionOauthProvider implements OAuthClientProvider {
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       client_name: "Continuous",
-      client_uri: "https://github.com/b1tninja/continued",
+      client_uri: "https://github.com/b1tninja/continuous",
     };
   }
 

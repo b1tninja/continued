@@ -31,8 +31,8 @@
 ## Install and set up
 
 Continuous is installed from a `.vsix` file. Downloads, checksums and troubleshooting are in the
-[install guide](https://github.com/b1tninja/continued/blob/main/docs/continuous-install.md).
-Source and issues: [github.com/b1tninja/continued](https://github.com/b1tninja/continued).
+[install guide](https://github.com/b1tninja/continuous/blob/main/docs/continuous-install.md).
+Source and issues: [github.com/b1tninja/continuous](https://github.com/b1tninja/continuous).
 
 ## License
 

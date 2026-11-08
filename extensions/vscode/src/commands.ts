@@ -693,7 +693,7 @@ const getCommandsMap: (
           if (selection === "Read the docs") {
             await vscode.env.openExternal(
               vscode.Uri.parse(
-                "https://b1tninja.github.io/continued/reference/yaml-migration",
+                "https://b1tninja.github.io/continuous/reference/yaml-migration",
               ),
             );
           }

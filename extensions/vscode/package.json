@@ -5,17 +5,17 @@
   "version": "2.4.2",
   "repository": {
     "type": "git",
-    "url": "https://github.com/b1tninja/continued"
+    "url": "https://github.com/b1tninja/continuous"
   },
   "extensionKind": [
     "ui",
     "workspace"
   ],
   "bugs": {
-    "url": "https://github.com/b1tninja/continued/issues"
+    "url": "https://github.com/b1tninja/continuous/issues"
   },
-  "homepage": "https://github.com/b1tninja/continued",
-  "qna": "https://github.com/b1tninja/continued/issues/new/choose",
+  "homepage": "https://github.com/b1tninja/continuous",
+  "qna": "https://github.com/b1tninja/continuous/issues/new/choose",
   "license": "Apache-2.0",
   "displayName": "Continuous - open-source AI code agent",
   "pricing": "Free",
@@ -127,17 +127,17 @@
         "continue.enableQuickActions": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Enable the experimental Quick Actions feature. Read our walkthrough to learn about configuration and how to share feedback: [continue.dev › Walkthrough: Quick Actions (experimental)](https://b1tninja.github.io/continued/customize/overview)"
+          "markdownDescription": "Enable the experimental Quick Actions feature. Read our walkthrough to learn about configuration and how to share feedback: [continue.dev › Walkthrough: Quick Actions (experimental)](https://b1tninja.github.io/continuous/customize/overview)"
         },
         "continue.enableTabAutocomplete": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable Continuous's tab autocomplete feature. Read our walkthrough to learn about configuration and how to share feedback: [continue.dev › Walkthrough: Tab Autocomplete (beta)](https://b1tninja.github.io/continued/customize/deep-dives/autocomplete)"
+          "markdownDescription": "Enable Continuous's tab autocomplete feature. Read our walkthrough to learn about configuration and how to share feedback: [continue.dev › Walkthrough: Tab Autocomplete (beta)](https://b1tninja.github.io/continuous/customize/deep-dives/autocomplete)"
         },
         "continue.enableNextEdit": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable Continuous's next edit feature. Read our docs to learn about configuration and how to share feedback: [continue.dev › Features › Autocomplete › Next Edit (experimental)](https://b1tninja.github.io/continued/ide-extensions/autocomplete/next-edit)"
+          "markdownDescription": "Enable Continuous's next edit feature. Read our docs to learn about configuration and how to share feedback: [continue.dev › Features › Autocomplete › Next Edit (experimental)](https://b1tninja.github.io/continuous/ide-extensions/autocomplete/next-edit)"
         },
         "continue.pauseTabAutocompleteOnBattery": {
           "type": "boolean",
