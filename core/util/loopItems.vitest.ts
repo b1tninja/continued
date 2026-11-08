@@ -356,6 +356,17 @@ describe("checks", () => {
     expect(refused.loop.items[0].check?.status).toBe("refused");
   });
 
+  test("an item cannot be skipped while its check runs", () => {
+    const loop = startCheck(run(loopOn(p), p, "1"), "1", 0, T0);
+    const skipped = skipItem(loop, "1");
+    expect(skipped).toEqual({
+      ok: false,
+      error: "1's check is running: use Stop now, or wait for it",
+    });
+    // Waiting for the person's approval, it can be
+    expect(skipItem(holdCheck(loop), "1").ok).toBe(true);
+  });
+
   test("an item whose check was removed from the plan counts as done", () => {
     const loop = run(loopOn(p), p, "1");
     const edited = plan({ text: "Helper" }, { text: "Docs" });

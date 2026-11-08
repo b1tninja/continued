@@ -1161,6 +1161,13 @@ export function skipItem(loop: LoopState, itemId: string): LoopControlResult {
       error: `${itemId} is running: use Stop now, or Stop after this item, instead`,
     };
   }
+  // Its check is running: the result would overwrite the skip
+  if (loop.current?.kind === "check" && loop.current.itemId === itemId) {
+    return {
+      ok: false,
+      error: `${itemId}'s check is running: use Stop now, or wait for it`,
+    };
+  }
   if (state.skipped) {
     return { ok: false, error: `${itemId} is already skipped` };
   }
