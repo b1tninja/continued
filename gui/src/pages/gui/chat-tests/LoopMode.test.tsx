@@ -769,6 +769,37 @@ describe("Loop mode", () => {
     expect(runs).toBe(7);
   }, 20_000);
 
+  test("an approved write still runs when the model rewrites it with different text", async () => {
+    const h = await setup(["Write the report"]);
+    let written = 0;
+    h.ideMessenger.responseHandlers["tools/call"] = async () => {
+      written++;
+      return {
+        contextItems: [{ name: "r", description: "r", content: "created" }],
+      };
+    };
+    const write = (contents: string) =>
+      calls({
+        name: BuiltInToolNames.CreateNewFile,
+        args: { filepath: "report.md", contents },
+      });
+    h.turns.push(
+      write("first draft"),
+      finish("waiting", "needs approval to write"),
+      write("second draft, reworded"),
+      finish("done", "written"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+    expect(written).toBe(0);
+    await act(async () => {
+      fireEvent.click(document.querySelector("[data-testid=loop-approve]")!);
+    });
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+    expect(written).toBe(1);
+    expect(h.loop().questions).toHaveLength(1);
+  });
+
   test("Stop stops the loop with the item back to pending, and Resume goes on", async () => {
     const h = await setup(["Write the lexer"]);
     h.turns.push(async function* (signal) {

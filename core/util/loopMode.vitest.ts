@@ -16,6 +16,7 @@ import {
   describeLoopBudget,
   describeLoopReplan,
   enterWait,
+  loopGrantKey,
   releaseEmptyWait,
   loopTokensFromUsage,
   describeHeldCall,
@@ -2056,4 +2057,21 @@ describe("an item that reports waiting", () => {
     );
     expect(loop.consecutiveFailures).toBe(1);
   });
+});
+
+test("an Allow once grant covers the file or command, not every argument", () => {
+  // Found by the sandbox run: the model rewrote the file with slightly
+  // different text, so an exact-argument grant never matched
+  expect(
+    loopGrantKey("create_new_file", { filepath: "a/b.md", contents: "one" }),
+  ).toBe(
+    loopGrantKey("create_new_file", { filepath: "a\\b.md", contents: "two" }),
+  );
+  expect(loopGrantKey("run", { command: " npm test " })).toBe(
+    loopGrantKey("run", { command: "npm test", cwd: "x" }),
+  );
+  expect(loopGrantKey("create_new_file", { filepath: "a.md" })).not.toBe(
+    loopGrantKey("create_new_file", { filepath: "b.md" }),
+  );
+  expect(loopGrantKey("mcp", { q: 1 })).not.toBe(loopGrantKey("mcp", { q: 2 }));
 });
