@@ -185,7 +185,13 @@ export async function processStreamingResponse(
     isCompacting = false,
   } = options;
 
-  let chatHistory = options.chatHistory;
+  // The request carries one system message, the current `systemMessage`.
+  // A system item in the history is left out: `cn serve` stores the startup
+  // system message there, fixed before any mode switch, and the TUI stores
+  // slash command output and compaction notices there for display only.
+  let chatHistory = options.chatHistory.filter(
+    (item) => item.message.role !== "system",
+  );
 
   // The session's task list, sent last when the TaskList tool is offered.
   const taskListBlock = taskListBlockForRequest(tools, isCompacting);
