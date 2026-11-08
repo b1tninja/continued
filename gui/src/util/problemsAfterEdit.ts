@@ -4,6 +4,7 @@ import {
   newProblemsItem,
   PROBLEMS_WAIT_MS,
 } from "core/tools/problemsReport";
+import { findUriInDirs, getUriPathBasename } from "core/util/uri";
 import { IIdeMessenger } from "../context/IdeMessenger";
 
 /** Each edit's problems from before it was applied, by tool call id. */
@@ -49,8 +50,20 @@ export async function problemsAfterEdit(
         .request("waitForProblems", { filepath, timeoutMs: PROBLEMS_WAIT_MS })
         .then((r) => (r.status === "success" ? r.content : [])),
     ]);
-    return newProblemsItem(filepath, newProblems(was, now));
+    const added = newProblems(was, now);
+    if (added.length === 0) return undefined;
+    return newProblemsItem(await displayPath(ideMessenger, filepath), added);
   } catch {
     return undefined;
+  }
+}
+
+/** The file as the agent wrote it: relative to the workspace when it can be. */
+async function displayPath(ideMessenger: IIdeMessenger, uri: string) {
+  try {
+    const dirs = await ideMessenger.ide.getWorkspaceDirs();
+    return findUriInDirs(uri, dirs).relativePathOrBasename;
+  } catch {
+    return getUriPathBasename(uri);
   }
 }

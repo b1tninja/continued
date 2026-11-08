@@ -20,7 +20,8 @@ function messenger(before: Problem[], after: Problem[]) {
     done: true as const,
     content: type === "getProblems" ? before : after,
   }));
-  return { request } as unknown as IIdeMessenger & {
+  const ide = { getWorkspaceDirs: vi.fn(async () => ["file:///w"]) };
+  return { request, ide } as unknown as IIdeMessenger & {
     request: typeof request;
   };
 }
@@ -41,7 +42,7 @@ describe("problems after an edit", () => {
       filepath: "file:///w/a.ts",
       timeoutMs: 1500,
     });
-    expect(item?.content).toContain("1 new problem in file:///w/a.ts");
+    expect(item?.content).toContain("1 new problem in a.ts");
     expect(item?.content).toContain("line 4: error: new");
     expect(item?.content).not.toContain(": old");
   });
