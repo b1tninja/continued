@@ -53,7 +53,7 @@ export class GUIActions {
     for (let i = 0; i < iframes.length; i++) {
       const iframe = iframes[i];
       const src = await iframe.getAttribute("src");
-      if (src?.includes("extensionId=b1tninja.continued")) {
+      if (src?.includes("extensionId=b1tninja.continuing")) {
         firstMatch ??= iframe;
         // Newer VS Code versions keep hidden webviews around, so prefer the
         // one that is actually showing.

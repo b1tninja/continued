@@ -11,7 +11,7 @@ See [Environment Setup](../../CONTRIBUTING.md#environment-setup)
 
 # Building and installing a VSIX locally
 
-The extension is published as `b1tninja.continued`. To build and install it from source (this mirrors `.github/actions/build-vscode-extension`):
+The extension is published as `b1tninja.continuing`. To build and install it from source (this mirrors `.github/actions/build-vscode-extension`):
 
 ```bash
 node scripts/build-packages.js           # from the repo root
@@ -22,7 +22,7 @@ npm ci                                   # runs install scripts: sqlite3 needs t
 npm run prepackage -- --target linux-x64 # or darwin-arm64, darwin-x64, win32-x64, ... (fetches that platform's
                                          # ripgrep from npm and checks it against package-lock.json)
 npm run package -- --target linux-x64    # writes build/continued-<version>.vsix
-code --install-extension build/continued-*.vsix
+code --install-extension build/continuing-*.vsix
 ```
 
 For day-to-day development, run the `Launch extension` configuration (F5) instead; no VSIX is needed.

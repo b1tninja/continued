@@ -6,7 +6,7 @@
  * The Marketplace refuses extensions that declare proposed APIs, so the
  * normal build never has these. The agents build is attached to GitHub
  * releases only, and works in VS Code Insiders, or in Stable started with
- * `--enable-proposed-api b1tninja.continued`. Without that, VS Code ignores
+ * `--enable-proposed-api b1tninja.continuing`. Without that, VS Code ignores
  * the proposals and the extension works as the normal build.
  *
  * Usage: node scripts/agents-manifest.js   (edits package.json in place)

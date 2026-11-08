@@ -10,7 +10,7 @@ import { toContinuedTool } from "./languageModelChatProvider";
  * chatSessionsProvider API (and chatParticipantPrivate for transcripts).
  *
  * Proposed APIs only work in VS Code Insiders, or in Stable started with
- * `--enable-proposed-api b1tninja.continued`, and only in the "agents" build
+ * `--enable-proposed-api b1tninja.continuing`, and only in the "agents" build
  * of the extension, whose package.json declares them. Everywhere else the
  * functions are missing and this does nothing. The API is still changing, so
  * every call is feature-checked.
