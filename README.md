@@ -18,16 +18,16 @@ Continued is not published to the VS Code Marketplace or Open VSX. Install it fr
 2. Install it, then reload VS Code (**Developer: Reload Window**):
 
    ```bash
-   code --install-extension continuing-win32-x64-2.4.2.vsix --force
+   code --install-extension continuous-win32-x64-2.4.2.vsix --force
    ```
 
 Or, with the GitHub CLI (change `win32-x64` to your platform):
 
 ```bash
-gh release download --repo b1tninja/continued --pattern "continuing-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continued-vsix
+gh release download --repo b1tninja/continued --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continued-vsix
 ```
 
-Continued (`b1tninja.continuing`) installs alongside the original Continue extension and reads your existing `~/.continue` configuration. To update, install the next release's `.vsix` the same way. Releases up to 2.4.1 used the ID `b1tninja.continued`; after installing 2.4.2, uninstall that one ([details](docs/continued-install.md#4-reload-vs-code)).
+Continued (`b1tninja.continuous`) installs alongside the original Continue extension and reads your existing `~/.continue` configuration. To update, install the next release's `.vsix` the same way. Releases up to 2.4.1 used the ID `b1tninja.continued`; after installing 2.4.2, uninstall that one ([details](docs/continued-install.md#4-reload-vs-code)).
 
 The [install guide](docs/continued-install.md) has every platform's file name, checksum commands, unreleased builds from GitHub Actions, and troubleshooting.
 

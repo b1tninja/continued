@@ -26,11 +26,11 @@ The **agents** build of the extension adds a **Continued** chat session type. It
 
 It uses VS Code APIs that are still proposed, so:
 
-- Install the `continuing-<platform>-<version>-agents.vsix` file from the [GitHub release](https://github.com/b1tninja/continued/releases) instead of the Marketplace version, which cannot include proposed APIs.
+- Install the `continuous-<platform>-<version>-agents.vsix` file from the [GitHub release](https://github.com/b1tninja/continued/releases) instead of the Marketplace version, which cannot include proposed APIs.
 - Use VS Code Insiders, or start VS Code Stable with:
 
   ```bash
-  code --enable-proposed-api b1tninja.continuing
+  code --enable-proposed-api b1tninja.continuous
   ```
 
 Without either, the agents build works like the normal one. Proposed APIs change without notice, so a VS Code update can break these sessions.
@@ -42,7 +42,7 @@ These sessions are expected to appear in editor chat and its sessions list, not 
 In VS Code 1.145, an extension with code runs in the Agents window only if its `package.json` declares `capabilities.agentsWindow.supported`. Continued does not declare it yet, so its models and MCP servers are available in editor chat and agent mode, not in the Agents window. To try it anyway, enable Continued there in your user settings and reload the Agents window. Continued's sidebar and status bar do not exist in the Agents window, and this is untested:
 
 ```json
-"extensions.supportAgentsWindow": { "b1tninja.continuing": true }
+"extensions.supportAgentsWindow": { "b1tninja.continuous": true }
 ```
 
 ## Roadmap

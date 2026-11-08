@@ -115,7 +115,7 @@ jobs:
           version=$(node -p "require('./package.json').version")
           mkdir -p agents
           npx vsce package --no-dependencies --target ${{ matrix.platform }}-${{ matrix.arch }} \
-            --out "agents/continuing-${{ matrix.platform }}-${{ matrix.arch }}-${version}-agents.vsix"
+            --out "agents/continuous-${{ matrix.platform }}-${{ matrix.arch }}-${version}-agents.vsix"
           git checkout -- package.json
 
       - name: Upload agents .vsix artifact

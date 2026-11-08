@@ -28,7 +28,7 @@ export const isValidSnippet = (snippet: AutocompleteSnippet): boolean => {
 
   if (
     (snippet as AutocompleteCodeSnippet).filepath?.startsWith(
-      "output:extension-output-b1tninja.continuing",
+      "output:extension-output-b1tninja.continuous",
     )
   ) {
     return false;

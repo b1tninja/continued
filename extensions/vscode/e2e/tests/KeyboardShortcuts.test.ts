@@ -108,7 +108,7 @@ describe("Keyboard Shortcuts", () => {
       for (const iframe of iframes) {
         const src = await iframe.getAttribute("src");
         if (
-          src?.includes("extensionId=b1tninja.continuing") &&
+          src?.includes("extensionId=b1tninja.continuous") &&
           (await iframe.isDisplayed())
         ) {
           throw new Error("Continued view is still visible");

@@ -16,19 +16,19 @@ Open the [latest release](https://github.com/b1tninja/continued/releases/latest)
 
 | Platform              | File                                     |
 | --------------------- | ---------------------------------------- |
-| Windows x64           | `continuing-win32-x64-<version>.vsix`    |
-| Windows Arm64         | `continuing-win32-arm64-<version>.vsix`  |
-| macOS (Apple Silicon) | `continuing-darwin-arm64-<version>.vsix` |
-| macOS (Intel)         | `continuing-darwin-x64-<version>.vsix`   |
-| Linux x64             | `continuing-linux-x64-<version>.vsix`    |
-| Linux Arm64           | `continuing-linux-arm64-<version>.vsix`  |
+| Windows x64           | `continuous-win32-x64-<version>.vsix`    |
+| Windows Arm64         | `continuous-win32-arm64-<version>.vsix`  |
+| macOS (Apple Silicon) | `continuous-darwin-arm64-<version>.vsix` |
+| macOS (Intel)         | `continuous-darwin-x64-<version>.vsix`   |
+| Linux x64             | `continuous-linux-x64-<version>.vsix`    |
+| Linux Arm64           | `continuous-linux-arm64-<version>.vsix`  |
 
-For 2.4.2, the Windows x64 file is `continuing-win32-x64-2.4.2.vsix`. There are no 32-bit ARM or Alpine (musl) builds; the 2.2.0 release's `linux-armhf` and `alpine-x64` files did not work, because their native modules were built for other platforms.
+For 2.4.2, the Windows x64 file is `continuous-win32-x64-2.4.2.vsix`. There are no 32-bit ARM or Alpine (musl) builds; the 2.2.0 release's `linux-armhf` and `alpine-x64` files did not work, because their native modules were built for other platforms.
 
 With the [GitHub CLI](https://cli.github.com/), you can download the latest release's file and checksums in one command. Change `win32-x64` to your platform:
 
 ```bash
-gh release download --repo b1tninja/continued --pattern "continuing-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continued-vsix
+gh release download --repo b1tninja/continued --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continued-vsix
 ```
 
 ### 2. Verify the download (optional, recommended)
@@ -37,7 +37,7 @@ The packages are not code-signed, so the checksum is how you confirm you have th
 
 ```powershell
 # Windows PowerShell: prints True when the checksum matches
-$file = Get-ChildItem continuing-win32-x64-*.vsix
+$file = Get-ChildItem continuous-win32-x64-*.vsix
 $expected = (Select-String -Path SHA256SUMS.txt -SimpleMatch $file.Name).Line.Split(' ')[0]
 (Get-FileHash $file.FullName -Algorithm SHA256).Hash -eq $expected
 ```
@@ -46,13 +46,13 @@ $expected = (Select-String -Path SHA256SUMS.txt -SimpleMatch $file.Name).Line.Sp
 # Linux: prints "<file>: OK" when the checksum matches
 sha256sum --check --ignore-missing SHA256SUMS.txt
 # macOS (change darwin-arm64 to darwin-x64 on an Intel Mac)
-grep continuing-darwin-arm64 SHA256SUMS.txt | shasum -a 256 --check
+grep continuous-darwin-arm64 SHA256SUMS.txt | shasum -a 256 --check
 ```
 
 ### 3. Install it
 
 ```bash
-code --install-extension continuing-win32-x64-2.4.2.vsix --force
+code --install-extension continuous-win32-x64-2.4.2.vsix --force
 ```
 
 Or in VS Code: open the **Extensions** view, select **...** → **Install from VSIX...**, and choose the file.
@@ -61,13 +61,13 @@ Or in VS Code: open the **Extensions** view, select **...** → **Install from V
 
 Run **Developer: Reload Window**, then open the Continued icon in the activity bar.
 
-Continued uses the extension ID `b1tninja.continuing`. It installs alongside the original Continue extension (`Continue.continue`) without conflicts, so you do not need to uninstall Continue first. It reads your existing `~/.continue` configuration.
+Continued uses the extension ID `b1tninja.continuous`. It installs alongside the original Continue extension (`Continue.continue`) without conflicts, so you do not need to uninstall Continue first. It reads your existing `~/.continue` configuration.
 
-To check which version is installed, run `code --list-extensions --show-versions` and look for `b1tninja.continuing@<version>`.
+To check which version is installed, run `code --list-extensions --show-versions` and look for `b1tninja.continuous@<version>`.
 
-**Coming from 2.4.1 or earlier?** Those releases used the ID `b1tninja.continued`, which is taken on the VS Code Marketplace by another extension, so from 2.4.2 the ID is `b1tninja.continuing`. VS Code treats it as a different extension: uninstall `b1tninja.continued` (`code --uninstall-extension b1tninja.continued`) after installing 2.4.2, so the two do not both run. Your settings and `~/.continue` (configs, provider accounts, models, sessions) carry over. API keys kept in VS Code's secure storage do not, as each extension has its own: enter them again, or keep them in `~/.continue/.env`. The welcome screen also shows once; close it, your models are already set up.
+**Coming from 2.4.1 or earlier?** Those releases used the ID `b1tninja.continued`, which is taken on the VS Code Marketplace by another extension, so from 2.4.2 the ID is `b1tninja.continuous`. VS Code treats it as a different extension: uninstall `b1tninja.continued` (`code --uninstall-extension b1tninja.continued`) after installing 2.4.2, so the two do not both run. Your settings and `~/.continue` (configs, provider accounts, models, sessions) carry over. API keys kept in VS Code's secure storage do not, as each extension has its own: enter them again, or keep them in `~/.continue/.env`. The welcome screen also shows once; close it, your models are already set up.
 
-> Release files are named with the version only, for example `continuing-win32-x64-2.4.2.vsix`. GitHub Actions builds (Option 2) add the short commit SHA, for example `continuing-win32-x64-2.4.2-g62505d0.vsix`.
+> Release files are named with the version only, for example `continuous-win32-x64-2.4.2.vsix`. GitHub Actions builds (Option 2) add the short commit SHA, for example `continuous-win32-x64-2.4.2-g62505d0.vsix`.
 
 ## Option 2: download an unreleased build from GitHub Actions
 
