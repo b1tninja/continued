@@ -554,6 +554,30 @@ export type LoopAutonomy = "supervised" | "auto" | "unattended";
  */
 export type LoopStrategy = "finish" | "check-in" | "fix-forward";
 
+export type LoopReminderWhen = "item" | "next_items" | "retry" | "replan";
+
+/** A file a reminder refers to, and its content when the reminder was saved. */
+export interface LoopReminderFile {
+  path: string;
+  /** core/util/loopReminders.ts reminderFileStamp */
+  stamp: string;
+}
+
+/** What a run saved for one later run (remind_me). */
+export interface LoopReminder {
+  id: string;
+  note: string;
+  when: LoopReminderWhen;
+  /** The item saving it */
+  fromItemId: string;
+  /** The item it is for, with when "item" */
+  itemId?: string;
+  files?: LoopReminderFile[];
+  savedAt: string;
+  /** Set when a run's opening prompt carried it; it is delivered once */
+  deliveredAt?: string;
+}
+
 export interface LoopState {
   status: LoopStatus;
   /** 1 for the plan the loop started with, +1 at each accepted re-plan */
@@ -639,6 +663,8 @@ export interface LoopState {
    * newest last, capped; sent with every item prompt.
    */
   notes?: string[];
+  /** What runs saved for later runs with remind_me; they end with the loop */
+  reminders?: LoopReminder[];
   /** The person asked to stop once the running item or re-plan ends */
   stopRequested?: boolean;
   stopReason?: LoopStopReason;

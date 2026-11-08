@@ -3,6 +3,8 @@ import {
   FINISH_ITEM_TOOL_DESCRIPTION,
   HOLD_QUESTION_PARAMETERS,
   holdQuestionToolDescription,
+  REMIND_ME_PARAMETERS,
+  REMIND_ME_TOOL_DESCRIPTION,
 } from "core/tools/definitions/loopTools.js";
 import {
   finishItemReport,
@@ -10,24 +12,32 @@ import {
   holdQuestion,
   holdQuestionResult,
 } from "core/util/loopMode.js";
+import {
+  reminderFilePaths,
+  reminderSavedResult,
+  saveReminder,
+} from "core/util/loopReminders.js";
 
+import { stampFile } from "../loop/loopReminderFiles.js";
 import {
   CLI_LOOP_TOOL_NAMES,
   commitLoop,
   getSessionLoop,
   requestLoopTurnEnd,
 } from "../loop/loopSession.js";
+import { getSessionTaskPlan } from "../session.js";
 
 import type { Tool, ToolParametersSchema } from "./types.js";
 
 /**
- * Loop mode's two tools in the CLI, offered only while the loop runs an
+ * Loop mode's tools in the CLI, offered only while the loop runs an
  * item (getAllAvailableTools), with the IDE's descriptions and parameters
  * (core/tools/definitions/loopTools.ts). Design: plans/loop-mode.md.
  */
 
 export const HOLD_QUESTION_TOOL_NAME = CLI_LOOP_TOOL_NAMES.holdQuestion;
 export const FINISH_ITEM_TOOL_NAME = CLI_LOOP_TOOL_NAMES.finishItem;
+export const REMIND_ME_TOOL_NAME = CLI_LOOP_TOOL_NAMES.remindMe;
 
 /** Core's schema with a description on every property, as the CLI's type wants. */
 function withDescriptions(
@@ -88,6 +98,38 @@ export const holdQuestionTool: Tool = {
       result.duplicate,
       CLI_LOOP_TOOL_NAMES,
     );
+  },
+};
+
+export const remindMeTool: Tool = {
+  name: REMIND_ME_TOOL_NAME,
+  displayName: "Remind Me",
+  description: REMIND_ME_TOOL_DESCRIPTION,
+  readonly: true,
+  isBuiltIn: true,
+  parameters: REMIND_ME_PARAMETERS as ToolParametersSchema,
+  run: async (args: Record<string, unknown>) => {
+    const { loop, itemId } = runningItem();
+    const result = saveReminder(
+      loop,
+      getSessionTaskPlan(),
+      {
+        fromItemId: itemId,
+        note: args?.note,
+        when: args?.when,
+        item: args?.item,
+        files: reminderFilePaths(args?.files).map((path) => ({
+          path,
+          stamp: stampFile(path),
+        })),
+      },
+      new Date(),
+    );
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+    commitLoop(result.loop);
+    return reminderSavedResult(result.reminder, result.duplicate);
   },
 };
 

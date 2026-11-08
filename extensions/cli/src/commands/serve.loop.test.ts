@@ -361,4 +361,44 @@ describe("cn serve: Loop mode", () => {
       "the person asked for it to run again",
     );
   });
+
+  it("marks a reminder whose file changed, and shows it in /state", async () => {
+    const file = path.join(cwd, "a.txt");
+    fs.writeFileSync(file, "before");
+    const held = heldTurn(
+      toolTurn("FinishItem", { outcome: "done", summary: "One" }),
+    );
+    const llm = new ScriptedLlm([
+      toolTurn("RemindMe", {
+        note: "a.txt has the setting",
+        when: "next_items",
+        files: ["a.txt"],
+      }),
+      held.turn,
+      toolTurn("FinishItem", { outcome: "done", summary: "Two" }),
+    ]);
+    await start(llm);
+    await savePlan(
+      { title: "Two steps", plan: "Two steps.", todos: ["One", "Two"] },
+      cwd,
+    );
+    await post({ loopAction: "start" });
+    await held.started;
+
+    const saved = (await getState()).loop.reminders;
+    expect(saved).toMatchObject([{ id: "r1", when: "next_items" }]);
+    expect(saved[0].deliveredAt).toBeUndefined();
+    fs.writeFileSync(file, "after");
+
+    held.release();
+    await waitUntil(
+      () => getSessionLoop()?.stopReason === "done",
+      "the loop to finish",
+      () => JSON.stringify(getSessionLoop()),
+    );
+    expect(messageText(userMessages(llm.requests[2]).at(-1)!)).toContain(
+      "- (from item 1; written before these files changed, so check first: a.txt) a.txt has the setting",
+    );
+    expect((await getState()).loop.reminders[0].deliveredAt).toBeDefined();
+  });
 });

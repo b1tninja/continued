@@ -25,6 +25,8 @@ export const TASK_LIST_TOOL_NAMES = [
   "finish_item",
   "HoldQuestion",
   "FinishItem",
+  "remind_me",
+  "RemindMe",
 ];
 
 /**

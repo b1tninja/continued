@@ -6,6 +6,7 @@ import {
   createNewFileTool,
   finishItemTool,
   holdQuestionTool,
+  remindMeTool,
   presentPlanTool,
   readFileTool,
   runTerminalCommandTool,
@@ -90,6 +91,7 @@ async function setup(todos: string[]) {
           taskListTool,
           presentPlanTool,
           holdQuestionTool,
+          remindMeTool,
           finishItemTool,
         ].map(serializeTool) as any;
         return current;
@@ -1179,5 +1181,41 @@ describe("Loop mode's checks and dependencies", () => {
     expect(el("loop-check-result-1")!.textContent).toContain(
       "check not run: Blocked by your rule",
     );
+  });
+
+  test("a reminder reaches the next item once, marked when its file changed", async () => {
+    const h = await setup(["Write the lexer", "Add tests"]);
+    const file = "file:///Users/user/workspace1/a.ts";
+    h.files[file] = "before";
+    h.ideMessenger.responseHandlers["tools/call"] = async () => {
+      h.files[file] = "after";
+      return {
+        contextItems: [{ name: "a.ts", description: "a.ts", content: "src" }],
+      };
+    };
+    h.turns.push(
+      calls({
+        name: BuiltInToolNames.RemindMe,
+        args: {
+          note: "a.ts has the grammar",
+          when: "next_items",
+          files: ["a.ts"],
+        },
+      }),
+      calls({ name: BuiltInToolNames.ReadFile, args: { filepath: "a.ts" } }),
+      finish("done", "lexer written"),
+      finish("done", "tests added"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+
+    expect(h.requests[0].tools).toContain(BuiltInToolNames.RemindMe);
+    expect(h.prompt(0)).toContain("save it with remind_me now");
+    expect(h.prompt(0)).not.toContain("a.ts has the grammar");
+    expect(h.prompt(3)).toContain("only this item: Add tests");
+    expect(h.prompt(3)).toContain(
+      "- (from item 1; written before these files changed, so check first: a.ts) a.ts has the grammar",
+    );
+    expect(h.loop().reminders?.[0].deliveredAt).toBeDefined();
   });
 });

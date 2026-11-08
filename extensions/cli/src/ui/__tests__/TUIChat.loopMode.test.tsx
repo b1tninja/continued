@@ -247,4 +247,58 @@ describe("TUIChat - Loop mode", () => {
       ui.unmount();
     }
   }, 60_000);
+
+  it("carries a reminder from one item to the next, once", async () => {
+    const llm = new ScriptedLlm([
+      toolTurn("PresentPlan", planArgs),
+      // Item 1 saves what it found, and goes on
+      toolTurn("RemindMe", {
+        note: "The flaky test is t3",
+        when: "next_items",
+      }),
+      toolTurn("FinishItem", { outcome: "done", summary: "Added" }),
+      // Item 2
+      toolTurn("FinishItem", { outcome: "done", summary: "Used" }),
+    ]);
+    await registerFlowServices({ llm, mode: "normal" });
+    services.toolPermissions.switchMode("plan");
+    const ui = renderFlow();
+    try {
+      await type(ui.stdin, "plan a retry");
+      await type(ui.stdin, ENTER);
+      await waitLong(
+        () => (ui.lastFrame() ?? "").includes("Build in a loop"),
+        "the plan question",
+        ui.lastFrame,
+      );
+      await type(ui.stdin, DOWN);
+      await type(ui.stdin, ENTER);
+      await waitLong(
+        () => getSessionLoop()?.stopReason === "done",
+        "the loop to finish",
+        () => `${ui.lastFrame()}\n${JSON.stringify(getSessionLoop())}`,
+      );
+
+      const [plan, item1, afterSave, item2] = llm.requests;
+      const offered = (r: typeof plan) => r.tools.map((t) => t.function.name);
+      expect(offered(item1)).toContain("RemindMe");
+      expect(offered(plan)).not.toContain("RemindMe");
+      expect(userTexts(item1)[0]).toContain("save it with RemindMe now");
+      expect(userTexts(item1)[0]).not.toContain("The flaky test is t3");
+      expect(
+        afterSave.messages.some(
+          (m) => m.role === "tool" && messageText(m).includes("Saved as r1"),
+        ),
+      ).toBe(true);
+      expect(userTexts(item2)[0]).toContain(
+        "- (from item 1) The flaky test is t3",
+      );
+      expect(getSessionLoop()?.reminders?.[0].deliveredAt).toBeDefined();
+
+      await type(ui.stdin, ESC);
+      await tick(100);
+    } finally {
+      ui.unmount();
+    }
+  }, 60_000);
 });

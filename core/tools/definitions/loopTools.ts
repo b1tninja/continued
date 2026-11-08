@@ -1,10 +1,14 @@
 import { Tool } from "../..";
 import { LOOP_LIMITS } from "../../util/loopMode";
+import {
+  LOOP_REMINDER_LIMITS,
+  LOOP_REMINDER_WHEN,
+} from "../../util/loopReminders";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "../builtIn";
 
 /**
- * Loop mode's two tools, offered only while the loop runs an item
- * (selectActiveTools). Both run in the gui, which holds the loop's state.
+ * Loop mode's tools, offered only while the loop runs an item
+ * (selectActiveTools). They run in the gui, which holds the loop's state.
  * Design: plans/loop-mode.md.
  */
 
@@ -60,6 +64,41 @@ export const FINISH_ITEM_PARAMETERS = {
   },
 };
 
+export const REMIND_ME_TOOL_DESCRIPTION = `Save a note for a later run. Each item starts without this conversation, so what you do not save is gone. It is saved at once, so it survives a stopped run. Use it for what a later run would otherwise have to find again: a cause you tracked down, a command that works, a trap.
+
+- when "item": for the run of the item numbered in \`item\`
+- when "next_items": for the next item that runs
+- when "retry": for a later run of this item
+- when "replan": for the next re-plan
+
+Each reminder is delivered once. List in \`files\` the files it depends on: if they change before it is delivered, it arrives marked to check first.`;
+
+export const REMIND_ME_PARAMETERS = {
+  type: "object" as const,
+  required: ["note", "when"],
+  properties: {
+    note: {
+      type: "string",
+      description: `What the later run needs, self-contained, at most ${LOOP_REMINDER_LIMITS.maxLength} characters`,
+    },
+    when: {
+      type: "string",
+      enum: [...LOOP_REMINDER_WHEN],
+      description: "Which run it is for",
+    },
+    item: {
+      type: "string",
+      description:
+        'The number of the item in the plan. Required for when "item".',
+    },
+    files: {
+      type: "array",
+      items: { type: "string" },
+      description: `Paths of the files the note depends on, at most ${LOOP_REMINDER_LIMITS.maxFiles}`,
+    },
+  },
+};
+
 export const holdQuestionTool: Tool = {
   type: "function",
   displayTitle: "Hold Question",
@@ -76,6 +115,24 @@ export const holdQuestionTool: Tool = {
   },
   defaultToolPolicy: "allowedWithoutPermission",
   toolCallIcon: "QuestionMarkCircleIcon",
+};
+
+export const remindMeTool: Tool = {
+  type: "function",
+  displayTitle: "Remind Me",
+  wouldLikeTo: "save a reminder",
+  isCurrently: "saving a reminder",
+  hasAlready: "saved a reminder",
+  readonly: true,
+  isInstant: true,
+  group: BUILT_IN_GROUP_NAME,
+  function: {
+    name: BuiltInToolNames.RemindMe,
+    description: REMIND_ME_TOOL_DESCRIPTION,
+    parameters: REMIND_ME_PARAMETERS,
+  },
+  defaultToolPolicy: "allowedWithoutPermission",
+  toolCallIcon: "BookmarkIcon",
 };
 
 export const finishItemTool: Tool = {

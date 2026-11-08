@@ -37,6 +37,7 @@ export const TASK_LIST_TOOLS = [
   "Checklist",
   "HoldQuestion",
   "FinishItem",
+  "RemindMe",
 ];
 
 export function subagentPermissions(

@@ -50,7 +50,8 @@ export const selectActiveTools = createSelector(
         // Loop mode's tools exist only for the item it is running.
         if (
           (tool.function.name === BuiltInToolNames.HoldQuestion ||
-            tool.function.name === BuiltInToolNames.FinishItem) &&
+            tool.function.name === BuiltInToolNames.FinishItem ||
+            tool.function.name === BuiltInToolNames.RemindMe) &&
           !(loopItemRunning && mode === "agent")
         ) {
           return false;

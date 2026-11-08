@@ -6,6 +6,7 @@ import {
   describeHeldCall,
   FINISH_ITEM_TOOL_NAME,
   HOLD_QUESTION_TOOL_NAME,
+  REMIND_ME_TOOL_NAME,
   itemTurnLimitReport,
   itemTurnLimitResult,
   itemTurnState,
@@ -127,6 +128,8 @@ export function applyLoopHolds(
       current.kind === "item" &&
       name !== HOLD_QUESTION_TOOL_NAME &&
       name !== FINISH_ITEM_TOOL_NAME &&
+      // Saving what it found is what a run out of turns should do
+      name !== REMIND_ME_TOOL_NAME &&
       // Only reading stops: research already done must still get written
       toolCallState.tool?.readonly &&
       startLoop &&

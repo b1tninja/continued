@@ -40,6 +40,7 @@ import {
   startReplan,
   stopLoop,
 } from "core/util/loopMode";
+import { reminderPathsDue, takeReminders } from "core/util/loopReminders";
 import { parsePlanFile, taskPlanFromPlanFile } from "core/util/planFile";
 import { findUriInDirs } from "core/util/uri";
 import { selectEffectiveApprovalMode } from "../selectors/selectAutoApproval";
@@ -54,6 +55,7 @@ import {
 } from "../slices/sessionSlice";
 import { AppThunkDispatch, RootState, ThunkApiType } from "../store";
 import { commitLoop } from "../util/loopCommit";
+import { stampLoopFiles } from "../util/loopReminderFiles";
 
 import { runLoopCheck } from "./loopChecks";
 import { streamResponseThunk } from "./streamResponse";
@@ -484,6 +486,14 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
         return;
       case "run": {
         const item = plan.items.find((i) => i.id === action.itemId)!;
+        const reminderTarget = { kind: "item", itemId: action.itemId } as const;
+        const taken = takeReminders(
+          loop,
+          reminderTarget,
+          await stampLoopFiles(ide, reminderPathsDue(loop, reminderTarget)),
+          now,
+        );
+        loop = taken.loop;
         const itemState = loop.items.find((i) => i.id === action.itemId);
         const answers = answersToDeliver(loop, action.itemId);
         const prompt = loopItemPrompt({
@@ -501,6 +511,7 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           lastCheck: itemState?.check,
           // The request carries the plan block (loopPlanBlock)
           planBlock: true,
+          reminders: taken.reminders,
           unanswered: loop.questions.filter((q) =>
             itemState?.unanswered?.includes(q.id),
           ),
@@ -537,11 +548,20 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           }
         }
         // A round's re-plan, a check-in, or a repair of one failed item
+        const replanTarget = { kind: "replan" } as const;
+        const taken = takeReminders(
+          loop,
+          replanTarget,
+          await stampLoopFiles(ide, reminderPathsDue(loop, replanTarget)),
+          now,
+        );
+        loop = taken.loop;
         const prompt = loopReplanTurnPrompt(action, {
           loop,
           plan,
           planFile,
           planTitle,
+          reminders: taken.reminders,
         });
         loop = startReplan(loop, state.session.history.length, now, {
           plan,

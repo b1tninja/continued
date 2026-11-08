@@ -73,7 +73,8 @@ export function holdLoopCall(
   if (
     current.kind === "item" &&
     (call.name === CLI_LOOP_TOOL_NAMES.holdQuestion ||
-      call.name === CLI_LOOP_TOOL_NAMES.finishItem)
+      call.name === CLI_LOOP_TOOL_NAMES.finishItem ||
+      call.name === CLI_LOOP_TOOL_NAMES.remindMe)
   ) {
     return { approved: true };
   }

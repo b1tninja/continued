@@ -16,6 +16,7 @@ import type {
   TaskPlan,
 } from "../index.js";
 import { stableStringify } from "../tools/permissions/auto/state.js";
+import type { LoopDeliveredReminder } from "./loopReminders.js";
 import { TASK_LIST_BLOCK_CLOSE, TASK_LIST_BLOCK_OPEN } from "./taskPlan.js";
 
 /**
@@ -32,6 +33,7 @@ import { TASK_LIST_BLOCK_CLOSE, TASK_LIST_BLOCK_OPEN } from "./taskPlan.js";
 
 export const HOLD_QUESTION_TOOL_NAME = "hold_question";
 export const FINISH_ITEM_TOOL_NAME = "finish_item";
+export const REMIND_ME_TOOL_NAME = "remind_me";
 
 /**
  * The names the prompts and tool results give the model for the loop's
@@ -41,18 +43,21 @@ export const FINISH_ITEM_TOOL_NAME = "finish_item";
 export interface LoopToolNames {
   holdQuestion: string;
   finishItem: string;
+  remindMe: string;
   presentPlan: string;
 }
 
 export const LOOP_TOOL_NAMES: LoopToolNames = {
   holdQuestion: HOLD_QUESTION_TOOL_NAME,
   finishItem: FINISH_ITEM_TOOL_NAME,
+  remindMe: REMIND_ME_TOOL_NAME,
   presentPlan: "present_plan",
 };
 
 export const LOOP_CLI_TOOL_NAMES: LoopToolNames = {
   holdQuestion: "HoldQuestion",
   finishItem: "FinishItem",
+  remindMe: "RemindMe",
   presentPlan: "PresentPlan",
 };
 
@@ -1980,6 +1985,24 @@ function quote(text: string): string {
   return text.replace(/\s*\n\s*/g, " ");
 }
 
+/** The lines a run's opening prompt carries for its reminders. */
+function reminderLines(reminders?: LoopDeliveredReminder[]): string[] {
+  if (!reminders?.length) return [];
+  return [
+    "",
+    "Reminders saved by earlier runs:",
+    ...reminders.map(({ reminder, staleFiles }) => {
+      const from = `from item ${reminder.fromItemId}`;
+      const files = reminder.files?.length
+        ? `; about ${reminder.files.map((f) => f.path).join(", ")}`
+        : "";
+      return staleFiles.length
+        ? `- (${from}; written before these files changed, so check first: ${staleFiles.join(", ")}) ${quote(reminder.note)}`
+        : `- (${from}${files}) ${quote(reminder.note)}`;
+    }),
+  ];
+}
+
 /**
  * The prompt for one item's run: the item, where the plan is, the answers it
  * should use, and the contract. It never explains the loop or asks the model
@@ -2011,6 +2034,8 @@ export function loopItemPrompt(input: {
   planBlock?: boolean;
   /** The last run of the item's check (LoopItemState.check) */
   lastCheck?: LoopCheckResult;
+  /** What earlier runs saved for this one (takeReminders) */
+  reminders?: LoopDeliveredReminder[];
 }): string {
   const { item } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
@@ -2083,6 +2108,7 @@ export function loopItemPrompt(input: {
       );
     }
   }
+  lines.push(...reminderLines(input.reminders));
   lines.push(
     "",
     "Search the code before you add anything: do not assume something is missing because one search did not find it. Implement the item fully, with no placeholders or stubs.",
@@ -2090,6 +2116,8 @@ export function loopItemPrompt(input: {
     "Before you report it done, run the checks the project has for what you changed (tests, type check, lint) and fix what fails; name them in your summary, or say there was nothing to run.",
     "",
     `When the item is done, call ${names.finishItem} with outcome "done" and a one-line summary. If you cannot finish it, call ${names.finishItem} with outcome "stuck" and say why. Put anything a later item should know (a command that works, a trap you hit) in \`notes\`: one or two lines, not progress.`,
+    "",
+    `If you learn something a later item or a retry will need, save it with ${names.remindMe} now.`,
     "",
     `Ask, rather than decide silently: whenever the person might want a say (a choice between approaches, scope, naming, an irreversible step, or anything the plan does not settle), call ${names.holdQuestion}. Use kind "assumption" by default: state the choice you are making in \`assumption\` and keep working; the person can overrule it later. Use kind "blocking" only when there is no reasonable default, then stop and call ${names.finishItem} with outcome "waiting". Write each question so it can be answered without this conversation: name the item, the options and your default.`,
   );
@@ -2283,6 +2311,8 @@ export function loopItemRepairPrompt(input: {
   planTitle?: string;
   /** The names the model knows the tools by (default the IDE's) */
   toolNames?: LoopToolNames;
+  /** What earlier runs saved for this re-plan (takeReminders) */
+  reminders?: LoopDeliveredReminder[];
 }): string {
   const { loop, plan } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
@@ -2310,6 +2340,7 @@ export function loopItemRepairPrompt(input: {
     lines.push("", "Notes from the runs:");
     for (const n of loop.notes) lines.push(`- ${quote(n)}`);
   }
+  lines.push(...reminderLines(input.reminders));
   lines.push(
     "",
     `Find out why it failed: read the code and what the run left. Then do one of these: reword the item so a run can finish it; split it into at most ${LOOP_REPAIR_MAX_TODOS} smaller to-dos that replace it, in its place; or drop it if the plan's goal does not need it, or it is already done.`,
@@ -2328,6 +2359,7 @@ export function loopReplanTurnPrompt(
     planFile?: string;
     planTitle?: string;
     toolNames?: LoopToolNames;
+    reminders?: LoopDeliveredReminder[];
   },
 ): string {
   return action.itemId
@@ -2345,6 +2377,8 @@ export function loopReplanPrompt(input: {
   toolNames?: LoopToolNames;
   /** A check-in between items (check-in strategy): why it is due */
   checkIn?: string;
+  /** What earlier runs saved for this re-plan (takeReminders) */
+  reminders?: LoopDeliveredReminder[];
 }): string {
   const { loop, plan } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
@@ -2380,6 +2414,7 @@ export function loopReplanPrompt(input: {
       );
     }
   }
+  lines.push(...reminderLines(input.reminders));
   lines.push(
     "",
     "The plan may be wrong. Check its open items against the code before you keep them: drop what is already done, and do not add what already exists.",

@@ -15,6 +15,7 @@ export const BUILT_IN_TOOL_NAMES = [
   "List",
   "MultiEdit",
   "PresentPlan",
+  "RemindMe",
   "Read",
   "ReportFailure",
   "Bash",

@@ -25,7 +25,7 @@ import { editTool } from "./edit.js";
 import { exitTool } from "./exit.js";
 import { fetchTool } from "./fetch.js";
 import { listFilesTool } from "./listFiles.js";
-import { finishItemTool, holdQuestionTool } from "./loopTools.js";
+import { finishItemTool, holdQuestionTool, remindMeTool } from "./loopTools.js";
 import { multiEditTool } from "./multiEdit.js";
 import { presentPlanTool } from "./presentPlan.js";
 import { readFileTool } from "./readFile.js";
@@ -91,6 +91,7 @@ export async function getAllAvailableTools(
     ? [
         ...BASE_BUILTIN_TOOLS.filter((t) => t !== taskListTool),
         holdQuestionTool,
+        remindMeTool,
         finishItemTool,
       ]
     : [...BASE_BUILTIN_TOOLS];

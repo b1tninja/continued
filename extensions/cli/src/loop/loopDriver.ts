@@ -21,6 +21,7 @@ import {
   startReplan,
   stopLoop,
 } from "core/util/loopMode.js";
+import { reminderPathsDue, takeReminders } from "core/util/loopReminders.js";
 import {
   parsePlanFile,
   PRESENT_PLAN_CLI_TOOL_NAME,
@@ -31,6 +32,7 @@ import { getSessionLoop, getSessionTaskPlan } from "../session.js";
 import { logger } from "../util/logger.js";
 
 import { type LoopCheckStep, runLoopCheck } from "./loopChecks.js";
+import { stampFiles } from "./loopReminderFiles.js";
 import {
   acceptLoopPlan,
   CLI_LOOP_TOOL_NAMES,
@@ -198,6 +200,14 @@ export function nextLoopTurn(
         };
       case "run": {
         const item = plan.items.find((i) => i.id === action.itemId)!;
+        const reminderTarget = { kind: "item", itemId: action.itemId } as const;
+        const taken = takeReminders(
+          loop,
+          reminderTarget,
+          stampFiles(reminderPathsDue(loop, reminderTarget)),
+          now,
+        );
+        loop = taken.loop;
         const itemState = loop.items.find((i) => i.id === action.itemId);
         const answers = answersToDeliver(loop, action.itemId);
         const prompt = loopItemPrompt({
@@ -218,6 +228,7 @@ export function nextLoopTurn(
           ),
           toolNames: CLI_LOOP_TOOL_NAMES,
           lastCheck: itemState?.check,
+          reminders: taken.reminders,
         });
         loop = markDelivered(
           loop,
@@ -230,12 +241,21 @@ export function nextLoopTurn(
       }
       case "replan": {
         // A round's re-plan, a check-in, or a repair of one failed item
+        const replanTarget = { kind: "replan" } as const;
+        const taken = takeReminders(
+          loop,
+          replanTarget,
+          stampFiles(reminderPathsDue(loop, replanTarget)),
+          now,
+        );
+        loop = taken.loop;
         const prompt = loopReplanTurnPrompt(action, {
           loop,
           plan,
           planFile,
           planTitle: planTitle(),
           toolNames: CLI_LOOP_TOOL_NAMES,
+          reminders: taken.reminders,
         });
         loop = startReplan(loop, historyLength, now, {
           plan,

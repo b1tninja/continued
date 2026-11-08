@@ -5,6 +5,12 @@ import {
   holdQuestion,
   holdQuestionResult,
 } from "core/util/loopMode";
+import {
+  reminderFilePaths,
+  reminderSavedResult,
+  saveReminder,
+} from "core/util/loopReminders";
+import { stampLoopFiles } from "../../redux/util/loopReminderFiles";
 import { commitLoop } from "../../redux/util/loopCommit";
 import { ClientToolImpl } from "./callClientTool";
 
@@ -47,6 +53,46 @@ export const holdQuestionImpl: ClientToolImpl = async (
         name: "Question held",
         description: `${result.question.id} (${result.question.kind})`,
         content: holdQuestionResult(result.question, result.duplicate),
+        hidden: false,
+      },
+    ],
+  };
+};
+
+/** remind_me: saves a note for a later run; the turn goes on. */
+export const remindMeImpl: ClientToolImpl = async (
+  args,
+  _toolCallId,
+  extras,
+) => {
+  const { itemId } = runningItem(extras);
+  const paths = reminderFilePaths(args?.files);
+  const stamps = await stampLoopFiles(extras.ideMessenger.ide, paths);
+  // The read above took time: save on the loop as it is now
+  const { loop } = runningItem(extras);
+  const result = saveReminder(
+    loop,
+    extras.getState().session.taskPlan,
+    {
+      fromItemId: itemId,
+      note: args?.note,
+      when: args?.when,
+      item: args?.item,
+      files: paths.map((path) => ({ path, stamp: stamps[path] })),
+    },
+    new Date(),
+  );
+  if (!result.ok) {
+    throw new ContinueError(ContinueErrorReason.Unspecified, result.error);
+  }
+  commitLoop(extras.dispatch, extras.getState, result.loop);
+  return {
+    respondImmediately: true,
+    output: [
+      {
+        name: "Reminder saved",
+        description: result.reminder.id,
+        content: reminderSavedResult(result.reminder, result.duplicate),
         hidden: false,
       },
     ],
