@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { services } from "../../services/index.js";
+import { messageQueue } from "../../stream/messageQueue.js";
 
 import {
   registerFlowServices,
@@ -54,6 +55,19 @@ describe("TUIChat - Left and Right switch modes on an empty prompt", () => {
         "plan, going back",
         ui.lastFrame,
       );
+    } finally {
+      ui.unmount();
+    }
+  });
+
+  it("leaves the mode alone while a queued message is selected", async () => {
+    await registerFlowServices({ llm: new ScriptedLlm([]) });
+    const ui = renderFlow();
+    try {
+      await messageQueue.enqueueMessage("queued");
+      messageQueue.select(messageQueue.list()[0].id);
+      await type(ui.stdin, RIGHT);
+      expect(mode()).toBe("normal");
     } finally {
       ui.unmount();
     }

@@ -1,4 +1,5 @@
 import type { PermissionMode } from "../../permissions/types.js";
+import { messageQueue } from "../../stream/messageQueue.js";
 import { backgroundSignalManager } from "../../util/backgroundSignalManager.js";
 import {
   checkClipboardForImage,
@@ -101,9 +102,10 @@ export function handleControlKeys(options: ControlKeysOptions): boolean {
   }
 
   // Left and Right on an empty prompt (where they move nothing) step back
-  // and forward through the modes
+  // and forward through the modes; not while a queued message is selected
   if (
     (key.leftArrow || key.rightArrow) &&
+    !messageQueue.getSelectedId() &&
     !key.ctrl &&
     !key.meta &&
     !key.shift &&
