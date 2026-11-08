@@ -30,5 +30,9 @@ describe("isTruncatedJson", () => {
     expect(text).toContain("output limit of 4096 tokens");
     expect(text).toContain("nothing was written");
     expect(text).toContain("smaller pieces");
+    expect(text).toContain("append set to true");
+    expect(truncatedToolCallResult("multi_edit", undefined)).not.toContain(
+      "append",
+    );
   });
 });

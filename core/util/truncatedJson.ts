@@ -30,5 +30,5 @@ export function truncatedToolCallResult(
   maxTokens: number | undefined,
 ): string {
   const limit = maxTokens ? ` of ${maxTokens} tokens` : "";
-  return `Your ${toolName} call was cut off at the output limit${limit}, so it was not run and nothing was written. Send it again in smaller pieces: create a file with its first part, then add the rest with further edits, each in its own call.`;
+  return `Your ${toolName} call was cut off at the output limit${limit}, so it was not run and nothing was written. ${toolName === "create_new_file" ? "Send it again in smaller pieces: create the file with its first part, then call create_new_file with append set to true for each further part." : "Send it again in smaller pieces, each in its own call."}`;
 }
