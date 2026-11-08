@@ -12,6 +12,7 @@ import type {
   TaskItem,
   TaskPlan,
 } from "../index.js";
+import { stableStringify } from "../tools/permissions/auto/state.js";
 
 /**
  * Loop mode: build a plan item by item without the person driving each step.
@@ -25,6 +26,42 @@ import type {
 
 export const HOLD_QUESTION_TOOL_NAME = "hold_question";
 export const FINISH_ITEM_TOOL_NAME = "finish_item";
+
+/**
+ * Same tool and same arguments: the key of an approval grant and of the
+ * repeat count. The same format as the gui's grantKey.
+ */
+export function loopCallKey(toolName: string, args: unknown): string {
+  return `${toolName}\u0000${stableStringify(args ?? {})}`;
+}
+
+/**
+ * The key an "Allow once" grant is kept under: the tool and what its
+ * approval question names (the command, or the file), not every argument.
+ * A model that writes the file again with slightly different content still
+ * gets the write the person allowed. `resolvePath` makes a relative path
+ * absolute, so "src/a.ts" and its absolute form are one file.
+ */
+export function loopGrantKey(
+  toolName: string,
+  args: unknown,
+  resolvePath: (path: string) => string = (path) => path,
+): string {
+  const a = (args ?? {}) as Record<string, unknown>;
+  if (typeof a.command === "string" && a.command.trim()) {
+    return loopCallKey(toolName, { command: a.command.trim() });
+  }
+  for (const key of ["filepath", "file_path", "path"]) {
+    const value = a[key];
+    if (typeof value === "string" && value.trim()) {
+      const path = resolvePath(value.trim())
+        .replace(/[\\/]+/g, "/")
+        .replace(/^([a-z]):/, (_, d: string) => `${d.toUpperCase()}:`);
+      return loopCallKey(toolName, { path });
+    }
+  }
+  return loopCallKey(toolName, args);
+}
 
 export const DEFAULT_LOOP_BUDGET: LoopBudget = {
   maxRounds: 5,

@@ -11,6 +11,7 @@ import {
   itemTurnState,
   holdQuestion,
   LOOP_REPEAT_LIMIT,
+  loopGrantKey,
   REPLAN_HOLD_RESULT,
   repeatCount,
   repeatedCallReport,
@@ -171,7 +172,9 @@ export function applyLoopHolds(
       );
       return { ...p, policy: "disabled" };
     }
-    const grant = consumeLoopGrant(loop, key);
+    // A grant covers what the question names (the file, the command)
+    const grantFor = loopGrantKey(name, toolCallState.parsedArgs ?? {});
+    const grant = consumeLoopGrant(loop, grantFor);
     if (grant.granted) {
       loop = grant.loop;
       return {
@@ -190,7 +193,7 @@ export function applyLoopHolds(
         itemId: current.itemId,
         question: `Allow this call? ${summary}${p.reason ? ` (${p.reason})` : ""}`,
         kind: "approval",
-        approval: { toolName: name, summary, grantKey: key },
+        approval: { toolName: name, summary, grantKey: grantFor },
       },
       new Date(),
     );
