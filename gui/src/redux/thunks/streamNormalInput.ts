@@ -476,6 +476,11 @@ export const streamNormalInput = createAsyncThunk<
     }
     // Loop mode holds calls that would ask instead of waiting (loopHolds.ts)
     const policies = applyLoopHolds(dispatch, getState, evaluated);
+    // A hold can end the run (a call repeated after it was refused)
+    if (getState().session.loop?.current?.report) {
+      await dispatch(cancelStream({ loop: "keep" }));
+      return;
+    }
     const autoApprovedPolicies = policies.filter(
       ({ policy }) => policy === "allowedWithoutPermission",
     );

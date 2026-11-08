@@ -168,8 +168,19 @@ export function repeatCount(previous: string[], key: string): number {
 }
 
 /** What the model sees when a call is refused for repeating. */
-export function repeatedCallResult(count: number): string {
-  return `You have made this exact call ${count} times while working on this item, so it was not run again. Its result will not change. Try a different approach, or call ${FINISH_ITEM_TOOL_NAME} with outcome "stuck" and say what is in the way.`;
+export function repeatedCallResult(toolName: string, count: number): string {
+  return `${toolName} was not run: the same call has run ${count - 1} times with no file change in between, and its last result is above. A different check of your current explanation would return new information. If nothing is left to check, call ${FINISH_ITEM_TOOL_NAME} with outcome "stuck" and say what is in the way.`;
+}
+
+/** The report of a run that kept repeating a call after it was refused. */
+export function repeatedCallReport(toolName: string): {
+  outcome: FinishOutcome;
+  summary: string;
+} {
+  return {
+    outcome: "stuck",
+    summary: `Kept repeating ${toolName} with no file change after it was refused.`,
+  };
 }
 
 /** Requests past maxItemTurns before the run is ended for not reporting. */

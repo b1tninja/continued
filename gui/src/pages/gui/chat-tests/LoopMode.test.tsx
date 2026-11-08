@@ -3,6 +3,7 @@ import type { ChatMessage, PromptLog } from "core";
 import { serializeTool } from "core/tools";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import {
+  createNewFileTool,
   finishItemTool,
   holdQuestionTool,
   presentPlanTool,
@@ -84,6 +85,7 @@ async function setup(todos: string[]) {
         current.tools = [
           readFileTool,
           runTerminalCommandTool,
+          createNewFileTool,
           taskListTool,
           presentPlanTool,
           holdQuestionTool,
@@ -672,6 +674,68 @@ describe("Loop mode", () => {
     expect(stored.parsedArgs).toEqual({});
     expect(h.requests[1].messages.map(text).join(" ")).not.toContain("line 1");
   });
+
+  test("a call repeated with no file change is refused once, then the run ends as stuck", async () => {
+    const h = await setup(["Run the tests"]);
+    let runs = 0;
+    h.ideMessenger.responseHandlers["tools/call"] = async () => {
+      runs++;
+      return {
+        contextItems: [{ name: "r", description: "r", content: "1 failed" }],
+      };
+    };
+    const again = () =>
+      calls({ name: BuiltInToolNames.ReadFile, args: { filepath: "a.ts" } });
+    h.turns.push(again(), again(), again(), again(), again());
+    await h.start();
+    await waitFor(() => expect(h.itemStatus("1")).toBe("failed"));
+    expect(runs).toBe(3);
+    expect(h.requests[4].messages.map(text).join(" ")).toContain(
+      "with no file change in between",
+    );
+    expect(h.loop().items[0].summary).toContain("Kept repeating read_file");
+  });
+
+  test("the same call after a file change is not counted as a repeat", async () => {
+    const h = await setup(["Fix the test"]);
+    let runs = 0;
+    h.ideMessenger.responseHandlers["tools/call"] = async () => {
+      runs++;
+      return {
+        contextItems: [{ name: "r", description: "r", content: "output" }],
+      };
+    };
+    const test = () =>
+      calls({ name: BuiltInToolNames.ReadFile, args: { filepath: "a.ts" } });
+    const edit = (n: number) =>
+      calls({
+        name: BuiltInToolNames.CreateNewFile,
+        args: { filepath: `new${n}.ts`, contents: "x" },
+      });
+    await act(async () => {
+      h.store.dispatch(setApprovalMode("yolo"));
+    });
+    h.ideMessenger.responseHandlers["tools/evaluatePolicy"] = async () => ({
+      policy: "allowedWithoutPermission",
+      source: "yolo",
+    });
+    h.turns.push(
+      test(),
+      test(),
+      test(),
+      edit(1),
+      test(),
+      test(),
+      test(),
+      finish("done", "fixed"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"), {
+      timeout: 15_000,
+    });
+    expect(h.requests).toHaveLength(8);
+    expect(runs).toBe(7);
+  }, 20_000);
 
   test("Stop stops the loop with the item back to pending, and Resume goes on", async () => {
     const h = await setup(["Write the lexer"]);

@@ -1,3 +1,5 @@
+import { BuiltInToolNames } from "core/tools/builtIn";
+import { isEditTool } from "../../util/toolCallState";
 import {
   approvalHeldResult,
   consumeLoopGrant,
@@ -11,6 +13,7 @@ import {
   LOOP_REPEAT_LIMIT,
   REPLAN_HOLD_RESULT,
   repeatCount,
+  repeatedCallReport,
   repeatedCallResult,
 } from "core/util/loopMode";
 import { grantKey } from "../slices/blockedCallsSlice";
@@ -77,7 +80,8 @@ export function endRunAtTurnLimit(
  *   question in the inbox and refused for now, so the item goes on (or
  *   reports waiting) and other items run;
  * - in a re-plan turn, which only reads, such a call is refused;
- * - a call repeated LOOP_REPEAT_LIMIT times in the item's run is refused;
+ * - a call repeated LOOP_REPEAT_LIMIT times with no file change between is
+ *   refused, and a second refusal ends the run as stuck;
  * - past the item's turn limit, tools that only read are refused.
  *
  * Refused calls come back as "disabled", which the caller treats as done.
@@ -92,11 +96,23 @@ export function applyLoopHolds(
   if (!loop || !current) return policies;
 
   const newIds = new Set(policies.map((p) => p.toolCallState.toolCallId));
-  const previous = getState()
+  // Only calls since the last file change count: running the tests again
+  // after an edit is progress, and its result can differ
+  const previous: string[] = [];
+  for (const tc of getState()
     .session.history.slice(current.historyIndex)
-    .flatMap((item) => item.toolCallStates ?? [])
-    .filter((tc) => !newIds.has(tc.toolCallId))
-    .map((tc) => grantKey(tc.toolCall.function.name, tc.parsedArgs ?? {}));
+    .flatMap((item) => item.toolCallStates ?? [])) {
+    if (newIds.has(tc.toolCallId)) continue;
+    const called = tc.toolCall.function.name;
+    if (
+      tc.status === "done" &&
+      (isEditTool(called) || called === BuiltInToolNames.CreateNewFile)
+    ) {
+      previous.length = 0;
+      continue;
+    }
+    previous.push(grantKey(called, tc.parsedArgs ?? {}));
+  }
 
   const turns = itemTurns(getState(), current.historyIndex);
   const startLoop = loop;
@@ -131,8 +147,16 @@ export function applyLoopHolds(
           dispatch,
           toolCallState.toolCallId,
           "Repeated call",
-          repeatedCallResult(count),
+          repeatedCallResult(name, count),
         );
+        // A second refusal of the same call ends the run, rather than
+        // refusing until the turn limit
+        if (count > LOOP_REPEAT_LIMIT && loop?.current) {
+          loop = {
+            ...loop,
+            current: { ...loop.current, report: repeatedCallReport(name) },
+          };
+        }
         return { ...p, policy: "disabled" };
       }
     }

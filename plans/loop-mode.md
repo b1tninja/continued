@@ -311,6 +311,45 @@ The IDE is wired first. The CLI is the next phase (L3). It has its own streaming
 
 The decisions and prompts come from core, so it is mostly wiring.
 
+## Stall guidance (decided 2026-11-08, mostly not built)
+
+The question was whether a stuck agent should get problem-solving advice, for example random cards from frameworks like 5 Whys, through a tool or a system prompt. The research behind this is summarised here; no study tests this exact intervention, so every wording is untested.
+
+**Decision: hand the model a fact from the harness and ask for one checkable hypothesis. Then change something structural.**
+
+| Idea                             | Decision           | Why                                                                                                                                                                  |
+| -------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Intervene at a stall             | Yes                | SWE-PRM (SWE-bench Verified): 40.0% base, 45.8% generic critique, 50.6% targeted diagnosis. Wink's 15-day production A/B cut tool-call failures 4.2% and tokens 5.3% |
+| The harness triggers it          | Yes                | Mid-run self-assessment barely separates success from failure (AUROC about 0.5 to 0.64, Kaddour et al.)                                                              |
+| A tool the model calls           | No                 | It would have to know it is stuck. Anthropic's think tool added 1.6% on SWE-bench and Anthropic now prefers extended thinking                                        |
+| Named frameworks                 | No                 | No test of 5 Whys or PDCA exists; the nearest proxy, personas, shows no benefit (Zheng et al.). Their useful content is rewritten as concrete moves                  |
+| Random advice                    | Only as a test arm | No support, and it discards the one thing the harness knows: which failure happened                                                                                  |
+| Dictating the next command       | No                 | SWE-PRM: diagnosis plus a dictated action scored 44.8%, below diagnosis alone                                                                                        |
+| Injecting without a real failure | No                 | Self-correction with no external signal hurts (Huang et al., Reflexion's ablation). "Are you sure?" makes models abandon correct answers (Sharma et al.)             |
+
+What follows a note matters as much as the note. Two rounds capture most of the gain (Arimbur), and the best recovery numbers come from structural change: rollback with a note, decomposing on failure (ADaPT), or new information. An executable reproduction added 19 to 28 points in ORACLE-SWE, and a debugger offered after 5 failed rewrites beat none on all six debug-gym models.
+
+**Signals and text** (full wording in the report):
+
+| Signal                                      | Text carries                                                                                                                                      | State                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Same call 4 times with no file change       | The fact, and a request for a different check. A second refusal ends the run as stuck                                                             | Built                          |
+| Same check fails twice with an edit between | The first error line, files changed, and "name the single cause you now think most likely and run the cheapest thing that would show it is wrong" | Not built; observe-only in 2.4 |
+| Item retried                                | What the last run saw and changed, and "start from a different explanation"                                                                       | Not built; on in 2.4           |
+| Past the turn limit                         | What has been verified so far, without a verdict                                                                                                  | Not built; on in 2.4           |
+| Item reports stuck                          | A required `blocker` on `finish_item`: answer, observe, plan or environment                                                                       | Not built; on in 2.4           |
+| A round finished nothing                    | Each failed item's blocker, and a reproduce-first first step                                                                                      | Not built; on in 2.4           |
+
+**Exposure:** no tool. One setting, `loopMode.stallNotes: off | observe | on`, default `observe`, which governs only the new mid-run note. The rest replace text the loop already sends.
+
+**Placement:** tagged `<harness-note>` user-role text after the tool results, appended once and never edited, and never in the system prompt. Refusals stay in the refused call's tool result. Qwen3.5 templates raise an error on a mid-history `system` message.
+
+**Cap:** at most two mid-run notes per run, five requests apart, then the existing ladder. There is no third note, and no sterner one.
+
+**Measure:** whole-task A/B cannot detect this (about 1,900 runs per arm). Replay about 30 real stuck states as paired forks in four arms: no note, a neutral placebo, the targeted note, and a random card. Add a separate test on healthy states for the cost of a false positive. If the placebo equals the targeted note, keep the shortest text. That is the result that would vindicate the random-card idea.
+
+**Tools to add after 2.4, in order:** harness-triggered restore to the item's starting checkpoint with a note; a failure-only test runner; a second-model reviewer for local workers, never a local model judging itself; a dedicated debugger only if guidance plus the terminal measurably falls short.
+
 ## Safeguards
 
 - The loop never starts by itself after a reload: a loop saved mid-run comes back stopped.
