@@ -33,8 +33,10 @@ import {
   applyCrossRegionInference,
   bedrockCachePoint,
   bedrockCacheTtl,
+  bedrockModelAccessMessage,
   bedrockUsageToCompletionUsage,
   getBedrockErrorHint,
+  fillMissingToolResults,
   normalizeToolUseIds,
   resolveBedrockCacheParts,
 } from "./bedrockHelpers.js";
@@ -561,10 +563,13 @@ export class BedrockApi implements BaseLlmApi {
 
     // Convert messages
     const convertedMessages = normalizeToolUseIds(
-      this._convertMessages(oaiBody.messages, availableTools, {
-        conversation: parts.conversation,
-        ttl: cacheTtl,
-      }),
+      fillMissingToolResults(
+        this._convertMessages(oaiBody.messages, availableTools, {
+          conversation: parts.conversation,
+          ttl: cacheTtl,
+        }),
+        "The user cancelled this tool call.",
+      ),
       oaiBody.model,
     );
 
@@ -769,6 +774,13 @@ export class BedrockApi implements BaseLlmApi {
         }
       }
     } catch (error) {
+      const accessMessage = bedrockModelAccessMessage(
+        error,
+        requestBody.modelId ?? body.model,
+      );
+      if (accessMessage) {
+        throw new Error(accessMessage);
+      }
       // TLS / proxy trouble (untrusted corporate CA, proxy auth) is common
       // here; say how to fix it.
       const hint = getTlsErrorHint(error);

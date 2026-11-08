@@ -106,6 +106,37 @@ export function getBedrockErrorHint(
   return undefined;
 }
 
+/**
+ * The message to show when Bedrock refuses a call because the AWS account has
+ * not been granted the model, or undefined for any other error. AWS uses this
+ * refusal for an unfinished console step and for a tokens-per-minute quota of
+ * 0, which is how a newer model can look available and still be refused. The
+ * error alone can't say which, so this lists what to check (seen live: form and
+ * agreement done, quota 0).
+ *
+ * Core's Bedrock provider uses this too. The lines are joined by single
+ * newlines because the chat window shows only what follows the first blank
+ * line of an error (parseErrorMessage in gui/src/util/errorAnalysis.ts).
+ */
+export function bedrockModelAccessMessage(
+  error: unknown,
+  modelId: string,
+): string | undefined {
+  const err = error as { name?: string; message?: string } | undefined;
+  const message = err?.message ?? "";
+  if (
+    !/AccessDeniedException/i.test(`${err?.name ?? ""} ${message}`) ||
+    !/not available for this account/i.test(message)
+  ) {
+    return undefined;
+  }
+  return [
+    `Amazon Bedrock refused ${modelId}: this AWS account has not been given access to that model.`,
+    "Check the model's tokens-per-minute quota in Service Quotas: AWS can leave it at 0 for newer models until it grants the account access, and only AWS can raise it. For Anthropic models, also check that the use-case form and the model agreement are complete in the Bedrock console (https://console.aws.amazon.com/bedrock/).",
+    `AWS said: ${message}`,
+  ].join("\n");
+}
+
 /** The fields of Bedrock's `TokenUsage` that the adapter reads. */
 export interface BedrockTokenUsageLike {
   inputTokens?: number;
@@ -323,4 +354,50 @@ export function normalizeToolUseIds<
     }
   }
   return messages;
+}
+
+/**
+ * Gives every toolUse a toolResult in the message right after it, with `text`
+ * as the result of any that has none. Claude refuses a conversation with an
+ * unanswered tool call ("tool_use ids were found without tool_result blocks
+ * immediately after"), and the rest of the history can't be sent without it.
+ */
+export function fillMissingToolResults<
+  M extends {
+    role?: string;
+    content?: Array<{
+      toolUse?: { toolUseId?: string };
+      toolResult?: unknown;
+      text?: unknown;
+    }>;
+  },
+>(messages: M[], text: string): M[] {
+  const filled: M[] = [];
+  messages.forEach((message, index) => {
+    filled.push(message);
+    if (message.role !== "assistant") return;
+    const next = messages[index + 1];
+    const answered = new Set(
+      next?.role === "user"
+        ? (next.content ?? []).map(
+            (block) =>
+              (block.toolResult as { toolUseId?: string } | undefined)
+                ?.toolUseId,
+          )
+        : [],
+    );
+    const results = (message.content ?? [])
+      .map((block) => block.toolUse?.toolUseId)
+      .filter((id) => id !== undefined && !answered.has(id))
+      .map((toolUseId) => ({
+        toolResult: { toolUseId, content: [{ text }] },
+      }));
+    if (results.length === 0) return;
+    if (next?.role === "user") {
+      next.content = [...results, ...(next.content ?? [])];
+    } else {
+      filled.push({ role: "user", content: results } as M);
+    }
+  });
+  return filled;
 }
