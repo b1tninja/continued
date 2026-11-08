@@ -22,6 +22,7 @@ export enum BuiltInToolNames {
   PresentPlan = "present_plan",
   HoldQuestion = "hold_question",
   FinishItem = "finish_item",
+  CodeNavigation = "code_navigation",
 
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",
