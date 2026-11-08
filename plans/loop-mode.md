@@ -1,6 +1,6 @@
 # Loop mode
 
-Last updated: 2026-11-07. Status: L1 (core state machine), L2 (IDE, with autonomy levels), L3 (CLI and `cn serve`) and most of L5 (plan slots, controls, strategies, Loop as a mode) built, with unit tests, gui integration tests, and CLI flow tests through the TUI and `cn serve`. Four sandbox runs on a local model are done (see "Sandbox runs on a local model"); a rerun to measure the plan block's new place is pending. L4 (parallel items, verification) is not built.
+Last updated: 2026-11-07. Status: L1 (core state machine), L2 (IDE, with autonomy levels), L3 (CLI and `cn serve`) and most of L5 (plan slots, controls, strategies, Loop as a mode) built, with unit tests, gui integration tests, and CLI flow tests through the TUI and `cn serve`. Five sandbox runs on a local model are done (see "Sandbox runs on a local model"). L4 (parallel items, verification) is not built.
 
 Build a plan item by item without the person driving each step. Questions go to an inbox the person can answer while the work continues.
 
@@ -638,12 +638,13 @@ Run on 2026-11-07 against Strata, a single-slot OpenAI-compatible server on this
 
 `cn serve` did the work, from the built CLI. A driver script played the person over `/state` and `POST /message`: it allowed held approvals, kept assumptions, answered blocking questions, and started the loop once the plan was presented.
 
-| Run | Result                                                                           | Approvals held | Cached share of prompt tokens                                      |
-| --- | -------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------ |
-| 1   | Stopped on no progress: 0 of 5 done, 1 waiting                                   | 19             | not counted yet                                                    |
-| 2   | 5 of 5 done, every check passed, the repository's 19 tests pass, about 5 minutes | 4              | not counted yet                                                    |
-| 3   | 5 of 5 done, every check passed                                                  | 4              | 41% over 45 requests (first request of a turn 64%, later ones 39%) |
-| 4   | stopped early, through a logging proxy that saved each request                   | 3              | 33% over 28 requests                                               |
+| Run | Result                                                                                                                 | Approvals held | Cached share of prompt tokens                                          |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------- |
+| 1   | Stopped on no progress: 0 of 5 done, 1 waiting                                                                         | 19             | not counted yet                                                        |
+| 2   | 5 of 5 done, every check passed, the repository's 19 tests pass, about 5 minutes                                       | 4              | not counted yet                                                        |
+| 3   | 5 of 5 done, every check passed                                                                                        | 4              | 41% over 45 requests (first request of a turn 64%, later ones 39%)     |
+| 4   | stopped early, through a logging proxy that saved each request                                                         | 3              | 33% over 28 requests                                                   |
+| 5   | 5 of 5 done, every check passed, the repository's 20 tests pass, about 6 minutes, with the plan block in its new place | 6              | **89%** over 51 requests (first request of a turn 53%, later ones 91%) |
 
 **Bugs run 1 found, fixed before run 2:**
 
@@ -672,7 +673,8 @@ Run on 2026-11-07 against Strata, a single-slot OpenAI-compatible server on this
   | Last, with `strata_prefix: {messages: n - 1}` pinning a checkpoint before it | 89%                                                       |
 
 - **Fix, built:** the block goes after the item prompt and is fixed for the run (see "Plan slots"). It helps any provider whose cache matches a prefix, not only Strata.
-- **Still to do:** rerun the sandbox and measure the real cached share. Requests that must end with something that changes, such as the Done-first reminder, need a checkpoint pinned before it: Strata's `strata_prefix` as a `requestBodyHints.conversation` field, or Anthropic's `cache_control`.
+- **Measured, run 5:** 89% of all prompt tokens came from the cache, against 33 to 41% before, and 91% in the later requests of a run. Each request reused everything the one before it sent. Each later item's first request reused the 2,792 tokens of system message and tools.
+- **Still to do:** Requests that must end with something that changes, such as the Done-first reminder, need a checkpoint pinned before it: Strata's `strata_prefix` as a `requestBodyHints.conversation` field, or Anthropic's `cache_control`.
 
 ## Phases
 
