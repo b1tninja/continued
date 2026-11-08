@@ -1,5 +1,5 @@
 import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
-import { findAnthropicPricing } from "core/llm/utils/calculateRequestCost";
+import { findModelPricing } from "core/llm/utils/calculateRequestCost";
 import {
   formatSwitchCost,
   modelSupportsPromptCacheControl,
@@ -22,8 +22,8 @@ export function ModelSwitchCacheNotice() {
   if (!model || !state || !modelSupportsPromptCacheControl(model)) return null;
 
   const status = promptCacheStatus(model, setting, state, Date.now());
-  const price = findAnthropicPricing(model.model)?.input;
-  const cost = switchCost(status, state, price);
+  const pricing = findModelPricing(model.model, state.lastInputTokens);
+  const cost = switchCost(status, state, pricing);
   if (!cost) return null;
 
   return (

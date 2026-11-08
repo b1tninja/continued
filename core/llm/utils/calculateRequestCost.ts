@@ -57,7 +57,7 @@ function anthropicPricing(
 export const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
   // Claude 5 and 5.5, list prices checked 2026-11-03 at
   // platform.claude.com/docs/en/about-claude/pricing. These are list prices;
-  // `findAnthropicPricing` adds the Bedrock `us.` profile premium.
+  // `findModelPricing` adds the Bedrock `us.` profile premium.
   "claude-opus-5-5": anthropicPricing(4, 20, 0.05),
   "claude-opus-5": anthropicPricing(5, 25),
   // Fable and Mythos: $10 / $50, 5m write 1.25x, 1h write 2x. Reads are 0.025x
@@ -96,6 +96,49 @@ export const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
     cacheRead: 0.03,
   },
 };
+
+/**
+ * Amazon Nova on Bedrock, USD per million tokens, from the Amazon Nova tables
+ * of aws.amazon.com/bedrock/pricing (Standard tier, US East (Ohio), checked
+ * 2026-11-08). The page lists Nova 2 Lite twice: $0.30 / $2.50 under "Global
+ * Cross-region Inference" and $0.33 / $2.75 under "Geo Cross-region inference
+ * and in-region", so its list price is the global one and a geographic prefix
+ * adds 10% (see `bedrockRegionalPriceFactor`). Nova Pro, Lite and Micro are in
+ * the geo/in-region table only, so their one price applies to every ID. The
+ * footnote under every Nova table: "Cache read input tokens will be 75% less
+ * than on-demand input token price". The page lists no price for a cache
+ * write, so a write is estimated at the input price; Nova has no 1-hour
+ * lifetime, so the 1-hour figure is the same and is never reached. Only the
+ * four models that take cache points (`bedrockCachePointFields`) are here.
+ */
+function novaPricing(input: number, output: number): ModelPricing {
+  return {
+    input,
+    output,
+    cacheWrite: input,
+    cacheWrite1h: input,
+    cacheRead: input * 0.25,
+  };
+}
+
+export const NOVA_PRICING: Record<string, ModelPricing> = {
+  "nova-2-lite": novaPricing(0.3, 2.5),
+  "nova-pro": novaPricing(0.8, 3.2),
+  "nova-lite": novaPricing(0.06, 0.24),
+  "nova-micro": novaPricing(0.035, 0.14),
+};
+
+/**
+ * `us.amazon.nova-2-lite-v1:0` -> `nova-2-lite`, for the four Nova models in
+ * `NOVA_PRICING`; undefined for anything else, including Nova Premier and the
+ * other Nova 2 models (`nova-2-pro` does not match `nova-pro`). The same
+ * pattern as `bedrockCachePointFields` in core/llm/llms/bedrockHelpers.ts.
+ */
+export function normalizeNovaModelId(model: string): string | undefined {
+  return model
+    .match(/(?:^|\.)amazon\.(nova-(?:2-lite|pro|lite|micro))-v\d/i)?.[1]
+    ?.toLowerCase();
+}
 
 /**
  * Reduce the model ID formats of Anthropic, Bedrock (`us.anthropic.claude-...-v1:0`),
@@ -148,18 +191,28 @@ function continuesWithMinorVersion(rest: string): boolean {
  *
  * Only `us.` was seen in billing data; the other prefixes follow the vendor's
  * statement and are not measured.
+ *
+ * Amazon Nova 2 Lite has the same 10% gap on AWS's own pricing page ($0.30
+ * global, $0.33 geo cross-region and in-region, checked 2026-11-08), so a
+ * geographic prefix on it carries the factor too. Nova Pro, Lite and Micro
+ * are listed at one price, so they get none.
  */
 const BEDROCK_GEO_PROFILE_FACTOR = 1.1;
-const BEDROCK_GEO_PREFIX = /^(us|eu|apac|jp|au|ca)\.anthropic\./i;
-/** Normalized IDs of the models the premium applies to: 4.5 and later. */
+const BEDROCK_GEO_PREFIX = /^(us|eu|apac|jp|au|ca)\.(anthropic|amazon)\./i;
+/** Normalized IDs of the Claude models the premium applies to: 4.5 and later. */
 const REGIONAL_PREMIUM_MODELS =
   /^claude-(?:(?:opus|sonnet|haiku)-(?:4-[5-9]|[5-9])|fable|mythos)/;
 
 /** The multiplier to apply to list prices for this model ID. */
 export function bedrockRegionalPriceFactor(model: string): number {
   if (!BEDROCK_GEO_PREFIX.test(model)) return 1;
-  const id = normalizeClaudeModelId(model);
-  return id && REGIONAL_PREMIUM_MODELS.test(id)
+  const claude = normalizeClaudeModelId(model);
+  if (claude) {
+    return REGIONAL_PREMIUM_MODELS.test(claude)
+      ? BEDROCK_GEO_PROFILE_FACTOR
+      : 1;
+  }
+  return normalizeNovaModelId(model) === "nova-2-lite"
     ? BEDROCK_GEO_PROFILE_FACTOR
     : 1;
 }
@@ -188,11 +241,15 @@ function scalePricing(pricing: ModelPricing, factor: number): ModelPricing {
 }
 
 /**
+ * The prices of a Claude model, or of one of the four Amazon Nova models that
+ * cache on Bedrock, with the Bedrock regional premium applied; null for a
+ * model neither table lists.
+ *
  * @param inputTokens The request's whole prompt. When the model has a
  * long-context tier and the prompt is over its limit, the tier's prices are
  * returned.
  */
-export function findAnthropicPricing(
+export function findModelPricing(
   model: string,
   inputTokens?: number,
 ): ModelPricing | null {
@@ -205,7 +262,10 @@ function findListPricing(
   inputTokens?: number,
 ): ModelPricing | null {
   let id = normalizeClaudeModelId(model);
-  if (!id) return null;
+  if (!id) {
+    const nova = normalizeNovaModelId(model);
+    return nova ? NOVA_PRICING[nova] : null;
+  }
   id = EXACT_ALIASES[id] ?? id;
   const sortedKeys = Object.keys(ANTHROPIC_PRICING).sort(
     (a, b) => b.length - a.length,
@@ -226,17 +286,22 @@ function findListPricing(
   return null;
 }
 
-function calculateAnthropicCost(
+/**
+ * Claude on any provider, and Amazon Nova on Bedrock, which report usage the
+ * same way: `promptTokens` leaves out cache reads and writes, and writes may
+ * be split by lifetime.
+ */
+function calculateCachedModelCost(
   model: string,
   usage: Usage,
 ): CostBreakdown | null {
-  // The whole prompt decides the price tier. For Claude, `promptTokens` leaves
-  // out the cache reads and writes, so add them back.
+  // The whole prompt decides the price tier. `promptTokens` leaves out the
+  // cache reads and writes, so add them back.
   const wholePrompt =
     usage.promptTokens +
     (usage.promptTokensDetails?.cachedTokens ?? 0) +
     (usage.promptTokensDetails?.cacheWriteTokens ?? 0);
-  const modelPricing = findAnthropicPricing(model, wholePrompt);
+  const modelPricing = findModelPricing(model, wholePrompt);
   if (!modelPricing) {
     return null; // Unknown model
   }
@@ -311,7 +376,8 @@ function calculateAnthropicCost(
   let breakdown = `Model: ${model}\n`;
   const regionalFactor = bedrockRegionalPriceFactor(model);
   if (regionalFactor !== 1) {
-    breakdown += `Prices: Anthropic list × ${regionalFactor} (Bedrock regional endpoint)\n`;
+    const vendor = normalizeClaudeModelId(model) ? "Anthropic" : "AWS";
+    breakdown += `Prices: ${vendor} list × ${regionalFactor} (Bedrock regional endpoint)\n`;
   }
   breakdown += breakdownParts.join("\n");
   if (breakdownParts.length > 1) {
@@ -461,10 +527,11 @@ export function calculateRequestCost(
     case "anthropic":
     // Claude models served by other providers use the same list prices as an
     // estimate. Regional pricing, data residency and reseller margins can differ.
+    // On Bedrock the table also prices the Amazon Nova models that cache.
     case "bedrock":
     case "vertexai":
     case "openrouter":
-      return calculateAnthropicCost(model, usage);
+      return calculateCachedModelCost(model, usage);
     case "openai":
       return calculateOpenAICost(model, usage);
     default:

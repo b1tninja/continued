@@ -1,5 +1,8 @@
 import type { ModelDescription } from "core";
-import { bedrockRegionalPriceFactor } from "core/llm/utils/calculateRequestCost";
+import {
+  bedrockRegionalPriceFactor,
+  normalizeClaudeModelId,
+} from "core/llm/utils/calculateRequestCost";
 import {
   replayAll,
   type CacheLedgerEntry,
@@ -11,6 +14,7 @@ import { countFailures, type RequestFailure } from "./requestFailures";
 import {
   configEnablesPromptCaching,
   configTtlPolicy,
+  modelHasFixedCacheLifetime,
   modelSupportsOneHourCache,
   modelSupportsPromptCacheControl,
   type PromptCacheSetting,
@@ -91,20 +95,22 @@ export function cacheTips(
 
   // Anthropic's pricing page: "Regional and multi-region endpoints include a
   // 10 percent premium over global endpoints" (Sonnet 4.5, Haiku 4.5, Opus 4.5
-  // and later). On Bedrock the endpoint type is the model ID's prefix.
+  // and later). AWS's own page lists Amazon Nova 2 Lite with the same gap. On
+  // Bedrock the endpoint type is the model ID's prefix.
   if (model.provider?.toLowerCase() === "bedrock") {
     const factor = bedrockRegionalPriceFactor(model.model);
     if (factor > 1) {
       const percent = Math.round((factor - 1) * 100);
       const noGlobal = globalProfile === "absent";
+      const vendor = normalizeClaudeModelId(model.model) ? "Anthropic" : "AWS";
       tips.push({
         id: "regional-premium",
         severity: noGlobal ? "info" : "warning",
         title: `Regional endpoints cost ${percent}% more`,
         body: noGlobal
-          ? `This model ID uses a regional endpoint, which Anthropic prices ${percent}% above a global one, on input, output and cache reads and writes. ` +
+          ? `This model ID uses a regional endpoint, which ${vendor} prices ${percent}% above a global one, on input, output and cache reads and writes. ` +
             `Your account does not list a global profile for this model, so there is nothing cheaper to switch to here.`
-          : `This model ID uses a regional endpoint, which Anthropic prices ${percent}% above a global one, ` +
+          : `This model ID uses a regional endpoint, which ${vendor} prices ${percent}% above a global one, ` +
             `on input, output and cache reads and writes. If your data does not have to stay in that geography, ` +
             `try the global ID if one exists for this model. Global endpoints can route a request to any region, ` +
             `so keep the regional one when data residency matters.`,
@@ -116,7 +122,11 @@ export function cacheTips(
   // AWS Bedrock prompt caching guide: only the models in its table take a
   // 1-hour `ttl`; sending one to the others "can result in a
   // ValidationException", so Continuous sends the 5-minute default instead.
-  if (modelSupportsPromptCacheControl(model)) {
+  // Not for a model with one lifetime (Nova), whose menu never offers 1 hour.
+  if (
+    modelSupportsPromptCacheControl(model) &&
+    !modelHasFixedCacheLifetime(model)
+  ) {
     const on =
       setting === undefined
         ? configEnablesPromptCaching(model)
