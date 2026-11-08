@@ -13,8 +13,16 @@ import {
   replanDecision,
   setLoopAutonomy,
   decideNext,
+  approvalHeldResult,
+  finishItemReport,
   finishItemRun,
   formatLoopStatus,
+  holdQuestionResult,
+  LOOP_CLI_TOOL_NAMES,
+  loopCallKey,
+  repeatedCallResult,
+  replanHoldResult,
+  REPLAN_HOLD_RESULT,
   holdQuestion,
   loopItemPrompt,
   loopReplanPrompt,
@@ -907,5 +915,108 @@ describe("autonomy levels", () => {
         enterWait(runItem(unattended, "1", { outcome: "waiting" }), T0),
       ),
     ).toMatch(/goes on without answers at/);
+  });
+});
+
+describe("tool names for the CLI", () => {
+  const names = LOOP_CLI_TOOL_NAMES;
+
+  test("the item prompt names the CLI's tools when told to", () => {
+    const prompt = loopItemPrompt({
+      item: PLAN.items[0],
+      answers: [],
+      questions: [],
+      attempt: 1,
+      unanswered: [
+        {
+          id: "q1",
+          itemId: "1",
+          question: "Which?",
+          kind: "blocking",
+          askedAt: T0.toISOString(),
+        },
+      ],
+      toolNames: names,
+    });
+    expect(prompt).toContain("call FinishItem");
+    expect(prompt).toContain("call HoldQuestion");
+    expect(prompt).toContain("record it with HoldQuestion");
+    expect(prompt).not.toMatch(/finish_item|hold_question/);
+    // Without names it is the IDE's, as before
+    expect(
+      loopItemPrompt({
+        item: PLAN.items[0],
+        answers: [],
+        questions: [],
+        attempt: 1,
+      }),
+    ).toContain("call finish_item");
+  });
+
+  test("the re-plan prompt names the CLI's plan tool", () => {
+    const prompt = loopReplanPrompt({
+      loop: loopOn(),
+      plan: PLAN,
+      planTitle: "Parser",
+      toolNames: names,
+    });
+    expect(prompt).toContain('call PresentPlan with the title "Parser"');
+    expect(prompt).not.toContain("present_plan");
+  });
+
+  test("tool results and errors use the names they are given", () => {
+    let loop = startItemRun(loopOn(), "1", 0, T0);
+    for (let i = 0; i < 4; i++) {
+      const r = holdQuestion(
+        loop,
+        { itemId: "1", question: `Q${i}?`, kind: "blocking" },
+        T0,
+      );
+      if (!r.ok) throw new Error(r.error);
+      loop = r.loop;
+    }
+    const over = holdQuestion(
+      loop,
+      { itemId: "1", question: "Q5?", kind: "blocking", toolNames: names },
+      T0,
+    );
+    expect(over.ok).toBe(false);
+    expect(!over.ok && over.error).toContain("call FinishItem");
+
+    const q = loop.questions[0];
+    expect(holdQuestionResult(q, false, names)).toContain("call FinishItem");
+    expect(holdQuestionResult(q, false)).toContain("call finish_item");
+    expect(approvalHeldResult(q, names)).toContain("call FinishItem");
+    expect(repeatedCallResult(4, names)).toContain("call FinishItem");
+    expect(replanHoldResult(names)).toContain("with PresentPlan");
+    expect(REPLAN_HOLD_RESULT).toContain("with present_plan");
+  });
+
+  test("a call's key ignores argument order and matches the gui's grantKey", () => {
+    expect(loopCallKey("Bash", { a: 1, b: [2, { c: 3, d: 4 }] })).toBe(
+      loopCallKey("Bash", { b: [2, { d: 4, c: 3 }], a: 1 }),
+    );
+    expect(loopCallKey("Bash", { command: "ls" })).toBe('Bash {"command":"ls"}');
+    expect(loopCallKey("Bash", undefined)).toBe("Bash {}");
+  });
+
+  test("finish_item's arguments become its report", () => {
+    expect(finishItemReport({ outcome: "nope" })).toEqual({
+      ok: false,
+      error: "outcome must be one of done, waiting, stuck",
+    });
+    const r = finishItemReport({
+      outcome: "done",
+      summary: `  ${"s".repeat(600)}`,
+      notes: "  use npm test  ",
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.report.outcome).toBe("done");
+    expect(r.report.summary).toHaveLength(500);
+    expect(r.report.notes).toBe("use npm test");
+    expect(finishItemReport({ outcome: "stuck", summary: " " })).toEqual({
+      ok: true,
+      report: { outcome: "stuck" },
+    });
   });
 });

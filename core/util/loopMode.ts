@@ -12,6 +12,7 @@ import type {
   TaskItem,
   TaskPlan,
 } from "../index.js";
+import { stableStringify } from "../tools/permissions/auto/state.js";
 
 /**
  * Loop mode: build a plan item by item without the person driving each step.
@@ -25,6 +26,37 @@ import type {
 
 export const HOLD_QUESTION_TOOL_NAME = "hold_question";
 export const FINISH_ITEM_TOOL_NAME = "finish_item";
+
+/**
+ * The names the prompts and tool results give the model for the loop's
+ * tools and the plan tool. The IDE's tools are snake_case; the CLI's are
+ * PascalCase like its other tools (LOOP_CLI_TOOL_NAMES).
+ */
+export interface LoopToolNames {
+  holdQuestion: string;
+  finishItem: string;
+  presentPlan: string;
+}
+
+export const LOOP_TOOL_NAMES: LoopToolNames = {
+  holdQuestion: HOLD_QUESTION_TOOL_NAME,
+  finishItem: FINISH_ITEM_TOOL_NAME,
+  presentPlan: "present_plan",
+};
+
+export const LOOP_CLI_TOOL_NAMES: LoopToolNames = {
+  holdQuestion: "HoldQuestion",
+  finishItem: "FinishItem",
+  presentPlan: "PresentPlan",
+};
+
+/**
+ * Same tool and same arguments: the key of an approval grant and of the
+ * repeat count. The same format as the gui's grantKey.
+ */
+export function loopCallKey(toolName: string, args: unknown): string {
+  return `${toolName}\u0000${stableStringify(args ?? {})}`;
+}
 
 export const DEFAULT_LOOP_BUDGET: LoopBudget = {
   maxRounds: 5,
@@ -167,13 +199,19 @@ export function repeatCount(previous: string[], key: string): number {
 }
 
 /** What the model sees when a call is refused for repeating. */
-export function repeatedCallResult(count: number): string {
-  return `You have made this exact call ${count} times while working on this item, so it was not run again. Its result will not change. Try a different approach, or call ${FINISH_ITEM_TOOL_NAME} with outcome "stuck" and say what is in the way.`;
+export function repeatedCallResult(
+  count: number,
+  names: LoopToolNames = LOOP_TOOL_NAMES,
+): string {
+  return `You have made this exact call ${count} times while working on this item, so it was not run again. Its result will not change. Try a different approach, or call ${names.finishItem} with outcome "stuck" and say what is in the way.`;
 }
 
 /** What the model sees when a re-plan turn tries a call that would ask. */
-export const REPLAN_HOLD_RESULT =
-  "Re-planning only reads, so this call was not run. Present the plan with present_plan instead.";
+export function replanHoldResult(names: LoopToolNames = LOOP_TOOL_NAMES) {
+  return `Re-planning only reads, so this call was not run. Present the plan with ${names.presentPlan} instead.`;
+}
+
+export const REPLAN_HOLD_RESULT = replanHoldResult();
 
 export type FinishOutcome = "done" | "stuck" | "waiting";
 
@@ -573,7 +611,8 @@ function hasOpenBlocking(loop: LoopState, itemId: string): boolean {
 export function finishItemRun(
   loop: LoopState,
   report:
-    { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
+    | { outcome: FinishOutcome; summary?: string; notes?: string }
+    | undefined,
 ): LoopState {
   const itemId = loop.current?.itemId;
   if (!itemId || loop.current?.kind !== "item") return loop;
@@ -644,9 +683,12 @@ export function holdQuestion(
     kind: unknown;
     assumption?: unknown;
     approval?: LoopQuestion["approval"];
+    /** For the error texts; default the IDE's names */
+    toolNames?: LoopToolNames;
   },
   now: Date,
 ): HoldResult {
+  const names = input.toolNames ?? LOOP_TOOL_NAMES;
   const question =
     typeof input.question === "string" ? input.question.trim() : "";
   if (!question) return { ok: false, error: "question is empty" };
@@ -682,7 +724,7 @@ export function holdQuestion(
   ) {
     return {
       ok: false,
-      error: `This item already holds ${LOOP_LIMITS.maxOpenQuestionsPerItem} open questions. Continue on your stated assumptions, or call ${FINISH_ITEM_TOOL_NAME} with outcome "waiting".`,
+      error: `This item already holds ${LOOP_LIMITS.maxOpenQuestionsPerItem} open questions. Continue on your stated assumptions, or call ${names.finishItem} with outcome "waiting".`,
     };
   }
   if (loop.questions.length >= LOOP_LIMITS.maxQuestions) {
@@ -1047,8 +1089,11 @@ export function loopItemPrompt(input: {
   freshContext?: boolean;
   /** Questions of this item nobody answered in time (unattended) */
   unanswered?: LoopQuestion[];
+  /** The names the model knows the tools by (default the IDE's) */
+  toolNames?: LoopToolNames;
 }): string {
   const { item } = input;
+  const names = input.toolNames ?? LOOP_TOOL_NAMES;
   const lines = [
     `Work on this item of the plan, and only this item: ${quote(item.text)}`,
   ];
@@ -1073,7 +1118,7 @@ export function loopItemPrompt(input: {
     );
     for (const q of input.unanswered) lines.push(`- ${quote(q.question)}`);
     lines.push(
-      `For each, take your best default and record it with ${HOLD_QUESTION_TOOL_NAME} kind "assumption". Do not do anything that cannot be undone on such a default; leave that part and say so in the summary.`,
+      `For each, take your best default and record it with ${names.holdQuestion} kind "assumption". Do not do anything that cannot be undone on such a default; leave that part and say so in the summary.`,
     );
   }
   if (input.standing?.length) {
@@ -1101,9 +1146,9 @@ export function loopItemPrompt(input: {
     "",
     "Before you report it done, run the checks the project has for what you changed (tests, type check, lint) and fix what fails; name them in your summary, or say there was nothing to run.",
     "",
-    `When the item is done, call ${FINISH_ITEM_TOOL_NAME} with outcome "done" and a one-line summary. If you cannot finish it, call ${FINISH_ITEM_TOOL_NAME} with outcome "stuck" and say why. Put anything a later item should know (a command that works, a trap you hit) in \`notes\`: one or two lines, not progress.`,
+    `When the item is done, call ${names.finishItem} with outcome "done" and a one-line summary. If you cannot finish it, call ${names.finishItem} with outcome "stuck" and say why. Put anything a later item should know (a command that works, a trap you hit) in \`notes\`: one or two lines, not progress.`,
     "",
-    `Ask, rather than decide silently: whenever the person might want a say (a choice between approaches, scope, naming, an irreversible step, or anything the plan does not settle), call ${HOLD_QUESTION_TOOL_NAME}. Use kind "assumption" by default: state the choice you are making in \`assumption\` and keep working; the person can overrule it later. Use kind "blocking" only when there is no reasonable default, then stop and call ${FINISH_ITEM_TOOL_NAME} with outcome "waiting". Write each question so it can be answered without this conversation: name the item, the options and your default.`,
+    `Ask, rather than decide silently: whenever the person might want a say (a choice between approaches, scope, naming, an irreversible step, or anything the plan does not settle), call ${names.holdQuestion}. Use kind "assumption" by default: state the choice you are making in \`assumption\` and keep working; the person can overrule it later. Use kind "blocking" only when there is no reasonable default, then stop and call ${names.finishItem} with outcome "waiting". Write each question so it can be answered without this conversation: name the item, the options and your default.`,
   );
   return lines.join("\n");
 }
@@ -1123,8 +1168,11 @@ export function loopReplanPrompt(input: {
   plan: TaskPlan;
   planFile?: string;
   planTitle?: string;
+  /** The names the model knows the tools by (default the IDE's) */
+  toolNames?: LoopToolNames;
 }): string {
   const { loop, plan } = input;
+  const names = input.toolNames ?? LOOP_TOOL_NAMES;
   const lines = [
     `No item of the plan can run now. Re-evaluate the plan${input.planFile ? ` in ${input.planFile}` : ""} against what has happened, and propose the next round.`,
     "",
@@ -1171,7 +1219,7 @@ export function loopReplanPrompt(input: {
     "",
     "The plan may be wrong. Check its open items against the code before you keep them: drop what is already done, and do not add what already exists.",
     "",
-    `Read what you need, then call present_plan${input.planTitle ? ` with the title "${quote(input.planTitle)}"` : ""} with the updated to-dos. Keep finished to-dos word for word so they stay done. Reword or split items that failed, drop what is no longer needed, and add only work the plan's goal requires. Leave items that wait on the person in the list as they are.`,
+    `Read what you need, then call ${names.presentPlan}${input.planTitle ? ` with the title "${quote(input.planTitle)}"` : ""} with the updated to-dos. Keep finished to-dos word for word so they stay done. Reword or split items that failed, drop what is no longer needed, and add only work the plan's goal requires. Leave items that wait on the person in the list as they are.`,
   );
   return lines.join("\n");
 }
@@ -1266,16 +1314,55 @@ export function finishItemResult(outcome: FinishOutcome): string {
 export function holdQuestionResult(
   question: LoopQuestion,
   duplicate: boolean,
+  names: LoopToolNames = LOOP_TOOL_NAMES,
 ): string {
   const prefix = duplicate
     ? `You already asked this (${question.id}).`
     : `Question ${question.id} is in the person's inbox.`;
   return question.kind === "assumption"
     ? `${prefix} Keep working on your assumption; if they overrule it, the item will be redone.`
-    : `${prefix} Do what you can without the answer, then call ${FINISH_ITEM_TOOL_NAME} with outcome "waiting".`;
+    : `${prefix} Do what you can without the answer, then call ${names.finishItem} with outcome "waiting".`;
 }
 
 /** What the model sees when a tool call that would ask is held as a question. */
-export function approvalHeldResult(question: LoopQuestion): string {
-  return `This call needs the person's approval, so it was not run. It is held as question ${question.id} in their inbox. Do not try to reach the same result another way. Do what you can without it, then call ${FINISH_ITEM_TOOL_NAME} with outcome "waiting"; the item will run again once they answer.`;
+export function approvalHeldResult(
+  question: LoopQuestion,
+  names: LoopToolNames = LOOP_TOOL_NAMES,
+): string {
+  return `This call needs the person's approval, so it was not run. It is held as question ${question.id} in their inbox. Do not try to reach the same result another way. Do what you can without it, then call ${names.finishItem} with outcome "waiting"; the item will run again once they answer.`;
+}
+
+const FINISH_OUTCOMES: FinishOutcome[] = ["done", "waiting", "stuck"];
+
+/** The report a finish_item call makes, from its arguments. */
+export function finishItemReport(args: unknown):
+  | {
+      ok: true;
+      report: { outcome: FinishOutcome; summary?: string; notes?: string };
+    }
+  | { ok: false; error: string } {
+  const a = (args ?? {}) as Record<string, unknown>;
+  const outcome = a.outcome as FinishOutcome;
+  if (!FINISH_OUTCOMES.includes(outcome)) {
+    return {
+      ok: false,
+      error: `outcome must be one of ${FINISH_OUTCOMES.join(", ")}`,
+    };
+  }
+  const summary =
+    typeof a.summary === "string"
+      ? a.summary.trim().slice(0, LOOP_LIMITS.maxSummaryLength)
+      : undefined;
+  const notes =
+    typeof a.notes === "string"
+      ? a.notes.trim().slice(0, LOOP_LIMITS.maxNoteLength)
+      : undefined;
+  return {
+    ok: true,
+    report: {
+      outcome,
+      ...(summary ? { summary } : {}),
+      ...(notes ? { notes } : {}),
+    },
+  };
 }

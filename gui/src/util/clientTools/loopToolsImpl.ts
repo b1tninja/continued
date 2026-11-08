@@ -1,10 +1,9 @@
 import { ContinueError, ContinueErrorReason } from "core/util/errors";
 import {
-  FinishOutcome,
+  finishItemReport,
   finishItemResult,
   holdQuestion,
   holdQuestionResult,
-  LOOP_LIMITS,
 } from "core/util/loopMode";
 import { commitLoop } from "../../redux/util/loopCommit";
 import { ClientToolImpl } from "./callClientTool";
@@ -54,8 +53,6 @@ export const holdQuestionImpl: ClientToolImpl = async (
   };
 };
 
-const OUTCOMES: FinishOutcome[] = ["done", "waiting", "stuck"];
-
 /** finish_item: records the run's report and ends the turn. */
 export const finishItemImpl: ClientToolImpl = async (
   args,
@@ -63,31 +60,14 @@ export const finishItemImpl: ClientToolImpl = async (
   extras,
 ) => {
   const { loop } = runningItem(extras);
-  const outcome = args?.outcome as FinishOutcome;
-  if (!OUTCOMES.includes(outcome)) {
-    throw new ContinueError(
-      ContinueErrorReason.Unspecified,
-      `outcome must be one of ${OUTCOMES.join(", ")}`,
-    );
+  const parsed = finishItemReport(args);
+  if (!parsed.ok) {
+    throw new ContinueError(ContinueErrorReason.Unspecified, parsed.error);
   }
-  const summary =
-    typeof args?.summary === "string"
-      ? args.summary.trim().slice(0, LOOP_LIMITS.maxSummaryLength)
-      : undefined;
-  const notes =
-    typeof args?.notes === "string"
-      ? args.notes.trim().slice(0, LOOP_LIMITS.maxNoteLength)
-      : undefined;
+  const { report } = parsed;
   commitLoop(extras.dispatch, extras.getState, {
     ...loop,
-    current: loop.current && {
-      ...loop.current,
-      report: {
-        outcome,
-        ...(summary ? { summary } : {}),
-        ...(notes ? { notes } : {}),
-      },
-    },
+    current: loop.current && { ...loop.current, report },
   });
   return {
     respondImmediately: true,
@@ -96,8 +76,8 @@ export const finishItemImpl: ClientToolImpl = async (
     output: [
       {
         name: "Item reported",
-        description: outcome,
-        content: finishItemResult(outcome),
+        description: report.outcome,
+        content: finishItemResult(report.outcome),
         hidden: false,
       },
     ],
