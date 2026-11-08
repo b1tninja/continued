@@ -123,7 +123,9 @@ export function addModel(
     (config) => {
       const numMatches = config.models?.reduce(
         (prev, curr) =>
-          "name" in curr && curr.name.startsWith(model.title) ? prev + 1 : prev,
+          "name" in curr && curr.name?.startsWith(model.title)
+            ? prev + 1
+            : prev,
         0,
       );
       if (numMatches !== undefined && numMatches > 0) {
@@ -235,7 +237,7 @@ async function showUnsupportedCpuToast(ide: IDE) {
 
   if (shouldOpenLink) {
     void ide.openUrl(
-      "https://b1tninja.github.io/continued/faqs#i-received-a-codebase-indexing-disabled---your-linux-system-lacks-required-cpu-features-avx2-fma-notification",
+      "https://b1tninja.github.io/continuous/faqs#i-received-a-codebase-indexing-disabled---your-linux-system-lacks-required-cpu-features-avx2-fma-notification",
     );
   }
 }

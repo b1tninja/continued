@@ -22,6 +22,7 @@ import {
 } from "./auth/workos.js";
 import { CLIPlatformClient } from "./CLIPlatformClient.js";
 import { env } from "./env.js";
+import { loadLocalModelFiles } from "./localModelFiles.js";
 
 export interface ConfigLoadResult {
   config: AssistantUnrolled;
@@ -302,7 +303,7 @@ async function loadUserAssistantWithFallback(
 }
 
 /**
- * Loads default config.yaml from ~/.continue/config.yaml
+ * Loads default config.yaml from the global folder (~/.continuous/config.yaml)
  */
 async function loadLocalConfigYaml(
   accessToken: string | null,
@@ -374,6 +375,7 @@ export async function unrollPackageIdentifiersAsConfigYaml(
       platformClient: new CLIPlatformClient(organizationId, apiClient),
       renderSecrets: true,
       injectBlocks: packageIdentifiers,
+      ...loadLocalModelFiles(),
     },
   );
   if (unrollResult.errors) {
@@ -410,6 +412,8 @@ async function unrollAssistantWithConfig(
       renderSecrets: true,
       platformClient: new CLIPlatformClient(organizationId, apiClient),
       injectBlocks,
+      // Accounts (providers.yaml) and the model catalog (models.yaml)
+      ...loadLocalModelFiles(),
     },
   );
 

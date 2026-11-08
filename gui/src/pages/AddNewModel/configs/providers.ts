@@ -43,6 +43,11 @@ export interface ProviderInfo {
   refPage?: string;
   apiKeyUrl?: string;
   downloadUrl?: string;
+  /**
+   * A server on this machine: the setup flow offers the usual addresses and
+   * detects running servers, and the API key is optional.
+   */
+  localServer?: boolean;
 }
 
 const BEDROCK_REGIONS = [
@@ -289,7 +294,7 @@ export const providers: Partial<Record<string, ProviderInfo>> = {
     title: "Moonshot",
     provider: "moonshot",
     description: "Use the Moonshot API for LLMs",
-    longDescription: `[Visit our documentation](https://b1tninja.github.io/continued/customize/model-providers/more/moonshot) for information on obtaining an API key.`,
+    longDescription: `[Visit our documentation](https://b1tninja.github.io/continuous/customize/model-providers/more/moonshot) for information on obtaining an API key.`,
     icon: "moonshot.png",
     tags: [ModelProviderTags.RequiresApiKey],
     refPage: "moonshot",
@@ -428,7 +433,7 @@ export const providers: Partial<Record<string, ProviderInfo>> = {
     icon: "bedrock.svg",
     description:
       "Use Claude, Nova and other models through your AWS account. Authenticate with a Bedrock API key, an AWS profile (including SSO), or access keys.",
-    longDescription: `Enable the models you want in the [Bedrock console](https://console.aws.amazon.com/bedrock) (**Model access**) in the region you choose below. See the [documentation](https://b1tninja.github.io/continued/customize/model-providers/top-level/bedrock) for help picking an authentication method.`,
+    longDescription: `Enable the models you want in the [Bedrock console](https://console.aws.amazon.com/bedrock) (**Model access**) in the region you choose below. See the [documentation](https://b1tninja.github.io/continuous/customize/model-providers/top-level/bedrock) for help picking an authentication method.`,
     tags: [ModelProviderTags.RequiresApiKey],
     refPage: "bedrock",
     packages: [
@@ -547,7 +552,7 @@ export const providers: Partial<Record<string, ProviderInfo>> = {
     icon: "bedrock.svg",
     description:
       "OpenAI-compatible endpoint for models on Amazon Bedrock, used with a Bedrock API key.",
-    longDescription: `Bedrock Mantle serves open-weight and partner models (GPT OSS, Qwen, Kimi and more) through an OpenAI-compatible API. Create a [Bedrock API key](https://console.aws.amazon.com/bedrock/home#/api-keys) in the same region. Mantle is available in fewer regions than the standard Bedrock endpoint, and some models are served under a different path prefix, which Continue detects automatically.`,
+    longDescription: `Bedrock Mantle serves open-weight and partner models (GPT OSS, Qwen, Kimi and more) through an OpenAI-compatible API. Create a [Bedrock API key](https://console.aws.amazon.com/bedrock/home#/api-keys) in the same region. Mantle is available in fewer regions than the standard Bedrock endpoint, and some models are served under a different path prefix, which Continuous detects automatically.`,
     tags: [ModelProviderTags.RequiresApiKey],
     refPage: "bedrock",
     apiKeyUrl: "https://console.aws.amazon.com/bedrock/home#/api-keys",
@@ -588,7 +593,7 @@ export const providers: Partial<Record<string, ProviderInfo>> = {
     provider: "azure",
     description:
       "Azure OpenAI Service offers industry-leading coding and language AI models that you can fine-tune to your specific needs for a variety of use cases.",
-    longDescription: `[Visit our documentation](https://b1tninja.github.io/continued/customize/model-providers/top-level/azure) for information on obtaining an API key.
+    longDescription: `[Visit our documentation](https://b1tninja.github.io/continuous/customize/model-providers/top-level/azure) for information on obtaining an API key.
 
 Select the \`GPT-4o\` model below to complete your provider configuration, but note that this will not affect the specific model you need to select when creating your Azure deployment.`,
     icon: "azure.png",
@@ -1027,7 +1032,7 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
     description:
       "High-performance local LLM inference with AMD hardware optimization",
     longDescription:
-      "Lemonade provides optimized local LLM inference with support for AMD NPU, GPU, and CPU acceleration. Visit [lemonade-server.ai](https://lemonade-server.ai/) for installation and setup instructions. Once the Lemonade server is running, you can begin using Continue with your local models.",
+      "Lemonade provides optimized local LLM inference with support for AMD NPU, GPU, and CPU acceleration. Visit [lemonade-server.ai](https://lemonade-server.ai/) for installation and setup instructions. Once the Lemonade server is running, you can begin using Continuous with your local models.",
     icon: "lemonade.png",
     tags: [ModelProviderTags.Local, ModelProviderTags.OpenSource],
     params: {
@@ -1145,27 +1150,31 @@ After it's up and running, you can start using Continue.`,
     collectInputFor: [...completionParamsInputsConfigs],
     downloadUrl: "https://github.com/ggerganov/llama.cpp",
   },
-  "openai-aiohttp": {
-    title: "Other OpenAI-compatible API",
+  "openai-compatible": {
+    title: "Local server (OpenAI-compatible)",
     provider: "openai",
     description:
-      "If you are using any other OpenAI-compatible API, for example text-gen-webui, FastChat, LocalAI, or llama-cpp-python, you can simply enter your server URL",
-    longDescription: `If you are using any other OpenAI-compatible API, you can simply enter your server URL. If you still need to set up your model server, you can follow a guide below:
+      "A model server on your machine with an OpenAI-compatible API: Strata, llama.cpp, vLLM, LM Studio, Ollama, LocalAI and others",
+    longDescription: `Any server with an OpenAI-compatible API works: enter its address, including the \`/v1\` path. **Detect** looks for servers on the usual local ports.
 
-- [text-gen-webui](https://github.com/oobabooga/text-generation-webui/tree/main/extensions/openai#setup--installation)
-- [LocalAI](https://localai.io/basics/getting_started/)
-- [llama-cpp-python](https://github.com/continuedev/ggml-server-example)
-- [FastChat](https://github.com/lm-sys/FastChat/blob/main/docs/openai_api.md)`,
+- Strata, llama.cpp (\`llama-server\`), llamafile and LocalAI: \`http://127.0.0.1:8080/v1\`
+- vLLM: \`http://127.0.0.1:8000/v1\`
+- LM Studio: \`http://127.0.0.1:1234/v1\`
+- Ollama: \`http://127.0.0.1:11434/v1\``,
     params: {
       apiBase: "",
     },
     collectInputFor: [
       {
         ...apiBaseInput,
-        defaultValue: "http://localhost:8000/v1/",
+        label: "Server address",
+        defaultValue: "http://127.0.0.1:8080/v1/",
+        placeholder: "e.g. http://127.0.0.1:8080/v1/",
+        required: true,
       },
       ...completionParamsInputsConfigs,
     ],
+    localServer: true,
     icon: "openai.png",
     tags: [ModelProviderTags.Local, ModelProviderTags.OpenSource],
     packages: [

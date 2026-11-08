@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Continued",
+  "name": "Continuous",
   "colors": {
     "primary": "#6b7280",
     "light": "#ffffff",
@@ -80,6 +80,7 @@
               "customize/models",
               "customize/model-setup",
               "customize/providers",
+              "customize/model-catalog",
               "customize/configs",
               "customize/vscode-chat-and-agents",
               "customize/mcp-tools",
@@ -116,6 +117,7 @@
                       "customize/model-providers/more/groq",
                       "customize/model-providers/more/llamacpp",
                       "customize/model-providers/more/llamastack",
+                      "customize/model-providers/more/local-servers",
                       "customize/model-providers/more/mimo",
                       "customize/model-providers/more/mistral",
                       "customize/model-providers/more/moonshot",
@@ -202,7 +204,7 @@
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg",
-    "href": "https://github.com/b1tninja/continued"
+    "href": "https://github.com/b1tninja/continuous"
   },
   "background": {
     "color": {
@@ -212,12 +214,12 @@
   "navbar": {
     "primary": {
       "type": "github",
-      "href": "https://github.com/b1tninja/continued"
+      "href": "https://github.com/b1tninja/continuous"
     }
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/b1tninja/continued"
+      "github": "https://github.com/b1tninja/continuous"
     }
   },
   "contextual": {
@@ -234,7 +236,7 @@
   "redirects": [
     {
       "source": "/changelog",
-      "destination": "https://github.com/b1tninja/continued/releases"
+      "destination": "https://github.com/b1tninja/continuous/releases"
     },
     {
       "source": "/customization",
@@ -846,7 +848,7 @@
     },
     {
       "source": "/about",
-      "destination": "https://github.com/b1tninja/continued"
+      "destination": "https://github.com/b1tninja/continuous"
     },
     {
       "source": "/autocomplete/model-setup",
