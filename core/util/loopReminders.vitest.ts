@@ -205,7 +205,11 @@ describe("delivering a reminder", () => {
     const reloaded = restoreLoop(JSON.parse(JSON.stringify(loop)))!;
     expect(reloaded.reminders).toEqual(loop.reminders);
     expect(notes(reloaded, ITEM_2)).toEqual(["A note"]);
-    const delivered = take(loop, ITEM_2).loop;
+    // Taken once the saving run is over, as the next run's prompt is built
+    const delivered = take(
+      finishItemRun(loop, { outcome: "done" }),
+      ITEM_2,
+    ).loop;
     const again = restoreLoop(JSON.parse(JSON.stringify(delivered)))!;
     expect(notes(again, ITEM_2)).toEqual([]);
   });

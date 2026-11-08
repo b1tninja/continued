@@ -7,9 +7,8 @@ import {
   REMIND_ME_TOOL_DESCRIPTION,
 } from "core/tools/definitions/loopTools.js";
 import {
-  deferralSpent,
   finishItemReport,
-  finishItemResult,
+  finishItemResultFor,
   holdQuestion,
   holdQuestionResult,
 } from "core/util/loopMode.js";
@@ -142,7 +141,7 @@ export const finishItemTool: Tool = {
   readonly: true,
   isBuiltIn: true,
   parameters: withDescriptions(FINISH_ITEM_PARAMETERS, {
-    outcome: "done, waiting or stuck",
+    outcome: "done, waiting, stuck or later",
   }),
   run: async (args: Record<string, unknown>) => {
     const { loop, itemId } = runningItem();
@@ -151,7 +150,7 @@ export const finishItemTool: Tool = {
       throw new Error(parsed.error);
     }
     const { report, later } = parsed;
-    const spent = deferralSpent(loop, itemId);
+    const result = finishItemResultFor(loop, itemId, report.outcome);
     const saved = later
       ? saveLaterReminder(
           loop,
@@ -167,6 +166,6 @@ export const finishItemTool: Tool = {
     });
     // The loop picks what comes next; no need to ask the model again
     requestLoopTurnEnd();
-    return finishItemResult(report.outcome, spent);
+    return result;
   },
 };

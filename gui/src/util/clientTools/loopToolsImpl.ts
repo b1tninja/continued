@@ -1,8 +1,7 @@
 import { ContinueError, ContinueErrorReason } from "core/util/errors";
 import {
-  deferralSpent,
   finishItemReport,
-  finishItemResult,
+  finishItemResultFor,
   holdQuestion,
   holdQuestionResult,
 } from "core/util/loopMode";
@@ -119,7 +118,7 @@ export const finishItemImpl: ClientToolImpl = async (
   );
   // The read above took time: report on the loop as it is now
   const { loop } = runningItem(extras);
-  const spent = deferralSpent(loop, itemId);
+  const result = finishItemResultFor(loop, itemId, report.outcome);
   const saved = later
     ? saveLaterReminder(
         loop,
@@ -141,7 +140,7 @@ export const finishItemImpl: ClientToolImpl = async (
       {
         name: "Item reported",
         description: report.outcome,
-        content: finishItemResult(report.outcome, spent),
+        content: result,
         hidden: false,
       },
     ],

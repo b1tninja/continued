@@ -17,7 +17,10 @@ import type {
 } from "../index.js";
 import { stableStringify } from "../tools/permissions/auto/state.js";
 import {
+  hasReplanReminder,
   LOOP_REMINDER_LIMITS,
+  rehomedReminders,
+  releasedReminders,
   reminderFilePaths,
   type LoopDeliveredReminder,
 } from "./loopReminders.js";
@@ -621,7 +624,7 @@ export function nextRunnableItem(
     );
   });
   return (
-    runnable.find((task) => !itemState(loop, task.id)?.deferrals) ?? runnable[0]
+    runnable.find((task) => !itemState(loop, task.id)?.setAside) ?? runnable[0]
   );
 }
 
@@ -727,7 +730,7 @@ export function decideNext(
     return { kind: "run", itemId: next.id };
   }
   if (live.every((i) => i.status === "done")) {
-    if (hasUndeliveredPlanAnswers(loop)) {
+    if (hasUndeliveredPlanAnswers(loop) || hasReplanReminder(loop)) {
       return replanOrStop(loop);
     }
     const skipped = live.filter((i) => i.skipped).length;
@@ -831,6 +834,7 @@ export function stopLoop(
     : loop.items;
   return {
     ...loop,
+    ...releasedReminders(loop),
     items,
     current: undefined,
     status: "stopped",
@@ -1015,6 +1019,7 @@ export function startItemRun(
     ...withItem(loop, itemId, {
       status: "running",
       attempts: (state?.attempts ?? 0) + 1,
+      setAside: undefined,
     }),
     status: "running",
     current: { kind: "item", itemId, historyIndex, startedAt: iso(now) },
@@ -1222,6 +1227,7 @@ export function finishItemRun(
     ...(deferred
       ? {
           deferrals: (state?.deferrals ?? 0) + 1,
+          setAside: true,
           attempts: Math.max(0, (state?.attempts ?? 0) - 1),
         }
       : {}),
@@ -1240,6 +1246,7 @@ export function finishItemRun(
         : (loop.consecutiveFailures ?? 0);
   return {
     ...withItem(next, itemId, { unanswered: undefined, again: undefined }),
+    ...(report ? {} : releasedReminders(loop)),
     current: undefined,
     doneThisRound: loop.doneThisRound + (status === "done" ? 1 : 0),
     consecutiveFailures: failures,
@@ -1375,7 +1382,9 @@ export function runItemAgain(
       error:
         state.status === "waiting"
           ? `${itemId} waits on an answer: answer its question instead`
-          : `${itemId} has not run yet`,
+          : state.setAside
+            ? `${itemId} was set aside and is still to run`
+            : `${itemId} has not run yet`,
     };
   }
   const { skipped: _skipped, unanswered: _unanswered, ...rest } = state;
@@ -1981,6 +1990,7 @@ export function acceptReplan(
   plan: TaskPlan,
   ctx: LoopContext,
 ): LoopState {
+  loop = { ...loop, ...rehomedReminders(loop, plan) };
   const scope = loop.replanned;
   const unchangedCheckIn = !!scope?.checkIn && sameTexts(scope.planTexts, plan);
   const repairOf = scope?.itemId ? itemState(loop, scope.itemId) : undefined;
@@ -2116,7 +2126,7 @@ export function loopItemPrompt(input: {
   }
   if (input.returning) {
     lines.push(
-      "An earlier run set this item aside to come back to it, and other items have run since. Check what changed before you go on.",
+      "An earlier run set this item aside to come back to it. Check what changed before you go on.",
     );
   }
   if (input.item.check) {
@@ -2565,6 +2575,18 @@ export function restoreLoop(value: unknown): LoopState | undefined {
     "stopped",
     "The window reloaded while the loop was running. Resume to go on.",
   );
+}
+
+/** finish_item's result, knowing what the report will come to on this item. */
+export function finishItemResultFor(
+  loop: LoopState,
+  itemId: string,
+  outcome: FinishOutcome,
+): string {
+  if (outcome === "later" && hasOpenBlocking(loop, itemId)) {
+    return "This item has an open blocking question, so it waits for the answer instead. End your turn now.";
+  }
+  return finishItemResult(outcome, deferralSpent(loop, itemId));
 }
 
 /** Text of the tool result for finish_item. */

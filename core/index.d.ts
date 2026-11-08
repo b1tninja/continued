@@ -416,6 +416,8 @@ export interface LoopItemState {
   attempts: number;
   /** Times a run set this item aside (finish_item outcome "later") */
   deferrals?: number;
+  /** Set aside and not run since: it goes behind the other runnable items */
+  setAside?: boolean;
   /** What the run said it did (finish_item), or why it stopped */
   summary?: string;
   /**

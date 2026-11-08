@@ -21,7 +21,11 @@ import {
   startReplan,
   stopLoop,
 } from "core/util/loopMode.js";
-import { reminderPathsDue, takeReminders } from "core/util/loopReminders.js";
+import {
+  reminderPathsDue,
+  replanReminderTarget,
+  takeReminders,
+} from "core/util/loopReminders.js";
 import {
   parsePlanFile,
   PRESENT_PLAN_CLI_TOOL_NAME,
@@ -229,7 +233,7 @@ export function nextLoopTurn(
           toolNames: CLI_LOOP_TOOL_NAMES,
           lastCheck: itemState?.check,
           reminders: taken.reminders,
-          returning: (itemState?.deferrals ?? 0) > 0,
+          returning: itemState?.setAside,
         });
         loop = markDelivered(
           loop,
@@ -242,7 +246,7 @@ export function nextLoopTurn(
       }
       case "replan": {
         // A round's re-plan, a check-in, or a repair of one failed item
-        const replanTarget = { kind: "replan" } as const;
+        const replanTarget = replanReminderTarget(action);
         const taken = takeReminders(
           loop,
           replanTarget,

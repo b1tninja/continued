@@ -40,7 +40,11 @@ import {
   startReplan,
   stopLoop,
 } from "core/util/loopMode";
-import { reminderPathsDue, takeReminders } from "core/util/loopReminders";
+import {
+  reminderPathsDue,
+  replanReminderTarget,
+  takeReminders,
+} from "core/util/loopReminders";
 import { parsePlanFile, taskPlanFromPlanFile } from "core/util/planFile";
 import { findUriInDirs } from "core/util/uri";
 import { selectEffectiveApprovalMode } from "../selectors/selectAutoApproval";
@@ -512,7 +516,7 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           // The request carries the plan block (loopPlanBlock)
           planBlock: true,
           reminders: taken.reminders,
-          returning: (itemState?.deferrals ?? 0) > 0,
+          returning: itemState?.setAside,
           unanswered: loop.questions.filter((q) =>
             itemState?.unanswered?.includes(q.id),
           ),
@@ -549,7 +553,7 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           }
         }
         // A round's re-plan, a check-in, or a repair of one failed item
-        const replanTarget = { kind: "replan" } as const;
+        const replanTarget = replanReminderTarget(action);
         const taken = takeReminders(
           loop,
           replanTarget,

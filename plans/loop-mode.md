@@ -225,10 +225,11 @@ Built on 2026-11-08. Each item starts in a fresh context, so `finish_item`'s `no
 `remind_me(note, when, item?, files?)` (`RemindMe` in the CLI) saves a note for one later run. The logic is in `core/util/loopReminders.ts`. It is offered only while an item runs, and subagents never get it.
 
 - **Saved at once** on `LoopState.reminders`, persisted with the session, and ended with the loop. Cross-session memory is out of scope.
-- **`when`:** `item` (that item's run; needs `item`), `next_items` (the next other item that runs), `retry` (a later run of this item), `replan` (the next re-plan or repair).
-- **Delivered once,** in that run's opening prompt, so the prompt cache is not touched.
+- **`when`:** `item` (that item's run; needs `item`), `next_items` (the next other item that runs), `retry` (a later run of this item), `replan` (the next round re-plan or check-in). A repair of a failed item gets only that item's `retry` and `replan` notes, because it may change only that item.
+- **After a re-plan:** a re-plan matches items by their text, so a `retry` or `item` note whose item was reworded or dropped goes to the next item that runs. A `replan` note keeps the loop from ending until a re-plan has read it.
+- **Delivered once,** in that run's opening prompt, so the prompt cache is not touched. If that run ends without reporting (stopped, failed, reloaded), its reminders go back to undelivered, since the next run starts without its context.
 - **Staleness:** the harness stamps each file in `files` when the note is saved and again when it is delivered. A file that changed or went away marks the note "written before these files changed, so check first". The basis is the finding that stale failure traces harmed 34 of 135 correct starts, against 4 of 135 with current ones.
-- **Limits:** 2,000 characters per note, 20 per loop, 5 per item, 10 files per note. A note over a limit is refused with the reason rather than clipped, since clipping mid-sentence was the problem. Saving the same undelivered note twice is one reminder.
+- **Limits:** 2,000 characters per note, 20 per loop, 5 per item, 10 files per note (further files are ignored). A note over a limit is refused with the reason rather than clipped, since clipping mid-sentence was the problem. Saving the same undelivered note twice is one reminder.
 - **At the turn limit** in the IDE, `remind_me` still runs while reading stops: saving what it found is what such a run should do.
 - **Next to the others:** `notes`, `hold_question` and the person's "For every item" instructions are unchanged. The item prompt gains one line asking the model to save what a later item or a retry will need.
 
