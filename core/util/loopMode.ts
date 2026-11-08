@@ -921,6 +921,27 @@ export function answerLoop(
   return { ok: true, loop: next, answer };
 }
 
+/**
+ * After a run ended: an item that reported waiting must have something to wait
+ * for, or nothing would ever wake it. If nothing blocking is open and answers
+ * came in during the run, it runs again with them. If it never asked anything,
+ * it has failed: the person has nothing to answer.
+ */
+export function releaseEmptyWait(loop: LoopState, itemId: string): LoopState {
+  if (itemState(loop, itemId)?.status !== "waiting") return loop;
+  if (hasOpenBlocking(loop, itemId)) return loop;
+  if (answersToDeliver(loop, itemId).length > 0) {
+    return withItem(loop, itemId, { status: "pending", attempts: 0 });
+  }
+  return {
+    ...withItem(loop, itemId, {
+      status: "failed",
+      summary: "Reported waiting, but no question is open.",
+    }),
+    consecutiveFailures: (loop.consecutiveFailures ?? 0) + 1,
+  };
+}
+
 /** The person's standing instructions, for every item prompt. */
 export function standingInstructions(loop: LoopState): string[] {
   return loop.answers.filter((a) => a.route === "standing").map((a) => a.text);

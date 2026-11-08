@@ -16,6 +16,7 @@ import {
   loopTokensFromUsage,
   proceedUnanswered,
   reconcileLoop,
+  releaseEmptyWait,
   replanDecision,
   setLoopAutonomy,
   requestStop,
@@ -278,8 +279,10 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
       const delivered = loop.answers
         .filter((a) => a.route === "steer" && !queuedIds.has(a.id))
         .map((a) => a.id);
+      const finishedItem = loop.current.itemId;
       loop = finishItemRun(loop, loop.current.report);
       loop = settleSteeredAnswers(loop, delivered);
+      if (finishedItem) loop = releaseEmptyWait(loop, finishedItem);
     } else if (loop.current?.kind === "replan") {
       const presented = callsSince(
         state,

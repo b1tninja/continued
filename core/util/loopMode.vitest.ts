@@ -7,6 +7,7 @@ import {
   consumeLoopGrant,
   createLoop,
   enterWait,
+  releaseEmptyWait,
   loopTokensFromUsage,
   describeHeldCall,
   itemTurnState,
@@ -974,4 +975,66 @@ test("the token budget counts output and uncached input, not re-sent prompts", (
   expect(loopTokensFromUsage({ promptTokens: 100, completionTokens: 5 })).toBe(
     105,
   );
+});
+
+describe("an item that reports waiting", () => {
+  function heldApproval() {
+    const loop = startItemRun(loopOn(), "1", 0, T0);
+    const held = holdQuestion(
+      loop,
+      {
+        itemId: "1",
+        question: "Allow this call? create the report",
+        kind: "approval",
+        approval: {
+          toolName: "create_new_file",
+          summary: "report",
+          grantKey: "k",
+        },
+      },
+      T0,
+    );
+    if (!held.ok) throw new Error(held.error);
+    return held;
+  }
+
+  test("runs again when its question was answered during the run", () => {
+    // Found by the sandbox run: the answer came before the run reported waiting
+    const held = heldApproval();
+    const answered = answerLoop(
+      held.loop,
+      { questionId: held.question.id, text: "", approve: true },
+      T0,
+    );
+    if (!answered.ok) throw new Error(answered.error);
+    expect(answered.answer.route).toBe("steer");
+    let loop = finishItemRun(answered.loop, { outcome: "waiting" });
+    loop = settleSteeredAnswers(loop, []);
+    expect(status(loop, "1")).toBe("waiting");
+    loop = releaseEmptyWait(loop, "1");
+    expect(status(loop, "1")).toBe("pending");
+    expect(decideNext(loop, PLAN, ctx())).toEqual({ kind: "run", itemId: "1" });
+    expect(answersToDeliver(loop, "1")).toHaveLength(1);
+  });
+
+  test("keeps waiting while a blocking question is open", () => {
+    const held = heldApproval();
+    const loop = releaseEmptyWait(
+      finishItemRun(held.loop, { outcome: "waiting" }),
+      "1",
+    );
+    expect(status(loop, "1")).toBe("waiting");
+  });
+
+  test("fails when it asked nothing, because nobody could ever answer", () => {
+    const loop = releaseEmptyWait(
+      runItem(loopOn(), "1", { outcome: "waiting" }),
+      "1",
+    );
+    expect(status(loop, "1")).toBe("failed");
+    expect(loop.items[0].summary).toBe(
+      "Reported waiting, but no question is open.",
+    );
+    expect(loop.consecutiveFailures).toBe(1);
+  });
 });
