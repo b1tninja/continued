@@ -202,6 +202,24 @@ modeModels:
     expect(out[0].range.start.line).toBe(1);
   });
 
+  it("leaves syntax and schema to the YAML extension when asked, keeping the cross-file checks", () => {
+    const text =
+      "models:\n  - name: A\n    model: a\n    connection: strat\n    contextLength: lots\n";
+    const all = checkConfigFile("models", text, context).map((d) => d.message);
+    const crossOnly = checkConfigFile("models", text, context, {
+      shapeChecks: false,
+    }).map((d) => d.message);
+    expect(all.some((m) => m.startsWith("models.0.contextLength"))).toBe(true);
+    expect(crossOnly).toEqual([
+      'No account named "strat" in providers.yaml. Did you mean "strata"?',
+    ]);
+    expect(
+      checkConfigFile("config", "models: [a,\n", context, {
+        shapeChecks: false,
+      }),
+    ).toEqual([]);
+  });
+
   it("reports YAML syntax errors at their position, and nothing else", () => {
     const out = checkConfigFile("config", "name: c\nmodels: [a,\n", context);
     expect(out.length).toBeGreaterThan(0);

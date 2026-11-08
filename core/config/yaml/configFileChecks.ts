@@ -367,11 +367,21 @@ export function checkConfigFile(
   kind: ConfigFileKind,
   text: string,
   context: ConfigFileContext,
+  options: {
+    /**
+     * YAML syntax and the file's own schema. Off when the editor's YAML
+     * extension already reports them from the same schema, so each problem
+     * shows once; the cross-file checks run either way.
+     */
+    shapeChecks?: boolean;
+  } = {},
 ): ConfigFileDiagnostic[] {
+  const shapeChecks = options.shapeChecks ?? true;
   const lines = new LineCounter();
   const doc = parseDocument(text, { lineCounter: lines, prettyErrors: false });
   const located = { doc, lines };
   if (doc.errors.length) {
+    if (!shapeChecks) return [];
     return doc.errors.map((e) => ({
       range: rangeOf(located, null, [e.pos[0], e.pos[1]]),
       severity: "error",
@@ -380,7 +390,7 @@ export function checkConfigFile(
   }
   const value = doc.toJS({ maxAliasCount: 100 });
   if (value === null || value === undefined) return [];
-  const out = schemaProblems(located, kind, value);
+  const out = shapeChecks ? schemaProblems(located, kind, value) : [];
   if (kind === "config") out.push(...checkConfig(located, context));
   if (kind === "models") out.push(...checkModels(located, context));
   if (kind === "providers")

@@ -13,6 +13,7 @@ import { getGlobalDirPath } from "core/util/paths";
 import * as vscode from "vscode";
 
 const DEBOUNCE_MS = 300;
+const YAML_EXTENSION = "redhat.vscode-yaml";
 
 /**
  * Editor support for Continuous's YAML files, in the extension host (the
@@ -53,7 +54,11 @@ export function registerConfigLanguageSupport(
       return;
     }
     const version = doc.version;
-    const found = checkConfigFile(kind, doc.getText(), await otherFiles());
+    const found = checkConfigFile(kind, doc.getText(), await otherFiles(), {
+      // With the YAML extension, syntax and schema problems come from it
+      // (package.json's yamlValidation); don't show them twice
+      shapeChecks: !vscode.extensions.getExtension(YAML_EXTENSION),
+    });
     if (doc.isClosed || doc.version !== version) {
       return;
     } // a newer check follows
