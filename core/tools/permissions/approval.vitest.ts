@@ -294,38 +294,58 @@ describe("YOLO", () => {
       approve("read_file", readTool, { filepath: "/outside/a" }, yolo).policy,
     ).toBe(ALLOW);
   });
+  it("overrides the safety floor, deny rules, protected paths and ask rules", () => {
+    expect(cmd("rm -rf /", yolo).policy).toBe(ALLOW);
+    const deny = {
+      permissions: { deny: ["runTerminalCommand(terraform apply*)"] },
+    };
+    expect(cmd("terraform apply", yolo, deny).policy).toBe(ALLOW);
+    expect(cmd("cat .env", yolo).policy).toBe(ALLOW);
+    const ask = { permissions: { ask: ["runTerminalCommand(git push*)"] } };
+    expect(cmd("git push", yolo, ask).policy).toBe(ALLOW);
+  });
+  it("does not turn on a tool the user switched off", () => {
+    expect(cmd("npm test", yolo, { basePolicy: OFF }).policy).toBe(OFF);
+  });
+});
+
+describe("Approve most", () => {
+  const most: ApprovalSettings = { mode: "most" };
+
+  it("allows what would have asked, naming the mode", () => {
+    const r = cmd("git push origin main", most);
+    expect(r.policy).toBe(ALLOW);
+    expect(r.source).toBe("most");
+  });
   it("still refuses what the safety floor refuses", () => {
-    const r = cmd("rm -rf /", yolo);
+    const r = cmd("rm -rf /", most);
     expect(r.policy).toBe(OFF);
-    expect(r.source).not.toBe("yolo");
+    expect(r.source).not.toBe("most");
   });
   it("still honours deny rules", () => {
-    const r = cmd("terraform apply", yolo, {
+    const r = cmd("terraform apply", most, {
       permissions: { deny: ["runTerminalCommand(terraform apply*)"] },
     });
     expect(r.policy).toBe(OFF);
     expect(r.source).toBe("deny-rule");
   });
   it("still honours protected paths for commands and files", () => {
-    expect(cmd("cat ~/.aws/credentials", yolo).source).toBe("protected-path");
-    expect(cmd("cat .env", yolo).policy).toBe(ASK);
+    expect(cmd("cat ~/.aws/credentials", most).source).toBe("protected-path");
+    expect(cmd("cat .env", most).policy).toBe(ASK);
     const e = approve(
       "edit_existing_file",
       plain,
       { filepath: ".git/hooks/pre-commit" },
-      yolo,
+      most,
     );
     expect(e.policy).toBe(ASK);
     expect(e.source).toBe("protected-path");
   });
   it("still honours ask rules", () => {
-    const r = cmd("git push", yolo, {
+    const r = cmd("git push", most, {
       permissions: { ask: ["runTerminalCommand(git push*)"] },
     });
     expect(r.policy).toBe(ASK);
     expect(r.source).toBe("ask-rule");
-  });
-  it("does not turn on a tool the user switched off", () => {
-    expect(cmd("npm test", yolo, { basePolicy: OFF }).policy).toBe(OFF);
   });
 });

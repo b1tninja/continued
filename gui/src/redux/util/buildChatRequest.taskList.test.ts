@@ -55,17 +55,17 @@ function stateWith(
 }
 
 describe("the task list in the request", () => {
-  it("is offered in Agent and Plan modes only", () => {
+  it("is offered in Plan mode only: Agent mode just does the work", () => {
     const names = (mode: RootState["session"]["mode"]) =>
       selectActiveTools(stateWith(mode)).map((t) => t.function.name);
-    expect(names("agent")).toContain("task_list");
+    expect(names("agent")).not.toContain("task_list");
     expect(names("plan")).toContain("task_list");
     expect(names("chat")).not.toContain("task_list");
     expect(names("background")).not.toContain("task_list");
   });
 
   it("comes as a separate tail message, not inside the history", () => {
-    const request = buildChatRequest(stateWith("agent", plan));
+    const request = buildChatRequest(stateWith("plan", plan));
     expect(request.taskListMessage).toEqual({
       role: "user",
       content: expect.stringMatching(/^<task_list>\n/),
@@ -80,9 +80,9 @@ describe("the task list in the request", () => {
   });
 
   it("leaves the conversation messages unchanged when the list changes", () => {
-    const before = buildChatRequest(stateWith("agent", plan));
+    const before = buildChatRequest(stateWith("plan", plan));
     const after = buildChatRequest(
-      stateWith("agent", {
+      stateWith("plan", {
         ...plan,
         items: [
           ...plan.items,

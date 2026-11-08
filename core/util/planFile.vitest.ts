@@ -215,11 +215,11 @@ describe("task list from a plan", () => {
 });
 
 describe("messages", () => {
-  it("Build names the file, says to re-read it and keep the list", () => {
+  it("Build names the file, says to re-read it, and asks for no checklist", () => {
     const text = planBuildMessage(".continuous/plans/x.md");
     expect(text).toContain(".continuous/plans/x.md");
     expect(text).toMatch(/Read the file first/);
-    expect(text).toMatch(/task list current/);
+    expect(text).not.toMatch(/task list/i);
   });
 
   it("keep planning passes feedback on", () => {

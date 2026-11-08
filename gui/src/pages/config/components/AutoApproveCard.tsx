@@ -59,7 +59,7 @@ export function AutoApproveCard() {
     (s) => s.config.config.mcpServerStatuses ?? [],
   );
 
-  const inactive = mode === "manual" || mode === "yolo";
+  const inactive = mode === "manual" || mode === "most" || mode === "yolo";
 
   return (
     <div data-testid="auto-approve-card">

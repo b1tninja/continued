@@ -39,11 +39,11 @@ export const selectActiveTools = createSelector(
       return [];
     } else {
       const enabledTools = tools.filter((tool) => {
-        // The task list is for agent work: Agent and Plan modes only. While
-        // the loop runs an item, the loop keeps the list.
+        // Only Plan mode makes a checklist: Agent mode just does the work,
+        // and while the loop runs an item, the loop keeps the list.
         if (
           tool.function.name === BuiltInToolNames.TaskList &&
-          ((mode !== "agent" && mode !== "plan") || loopItemRunning)
+          mode !== "plan"
         ) {
           return false;
         }

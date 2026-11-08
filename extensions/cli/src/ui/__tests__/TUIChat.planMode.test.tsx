@@ -72,7 +72,7 @@ describe("TUIChat - plan mode", () => {
     return ui;
   }
 
-  it("PresentPlan saves the plan, and Build leaves plan mode with the to-dos as the task list", async () => {
+  it("PresentPlan saves the plan, and Build leaves plan mode without a checklist", async () => {
     const llm = new ScriptedLlm([
       toolTurn("PresentPlan", planArgs),
       textTurn("building now"),
@@ -89,9 +89,7 @@ describe("TUIChat - plan mode", () => {
         "Retry failed fetches with backoff.",
       );
       expect(getSessionPlanFile()).toMatch(/add-retry\.md$/);
-      expect(getSessionTaskPlan()?.items.map((i) => i.text)).toEqual(
-        planArgs.todos,
-      );
+      expect(getSessionTaskPlan()).toBeUndefined();
 
       const result = llm.requests[1].messages.find((m) => m.role === "tool");
       expect(messageText(result!)).toContain("The user approved the plan");
@@ -108,7 +106,7 @@ describe("TUIChat - plan mode", () => {
       );
       const frame = ui.lastFrame() ?? "";
       expect(frame).not.toContain("plan]");
-      expect(frame).toContain("0/2 Add a retry helper");
+      expect(frame).not.toContain("0/2 Add a retry helper");
       expect(frame).toContain("plan add-retry.md");
     } finally {
       ui.unmount();

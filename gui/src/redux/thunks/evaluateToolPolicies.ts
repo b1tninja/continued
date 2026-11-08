@@ -86,7 +86,10 @@ export async function evaluateToolPolicy(
     toolPolicies,
     approval,
   );
-  return mode === "plan" ? holdInPlanMode(result, activeTools) : result;
+  // YOLO approves everything, and Plan mode's hold is one more thing to approve
+  return mode === "plan" && approval?.mode !== "yolo"
+    ? holdInPlanMode(result, activeTools)
+    : result;
 }
 
 async function evaluateBasePolicy(
@@ -111,6 +114,7 @@ async function evaluateBasePolicy(
         basePolicy: "allowedWithoutPermission",
         parsedArgs: toolCallState.parsedArgs,
         processedArgs: toolCallState.processedArgs,
+        ...(approval ? { approval } : {}),
       });
       if (result.status === "success") {
         const { policy, source } = result.content;
@@ -165,6 +169,7 @@ async function evaluateBasePolicy(
     // call no rule, protected path or safety check has settled.
     details.source !== "allow-rule" &&
     details.source !== "category" &&
+    details.source !== "most" &&
     details.source !== "yolo"
   ) {
     return { ...details, policy: "allowedWithPermission", toolCallState }; // Cannot make more lenient
@@ -403,6 +408,7 @@ export async function evaluateToolPolicies(
         source === "auto" ||
         source === "once" ||
         source === "category" ||
+        source === "most" ||
         source === "yolo")
     ) {
       dispatch(

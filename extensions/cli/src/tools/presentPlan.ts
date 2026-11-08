@@ -15,7 +15,7 @@ import {
   taskPlanForProposal,
   validatePlanArgs,
 } from "core/util/planFile.js";
-import { TASK_PLAN_LIMITS, taskPlanToMarkdown } from "core/util/taskPlan.js";
+import { TASK_PLAN_LIMITS } from "core/util/taskPlan.js";
 
 import { safeStderr } from "../init.js";
 import {
@@ -157,7 +157,7 @@ export const presentPlanTool: Tool = {
     return { args, preview };
   },
   run: async (args: PresentPlanArgs): Promise<string> => {
-    const { file, relativePath, plan } = await savePlan(args);
+    const { relativePath, plan } = await savePlan(args);
 
     // Loop mode's re-plan: the loop decides whether the new plan starts the
     // next round by itself (its autonomy level) or waits for the person in
@@ -179,9 +179,10 @@ export const presentPlanTool: Tool = {
       : await askBuild(relativePath);
 
     if (answer === PRESENT_PLAN_BUILD) {
-      reloadPlanFile(file);
+      // Agent work keeps no checklist: only Plan mode makes one
+      updateSessionTaskPlan(undefined);
       services.toolPermissions.switchMode("normal");
-      return `The user approved the plan and switched out of plan mode, so you can now edit files (each edit asks for approval). ${planBuildMessage(relativePath)}\n\nCurrent task list:\n${taskPlanToMarkdown(getSessionTaskPlan())}`;
+      return `The user approved the plan and switched out of plan mode, so you can now edit files (each edit asks for approval). ${planBuildMessage(relativePath)}`;
     }
     if (answer === PRESENT_PLAN_BUILD_IN_LOOP) {
       // Loop mode: the CLI runs the to-dos one at a time, each in its own
@@ -191,7 +192,7 @@ export const presentPlanTool: Tool = {
         requestLoopTurnEnd();
         return "The user approved the plan and chose to build it in a loop: each to-do will be given to you on its own turn. Do not start on it now; end your turn.";
       }
-      reloadPlanFile(file);
+      updateSessionTaskPlan(undefined);
       return `The user approved the plan and switched out of plan mode. ${planBuildMessage(relativePath)}`;
     }
     return planKeepPlanningResult(

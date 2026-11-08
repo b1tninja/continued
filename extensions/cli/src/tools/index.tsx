@@ -95,6 +95,11 @@ export async function getAllAvailableTools(
         finishItemTool,
       ]
     : [...BASE_BUILTIN_TOOLS];
+  // Only Plan mode makes a checklist: otherwise the model just does the work
+  if (services.toolPermissions.getCurrentMode() !== "plan" && !loopItem) {
+    tools.splice(tools.indexOf(taskListTool), 1);
+  }
+
   // A loop goes on without the person, so a question that waits for an answer
   // would stall it for good: its questions go through HoldQuestion
   if (loopRunGoing()) {

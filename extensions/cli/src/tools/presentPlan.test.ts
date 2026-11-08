@@ -105,7 +105,7 @@ describe("PresentPlan", () => {
     expect(store.planFile).toBe(pathToFileURL(file).href);
   });
 
-  it("Build reads the file back, leaves plan mode and says to implement", async () => {
+  it("Build leaves plan mode, clears the checklist and says to implement", async () => {
     store.edit = (f) =>
       fs.writeFileSync(
         f,
@@ -123,12 +123,8 @@ describe("PresentPlan", () => {
     expect(result).toContain(
       "Build the plan in .continuous/plans/add-retry.md",
     );
-    expect(store.plan?.updatedBy).toBe("user");
-    expect(store.plan?.items.map((i) => i.text)).toEqual([
-      "Add a helper",
-      "Use it everywhere",
-    ]);
-    expect(result).toContain("Use it everywhere");
+    // Only Plan mode makes a checklist
+    expect(store.plan).toBeUndefined();
   });
 
   it("Keep planning stays in plan mode, with or without feedback", async () => {
