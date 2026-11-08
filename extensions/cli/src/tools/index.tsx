@@ -245,7 +245,8 @@ export function convertMcpToolToContinueTool(mcpTool: MCPTool): Tool {
       >,
       required: mcpTool.inputSchema.required,
     },
-    readonly: undefined, // MCP tools don't have readonly property
+    // A server's own word that the tool changes nothing
+    readonly: mcpTool.annotations?.readOnlyHint === true ? true : undefined,
     isBuiltIn: false,
     run: async (args: any) => {
       const result = await services.mcp?.runTool(mcpTool.name, args);

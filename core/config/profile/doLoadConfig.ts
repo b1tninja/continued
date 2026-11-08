@@ -218,7 +218,12 @@ export default async function doLoadConfig(options: {
           parameters: tool.inputSchema,
         },
         faviconUrl: server.faviconUrl,
-        readonly: false,
+        // A server's own word that the tool changes nothing, for tools that
+        // only fetch context: they run without asking, in Plan mode too
+        readonly: tool.annotations?.readOnlyHint === true,
+        ...(tool.annotations?.readOnlyHint === true && {
+          defaultToolPolicy: "allowedWithoutPermission" as const,
+        }),
         type: "function" as const,
         uri: encodeMCPToolUri(server.id, tool.name),
         group: server.name,

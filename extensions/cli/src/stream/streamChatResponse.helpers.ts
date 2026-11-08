@@ -18,6 +18,7 @@ import {
 } from "../permissions/coreRules.js";
 import { checkToolPermission } from "../permissions/permissionChecker.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
+import { withReadOnlyMcp } from "../permissions/readOnlyMcp.js";
 import { ToolCallRequest, ToolPermissions } from "../permissions/types.js";
 import {
   SERVICE_NAMES,
@@ -209,7 +210,10 @@ export async function checkToolPermissionApproval(
   /** Why a rule, protected path or the reviewer refused it, to tell the model. */
   denialMessage?: string;
 }> {
-  const permissionCheck = checkToolPermission(toolCall, permissions);
+  const permissionCheck = withReadOnlyMcp(
+    checkToolPermission(toolCall, permissions),
+    toolCall.tool,
+  );
   let permission = permissionCheck.permission;
 
   // PreToolUse hooks adjust the CLI policy first; the CLI's own exclude

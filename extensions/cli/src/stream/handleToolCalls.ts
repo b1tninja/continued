@@ -4,6 +4,7 @@ import { createHistoryItem } from "core/util/messageConversion.js";
 
 import { isAutoReviewEnabled } from "src/permissions/coreRules.js";
 import { checkToolPermission } from "src/permissions/permissionChecker.js";
+import { withReadOnlyMcp } from "src/permissions/readOnlyMcp.js";
 
 import { loopItemRunning } from "../loop/loopSession.js";
 import {
@@ -212,9 +213,12 @@ export async function getRequestTools(isHeadless: boolean) {
 
   const allowedTools: Tool[] = [];
   for (const tool of availableTools) {
-    const result = checkToolPermission(
-      { name: tool.name, arguments: {} },
-      permissionsState.permissions,
+    const result = withReadOnlyMcp(
+      checkToolPermission(
+        { name: tool.name, arguments: {} },
+        permissionsState.permissions,
+      ),
+      tool,
     );
 
     // Headless runs have no one to ask, so "ask" tools are normally not offered.

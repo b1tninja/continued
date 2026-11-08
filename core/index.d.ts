@@ -1989,6 +1989,8 @@ export interface MCPTool {
     properties?: Record<string, any>;
   };
   _meta?: Record<string, unknown> | undefined;
+  /** MCP tool annotations; `readOnlyHint` says the tool changes nothing */
+  annotations?: { readOnlyHint?: boolean };
 }
 
 type BaseInternalMCPOptions = {
