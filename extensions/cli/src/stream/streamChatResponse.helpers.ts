@@ -408,6 +408,17 @@ function calculateFallbackCost(
   return (inputTokens * 1 + outputTokens * 2) / 1_000_000;
 }
 
+/**
+ * Cached input tokens from a response's usage. The adapters for Anthropic,
+ * Bedrock and Gemini set `cache_read_tokens`; OpenAI-style servers (OpenAI,
+ * Strata, llama.cpp) report only `cached_tokens`, which was read as none.
+ */
+export function cacheReadTokens(
+  details: { cache_read_tokens?: number; cached_tokens?: number } | undefined,
+): number | undefined {
+  return details?.cache_read_tokens ?? details?.cached_tokens;
+}
+
 // Helper function to record telemetry
 export function recordStreamTelemetry(options: {
   requestStartTime: number;
@@ -440,7 +451,7 @@ export function recordStreamTelemetry(options: {
       completionTokens: fullUsage.completion_tokens,
       promptTokensDetails: fullUsage.prompt_tokens_details
         ? {
-            cachedTokens: fullUsage.prompt_tokens_details.cache_read_tokens,
+            cachedTokens: cacheReadTokens(fullUsage.prompt_tokens_details),
             cacheWriteTokens:
               fullUsage.prompt_tokens_details.cache_write_tokens,
             // The split by lifetime, when the adapter has one, prices a 1-hour
@@ -484,12 +495,9 @@ export function recordStreamTelemetry(options: {
   telemetryService.recordTokenUsage(actualOutputTokens, "output", model.model);
 
   // Record cache tokens if available
-  if (fullUsage?.prompt_tokens_details?.cache_read_tokens) {
-    telemetryService.recordTokenUsage(
-      fullUsage.prompt_tokens_details.cache_read_tokens,
-      "cacheRead",
-      model.model,
-    );
+  const cacheRead = cacheReadTokens(fullUsage?.prompt_tokens_details);
+  if (cacheRead) {
+    telemetryService.recordTokenUsage(cacheRead, "cacheRead", model.model);
   }
   if (fullUsage?.prompt_tokens_details?.cache_write_tokens) {
     telemetryService.recordTokenUsage(
