@@ -57,6 +57,7 @@ import {
   selectCurrentToolCalls,
   selectPendingToolCalls,
 } from "../selectors/selectToolCalls";
+import { localOutputLimit } from "core/llm/outputLimit";
 import { callToolById } from "./callToolById";
 import { cancelStream } from "./cancelStream";
 import { applyLoopHolds, endRunAtTurnLimit } from "./loopHolds";
@@ -190,8 +191,25 @@ export const streamNormalInput = createAsyncThunk<
       }
     }
 
-    const { compiledChatMessages, didPrune, contextPercentage } =
-      precompiledRes.content;
+    const {
+      compiledChatMessages,
+      didPrune,
+      contextPercentage,
+      outputTokensAvailable,
+    } = precompiledRes.content;
+
+    // A local model with no configured limit may use the room that is left,
+    // so a large tool call is not cut off for no gain
+    const localMaxTokens = localOutputLimit({
+      apiBase: selectedChatModel.apiBase,
+      maxTokens:
+        completionOptions.maxTokens ??
+        selectedChatModel.completionOptions?.maxTokens,
+      outputTokensAvailable,
+    });
+    if (localMaxTokens) {
+      completionOptions = { ...completionOptions, maxTokens: localMaxTokens };
+    }
 
     dispatch(setIsPruned(didPrune));
     dispatch(setContextPercentage(contextPercentage));
@@ -416,7 +434,8 @@ export const streamNormalInput = createAsyncThunk<
     refuseTruncatedToolCalls(
       dispatch,
       selectPendingToolCalls(getState()),
-      completionOptions.maxTokens,
+      completionOptions.maxTokens ??
+        selectedChatModel.completionOptions?.maxTokens,
     );
 
     // 2. Pre-process args to catch invalid args before checking policies

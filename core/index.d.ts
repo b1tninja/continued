@@ -2464,6 +2464,8 @@ export interface CompiledMessagesResult {
   compiledChatMessages: ChatMessage[];
   didPrune: boolean;
   contextPercentage: number;
+  /** Tokens the context has left for the reply, after the prompt. */
+  outputTokensAvailable?: number;
 }
 
 export interface AddToChatPayload {
