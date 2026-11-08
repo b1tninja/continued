@@ -107,7 +107,7 @@ describe("TUIChat - plan mode", () => {
       const frame = ui.lastFrame() ?? "";
       expect(frame).not.toContain("plan]");
       expect(frame).not.toContain("0/2 Add a retry helper");
-      expect(frame).toContain("plan add-retry.md");
+      expect(frame).not.toContain("plan add-retry.md");
     } finally {
       ui.unmount();
     }
