@@ -557,7 +557,7 @@ export function ProviderSetupFlow({
       >
         <h2 className="m-0 text-center text-lg">Key saved</h2>
         <p className="m-0 text-sm">
-          The key is in secure storage, which Continue reads first.{" "}
+          The key is in secure storage, which Continuous reads first.{" "}
           <code>{envCopy}</code> is also set in plaintext in{" "}
           <code>~/.continue/.env</code>. Remove that line?
         </p>

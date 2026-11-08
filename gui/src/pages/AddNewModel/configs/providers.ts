@@ -552,7 +552,7 @@ export const providers: Partial<Record<string, ProviderInfo>> = {
     icon: "bedrock.svg",
     description:
       "OpenAI-compatible endpoint for models on Amazon Bedrock, used with a Bedrock API key.",
-    longDescription: `Bedrock Mantle serves open-weight and partner models (GPT OSS, Qwen, Kimi and more) through an OpenAI-compatible API. Create a [Bedrock API key](https://console.aws.amazon.com/bedrock/home#/api-keys) in the same region. Mantle is available in fewer regions than the standard Bedrock endpoint, and some models are served under a different path prefix, which Continue detects automatically.`,
+    longDescription: `Bedrock Mantle serves open-weight and partner models (GPT OSS, Qwen, Kimi and more) through an OpenAI-compatible API. Create a [Bedrock API key](https://console.aws.amazon.com/bedrock/home#/api-keys) in the same region. Mantle is available in fewer regions than the standard Bedrock endpoint, and some models are served under a different path prefix, which Continuous detects automatically.`,
     tags: [ModelProviderTags.RequiresApiKey],
     refPage: "bedrock",
     apiKeyUrl: "https://console.aws.amazon.com/bedrock/home#/api-keys",
@@ -1032,7 +1032,7 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
     description:
       "High-performance local LLM inference with AMD hardware optimization",
     longDescription:
-      "Lemonade provides optimized local LLM inference with support for AMD NPU, GPU, and CPU acceleration. Visit [lemonade-server.ai](https://lemonade-server.ai/) for installation and setup instructions. Once the Lemonade server is running, you can begin using Continue with your local models.",
+      "Lemonade provides optimized local LLM inference with support for AMD NPU, GPU, and CPU acceleration. Visit [lemonade-server.ai](https://lemonade-server.ai/) for installation and setup instructions. Once the Lemonade server is running, you can begin using Continuous with your local models.",
     icon: "lemonade.png",
     tags: [ModelProviderTags.Local, ModelProviderTags.OpenSource],
     params: {

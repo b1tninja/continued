@@ -69,7 +69,7 @@ describe("stream error for a failure that should pass", () => {
   it("does not wait on its own for an hour; it says how long the server asked for", async () => {
     await render(
       new Error(
-        "The server asked to wait 3600 s before trying again (rate limit or overload), longer than Continue waits on its own.",
+        "The server asked to wait 3600 s before trying again (rate limit or overload), longer than Continuous waits on its own.",
       ),
     );
     expect(screen.getByTestId("transient-failure").textContent).toContain(

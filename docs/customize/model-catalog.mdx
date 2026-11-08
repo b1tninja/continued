@@ -87,7 +87,7 @@ A route takes `connection`, and optionally `model`, `apiBase`, `env` and `reques
 
 A rate limit (HTTP 429), an overloaded or unavailable server (503, 529) and a dropped connection are tried again, by one policy:
 
-- When the server sends `Retry-After`, as seconds or as a date, Continue waits that long.
+- When the server sends `Retry-After`, as seconds or as a date, Continuous waits that long.
 - Otherwise the waits double from about a second, with some randomness so that several agents do not retry at the same moment. No single wait is longer than 30 seconds, and the waits together stay under 90 seconds.
 - A server that asks for a longer wait is reported straight away, with how long it asked for, instead of the request hanging.
 - A route with another route after it is not retried at all: the next account is tried at once, and its own retries apply only on the last route.

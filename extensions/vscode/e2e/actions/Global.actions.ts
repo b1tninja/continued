@@ -113,7 +113,7 @@ export class GlobalActions {
       }
 
       const element = await statusBar.findElement(
-        By.xpath("//*[contains(text(), 'Continue')]"),
+        By.xpath("//*[contains(text(), 'Continuous')]"),
       );
 
       // Validate we can get text
