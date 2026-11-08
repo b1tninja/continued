@@ -220,8 +220,7 @@ export function answerLoopQuestion(
   input: LoopAnswerInput,
   now = new Date(),
 ):
-  | { ok: true; route: string; answerId: string }
-  | { ok: false; error: string } {
+  { ok: true; route: string; answerId: string } | { ok: false; error: string } {
   const loop = getSessionLoop();
   if (!loop) return { ok: false, error: "No loop is running" };
   const result = answerLoop(loop, input, now);

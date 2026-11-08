@@ -611,8 +611,7 @@ function hasOpenBlocking(loop: LoopState, itemId: string): boolean {
 export function finishItemRun(
   loop: LoopState,
   report:
-    | { outcome: FinishOutcome; summary?: string; notes?: string }
-    | undefined,
+    { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
 ): LoopState {
   const itemId = loop.current?.itemId;
   if (!itemId || loop.current?.kind !== "item") return loop;
