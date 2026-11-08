@@ -9,6 +9,7 @@ import { ChatCompletionToolMessageParam } from "openai/resources/chat/completion
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
 import type { ModelServiceState } from "src/services/types.js";
 
+import { holdLoopCall, loopRepeatGuard } from "../loop/loopHolds.js";
 import {
   evaluateWithCoreRules,
   getReviewer,
@@ -203,7 +204,8 @@ export async function checkToolPermissionApproval(
   hookDecision?: "allow" | "ask",
 ): Promise<{
   approved: boolean;
-  denialReason?: "user" | "policy";
+  /** "loop": Loop mode held the call as a question instead of asking */
+  denialReason?: "user" | "policy" | "loop";
   /** Why a rule, protected path or the reviewer refused it, to tell the model. */
   denialMessage?: string;
 }> {
@@ -235,8 +237,10 @@ export async function checkToolPermissionApproval(
           denialMessage: verdict.reason,
         };
       }
-      // "ask" (or an allow rule over a hook's ask): nobody to ask when
-      // headless, so it is a refusal.
+      // "ask" (or an allow rule over a hook's ask): Loop mode holds it as a
+      // question; otherwise nobody to ask when headless, so it is a refusal.
+      const held = holdLoopCall(toolCall, verdict.reason);
+      if (held) return held;
       if (isHeadless) {
         return {
           approved: false,
@@ -254,6 +258,8 @@ export async function checkToolPermissionApproval(
   if (permission === "allow") {
     return { approved: true };
   } else if (permission === "ask") {
+    const held = holdLoopCall(toolCall);
+    if (held) return held;
     if (isHeadless) {
       // "ask" tools are excluded in headless so can only get here by policy evaluation
       return { approved: false, denialReason: "policy" };
@@ -619,6 +625,7 @@ export async function preprocessStreamedToolCalls(
  * @param callbacks - Optional callbacks for notifying of events
  * @returns - Chat history entries with tool results and status information
  */
+// eslint-disable-next-line max-statements
 export async function executeStreamedToolCalls(
   preprocessedCalls: PreprocessedToolCall[],
   callbacks?: StreamCallbacks,
@@ -647,6 +654,9 @@ export async function executeStreamedToolCalls(
 
   let hasRejection = false;
 
+  // Loop mode refuses a call repeated too often in one item's run
+  const loopRepeat = loopRepeatGuard(preprocessedCalls.map((c) => c.id));
+
   // Permission phase (sequential)
   for (const { index, call: originalCall } of indexedCalls) {
     // Do not cancel subsequent tools after a rejection; handle each independently
@@ -655,6 +665,22 @@ export async function executeStreamedToolCalls(
     let call = originalCall;
 
     try {
+      const repeated = loopRepeat.check(call);
+      if (repeated) {
+        callbacks?.onToolStart?.(call.name, call.arguments);
+        entriesByIndex.set(index, {
+          role: "tool",
+          tool_call_id: call.id,
+          content: repeated,
+          status: "canceled",
+        });
+        callbacks?.onToolResult?.(repeated, call.name, "canceled");
+        try {
+          services.chatHistory.addToolResult(call.id, repeated, "canceled");
+        } catch {}
+        continue;
+      }
+
       logger.debug("Checking tool permissions", {
         name: call.name,
         arguments: call.arguments,
@@ -709,11 +735,13 @@ export async function executeStreamedToolCalls(
         // Permission denied: create entry with canceled status
         const denialReason = permissionResult.denialReason || "user";
         const deniedMessage =
-          denialReason === "policy"
-            ? permissionResult.denialMessage
-              ? `Command blocked by security policy: ${permissionResult.denialMessage} Do not retry it or reach the same result another way; find a safer route or tell the user what you need.`
-              : `Command blocked by security policy`
-            : `Permission denied by user`;
+          denialReason === "loop"
+            ? (permissionResult.denialMessage ?? "Held for the person.")
+            : denialReason === "policy"
+              ? permissionResult.denialMessage
+                ? `Command blocked by security policy: ${permissionResult.denialMessage} Do not retry it or reach the same result another way; find a safer route or tell the user what you need.`
+                : `Command blocked by security policy`
+              : `Permission denied by user`;
 
         const deniedEntry: ToolResultWithStatus = {
           role: "tool",
@@ -735,7 +763,8 @@ export async function executeStreamedToolCalls(
             "canceled",
           );
         } catch {}
-        hasRejection = true;
+        // A call Loop mode held is not a refusal: the item goes on without it
+        if (denialReason !== "loop") hasRejection = true;
         // Remaining items will be auto-cancelled in subsequent iterations
         continue;
       }

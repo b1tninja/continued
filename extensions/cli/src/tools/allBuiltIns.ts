@@ -5,6 +5,7 @@ import { editTool } from "./edit.js";
 import { exitTool } from "./exit.js";
 import { fetchTool } from "./fetch.js";
 import { listFilesTool } from "./listFiles.js";
+import { finishItemTool, holdQuestionTool } from "./loopTools.js";
 import { multiEditTool } from "./multiEdit.js";
 import { presentPlanTool } from "./presentPlan.js";
 import { readFileTool } from "./readFile.js";
@@ -25,6 +26,8 @@ export const ALL_BUILT_IN_TOOLS = [
   editTool,
   exitTool,
   fetchTool,
+  finishItemTool,
+  holdQuestionTool,
   listFilesTool,
   multiEditTool,
   presentPlanTool,

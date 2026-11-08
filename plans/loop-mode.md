@@ -1,6 +1,6 @@
 # Loop mode
 
-Last updated: 2026-11-07. Status: L1 (core state machine) and L2 (IDE, with autonomy levels) built, with unit and gui integration tests. The sandbox run on a local model is pending; its report goes in the PR. L3 (CLI and `cn serve`) and L4 (parallel items, verification) are not built.
+Last updated: 2026-11-07. Status: L1 (core state machine), L2 (IDE, with autonomy levels) and L3 (CLI and `cn serve`) built, with unit tests, gui integration tests, and CLI flow tests through the TUI and `cn serve`. The sandbox run on a local model is pending; its report goes in the PR. L4 (parallel items, verification) is not built.
 
 Build a plan item by item without the person driving each step. Questions go to an inbox the person can answer while the work continues.
 
@@ -144,7 +144,7 @@ What the playbook's prompts insist on:
 
 ### Shape
 
-All of the logic is in `core/util/loopMode.ts`: pure functions, no I/O. The gui applies their results. The CLI can use the same functions later.
+All of the logic is in `core/util/loopMode.ts`: pure functions, no I/O. The gui and the CLI apply their results.
 
 The loop state is `Session.loop` (`LoopState` in `core/index.d.ts`), saved with the session like the task list and the queue. The task list (`Session.taskPlan`, #306) is still the list of items. The loop keeps its own status for each item, by task id, and writes it back to the list:
 
@@ -292,14 +292,28 @@ Unattended is the hands-off level here, but it keeps the person's rules and reco
 
 **No new `MessageModes` value.** The loop is a controller over two existing modes: item runs are Agent mode and re-plans are Plan mode. A new mode would have meant threading a value through `selectActiveTools`, ModeSelect, ToolPolicyItem, promptCache and the CLI's mode handling, and every one of those would have to treat it as Agent or Plan anyway. The smallest correct change is a session field the selectors read: `selectActiveTools` offers the loop tools while an item runs, and hides the task list tool.
 
-The IDE is wired first. The CLI is the next phase (L3). It has its own streaming loop and tool set, so it needs:
+The IDE was wired first. The CLI (L3) has its own streaming loop and tool set, so it has its own wiring of the same core functions in `extensions/cli/src/loop/`. The decisions and prompts all come from core.
 
-- its own driver around `streamChatResponse`;
-- `HoldQuestion` and `FinishItem` tools;
-- a TUI inbox;
-- for `cn serve`, `GET /state` to include the loop and `POST /message` to take `{loopAnswer: {questionId, text}}`.
+| Piece          | IDE                                         | CLI                                                                                                                                                                                                                                                                                                                                                |
+| -------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entry          | Plan card: **Build in a loop**              | PresentPlan's question: Build, **Build in a loop**, Keep planning. The level comes from `loopAutonomyFor` applied to the CLI's approval setting: the `auto` mode is YOLO (Unattended), `--auto-review` is Auto, otherwise Manual (Supervised)                                                                                                      |
+| Driver         | `useLoopDriver`, `advanceLoop`              | `nextLoopTurn` (`loopDriver.ts`) finishes what ran and returns the next turn's prompt. The TUI's `LoopRunner` sends it when nothing is going on; `cn serve` sends it from `processMessages` after the queue. The person's queued messages go first in both                                                                                         |
+| Tools          | `hold_question`, `finish_item`              | `HoldQuestion`, `FinishItem`, with core's descriptions and parameters. Offered only while an item runs in a mode other than Plan, and TaskList is hidden then. Core's prompts and results take the CLI's names (`LOOP_CLI_TOOL_NAMES`)                                                                                                             |
+| Turn end       | `finish_item`'s `endTurn`                   | FinishItem, a re-plan's PresentPlan, and "Build in a loop" ask `streamChatResponse` to end the turn after the tool round, without another request                                                                                                                                                                                                  |
+| Approvals      | `applyLoopHolds`                            | `holdLoopCall` in `checkToolPermissionApproval`, where a call would ask (or, headless, be refused), after hooks, rules and the reviewer. The repeat limit is checked per batch in `executeStreamedToolCalls`. The loop's own two tools are never held. Under `cn serve`, which is headless, "ask" tools are offered to an item so they can be held |
+| Fresh context  | `buildChatRequest` slices at `historyIndex` | `loopRequestHistory` slices the request in `streamChatResponse`, only for the main session (not a subagent or compaction)                                                                                                                                                                                                                          |
+| Steered answer | A queued message tagged `loopAnswerId`      | Kept by the loop and merged into the host's tool-boundary callback (`withLoopSteering`), ahead of what the person steered with; one that misses the run is settled by `settleSteeredAnswers` as in the IDE                                                                                                                                         |
+| Inbox          | `LoopInbox`                                 | `/loop` opens it; a strip above the prompt shows the loop's state. Answer, Keep the default, Allow once, Don't allow, a note about the plan (next re-plan, Re-plan now, For every item), Continue the loop, Resume, the level, and Stop loop                                                                                                       |
+| Persistence    | `Session.loop`, `restoreLoop` on load       | The same field, saved with the CLI session; `restoreLoop` runs whenever a session is set (`--resume`, `cn serve --id`)                                                                                                                                                                                                                             |
+| Stop           | Stop button                                 | Esc in the TUI and `POST /pause` stop the loop; a turn that fails during a step stops it too, with "Resume to go on"                                                                                                                                                                                                                               |
 
-The decisions and prompts come from core, so it is mostly wiring.
+`cn serve`:
+
+- `GET /state` adds `loop` (the `LoopState`, or null) and `loopStatus` (the inbox's status line).
+- `POST /message` takes, instead of `message`:
+  - `{loopAnswer: {questionId?, itemId?, text, confirm?, approve?, replanNow?, standing?}}`, routed by `answerLoop`. The response gives the answer's id and route.
+  - `{loopAction: "start" | "stop" | "resume" | "continue"}`: build the session's plan in a loop (a headless PresentPlan saves it without asking), Stop loop, Resume, and Continue the loop after a re-plan that waits for the person.
+  - `{loopAutonomy: "supervised" | "auto" | "unattended"}`, the level picker.
 
 ## Safeguards
 
@@ -319,7 +333,10 @@ The decisions and prompts come from core, so it is mostly wiring.
 - **L2 (built):**
   - IDE wiring: the plan card buttons, `LoopInbox`, `useLoopDriver`, `gui/src/redux/thunks/loop.ts`, `loopHolds.ts`, the client tools, persistence and the Stop path.
   - Integration tests in `gui/src/pages/gui/chat-tests/LoopMode.test.tsx` and `gui/src/redux/slices/sessionSlice.loop.test.ts`.
-- **L3:** CLI and `cn serve`, as above.
+- **L3 (built):**
+  - CLI wiring in `extensions/cli/src/loop/` (`loopSession.ts`, `loopDriver.ts`, `loopHolds.ts`), the tools in `src/tools/loopTools.ts`, the inbox in `src/ui/components/LoopInbox.tsx`, and `cn serve` in `src/commands/serve.loop.ts`.
+  - Core: `LoopToolNames` for the CLI's tool names, `loopCallKey`, `finishItemReport`, and the tool schemas exported from `core/tools/definitions/loopTools.ts`.
+  - Tests: `src/ui/__tests__/TUIChat.loopMode.test.tsx` (the whole flow through the TUI), `src/commands/serve.loop.test.ts`, `src/loop/loopDriver.test.ts` (re-plans, reload, steering, holds) and `src/tools/loopTools.test.ts`.
 - **L4:**
   - Verification: an acceptance check per item, run by the harness before an item counts as done (a command from the plan, or a separate evaluator).
   - Parallel items as subagents, only for items the plan marks independent with disjoint files, at most 2 or 3, and ideally each in its own worktree (#314's Agents panel).
@@ -339,7 +356,7 @@ The decisions and prompts come from core, so it is mostly wiring.
 2. **No new mode, no new format.** Item runs are Agent mode and re-plans are Plan mode. Items come from the plan file and the task list. The new state is one session field.
 3. **`finish_item` is the one addition to "say when it's done".** A structured report is what makes "done" checkable, and no report never counts as done. It also ends the turn without another request.
 4. **Answers are routed when given, by the item's state, and kept on the loop.** A running item gets its answer by steering. The person's own messages keep the usual queue: they are sent at turn end as an ordinary turn, and the loop waits for that turn.
-5. **Parallel items, verification and the CLI are later phases.** Each is a separable change, and the research argues against parallel items by default.
+5. **Parallel items and verification are later phases; the CLI was L3.** Each is a separable change, and the research argues against parallel items by default.
 6. **Each run gets a fresh context, in the same session.** Ralph, Claude Code's best practices and Reflexion all favour a fresh context with a short note over one growing conversation. A subagent per item would also give one, but subagents cannot ask the person. Slicing the request keeps the transcript in one chat, and the system and tools prefix stays cached. This replaces the earlier open question "one conversation or a fresh context per item".
 7. **Autonomy is one setting that follows the approval mode.** Several options (re-plan acceptance, what happens when everything waits, budgets) need a hands-off setting. Separate switches would let a loop be "YOLO" in one place and supervised in another. So there are three levels, the approval mode picks the starting one, and the hard limits are the same in all of them.
 

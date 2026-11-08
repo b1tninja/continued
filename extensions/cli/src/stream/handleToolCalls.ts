@@ -5,6 +5,7 @@ import { createHistoryItem } from "core/util/messageConversion.js";
 import { isAutoReviewEnabled } from "src/permissions/coreRules.js";
 import { checkToolPermission } from "src/permissions/permissionChecker.js";
 
+import { loopItemRunning } from "../loop/loopSession.js";
 import {
   SERVICE_NAMES,
   serviceContainer,
@@ -197,9 +198,12 @@ export async function getRequestTools(isHeadless: boolean) {
 
     // Headless runs have no one to ask, so "ask" tools are normally not offered.
     // With --auto-review the reviewer model answers instead of a person, so they are.
+    // Under Loop mode an item's "ask" call is held as a question for the
+    // person (src/loop/loopHolds.ts), so they are offered too.
     if (
       result.permission === "allow" ||
-      (result.permission === "ask" && (!isHeadless || isAutoReviewEnabled()))
+      (result.permission === "ask" &&
+        (!isHeadless || isAutoReviewEnabled() || loopItemRunning()))
     ) {
       allowedTools.push(tool);
     }

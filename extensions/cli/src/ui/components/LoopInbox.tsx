@@ -1,0 +1,390 @@
+import type { LoopQuestion, LoopState } from "core/index.js";
+import {
+  formatLoopStatus,
+  LOOP_AUTONOMY,
+  LOOP_AUTONOMY_LEVELS,
+  standingInstructions,
+} from "core/util/loopMode.js";
+import { Box, Text, useInput } from "ink";
+import React, { useEffect, useState } from "react";
+
+import {
+  acceptLoopPlan,
+  answerLoopQuestion,
+  requestLoopStop,
+  resumeStoppedLoop,
+  setRunningLoopAutonomy,
+} from "../../loop/loopSession.js";
+import {
+  getSessionLoop,
+  getSessionTaskPlan,
+  onLoopChange,
+} from "../../session.js";
+import { defaultBoxStyles } from "../styles.js";
+
+/** The session's loop, re-rendering when it changes. */
+export function useLoopState(): LoopState | undefined {
+  const [loop, setLoop] = useState<LoopState | undefined>(() => {
+    try {
+      return getSessionLoop();
+    } catch {
+      return undefined;
+    }
+  });
+  useEffect(() => onLoopChange(setLoop), []);
+  return loop;
+}
+
+/**
+ * One line above the prompt while the session has a loop: its state, and
+ * how to open the inbox when there is something to answer.
+ */
+export const LoopStrip: React.FC = () => {
+  const loop = useLoopState();
+  if (!loop) return null;
+  const open = loop.questions.some((q) => !q.answerId);
+  const needsYou =
+    open || loop.status === "awaiting_plan" || loop.status === "stopped";
+  return (
+    <Box paddingLeft={1}>
+      <Text wrap="truncate-end">
+        <Text color="dim">Loop </Text>
+        <Text color={needsYou ? "yellow" : "dim"}>
+          {needsYou ? "(/loop to answer)" : "(/loop)"}
+        </Text>
+        <Text color={needsYou ? "yellow" : "cyan"}>
+          {" "}
+          {formatLoopStatus(loop)}
+        </Text>
+      </Text>
+    </Box>
+  );
+};
+
+type InboxAction =
+  | { kind: "answer"; question: LoopQuestion }
+  | { kind: "confirm"; question: LoopQuestion }
+  | { kind: "approve"; question: LoopQuestion; approve: boolean }
+  | { kind: "note" }
+  | { kind: "continue" }
+  | { kind: "resume" }
+  | { kind: "level" }
+  | { kind: "stop" }
+  | { kind: "close" };
+
+type InboxMode =
+  | { kind: "menu" }
+  | { kind: "text"; question?: LoopQuestion }
+  | { kind: "planRoute"; text: string };
+
+const PLAN_ROUTES = [
+  { label: "Read it at the next re-plan", input: {} },
+  { label: "Re-plan now (after the running item)", input: { replanNow: true } },
+  { label: "For every item from now on", input: { standing: true } },
+] as const;
+
+function itemText(itemId: string | undefined): string | undefined {
+  if (!itemId) return undefined;
+  return getSessionTaskPlan()?.items.find((i) => i.id === itemId)?.text;
+}
+
+function actionLabel(action: InboxAction, loop: LoopState): string {
+  switch (action.kind) {
+    case "answer":
+      return `Answer ${action.question.id}`;
+    case "confirm":
+      return `Keep the default (${action.question.id})`;
+    case "approve":
+      return action.approve
+        ? `Allow once (${action.question.id})`
+        : `Don't allow (${action.question.id})`;
+    case "note":
+      return "Write a note about the plan";
+    case "continue":
+      return "Continue the loop with the new plan";
+    case "resume":
+      return "Resume the loop";
+    case "level":
+      return `Level: ${LOOP_AUTONOMY[loop.autonomy ?? "auto"].label} (Enter to change)`;
+    case "stop":
+      return "Stop loop";
+    case "close":
+      return "Close";
+  }
+}
+
+function inboxActions(loop: LoopState): InboxAction[] {
+  const actions: InboxAction[] = [];
+  for (const question of loop.questions.filter((q) => !q.answerId)) {
+    if (question.kind === "approval") {
+      actions.push({ kind: "approve", question, approve: true });
+      actions.push({ kind: "approve", question, approve: false });
+    } else if (question.kind === "assumption") {
+      actions.push({ kind: "confirm", question });
+    }
+    actions.push({ kind: "answer", question });
+  }
+  actions.push({ kind: "note" });
+  if (loop.status === "awaiting_plan") actions.push({ kind: "continue" });
+  if (loop.status === "stopped") actions.push({ kind: "resume" });
+  actions.push({ kind: "level" });
+  if (loop.status !== "stopped" && !loop.stopRequested) {
+    actions.push({ kind: "stop" });
+  }
+  actions.push({ kind: "close" });
+  return actions;
+}
+
+const KIND_LABEL: Record<LoopQuestion["kind"], string> = {
+  assumption: "assumption",
+  blocking: "blocking",
+  approval: "approval",
+};
+
+/**
+ * Loop mode's inbox (`/loop`): the open questions, answered while the loop
+ * goes on. Core routes each answer by the state of its item; a note with no
+ * item is about the plan, read at the next re-plan, at once ("Re-plan now"),
+ * or sent with every item ("For every item"). The level picker and Stop loop
+ * are here too.
+ */
+export const LoopInbox: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const loop = useLoopState();
+  const [mode, setMode] = useState<InboxMode>({ kind: "menu" });
+  const [selected, setSelected] = useState(0);
+  const [text, setText] = useState("");
+  const [feedback, setFeedback] = useState<string | undefined>();
+
+  const actions = loop ? inboxActions(loop) : [];
+  const index = Math.min(selected, Math.max(0, actions.length - 1));
+
+  const report = (result: { ok: boolean; error?: string; route?: string }) => {
+    setFeedback(
+      result.ok
+        ? `Answer recorded${result.route ? ` (${result.route})` : ""}.`
+        : result.error,
+    );
+  };
+
+  const run = (action: InboxAction) => {
+    switch (action.kind) {
+      case "answer":
+        setText("");
+        setMode({ kind: "text", question: action.question });
+        return;
+      case "note":
+        setText("");
+        setMode({ kind: "text" });
+        return;
+      case "confirm":
+        report(
+          answerLoopQuestion({
+            questionId: action.question.id,
+            text: "",
+            confirm: true,
+          }),
+        );
+        return;
+      case "approve":
+        report(
+          answerLoopQuestion({
+            questionId: action.question.id,
+            text: "",
+            approve: action.approve,
+          }),
+        );
+        return;
+      case "continue":
+        setFeedback(
+          acceptLoopPlan() ? "The next round starts." : "No plan to continue.",
+        );
+        return;
+      case "resume":
+        setFeedback(resumeStoppedLoop() ? "Resumed." : "Nothing to resume.");
+        return;
+      case "level": {
+        const current = loop?.autonomy ?? "auto";
+        const next =
+          LOOP_AUTONOMY_LEVELS[
+            (LOOP_AUTONOMY_LEVELS.indexOf(current) + 1) %
+              LOOP_AUTONOMY_LEVELS.length
+          ];
+        setRunningLoopAutonomy(next);
+        setFeedback(LOOP_AUTONOMY[next].description);
+        return;
+      }
+      case "stop":
+        requestLoopStop();
+        setFeedback("The loop stops after the running step.");
+        return;
+      case "close":
+        onClose();
+        return;
+    }
+  };
+
+  useInput((input, key) => {
+    if (mode.kind === "text") {
+      if (key.escape) {
+        setMode({ kind: "menu" });
+        return;
+      }
+      if (key.return) {
+        const answer = text.trim();
+        if (!answer) return;
+        if (mode.question) {
+          report(answerLoopQuestion({ questionId: mode.question.id, text }));
+          setMode({ kind: "menu" });
+        } else {
+          setSelected(0);
+          setMode({ kind: "planRoute", text });
+        }
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setText((t) => t.slice(0, -1));
+        return;
+      }
+      if (input && !key.ctrl && !key.meta) setText((t) => t + input);
+      return;
+    }
+
+    const count =
+      mode.kind === "planRoute" ? PLAN_ROUTES.length : actions.length;
+    if (key.escape) {
+      if (mode.kind === "planRoute") setMode({ kind: "menu" });
+      else onClose();
+      return;
+    }
+    if (key.upArrow) {
+      setSelected((i) => (i <= 0 ? count - 1 : i - 1));
+      return;
+    }
+    if (key.downArrow) {
+      setSelected((i) => (i >= count - 1 ? 0 : i + 1));
+      return;
+    }
+    if (key.return) {
+      if (mode.kind === "planRoute") {
+        const route = PLAN_ROUTES[Math.min(selected, count - 1)];
+        report(answerLoopQuestion({ text: mode.text, ...route.input }));
+        setSelected(0);
+        setMode({ kind: "menu" });
+        return;
+      }
+      const action = actions[index];
+      if (action) run(action);
+    }
+  });
+
+  if (!loop) {
+    return (
+      <Box {...defaultBoxStyles("cyan")}>
+        <Text>
+          No loop in this session. Choose "Build in a loop" on a plan.
+        </Text>
+        <Text color="dim">Esc to close</Text>
+      </Box>
+    );
+  }
+
+  const open = loop.questions.filter((q) => !q.answerId);
+  const standing = standingInstructions(loop);
+
+  return (
+    <Box {...defaultBoxStyles("cyan")} flexDirection="column" marginBottom={1}>
+      <Text bold>Loop · {formatLoopStatus(loop)}</Text>
+      {loop.status === "awaiting_plan" && loop.replanReason && (
+        <Text color="yellow">
+          A new plan waits for you: {loop.replanReason}
+        </Text>
+      )}
+
+      <Box flexDirection="column" marginTop={1}>
+        {open.length === 0 ? (
+          <Text color="dim">No open questions.</Text>
+        ) : (
+          open.map((q) => {
+            const item = itemText(q.itemId);
+            return (
+              <Box key={q.id} flexDirection="column" marginBottom={1}>
+                <Text>
+                  <Text color="magenta" bold>
+                    {q.id}
+                  </Text>{" "}
+                  <Text color="dim">[{KIND_LABEL[q.kind]}]</Text>
+                  {item ? <Text color="dim"> {item}</Text> : null}
+                </Text>
+                <Text>{q.question}</Text>
+                {q.assumption && (
+                  <Text color="dim">Assumed: {q.assumption}</Text>
+                )}
+              </Box>
+            );
+          })
+        )}
+      </Box>
+
+      {standing.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="dim">For every item:</Text>
+          {standing.map((s, i) => (
+            <Text key={i} color="dim">
+              {"  "}- {s}
+            </Text>
+          ))}
+        </Box>
+      )}
+
+      {mode.kind === "text" && (
+        <Box flexDirection="column">
+          <Text>
+            {mode.question
+              ? `Your answer to ${mode.question.id}:`
+              : "Your note about the plan:"}
+          </Text>
+          <Box>
+            <Text color="cyan">❯ </Text>
+            <Text>{text}</Text>
+            <Text color="gray">▊</Text>
+          </Box>
+          <Text color="dim">Enter to send · Esc to go back</Text>
+        </Box>
+      )}
+
+      {mode.kind === "planRoute" && (
+        <Box flexDirection="column">
+          <Text>When should the loop use this note?</Text>
+          {PLAN_ROUTES.map((route, i) => (
+            <Text
+              key={route.label}
+              color={i === selected ? "cyan" : undefined}
+              bold={i === selected}
+            >
+              {i === selected ? "❯ " : "  "}
+              {route.label}
+            </Text>
+          ))}
+        </Box>
+      )}
+
+      {mode.kind === "menu" && (
+        <Box flexDirection="column">
+          {actions.map((action, i) => (
+            <Text
+              key={`${action.kind}-${i}`}
+              color={i === index ? "cyan" : undefined}
+              bold={i === index}
+            >
+              {i === index ? "❯ " : "  "}
+              {actionLabel(action, loop)}
+            </Text>
+          ))}
+          <Text color="dim">↑/↓ to move · Enter to choose · Esc to close</Text>
+        </Box>
+      )}
+
+      {feedback && <Text color="green">{feedback}</Text>}
+    </Box>
+  );
+};

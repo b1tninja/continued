@@ -8,6 +8,7 @@ import type {
 } from "../hooks/useChat.types.js";
 import { UserInput } from "../UserInput.js";
 
+import { LoopStrip } from "./LoopInbox.js";
 import { QuizPrompt } from "./QuizPrompt.js";
 import { TaskProgressStrip } from "./TaskProgressStrip.js";
 import { ToolPermissionSelector } from "./ToolPermissionSelector.js";
@@ -102,6 +103,7 @@ export const ChatScreenContent: React.FC<ChatScreenContentProps> = ({
   }
   return (
     <Box flexDirection="column">
+      <LoopStrip />
       <TaskProgressStrip />
       {input}
     </Box>

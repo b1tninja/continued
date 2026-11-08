@@ -286,6 +286,8 @@ const commandHandlers: Record<string, CommandHandler> = {
     return { openUpdateSelector: true };
   },
   jobs: handleJobs,
+  // Loop mode's inbox: questions, answers, the level, Stop loop
+  loop: () => ({ openLoopInbox: true }),
   skills: () => handleSkills(),
   "import-skill": (args) => handleImportSkill(args),
   sessions: handleSessions,

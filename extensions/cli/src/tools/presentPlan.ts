@@ -12,12 +12,16 @@ import {
   PRESENT_PLAN_TOOL_DESCRIPTION,
   serializePlanFile,
   taskPlanForProposal,
-  taskPlanFromPlanFile,
   validatePlanArgs,
 } from "core/util/planFile.js";
 import { TASK_PLAN_LIMITS, taskPlanToMarkdown } from "core/util/taskPlan.js";
 
 import { safeStderr } from "../init.js";
+import {
+  getSessionLoop,
+  requestLoopTurnEnd,
+  startLoopFromPlan,
+} from "../loop/loopSession.js";
 import { services } from "../services/index.js";
 import { quizService } from "../services/QuizService.js";
 import {
@@ -26,10 +30,12 @@ import {
   updateSessionPlanFile,
   updateSessionTaskPlan,
 } from "../session.js";
+import { reloadPlanFile } from "../util/planFileReload.js";
 
 import type { Tool } from "./types.js";
 
 export const PRESENT_PLAN_BUILD = "Build";
+export const PRESENT_PLAN_BUILD_IN_LOOP = "Build in a loop";
 export const PRESENT_PLAN_KEEP_PLANNING = "Keep planning";
 
 interface PresentPlanArgs {
@@ -86,23 +92,10 @@ export async function savePlan(args: PresentPlanArgs, cwd = process.cwd()) {
 }
 
 /**
- * Build: read the plan file back (the person may have edited it in their
- * editor while the question was open) and make its checkboxes the task list.
- * A file that cannot be read or breaks the list rules leaves the list as is.
+ * Build: read the plan file back and make its checkboxes the task list
+ * (src/util/planFileReload.ts).
  */
-export function reloadPlanFile(file: string): void {
-  try {
-    const result = taskPlanFromPlanFile(
-      fs.readFileSync(file, "utf-8"),
-      getSessionTaskPlan(),
-    );
-    if (result.ok) {
-      updateSessionTaskPlan(result.plan);
-    }
-  } catch {
-    // The model is told to read the file anyway.
-  }
-}
+export { reloadPlanFile };
 
 export const presentPlanTool: Tool = {
   name: PRESENT_PLAN_CLI_TOOL_NAME,
@@ -149,6 +142,14 @@ export const presentPlanTool: Tool = {
   run: async (args: PresentPlanArgs): Promise<string> => {
     const { file, relativePath, plan } = await savePlan(args);
 
+    // Loop mode's re-plan: the loop decides whether the new plan starts the
+    // next round by itself (its autonomy level) or waits for the person in
+    // the inbox, so nobody is asked here and the turn ends.
+    if (getSessionLoop()?.current?.kind === "replan") {
+      requestLoopTurnEnd();
+      return `Plan saved to ${relativePath} with ${plan.items.length} to-dos. End your turn now.`;
+    }
+
     if (services.toolPermissions.isHeadless()) {
       // Nobody can approve: the file is the result.
       safeStderr(`Plan saved to ${relativePath}\n`);
@@ -157,7 +158,11 @@ export const presentPlanTool: Tool = {
 
     const answer = await quizService.askQuestion({
       question: `Build this plan? It is saved in ${relativePath}; edit the file first if you like. Or type what to change.`,
-      options: [PRESENT_PLAN_BUILD, PRESENT_PLAN_KEEP_PLANNING],
+      options: [
+        PRESENT_PLAN_BUILD,
+        PRESENT_PLAN_BUILD_IN_LOOP,
+        PRESENT_PLAN_KEEP_PLANNING,
+      ],
       defaultAnswer: PRESENT_PLAN_BUILD,
     });
 
@@ -165,6 +170,17 @@ export const presentPlanTool: Tool = {
       reloadPlanFile(file);
       services.toolPermissions.switchMode("normal");
       return `The user approved the plan and switched out of plan mode, so you can now edit files (each edit asks for approval). ${planBuildMessage(relativePath)}\n\nCurrent task list:\n${taskPlanToMarkdown(getSessionTaskPlan())}`;
+    }
+    if (answer === PRESENT_PLAN_BUILD_IN_LOOP) {
+      // Loop mode: the CLI runs the to-dos one at a time, each in its own
+      // turn with a fresh context (src/loop/loopDriver.ts). This turn ends.
+      services.toolPermissions.switchMode("normal");
+      if (startLoopFromPlan("normal")) {
+        requestLoopTurnEnd();
+        return "The user approved the plan and chose to build it in a loop: each to-do will be given to you on its own turn. Do not start on it now; end your turn.";
+      }
+      reloadPlanFile(file);
+      return `The user approved the plan and switched out of plan mode. ${planBuildMessage(relativePath)}`;
     }
     return planKeepPlanningResult(
       answer === PRESENT_PLAN_KEEP_PLANNING ? undefined : answer,

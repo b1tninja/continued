@@ -10,6 +10,8 @@ export const BUILT_IN_TOOL_NAMES = [
   "Edit",
   "Exit",
   "Fetch",
+  "FinishItem",
+  "HoldQuestion",
   "List",
   "MultiEdit",
   "PresentPlan",

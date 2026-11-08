@@ -4,6 +4,7 @@ import { ChatCompletionTool } from "openai/resources.mjs";
 
 import { isModelCapable } from "src/utils/modelCapability.js";
 
+import { loopItemRunning } from "../loop/loopSession.js";
 import {
   SERVICE_NAMES,
   serviceContainer,
@@ -24,6 +25,7 @@ import { editTool } from "./edit.js";
 import { exitTool } from "./exit.js";
 import { fetchTool } from "./fetch.js";
 import { listFilesTool } from "./listFiles.js";
+import { finishItemTool, holdQuestionTool } from "./loopTools.js";
 import { multiEditTool } from "./multiEdit.js";
 import { presentPlanTool } from "./presentPlan.js";
 import { readFileTool } from "./readFile.js";
@@ -81,7 +83,17 @@ const BUILTIN_SEARCH_TOOLS: Tool[] = [searchCodeTool];
 export async function getAllAvailableTools(
   isHeadless: boolean,
 ): Promise<Tool[]> {
-  const tools = [...BASE_BUILTIN_TOOLS];
+  // Loop mode: while it runs an item, the item reports with FinishItem and
+  // asks with HoldQuestion, and the loop owns the task list.
+  const loopItem =
+    loopItemRunning() && services.toolPermissions.getCurrentMode() !== "plan";
+  const tools = loopItem
+    ? [
+        ...BASE_BUILTIN_TOOLS.filter((t) => t !== taskListTool),
+        holdQuestionTool,
+        finishItemTool,
+      ]
+    : [...BASE_BUILTIN_TOOLS];
 
   const isRipgrepInstalled = await checkIfRipgrepIsInstalled();
   if (isRipgrepInstalled) {

@@ -120,7 +120,8 @@ describe("TUIChat - plan mode", () => {
       toolTurn("PresentPlan", planArgs),
       textTurn("what should change?"),
     ]);
-    const ui = await presentPlan([DOWN, ENTER], llm);
+    // Build, Build in a loop, Keep planning
+    const ui = await presentPlan([DOWN, DOWN, ENTER], llm);
     try {
       const result = llm.requests[1].messages.find((m) => m.role === "tool");
       expect(messageText(result!)).toContain("The user wants to keep planning");
