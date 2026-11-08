@@ -514,6 +514,11 @@ export function loopRequestHistory(
   return loop.freshContext === false ? withPlan : withPlan.slice(start);
 }
 
+/** Whether the loop is running an item or a re-plan in the main session. */
+export function loopRunGoing(): boolean {
+  return !!getSessionLoop()?.current;
+}
+
 /** Whether the loop is running an item in the main session. */
 export function loopItemRunning(): boolean {
   return getSessionLoop()?.current?.kind === "item";

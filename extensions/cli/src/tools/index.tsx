@@ -4,7 +4,7 @@ import { ChatCompletionTool } from "openai/resources.mjs";
 
 import { isModelCapable } from "src/utils/modelCapability.js";
 
-import { loopItemRunning } from "../loop/loopSession.js";
+import { loopItemRunning, loopRunGoing } from "../loop/loopSession.js";
 import {
   SERVICE_NAMES,
   serviceContainer,
@@ -95,6 +95,11 @@ export async function getAllAvailableTools(
         finishItemTool,
       ]
     : [...BASE_BUILTIN_TOOLS];
+  // A loop goes on without the person, so a question that waits for an answer
+  // would stall it for good: its questions go through HoldQuestion
+  if (loopRunGoing()) {
+    tools.splice(tools.indexOf(askQuestionTool), 1);
+  }
 
   const isRipgrepInstalled = await checkIfRipgrepIsInstalled();
   if (isRipgrepInstalled) {

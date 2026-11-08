@@ -282,6 +282,9 @@ describe("TUIChat - Loop mode", () => {
       const [plan, item1, afterSave, item2] = llm.requests;
       const offered = (r: typeof plan) => r.tools.map((t) => t.function.name);
       expect(offered(item1)).toContain("RemindMe");
+      // Nobody may be there to answer it, so a loop must never wait on it
+      expect(offered(item1)).not.toContain("AskQuestion");
+      expect(offered(plan)).toContain("AskQuestion");
       expect(offered(plan)).not.toContain("RemindMe");
       expect(userTexts(item1)[0]).toContain("save it with RemindMe now");
       expect(userTexts(item1)[0]).not.toContain("The flaky test is t3");

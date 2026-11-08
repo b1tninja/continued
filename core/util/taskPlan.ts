@@ -264,9 +264,12 @@ export function buildTaskPlan(
     seenIds.add(item.id);
   }
 
-  // Ids for new items: the next free number.
+  // Ids for new items: the next free number, above the previous list's too.
+  // A Loop keeps each item's state under its id, so a new to-do that took the
+  // id of a dropped one would inherit its attempts and its failed check.
+  const usedIds = [...seenIds, ...previousItems.map((item) => item.id)];
   let next = 1;
-  for (const id of seenIds) {
+  for (const id of usedIds) {
     if (/^\d+$/.test(id)) {
       next = Math.max(next, Number(id) + 1);
     }

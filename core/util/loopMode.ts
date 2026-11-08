@@ -931,6 +931,35 @@ function todos(n: number): string {
 }
 
 /**
+ * What a re-plan did that nobody should find out about only afterwards: it
+ * changed or removed a check that had failed, which is an easy way to make an
+ * item pass, or it dropped an item that was finished. Undefined if neither.
+ * A model did both in a sandbox run and the loop then reported all items done.
+ */
+export function replanConcern(
+  loop: LoopState,
+  plan: TaskPlan,
+): string | undefined {
+  const task = (id: string) => plan.items.find((t) => t.id === id);
+  const failedCheck = loop.items.filter(
+    (i) =>
+      i.check?.status === "failed" && task(i.id)?.check !== i.check.command,
+  );
+  const droppedDone = loop.items.filter(
+    (i) => i.status === "done" && !i.skipped && !task(i.id),
+  );
+  const parts = [
+    failedCheck.length
+      ? `It changes or removes the failing check of ${failedCheck.length === 1 ? "item" : "items"} ${failedCheck.map((i) => i.id).join(", ")}.`
+      : "",
+    droppedDone.length
+      ? `It drops finished ${droppedDone.length === 1 ? "item" : "items"} ${droppedDone.map((i) => i.id).join(", ")}.`
+      : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" ") : undefined;
+}
+
+/**
  * A repair re-plan (fix forward) ended with a plan: may the loop go on with
  * it by itself? Supervised: never, as for any re-plan. Auto and Unattended:
  * when it touched only the failed item (every other to-do kept word for
@@ -992,19 +1021,21 @@ export function endReplan(
     : repairOf
       ? repairDecision(loop, planTexts, repairOf.itemText, plan)
       : replanDecision(loop, planTexts, plan);
+  const concern = plan ? replanConcern(loop, plan) : undefined;
+  const reason = concern ? `${concern} ${decision.reason}` : decision.reason;
   return {
     loop: {
       ...loop,
       current: undefined,
       status: "awaiting_plan",
-      replanReason: decision.reason,
+      replanReason: reason,
       replanned: {
         planTexts,
         ...(current?.checkIn ? { checkIn: current.checkIn } : {}),
         ...repairOf,
       },
     },
-    accept: decision.accept,
+    accept: decision.accept && !concern,
   };
 }
 
