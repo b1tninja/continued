@@ -269,4 +269,79 @@ describe("cn serve: Loop mode", () => {
     );
     expect(llm.requests).toHaveLength(2);
   });
+
+  it("skips an item, runs one again, and changes the limits within bounds", async () => {
+    const run = heldTurn(
+      toolTurn("FinishItem", { outcome: "done", summary: "One" }),
+    );
+    const llm = new ScriptedLlm([
+      run.turn,
+      toolTurn("FinishItem", { outcome: "done", summary: "One again" }),
+    ]);
+    await start(llm);
+    await savePlan(
+      { title: "Two steps", plan: "Two steps.", todos: ["One", "Two"] },
+      cwd,
+    );
+    await post({ loopAction: "start" });
+    await run.started;
+
+    expect((await post({ loopAction: "skip" })).body).toEqual({
+      error: 'loopAction "skip" needs itemId',
+    });
+    expect((await post({ loopAction: "skip", itemId: "1" })).body).toEqual({
+      error: "1 is running: use Stop now, or Stop after this item, instead",
+    });
+    const skipped = await post({ loopAction: "skip", itemId: "2" });
+    expect(skipped.status).toBe(200);
+    expect(skipped.body.loop.items[1]).toMatchObject({
+      status: "done",
+      skipped: true,
+    });
+
+    // Limits out of bounds are refused, and nothing changes
+    const refused = await post({ loopBudget: { maxRounds: 0 } });
+    expect(refused).toEqual({
+      status: 400,
+      body: { error: "maxRounds must be an integer from 1 to 50" },
+    });
+    expect(
+      (await post({ loopAutonomy: "auto", loopBudget: { maxTokens: 5 } }))
+        .status,
+    ).toBe(400);
+    expect(getSessionLoop()?.autonomy).toBe("supervised");
+    const budgeted = await post({
+      loopBudget: { maxRounds: 1, maxTokens: 0, maxWallMs: 600_000 },
+    });
+    expect(budgeted.body.loop.budget).toMatchObject({
+      maxRounds: 1,
+      maxTokens: 0,
+      maxWallMs: 600_000,
+    });
+
+    run.release();
+    await waitUntil(
+      () => getSessionLoop()?.status === "stopped",
+      "the loop to finish",
+      () => JSON.stringify(getSessionLoop()),
+    );
+    expect(getSessionLoop()?.stopDetail).toBe(
+      "All 2 items are done (1 skipped).",
+    );
+
+    // Run item 1 again: the loop waits for Resume, then runs it once more
+    const again = await post({ loopAction: "again", itemId: "1" });
+    expect(again.body.loop.stopReason).toBe("stopped");
+    expect((await post({ loopAction: "resume" })).status).toBe(200);
+    await waitUntil(
+      () => getSessionLoop()?.stopReason === "done",
+      "the loop to finish after Run again",
+      () => JSON.stringify(getSessionLoop()),
+    );
+    expect(llm.requests).toHaveLength(2);
+    const rerun = userMessages(llm.requests[1]);
+    expect(messageText(rerun[rerun.length - 1])).toContain(
+      "the person asked for it to run again",
+    );
+  });
 });

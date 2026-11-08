@@ -30,6 +30,14 @@ import {
 import { defaultBoxStyles } from "../styles.js";
 
 import { ChecklistDisplay } from "./ChecklistDisplay.js";
+import {
+  applyLimitsText,
+  limitsDraft,
+  loopControlActions,
+  loopControlLabel,
+  runLoopControl,
+  type LoopControlAction,
+} from "./loopControls.js";
 import { useTaskPlan } from "./TaskProgressStrip.js";
 
 /** The session's loop, re-rendering when it changes. */
@@ -128,11 +136,12 @@ type InboxAction =
   | { kind: "resume" }
   | { kind: "level" }
   | { kind: "stop" }
+  | { kind: "control"; control: LoopControlAction }
   | { kind: "close" };
 
 type InboxMode =
   | { kind: "menu" }
-  | { kind: "text"; question?: LoopQuestion }
+  | { kind: "text"; question?: LoopQuestion; limits?: boolean }
   | { kind: "planRoute"; text: string };
 
 const PLAN_ROUTES = [
@@ -165,7 +174,9 @@ function actionLabel(action: InboxAction, loop: LoopState): string {
     case "level":
       return `Level: ${LOOP_AUTONOMY[loop.autonomy ?? "auto"].label} (Enter to change)`;
     case "stop":
-      return "Stop loop";
+      return "Stop after this item";
+    case "control":
+      return loopControlLabel(action.control, loop, getSessionTaskPlan());
     case "close":
       return "Close";
   }
@@ -186,9 +197,15 @@ function inboxActions(loop: LoopState): InboxAction[] {
   if (loop.status === "awaiting_plan") actions.push({ kind: "continue" });
   if (loop.status === "stopped") actions.push({ kind: "resume" });
   actions.push({ kind: "level" });
+  const controls = loopControlActions(loop, getSessionTaskPlan()).map(
+    (control) => ({ kind: "control" as const, control }),
+  );
+  const stopNow = controls.filter((c) => c.control.kind === "stopNow");
+  actions.push(...controls.filter((c) => c.control.kind !== "stopNow"));
   if (loop.status !== "stopped" && !loop.stopRequested) {
     actions.push({ kind: "stop" });
   }
+  actions.push(...stopNow);
   actions.push({ kind: "close" });
   return actions;
 }
@@ -203,10 +220,14 @@ const KIND_LABEL: Record<LoopQuestion["kind"], string> = {
  * Loop mode's inbox (`/loop`): the open questions, answered while the loop
  * goes on. Core routes each answer by the state of its item; a note with no
  * item is about the plan, read at the next re-plan, at once ("Re-plan now"),
- * or sent with every item ("For every item"). The level picker and Stop loop
- * are here too.
+ * or sent with every item ("For every item"). The level picker, the
+ * controls (loopControls.ts) and Stop after this item are here too;
+ * `onStopNow` aborts the running turn, as Esc does.
  */
-export const LoopInbox: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const LoopInbox: React.FC<{
+  onClose: () => void;
+  onStopNow?: () => void;
+}> = ({ onClose, onStopNow }) => {
   const loop = useLoopState();
   const plan = useTaskPlan();
   const [mode, setMode] = useState<InboxMode>({ kind: "menu" });
@@ -276,6 +297,14 @@ export const LoopInbox: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         requestLoopStop();
         setFeedback("The loop stops after the running step.");
         return;
+      case "control":
+        if (action.control.kind === "limits") {
+          setText(loop ? limitsDraft(loop) : "");
+          setMode({ kind: "text", limits: true });
+          return;
+        }
+        if (loop) setFeedback(runLoopControl(action.control, loop, onStopNow));
+        return;
       case "close":
         onClose();
         return;
@@ -291,7 +320,10 @@ export const LoopInbox: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       if (key.return) {
         const answer = text.trim();
         if (!answer) return;
-        if (mode.question) {
+        if (mode.limits) {
+          setFeedback(applyLimitsText(text));
+          setMode({ kind: "menu" });
+        } else if (mode.question) {
           report(answerLoopQuestion({ questionId: mode.question.id, text }));
           setMode({ kind: "menu" });
         } else {
@@ -405,9 +437,11 @@ export const LoopInbox: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       {mode.kind === "text" && (
         <Box flexDirection="column">
           <Text>
-            {mode.question
-              ? `Your answer to ${mode.question.id}:`
-              : "Your note about the plan:"}
+            {mode.limits
+              ? "Limits: rounds, tokens and minutes (0: no limit):"
+              : mode.question
+                ? `Your answer to ${mode.question.id}:`
+                : "Your note about the plan:"}
           </Text>
           <Box>
             <Text color="cyan">❯ </Text>

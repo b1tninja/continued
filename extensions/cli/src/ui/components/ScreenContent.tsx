@@ -148,7 +148,9 @@ export const ScreenContent: React.FC<ScreenContentProps> = ({
 
   // Loop mode's inbox
   if (isScreenActive("loop")) {
-    return <LoopInbox onClose={closeCurrentScreen} />;
+    return (
+      <LoopInbox onClose={closeCurrentScreen} onStopNow={handleInterrupt} />
+    );
   }
 
   // Jobs selector

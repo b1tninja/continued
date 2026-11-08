@@ -549,4 +549,74 @@ describe("Loop mode", () => {
     });
     await waitFor(() => expect(h.loop().stopReason).toBe("done"));
   });
+
+  test("the controls edit the limits, skip a waiting item and run a done one again", async () => {
+    const h = await setup(["Pick the grammar", "Write the lexer"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
+      finish("waiting", "needs the grammar"),
+      finish("done", "lexer written"),
+      finish("done", "lexer checked"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+    const el = (id: string) =>
+      document.querySelector(`[data-testid=${id}]`) as HTMLElement;
+
+    // The limits: core refuses what is out of bounds, and nothing changes
+    await act(async () => {
+      fireEvent.change(el("loop-limit-rounds"), { target: { value: "2" } });
+      fireEvent.change(el("loop-limit-tokens"), { target: { value: "5" } });
+      fireEvent.click(el("loop-limits-apply"));
+    });
+    await waitFor(() =>
+      expect(el("loop-controls-error").textContent).toContain(
+        "maxTokens must be 0 (no limit) or an integer from 10000",
+      ),
+    );
+    expect(h.loop().budget.maxRounds).toBe(3);
+    await act(async () => {
+      fireEvent.change(el("loop-limit-tokens"), { target: { value: "0" } });
+      fireEvent.change(el("loop-limit-minutes"), { target: { value: "30" } });
+      fireEvent.click(el("loop-limits-apply"));
+    });
+    await waitFor(() =>
+      expect(h.loop().budget).toMatchObject({
+        maxRounds: 2,
+        maxTokens: 0,
+        maxWallMs: 30 * 60_000,
+      }),
+    );
+    expect(el("loop-controls-error")).toBeNull();
+    await act(async () => {
+      fireEvent.change(el("loop-replan"), { target: { value: "never" } });
+    });
+    expect(h.loop().budget.maxRounds).toBe(1);
+    expect(el("loop-controls").textContent).toContain(
+      "Re-plan never: one pass over the plan",
+    );
+
+    // Skip the waiting item: finished, shown cancelled, its question open
+    await act(async () => {
+      fireEvent.click(el("loop-skip-1"));
+    });
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopDetail).toBe("All 2 items are done (1 skipped).");
+    expect(h.store.getState().session.taskPlan!.items[0].status).toBe(
+      "cancelled",
+    );
+    expect(h.loop().questions[0].answerId).toBeUndefined();
+
+    // Run the done item again, then Resume
+    await act(async () => {
+      fireEvent.click(el("loop-again-2"));
+    });
+    expect(h.itemStatus("2")).toBe("pending");
+    await act(async () => {
+      fireEvent.click(el("loop-resume"));
+    });
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+    expect(h.prompt(3)).toContain("only this item: Write the lexer");
+    expect(h.prompt(3)).toContain("the person asked for it to run again");
+  });
 });

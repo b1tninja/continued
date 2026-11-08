@@ -17,11 +17,15 @@ import {
   loopAutonomyFor,
   requestStop,
   resumeLoop,
+  runItemAgain,
   setLoopAutonomy,
+  setLoopBudget,
+  skipItem,
   loopPlanBlock,
   stopLoop,
   taskPlanWithLoop,
   type LoopAnswerInput,
+  type LoopControlResult,
 } from "core/util/loopMode.js";
 import { createHistoryItem } from "core/util/messageConversion.js";
 
@@ -200,6 +204,34 @@ export function setRunningLoopAutonomy(autonomy: LoopAutonomy): boolean {
   if (!loop) return false;
   commitLoop(setLoopAutonomy(loop, autonomy));
   return true;
+}
+
+// --- Controls: skip, run again, the limits ---
+
+/** Applies one of core's controls to the session's loop. */
+function applyControl(
+  apply: (loop: LoopState) => LoopControlResult,
+): LoopControlResult {
+  const loop = getSessionLoop();
+  if (!loop) return { ok: false, error: "No loop in this session" };
+  const result = apply(loop);
+  if (result.ok) commitLoop(result.loop);
+  return result;
+}
+
+/** Skip an item that is not running (core's skipItem). */
+export function skipLoopItem(itemId: string): LoopControlResult {
+  return applyControl((loop) => skipItem(loop, itemId));
+}
+
+/** Run a done, failed or skipped item again (core's runItemAgain). */
+export function runLoopItemAgain(itemId: string): LoopControlResult {
+  return applyControl((loop) => runItemAgain(loop, itemId));
+}
+
+/** Change the limits; core checks the bounds (setLoopBudget). */
+export function setRunningLoopBudget(input: unknown): LoopControlResult {
+  return applyControl((loop) => setLoopBudget(loop, input));
 }
 
 // --- Answers ---

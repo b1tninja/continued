@@ -192,6 +192,7 @@ export function nextLoopTurn(
           answers,
           questions: loop.questions,
           redo: itemState?.status === "redo",
+          again: itemState?.again,
           attempt: (itemState?.attempts ?? 0) + 1,
           notes: loop.notes,
           standing: standingInstructions(loop),

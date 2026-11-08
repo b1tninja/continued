@@ -1,5 +1,5 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { LoopAutonomy, LoopState } from "core";
+import { LoopAutonomy, LoopBudget, LoopState } from "core";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import {
   acceptReplan,
@@ -19,7 +19,11 @@ import {
   setLoopAutonomy,
   requestStop,
   resumeLoop,
+  runItemAgain,
+  setLoopBudget,
   settleSteeredAnswers,
+  skipItem,
+  type LoopControlResult,
   startItemRun,
   standingInstructions,
   startReplan,
@@ -187,6 +191,49 @@ export const setLoopAutonomyThunk = createAsyncThunk<
   if (!loop) return;
   commitLoop(dispatch, getState, setLoopAutonomy(loop, autonomy));
 });
+
+type LoopControlOutcome = { ok: boolean; error?: string };
+
+/** Applies one of core's controls to the session's loop. */
+function control(
+  dispatch: AppThunkDispatch,
+  getState: () => RootState,
+  apply: (loop: LoopState) => LoopControlResult,
+): LoopControlOutcome {
+  const { loop } = getState().session;
+  if (!loop) return { ok: false, error: "No loop is running" };
+  const result = apply(loop);
+  if (!result.ok) return result;
+  commitLoop(dispatch, getState, result.loop);
+  return { ok: true };
+}
+
+/** Skip an item that is not running: it counts as finished, shown cancelled. */
+export const skipLoopItemThunk = createAsyncThunk<
+  LoopControlOutcome,
+  string,
+  ThunkApiType
+>("loop/skipItem", async (itemId, { dispatch, getState }) =>
+  control(dispatch, getState, (loop) => skipItem(loop, itemId)),
+);
+
+/** Run a done, failed or skipped item again. */
+export const runLoopItemAgainThunk = createAsyncThunk<
+  LoopControlOutcome,
+  string,
+  ThunkApiType
+>("loop/runItemAgain", async (itemId, { dispatch, getState }) =>
+  control(dispatch, getState, (loop) => runItemAgain(loop, itemId)),
+);
+
+/** The inbox's limits editor and re-plan picker: core checks the bounds. */
+export const setLoopBudgetThunk = createAsyncThunk<
+  LoopControlOutcome,
+  Partial<LoopBudget>,
+  ThunkApiType
+>("loop/setBudget", async (budget, { dispatch, getState }) =>
+  control(dispatch, getState, (loop) => setLoopBudget(loop, budget)),
+);
 
 export const endLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
   "loop/end",
@@ -366,6 +413,7 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           answers,
           questions: loop.questions,
           redo: itemState?.status === "redo",
+          again: itemState?.again,
           attempt: (itemState?.attempts ?? 0) + 1,
           notes: loop.notes,
           standing: standingInstructions(loop),

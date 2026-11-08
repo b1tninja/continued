@@ -9,6 +9,8 @@ import {
 } from "core/util/loopMode";
 import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { cancelStream } from "../../redux/thunks/cancelStream";
+import { LoopControls } from "./LoopControls";
 import {
   answerLoopQuestion,
   endLoopThunk,
@@ -201,17 +203,33 @@ export function LoopInbox() {
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            data-testid="loop-stop"
-            title="Stop after the running item (Stop in the input stops it now)"
-            className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
-            onClick={() => void dispatch(stopLoopThunk())}
-          >
-            Stop loop
-          </button>
+          <>
+            {!loop.stopRequested && (
+              <button
+                type="button"
+                data-testid="loop-stop"
+                title="Stop once the running item or re-plan ends"
+                className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+                onClick={() => void dispatch(stopLoopThunk())}
+              >
+                Stop after this item
+              </button>
+            )}
+            {loop.current && (
+              <button
+                type="button"
+                data-testid="loop-stop-now"
+                title="Stop the running item now; it goes back to pending"
+                className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+                onClick={() => void dispatch(cancelStream())}
+              >
+                Stop now
+              </button>
+            )}
+          </>
         )}
       </div>
+      <LoopControls loop={loop} taskPlan={taskPlan} />
       {loop.status === "awaiting_plan" && loop.replanReason && (
         <div
           data-testid="loop-replan-reason"

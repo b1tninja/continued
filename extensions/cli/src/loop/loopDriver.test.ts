@@ -40,6 +40,9 @@ import {
   loopRequestHistory,
   requestLoopTurnEnd,
   resetLoopMemory,
+  runLoopItemAgain,
+  setRunningLoopBudget,
+  skipLoopItem,
   startLoopFromPlan,
   withLoopSteering,
 } from "./loopSession.js";
@@ -366,5 +369,72 @@ describe("Loop mode's driver in the CLI", () => {
       now,
     );
     expect(resumed.ok && resumed.loop.status).toBe("running");
+  });
+
+  it("skips an item, runs a done one again, and changes the limits", async () => {
+    await planOf("One", "Two", "Three");
+    startLoopFromPlan("normal");
+    expect(skipLoopItem("9")).toEqual({
+      ok: false,
+      error: "No item 9 in the loop",
+    });
+
+    // Item 1 runs; it cannot be skipped while it does
+    runItem("done");
+    const two = nextLoopTurn(history().length);
+    expect(two?.prompt).toContain("only this item: Two");
+    expect(skipLoopItem("2").ok).toBe(false);
+    expect(runLoopItemAgain("2").ok).toBe(false);
+
+    // Item 3 is skipped meanwhile: the task list shows it cancelled
+    expect(skipLoopItem("3").ok).toBe(true);
+    expect(getSessionTaskPlan()!.items[2].status).toBe("cancelled");
+
+    // Item 1 again: the next run says it is a repeat at the person's request
+    expect(runLoopItemAgain("1").ok).toBe(true);
+    expect(getSessionTaskPlan()!.items[0].status).toBe("pending");
+    const loop = loopNow();
+    commitLoop({
+      ...loop,
+      current: loop.current && {
+        ...loop.current,
+        report: { outcome: "done", summary: "Two done" },
+      },
+    });
+    const again = nextLoopTurn(history().length);
+    expect(again?.prompt).toContain("only this item: One");
+    expect(again?.prompt).toContain("the person asked for it to run again");
+
+    // The limits: out of bounds is refused, and nothing changes
+    expect(setRunningLoopBudget({ maxRounds: 51 })).toEqual({
+      ok: false,
+      error: "maxRounds must be an integer from 1 to 50",
+    });
+    expect(loopNow().budget.maxRounds).toBe(3);
+    expect(
+      setRunningLoopBudget({ maxRounds: 1, maxTokens: 0, maxWallMs: 600_000 })
+        .ok,
+    ).toBe(true);
+    expect(loopNow().budget).toMatchObject({
+      maxRounds: 1,
+      maxTokens: 0,
+      maxWallMs: 600_000,
+    });
+
+    // Item 1 ends; everything is finished, one of them skipped
+    const ran = loopNow();
+    commitLoop({
+      ...ran,
+      current: ran.current && {
+        ...ran.current,
+        report: { outcome: "done", summary: "One checked" },
+      },
+    });
+    expect(nextLoopTurn(history().length)).toBeUndefined();
+    expect(loopNow()).toMatchObject({
+      status: "stopped",
+      stopReason: "done",
+      stopDetail: "All 3 items are done (1 skipped).",
+    });
   });
 });

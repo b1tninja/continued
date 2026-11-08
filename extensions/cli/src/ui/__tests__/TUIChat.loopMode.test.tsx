@@ -212,6 +212,11 @@ describe("TUIChat - Loop mode", () => {
         ui.lastFrame,
       );
       expect(ui.lastFrame()).toContain("Allow this call? Write:");
+      // The controls: per item, the re-plan setting and the limits
+      expect(ui.lastFrame()).toContain("Run again: 1. Add a retry helper");
+      expect(ui.lastFrame()).toContain("Skip 2. Use it in fetch");
+      expect(ui.lastFrame()).toContain("Re-plan until done");
+      expect(ui.lastFrame()).toContain("Limits: 3 rounds");
       await type(ui.stdin, ENTER);
 
       await waitLong(
