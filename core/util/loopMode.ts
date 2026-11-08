@@ -3,6 +3,7 @@ import type {
   LoopAnswerRoute,
   LoopAutonomy,
   LoopBudget,
+  LoopCheckResult,
   LoopItemState,
   LoopItemStatus,
   LoopQuestion,
@@ -269,6 +270,8 @@ export const LOOP_LIMITS = {
   /** Notes carried to later items; kept short, as they go with every run */
   maxNoteLength: 300,
   maxNotes: 12,
+  /** The tail of a check's output that is kept and shown */
+  maxCheckOutput: 2000,
 } as const;
 
 /**
@@ -307,6 +310,8 @@ export type FinishOutcome = "done" | "stuck" | "waiting";
 /** What the loop should do next; see decideNext. */
 export type LoopAction =
   | { kind: "run"; itemId: string }
+  /** Run an item's check (TaskItem.check): the harness runs the command */
+  | { kind: "check"; itemId: string; command: string }
   /**
    * A re-plan turn. checkIn: a check-in between items (check-in strategy),
    * with why it is due. itemId: a repair of that failed item only (fix
@@ -356,6 +361,58 @@ function withItem(
     ...loop,
     items: loop.items.map((i) => (i.id === id ? { ...i, ...change } : i)),
   };
+}
+
+/**
+ * The items `task` comes after (TaskItem.after) that are not done yet. A
+ * skipped item does not count as done; one gone from the plan is ignored.
+ */
+export function unmetDependencies(
+  loop: LoopState,
+  plan: TaskPlan,
+  task: TaskItem,
+): string[] {
+  return (task.after ?? []).filter((id) => {
+    if (!plan.items.some((t) => t.id === id)) return false;
+    const state = itemState(loop, id);
+    return !(state?.status === "done" && !state.skipped);
+  });
+}
+
+/** Unmet dependencies that will not finish by themselves: failed or skipped. */
+export function blockingDependencies(
+  loop: LoopState,
+  plan: TaskPlan,
+  task: TaskItem,
+): string[] {
+  return unmetDependencies(loop, plan, task).filter((id) => {
+    const state = itemState(loop, id);
+    return state?.status === "failed" || !!state?.skipped;
+  });
+}
+
+/**
+ * The item cannot go on until the person answers: it waits, its check waits
+ * for an approval, or everything it comes after waits on the person.
+ */
+function waitsOnPerson(
+  loop: LoopState,
+  plan: TaskPlan,
+  state: LoopItemState,
+  seen: Set<string> = new Set(),
+): boolean {
+  if (state.status === "waiting") return true;
+  if (state.status === "checking") return hasOpenBlocking(loop, state.id);
+  if (state.status !== "pending" && state.status !== "redo") return false;
+  const task = plan.items.find((t) => t.id === state.id);
+  const unmet = task ? unmetDependencies(loop, plan, task) : [];
+  if (unmet.length === 0) return false;
+  return unmet.every((id) => {
+    if (seen.has(id)) return false;
+    seen.add(id);
+    const dep = itemState(loop, id);
+    return !!dep && waitsOnPerson(loop, plan, dep, seen);
+  });
 }
 
 /** Item state for a task list item the loop has not seen. */
@@ -418,6 +475,9 @@ export function reconcileLoop(loop: LoopState, plan: TaskPlan): LoopState {
   const items = plan.items.map((task) => {
     const known = itemState(loop, task.id);
     if (!known) return fromTask(task);
+    if (known.status === "checking" && !task.check) {
+      return { ...known, status: "done" as const };
+    }
     if (
       (task.status === "completed" || task.status === "cancelled") &&
       known.status !== "running" &&
@@ -437,7 +497,11 @@ export function nextRunnableItem(
 ): TaskItem | undefined {
   return plan.items.find((task) => {
     const state = itemState(loop, task.id);
-    return state !== undefined && OPEN_STATUSES.includes(state.status);
+    return (
+      state !== undefined &&
+      OPEN_STATUSES.includes(state.status) &&
+      unmetDependencies(loop, plan, task).length === 0
+    );
   });
 }
 
@@ -510,6 +574,14 @@ export function decideNext(
   }
 
   const live = loop.items.filter((i) => plan.items.some((t) => t.id === i.id));
+  // An item that reported done has its check run before anything else
+  const checking = plan.items.find((task) => {
+    const state = itemState(loop, task.id);
+    return state?.status === "checking" && !hasOpenBlocking(loop, task.id);
+  });
+  if (checking?.check) {
+    return { kind: "check", itemId: checking.id, command: checking.check };
+  }
   if (loop.replanRequested) {
     return replanOrStop(loop);
   }
@@ -531,7 +603,7 @@ export function decideNext(
     };
   }
   const open = live.filter((i) => i.status !== "done");
-  if (open.every((i) => i.status === "waiting")) {
+  if (open.every((i) => waitsOnPerson(loop, plan, i))) {
     const { waitTimeoutMs } = loopAutonomy(loop);
     if (waitTimeoutMs <= 0) return { kind: "wait" };
     const since = new Date(loop.waitingSince ?? ctx.now).getTime();
@@ -815,6 +887,86 @@ export function startItemRun(
 }
 
 /**
+ * The harness starts an item's check (decideNext's "check" action). It is not
+ * a model turn; `current` marks it so a held approval names the item.
+ */
+export function startCheck(
+  loop: LoopState,
+  itemId: string,
+  historyIndex: number,
+  now: Date,
+): LoopState {
+  return {
+    ...loop,
+    status: "running",
+    current: { kind: "check", itemId, historyIndex, startedAt: iso(now) },
+  };
+}
+
+/**
+ * The check ran, or could not. passed (exit 0): the item is done. failed:
+ * the item runs again with the output, up to maxAttempts, then is failed.
+ * refused (a rule refused the command, or the person did not allow it): the
+ * item is done without its check.
+ */
+export function recordCheck(
+  loop: LoopState,
+  result: {
+    status: LoopCheckResult["status"];
+    command: string;
+    exitCode?: number | null;
+    output?: string;
+  },
+  now: Date,
+): LoopState {
+  const itemId =
+    loop.current?.kind === "check" ? loop.current.itemId : undefined;
+  if (!itemId) return loop;
+  const state = itemState(loop, itemId);
+  const check: LoopCheckResult = {
+    status: result.status,
+    command: result.command,
+    ...(result.exitCode !== undefined ? { exitCode: result.exitCode } : {}),
+    ...(result.output
+      ? { output: result.output.slice(-LOOP_LIMITS.maxCheckOutput) }
+      : {}),
+    at: iso(now),
+  };
+  let status: LoopItemStatus;
+  let summary = state?.summary;
+  if (result.status === "failed") {
+    status =
+      (state?.attempts ?? 0) >= loop.budget.maxAttempts ? "failed" : "pending";
+    summary = `The check failed${result.exitCode != null ? ` (exit ${result.exitCode})` : ""}: ${result.command}`;
+  } else {
+    status = "done";
+  }
+  const failures =
+    status === "failed"
+      ? (loop.consecutiveFailures ?? 0) + 1
+      : status === "done"
+        ? 0
+        : (loop.consecutiveFailures ?? 0);
+  return {
+    ...withItem(loop, itemId, { status, check, summary }),
+    current: undefined,
+    doneThisRound: loop.doneThisRound + (status === "done" ? 1 : 0),
+    consecutiveFailures: failures,
+    ...strategyAfterRun(loop, state, status),
+  };
+}
+
+/**
+ * The check would ask for approval and is held as a question (the caller
+ * held it while `current` named the item): the item stays checking.
+ */
+export function holdCheck(loop: LoopState): LoopState {
+  return loop.current?.kind === "check"
+    ? { ...loop, current: undefined }
+    : loop;
+}
+
+/**
  * A re-plan turn starts. `scope` comes from the replan action: `plan` is the
  * list it starts from (to tell later what it changed), `checkIn` marks a
  * check-in, and `itemId` a repair of that failed item, which counts toward
@@ -881,6 +1033,8 @@ export function finishItemRun(
   loop: LoopState,
   report:
     { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
+  /** The item's check (TaskItem.check): done then waits for it to pass */
+  options: { check?: string } = {},
 ): LoopState {
   const itemId = loop.current?.itemId;
   if (!itemId || loop.current?.kind !== "item") return loop;
@@ -888,7 +1042,7 @@ export function finishItemRun(
   const summary = report?.summary?.slice(0, LOOP_LIMITS.maxSummaryLength);
   let status: LoopItemStatus;
   if (report?.outcome === "done") {
-    status = "done";
+    status = options.check ? "checking" : "done";
   } else if (hasOpenBlocking(loop, itemId) || report?.outcome === "waiting") {
     status = "waiting";
   } else if (report?.outcome === "stuck") {
@@ -1347,6 +1501,25 @@ function routeAnswer(
       return { route: confirmsAssumption ? "confirmed" : "next-run" };
     case "running":
       return { route: confirmsAssumption ? "confirmed" : "steer" };
+    case "checking":
+      // Allowing the check lets the loop run it; not allowing it leaves
+      // the item done without its check
+      if (question?.kind === "approval") {
+        return input.approve
+          ? { route: "confirmed" }
+          : {
+              route: "confirmed",
+              itemChange: {
+                status: "done",
+                check: {
+                  status: "refused",
+                  command: question.approval?.summary ?? "",
+                  at: question.askedAt,
+                },
+              },
+            };
+      }
+      return { route: confirmsAssumption ? "confirmed" : "next-run" };
     case "done":
       if (confirmsAssumption) return { route: "confirmed" };
       // The person skipped it: the answer waits for a run they ask for
@@ -1422,11 +1595,11 @@ export function answerLoop(
   }
   if (answer.replanNow) next = { ...next, replanRequested: true };
   // An answer to a loop that waited on the person resumes it.
-  if (
-    next.status === "waiting" &&
-    route !== "confirmed" &&
-    route !== "standing"
-  ) {
+  const unblocks =
+    route !== "confirmed" ||
+    !!itemChange ||
+    (question?.kind === "approval" && !!input.approve);
+  if (next.status === "waiting" && route !== "standing" && unblocks) {
     next = { ...next, status: "running", waitingSince: undefined };
   }
   return { ok: true, loop: next, answer };
@@ -1489,6 +1662,12 @@ export function taskPlanWithLoop(plan: TaskPlan, loop: LoopState): TaskPlan {
         status = "in_progress";
         note = undefined;
         break;
+      case "checking":
+        status = "in_progress";
+        note = open.length
+          ? `Check waiting on you: ${open.map((q) => q.id).join(", ")}`
+          : `Checking: ${task.check ?? "its check"}`;
+        break;
       case "done":
         if (state.skipped) {
           status = "cancelled";
@@ -1510,10 +1689,21 @@ export function taskPlanWithLoop(plan: TaskPlan, loop: LoopState): TaskPlan {
         status = "pending";
         note = "Redo: an assumption was overruled";
         break;
-      case "pending":
-        status = "pending";
-        note = state.again ? "Run again: you asked for it" : undefined;
+      case "pending": {
+        const blocked = blockingDependencies(loop, plan, task);
+        const unmet = unmetDependencies(loop, plan, task);
+        status = blocked.length ? "blocked" : "pending";
+        note = blocked.length
+          ? `Blocked on ${blocked.join(", ")}`
+          : state.again
+            ? "Run again: you asked for it"
+            : state.check?.status === "failed"
+              ? state.summary
+              : unmet.length
+                ? `After ${unmet.join(", ")}`
+                : undefined;
         break;
+      }
     }
     note = note?.slice(0, 200);
     if (status === task.status && note === task.note) return task;
@@ -1674,6 +1864,8 @@ export function loopItemPrompt(input: {
    * instructions are in it, so the prompt leaves them out.
    */
   planBlock?: boolean;
+  /** The last run of the item's check (LoopItemState.check) */
+  lastCheck?: LoopCheckResult;
 }): string {
   const { item } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
@@ -1701,6 +1893,20 @@ export function loopItemPrompt(input: {
   } else if (input.attempt > 1) {
     lines.push(
       "An earlier run of this item ended without reporting. Check what is already done before you change anything.",
+    );
+  }
+  if (input.item.check) {
+    lines.push(
+      `When you report it done, its check runs: \`${quote(input.item.check)}\`. It must exit 0, so run it yourself first.`,
+    );
+  }
+  if (input.lastCheck?.status === "failed") {
+    lines.push(
+      "",
+      `You reported this item done, but its check \`${quote(input.lastCheck.command)}\` failed${input.lastCheck.exitCode != null ? ` (exit ${input.lastCheck.exitCode})` : ""}. Fix what it reports:`,
+      "```",
+      (input.lastCheck.output ?? "(no output)").trim(),
+      "```",
     );
   }
   if (input.unanswered?.length) {
@@ -1749,6 +1955,7 @@ const STATUS_MARK: Record<LoopItemStatus, string> = {
   pending: "[ ]",
   redo: "[ ]",
   running: "[>]",
+  checking: "[~]",
   done: "[x]",
   waiting: "[?]",
   failed: "[!]",
@@ -1786,14 +1993,22 @@ export function loopPlanBlock(input: {
     loop.current?.kind === "item" ? loop.current.itemId : undefined;
   const lines = [
     TASK_LIST_BLOCK_OPEN,
-    `The plan, kept for you and read-only. Work only on the item marked "<- this item"; report it with ${names.finishItem} and ask with ${names.holdQuestion}. Markers: [ ] to do, [>] this item, [x] done, [?] waiting on the person, [!] failed.`,
+    `The plan, kept for you and read-only. Work only on the item marked "<- this item"; report it with ${names.finishItem} and ask with ${names.holdQuestion}. Markers: [ ] to do, [>] this item, [~] its check runs next, [x] done, [?] waiting on the person, [!] failed.`,
   ];
   for (const task of plan.items) {
     const state = itemState(loop, task.id);
     const status = state?.status ?? "pending";
     let line = `${STATUS_MARK[status]} ${task.id}. ${quote(task.text)}`;
+    const blocked = blockingDependencies(loop, plan, task);
+    const unmet = unmetDependencies(loop, plan, task);
     if (task.id === currentId) {
-      line += "  <- this item";
+      line += `  <- this item (attempt ${state?.attempts ?? 1} of ${loop.budget.maxAttempts})`;
+    } else if (status === "checking") {
+      line += " (its check runs next)";
+    } else if (blocked.length) {
+      line += ` (blocked: ${blocked.join(", ")} failed or skipped)`;
+    } else if (unmet.length && status !== "done") {
+      line += ` (after ${unmet.join(", ")})`;
     } else if (status === "redo") {
       line += " (to be redone: an assumption was overruled)";
     } else if (status === "waiting") {
@@ -1811,6 +2026,12 @@ export function loopPlanBlock(input: {
       line += `: ${clip(state.summary, LOOP_PLAN_BLOCK_LIMITS.summaryLength)}`;
     }
     lines.push(line);
+    if (task.check) {
+      const result = state?.check
+        ? ` (last run: ${state.check.status}${state.check.exitCode != null ? `, exit ${state.check.exitCode}` : ""})`
+        : "";
+      lines.push(`    check: ${quote(task.check)}${result}`);
+    }
     for (const q of openQuestions(loop, task.id)) {
       const assumed = q.assumption
         ? ` Assumed: ${clip(q.assumption, LOOP_PLAN_BLOCK_LIMITS.questionLength)}`
@@ -1980,6 +2201,7 @@ export function formatLoopStatus(
   const skipped = loop.items.filter((i) => i.skipped).length;
   const done = loop.items.filter((i) => i.status === "done").length - skipped;
   const waiting = loop.items.filter((i) => i.status === "waiting").length;
+  const checking = loop.items.filter((i) => i.status === "checking").length;
   const open = loop.questions.filter((q) => !q.answerId).length;
   // A strategy is named when it is not the level's default (and a loop saved
   // before strategies names none); with level: false the pickers show both.
@@ -1997,6 +2219,7 @@ export function formatLoopStatus(
   ];
   if (skipped) parts.push(`${skipped} skipped`);
   if (waiting) parts.push(`${waiting} waiting on you`);
+  if (checking) parts.push(`${checking} checking`);
   if (open) parts.push(`${open} open question${open === 1 ? "" : "s"}`);
   if (loop.stopRequested) parts.push("stopping after this step");
   switch (loop.status) {

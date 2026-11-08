@@ -386,8 +386,27 @@ export interface Session {
 }
 
 /** Where one plan item is in Loop mode. The task list shows it too. */
+/**
+ * checking: the item reported done and has a check (TaskItem.check) that
+ * has not passed yet; the loop runs it next (decideNext's "check" action).
+ */
 export type LoopItemStatus =
-  "pending" | "running" | "done" | "waiting" | "redo" | "failed";
+  "pending" | "running" | "checking" | "done" | "waiting" | "redo" | "failed";
+
+/** The last time an item's check (TaskItem.check) ran, or why it did not. */
+export interface LoopCheckResult {
+  /**
+   * passed: exit 0. failed: another exit code (the item runs again).
+   * refused: a rule refused the command or the person did not allow it, so
+   * the item counts as done without its check.
+   */
+  status: "passed" | "failed" | "refused";
+  command: string;
+  exitCode?: number | null;
+  /** The tail of what it printed, at most LOOP_LIMITS.maxCheckOutput */
+  output?: string;
+  at: string;
+}
 
 export interface LoopItemState {
   /** The task list item's id */
@@ -415,6 +434,8 @@ export interface LoopItemState {
    * when that run ends.
    */
   again?: boolean;
+  /** The last run of the item's check (TaskItem.check) */
+  check?: LoopCheckResult;
   /**
    * Fix forward: re-plans scoped to this item after it failed (at most
    * LOOP_MAX_REPAIRS_PER_ITEM). To-dos a repair splits it into inherit it.
@@ -548,9 +569,12 @@ export interface LoopState {
    */
   strategyPicked?: boolean;
   items: LoopItemState[];
-  /** What is running: one item, or the re-plan turn */
+  /**
+   * What is running: one item, the re-plan turn, or an item's check (a
+   * command the harness runs, not a model turn)
+   */
   current?: {
-    kind: "item" | "replan";
+    kind: "item" | "replan" | "check";
     /** The item that runs; for a repair re-plan, the failed item it is about */
     itemId?: string;
     /** History length when it started; its messages come after */
@@ -638,6 +662,18 @@ export interface TaskItem {
   note?: string;
   /** Present-tense label shown while the item is in progress ("Running migrations") */
   activeForm?: string;
+  /**
+   * Ids of the items this one comes after: Loop mode does not run it before
+   * they are done. The plan file writes them as `after: 1, 2` (positions)
+   * under the to-do.
+   */
+  after?: string[];
+  /**
+   * A shell command that confirms the item is done (exit 0). Loop mode runs
+   * it after the item reports done, under the same rules as any terminal
+   * command. The plan file writes it as `check: <command>` under the to-do.
+   */
+  check?: string;
 }
 
 export interface TaskPlan {

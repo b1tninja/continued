@@ -27,6 +27,8 @@ export const TASK_PLAN_LIMITS = {
   maxNoteLength: 200,
   maxActiveFormLength: 120,
   maxIdLength: 40,
+  /** A to-do's check command (TaskItem.check) */
+  maxCheckLength: 500,
   /** Completed items shown in the request block; older ones are a count */
   shownCompleted: 3,
 } as const;
@@ -67,6 +69,13 @@ export interface TaskItemInput {
   status?: unknown;
   note?: unknown;
   activeForm?: unknown;
+  /**
+   * The items this one comes after, as 1-based positions in the same list
+   * (numbers, or numeric strings); stored as ids (TaskItem.after)
+   */
+  after?: unknown;
+  /** A command that confirms the item is done (TaskItem.check) */
+  check?: unknown;
 }
 
 export type TaskPlanResult =
@@ -143,6 +152,8 @@ export function buildTaskPlan(
   const items: TaskItem[] = [];
   const seenIds = new Set<string>();
   let inProgress = 0;
+  /** Each item's `after` positions, resolved to ids once every id is known */
+  const afterPositions: number[][] = [];
 
   for (let i = 0; i < input.length; i++) {
     const position = i + 1;
@@ -209,6 +220,21 @@ export function buildTaskPlan(
       return { ok: false, error: activeForm.error };
     }
 
+    const check = optionalText(
+      raw.check,
+      "check",
+      TASK_PLAN_LIMITS.maxCheckLength,
+      position,
+    );
+    if (check.error) {
+      return { ok: false, error: check.error };
+    }
+    const after = afterList(raw.after, position, input.length);
+    if (typeof after === "string") {
+      return { ok: false, error: after };
+    }
+    afterPositions.push(after);
+
     if (id !== undefined) {
       seenIds.add(id);
     }
@@ -218,7 +244,16 @@ export function buildTaskPlan(
       status,
       ...(note.value && { note: note.value }),
       ...(activeForm.value && { activeForm: activeForm.value }),
+      ...(check.value && { check: check.value.replace(/\s*\n\s*/g, " ") }),
     });
+  }
+
+  const cycle = afterCycle(afterPositions);
+  if (cycle) {
+    return {
+      ok: false,
+      error: `Items ${cycle.join(", ")} come after each other in a circle; remove one of the after: lines.`,
+    };
   }
 
   if (inProgress > 1) {
@@ -258,6 +293,12 @@ export function buildTaskPlan(
     }
   }
 
+  // `after` positions become the ids the items now have
+  items.forEach((item, i) => {
+    const after = afterPositions[i].map((p) => items[p - 1].id);
+    if (after.length) item.after = after;
+  });
+
   return {
     ok: true,
     plan: {
@@ -266,6 +307,60 @@ export function buildTaskPlan(
       updatedBy: options.updatedBy ?? "model",
     },
   };
+}
+
+/**
+ * An item's `after` positions: 1-based, in the list, not the item itself.
+ * Returns the error text when they are not.
+ */
+function afterList(
+  value: unknown,
+  position: number,
+  count: number,
+): number[] | string {
+  if (value === undefined || value === null || value === "") return [];
+  const raw =
+    typeof value === "string"
+      ? value.split(/[\s,]+/).filter(Boolean)
+      : Array.isArray(value)
+        ? value
+        : [value];
+  const positions: number[] = [];
+  for (const entry of raw) {
+    const n = typeof entry === "number" ? entry : Number(String(entry).trim());
+    if (!Number.isInteger(n) || n < 1 || n > count) {
+      return `Item ${position}: after: must list item numbers from 1 to ${count}`;
+    }
+    if (n === position) {
+      return `Item ${position} cannot come after itself`;
+    }
+    if (!positions.includes(n)) positions.push(n);
+  }
+  return positions;
+}
+
+/** The positions in a circle of `after` references, if there is one. */
+function afterCycle(after: number[][]): number[] | undefined {
+  const state = new Map<number, "visiting" | "done">();
+  const path: number[] = [];
+  const visit = (p: number): number[] | undefined => {
+    if (state.get(p) === "done") return undefined;
+    if (state.get(p) === "visiting") return path.slice(path.indexOf(p));
+    state.set(p, "visiting");
+    path.push(p);
+    for (const q of after[p - 1] ?? []) {
+      const found = visit(q);
+      if (found) return found;
+    }
+    path.pop();
+    state.set(p, "done");
+    return undefined;
+  };
+  for (let p = 1; p <= after.length; p++) {
+    const found = visit(p);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 /** Checks a stored plan (for example one read from a session file). */
@@ -425,6 +520,14 @@ export function parseMarkdownChecklist(markdown: string): TaskItemInput[] {
   };
   const items: TaskItemInput[] = [];
   for (const line of markdown.split(/\r?\n/)) {
+    // `  after: 1, 2` and `  check: <command>` under a to-do belong to it
+    const attribute = line.match(ITEM_ATTRIBUTE);
+    if (attribute && items.length > 0) {
+      const last = items[items.length - 1];
+      const key = attribute[1].toLowerCase() as "after" | "check";
+      last[key] = attribute[2].trim();
+      continue;
+    }
     const match = line.match(/^\s*(?:[-*+]|\d+\.)\s*\[([ xX>!-])\]\s*(.*)$/);
     if (!match) {
       continue;
@@ -445,6 +548,23 @@ export function parseMarkdownChecklist(markdown: string): TaskItemInput[] {
     }
   }
   return items;
+}
+
+/** An indented `after: 1, 2` or `check: <command>` line under a to-do. */
+const ITEM_ATTRIBUTE = /^(?:\t|\s{2,})(after|check)\s*:\s*(.*)$/i;
+
+/** The lines a plan file writes under a to-do for its `after` and `check`. */
+export function taskItemAttributeLines(
+  item: TaskItem,
+  items: TaskItem[],
+): string[] {
+  const lines: string[] = [];
+  const positions = (item.after ?? [])
+    .map((id) => items.findIndex((i) => i.id === id) + 1)
+    .filter((p) => p > 0);
+  if (positions.length) lines.push(`  after: ${positions.join(", ")}`);
+  if (item.check) lines.push(`  check: ${item.check}`);
+  return lines;
 }
 
 /** `<!-- id: 3 -->` at the end of a checklist line. */
