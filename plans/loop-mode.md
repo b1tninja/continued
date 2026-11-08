@@ -1,6 +1,6 @@
 # Loop mode
 
-Last updated: 2026-11-07. Status: L1 (core state machine) and L2 (IDE, with autonomy levels) built, with unit and gui integration tests. The sandbox run on a local model is pending; its report goes in the PR. L3 (CLI and `cn serve`) and L4 (parallel items, verification) are not built.
+Last updated: 2026-11-07. Status: L1 (core state machine) and L2 (IDE, with autonomy levels) built, with unit and gui integration tests. Five sandbox runs on a local model are reported in the PR. L3 (CLI and `cn serve`) and L4 (parallel items, verification) are not built.
 
 Build a plan item by item without the person driving each step. Questions go to an inbox the person can answer while the work continues.
 
