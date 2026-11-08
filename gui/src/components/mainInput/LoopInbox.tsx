@@ -248,6 +248,17 @@ export function LoopInbox() {
           </>
         )}
       </div>
+      {loop.current?.kind === "check" && (
+        <div
+          data-testid="loop-check-running"
+          className="mt-0.5 truncate text-description"
+        >
+          Running the check for {loop.current.itemId}:{" "}
+          <code>
+            {taskPlan?.items.find((i) => i.id === loop.current?.itemId)?.check}
+          </code>
+        </div>
+      )}
       <LoopControls loop={loop} taskPlan={taskPlan} />
       {loop.status === "awaiting_plan" && loop.replanReason && (
         <div

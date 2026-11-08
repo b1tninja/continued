@@ -15,6 +15,7 @@ import {
   decideNext,
   endReplan,
   finishItemRun,
+  holdCheck,
   loopItemPrompt,
   loopReplanTurnPrompt,
   markDelivered,
@@ -51,6 +52,7 @@ import {
 import { AppThunkDispatch, RootState, ThunkApiType } from "../store";
 import { commitLoop } from "../util/loopCommit";
 
+import { runLoopCheck } from "./loopChecks";
 import { streamResponseThunk } from "./streamResponse";
 
 /**
@@ -398,8 +400,17 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
       const delivered = loop.answers
         .filter((a) => a.route === "steer" && !queuedIds.has(a.id))
         .map((a) => a.id);
-      loop = finishItemRun(loop, loop.current.report);
+      // An item with a check is not done until its check passes
+      const itemId = loop.current.itemId;
+      const check = state.session.taskPlan?.items.find(
+        (t) => t.id === itemId,
+      )?.check;
+      loop = finishItemRun(loop, loop.current.report, { check });
       loop = settleSteeredAnswers(loop, delivered);
+    } else if (loop.current?.kind === "check") {
+      // A check that did not finish (the gui reloaded while it ran): the
+      // item stays checking, and its check runs again
+      loop = holdCheck(loop);
     } else if (loop.current?.kind === "replan") {
       const presented = callsSince(
         state,
@@ -482,6 +493,8 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           notes: loop.notes,
           standing: standingInstructions(loop),
           freshContext: loop.freshContext !== false,
+          // A failed check's output, for the item to fix
+          lastCheck: itemState?.check,
           // The request carries the plan block (loopPlanBlock)
           planBlock: true,
           unanswered: loop.questions.filter((q) =>
@@ -503,6 +516,11 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
         await sendLoopTurn(dispatch, prompt);
         return;
       }
+      case "check":
+        // The harness runs the item's check; no model turn
+        commitLoop(dispatch, getState, loop);
+        await runLoopCheck(dispatch, getState, extra.ideMessenger, action, now);
+        return;
       case "replan": {
         let planTitle: string | undefined;
         if (state.session.planFile) {
