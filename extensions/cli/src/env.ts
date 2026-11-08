@@ -1,6 +1,5 @@
-import dotenv from "dotenv";
-
 import { getGlobalDirPath } from "core/util/paths.js";
+import dotenv from "dotenv";
 
 dotenv.config();
 

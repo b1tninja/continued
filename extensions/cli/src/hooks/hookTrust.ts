@@ -22,7 +22,6 @@
 
 import * as crypto from "crypto";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 
 import { GLOBAL_DIR_NAME } from "core/util/paths.js";
