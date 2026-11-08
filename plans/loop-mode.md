@@ -561,6 +561,63 @@ The goal's criteria sit under a `## Done` heading, before the to-dos. An item's 
 
 **Depends on:** L6 item 6, the read-only verifier, which is not built. The `check:` half works today.
 
+#### A fixed base prompt, a pinned done block, and a constant reminder
+
+Added on 2026-11-07 from the owner. In their words: "use some sort of base prompt to ask the model / agent to potentially rephrase the task in a repeatable set of steps, and then also to identify the end state, separately, in a way that we could then repeat those in a cache optimized way, and continuously remind it / ask it what we need to reach the done state", and then "we could take advantage of our cached input reuse."
+
+**The payoff is cached input reuse.** Every loop turn, and every item, should re-read the same prefix from the cache. Only the new tool results and the short reminder should be fresh input. The three pieces below exist for that:
+
+1. **A fixed base prompt for planning.** It is the same text every time, so it caches. It asks for two separate outputs:
+   - the task restated as a repeatable list of steps (the to-dos);
+   - the end state, on its own and independent of the steps: the `## Done` criteria.
+
+   This is the planning call that produces the plan file. The plan prompt and `loopReplanPrompt` would use it instead of their current wording.
+
+2. **An immutable steps-and-done block, early in the prompt.** Once approved, the restated steps and the done criteria form one block placed right after the system message and the tools.
+   - It is never edited in place. A re-plan or an edited criterion is appended as a short amendment ("D2 now reads: …; step 4 dropped") until the next round rewrites the block once.
+   - Criteria get stable ids (D1, D2, …) so later turns can refer to them cheaply.
+   - With a fresh context per item (Decision 6), each item's request is the same system message, tools and block, then that item's prompt. So the whole prefix up to the item prompt is shared across items, not only within one item's run.
+   - The changing per-item state (the plan block's slots, built) stays at the tail, where it is now.
+3. **A short, constant reminder at the tail of each turn.** It has the same wording every time and comes after the latest tool results and the slots: "Which of D1..Dn are met now, with evidence? What is the next step towards the rest?"
+   - Its answer feeds `decideNext` (the goal stop) and the verifier.
+   - Because it is the same small tail, it costs a few tokens per turn and never moves the cached boundary.
+
+**How it is measured, with what exists:**
+
+- **Per request:** the provider's usage reports cached input (`prompt_tokens_details.cached_tokens` on OpenAI-style APIs, cache-read tokens on Anthropic and Bedrock). Core turns that into one shape in `core/llm/utils/cacheStats.ts`. `core/llm/utils/cacheMinimums.ts` knows each provider's minimum cacheable prefix, below which nothing is cached.
+- **Per session:** the gui's usage readout (`useTotalUsage`, `gui/src/util/cacheLedger.ts`) and the CLI's tally (`extensions/cli/src/util/cacheTally.ts`) add requests up, and could break them down by loop run.
+- **Locally:** the sandbox's fake Strata server reports `cached_tokens` as the longest prefix it has seen. That gives a deterministic check without a provider.
+
+  It is not in this repository. A loop test could assert the cached share of each request through it.
+
+- **Targets to report** (proposed):
+  - The cached share of each loop turn after an item's first request: everything but the new tool results and the reminder.
+  - The cached share of each item's first request: the system message, the tools and the block should all come from the cache.
+  - The loop's status line or inbox could show the running share, so a drop is visible when it happens.
+
+**What breaks the reuse, and how the loop avoids it:**
+
+- **Editing the block in place.** Changes are appended as amendments. The block is rewritten only when a round's re-plan is accepted, at most once per round.
+- **Compaction rewriting the prefix.**
+  - The block is pinned like the system message: compaction keeps it word for word, and the reminder stays the last thing before the model's turn.
+  - With a fresh context per item, an item's run rarely grows enough to compact at all.
+  - Compaction's own summary request is a one-shot, which #316's `oneShot` hints already keep from evicting the main conversation's cache.
+- **Switching the model, the route or the reasoning effort mid-loop.** Any of these starts a new cache. The gui already warns on such a switch (`switchKeepsCache`, `gui/src/util/cacheSafeguards.ts`). The loop would:
+  - keep one model, route and effort for the whole loop by default;
+  - treat L6 item 8 (per-item `model:` and `effort:`) as a cache trade-off, shown when it is set;
+  - warn before a mid-loop change, as the picker does.
+- **Several runs sharing one cached conversation.** A single-slot server such as Strata holds one conversation, so interleaved requests evict each other's prefix. That is why subagents run one at a time against such a server (S1), and why parallel items (the parallel-agents plan) need a slot each.
+  - The loop's own extra requests are one-shots: the verifier, a scout, and the reminder's evaluation if it runs as a separate call.
+  - They should carry #316's `requestBodyHints.oneShot` fields (for Strata, `{"strata_checkpoint": false}`), so they do not replace the main conversation in the cache.
+- **Bytes that change for no reason.** Timestamps, counters, or the attempt number inside the block. Anything that changes goes in the tail (the slots, the reminder), never in the block.
+
+**Where it meets #316 (now on main).** `contextManagement.requestBodyHints` (`extensions/cli/src/contextManagement.ts` `getRequestBodyHints`, schema in `packages/config-yaml/src/schemas/models.ts`) is the existing way to tell the server how a request relates to the cached conversation:
+
+- `conversation` fields go on requests that continue the conversation: an item's turns.
+- `oneShot` fields go on requests nothing continues: the compaction summary today, and the verifier, a scout and a check-in's evaluation under this proposal.
+
+The block and the reminder need no new hint: they make the prefix stable, and the server's own prefix matching does the rest. A server-specific prefix hint, if Strata gains one, would be one more field under `conversation`.
+
 ## Safeguards
 
 - The loop never starts by itself after a reload: a loop saved mid-run comes back stopped.
