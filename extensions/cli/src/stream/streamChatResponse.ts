@@ -10,6 +10,7 @@ import type {
 } from "openai/resources.mjs";
 
 import { pruneLastMessage } from "../compaction.js";
+import { getRequestBodyHints } from "../contextManagement.js";
 import { consumeLoopTurnEnd, loopRequestHistory } from "../loop/loopSession.js";
 import { services } from "../services/index.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
@@ -26,6 +27,7 @@ import { validateContextLength } from "../util/tokenizer.js";
 import { getRequestTools, handleToolCalls } from "./handleToolCalls.js";
 import { injectSteeringMessage } from "./steering.js";
 import {
+  handleAutoContinuation,
   handleNormalAutoCompaction,
   handlePostToolValidation,
   handlePreApiCompaction,
@@ -95,42 +97,6 @@ function refreshChatHistoryFromService(
   return chatHistory;
 }
 
-// Helper function to handle auto-continuation after compaction
-function handleAutoContinuation(
-  compactionOccurred: boolean,
-  shouldContinue: boolean,
-  chatHistory: ChatHistoryItem[],
-): { shouldAutoContinue: boolean; chatHistory: ChatHistoryItem[] } {
-  if (!compactionOccurred || shouldContinue) {
-    return { shouldAutoContinue: false, chatHistory };
-  }
-
-  logger.debug(
-    "Auto-compaction occurred during this turn - automatically continuing session",
-  );
-
-  // Add a continuation message to the history
-  const chatHistorySvc = services.chatHistory;
-  if (
-    typeof chatHistorySvc?.isReady === "function" &&
-    chatHistorySvc.isReady()
-  ) {
-    chatHistorySvc.addUserMessage("continue");
-    chatHistory = chatHistorySvc.getHistory();
-  } else {
-    chatHistory.push({
-      message: {
-        role: "user",
-        content: "continue",
-      },
-      contextItems: [],
-    });
-  }
-
-  logger.debug("Added continuation message after compaction");
-  return { shouldAutoContinue: true, chatHistory };
-}
-
 // Helper function to process a single chunk
 interface ProcessChunkOptions {
   chunk: any;
@@ -194,7 +160,7 @@ interface ProcessStreamingResponseOptions {
   isHeadless?: boolean;
   tools?: ChatCompletionTool[];
   systemMessage: string;
-  isCompacting?: boolean; // compaction: no Loop mode plan block
+  isCompacting?: boolean; // also: compaction gets no Loop mode plan block
 }
 
 // Process a single streaming response and return whether we need to continue
@@ -216,12 +182,13 @@ export async function processStreamingResponse(
     isHeadless,
     tools,
     systemMessage,
+    isCompacting = false,
   } = options;
 
   let chatHistory = options.chatHistory;
 
   // The session's task list, sent last when the TaskList tool is offered.
-  const taskListBlock = taskListBlockForRequest(tools, options.isCompacting);
+  const taskListBlock = taskListBlockForRequest(tools, isCompacting);
 
   // Safety buffer to account for tokenization estimation errors
   const SAFETY_BUFFER = 100;
@@ -288,6 +255,11 @@ export async function processStreamingResponse(
         stream: true,
         tools,
         ...getDefaultCompletionOptions(model.defaultCompletionOptions),
+        // A compaction summary is never continued, so it is a one-shot request
+        ...getRequestBodyHints(
+          model,
+          isCompacting ? "oneShot" : "conversation",
+        ),
       },
       retryAbortSignal,
     );
@@ -442,6 +414,14 @@ export async function processStreamingResponse(
   };
 }
 
+export interface StreamChatResponseOptions {
+  /**
+   * Whether auto-compaction saves the compacted history to the current
+   * session. False for sub-agents, whose child history is not the session's.
+   */
+  persistSession?: boolean;
+}
+
 // Main function that handles the conversation loop
 // eslint-disable-next-line max-params
 export async function streamChatResponse(
@@ -451,7 +431,9 @@ export async function streamChatResponse(
   abortController: AbortController,
   callbacks?: StreamCallbacks,
   isCompacting = false,
+  options: StreamChatResponseOptions = {},
 ) {
+  const { persistSession = true } = options;
   logger.debug("streamChatResponse called", {
     model,
     historyLength: chatHistory.length,
@@ -463,6 +445,7 @@ export async function streamChatResponse(
   let fullResponse = "";
   let finalResponse = "";
   let compactionOccurredThisTurn = false; // Track if compaction happened during this conversation turn
+  let autoContinuedLastIteration = false; // Whether the previous iteration only sent our own "continue"
 
   while (true) {
     // If ChatHistoryService is available, refresh local chatHistory view
@@ -490,6 +473,7 @@ export async function streamChatResponse(
       callbacks,
       systemMessage,
       tools,
+      persistSession,
     });
     chatHistory = preCompactionResult.chatHistory;
     if (preCompactionResult.wasCompacted) {
@@ -508,13 +492,13 @@ export async function streamChatResponse(
       await processStreamingResponse({
         isHeadless,
         chatHistory: loopRequestHistory(chatHistory, isCompacting),
-        isCompacting,
         model,
         llmApi,
         abortController,
         callbacks,
         tools,
         systemMessage,
+        isCompacting,
       }).finally(() => callbacks?.onModelStreaming?.(false));
 
     if (abortController?.signal.aborted) {
@@ -567,6 +551,7 @@ export async function streamChatResponse(
         callbacks,
         systemMessage,
         tools,
+        persistSession,
       },
     );
     chatHistory = postToolResult.chatHistory;
@@ -574,7 +559,7 @@ export async function streamChatResponse(
       compactionOccurredThisTurn = true;
     }
 
-    // Normal auto-compaction check at 80% threshold
+    // Normal auto-compaction check at the model's threshold
     const compactionResult = await handleNormalAutoCompaction(
       chatHistory,
       shouldContinue,
@@ -586,6 +571,7 @@ export async function streamChatResponse(
         callbacks,
         systemMessage,
         tools,
+        persistSession,
       },
     );
     chatHistory = compactionResult.chatHistory;
@@ -607,6 +593,7 @@ export async function streamChatResponse(
       compactionOccurredThisTurn,
       shouldContinue,
       chatHistory,
+      autoContinuedLastIteration,
     );
     chatHistory = autoContinueResult.chatHistory;
     const shouldAutoContinue = autoContinueResult.shouldAutoContinue;
@@ -615,6 +602,7 @@ export async function streamChatResponse(
     if (shouldAutoContinue) {
       compactionOccurredThisTurn = false;
     }
+    autoContinuedLastIteration = shouldAutoContinue;
 
     // Check if we should continue (skip break if auto-continuing after compaction)
     if (!shouldContinue && !shouldAutoContinue) {

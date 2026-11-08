@@ -224,6 +224,7 @@ const TUIChat: React.FC<TUIChatProps> = ({
     queuedMessages,
     queuePaused,
     queueSteerRequested,
+    queueSelectedId,
     pendingMessage,
     handleUserMessage,
     handleInterrupt,
@@ -419,6 +420,7 @@ const TUIChat: React.FC<TUIChatProps> = ({
           queuedMessages={queuedMessages}
           queuePaused={queuePaused}
           queueSteerRequested={queueSteerRequested}
+          queueSelectedId={queueSelectedId}
           pendingMessage={pendingMessage}
           renderMessage={renderMessage}
           refreshTrigger={staticRefreshTrigger}
