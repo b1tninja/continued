@@ -1,6 +1,6 @@
 # Loop mode
 
-Last updated: 2026-11-07. Status: L1 (core state machine), L2 (IDE, with autonomy levels) and L3 (CLI and `cn serve`) built, with unit tests, gui integration tests, and CLI flow tests through the TUI and `cn serve`. The sandbox run on a local model is pending; its report goes in the PR. L4 (parallel items, verification) is not built.
+Last updated: 2026-11-07. Status: L1 (core state machine), L2 (IDE, with autonomy levels), L3 (CLI and `cn serve`) and most of L5 (plan slots, controls, strategies, Loop as a mode) built, with unit tests, gui integration tests, and CLI flow tests through the TUI and `cn serve`. The sandbox run on a local model is pending; its report goes in the PR. L4 (parallel items, verification) is not built.
 
 Build a plan item by item without the person driving each step. Questions go to an inbox the person can answer while the work continues.
 
@@ -119,15 +119,15 @@ What the playbook's prompts insist on:
 
 ### What the research changed
 
-| Brief                                       | Research                                                                                                                                                                             | Built                                                                                                                           |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| The extension picks the next unblocked item | Supported. The systems that schedule in the harness (LLMCompiler, Kiro, agent teams) behave. BabyAGI, which lets the model re-prioritise each cycle, runs away                       | As briefed. Ties go by plan order, and only the re-plan turn changes the order                                                  |
-| "Say when it's done"                        | A turn should end with a structured result, and no result must not count as done (Anthropic's long-running harness, `/goal`, agent teams' status lag)                                | A `finish_item` tool with outcome done, waiting or stuck. A turn that ends without it runs the item again, then marks it failed |
-| Independent items as parallel subagents     | Cognition: parallel agents make conflicting hidden decisions. Agent teams: two agents on one file overwrite each other. About 15x tokens. Claude Code subagents cannot ask questions | Not built. Items run one at a time (phase L4)                                                                                   |
-| Stop on no progress                         | Cheap counters per item work (OpenHands, Kiro)                                                                                                                                       | Rounds that finish nothing stop the loop. A call repeated 4 times in one item's run is refused                                  |
-| Verification                                | Done should be confirmed by something other than the worker: about 17% of failed traces in MAST                                                                                      | Not built (phase L4)                                                                                                            |
-| Assumption questions                        | No harness records them for later. Overruling should redo the work                                                                                                                   | Assumptions are recorded. Overruling one on a done item reopens it as redo                                                      |
-| Reload                                      | Kiro reopens an interrupted run paused                                                                                                                                               | A loop saved mid-run comes back stopped, with the item pending                                                                  |
+| Brief                                       | Research                                                                                                                                                                                                                            | Built                                                                                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| The extension picks the next unblocked item | Supported. The systems that schedule in the harness (LLMCompiler, Kiro, agent teams) behave. BabyAGI, which lets the model re-prioritise each cycle, runs away                                                                      | As briefed. Ties go by plan order, and only the re-plan turn changes the order                                                  |
+| "Say when it's done"                        | A turn should end with a structured result, and no result must not count as done (Anthropic's long-running harness, `/goal`, agent teams' status lag)                                                                               | A `finish_item` tool with outcome done, waiting or stuck. A turn that ends without it runs the item again, then marks it failed |
+| Independent items as parallel subagents     | Cognition: parallel agents make conflicting hidden decisions. Agent teams: two agents on one file overwrite each other. Anthropic: multi-agent systems use about 15x the tokens of chat. Claude Code subagents cannot ask questions | Not built. Items run one at a time (phase L4)                                                                                   |
+| Stop on no progress                         | Cheap counters per item work (OpenHands, Kiro)                                                                                                                                                                                      | Rounds that finish nothing stop the loop. A call repeated 4 times in one item's run is refused                                  |
+| Verification                                | Done should be confirmed by something other than the worker: about 17% of failed traces in MAST                                                                                                                                     | Not built (phase L4)                                                                                                            |
+| Assumption questions                        | No harness records them for later. Overruling should redo the work                                                                                                                                                                  | Assumptions are recorded. Overruling one on a done item reopens it as redo                                                      |
+| Reload                                      | Kiro reopens an interrupted run paused                                                                                                                                                                                              | A loop saved mid-run comes back stopped, with the item pending                                                                  |
 
 ### What the Ralph loop changed
 
@@ -317,23 +317,29 @@ The IDE was wired first. The CLI (L3) has its own streaming loop and tool set, s
 
 ## Next: Loop as a mode, plan slots, strategies and controls (proposed, L5)
 
-Proposed on 2026-11-07, after L3. Only the plan slots are built. It changes decision 2 (no new mode, no new format), so it needs the owner's go-ahead before code.
+Proposed on 2026-11-07, after L3. Built the same day: the plan slots, the controls, three of the strategies, and Loop as a mode. Recursive descent and the Ralph strategy are not built. Loop as a mode revisits decision 2; recursive descent would need the plan-file format change decision 2 ruled out, so it waits for the owner.
 
-### Loop as a mode
+### Loop as a mode (built)
 
-**Loop** joins the mode picker: Chat, Plan, Agent, Loop. It works like this:
+**Loop** is an entry in the mode picker, after Chat, Plan and Agent:
 
-- The first message starts a Plan-mode turn.
-- When the plan is presented, the loop starts by itself, with no Build in a loop click. It starts at the level the approval mode implies, as now.
-- Later messages become notes in the inbox, or steer the running item.
-- While the loop runs, the picker shows its status line.
+- the first message starts a Plan-mode turn;
+- when that plan is presented, the loop starts by itself (no Build in a loop click), at the level the approval mode implies;
+- while the loop runs, the picker shows Loop with the loop's status line.
 
-Underneath, nothing new is added to tool filtering, policies or the prompt cache. Every turn the loop sends is still an Agent turn or a Plan turn. The new state is "the picker says Loop" plus the strategy. The CLI gets the same: Shift+Tab reaches a loop entry, and the status bar shows the loop.
+There is still no `MessageModes` or CLI `PermissionMode` value: every turn the loop sends is an Agent or Plan turn, so tool filtering, policies and the prompt cache are untouched.
 
-Open:
-
-- What switching away from Loop does while a loop runs. Proposed: stop after the running item.
-- Whether a message typed mid-loop can start a new loop. Proposed: no; it is a note about the plan.
+- **IDE:**
+  - `session.loopRequested`, saved with the session, says the person chose Loop. `chooseLoopMode`, `leaveLoopMode` and `startLoopIfRequested` are in `gui/src/redux/thunks/loop.ts`; `selectModeEntry` gives what the picker shows.
+  - `presentPlanImpl` starts the loop when the flag is set and no loop is going, so a loop's own re-plans behave as before. The plan card then says the loop is building the plan.
+- **CLI:**
+  - Shift+Tab and Right step forward, and Left back, through normal, plan, loop and auto. `cycleModeEntry` is in `src/loop/loopSession.ts`, and the flag is held in memory there.
+  - The status bar shows `[⟳ loop]`.
+  - With the flag set, PresentPlan answers Build in a loop without asking.
+- **Leaving Loop while an item runs** stops the loop after that item. The new mode is applied only then, so the item finishes with the tools it started with. Between items the switch is immediate.
+- **When a loop ends while Loop is still picked,** the mode goes back to Plan, so the next message plans again.
+- **Messages typed while the loop runs** keep today's queue and steering; they do not start a new loop. A note about the plan goes through the inbox.
+- **Not built:** a `--loop` command-line flag.
 
 ### Plan slots (built)
 
@@ -359,7 +365,9 @@ Notes from earlier items:
 - **Re-plans keep their own prompt,** which already lists every item with its state, so they do not get the block.
 - **In the TUI:** while a loop runs, the plan shows above the prompt as a checklist in place of the one-line task strip, like the queued messages. Finished items but the last fold into a count, at most 8 lines are shown, and an item that waits says what it waits on. `/loop` shows the whole plan with each item's summary.
 
-### Strategies
+### Strategies (three built)
+
+Built: Finish what you started, Check in, and Fix forward, in core (`LoopState.strategy`, `LOOP_STRATEGIES`, `setLoopStrategy`, `endReplan`, `loopItemRepairPrompt`, `repairDecision`) with a picker in both inboxes and `loopStrategy` in `cn serve`. Not built: Recursive descent (needs nested checkboxes in the plan file) and Ralph. Ralph lets the model pick its item, but everything in a run binds to the item when the run starts (questions, held approvals, steered answers, the repeat guard, the plan block's marker), so choosing at `finish_item` would mean re-attributing all of that afterwards.
 
 A second setting next to the autonomy level. Autonomy is how much the loop does without the person; the strategy is how it moves through the plan. Every strategy keeps the limits that hold today: the person's rules, held approvals, the repeat limit, the budgets, and the three-failures stop.
 
@@ -396,7 +404,9 @@ Recursive descent and Ralph are opt-in. Running items in parallel (best-of-N) st
 
 Recursive descent needs to-dos with a parent. The plan file would hold the tree as nested checkboxes: still markdown, but a format change that decision 2 ruled out.
 
-### Controls
+### Controls (built)
+
+Built as described below: `skipItem`, `runItemAgain` and `setLoopBudget` (with `LOOP_BUDGET_BOUNDS`) in core; an "Items and limits" section in the IDE inbox; menu rows in the TUI's `/loop`, including Stop now; and `loopAction: "skip" | "again"` with `itemId`, plus `loopBudget`, in `cn serve`. A skipped item counts as finished but shows cancelled, and its questions stay open. An answer to it waits until the item runs again. Running an item again on a finished loop marks the loop stopped, so Resume appears.
 
 Plain controls under the loop's status, in the IDE, the CLI and `cn serve`:
 
@@ -411,12 +421,71 @@ In `cn serve`, these are more `loopAction` values (`skip`, `again`) and a `loopB
 ### Order of work
 
 1. **Plan slots** (built).
-2. **Controls and editable limits.** Mostly UI over core functions that exist.
-3. **Strategies,** as a field on `LoopState` that `decideNext` and `replanDecision` read, with unit tests in core. Both surfaces get them through those functions.
-4. **Loop as a mode.**
+2. **Controls and editable limits** (built).
+3. **Strategies** (Finish what you started, Check in and Fix forward built; Ralph not built).
+4. **Loop as a mode** (built).
 5. **Recursive descent,** after the nested plan file is agreed.
 
 The sources are listed under Sources below, under "Strategies".
+
+## Next: parallel work and plan-item improvements (proposed, L6)
+
+Proposed on 2026-11-07, from three research passes: how other tools run work in parallel, an audit of this repository, and research on plan items. Nothing here is built. Items 1, 2 and 8 add optional indented `key: value` lines under a to-do (a plain checklist ignores them), which is a plan-file change decision 2 ruled out, so they need the owner's go-ahead:
+
+```
+- [ ] 3. Parse config files
+  after: 1, 2
+  check: npm test -- config
+  model: fast
+```
+
+### What other tools do
+
+- **Isolation and merging:** every tool isolates parallel work in a worktree, VM or branch, and none merges automatically: the person reviews a PR or a diff. Conflicts are avoided by splitting files up front, not resolved afterwards.
+- **Cursor:**
+  - `/best-of-n` runs one task on several models in separate worktrees and only compares them.
+  - "Build in Parallel" runs a plan's independent steps as subagents; its changelog does not say how it decides independence.
+  - Worktrees are capped at 25.
+- **Claude Code:**
+  - Subagents: depth 3, 20 at once.
+  - Agent teams: a shared task list with dependencies and a completion gate (`TaskCompleted`).
+  - `/batch`: 5-30 approved units, each with its own worktree and PR.
+- **Others:**
+  - Codex runs 1-4 attempts.
+  - Kiro's Task Runner runs 3 in parallel, each on its own branch.
+  - Jules runs 3 concurrent tasks on its base plan.
+  - Devin's coordinator gives each child its own budget.
+  - Amp's subagents start with only the context they are given, and its Oracle advises but never edits.
+- **The arguments against parallel items:**
+  - Cognition: actions carry implicit decisions, and parallel agents make conflicting ones. It accepts read-only subagents that answer a well-defined question.
+  - Anthropic: multi-agent systems use about 15x the tokens of chat, and coding has fewer parallel parts than research.
+  - GitHub: keep work sequential when steps depend on each other.
+
+### What this repository has
+
+- **No Agents panel and no worktree manager.** The only worktree code is `cn review`, which forks a worker process per review in a temporary worktree and returns the patch as text.
+- **IDE subagents:** at most 3 at once (`core/subagents/scheduling.ts`), and depth 1. They **cannot edit files**: the edit tools are client tools, which `core/subagents/tools.ts` filters out.
+- **CLI subagents:** they run one at a time, and while one runs it swaps process-wide services (the chat history reads as not ready). Parallel items in one process are unsafe; the CLI would need worker processes, as `cn review` uses.
+- **Checkpoints:** IDE only, per turn, so each serial item can already be restored there. They miss terminal-command edits and anything a subagent writes. The CLI has none.
+- **Models:** a model per mode exists, so item runs and re-plans can already use different models. There is no model per item.
+- **One running item** is assumed in about 25 places, all through `LoopState.current`.
+
+### Proposals, ranked by value for the effort
+
+| #   | Proposal                                                                                                                                                                                                                                                                                                          | Default                                          | Why                                                                                                                                                                                                           | Effort     |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1   | **A check per item** (`check:`): the loop runs it after FinishItem(done); exit 0 confirms done, a failure sends the item back with the output. An item without one is "done (unverified)". A plan-level `smoke:` runs before each item                                                                            | On when given; the planner is asked to write one | Self-reports are unreliable: ADaPT's were inflated by more than 30 points on WebShop. Kiro, Claude Code's `/goal` and Anthropic's long-running harness all gate done on something other than the agent's word | Low        |
+| 2   | **Dependencies** (`after: 1, 2`): an item waits for those slots; a stuck or skipped dependency makes it "blocked on N". Cycles and dangling references are refused                                                                                                                                                | None                                             | Every parallel tool depends on this, and it settles open question 2 even without parallel work                                                                                                                | Low        |
+| 3   | **A fuller row per slot:** waiting on N, attempt n/4, check passed / failed / none, rounds and tokens spent, last note                                                                                                                                                                                            | On                                               | What Kiro and Claude Code show per task                                                                                                                                                                       | Low        |
+| 4   | **Item size:** tell the planner "one reviewable change that one check can verify, about an hour"; split an item that ends stuck twice                                                                                                                                                                             | On                                               | 91% of SWE-bench Verified tasks take under an hour (Epoch); ADaPT splits on failure                                                                                                                           | Medium     |
+| 5   | **A read-only scout** before an item: maps the code it needs, summary into the slot                                                                                                                                                                                                                               | On in Auto and Unattended                        | The one kind of subagent Cognition and Amp accept; IDE subagents can do it today                                                                                                                              | Low-medium |
+| 6   | **A read-only verifier** after an item: judges the diff and the check output, never the self-report                                                                                                                                                                                                               | Off                                              | Like Claude Code's completion gate and Amp's Oracle; a model call per item                                                                                                                                    | Medium     |
+| 7   | **A snapshot per item:** the starting commit and a `git stash create` ref on the slot; reverting is offered, never automatic. Commits only on a loop branch                                                                                                                                                       | Snapshot on, commits off                         | Kiro's `reset --hard` and Aider's auto-commits show the risks                                                                                                                                                 | Medium     |
+| 8   | **Per-item `model:`, `effort:` and `budget:`**, inherited from the loop; one step up on the second attempt                                                                                                                                                                                                        | Inherit                                          | No automatic routing: RouteLLM and FrugalGPT were not tested on coding agents                                                                                                                                 | Low-medium |
+| 9   | **Best-of-N for one hard item:** up to 3 attempts in worktrees; the person picks in the inbox                                                                                                                                                                                                                     | Off; Supervised first                            | Codex, Cursor; N times the tokens                                                                                                                                                                             | High       |
+| 10  | **Independent items in parallel:** waves of at most 3, only items whose `after:` is met and whose declared files do not overlap. Extra items run as subagents in their own worktrees (a worker process in the CLI) and merge one at a time after their check passes. A conflict sends the item back to run inline | Off                                              | Kiro and Jules use 3. The arguments above say most plan items are a poor fit. About 1,500-2,000 lines; running core tools in a worktree path is the first thing to prototype                                  | High       |
+
+Items 1 to 3 come first: they are small, and they make 10 safer later. Item 10 also needs IDE subagents that can edit files and a working-directory override for core's tools.
 
 ## Safeguards
 
@@ -442,22 +511,23 @@ The sources are listed under Sources below, under "Strategies".
   - Tests: `src/ui/__tests__/TUIChat.loopMode.test.tsx` (the whole flow through the TUI), `src/commands/serve.loop.test.ts`, `src/loop/loopDriver.test.ts` (re-plans, reload, steering, holds) and `src/tools/loopTools.test.ts`.
 - **L4:**
   - Verification: an acceptance check per item, run by the harness before an item counts as done (a command from the plan, or a separate evaluator).
-  - Parallel items as subagents, only for items the plan marks independent with disjoint files, at most 2 or 3, and ideally each in its own worktree (#314's Agents panel).
+  - Parallel items as subagents, only for items the plan marks independent with disjoint files, at most 2 or 3, each in its own worktree. (An Agents panel was assumed here; none exists. See "Next: parallel work and plan-item improvements".)
   - Checks the project names once (Ralph's `AGENTS.md` validation commands), run by the harness after each item as backpressure.
-- **L5 (proposed; plan slots built):** Loop as a mode, plan slots, strategies and controls, in the order given in "Order of work" above.
+- **L5 (built, except recursive descent and Ralph):** Loop as a mode, plan slots, strategies and controls; see "Order of work" above.
+- **L6 (proposed):** parallel work and plan-item improvements; see the section of that name.
 
 ## Open questions
 
 1. **Notes or a file?** Ralph keeps its learnings in `AGENTS.md`, where they outlive the loop and any later session reads them. Here they live on the loop, so they end with it. Should accepting the last round offer to append them to the project's rules or AGENTS.md?
 2. **Dependencies between items.** To-dos have no dependency field, so "not blocked" means "not waiting on the person". Kiro and LLMCompiler schedule a DAG. A `depends:` note in the plan file would need a format change, which the brief rules out for now.
 3. **Overruled assumptions downstream.** Overruling reopens only the item that made the assumption. Items built on it are not marked stale; the re-plan prompt lists unconfirmed assumptions so the model can rework them. Should a commit or push wait until the assumptions it depends on are confirmed?
-4. **Budget defaults.** The budgets of each autonomy level are guesses. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet. L5's controls propose editable limits.
+4. **Budget defaults.** The budgets of each autonomy level are guesses. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet. L5's controls made them editable while the loop runs.
 5. **The 15-minute wait.** Unattended's wait is fixed. It could be a setting, or follow how long the person usually takes to answer.
 
 ## Decisions
 
 1. **The extension runs the loop, not the model.** This is the brief, and the research supports it: harness scheduling works, and model-driven re-prioritisation runs away.
-2. **No new mode, no new format.** Item runs are Agent mode and re-plans are Plan mode. Items come from the plan file and the task list. The new state is one session field. L5 proposes revisiting this: Loop as an entry in the mode picker (still Agent and Plan turns underneath), and nested checkboxes in the plan file for recursive descent.
+2. **No new mode, no new format.** Item runs are Agent mode and re-plans are Plan mode. Items come from the plan file and the task list. The new state is one session field. L5 revisited the first half: Loop is now an entry in the mode picker, but there is still no new `MessageModes` value and every turn is Agent or Plan underneath. The second half stands: the plan-file changes that recursive descent and L6 propose (nested checkboxes, `after:` and `check:` lines) wait for the owner.
 3. **`finish_item` is the one addition to "say when it's done".** A structured report is what makes "done" checkable, and no report never counts as done. It also ends the turn without another request.
 4. **Answers are routed when given, by the item's state, and kept on the loop.** A running item gets its answer by steering. The person's own messages keep the usual queue: they are sent at turn end as an ordinary turn, and the loop waits for that turn.
 5. **Parallel items and verification are later phases; the CLI was L3.** Each is a separable change, and the research argues against parallel items by default.
@@ -532,6 +602,22 @@ All fetched on 2026-11-07 by the research pass.
   - BabyAGI, https://github.com/yoheinakajima/babyagi_archive
   - AutoGPT classic, https://github.com/Significant-Gravitas/AutoGPT/blob/master/classic/original_autogpt/README.md
   - SWE-agent, https://swe-agent.com/latest/reference/model_config/
+- **Parallel work and plan items** (fetched 2026-11-07 for L6):
+  - Anthropic, multi-agent research system, https://www.anthropic.com/engineering/multi-agent-research-system
+  - Cognition, Don't build multi-agents, https://cognition.com/blog/dont-build-multi-agents
+  - Cursor worktrees, https://cursor.com/docs/configuration/worktrees ; changelog, https://cursor.com/changelog/05-07-26
+  - Claude Code subagents, https://code.claude.com/docs/en/sub-agents ; agent teams, https://code.claude.com/docs/en/agent-teams ; commands, https://code.claude.com/docs/en/commands
+  - Codex CLI, https://learn.chatgpt.com/docs/developer-commands?surface=cli
+  - GitHub mission control, https://github.blog/ai-and-ml/github-copilot/how-to-orchestrate-agents-using-mission-control/
+  - Kiro Task Runner, https://kiro.dev/docs/crew/features/task-runner/
+  - Jules limits, https://jules.google/docs/usage-limits
+  - Amp subagents, https://ampcode.com/docs/models-and-subagents
+  - LLMCompiler, https://arxiv.org/abs/2312.04511
+  - Tests in the prompt, https://arxiv.org/html/2402.13521v2
+  - SWE-bench Verified task sizes, https://epoch.ai/blog/what-skills-does-swe-bench-verified-evaluate
+  - METR time horizons, https://arxiv.org/abs/2503.14499
+  - RouteLLM, https://arxiv.org/html/2406.18665v4
+  - Chroma context rot, https://trychroma.com/research/context-rot
 - **Strategies** (fetched 2026-11-07 for L5):
   - Learning When to Plan, https://arxiv.org/html/2509.03581v2
   - Scaling Test-time Compute for LLM Agents, https://arxiv.org/pdf/2506.12928
