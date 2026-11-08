@@ -52,7 +52,7 @@ export const TASK_LIST_BLOCK_OPEN = "<task_list>";
 export const TASK_LIST_BLOCK_CLOSE = "</task_list>";
 
 /** The task list tool's description, shared by the IDE (task_list) and the CLI (TaskList). */
-export const TASK_LIST_TOOL_DESCRIPTION = `Optional. Do not make a task list by default or write one before you act: just do the work. Use this only if a list would really help, or to keep current a list a plan gave you. Send the complete list each time, in order.
+export const TASK_LIST_TOOL_DESCRIPTION = `Your task list: while planning, the steps of the work; while building, the list the plan gave you, to keep current. Send the complete list each time, in order.
 
 Rules:
 - Exactly one item is in_progress while you work. Mark an item in_progress before you start it and completed as soon as it is done, not in batches.

@@ -15,6 +15,7 @@ import type {
   MCPTool,
   ModelServiceState,
 } from "../services/types.js";
+import { getSessionTaskPlan } from "../session.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { logger } from "../util/logger.js";
 
@@ -95,6 +96,16 @@ export async function getAllAvailableTools(
         finishItemTool,
       ]
     : [...BASE_BUILTIN_TOOLS];
+  // Only plan mode makes a list. Otherwise the model acts: it gets the tool
+  // only to keep a list a plan left.
+  if (
+    services.toolPermissions.getCurrentMode() !== "plan" &&
+    !loopItem &&
+    !getSessionTaskPlan()?.items.length
+  ) {
+    tools.splice(tools.indexOf(taskListTool), 1);
+  }
+
   // A loop goes on without the person, so a question that waits for an answer
   // would stall it for good: its questions go through HoldQuestion
   if (loopRunGoing()) {

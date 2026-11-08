@@ -63,7 +63,7 @@ export const taskListTool: Tool = {
     },
   },
   systemMessageDescription: {
-    prefix: `The ${BuiltInToolNames.TaskList} tool is optional: do not make a task list by default or before you act, just do the work. If you do keep one, send the complete list each time. Exactly one item is in_progress while you work; mark items completed as soon as they are done. Statuses: ${TASK_STATUSES.join(", ")}. The list is sent back to you with every request. For example:`,
+    prefix: `Use the ${BuiltInToolNames.TaskList} tool to keep the task list, with the complete list each time. Exactly one item is in_progress while you work; mark items completed as soon as they are done. Statuses: ${TASK_STATUSES.join(", ")}. The list is sent back to you with every request. For example:`,
     exampleArgs: [
       [
         "items",
