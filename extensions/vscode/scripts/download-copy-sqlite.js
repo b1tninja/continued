@@ -7,8 +7,9 @@ const { rimrafSync } = require("rimraf");
 
 const { execCmdSync } = require("../../../scripts/util");
 
-const DOWNLOAD_ATTEMPTS = 6;
+const DOWNLOAD_ATTEMPTS = 8;
 const DOWNLOAD_RETRY_BASE_MS = 5000;
+const DOWNLOAD_RETRY_MAX_MS = 60000;
 
 /**
  * download a file using fetch API
@@ -42,7 +43,10 @@ async function downloadFile(url, outputPath) {
       // fetch rejects with a TypeError when the connection fails
       const retryable = error.retryable ?? true;
       if (!retryable || attempt >= DOWNLOAD_ATTEMPTS) throw error;
-      const delayMs = DOWNLOAD_RETRY_BASE_MS * 2 ** (attempt - 1);
+      const delayMs = Math.min(
+        DOWNLOAD_RETRY_BASE_MS * 2 ** (attempt - 1),
+        DOWNLOAD_RETRY_MAX_MS,
+      );
       console.log(
         `[info] Download failed (${error.message}); retrying in ${delayMs / 1000}s (${attempt}/${DOWNLOAD_ATTEMPTS})`,
       );
