@@ -15,6 +15,11 @@ import {
   describeLoopBudget,
   describeLoopReplan,
   enterWait,
+  releaseEmptyWait,
+  loopTokensFromUsage,
+  describeHeldCall,
+  itemTurnState,
+  itemTurnLimitReport,
   LOOP_AUTONOMY,
   type LoopControlResult,
   loopReplanSetting,
@@ -1014,7 +1019,7 @@ describe("tool names for the CLI", () => {
     expect(holdQuestionResult(q, false, names)).toContain("call FinishItem");
     expect(holdQuestionResult(q, false)).toContain("call finish_item");
     expect(approvalHeldResult(q, names)).toContain("call FinishItem");
-    expect(repeatedCallResult(4, names)).toContain("call FinishItem");
+    expect(repeatedCallResult("Bash", 4, names)).toContain("call FinishItem");
     expect(replanHoldResult(names)).toContain("with PresentPlan");
     expect(REPLAN_HOLD_RESULT).toContain("with present_plan");
   });
@@ -1357,6 +1362,7 @@ describe("controls: skip, run again and the limits", () => {
       maxAttempts: 5,
       maxConsecutiveFailures: 10,
       maxNoProgressRounds: loop.budget.maxNoProgressRounds,
+      maxItemTurns: loop.budget.maxItemTurns,
     });
     // The bounds themselves are allowed
     expect(
@@ -1478,7 +1484,7 @@ describe("controls: skip, run again and the limits", () => {
 
   test("describeLoopBudget says the limits in words", () => {
     expect(describeLoopBudget(LOOP_AUTONOMY.auto.budget)).toBe(
-      "5 rounds, 2,000,000 tokens, 120 minutes",
+      "5 rounds, 10,000,000 tokens, 120 minutes",
     );
     expect(
       describeLoopBudget({
@@ -1924,5 +1930,129 @@ describe("strategies", () => {
         itemId: "1",
       });
     });
+  });
+});
+
+describe("found by the sandbox run", () => {
+  test("a run may make maxItemTurns requests, then only report, then it ends", () => {
+    const loop = loopOn(PLAN, { maxItemTurns: 10 });
+    expect(itemTurnState(loop, 9)).toBe("ok");
+    expect(itemTurnState(loop, 10)).toBe("wrap-up");
+    expect(itemTurnState(loop, 19)).toBe("wrap-up");
+    expect(itemTurnState(loop, 20)).toBe("end");
+    expect(itemTurnState(loopOn(PLAN, { maxItemTurns: 0 }), 500)).toBe("ok");
+  });
+
+  test("a loop saved before the turn limit uses the default", () => {
+    const loop = loopOn();
+    const { maxItemTurns: _drop, ...budget } = loop.budget;
+    expect(itemTurnState({ ...loop, budget: budget as any }, 59)).toBe("ok");
+    expect(itemTurnState({ ...loop, budget: budget as any }, 60)).toBe(
+      "wrap-up",
+    );
+  });
+
+  test("a run ended at the limit is failed with the reason, not counted as done", () => {
+    const loop = runItem(loopOn(), "1", itemTurnLimitReport(33));
+    expect(status(loop, "1")).toBe("failed");
+    expect(loop.items[0].summary).toBe(
+      "Ended after 33 requests without reporting.",
+    );
+  });
+
+  test("a held call reads as what would actually run", () => {
+    expect(
+      describeHeldCall("run_terminal_command", { command: "npm publish" }),
+    ).toBe("npm publish");
+    expect(describeHeldCall("mcp_tool", { a: 1 })).toBe('mcp_tool {"a":1}');
+    expect(describeHeldCall("mcp_tool", {})).toBe("mcp_tool");
+    expect(describeHeldCall("mcp_tool", undefined)).toBe("mcp_tool");
+  });
+
+  test("a failed request stops the loop with its own reason, and Resume is possible", () => {
+    let loop = startItemRun(loopOn(), "1", 0, T0);
+    loop = stopLoop(loop, "error", "The model request failed: boom");
+    expect(loop).toMatchObject({ status: "stopped", stopReason: "error" });
+    expect(status(loop, "1")).toBe("pending");
+    expect(decideNext(resumeLoop(loop, ctx()), PLAN, ctx())).toEqual({
+      kind: "run",
+      itemId: "1",
+    });
+  });
+});
+
+test("the token budget counts output and uncached input, not re-sent prompts", () => {
+  expect(
+    loopTokensFromUsage({
+      promptTokens: 201_398,
+      completionTokens: 1283,
+      promptTokensDetails: { cachedTokens: 184_961 },
+    }),
+  ).toBe(17_720);
+  // A provider that reports no cache counts in full
+  expect(loopTokensFromUsage({ promptTokens: 100, completionTokens: 5 })).toBe(
+    105,
+  );
+});
+
+describe("an item that reports waiting", () => {
+  function heldApproval() {
+    const loop = startItemRun(loopOn(), "1", 0, T0);
+    const held = holdQuestion(
+      loop,
+      {
+        itemId: "1",
+        question: "Allow this call? create the report",
+        kind: "approval",
+        approval: {
+          toolName: "create_new_file",
+          summary: "report",
+          grantKey: "k",
+        },
+      },
+      T0,
+    );
+    if (!held.ok) throw new Error(held.error);
+    return held;
+  }
+
+  test("runs again when its question was answered during the run", () => {
+    // Found by the sandbox run: the answer came before the run reported waiting
+    const held = heldApproval();
+    const answered = answerLoop(
+      held.loop,
+      { questionId: held.question.id, text: "", approve: true },
+      T0,
+    );
+    if (!answered.ok) throw new Error(answered.error);
+    expect(answered.answer.route).toBe("steer");
+    let loop = finishItemRun(answered.loop, { outcome: "waiting" });
+    loop = settleSteeredAnswers(loop, []);
+    expect(status(loop, "1")).toBe("pending");
+    loop = releaseEmptyWait(loop, "1");
+    expect(status(loop, "1")).toBe("pending");
+    expect(decideNext(loop, PLAN, ctx())).toEqual({ kind: "run", itemId: "1" });
+    expect(answersToDeliver(loop, "1")).toHaveLength(1);
+  });
+
+  test("keeps waiting while a blocking question is open", () => {
+    const held = heldApproval();
+    const loop = releaseEmptyWait(
+      finishItemRun(held.loop, { outcome: "waiting" }),
+      "1",
+    );
+    expect(status(loop, "1")).toBe("waiting");
+  });
+
+  test("fails when it asked nothing, because nobody could ever answer", () => {
+    const loop = releaseEmptyWait(
+      runItem(loopOn(), "1", { outcome: "waiting" }),
+      "1",
+    );
+    expect(status(loop, "1")).toBe("failed");
+    expect(loop.items[0].summary).toBe(
+      "Reported waiting, but no question is open.",
+    );
+    expect(loop.consecutiveFailures).toBe(1);
   });
 });

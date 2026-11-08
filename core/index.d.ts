@@ -507,6 +507,7 @@ export type LoopStopReason =
   | "time"
   | "no_progress"
   | "failures"
+  | "error"
   | "stopped"
   | "replan_failed";
 
@@ -531,6 +532,8 @@ export interface LoopBudget {
   maxNoProgressRounds: number;
   /** Items in a row that fail before the loop stops */
   maxConsecutiveFailures: number;
+  /** Model requests one run of an item may make before it must report */
+  maxItemTurns: number;
 }
 
 /**
@@ -2567,6 +2570,8 @@ export interface CompiledMessagesResult {
   compiledChatMessages: ChatMessage[];
   didPrune: boolean;
   contextPercentage: number;
+  /** Tokens the context has left for the reply, after the prompt. */
+  outputTokensAvailable?: number;
 }
 
 export interface AddToChatPayload {

@@ -251,7 +251,7 @@ The loop stops when:
 
 - every item is done and no note about the plan is waiting;
 - it has run `maxRounds` rounds (default 5);
-- its own token use reaches `maxTokens` (default 2,000,000, counted from the session's usage when the loop started);
+- its own token use reaches `maxTokens` (default 10,000,000, by autonomy level), counting output and input the provider did not read from its cache, from the session's usage when the loop started;
 - it has run for `maxWallMs` (default 2 hours);
 - two rounds in a row finish no item, checked before paying for another re-plan;
 - three items in a row fail (`maxConsecutiveFailures`), like Claude Code auto mode pausing after 3 refusals in a row;
@@ -262,16 +262,26 @@ When every open item waits on the person, the loop pauses instead. An answer res
 
 Resume restarts the budgets from that moment.
 
+### Limits that must not get in the way of the work
+
+The first sandbox runs hit these, so they are recorded here:
+
+- **The token budget counts new work.** Each request re-sends the conversation, and counting whole prompts charges the same text again every time. In one run, 3.3M prompt tokens were 94% cached: about 250k tokens of real work read as 3.35M, and the loop stopped itself after one item. The budget is a guard against a runaway, not a target, so its defaults are also larger.
+- **One item's run has a limit of 60 model requests.** Past it, tools that only read are refused, and the model is told to write what it has and report. Writing goes on, because a run that has done its research must still be able to produce the result. If it keeps going for 10 more requests the run ends as stuck.
+- **A tool call cut off at the output limit is not run.** The lenient argument parser repairs a truncated object into a valid-looking one, so `create_new_file` would write part of the file and report success. A call that stops inside a string or an open value is refused, this applies outside the loop too, and the model is told to write in smaller pieces (`core/util/truncatedJson.ts`).
+- **Large files are written in parts.** `create_new_file` takes `append`, and its description says to write a long file in parts. A larger limit alone is not enough: a cut-off call throws away the whole generation, Aider's 2024 benchmark found models write worse code inside JSON, and one tool author reports that steering the model saves tokens where blocking oversized writes does not. Automatic retry with a higher limit and repairing truncated arguments were rejected: the first regenerates everything, and the second is the bug that wrote partial files.
+- **Output limit on local models.** A local model with no configured limit is asked for the room its context has left, up to 131,072 tokens (`core/llm/outputLimit.ts`). A truncated file edit is expensive and asking for more costs a local server nothing: the IDE's pruning reserves a fixed 1,000 tokens for the reply whatever `maxTokens` says, so a large limit does not take room from the conversation. The ceiling is only there to end a model that has started repeating itself. A limit set in the model's config (`defaultCompletionOptions.maxTokens`) stands, and hosted providers keep their defaults, because some reject a value above their own limit. The CLI budgets differently (`contextLength - maxTokens`) and is unchanged.
+
 ### Autonomy
 
 How much the loop does without the person is one setting with three levels. It is not a second switch next to the approval mode: the loop starts at the level the approval mode implies, so "YOLO" means one thing. The inbox has a picker to change the level while the loop runs. Changing it gives the loop that level's budgets.
 
-|                                           | Supervised                                  | Auto                         | Unattended                                                                          |
-| ----------------------------------------- | ------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------- |
-| Starts from approval mode                 | Manual                                      | Auto-approve, Auto           | YOLO                                                                                |
-| A re-plan starts the next round by itself | Never: the card waits for Continue the loop | When it adds no new to-dos   | When it adds at most 5 new to-dos                                                   |
-| Every open item waits on the person       | Pause until an answer                       | Pause until an answer        | After 15 minutes without an answer, the waiting items go on with their best default |
-| Default budgets                           | 3 rounds, 1M tokens, 1 hour                 | 5 rounds, 2M tokens, 2 hours | 10 rounds, 5M tokens, 8 hours                                                       |
+|                                           | Supervised                                  | Auto                          | Unattended                                                                          |
+| ----------------------------------------- | ------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| Starts from approval mode                 | Manual                                      | Auto-approve, Auto            | YOLO                                                                                |
+| A re-plan starts the next round by itself | Never: the card waits for Continue the loop | When it adds no new to-dos    | When it adds at most 5 new to-dos                                                   |
+| Every open item waits on the person       | Pause until an answer                       | Pause until an answer         | After 15 minutes without an answer, the waiting items go on with their best default |
+| Default budgets                           | 3 rounds, 5M tokens, 1 hour                 | 5 rounds, 10M tokens, 2 hours | 10 rounds, 20M tokens, 8 hours                                                      |
 
 Whatever the level:
 
@@ -620,6 +630,45 @@ Added on 2026-11-07 from the owner. In their words: "use some sort of base promp
 
 The block and the reminder need no new mechanism: they make the prefix stable, and the server's own prefix matching does the rest. The sandbox runs qualify that for a hybrid model, which resumes only from a checkpoint: a reminder at the tail needs a checkpoint before it, which `strata_prefix` gives (see "Sandbox runs on a local model"). A prefix hint already has a worked example: `extensions/cli/src/contextManagement.test.ts` configures `conversation: { strata_prefix: { messages: 1 } }` beside `oneShot: { strata_checkpoint: false }`, and checks that each lands only on its kind of request. `strata_prefix` is not a field the CLI knows; it is whatever the config passes through. A hint naming the block, for a server that takes one, would be one more such `conversation` field.
 
+## Stall guidance (decided 2026-11-08, mostly not built)
+
+The question was whether a stuck agent should get problem-solving advice, for example random cards from frameworks like 5 Whys, through a tool or a system prompt. The research behind this is summarised here; no study tests this exact intervention, so every wording is untested.
+
+**Decision: hand the model a fact from the harness and ask for one checkable hypothesis. Then change something structural.**
+
+| Idea                             | Decision           | Why                                                                                                                                                                  |
+| -------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Intervene at a stall             | Yes                | SWE-PRM (SWE-bench Verified): 40.0% base, 45.8% generic critique, 50.6% targeted diagnosis. Wink's 15-day production A/B cut tool-call failures 4.2% and tokens 5.3% |
+| The harness triggers it          | Yes                | Mid-run self-assessment barely separates success from failure (AUROC about 0.5 to 0.64, Kaddour et al.)                                                              |
+| A tool the model calls           | No                 | It would have to know it is stuck. Anthropic's think tool added 1.6% on SWE-bench and Anthropic now prefers extended thinking                                        |
+| Named frameworks                 | No                 | No test of 5 Whys or PDCA exists; the nearest proxy, personas, shows no benefit (Zheng et al.). Their useful content is rewritten as concrete moves                  |
+| Random advice                    | Only as a test arm | No support, and it discards the one thing the harness knows: which failure happened                                                                                  |
+| Dictating the next command       | No                 | SWE-PRM: diagnosis plus a dictated action scored 44.8%, below diagnosis alone                                                                                        |
+| Injecting without a real failure | No                 | Self-correction with no external signal hurts (Huang et al., Reflexion's ablation). "Are you sure?" makes models abandon correct answers (Sharma et al.)             |
+
+What follows a note matters as much as the note. Two rounds capture most of the gain (Arimbur), and the best recovery numbers come from structural change: rollback with a note, decomposing on failure (ADaPT), or new information. An executable reproduction added 19 to 28 points in ORACLE-SWE, and a debugger offered after 5 failed rewrites beat none on all six debug-gym models.
+
+**Signals and text** (full wording in the report):
+
+| Signal                                      | Text carries                                                                                                                                      | State                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Same call 4 times with no file change       | The fact, and a request for a different check. A second refusal ends the run as stuck                                                             | Built                          |
+| Same check fails twice with an edit between | The first error line, files changed, and "name the single cause you now think most likely and run the cheapest thing that would show it is wrong" | Not built; observe-only in 2.4 |
+| Item retried                                | What the last run saw and changed, and "start from a different explanation"                                                                       | Not built; on in 2.4           |
+| Past the turn limit                         | What has been verified so far, without a verdict                                                                                                  | Not built; on in 2.4           |
+| Item reports stuck                          | A required `blocker` on `finish_item`: answer, observe, plan or environment                                                                       | Not built; on in 2.4           |
+| A round finished nothing                    | Each failed item's blocker, and a reproduce-first first step                                                                                      | Not built; on in 2.4           |
+
+**Exposure:** no tool. One setting, `loopMode.stallNotes: off | observe | on`, default `observe`, which governs only the new mid-run note. The rest replace text the loop already sends.
+
+**Placement:** tagged `<harness-note>` user-role text after the tool results, appended once and never edited, and never in the system prompt. Refusals stay in the refused call's tool result. Qwen3.5 templates raise an error on a mid-history `system` message.
+
+**Cap:** at most two mid-run notes per run, five requests apart, then the existing ladder. There is no third note, and no sterner one.
+
+**Measure:** whole-task A/B cannot detect this (about 1,900 runs per arm). Replay about 30 real stuck states as paired forks in four arms: no note, a neutral placebo, the targeted note, and a random card. Add a separate test on healthy states for the cost of a false positive. If the placebo equals the targeted note, keep the shortest text. That is the result that would vindicate the random-card idea.
+
+**Tools to add after 2.4, in order:** harness-triggered restore to the item's starting checkpoint with a note; a failure-only test runner; a second-model reviewer for local workers, never a local model judging itself; a dedicated debugger only if guidance plus the terminal measurably falls short.
+
 ## Safeguards
 
 - The loop never starts by itself after a reload: a loop saved mid-run comes back stopped.
@@ -627,6 +676,8 @@ The block and the reminder need no new mechanism: they make the prefix stable, a
 - Item runs keep Agent mode's permissions. A call that would ask is held, never run.
 - Re-plans are read-only, and anything the rules would ask about is refused during them.
 - A call repeated 4 times in one item's run is refused, and the model is told to try another way or report stuck.
+- A run has a limit of 60 model requests. Past it, reading stops and writing goes on; 10 requests later the run is ended as stuck.
+- A tool call cut off at the output limit is refused instead of run with partial arguments.
 - A turn that ends without `finish_item` is not counted as done. After 2 such runs the item is failed.
 - Caps apply to questions per item and per loop, to answer and question length, to summaries, and to the notes carried between items (12, at most 300 characters each), so the item prompt cannot bloat.
 - Subagents cannot use `hold_question` or `finish_item`: they would report the parent's item.
@@ -698,7 +749,7 @@ Run on 2026-11-07 against Strata, a single-slot OpenAI-compatible server on this
 1. **Notes or a file?** Ralph keeps its learnings in `AGENTS.md`, where they outlive the loop and any later session reads them. Here they live on the loop, so they end with it. Should accepting the last round offer to append them to the project's rules or AGENTS.md?
 2. **Dependencies between items.** Settled by L6: an `after:` line under a to-do (TaskItem.after). What remains open is using them to run independent items at the same time, which is the parallel-agents plan's Build in parallel.
 3. **Overruled assumptions downstream.** Overruling reopens only the item that made the assumption. Items built on it are not marked stale; the re-plan prompt lists unconfirmed assumptions so the model can rework them. Should a commit or push wait until the assumptions it depends on are confirmed?
-4. **Budget defaults.** The budgets of each autonomy level are guesses. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet. L5's controls made them editable while the loop runs.
+4. **Budget defaults.** The budgets of each autonomy level are guesses, raised once after the sandbox runs. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet. L5's controls made them editable while the loop runs.
 5. **The 15-minute wait.** Unattended's wait is fixed. It could be a setting, or follow how long the person usually takes to answer.
 
 ## Decisions

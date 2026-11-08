@@ -325,7 +325,7 @@ describe("Loop mode's driver in the CLI", () => {
     );
     const guard = loopRepeatGuard(["r4"]);
     expect(guard.check({ name: "Read", arguments: args })).toContain(
-      "You have made this exact call 4 times",
+      "Read was not run: the same call has run 3 times with no file change",
     );
     expect(guard.check({ name: "Read", arguments: args })).toContain(
       "call FinishItem",

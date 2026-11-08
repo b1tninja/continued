@@ -13,6 +13,7 @@ import {
   markDelivered,
   proceedUnanswered,
   reconcileLoop,
+  releaseEmptyWait,
   settleSteeredAnswers,
   standingInstructions,
   startCheck,
@@ -101,10 +102,13 @@ function finishRun(loop: LoopState): LoopState | "accepted" | "awaiting" {
     const check = getSessionTaskPlan()?.items.find(
       (t) => t.id === loop.current?.itemId,
     )?.check;
-    return settleSteeredAnswers(
+    const itemId = loop.current.itemId;
+    const settled = settleSteeredAnswers(
       finishItemRun(loop, loop.current.report, { check }),
       delivered,
     );
+    // Waiting with no question open would wait forever
+    return itemId ? releaseEmptyWait(settled, itemId) : settled;
   }
   if (loop.current?.kind === "replan") {
     if (!presentedSince(loop.current.historyIndex)) {

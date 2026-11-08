@@ -17,6 +17,9 @@ import { getSessionLoop } from "../session.js";
 
 import { CLI_LOOP_TOOL_NAMES, commitLoop } from "./loopSession.js";
 
+/** The CLI's tools that change a file, which reset the repeat count. */
+const FILE_CHANGING_TOOLS = new Set(["Write", "Edit", "MultiEdit"]);
+
 /**
  * Loop mode's changes to tool permissions in the CLI, as applyLoopHolds does
  * in the IDE (gui/src/redux/thunks/loopHolds.ts), so the loop never stalls on
@@ -135,19 +138,28 @@ export function loopRepeatGuard(batchIds: string[]): {
     return { check: () => undefined };
   }
   const batch = new Set(batchIds);
-  const previous = svc
+  // Only calls since the last file change count: running the tests again
+  // after an edit is progress, and its result can differ
+  const previous: string[] = [];
+  for (const tc of svc
     .getHistory()
     .slice(current.historyIndex)
-    .flatMap((item) => item.toolCallStates ?? [])
-    .filter((tc) => !batch.has(tc.toolCallId))
-    .map((tc) => loopCallKey(tc.toolCall.function.name, tc.parsedArgs ?? {}));
+    .flatMap((item) => item.toolCallStates ?? [])) {
+    if (batch.has(tc.toolCallId)) continue;
+    const called = tc.toolCall.function.name;
+    if (tc.status === "done" && FILE_CHANGING_TOOLS.has(called)) {
+      previous.length = 0;
+      continue;
+    }
+    previous.push(loopCallKey(called, tc.parsedArgs ?? {}));
+  }
   return {
     check: (call) => {
       const key = loopCallKey(call.name, call.arguments);
       const count = repeatCount(previous, key);
       previous.push(key);
       return count >= LOOP_REPEAT_LIMIT
-        ? repeatedCallResult(count, CLI_LOOP_TOOL_NAMES)
+        ? repeatedCallResult(call.name, count, CLI_LOOP_TOOL_NAMES)
         : undefined;
     },
   };

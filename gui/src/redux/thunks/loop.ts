@@ -21,8 +21,11 @@ import {
   markDelivered,
   enterWait,
   loopAutonomyFor,
+  loopTokensFromUsage,
   proceedUnanswered,
   reconcileLoop,
+  releaseEmptyWait,
+  replanDecision,
   setLoopAutonomy,
   setLoopStrategy,
   requestStop,
@@ -71,7 +74,7 @@ function doc(text: string) {
 
 function sessionTokens(state: RootState): number {
   const usage = state.session.usage;
-  return usage ? usage.promptTokens + usage.completionTokens : 0;
+  return usage ? loopTokensFromUsage(usage) : 0;
 }
 
 async function displayPath(
@@ -407,6 +410,7 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
       )?.check;
       loop = finishItemRun(loop, loop.current.report, { check });
       loop = settleSteeredAnswers(loop, delivered);
+      if (itemId) loop = releaseEmptyWait(loop, itemId);
     } else if (loop.current?.kind === "check") {
       // A check that did not finish (the gui reloaded while it ran): the
       // item stays checking, and its check runs again
