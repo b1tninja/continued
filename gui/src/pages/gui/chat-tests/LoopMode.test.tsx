@@ -29,7 +29,7 @@ import { Chat } from "../Chat";
  */
 
 const WORKSPACE = "file:///Users/user/workspace1";
-const PLAN_FILE = `${WORKSPACE}/.continue/plans/build-the-parser.md`;
+const PLAN_FILE = `${WORKSPACE}/.continuous/plans/build-the-parser.md`;
 
 type Turn = (signal: AbortSignal) => AsyncGenerator<ChatMessage[]>;
 
@@ -206,7 +206,7 @@ describe("Loop mode", () => {
     expect(h.itemStatus("2")).toBe("done");
     expect(h.itemStatus("3")).toBe("done");
     expect(h.prompt(0)).toContain("only this item: Pick the grammar");
-    expect(h.prompt(0)).toContain(".continue/plans/build-the-parser.md");
+    expect(h.prompt(0)).toContain(".continuous/plans/build-the-parser.md");
     expect(h.prompt(2)).toContain("only this item: Write the lexer");
     // The loop's tools are offered; the task list is the loop's
     expect(h.requests[0].tools).toContain(BuiltInToolNames.HoldQuestion);

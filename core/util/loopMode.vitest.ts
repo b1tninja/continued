@@ -456,7 +456,7 @@ describe("re-evaluation", () => {
     const prompt = loopReplanPrompt({
       loop,
       plan: PLAN,
-      planFile: ".continue/plans/p.md",
+      planFile: ".continuous/plans/p.md",
     });
     expect(prompt).toContain("[!] Add tests (failed: no runner)");
     expect(prompt).toContain("present_plan");
@@ -636,7 +636,7 @@ describe("persistence", () => {
 describe("the item prompt", () => {
   const prompt = loopItemPrompt({
     item: PLAN.items[1],
-    planFile: ".continue/plans/parser.md",
+    planFile: ".continuous/plans/parser.md",
     answers: [],
     questions: [],
     attempt: 1,
@@ -644,7 +644,7 @@ describe("the item prompt", () => {
 
   test("is about the one item and points at the plan", () => {
     expect(prompt).toContain("only this item: Add tests");
-    expect(prompt).toContain(".continue/plans/parser.md");
+    expect(prompt).toContain(".continuous/plans/parser.md");
     expect(prompt).toContain("finish_item");
     // It never asks the model to pick what comes next or explains the loop
     expect(prompt).not.toMatch(/next item|choose.*item|loop/i);
