@@ -1218,4 +1218,29 @@ describe("Loop mode's checks and dependencies", () => {
     );
     expect(h.loop().reminders?.[0].deliveredAt).toBeDefined();
   });
+
+  test('an item set aside with "later" comes back last, with its note', async () => {
+    const h = await setup(["Write the lexer", "Add tests"]);
+    h.turns.push(
+      calls({
+        name: BuiltInToolNames.FinishItem,
+        args: {
+          outcome: "later",
+          summary: "Needs the tests first",
+          reminder: "Tried a table; the tests fix the grammar",
+        },
+      }),
+      finish("done", "tests added"),
+      finish("done", "lexer written"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+
+    expect(h.prompt(1)).toContain("only this item: Add tests");
+    expect(h.prompt(2)).toContain("only this item: Write the lexer");
+    expect(h.prompt(2)).toContain("set this item aside");
+    expect(h.prompt(2)).toContain("Tried a table; the tests fix the grammar");
+    expect(h.loop().items[0].deferrals).toBe(1);
+    expect(h.loop().consecutiveFailures ?? 0).toBe(0);
+  });
 });

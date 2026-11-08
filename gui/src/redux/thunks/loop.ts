@@ -512,6 +512,7 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           // The request carries the plan block (loopPlanBlock)
           planBlock: true,
           reminders: taken.reminders,
+          returning: (itemState?.deferrals ?? 0) > 0,
           unanswered: loop.questions.filter((q) =>
             itemState?.unanswered?.includes(q.id),
           ),

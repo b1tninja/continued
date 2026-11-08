@@ -7,6 +7,7 @@ import {
   REMIND_ME_TOOL_DESCRIPTION,
 } from "core/tools/definitions/loopTools.js";
 import {
+  deferralSpent,
   finishItemReport,
   finishItemResult,
   holdQuestion,
@@ -15,6 +16,7 @@ import {
 import {
   reminderFilePaths,
   reminderSavedResult,
+  saveLaterReminder,
   saveReminder,
 } from "core/util/loopReminders.js";
 
@@ -143,18 +145,28 @@ export const finishItemTool: Tool = {
     outcome: "done, waiting or stuck",
   }),
   run: async (args: Record<string, unknown>) => {
-    const { loop } = runningItem();
+    const { loop, itemId } = runningItem();
     const parsed = finishItemReport(args);
     if (!parsed.ok) {
       throw new Error(parsed.error);
     }
-    const { report } = parsed;
+    const { report, later } = parsed;
+    const spent = deferralSpent(loop, itemId);
+    const saved = later
+      ? saveLaterReminder(
+          loop,
+          itemId,
+          later.note,
+          later.files.map((path) => ({ path, stamp: stampFile(path) })),
+          new Date(),
+        )
+      : loop;
     commitLoop({
-      ...loop,
-      current: loop.current && { ...loop.current, report },
+      ...saved,
+      current: saved.current && { ...saved.current, report },
     });
     // The loop picks what comes next; no need to ask the model again
     requestLoopTurnEnd();
-    return finishItemResult(report.outcome);
+    return finishItemResult(report.outcome, spent);
   },
 };

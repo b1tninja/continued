@@ -414,6 +414,8 @@ export interface LoopItemState {
   status: LoopItemStatus;
   /** Runs started for this item, reset when an answer requeues it */
   attempts: number;
+  /** Times a run set this item aside (finish_item outcome "later") */
+  deferrals?: number;
   /** What the run said it did (finish_item), or why it stopped */
   summary?: string;
   /**
@@ -609,7 +611,7 @@ export interface LoopState {
     startedAt: string;
     /** What finish_item reported during this run */
     report?: {
-      outcome: "done" | "stuck" | "waiting";
+      outcome: "done" | "stuck" | "waiting" | "later";
       summary?: string;
       /** What a later item should know (finish_item notes) */
       notes?: string;

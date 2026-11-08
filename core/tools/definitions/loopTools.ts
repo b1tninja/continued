@@ -43,7 +43,7 @@ export const HOLD_QUESTION_PARAMETERS = {
 };
 
 export const FINISH_ITEM_TOOL_DESCRIPTION =
-  'Report the item you were given and end your turn. outcome "done" when it is finished; "waiting" when it needs an answer to a blocking question; "stuck" when you cannot finish it (say why in summary).';
+  'Report the item you were given and end your turn. outcome "done" when it is finished; "waiting" when it needs an answer to a blocking question; "stuck" when you cannot finish it (say why in summary); "later" when another item may settle it: the item comes back after the others, once, and needs `reminder`. A second "later" counts as stuck.';
 
 export const FINISH_ITEM_PARAMETERS = {
   type: "object" as const,
@@ -51,7 +51,7 @@ export const FINISH_ITEM_PARAMETERS = {
   properties: {
     outcome: {
       type: "string",
-      enum: ["done", "waiting", "stuck"],
+      enum: ["done", "waiting", "stuck", "later"],
     },
     summary: {
       type: "string",
@@ -60,6 +60,16 @@ export const FINISH_ITEM_PARAMETERS = {
     notes: {
       type: "string",
       description: `Optional. What a later item should know: a command that works, a trap you hit. One or two lines, at most ${LOOP_LIMITS.maxNoteLength} characters; not progress.`,
+    },
+    reminder: {
+      type: "string",
+      description: `Required for outcome "later": what you tried, what you learned, and why it may go better later. At most ${LOOP_REMINDER_LIMITS.maxLength} characters.`,
+    },
+    files: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        'With outcome "later": paths of the files the reminder depends on',
     },
   },
 };

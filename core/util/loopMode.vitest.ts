@@ -7,6 +7,7 @@ import type {
   TaskPlan,
 } from "../index.js";
 import {
+  type FinishOutcome,
   acceptReplan,
   answerLoop,
   answersToDeliver,
@@ -101,7 +102,7 @@ function loopOn(p = PLAN, budget = {}): LoopState {
 function runItem(
   loop: LoopState,
   itemId: string,
-  report?: { outcome: "done" | "stuck" | "waiting"; summary?: string },
+  report?: { outcome: FinishOutcome; summary?: string },
 ) {
   return finishItemRun(startItemRun(loop, itemId, 0, T0), report);
 }
@@ -1037,7 +1038,7 @@ describe("tool names for the CLI", () => {
   test("finish_item's arguments become its report", () => {
     expect(finishItemReport({ outcome: "nope" })).toEqual({
       ok: false,
-      error: "outcome must be one of done, waiting, stuck",
+      error: "outcome must be one of done, waiting, stuck, later",
     });
     const r = finishItemReport({
       outcome: "done",

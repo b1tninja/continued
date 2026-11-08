@@ -115,6 +115,8 @@ export function saveReminder(
     when: unknown;
     item?: unknown;
     files?: LoopReminderFile[];
+    /** Not counted against the caps: a deferral must be able to say why */
+    uncapped?: boolean;
   },
   now: Date,
 ): SaveReminderResult {
@@ -151,15 +153,16 @@ export function saveReminder(
   );
   if (same) return { ok: true, loop, reminder: same, duplicate: true };
 
-  if (reminders.length >= maxPerLoop) {
+  if (!input.uncapped && reminders.length >= maxPerLoop) {
     return {
       ok: false,
       error: `Not saved: this loop already holds ${maxPerLoop} reminders, the most it keeps. Put what matters most in your report's notes instead.`,
     };
   }
   if (
+    !input.uncapped &&
     reminders.filter((r) => r.fromItemId === input.fromItemId).length >=
-    maxPerItem
+      maxPerItem
   ) {
     return {
       ok: false,
@@ -182,6 +185,23 @@ export function saveReminder(
     reminder,
     duplicate: false,
   };
+}
+
+/** Saves the note of finish_item outcome "later", for the item's return. */
+export function saveLaterReminder(
+  loop: LoopState,
+  itemId: string,
+  note: string,
+  files: LoopReminderFile[],
+  now: Date,
+): LoopState {
+  const saved = saveReminder(
+    loop,
+    undefined,
+    { fromItemId: itemId, note, when: "retry", files, uncapped: true },
+    now,
+  );
+  return saved.ok ? saved.loop : loop;
 }
 
 function isDue(reminder: LoopReminder, target: LoopReminderTarget): boolean {

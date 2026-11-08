@@ -78,7 +78,7 @@ describe("HoldQuestion and FinishItem", () => {
   it("FinishItem records the report and ends the turn", async () => {
     runningItem();
     await expect(finishItemTool.run({ outcome: "maybe" })).rejects.toThrow(
-      "outcome must be one of done, waiting, stuck",
+      "outcome must be one of done, waiting, stuck, later",
     );
     expect(consumeLoopTurnEnd()).toBe(false);
     const result = await finishItemTool.run({
@@ -93,6 +93,25 @@ describe("HoldQuestion and FinishItem", () => {
       notes: "npm test works",
     });
     expect(consumeLoopTurnEnd()).toBe(true);
+  });
+
+  it('FinishItem with outcome "later" saves its note for the item\'s return', async () => {
+    runningItem();
+    await expect(
+      finishItemTool.run({ outcome: "later", summary: "Needs Two" }),
+    ).rejects.toThrow("needs `reminder`");
+    await expect(
+      finishItemTool.run({
+        outcome: "later",
+        summary: "Needs Two",
+        reminder: "Tried X; Two adds the API",
+      }),
+    ).resolves.toContain("comes back after the other items");
+    const loop = getSessionLoop()!;
+    expect(loop.current?.report?.outcome).toBe("later");
+    expect(loop.reminders).toMatchObject([
+      { note: "Tried X; Two adds the API", when: "retry", fromItemId: "2" },
+    ]);
   });
 
   it("are described with the CLI's names", () => {

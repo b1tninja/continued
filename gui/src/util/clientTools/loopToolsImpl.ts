@@ -1,5 +1,6 @@
 import { ContinueError, ContinueErrorReason } from "core/util/errors";
 import {
+  deferralSpent,
   finishItemReport,
   finishItemResult,
   holdQuestion,
@@ -8,6 +9,7 @@ import {
 import {
   reminderFilePaths,
   reminderSavedResult,
+  saveLaterReminder,
   saveReminder,
 } from "core/util/loopReminders";
 import { stampLoopFiles } from "../../redux/util/loopReminderFiles";
@@ -105,15 +107,31 @@ export const finishItemImpl: ClientToolImpl = async (
   _toolCallId,
   extras,
 ) => {
-  const { loop } = runningItem(extras);
+  const { itemId } = runningItem(extras);
   const parsed = finishItemReport(args);
   if (!parsed.ok) {
     throw new ContinueError(ContinueErrorReason.Unspecified, parsed.error);
   }
-  const { report } = parsed;
+  const { report, later } = parsed;
+  const stamps = await stampLoopFiles(
+    extras.ideMessenger.ide,
+    later?.files ?? [],
+  );
+  // The read above took time: report on the loop as it is now
+  const { loop } = runningItem(extras);
+  const spent = deferralSpent(loop, itemId);
+  const saved = later
+    ? saveLaterReminder(
+        loop,
+        itemId,
+        later.note,
+        later.files.map((path) => ({ path, stamp: stamps[path] })),
+        new Date(),
+      )
+    : loop;
   commitLoop(extras.dispatch, extras.getState, {
-    ...loop,
-    current: loop.current && { ...loop.current, report },
+    ...saved,
+    current: saved.current && { ...saved.current, report },
   });
   return {
     respondImmediately: true,
@@ -123,7 +141,7 @@ export const finishItemImpl: ClientToolImpl = async (
       {
         name: "Item reported",
         description: report.outcome,
-        content: finishItemResult(report.outcome),
+        content: finishItemResult(report.outcome, spent),
         hidden: false,
       },
     ],

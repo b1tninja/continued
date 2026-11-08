@@ -16,7 +16,11 @@ import type {
   TaskPlan,
 } from "../index.js";
 import { stableStringify } from "../tools/permissions/auto/state.js";
-import type { LoopDeliveredReminder } from "./loopReminders.js";
+import {
+  LOOP_REMINDER_LIMITS,
+  reminderFilePaths,
+  type LoopDeliveredReminder,
+} from "./loopReminders.js";
 import { TASK_LIST_BLOCK_CLOSE, TASK_LIST_BLOCK_OPEN } from "./taskPlan.js";
 
 /**
@@ -331,7 +335,7 @@ export function repeatedCallResult(
   count: number,
   names: LoopToolNames = LOOP_TOOL_NAMES,
 ): string {
-  return `${toolName} was not run: the same call has run ${count - 1} times with no file change in between, and its last result is above. A different check of your current explanation would return new information. If nothing is left to check, call ${names.finishItem} with outcome "stuck" and say what is in the way.`;
+  return `${toolName} was not run: the same call has run ${count - 1} times with no file change in between, and its last result is above. A different check of your current explanation would return new information. If nothing is left to check, call ${names.finishItem} with outcome "stuck" and say what is in the way, or, if another item may settle this, with outcome "later".`;
 }
 
 /** The report of a run that kept repeating a call after it was refused. */
@@ -365,7 +369,7 @@ export function itemTurnState(
 
 /** What the model sees when a call is refused at the turn limit. */
 export function itemTurnLimitResult(turns: number): string {
-  return `You have made ${turns} requests on this item, so this call was not run. Stop reading and searching. Write what the item needs now, in as few calls as you can, then call ${FINISH_ITEM_TOOL_NAME}: outcome "done" if the item is finished, otherwise "stuck" and say what is left.`;
+  return `You have made ${turns} requests on this item, so this call was not run. Stop reading and searching. Write what the item needs now, in as few calls as you can, then call ${FINISH_ITEM_TOOL_NAME}: outcome "done" if the item is finished, otherwise "stuck" and say what is left, or "later" if another item may settle this.`;
 }
 
 /** The report of a run ended at its turn limit. */
@@ -394,7 +398,18 @@ export function replanHoldResult(names: LoopToolNames = LOOP_TOOL_NAMES) {
 
 export const REPLAN_HOLD_RESULT = replanHoldResult();
 
-export type FinishOutcome = "done" | "stuck" | "waiting";
+export type FinishOutcome = "done" | "stuck" | "waiting" | "later";
+
+/**
+ * Times one item may be set aside with outcome "later"; one more is recorded
+ * as stuck, because "later" is an easy way out of hard work.
+ */
+export const LOOP_MAX_DEFERRALS = 1;
+
+/** The item has used its deferrals, so another "later" counts as stuck. */
+export function deferralSpent(loop: LoopState, itemId: string): boolean {
+  return (itemState(loop, itemId)?.deferrals ?? 0) >= LOOP_MAX_DEFERRALS;
+}
 
 /** What the loop should do next; see decideNext. */
 export type LoopAction =
@@ -588,12 +603,16 @@ export function reconcileLoop(loop: LoopState, plan: TaskPlan): LoopState {
   return { ...loop, items };
 }
 
-/** The first item, in plan order, that can run now. */
+/**
+ * The first item, in plan order, that can run now. An item set aside with
+ * finish_item outcome "later" goes behind the others, in plan order among
+ * themselves, and runs when only such items are left.
+ */
 export function nextRunnableItem(
   loop: LoopState,
   plan: TaskPlan,
 ): TaskItem | undefined {
-  return plan.items.find((task) => {
+  const runnable = plan.items.filter((task) => {
     const state = itemState(loop, task.id);
     return (
       state !== undefined &&
@@ -601,6 +620,9 @@ export function nextRunnableItem(
       unmetDependencies(loop, plan, task).length === 0
     );
   });
+  return (
+    runnable.find((task) => !itemState(loop, task.id)?.deferrals) ?? runnable[0]
+  );
 }
 
 /**
@@ -1142,6 +1164,32 @@ function hasOpenBlocking(loop: LoopState, itemId: string): boolean {
  * failed. An item with an open blocking question waits whatever it reported,
  * unless it says it is done.
  */
+/** The item's status once its run has reported (or ended without a report). */
+function statusAfterRun(
+  loop: LoopState,
+  itemId: string,
+  outcome: FinishOutcome | undefined,
+  run: { check?: string; overDeferred: boolean; deferred: boolean },
+): LoopItemStatus {
+  const outOfAttempts =
+    (itemState(loop, itemId)?.attempts ?? 0) >= loop.budget.maxAttempts;
+  const blocked = hasOpenBlocking(loop, itemId);
+  if (outcome === "done") return run.check ? "checking" : "done";
+  if (
+    outcome === "waiting" &&
+    !blocked &&
+    loop.answers.some((a) => a.itemId === itemId && !a.delivered)
+  ) {
+    // It waited on a question the person answered while it ran: it runs
+    // again, and its next prompt carries the answer
+    return outOfAttempts ? "failed" : "pending";
+  }
+  if (blocked || outcome === "waiting") return "waiting";
+  if (outcome === "stuck" || run.overDeferred) return "failed";
+  if (run.deferred) return "pending";
+  return outOfAttempts ? "failed" : "pending";
+}
+
 export function finishItemRun(
   loop: LoopState,
   report:
@@ -1153,31 +1201,30 @@ export function finishItemRun(
   if (!itemId || loop.current?.kind !== "item") return loop;
   const state = itemState(loop, itemId);
   const summary = report?.summary?.slice(0, LOOP_LIMITS.maxSummaryLength);
-  let status: LoopItemStatus;
-  const answeredMeanwhile =
-    report?.outcome === "waiting" &&
-    !hasOpenBlocking(loop, itemId) &&
-    loop.answers.some((a) => a.itemId === itemId && !a.delivered);
-  if (report?.outcome === "done") {
-    status = options.check ? "checking" : "done";
-  } else if (answeredMeanwhile) {
-    // It waited on a question the person answered while it ran: it runs
-    // again, and its next prompt carries the answer
-    status =
-      (state?.attempts ?? 0) >= loop.budget.maxAttempts ? "failed" : "pending";
-  } else if (hasOpenBlocking(loop, itemId) || report?.outcome === "waiting") {
-    status = "waiting";
-  } else if (report?.outcome === "stuck") {
-    status = "failed";
-  } else {
-    status =
-      (state?.attempts ?? 0) >= loop.budget.maxAttempts ? "failed" : "pending";
-  }
+  const later = report?.outcome === "later" && !hasOpenBlocking(loop, itemId);
+  const overDeferred = later && deferralSpent(loop, itemId);
+  const deferred = later && !overDeferred;
+  const status = statusAfterRun(loop, itemId, report?.outcome, {
+    check: options.check,
+    overDeferred,
+    deferred,
+  });
   const next = withItem(loop, itemId, {
     status,
-    summary:
-      summary ??
-      (report ? state?.summary : "The turn ended without finish_item."),
+    summary: overDeferred
+      ? `Set aside a second time, so recorded as stuck: ${summary ?? "no reason given"}`.slice(
+          0,
+          LOOP_LIMITS.maxSummaryLength,
+        )
+      : (summary ??
+        (report ? state?.summary : "The turn ended without finish_item.")),
+    // Coming back later is not another try at it
+    ...(deferred
+      ? {
+          deferrals: (state?.deferrals ?? 0) + 1,
+          attempts: Math.max(0, (state?.attempts ?? 0) - 1),
+        }
+      : {}),
   });
   const note = report?.notes?.trim().replace(/\s+/g, " ");
   const notes = note
@@ -2036,6 +2083,8 @@ export function loopItemPrompt(input: {
   lastCheck?: LoopCheckResult;
   /** What earlier runs saved for this one (takeReminders) */
   reminders?: LoopDeliveredReminder[];
+  /** A run set this item aside before (finish_item outcome "later") */
+  returning?: boolean;
 }): string {
   const { item } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
@@ -2063,6 +2112,11 @@ export function loopItemPrompt(input: {
   } else if (input.attempt > 1) {
     lines.push(
       "An earlier run of this item ended without reporting. Check what is already done before you change anything.",
+    );
+  }
+  if (input.returning) {
+    lines.push(
+      "An earlier run set this item aside to come back to it, and other items have run since. Check what changed before you go on.",
     );
   }
   if (input.item.check) {
@@ -2449,6 +2503,8 @@ export function formatLoopStatus(
     `${done}/${loop.items.length} done`,
   ];
   if (skipped) parts.push(`${skipped} skipped`);
+  const deferred = loop.items.filter((i) => i.deferrals).length;
+  if (deferred) parts.push(`${deferred} deferred`);
   if (waiting) parts.push(`${waiting} waiting on you`);
   if (checking) parts.push(`${checking} checking`);
   if (open) parts.push(`${open} open question${open === 1 ? "" : "s"}`);
@@ -2512,8 +2568,16 @@ export function restoreLoop(value: unknown): LoopState | undefined {
 }
 
 /** Text of the tool result for finish_item. */
-export function finishItemResult(outcome: FinishOutcome): string {
+export function finishItemResult(
+  outcome: FinishOutcome,
+  /** deferralSpent, before this report: "later" is then recorded as stuck */
+  spent = false,
+): string {
   switch (outcome) {
+    case "later":
+      return spent
+        ? "This item was already set aside once, so it is recorded as stuck. End your turn now."
+        : "Set aside; it comes back after the other items. End your turn now.";
     case "done":
       return "Recorded as done. End your turn now.";
     case "waiting":
@@ -2545,13 +2609,15 @@ export function approvalHeldResult(
   return `This call needs the person's approval, so it was not run. It is held as question ${question.id} in their inbox. Do not try to reach the same result another way. Do what you can without it, then call ${names.finishItem} with outcome "waiting"; the item will run again once they answer.`;
 }
 
-const FINISH_OUTCOMES: FinishOutcome[] = ["done", "waiting", "stuck"];
+const FINISH_OUTCOMES: FinishOutcome[] = ["done", "waiting", "stuck", "later"];
 
 /** The report a finish_item call makes, from its arguments. */
 export function finishItemReport(args: unknown):
   | {
       ok: true;
       report: { outcome: FinishOutcome; summary?: string; notes?: string };
+      /** Outcome "later": the note for the item's return, and its files */
+      later?: { note: string; files: string[] };
     }
   | { ok: false; error: string } {
   const a = (args ?? {}) as Record<string, unknown>;
@@ -2570,6 +2636,22 @@ export function finishItemReport(args: unknown):
     typeof a.notes === "string"
       ? a.notes.trim().slice(0, LOOP_LIMITS.maxNoteLength)
       : undefined;
+  const reminder = typeof a.reminder === "string" ? a.reminder.trim() : "";
+  if (outcome === "later") {
+    if (!reminder) {
+      return {
+        ok: false,
+        error:
+          'outcome "later" needs `reminder`: what you tried, what you learned, and why it may go better later.',
+      };
+    }
+    if (reminder.length > LOOP_REMINDER_LIMITS.maxLength) {
+      return {
+        ok: false,
+        error: `reminder is ${reminder.length} characters, over the limit of ${LOOP_REMINDER_LIMITS.maxLength}. Shorten it and report again.`,
+      };
+    }
+  }
   return {
     ok: true,
     report: {
@@ -2577,5 +2659,8 @@ export function finishItemReport(args: unknown):
       ...(summary ? { summary } : {}),
       ...(notes ? { notes } : {}),
     },
+    ...(outcome === "later"
+      ? { later: { note: reminder, files: reminderFilePaths(a.files) } }
+      : {}),
   };
 }

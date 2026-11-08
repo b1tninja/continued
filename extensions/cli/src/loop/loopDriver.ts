@@ -229,6 +229,7 @@ export function nextLoopTurn(
           toolNames: CLI_LOOP_TOOL_NAMES,
           lastCheck: itemState?.check,
           reminders: taken.reminders,
+          returning: (itemState?.deferrals ?? 0) > 0,
         });
         loop = markDelivered(
           loop,

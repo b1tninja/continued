@@ -234,6 +234,18 @@ Built on 2026-11-08. Each item starts in a fresh context, so `finish_item`'s `no
 
 This is a design choice. No study tests a reminder tool, and models tend to under-use optional tools, so whether it gets called has to be measured in the runs.
 
+**Coming back later** uses the same delivery, with no extra tool. `finish_item` takes outcome `later` when another item may settle this one, and needs `reminder`: what was tried, what was learned, and why it may go better later.
+
+- The item goes behind the other runnable items (`nextRunnableItem`). The extension still picks what runs next; the model never chooses, and a work turn never reorders the plan.
+- It is not marked failed. It does not count toward `consecutiveFailures`, as a finished item for no-progress, or as an attempt.
+- The reminder is delivered when the item comes back, with the same staleness marking. It is not held to the reminder caps, so a deferral can always say why.
+- **One deferral per item** (`LOOP_MAX_DEFERRALS`), because `later` is an easy way out of hard work. A second `later` is recorded as stuck. The loop's status shows how many items were deferred, so dodging is visible.
+- `after:` dependents of a deferred item keep waiting. When only deferred items remain they run; the loop does not re-plan or stop because they were deferred.
+- The repeat-refusal and turn-limit messages mention it.
+- "Follow up on this" needs nothing new: `remind_me` with `when: "replan"`, so the re-plan can add the work as a to-do.
+
+There is no measured evidence for deferral itself. It is a design choice, and the runs should count how often items are deferred and whether they succeed when they return.
+
 ### Answers are routed by the item's state
 
 `answerLoop` decides where an answer goes when it is given:
