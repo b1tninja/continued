@@ -22,7 +22,7 @@ Choose one per connection under "Keep the key in". `config.yaml` never contains 
 
 | Option | What is written | Notes |
 | :-- | :-- | :-- |
-| Secure storage | The key goes to the IDE's secret storage. `config.yaml` gets `apiKey: ${{ secrets.CONTINUED_<PROVIDER>_API_KEY }}`. | Default when the IDE can store and read back a test value: VS Code secret storage. Not readable by the CLI or other tools. |
+| Secure storage | The key goes to the IDE's secret storage. `config.yaml` gets `apiKey: ${{ secrets.CONTINUOUS_<PROVIDER>_API_KEY }}`. | Default when the IDE can store and read back a test value: VS Code secret storage. Not readable by the CLI or other tools. |
 | `~/.continuous/.env` file | The key is added to `~/.continuous/.env` (owner-only permissions). `config.yaml` gets the same reference. | Plaintext. Works with the CLI and anything else that reads `.env`. Default when secure storage is unavailable. |
 | Environment variable | Nothing is stored. `config.yaml` refers to the name you type. | For keys injected by something else. IDE extensions only see variables present when the IDE was launched. |
 | Inside `config.yaml` | The key is written into each model entry. | Not recommended: the file is often synced or committed. |

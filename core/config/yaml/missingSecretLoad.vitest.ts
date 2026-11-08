@@ -48,7 +48,7 @@ async function load(text: string) {
 }
 
 describe("config load with a secret that is not set on this machine", () => {
-  const name = "CONTINUED_A0_TEST_KEY";
+  const name = "CONTINUOUS_A0_TEST_KEY";
 
   afterEach(() => {
     delete process.env[name];

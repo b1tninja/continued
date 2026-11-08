@@ -16,7 +16,7 @@ const INFO: ProviderInstancesInfo = {
       sourceUri: "file:///home/u/.continuous/providers.yaml",
       key: {
         state: "secret",
-        secretName: "CONTINUED_ANTHROPIC_WORK_API_KEY",
+        secretName: "CONTINUOUS_ANTHROPIC_WORK_API_KEY",
         storedIn: { secure: true, env: false },
       },
       usedBy: [{ config: "Cloud", model: "Sonnet" }],
@@ -151,7 +151,7 @@ describe("PlaintextKeysNotice", () => {
         fileLabel: "Cloud",
         kind: "model" as const,
         label: "GPT",
-        secretName: "CONTINUED_OPENAI_API_KEY",
+        secretName: "CONTINUOUS_OPENAI_API_KEY",
       },
     ];
     m.responseHandlers["config/findPlaintextKeys"] = async () => ({

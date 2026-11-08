@@ -10,7 +10,7 @@ vi.mock("../../util/paths", () => ({
   getContinueDotEnv: () => dotEnv,
 }));
 
-const fqsn: FQSN = { packageSlugs: [], secretName: "CONTINUED_TEST_API_KEY" };
+const fqsn: FQSN = { packageSlugs: [], secretName: "CONTINUOUS_TEST_API_KEY" };
 
 function makeIde(secrets: Record<string, string> | Error | undefined) {
   return {
