@@ -937,7 +937,7 @@ export function recordCheck(
   if (result.status === "failed") {
     status =
       (state?.attempts ?? 0) >= loop.budget.maxAttempts ? "failed" : "pending";
-    summary = `The check failed${result.exitCode != null ? ` (exit ${result.exitCode})` : ""}: ${result.command}`;
+    summary = `The check failed${typeof result.exitCode === "number" ? ` (exit ${result.exitCode})` : ""}: ${result.command}`;
   } else {
     status = "done";
   }
@@ -1910,7 +1910,7 @@ export function loopItemPrompt(input: {
   if (input.lastCheck?.status === "failed") {
     lines.push(
       "",
-      `You reported this item done, but its check \`${quote(input.lastCheck.command)}\` failed${input.lastCheck.exitCode != null ? ` (exit ${input.lastCheck.exitCode})` : ""}. Fix what it reports:`,
+      `You reported this item done, but its check \`${quote(input.lastCheck.command)}\` failed${typeof input.lastCheck.exitCode === "number" ? ` (exit ${input.lastCheck.exitCode})` : ""}. Fix what it reports:`,
       "```",
       (input.lastCheck.output ?? "(no output)").trim(),
       "```",
@@ -2035,7 +2035,7 @@ export function loopPlanBlock(input: {
     lines.push(line);
     if (task.check) {
       const result = state?.check
-        ? ` (last run: ${state.check.status}${state.check.exitCode != null ? `, exit ${state.check.exitCode}` : ""})`
+        ? ` (last run: ${state.check.status}${typeof state.check.exitCode === "number" ? `, exit ${state.check.exitCode}` : ""})`
         : "";
       lines.push(`    check: ${quote(task.check)}${result}`);
     }

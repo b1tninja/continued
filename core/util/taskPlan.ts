@@ -220,20 +220,11 @@ export function buildTaskPlan(
       return { ok: false, error: activeForm.error };
     }
 
-    const check = optionalText(
-      raw.check,
-      "check",
-      TASK_PLAN_LIMITS.maxCheckLength,
-      position,
-    );
-    if (check.error) {
-      return { ok: false, error: check.error };
+    const extras = itemExtras(raw, position, input.length);
+    if ("error" in extras) {
+      return { ok: false, error: extras.error };
     }
-    const after = afterList(raw.after, position, input.length);
-    if (typeof after === "string") {
-      return { ok: false, error: after };
-    }
-    afterPositions.push(after);
+    afterPositions.push(extras.after);
 
     if (id !== undefined) {
       seenIds.add(id);
@@ -244,16 +235,13 @@ export function buildTaskPlan(
       status,
       ...(note.value && { note: note.value }),
       ...(activeForm.value && { activeForm: activeForm.value }),
-      ...(check.value && { check: check.value.replace(/\s*\n\s*/g, " ") }),
+      ...extras.fields,
     });
   }
 
-  const cycle = afterCycle(afterPositions);
-  if (cycle) {
-    return {
-      ok: false,
-      error: `Items ${cycle.join(", ")} come after each other in a circle; remove one of the after: lines.`,
-    };
+  const circle = afterCircleError(afterPositions);
+  if (circle) {
+    return { ok: false, error: circle };
   }
 
   if (inProgress > 1) {
@@ -293,11 +281,7 @@ export function buildTaskPlan(
     }
   }
 
-  // `after` positions become the ids the items now have
-  items.forEach((item, i) => {
-    const after = afterPositions[i].map((p) => items[p - 1].id);
-    if (after.length) item.after = after;
-  });
+  applyAfter(items, afterPositions);
 
   return {
     ok: true,
@@ -306,6 +290,27 @@ export function buildTaskPlan(
       updatedAt: (options.now ?? new Date()).toISOString(),
       updatedBy: options.updatedBy ?? "model",
     },
+  };
+}
+
+/** An item's check command and `after` positions, or why they are invalid. */
+function itemExtras(
+  raw: TaskItemInput,
+  position: number,
+  count: number,
+): { fields: { check?: string }; after: number[] } | { error: string } {
+  const check = optionalText(
+    raw.check,
+    "check",
+    TASK_PLAN_LIMITS.maxCheckLength,
+    position,
+  );
+  if (check.error) return { error: check.error };
+  const after = afterList(raw.after, position, count);
+  if (typeof after === "string") return { error: after };
+  return {
+    fields: check.value ? { check: check.value.replace(/\s*\n\s*/g, " ") } : {},
+    after,
   };
 }
 
@@ -337,6 +342,22 @@ function afterList(
     if (!positions.includes(n)) positions.push(n);
   }
   return positions;
+}
+
+/** The error for a circle of `after` references, if there is one. */
+function afterCircleError(after: number[][]): string | undefined {
+  const cycle = afterCycle(after);
+  return cycle
+    ? `Items ${cycle.join(", ")} come after each other in a circle; remove one of the after: lines.`
+    : undefined;
+}
+
+/** `after` positions become the ids the items now have. */
+function applyAfter(items: TaskItem[], afterPositions: number[][]): void {
+  items.forEach((item, i) => {
+    const after = afterPositions[i].map((p) => items[p - 1].id);
+    if (after.length) item.after = after;
+  });
 }
 
 /** The positions in a circle of `after` references, if there is one. */
