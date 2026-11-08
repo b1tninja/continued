@@ -7,9 +7,27 @@ const { rimrafSync } = require("rimraf");
 
 const { execCmdSync } = require("../../../scripts/util");
 
-const DOWNLOAD_ATTEMPTS = 8;
-const DOWNLOAD_RETRY_BASE_MS = 5000;
-const DOWNLOAD_RETRY_MAX_MS = 60000;
+const FETCH_ATTEMPTS = 4;
+
+/** fetch, trying again after a server error or a dropped connection. */
+async function fetchWithRetry(url, options) {
+  for (let attempt = 1; ; attempt++) {
+    let problem;
+    try {
+      const response = await fetch(url, options);
+      if (response.status < 500 || attempt === FETCH_ATTEMPTS) return response;
+      problem = `status code: ${response.status}`;
+    } catch (error) {
+      if (attempt === FETCH_ATTEMPTS) throw error;
+      problem = error.message;
+    }
+    const waitMs = 2000 * 2 ** (attempt - 1);
+    console.warn(
+      `[warn] Download failed (${problem}), trying again in ${waitMs / 1000}s`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+}
 
 /**
  * download a file using fetch API
@@ -21,37 +39,13 @@ async function downloadFile(url, outputPath) {
   const proxy = process.env.https_proxy || process.env.HTTPS_PROXY;
   const agent = proxy ? new ProxyAgent(proxy) : undefined;
 
-  // GitHub release downloads return 5xx for minutes at a time, so a server
-  // error or a dropped connection is worth waiting out. A 4xx is not.
-  let buffer;
-  for (let attempt = 1; ; attempt++) {
-    try {
-      const response = await fetch(url, {
-        redirect: "follow", // Automatically follow redirects
-        dispatcher: agent,
-      });
-      if (!response.ok) {
-        const error = new Error(
-          `Failed to download file, status code: ${response.status}`,
-        );
-        error.retryable = response.status >= 500 || response.status === 429;
-        throw error;
-      }
-      buffer = await response.arrayBuffer();
-      break;
-    } catch (error) {
-      // fetch rejects with a TypeError when the connection fails
-      const retryable = error.retryable ?? true;
-      if (!retryable || attempt >= DOWNLOAD_ATTEMPTS) throw error;
-      const delayMs = Math.min(
-        DOWNLOAD_RETRY_BASE_MS * 2 ** (attempt - 1),
-        DOWNLOAD_RETRY_MAX_MS,
-      );
-      console.log(
-        `[info] Download failed (${error.message}); retrying in ${delayMs / 1000}s (${attempt}/${DOWNLOAD_ATTEMPTS})`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
+  const response = await fetchWithRetry(url, {
+    redirect: "follow", // Automatically follow redirects
+    dispatcher: agent,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to download file, status code: ${response.status}`);
   }
 
   // Create output directory if it doesn't exist
@@ -60,6 +54,8 @@ async function downloadFile(url, outputPath) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
+  // Get the response as an array buffer and write it to the file
+  const buffer = await response.arrayBuffer();
   fs.writeFileSync(outputPath, Buffer.from(buffer));
 }
 
