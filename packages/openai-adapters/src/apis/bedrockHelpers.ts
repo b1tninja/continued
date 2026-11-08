@@ -106,6 +106,36 @@ export function getBedrockErrorHint(
   return undefined;
 }
 
+/**
+ * The message to show when Bedrock refuses a call because the AWS account has
+ * not been granted the model, or undefined for any other error. AWS's own text
+ * sends people to its sales team, while the usual cause is a step in the
+ * Bedrock console. The error alone can't prove which step, so this says
+ * "usually".
+ *
+ * Core's Bedrock provider uses this too. The lines are joined by single
+ * newlines because the chat window shows only what follows the first blank
+ * line of an error (parseErrorMessage in gui/src/util/errorAnalysis.ts).
+ */
+export function bedrockModelAccessMessage(
+  error: unknown,
+  modelId: string,
+): string | undefined {
+  const err = error as { name?: string; message?: string } | undefined;
+  const message = err?.message ?? "";
+  if (
+    !/AccessDeniedException/i.test(`${err?.name ?? ""} ${message}`) ||
+    !/not available for this account/i.test(message)
+  ) {
+    return undefined;
+  }
+  return [
+    `Amazon Bedrock refused ${modelId}: this AWS account has not been given access to that model.`,
+    "For Anthropic models, this usually means the Anthropic use-case form or the model agreement has not been completed in the Bedrock console (https://console.aws.amazon.com/bedrock/). Finish any step still open there, then try again.",
+    `AWS said: ${message}`,
+  ].join("\n");
+}
+
 /** The fields of Bedrock's `TokenUsage` that the adapter reads. */
 export interface BedrockTokenUsageLike {
   inputTokens?: number;
