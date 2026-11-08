@@ -18,7 +18,7 @@ export class GUIActions {
       await new Workbench().executeCommand("View: Move View");
       await (
         await InputBox.create(DEFAULT_TIMEOUT.MD)
-      ).selectQuickPick("Continued");
+      ).selectQuickPick("Continuous");
       await (
         await InputBox.create(DEFAULT_TIMEOUT.MD)
       ).selectQuickPick("New Secondary Side Bar Entry");
@@ -34,7 +34,7 @@ export class GUIActions {
   };
 
   /**
-   * @param requireDisplayed throw (so a caller can retry) unless the Continued
+   * @param requireDisplayed throw (so a caller can retry) unless the Continuous
    *   webview is actually showing, instead of falling back to a hidden one.
    */
   public static switchToReactIframe = async (

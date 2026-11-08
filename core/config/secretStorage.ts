@@ -12,7 +12,7 @@ import { withTimeout } from "../util/withTimeout";
 /** Where the setup flow can keep an API key. */
 export type SecretStorageKind = "secure" | "env";
 
-const PROBE_KEY = "continued.secretStorageProbe";
+const PROBE_KEY = "continuous.secretStorageProbe";
 
 /**
  * How long to wait for the IDE's secret storage. A keychain can show an unlock

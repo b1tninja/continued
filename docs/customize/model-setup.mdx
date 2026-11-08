@@ -4,7 +4,7 @@ title: "Set Up Providers and Models"
 
 Open the setup flow from **Settings > Models > Providers** (Add provider, or Edit on an existing row), from the first-run onboarding card, or from the command palette:
 
-- VS Code: `Continued: Manage Models and Providers`
+- VS Code: `Continuous: Manage Models and Providers`
 
 The flow has three steps, and nothing is written until you confirm the last one.
 
@@ -43,7 +43,7 @@ Because secure storage is read first, a key saved there wins over an older copy 
 
 ### Move an existing key to secure storage
 
-On the Providers card, a connection whose key is only in `~/.continue/.env` shows **Move key to secure storage**. After you confirm, Continued copies the value into secure storage, checks that it reads back, and then removes that line from `~/.continue/.env`. `config.yaml` is unchanged, since it already refers to the secret by name. The key value stays in the extension host and is not sent to the chat panel. If the key is in both places, the card offers **Remove .env copy** instead.
+On the Providers card, a connection whose key is only in `~/.continue/.env` shows **Move key to secure storage**. After you confirm, Continuous copies the value into secure storage, checks that it reads back, and then removes that line from `~/.continue/.env`. `config.yaml` is unchanged, since it already refers to the secret by name. The key value stays in the extension host and is not sent to the chat panel. If the key is in both places, the card offers **Remove .env copy** instead.
 
 ### A synced config on a new machine
 

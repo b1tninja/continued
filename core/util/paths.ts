@@ -160,7 +160,7 @@ export function getConfigTsPath(): string {
       JSON.stringify({
         name: "continue-config",
         version: "1.0.0",
-        description: "My Continued Configuration",
+        description: "My Continuous Configuration",
         main: "config.js",
       }),
     );

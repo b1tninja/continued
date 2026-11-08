@@ -1,20 +1,20 @@
 <div align="center">
 
-<img src="gui/public/logos/continued.png" alt="Continued logo" width="128" />
+<img src="gui/public/logos/continuous.png" alt="Continuous logo" width="128" />
 
-# Continued
+# Continuous
 
 **A community-maintained fork of the Continue VS Code extension.**
 
 </div>
 
-> **Unofficial fork.** Continued is not affiliated with, endorsed by, or supported by Continue Dev, Inc. The upstream `continuedev/continue` repository is no longer maintained. This fork carries its own changes (AWS Bedrock and Bedrock Mantle support, live model lists, and more) and is released separately.
+> **Unofficial fork.** Continuous is not affiliated with, endorsed by, or supported by Continue Dev, Inc. The upstream `continuedev/continue` repository is no longer maintained. This fork carries its own changes (AWS Bedrock and Bedrock Mantle support, live model lists, and more) and is released separately.
 
 ## Install
 
-Continued is not published to the VS Code Marketplace or Open VSX. Install it from a GitHub release. It needs VS Code 1.105 or newer.
+Continuous is not published to the VS Code Marketplace or Open VSX. Install it from a GitHub release. It needs VS Code 1.105 or newer.
 
-1. Download the `.vsix` for your platform from the [latest release](https://github.com/b1tninja/continued/releases/latest) ([Continued 2.4.2](https://github.com/b1tninja/continued/releases/tag/v2.4.2-vscode)). There are builds for Windows (x64, Arm64), macOS (Apple Silicon, Intel), and Linux (x64, Arm64). Each release has a `SHA256SUMS.txt` to check the download against.
+1. Download the `.vsix` for your platform from the [latest release](https://github.com/b1tninja/continued/releases/latest) ([Continuous 2.4.2](https://github.com/b1tninja/continued/releases/tag/v2.4.2-vscode)). There are builds for Windows (x64, Arm64), macOS (Apple Silicon, Intel), and Linux (x64, Arm64). Each release has a `SHA256SUMS.txt` to check the download against.
 2. Install it, then reload VS Code (**Developer: Reload Window**):
 
    ```bash
@@ -24,12 +24,12 @@ Continued is not published to the VS Code Marketplace or Open VSX. Install it fr
 Or, with the GitHub CLI (change `win32-x64` to your platform):
 
 ```bash
-gh release download --repo b1tninja/continued --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continued-vsix
+gh release download --repo b1tninja/continued --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continuous-vsix
 ```
 
-Continued (`b1tninja.continuous`) installs alongside the original Continue extension and reads your existing `~/.continue` configuration. To update, install the next release's `.vsix` the same way. Releases up to 2.4.1 used the ID `b1tninja.continued`; after installing 2.4.2, uninstall that one ([details](docs/continued-install.md#4-reload-vs-code)).
+Continuous (`b1tninja.continuous`) installs alongside the original Continue extension and reads your existing `~/.continue` configuration. To update, install the next release's `.vsix` the same way. Releases up to 2.4.1 used the ID `b1tninja.continued`; after installing 2.4.2, uninstall that one ([details](docs/continuous-install.md#4-reload-vs-code)).
 
-The [install guide](docs/continued-install.md) has every platform's file name, checksum commands, unreleased builds from GitHub Actions, and troubleshooting.
+The [install guide](docs/continuous-install.md) has every platform's file name, checksum commands, unreleased builds from GitHub Actions, and troubleshooting.
 
 ## What's different from upstream
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Continued",
+  "name": "Continuous",
   "colors": {
     "primary": "#6b7280",
     "light": "#ffffff",

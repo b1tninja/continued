@@ -13,7 +13,7 @@ export interface OpenRouterConfig extends OpenAIConfig {
 
 export const OPENROUTER_HEADERS: Record<string, string> = {
   "HTTP-Referer": "https://github.com/b1tninja/continued",
-  "X-OpenRouter-Title": "Continued",
+  "X-OpenRouter-Title": "Continuous",
   "X-OpenRouter-Categories": "ide-extension",
 };
 

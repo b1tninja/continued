@@ -110,7 +110,7 @@ export class VsCodeWebviewProtocol implements IMessenger<
             } else if (e.cause.code === "ECONNREFUSED") {
               message = `Connection was refused. This likely means that there is no server running at the specified URL. If you are running your own server you may need to set the "apiBase" parameter in config.json. For example, you can set up an OpenAI-compatible server like here: https://b1tninja.github.io/continued/customize/model-providers/top-level/openai#openai-api-compatible-providers`;
             } else {
-              message = `The request failed with "${e.cause.name}": ${e.cause.message}. If you're having trouble setting up Continued, please see the troubleshooting guide for help.`;
+              message = `The request failed with "${e.cause.name}": ${e.cause.message}. If you're having trouble setting up Continuous, please see the troubleshooting guide for help.`;
             }
           }
         }

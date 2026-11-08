@@ -13,6 +13,6 @@
     <path d="M342 160 L408 256 L342 352" fill="none" stroke="#F0FDFA" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
     <rect x="262" y="236" width="36" height="40" rx="6" fill="#5EEAD4"/>
   </g>
-  <text x="520" y="380" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="150" font-weight="600" fill="#F0FDFA">Continued</text>
+  <text x="520" y="380" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="150" font-weight="600" fill="#F0FDFA">Continuous</text>
   <text x="524" y="470" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="46" fill="#99F6E4">AI code agent for VS Code, community fork</text>
 </svg>

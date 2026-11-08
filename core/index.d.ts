@@ -2056,7 +2056,7 @@ export type ContinueRcJson = Partial<SerializedContinueConfig> & {
 
 // config.ts - give users simplified interfaces
 export interface Config {
-  /** Has no effect: Continued collects no telemetry. Kept so existing configs stay valid. */
+  /** Has no effect: Continuous collects no telemetry. Kept so existing configs stay valid. */
   allowAnonymousTelemetry?: boolean;
   /** Each entry in this array will originally be a JSONModelDescription, the same object from your config.json, but you may add CustomLLMs.
    * A CustomLLM requires you only to define an AsyncGenerator that calls the LLM and yields string updates. You can choose to define either `streamCompletion` or `streamChat` (or both).

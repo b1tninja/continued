@@ -6,8 +6,8 @@ interface ContinuedLogoProps {
 }
 
 /**
- * The Continued mark (brand-src/mark.svg: a forward chevron trailing off into
- * dots) with the "Continued" wordmark in the editor's foreground colour.
+ * The Continuous mark (brand-src/mark.svg: a forward chevron trailing off into
+ * dots) with the "Continuous" wordmark in the editor's foreground colour.
  */
 export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
   return (
@@ -17,7 +17,7 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Continued"
+      aria-label="Continuous"
     >
       <defs>
         <linearGradient id="continued-bg" x1="0" y1="0" x2="1" y2="1">
@@ -51,7 +51,7 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
         fontSize="210"
         fontWeight="600"
       >
-        Continued
+        Continuous
       </text>
     </svg>
   );

@@ -1,11 +1,11 @@
 ---
-title: "How to Configure Continued"
-description: Learn how to access and manage Continued configurations through local YAML files
+title: "How to Configure Continuous"
+description: Learn how to access and manage Continuous configurations through local YAML files
 keywords: [config, settings, customize]
 sidebarTitle: "Configuration"
 ---
 
-You can easily access your configuration from the Continued Chat sidebar. Open the sidebar by pressing <kbd>cmd/ctrl</kbd> + <kbd>L</kbd> (VS Code) and click the Agent selector above the main chat input. Then, you can hover over an agent and click the `gear` icon.
+You can easily access your configuration from the Continuous Chat sidebar. Open the sidebar by pressing <kbd>cmd/ctrl</kbd> + <kbd>L</kbd> (VS Code) and click the Agent selector above the main chat input. Then, you can hover over an agent and click the `gear` icon.
 
 
 ## How to Configure Local Configs with YAML
@@ -18,7 +18,7 @@ Local user-level configuration is stored and can be edited in your home director
 To open this `config.yaml`, you need to open the configs dropdown in the top-right portion of the chat input. On that dropdown beside the "Local Config" option, select the cog icon. It will open the local `config.yaml`.
 
 
-When editing this file, you can see the available options suggested as you type, or check the reference below. When you save a config file from the IDE, Continued will automatically refresh to take into account your changes. A config file is automatically created the first time you use Continued, and always automatically generated with default values if it doesn't exist.
+When editing this file, you can see the available options suggested as you type, or check the reference below. When you save a config file from the IDE, Continuous will automatically refresh to take into account your changes. A config file is automatically created the first time you use Continuous, and always automatically generated with default values if it doesn't exist.
 
 See the full reference for `config.yaml` [here](../../reference.mdx).
 
@@ -60,7 +60,7 @@ Example
 
 ### How to Use `config.ts` for Advanced Configuration
 
-`config.yaml` or `config.json` can handle the vast majority of necessary configuration, so we recommend using it whenever possible. However, if you need to programmatically extend Continued configuration, you can use a `config.ts` file, placed at `~/.continue/config.ts` (MacOS / Linux) or `%USERPROFILE%\.continue\config.ts` (Windows).
+`config.yaml` or `config.json` can handle the vast majority of necessary configuration, so we recommend using it whenever possible. However, if you need to programmatically extend Continuous configuration, you can use a `config.ts` file, placed at `~/.continue/config.ts` (MacOS / Linux) or `%USERPROFILE%\.continue\config.ts` (Windows).
 
 `config.ts` must export a `modifyConfig` function, like:
 

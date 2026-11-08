@@ -1,17 +1,17 @@
 ---
 title: "config.yaml Reference"
-description: "Comprehensive guide to the config.yaml format used by Continued for building custom coding agents. Learn how to define models, context providers, rules, prompts, and more using YAML configuration."
+description: "Comprehensive guide to the config.yaml format used by Continuous for building custom coding agents. Learn how to define models, context providers, rules, prompts, and more using YAML configuration."
 ---
 
 ## Introduction
 
-Continued Agents are defined using the `config.yaml` specification.
+Continuous Agents are defined using the `config.yaml` specification.
 
 **Agents** are composed of models, rules, and tools (MCP servers).
 
 <Columns cols={2}>
 <Card title="Configuring Models, Rules, and Tools" icon="cube" href="./guides/configuring-models-rules-tools.mdx">
-Learn how to work with Continued's configuration system, including using hub models, rules, and tools, creating local configurations, and organizing your setup.
+Learn how to work with Continuous's configuration system, including using hub models, rules, and tools, creating local configurations, and organizing your setup.
 </Card>
 
   <Card title="Understanding Configs" icon="robot" href="./guides/understanding-configs.mdx">
@@ -78,12 +78,12 @@ The `models` section defines the language models used in your configuration. Mod
 
 - `roles`: An array specifying the roles this model can fulfill, such as `chat`, `autocomplete`, `embed`, `rerank`, `edit`, `apply`, `summarize`, `reviewer` (experimental, see [Reviewer Role](./customize/model-roles/reviewer.mdx)). The default value is `[chat, edit, apply, summarize]`. Note that the `summarize` role is not currently used.
 
-- `capabilities`: Array of strings denoting model capabilities, which will overwrite Continued's autodetection based on provider and model. See the [Model Capabilities guide](./customize/deep-dives/model-capabilities.mdx) for detailed information. Supported capabilities include:
+- `capabilities`: Array of strings denoting model capabilities, which will overwrite Continuous's autodetection based on provider and model. See the [Model Capabilities guide](./customize/deep-dives/model-capabilities.mdx) for detailed information. Supported capabilities include:
 
   - `tool_use`: Enables function/tool calling support (required for Agent mode)
   - `image_input`: Enables image upload and processing support
 
-  Continued automatically detects these capabilities for most models, but you can override this when using custom deployments or if autodetection isn't working correctly.
+  Continuous automatically detects these capabilities for most models, but you can override this when using custom deployments or if autodetection isn't working correctly.
 
 - `maxStopWords`: Maximum number of stop words allowed, to avoid API errors with extensive lists.
 
@@ -437,7 +437,7 @@ docs:
 
 ### `mcpServers`
 
-The [Model Context Protocol](https://modelcontextprotocol.io/introduction) is a standard proposed by Anthropic to unify prompts, context, and tool use. Continued supports any MCP server with the MCP context provider.
+The [Model Context Protocol](https://modelcontextprotocol.io/introduction) is a standard proposed by Anthropic to unify prompts, context, and tool use. Continuous supports any MCP server with the MCP context provider.
 
 **Properties:**
 

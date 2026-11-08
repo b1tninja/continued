@@ -1,12 +1,12 @@
-# Installing Continued
+# Installing Continuous
 
-Continued is an unofficial, community-maintained fork of the Continue VS Code extension. It is **not** published to the VS Code Marketplace or Open VSX. You install it from a `.vsix` file attached to each [GitHub release](https://github.com/b1tninja/continued/releases).
+Continuous is an unofficial, community-maintained fork of the Continue VS Code extension. It is **not** published to the VS Code Marketplace or Open VSX. You install it from a `.vsix` file attached to each [GitHub release](https://github.com/b1tninja/continued/releases).
 
-Continued is not affiliated with Continue Dev, Inc.
+Continuous is not affiliated with Continue Dev, Inc.
 
 **Requirements:** VS Code 1.105 or newer (or a VS Code-based editor built on it). Older versions cannot load the extension and will refuse to install it, so they keep the previously installed version.
 
-The current release is [Continued 2.4.2](https://github.com/b1tninja/continued/releases/tag/v2.4.2-vscode).
+The current release is [Continuous 2.4.2](https://github.com/b1tninja/continued/releases/tag/v2.4.2-vscode).
 
 ## Option 1: install the latest release
 
@@ -28,7 +28,7 @@ For 2.4.2, the Windows x64 file is `continuous-win32-x64-2.4.2.vsix`. There are 
 With the [GitHub CLI](https://cli.github.com/), you can download the latest release's file and checksums in one command. Change `win32-x64` to your platform:
 
 ```bash
-gh release download --repo b1tninja/continued --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continued-vsix
+gh release download --repo b1tninja/continued --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continuous-vsix
 ```
 
 ### 2. Verify the download (optional, recommended)
@@ -59,9 +59,9 @@ Or in VS Code: open the **Extensions** view, select **...** → **Install from V
 
 ### 4. Reload VS Code
 
-Run **Developer: Reload Window**, then open the Continued icon in the activity bar.
+Run **Developer: Reload Window**, then open the Continuous icon in the activity bar.
 
-Continued uses the extension ID `b1tninja.continuous`. It installs alongside the original Continue extension (`Continue.continue`) without conflicts, so you do not need to uninstall Continue first. It reads your existing `~/.continue` configuration.
+Continuous uses the extension ID `b1tninja.continuous`. It installs alongside the original Continue extension (`Continue.continue`) without conflicts, so you do not need to uninstall Continue first. It reads your existing `~/.continue` configuration.
 
 To check which version is installed, run `code --list-extensions --show-versions` and look for `b1tninja.continuous@<version>`.
 
@@ -83,11 +83,11 @@ You need to be signed in to GitHub with access to the repository to download art
 With the GitHub CLI you can download the latest Windows build in one command:
 
 ```powershell
-gh run download --repo b1tninja/continued --name win32-x64-vsix --dir "$env:TEMP\continued-vsix"
-code --install-extension (Get-ChildItem "$env:TEMP\continued-vsix" -Filter *.vsix | Select-Object -First 1).FullName --force
+gh run download --repo b1tninja/continued --name win32-x64-vsix --dir "$env:TEMP\continuous-vsix"
+code --install-extension (Get-ChildItem "$env:TEMP\continuous-vsix" -Filter *.vsix | Select-Object -First 1).FullName --force
 ```
 
-Replace `win32-x64-vsix` with `darwin-arm64-vsix` on a Mac and use `bash`/`zsh` syntax with `gh run download ... --dir "$TMPDIR/continued-vsix"`.
+Replace `win32-x64-vsix` with `darwin-arm64-vsix` on a Mac and use `bash`/`zsh` syntax with `gh run download ... --dir "$TMPDIR/continuous-vsix"`.
 
 ## Updating
 
@@ -104,7 +104,7 @@ To go back to an earlier version, install that release's `.vsix` the same way. O
 | `code` is not recognised                          | In VS Code run **Shell Command: Install 'code' command in PATH**, then open a new terminal.          |
 | Install fails with "Extension ... is not a valid" | The download is incomplete. Re-download and compare the SHA-256 checksum.                            |
 | Install says the extension is not compatible      | Your VS Code is older than 1.105. Update VS Code, then install again.                                |
-| The Continued icon does not appear                | Reload the window, then check **View → Appearance** for the activity bar setting.                    |
+| The Continuous icon does not appear               | Reload the window, then check **View → Appearance** for the activity bar setting.                    |
 | Models do not load                                | Check your provider credentials and use **Test connection** or the refresh icon in the model picker. |
 | A corporate proxy blocks GitHub downloads         | Download the `.vsix` on another machine and copy it over.                                            |
 

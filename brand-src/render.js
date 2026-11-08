@@ -1,4 +1,4 @@
-// Render every Continued brand asset from the SVG sources in brand-src/.
+// Render every Continuous brand asset from the SVG sources in brand-src/.
 // Uses sharp (installed in core/). Run from the repository root:
 //   node brand-src/render.js
 const path = require("path");
@@ -20,7 +20,7 @@ const pngTargets = [
   ["extensions/vscode/media/icon.png", 256, MARK],
   // Docs favicon and GUI logo
   ["docs/favicon.png", 128, MARK],
-  ["gui/public/logos/continued.png", 256, MARK],
+  ["gui/public/logos/continuous.png", 256, MARK],
   // Browser / webview favicons
   ["gui/public/favicon-32.png", 32, SMALL],
   ["gui/public/apple-touch-icon.png", 180, MARK],

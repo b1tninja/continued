@@ -17,9 +17,9 @@
   "homepage": "https://github.com/b1tninja/continued",
   "qna": "https://github.com/b1tninja/continued/issues/new/choose",
   "license": "Apache-2.0",
-  "displayName": "Continued - open-source AI code agent",
+  "displayName": "Continuous - open-source AI code agent",
   "pricing": "Free",
-  "description": "Continued: a community-maintained fork of the Continue open-source AI code agent",
+  "description": "Continuous: a community-maintained fork of the Continue open-source AI code agent",
   "publisher": "b1tninja",
   "engines": {
     "vscode": "^1.105.0",
@@ -58,14 +58,14 @@
   "contributes": {
     "languageModelChatProviders": [
       {
-        "vendor": "continued",
-        "displayName": "Continued"
+        "vendor": "continuous",
+        "displayName": "Continuous"
       }
     ],
     "mcpServerDefinitionProviders": [
       {
-        "id": "continued.mcpServers",
-        "label": "Continued"
+        "id": "continuous.mcpServers",
+        "label": "Continuous"
       }
     ],
     "languages": [
@@ -95,29 +95,29 @@
       }
     ],
     "configuration": {
-      "title": "Continued",
+      "title": "Continuous",
       "properties": {
         "continue.shareModelsWithVSCode": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Offer the chat models of the selected Continued config to VS Code's own chat and agents (model picker vendor: Continued). Requests still go through Continued with your Continued keys."
+          "markdownDescription": "Offer the chat models of the selected Continuous config to VS Code's own chat and agents (model picker vendor: Continuous). Requests still go through Continuous with your Continuous keys."
         },
         "continue.shareMcpServersWithVSCode": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Offer the MCP servers of the selected Continued config to VS Code's own chat and agents, so they are configured once."
+          "markdownDescription": "Offer the MCP servers of the selected Continuous config to VS Code's own chat and agents, so they are configured once."
         },
         "continue.telemetryEnabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Has no effect: Continued does not collect telemetry or usage data. Kept so existing settings files stay valid.",
-          "markdownDeprecationMessage": "Continued does not collect telemetry, so this setting does nothing.",
-          "deprecationMessage": "Continued does not collect telemetry, so this setting does nothing."
+          "markdownDescription": "Has no effect: Continuous does not collect telemetry or usage data. Kept so existing settings files stay valid.",
+          "markdownDeprecationMessage": "Continuous does not collect telemetry, so this setting does nothing.",
+          "deprecationMessage": "Continuous does not collect telemetry, so this setting does nothing."
         },
         "continue.showInlineTip": {
           "type": "boolean",
           "default": true,
-          "description": "Show inline suggestion to use the Continued keyboard shortcuts (e.g. \"Cmd/Ctrl L to select code, Cmd/Ctrl I to edit\")."
+          "description": "Show inline suggestion to use the Continuous keyboard shortcuts (e.g. \"Cmd/Ctrl L to select code, Cmd/Ctrl I to edit\")."
         },
         "continue.disableQuickFix": {
           "type": "boolean",
@@ -132,22 +132,22 @@
         "continue.enableTabAutocomplete": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable Continued's tab autocomplete feature. Read our walkthrough to learn about configuration and how to share feedback: [continue.dev › Walkthrough: Tab Autocomplete (beta)](https://b1tninja.github.io/continued/customize/deep-dives/autocomplete)"
+          "markdownDescription": "Enable Continuous's tab autocomplete feature. Read our walkthrough to learn about configuration and how to share feedback: [continue.dev › Walkthrough: Tab Autocomplete (beta)](https://b1tninja.github.io/continued/customize/deep-dives/autocomplete)"
         },
         "continue.enableNextEdit": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable Continued's next edit feature. Read our docs to learn about configuration and how to share feedback: [continue.dev › Features › Autocomplete › Next Edit (experimental)](https://b1tninja.github.io/continued/ide-extensions/autocomplete/next-edit)"
+          "markdownDescription": "Enable Continuous's next edit feature. Read our docs to learn about configuration and how to share feedback: [continue.dev › Features › Autocomplete › Next Edit (experimental)](https://b1tninja.github.io/continued/ide-extensions/autocomplete/next-edit)"
         },
         "continue.pauseTabAutocompleteOnBattery": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Pause Continued's tab autocomplete feature when your battery is low."
+          "markdownDescription": "Pause Continuous's tab autocomplete feature when your battery is low."
         },
         "continue.pauseCodebaseIndexOnStart": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Pause Continued's codebase index on start."
+          "markdownDescription": "Pause Continuous's codebase index on start."
         },
         "continue.enableConsole": {
           "type": "boolean",
@@ -174,234 +174,234 @@
     "commands": [
       {
         "command": "continue.applyCodeFromChat",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Apply code from chat",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.acceptDiff",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Accept Diff",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.rejectDiff",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Reject Diff",
-        "group": "Continued",
+        "group": "Continuous",
         "icon": "$(stop)"
       },
       {
         "command": "continue.acceptVerticalDiffBlock",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Accept Vertical Diff Block",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.rejectVerticalDiffBlock",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Reject Vertical Diff Block",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.focusEdit",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Add to Edit",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.focusContinueInput",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Add Highlighted Code to Context and Clear Chat",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.focusContinueInputWithoutClear",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Add to Chat",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.debugTerminal",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Debug Terminal",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.exitEditMode",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Exit Edit Mode",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.openConfigPage",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Open Settings",
         "icon": "$(gear)",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.openModelSetup",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Manage Models and Providers",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.toggleTabAutocompleteEnabled",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Toggle Autocomplete Enabled",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.forceAutocomplete",
-        "title": "Continued: Force Autocomplete",
-        "category": "Continued"
+        "title": "Continuous: Force Autocomplete",
+        "category": "Continuous"
       },
       {
         "command": "continue.selectFilesAsContext",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Select Files as Context",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.newSession",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "New Session",
         "icon": "$(add)",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.shareSession",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Share Current Chat Session as Markdown",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.viewHistory",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "View History",
         "icon": "$(history)",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.viewLogs",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "View Logs",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.clearConsole",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Clear Console",
         "icon": "$(clear-all)",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.navigateTo",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Navigate to a path",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.writeCommentsForCode",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Write Comments for this Code",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.writeDocstringForCode",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Write a Docstring for this Code",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.fixCode",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Fix this Code",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.optimizeCode",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Optimize this Code",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.fixGrammar",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Fix Grammar / Spelling",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.codebaseForceReIndex",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Codebase Force Re-Index",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.rebuildCodebaseIndex",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Rebuild codebase index",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.docsIndex",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Docs Index",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.docsReIndex",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Docs Force Re-Index",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.focusContinueInput",
-        "category": "Continued",
-        "title": "Focus Continued Chat",
-        "group": "Continued"
+        "category": "Continuous",
+        "title": "Focus Continuous Chat",
+        "group": "Continuous"
       },
       {
         "command": "continue.enterEnterpriseLicenseKey",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Enter Enterprise License Key",
-        "group": "Continued"
+        "group": "Continuous"
       },
       {
         "command": "continue.toggleNextEditEnabled",
-        "title": "Continued: Toggle Next Edit"
+        "title": "Continuous: Toggle Next Edit"
       },
       {
         "command": "continue.nextEditWindow.hideNextEditSuggestion",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Hide Next Edit Suggestion"
       },
       {
         "command": "continue.nextEditWindow.acceptNextEditSuggestion",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Accept Next Edit Suggestion"
       },
       {
         "command": "continue.forceNextEdit",
-        "category": "Continued",
-        "title": "Continued: Force Next Edit"
+        "category": "Continuous",
+        "title": "Continuous: Force Next Edit"
       },
       {
         "command": "continue.acceptJump",
-        "category": "Continued",
-        "title": "Continued: Accept Jump Suggestion"
+        "category": "Continuous",
+        "title": "Continuous: Accept Jump Suggestion"
       },
       {
         "command": "continue.rejectJump",
-        "category": "Continued",
-        "title": "Continued: Reject Jump Suggestion"
+        "category": "Continuous",
+        "title": "Continuous: Reject Jump Suggestion"
       },
       {
         "command": "continue.openInNewWindow",
-        "category": "Continued",
+        "category": "Continuous",
         "title": "Open in new window",
-        "group": "Continued"
+        "group": "Continuous"
       }
     ],
     "keybindings": [
@@ -525,7 +525,7 @@
     "submenus": [
       {
         "id": "continue.continueSubMenu",
-        "label": "Continued"
+        "label": "Continuous"
       }
     ],
     "menus": {
@@ -558,18 +558,18 @@
       "editor/title/run": [
         {
           "command": "continue.rejectDiff",
-          "group": "Continued",
+          "group": "Continuous",
           "when": "continue.streamingDiff"
         }
       ],
       "continue.continueSubMenu": [
         {
           "command": "continue.focusContinueInputWithoutClear",
-          "group": "Continued"
+          "group": "Continuous"
         },
         {
           "command": "continue.focusEdit",
-          "group": "Continued",
+          "group": "Continuous",
           "when": "!editorReadonly"
         }
       ],
@@ -624,14 +624,14 @@
       "activitybar": [
         {
           "id": "continue",
-          "title": "Continued",
+          "title": "Continuous",
           "icon": "media/sidebar-icon.svg"
         }
       ],
       "panel": [
         {
           "id": "continueConsole",
-          "title": "Continued Console",
+          "title": "Continuous Console",
           "icon": "$(window)"
         }
       ]
@@ -641,7 +641,7 @@
         {
           "type": "webview",
           "id": "continue.continueGUIView",
-          "name": "Continued",
+          "name": "Continuous",
           "icon": "media/sidebar-icon.svg",
           "visibility": "visible"
         }
@@ -650,7 +650,7 @@
         {
           "type": "webview",
           "id": "continue.continueConsoleView",
-          "name": "Continued Console",
+          "name": "Continuous Console",
           "icon": "$(window)",
           "visibility": "visible",
           "when": "config.continue.enableConsole"

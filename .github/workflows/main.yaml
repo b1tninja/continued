@@ -180,7 +180,7 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "path=$notes" >> "$GITHUB_OUTPUT"
-          echo "name=Continued $version" >> "$GITHUB_OUTPUT"
+          echo "name=Continuous $version" >> "$GITHUB_OUTPUT"
 
       - name: Release
         uses: softprops/action-gh-release@v3

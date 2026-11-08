@@ -16,7 +16,7 @@ const SHARE_MODELS = "continue.shareModelsWithVSCode";
 const SHARE_MCP = "continue.shareMcpServersWithVSCode";
 
 /**
- * Offer the selected Continued config's chat models and MCP servers to VS
+ * Offer the selected Continuous config's chat models and MCP servers to VS
  * Code's own chat and agents, through the stable language model and MCP
  * provider APIs. Each can be turned off in settings.
  */
@@ -42,7 +42,7 @@ export function registerVsCodeAi(
     }
   } catch (e) {
     // An editor without these APIs (some VS Code forks) keeps working.
-    console.warn("Continued: could not register with VS Code AI APIs", e);
+    console.warn("Continuous: could not register with VS Code AI APIs", e);
   }
 
   const applySettings = () => {

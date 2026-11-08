@@ -18,7 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
     console.log("Error activating extension: ", e);
     vscode.window
       .showWarningMessage(
-        "Error activating the Continued extension.",
+        "Error activating the Continuous extension.",
         "View Logs",
         "Retry",
       )

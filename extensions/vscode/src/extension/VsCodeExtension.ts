@@ -285,7 +285,7 @@ export class VsCodeExtension {
 
     void this.configHandler.loadConfig();
 
-    // Offer Continued's models and MCP servers to VS Code's own chat/agents.
+    // Offer Continuous's models and MCP servers to VS Code's own chat/agents.
     registerVsCodeAi(context, this.configHandler);
 
     this.verticalDiffManager = new VerticalDiffManager(
