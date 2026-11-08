@@ -83,7 +83,16 @@ Cursor's `readonly` maps to the read-only tool set, and `.cursor/agents/` joins 
 
 ### 5. Build in parallel
 
-Plan files (F4) mark each step's dependencies. **Build in parallel** starts one agent per independent step, each in a worktree, and starts a dependent step only after the steps it depends on are applied. A step can name the folder it runs in, and goes to that folder's agent; across repositories this is [Later](#later). `/multitask` does the same for a list of requests typed together.
+Plan files (F4) mark each step's dependencies with Loop mode's syntax (#331, L6): indented `key: value` lines under a to-do, where `after: 1, 2` names the steps it waits for by their 1-based position in the list (stored as item ids on `TaskItem.after`). One syntax serves both features:
+
+```markdown
+- [ ] Add the worktree service
+- [ ] Build the Agents panel
+      after: 1
+      folder: packages/agents
+```
+
+**Build in parallel** starts one agent per step whose `after:` steps are done, each in a worktree, and starts a dependent step only after the steps it waits for are applied. A step can name the folder it runs in with a `folder:` line, and goes to that folder's agent; across repositories this is [Later](#later). Loop mode's own keys (`check:`) are ignored here. `/multitask` does the same for a list of requests typed together.
 
 ### 6. Best of N
 
@@ -130,7 +139,7 @@ Each checkpoint records the agent run that made it (a session or a subagent run)
 
 A project or workspace that spans several repositories, with one plan dispatched across them. It is worth building only on two things, so these are its entry condition:
 
-1. **Dispatchable plans** (A5): plan-file steps carry `depends_on` and the folder they run in, and Build sends them to agents.
+1. **Dispatchable plans** (A5): plan-file steps carry `after:` and `folder:` lines (the syntax in §5), and Build sends them to agents.
 2. **Checkpoints bound to a run or a repository** (A8), so restoring one repository's step does not touch the others.
 
 With both in place:
