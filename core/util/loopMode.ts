@@ -11,6 +11,7 @@ import type {
   LoopState,
   LoopStopReason,
   LoopStrategy,
+  MessageContent,
   TaskItem,
   TaskPlan,
 } from "../index.js";
@@ -1927,7 +1928,7 @@ export function loopItemPrompt(input: {
   ];
   if (input.planBlock) {
     lines.push(
-      "The task list at the end shows every item's state, with the notes earlier items left; it is kept for you, so do not change it.",
+      "The task list below shows every item's state as this run started, with the notes earlier items left; it is kept for you, so do not change it.",
     );
   }
   if (input.planFile) {
@@ -2028,11 +2029,11 @@ function clip(text: string, max: number): string {
 /**
  * The plan as a running item sees it: one slot per item with its state, what
  * its run reported and the questions it holds, the running item marked, then
- * the notes earlier runs left and the person's standing instructions. It is
- * sent last in every request of an item's run, where the task list block goes
- * (the same <task_list> tag, so prompt caching treats it the same way): the
- * run starts without the earlier turns but never without the plan. It
- * marks the item; it never asks the model to choose one. Empty without items.
+ * the notes earlier runs left and the person's standing instructions, in the
+ * task list block's <task_list> tag. Every request of an item's run carries
+ * it after the item prompt (loopRunPlanBlock, withLoopPlanBlock): the run
+ * starts without the earlier turns but never without the plan. It marks the
+ * item; it never asks the model to choose one. Empty without items.
  */
 export function loopPlanBlock(input: {
   loop: LoopState;
@@ -2105,6 +2106,57 @@ export function loopPlanBlock(input: {
   }
   lines.push(TASK_LIST_BLOCK_CLOSE);
   return lines.join("\n");
+}
+
+/**
+ * The key of the running item's run: the same for every request of one run
+ * and new for the next. A harness keeps the plan block it computed for this
+ * key (loopRunPlanBlock) instead of rebuilding it per request.
+ */
+export function loopRunKey(loop: LoopState): string | undefined {
+  const current = loop.current;
+  if (current?.kind !== "item") return undefined;
+  return `${current.itemId}:${current.historyIndex}:${current.startedAt}`;
+}
+
+/**
+ * The plan block for every request of an item's run: loopPlanBlock as it
+ * stood at the run's first request, kept in `memo` until the run changes. It
+ * goes into the run's first message (withLoopPlanBlock), never after the
+ * newest one: a prompt cache matches a request only up to the first token
+ * that differs, so a block that moves or changes inside a run makes
+ * everything after it uncached, and a trailing user message also makes Qwen's
+ * chat template drop the reasoning of every earlier assistant turn. What
+ * changes during the run reaches the model where it happens: a held question
+ * in its tool result, an answer as a steered message.
+ */
+export function loopRunPlanBlock(
+  memo: { key?: string; block?: string },
+  input: { loop: LoopState; plan: TaskPlan; toolNames?: LoopToolNames },
+): string {
+  const key = loopRunKey(input.loop);
+  if (!key) return "";
+  if (memo.key !== key || memo.block === undefined) {
+    memo.key = key;
+    memo.block = loopPlanBlock(input);
+  }
+  return memo.block;
+}
+
+/**
+ * A message's content with the plan block after it, for the run's first
+ * message (the item prompt). A string stays a string; a list of parts gets
+ * one more text part.
+ */
+export function withLoopPlanBlock(
+  content: MessageContent,
+  block: string,
+): MessageContent {
+  if (!block) return content;
+  if (typeof content === "string") {
+    return content ? `${content}\n\n${block}` : block;
+  }
+  return [...content, { type: "text", text: block }];
 }
 
 /** One line per item with its state, for the re-plan prompts. */

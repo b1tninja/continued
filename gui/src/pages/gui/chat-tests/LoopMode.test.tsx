@@ -145,13 +145,15 @@ async function setup(todos: string[]) {
       await store.dispatch(startLoopFromPlan({ planFile: PLAN_FILE }));
     });
   };
-  /** The prompt the loop sent with request n (the last user message before the task list block). */
+  /** The prompt the loop sent with request n (the last user message, without an item's plan block). */
   const prompt = (n: number) =>
     text(
       requests[n]?.messages
         .filter((m) => m.role === "user" && !text(m).startsWith("<task_list>"))
         .at(-1),
-    );
+    )
+      .split("<task_list>")[0]
+      .trimEnd();
   const loop = () => store.getState().session.loop!;
   const itemStatus = (id: string) =>
     loop().items.find((i) => i.id === id)?.status;
@@ -412,10 +414,12 @@ describe("Loop mode", () => {
     const all = h.requests[2].messages.map(text).join(" ");
     expect(h.prompt(2)).toContain("only this item: Add tests");
     expect(all).not.toContain("only this item: Write the lexer");
-    // The notes and the instruction ride in the plan block at the end, with
-    // every item's slot and the running item marked
-    const messages = h.requests[2].messages;
-    const block = text(messages[messages.length - 1]);
+    // The notes and the instruction ride in the plan block after the item
+    // prompt, with every item's slot and the running item marked
+    const full = text(
+      h.requests[2].messages.filter((m) => m.role === "user").at(-1),
+    );
+    const block = full.slice(full.indexOf("<task_list>"));
     expect(block.startsWith("<task_list>")).toBe(true);
     expect(block).toContain("[x] 1. Write the lexer");
     expect(block).toContain("[>] 2. Add tests  <- this item");

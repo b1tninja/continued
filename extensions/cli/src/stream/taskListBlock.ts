@@ -7,16 +7,15 @@ import { TASK_LIST_TOOL_NAME } from "../tools/taskList.js";
 
 /**
  * The task list block for this request (core/util/taskPlan.ts), or "" when
- * the TaskList tool is not offered or there is no list. While Loop mode runs
- * an item, the item gets the loop's plan block in the same place instead
- * (core's loopPlanBlock), though the TaskList tool is hidden from it.
+ * the TaskList tool is not offered or there is no list, and while Loop mode
+ * runs an item: that run gets the loop's plan block in its first message
+ * instead (loopRequestHistory), and the TaskList tool is hidden from it.
  */
 export function taskListBlockForRequest(
   tools?: ChatCompletionTool[],
   isCompacting = false,
 ): string {
-  const loopBlock = loopPlanBlockForRequest(isCompacting);
-  if (loopBlock) return loopBlock;
+  if (loopPlanBlockForRequest(isCompacting)) return "";
   const offered = tools?.some(
     (t) => t.type === "function" && t.function.name === TASK_LIST_TOOL_NAME,
   );

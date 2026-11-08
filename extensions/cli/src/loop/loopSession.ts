@@ -23,9 +23,10 @@ import {
   setLoopBudget,
   skipItem,
   setLoopStrategy,
-  loopPlanBlock,
+  loopRunPlanBlock,
   stopLoop,
   taskPlanWithLoop,
+  withLoopPlanBlock,
   type LoopAnswerInput,
   type LoopControlResult,
 } from "core/util/loopMode.js";
@@ -481,23 +482,36 @@ function isMainHistory(isCompacting: boolean): boolean {
 }
 
 /**
- * Each item and re-plan is sent without the turns before it (LoopState
- * freshContext): the request starts at the run's own prompt, while the
- * history, and the screen, keep everything.
+ * The history a request of the loop's run is built from. Each item and
+ * re-plan is sent without the turns before it (LoopState freshContext): the
+ * request starts at the run's own prompt, while the history, and the screen,
+ * keep everything. An item's prompt also carries the plan block, fixed for
+ * the run (core's loopRunPlanBlock), so every request of the run only
+ * extends the one before it and a prompt cache keeps matching.
  */
 export function loopRequestHistory(
   history: ChatHistoryItem[],
   isCompacting = false,
 ): ChatHistoryItem[] {
   const loop = getSessionLoop();
-  if (
-    !loop?.current ||
-    loop.freshContext === false ||
-    !isMainHistory(isCompacting)
-  ) {
-    return history;
-  }
-  return history.slice(Math.min(loop.current.historyIndex, history.length));
+  if (!loop?.current || !isMainHistory(isCompacting)) return history;
+  const start = Math.min(loop.current.historyIndex, history.length);
+  const block = loopPlanBlockForRequest(isCompacting);
+  const withPlan =
+    block && history[start]
+      ? [
+          ...history.slice(0, start),
+          {
+            ...history[start],
+            message: {
+              ...history[start].message,
+              content: withLoopPlanBlock(history[start].message.content, block),
+            } as ChatHistoryItem["message"],
+          },
+          ...history.slice(start + 1),
+        ]
+      : history;
+  return loop.freshContext === false ? withPlan : withPlan.slice(start);
 }
 
 /** Whether the loop is running an item in the main session. */
@@ -506,10 +520,11 @@ export function loopItemRunning(): boolean {
 }
 
 /**
- * The plan block for a request of the running item (core's loopPlanBlock):
- * every slot, the notes and the standing instructions, sent where the task
- * list block goes. "" outside an item's run, and for a subagent's or
- * compaction's request.
+ * The plan block of the running item's run (core's loopRunPlanBlock): every
+ * slot, the notes and the standing instructions as they stood at the run's
+ * first request, the same for every request of the run. loopRequestHistory
+ * puts it after the item prompt. "" outside an item's run, and for a
+ * subagent's or compaction's request.
  */
 export function loopPlanBlockForRequest(isCompacting = false): string {
   const loop = getSessionLoop();
@@ -518,8 +533,15 @@ export function loopPlanBlockForRequest(isCompacting = false): string {
   }
   const plan = getSessionTaskPlan();
   if (!plan) return "";
-  return loopPlanBlock({ loop, plan, toolNames: CLI_LOOP_TOOL_NAMES });
+  return loopRunPlanBlock(runPlanMemo, {
+    loop,
+    plan,
+    toolNames: CLI_LOOP_TOOL_NAMES,
+  });
 }
+
+/** The plan block of the current run, kept between its requests. */
+const runPlanMemo: { key?: string; block?: string } = {};
 
 /** For tests: forget what lives only in memory. */
 export function resetLoopMemory(): void {
@@ -528,4 +550,6 @@ export function resetLoopMemory(): void {
   modeBeforeReplan = undefined;
   loopEntry = false;
   modeAfterLoop = undefined;
+  runPlanMemo.key = undefined;
+  runPlanMemo.block = undefined;
 }

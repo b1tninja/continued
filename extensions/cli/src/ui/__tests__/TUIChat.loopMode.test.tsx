@@ -45,19 +45,20 @@ const waitLong = (
   lastFrame: () => string | undefined,
 ) => waitUntil(predicate, describe, lastFrame, 15_000);
 
-/** The user messages of a request, without the plan block at the end. */
+/** The user messages of a request, without the plan block in the prompt. */
 function userTexts(request: { messages: any[] }): string[] {
   return request.messages
     .filter((m) => m.role === "user")
-    .map((m) => messageText(m))
-    .filter((text) => !text.startsWith("<task_list>"));
+    .map((m) => messageText(m).split("<task_list>")[0]);
 }
 
-/** The plan block a loop request ends with. */
+/** The plan block an item's request carries after the item prompt. */
 function planBlock(request: { messages: any[] }): string {
-  const last = request.messages[request.messages.length - 1];
-  const text = last?.role === "user" ? messageText(last) : "";
-  return text.startsWith("<task_list>") ? text : "";
+  const prompt = request.messages.find(
+    (m) => m.role === "user" && messageText(m).includes("<task_list>"),
+  );
+  const text = prompt ? messageText(prompt) : "";
+  return text.slice(text.indexOf("<task_list>"));
 }
 
 /**
@@ -154,8 +155,8 @@ describe("TUIChat - Loop mode", () => {
       // Item 2 starts fresh too, and carries item 1's note
       expect(userTexts(item2)).toHaveLength(1);
       expect(userTexts(item2)[0]).toContain("only this item: Use it in fetch");
-      // The plan rides at the end of every request of a run: its slots, the
-      // running item marked, and the notes earlier items left
+      // The item prompt carries the plan: its slots, the running item
+      // marked, and the notes earlier items left
       expect(planBlock(item1)).toContain(
         "[>] 1. Add a retry helper  <- this item",
       );
@@ -170,9 +171,13 @@ describe("TUIChat - Loop mode", () => {
         (m) => m.role === "tool" && m.tool_call_id === "call_write_1",
       );
       expect(messageText(held!)).toContain("held as question q1");
-      // The item's slot shows the held question in the next request
-      expect(planBlock(llm.requests[3])).toContain(
-        "    q1 (approval): Allow this call? Write:",
+      // The plan block stays as the run started, so the next request only
+      // extends this one and a prompt cache keeps matching: the model has
+      // the held question from the tool result
+      expect(planBlock(llm.requests[3])).toBe(block2);
+      expect(block2).not.toContain("q1 (approval)");
+      expect(llm.requests[3].messages.slice(0, item2.messages.length)).toEqual(
+        item2.messages,
       );
       expect(fs.existsSync(target)).toBe(false);
       expect(ui.lastFrame()).not.toContain("Would you like to continue?");

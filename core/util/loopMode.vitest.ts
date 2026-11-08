@@ -44,6 +44,8 @@ import {
   LOOP_CLI_TOOL_NAMES,
   loopCallKey,
   loopPlanBlock,
+  loopRunKey,
+  loopRunPlanBlock,
   repeatedCallResult,
   replanHoldResult,
   REPLAN_HOLD_RESULT,
@@ -63,6 +65,7 @@ import {
   startReplan,
   stopLoop,
   taskPlanWithLoop,
+  withLoopPlanBlock,
 } from "./loopMode.js";
 
 const T0 = new Date("2026-11-07T10:00:00Z");
@@ -1126,13 +1129,67 @@ describe("the plan block", () => {
     const withBlock = loopItemPrompt({ ...base, planBlock: true });
     expect(withBlock).toContain("only this item: Add tests");
     expect(withBlock).toContain(
-      "The task list at the end shows every item's state",
+      "The task list below shows every item's state as this run started",
     );
     expect(withBlock).not.toContain("npm test works");
     expect(withBlock).not.toContain("Keep the public API");
     const without = loopItemPrompt(base);
     expect(without).toContain("- npm test works");
     expect(without).toContain("- Keep the public API");
+  });
+
+  test("one block per run: what the run changes stays out of it, the next run gets it", () => {
+    // Found by the real-model run: a block rebuilt per request changed (a
+    // held question) and broke the prompt cache at the block.
+    let loop = startItemRun(loopOn(), "1", 0, T0);
+    const memo = {};
+    const first = loopRunPlanBlock(memo, { loop, plan: PLAN });
+    expect(first).toContain("[>] 1. Write the parser  <- this item");
+    const held = holdQuestion(
+      loop,
+      {
+        itemId: "1",
+        question: "Tabs or spaces?",
+        kind: "assumption",
+        assumption: "spaces",
+      },
+      T0,
+    );
+    if (!held.ok) throw new Error(held.error);
+    loop = held.loop;
+    expect(loopPlanBlock({ loop, plan: PLAN })).toContain("Tabs or spaces?");
+    expect(loopRunPlanBlock(memo, { loop, plan: PLAN })).toBe(first);
+    loop = finishItemRun(loop, { outcome: "done", summary: "Parser written" });
+    loop = startItemRun(loop, "2", 4, at(5));
+    const next = loopRunPlanBlock(memo, { loop, plan: PLAN });
+    expect(next).toContain("[x] 1. Write the parser: Parser written");
+    expect(next).toContain("[>] 2. Add tests  <- this item");
+    expect(loopRunKey(loop)).toBe(`2:4:${at(5).toISOString()}`);
+    expect(
+      loopRunPlanBlock(
+        {},
+        {
+          loop: finishItemRun(loop, { outcome: "done", summary: "ok" }),
+          plan: PLAN,
+        },
+      ),
+    ).toBe("");
+  });
+
+  test("the block goes after the item prompt's text", () => {
+    expect(
+      withLoopPlanBlock("Work on this item", "<task_list></task_list>"),
+    ).toBe("Work on this item\n\n<task_list></task_list>");
+    expect(withLoopPlanBlock("Work", "")).toBe("Work");
+    expect(
+      withLoopPlanBlock(
+        [{ type: "text", text: "Work" }],
+        "<task_list></task_list>",
+      ),
+    ).toEqual([
+      { type: "text", text: "Work" },
+      { type: "text", text: "<task_list></task_list>" },
+    ]);
   });
 });
 

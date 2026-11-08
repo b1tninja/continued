@@ -384,6 +384,29 @@ describe("Loop mode's driver in the CLI", () => {
     services.chatHistory.isReady = ready;
   });
 
+  it("puts the plan block after the item prompt, the same for every request of the run", async () => {
+    await planOf("One", "Two");
+    commitLoop({ ...startLoopFromPlan("normal")!, freshContext: false });
+    append(user("plan the work"));
+    const turn = nextTurn(history().length);
+    append(user(turn!.prompt));
+    const block = loopPlanBlockForRequest();
+    const first = loopRequestHistory(history());
+    // Kept context: the turns before stay, the prompt carries the block
+    expect(first).toHaveLength(history().length);
+    expect(first.at(-1)!.message.content).toBe(`${turn!.prompt}\n\n${block}`);
+    expect(history().at(-1)!.message.content).toBe(turn!.prompt);
+    // A call the run makes later does not move or change it
+    append(toolCallItem("Read", { filepath: "a.ts" }, "call_read"));
+    const later = loopRequestHistory(history());
+    expect(later.slice(0, first.length)).toEqual(first);
+    // Fresh context: the request starts at the prompt, block included
+    commitLoop({ ...getSessionLoop()!, freshContext: true });
+    expect(loopRequestHistory(history())[0].message.content).toBe(
+      `${turn!.prompt}\n\n${block}`,
+    );
+  });
+
   it("an unattended loop wakes when its wait runs out", async () => {
     await planOf("One");
     const plan = getSessionTaskPlan()!;
