@@ -9,13 +9,8 @@ import {
   type SlashCommand,
 } from "../commands/commands.js";
 import { useServices } from "../hooks/useService.js";
-import type { PermissionMode } from "../permissions/types.js";
+import { cycleModeEntry } from "../loop/loopSession.js";
 import type { FileIndexServiceState } from "../services/FileIndexService.js";
-import {
-  SERVICE_NAMES,
-  serviceContainer,
-  services,
-} from "../services/index.js";
 import { messageQueue, renamePlaceholders } from "../stream/messageQueue.js";
 import { escapeEvents } from "../util/cli.js";
 import { InputHistory } from "../util/inputHistory.js";
@@ -206,26 +201,9 @@ const UserInput: React.FC<UserInputProps> = ({
     void loadCommands();
   }, [assistant?.prompts, assistant?.rules]);
 
-  // Cycle through permission modes
-  const cycleModes = async () => {
-    const modes: PermissionMode[] = ["normal", "plan", "auto"];
-    const currentMode = services.toolPermissions.getCurrentMode();
-    const currentIndex = modes.indexOf(currentMode);
-    const nextIndex = (currentIndex + 1) % modes.length;
-    const nextMode = modes[nextIndex];
-
-    services.toolPermissions.switchMode(nextMode);
-
-    // Update the service container with the new tool permissions state
-    // Since TOOL_PERMISSIONS was registered with registerValue(), we need to
-    // update its value directly rather than reloading from a factory
-    const updatedState = services.toolPermissions.getState();
-    serviceContainer.set(SERVICE_NAMES.TOOL_PERMISSIONS, updatedState);
-
-    // Show a brief indicator of the mode change
-    // This will be reflected in the ModeIndicator component
-    return nextMode;
-  };
+  // Cycle through the modes: normal, plan, loop (plan mode plus the loop
+  // entry, src/loop/loopSession.ts) and auto
+  const cycleModes = async () => cycleModeEntry();
 
   // Update shell mode state based on input
   const updateBashModeState = (text: string) => {

@@ -1,4 +1,3 @@
-import type { PermissionMode } from "../../permissions/types.js";
 import { backgroundSignalManager } from "../../util/backgroundSignalManager.js";
 import {
   checkClipboardForImage,
@@ -14,7 +13,7 @@ interface ControlKeysOptions {
   exit: () => void;
   showSlashCommands: boolean;
   showFileSearch: boolean;
-  cycleModes: () => Promise<PermissionMode>;
+  cycleModes: () => Promise<unknown>;
   clearInput?: () => void;
   textBuffer?: TextBuffer;
   onTextBufferUpdate?: () => void;

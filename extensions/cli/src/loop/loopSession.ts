@@ -27,7 +27,8 @@ import { createHistoryItem } from "core/util/messageConversion.js";
 
 import { isAutoReviewEnabled } from "../permissions/coreRules.js";
 import type { PermissionMode } from "../permissions/types.js";
-import { services } from "../services/index.js";
+import { serviceContainer, services } from "../services/index.js";
+import { SERVICE_NAMES } from "../services/types.js";
 import {
   getSessionLoop,
   getSessionPlanFile,
@@ -53,12 +54,114 @@ export { getSessionLoop };
 
 /** Stores the loop on the session and makes the task list show its statuses. */
 export function commitLoop(loop: LoopState | undefined): void {
+  const wasActive = isActiveLoop(getSessionLoop());
   updateSessionLoop(loop);
   const plan = getSessionTaskPlan();
   if (loop && plan) {
     const synced = taskPlanWithLoop(plan, loop);
     if (synced !== plan) updateSessionTaskPlan(synced);
   }
+  if (wasActive && !isActiveLoop(loop)) afterLoopEnded();
+}
+
+function isActiveLoop(loop: LoopState | undefined): boolean {
+  return !!loop && loop.status !== "stopped";
+}
+
+// --- Loop as a mode: the "loop" stop on Shift+Tab ---
+//
+// Not a permission mode: underneath it is plan mode (the first message
+// plans) plus this flag, kept in memory for the process, not on the session.
+// With it set, PresentPlan builds in a loop without asking. Item runs and
+// re-plans still switch between the working mode and plan mode as before.
+
+/** What Shift+Tab cycles through and the mode indicator shows. */
+export type ModeEntry = PermissionMode | "loop";
+export const MODE_ENTRIES: ModeEntry[] = ["normal", "plan", "loop", "auto"];
+
+let loopEntry = false;
+/** The mode the person picked while an item ran; taken when the loop stops. */
+let modeAfterLoop: PermissionMode | undefined;
+const modeEntryListeners = new Set<() => void>();
+
+function notifyModeEntry(): void {
+  for (const listener of modeEntryListeners) listener();
+}
+
+/** Calls `listener` whenever the shown entry may change; returns an unsubscribe. */
+export function onModeEntryChange(listener: () => void): () => void {
+  modeEntryListeners.add(listener);
+  return () => {
+    modeEntryListeners.delete(listener);
+  };
+}
+
+/** Whether the person chose the loop entry. */
+export function isLoopEntry(): boolean {
+  return loopEntry;
+}
+
+/** The entry the indicator shows: loop, the pending pick, or the mode. */
+export function currentModeEntry(): ModeEntry {
+  if (loopEntry) return "loop";
+  return modeAfterLoop ?? services.toolPermissions.getCurrentMode();
+}
+
+/** Switches the permission mode and refreshes what the TUI reads of it. */
+function switchPermissionMode(mode: PermissionMode): void {
+  services.toolPermissions.switchMode(mode);
+  serviceContainer.set(
+    SERVICE_NAMES.TOOL_PERMISSIONS,
+    services.toolPermissions.getState(),
+  );
+}
+
+/**
+ * Chooses an entry. Loop sets plan mode (unless a loop already runs in its
+ * own mode). Leaving Loop while a loop runs stops it after the running step,
+ * and the new mode is taken then, so the item finishes in its own mode.
+ */
+export function selectModeEntry(entry: ModeEntry): void {
+  if (entry === "loop") {
+    modeAfterLoop = undefined;
+    loopEntry = true;
+    if (!isActiveLoop(getSessionLoop())) switchPermissionMode("plan");
+    notifyModeEntry();
+    return;
+  }
+  const wasLoop = loopEntry;
+  loopEntry = false;
+  if (wasLoop && isActiveLoop(getSessionLoop())) {
+    modeAfterLoop = entry;
+    // Stops at once when nothing runs, and afterLoopEnded takes the mode
+    requestLoopStop();
+  } else {
+    modeAfterLoop = undefined;
+    switchPermissionMode(entry);
+  }
+  notifyModeEntry();
+}
+
+/** Shift+Tab: the entry after the one shown. */
+export function cycleModeEntry(): ModeEntry {
+  const index = MODE_ENTRIES.indexOf(currentModeEntry());
+  const next = MODE_ENTRIES[(index + 1) % MODE_ENTRIES.length];
+  selectModeEntry(next);
+  return next;
+}
+
+/** The loop stopped: take the pending pick, or plan again in the loop entry. */
+function afterLoopEnded(): void {
+  if (modeAfterLoop) {
+    const mode = modeAfterLoop;
+    modeAfterLoop = undefined;
+    switchPermissionMode(mode);
+  } else if (loopEntry) {
+    switchPermissionMode("plan");
+  } else {
+    return;
+  }
+  notifyModeEntry();
 }
 
 /** Prompt plus completion tokens the session has used, for the budgets. */
@@ -380,4 +483,6 @@ export function resetLoopMemory(): void {
   pendingSteers.length = 0;
   turnEndRequested = false;
   modeBeforeReplan = undefined;
+  loopEntry = false;
+  modeAfterLoop = undefined;
 }

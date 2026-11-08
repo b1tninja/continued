@@ -18,6 +18,7 @@ import { setApprovalMode } from "../../../redux/slices/uiSlice";
 import { startLoopFromPlan } from "../../../redux/thunks/loop";
 import { triggerConfigUpdate } from "../../../util/test/config";
 import { renderWithProviders } from "../../../util/test/render";
+import { getElementByTestId, getMainEditor } from "../../../util/test/utils";
 import { Chat } from "../Chat";
 
 /*
@@ -548,5 +549,116 @@ describe("Loop mode", () => {
       fireEvent.click(document.querySelector("[data-testid=loop-resume]")!);
     });
     await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+  });
+});
+
+describe("Loop in the mode picker", () => {
+  async function pickMode(
+    h: Awaited<ReturnType<typeof setup>>,
+    testId: string,
+  ) {
+    // Each sent message keeps an editor with its own toolbar; the main
+    // input's picker is the last one
+    const buttons = document.querySelectorAll<HTMLElement>(
+      "[data-testid=mode-select-button]",
+    );
+    await h.user.click(buttons[buttons.length - 1]);
+    await h.user.click(await getElementByTestId(testId));
+  }
+  async function send(input: string) {
+    const editor = await getMainEditor();
+    await act(async () => {
+      editor.commands.insertContent(input);
+    });
+    const submit = await getElementByTestId("submit-input-button");
+    await act(async () => submit.click());
+  }
+  const modeButton = () =>
+    document.querySelector("[data-testid=mode-select-button]")!.textContent;
+  const presentPlan = calls({
+    name: BuiltInToolNames.PresentPlan,
+    args: {
+      title: "Build the parser",
+      plan: "Parse the grammar.",
+      todos: ["Write the lexer", "Add tests"],
+    },
+  });
+
+  test("choose Loop, the message plans, and the presented plan starts the loop with no click", async () => {
+    const h = await setup([]);
+    h.turns.push(
+      presentPlan,
+      finish("done", "lexer written"),
+      finish("done", "tests added"),
+    );
+    await pickMode(h, "mode-option-loop");
+    expect(h.store.getState().session.mode).toBe("plan");
+    expect(h.store.getState().session.loopRequested).toBe(true);
+
+    await send("Plan the parser");
+
+    // The first turn is an ordinary Plan turn: read-only, with present_plan
+    await waitFor(() => expect(h.requests.length).toBeGreaterThan(0));
+    expect(h.requests[0].tools).toContain(BuiltInToolNames.PresentPlan);
+    expect(h.requests[0].tools).not.toContain(
+      BuiltInToolNames.RunTerminalCommand,
+    );
+    expect(h.requests[0].tools).not.toContain(BuiltInToolNames.FinishItem);
+
+    // The plan started the loop by itself, and its items ran
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    expect(h.prompt(1)).toContain("only this item: Write the lexer");
+    expect(h.prompt(2)).toContain("only this item: Add tests");
+    expect(h.requests[1].tools).toContain(BuiltInToolNames.FinishItem);
+    expect(h.requests).toHaveLength(3);
+    // The card says the loop took it, instead of offering Build
+    expect(
+      document.querySelector("[data-testid=plan-card-build-loop]"),
+    ).toBeNull();
+    // Still in Loop: the next message plans again
+    expect(h.store.getState().session.mode).toBe("plan");
+    expect(modeButton()).toContain("Loop");
+  });
+
+  test("the picker shows Loop while the loop runs, and leaving it stops after the running item", async () => {
+    const h = await setup([]);
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    h.turns.push(
+      presentPlan,
+      // Item 1 is held while the person leaves Loop
+      async function* () {
+        yield [{ role: "assistant", content: "Working" }];
+        await held;
+        yield* finish("done", "lexer written")(new AbortController().signal);
+      },
+    );
+    await pickMode(h, "mode-option-loop");
+    await send("Plan the parser");
+
+    await waitFor(() => expect(h.requests).toHaveLength(2));
+    expect(h.loop().current?.itemId).toBe("1");
+    expect(h.store.getState().session.mode).toBe("agent");
+    expect(modeButton()).toContain("Loop");
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-testid=plan-card-loop-started]"),
+      ).not.toBeNull(),
+    );
+
+    await pickMode(h, "mode-option-chat");
+    // The item goes on in Agent mode; the picker shows the choice
+    expect(h.loop().stopRequested).toBe(true);
+    expect(h.store.getState().session.mode).toBe("agent");
+    expect(h.store.getState().session.loopRequested).toBeUndefined();
+    expect(modeButton()).toContain("Chat");
+
+    await act(async () => release());
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.itemStatus("1")).toBe("done");
+    expect(h.itemStatus("2")).toBe("pending");
+    expect(h.requests).toHaveLength(2);
+    expect(h.store.getState().session.mode).toBe("chat");
   });
 });

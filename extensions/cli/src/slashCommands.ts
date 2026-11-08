@@ -39,7 +39,7 @@ async function handleHelp(_args: string[], _assistant: AssistantConfig) {
     `  ${chalk.cyan("Ctrl+C")}     Clear input`,
     `  ${chalk.cyan("Ctrl+D")}     Exit application`,
     `  ${chalk.cyan("Ctrl+L")}     Clear screen`,
-    `  ${chalk.cyan("Shift+Tab")}  Cycle permission modes (normal/plan/auto)`,
+    `  ${chalk.cyan("Shift+Tab")}  Cycle modes (normal/plan/loop/auto)`,
     `  ${chalk.cyan("Esc")}        Cancel streaming or close suggestions`,
     "",
     chalk.white("Special Characters:"),
