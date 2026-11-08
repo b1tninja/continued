@@ -106,9 +106,10 @@ export async function getAllAvailableTools(
     tools.splice(tools.indexOf(taskListTool), 1);
   }
 
-  // A loop goes on without the person, so a question that waits for an answer
-  // would stall it for good: its questions go through HoldQuestion
-  if (loopRunGoing()) {
+  // A question that waits for an answer would stall for good with nobody
+  // there to answer it: headless runs and `cn serve`, where there is no
+  // question box, and a loop, whose questions go through HoldQuestion
+  if (isHeadless || services.toolPermissions.isHeadless() || loopRunGoing()) {
     tools.splice(tools.indexOf(askQuestionTool), 1);
   }
 

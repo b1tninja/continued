@@ -385,6 +385,11 @@ describe("cn serve: Loop mode", () => {
     await post({ loopAction: "start" });
     await held.started;
 
+    // Nobody can answer a question box here
+    expect(llm.requests[0].tools.map((t) => t.function.name)).not.toContain(
+      "AskQuestion",
+    );
+
     const saved = (await getState()).loop.reminders;
     expect(saved).toMatchObject([{ id: "r1", when: "next_items" }]);
     expect(saved[0].deliveredAt).toBeUndefined();
