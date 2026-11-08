@@ -14,7 +14,7 @@ interface ControlKeysOptions {
   exit: () => void;
   showSlashCommands: boolean;
   showFileSearch: boolean;
-  cycleModes: () => Promise<PermissionMode>;
+  cycleModes: (step?: 1 | -1) => Promise<PermissionMode>;
   clearInput?: () => void;
   textBuffer?: TextBuffer;
   onTextBufferUpdate?: () => void;
@@ -96,6 +96,24 @@ export function handleControlKeys(options: ControlKeysOptions): boolean {
   if (key.tab && key.shift && !showSlashCommands && !showFileSearch) {
     cycleModes().catch((error) => {
       logger.error("Failed to cycle modes:", error);
+    });
+    return true;
+  }
+
+  // Left and Right on an empty prompt (where they move nothing) step back
+  // and forward through the modes
+  if (
+    (key.leftArrow || key.rightArrow) &&
+    !key.ctrl &&
+    !key.meta &&
+    !key.shift &&
+    textBuffer &&
+    textBuffer.text === "" &&
+    !showSlashCommands &&
+    !showFileSearch
+  ) {
+    cycleModes(key.rightArrow ? 1 : -1).catch((error) => {
+      logger.error("Failed to switch modes:", error);
     });
     return true;
   }
