@@ -315,6 +315,100 @@ The IDE was wired first. The CLI (L3) has its own streaming loop and tool set, s
   - `{loopAction: "start" | "stop" | "resume" | "continue"}`: build the session's plan in a loop (a headless PresentPlan saves it without asking), Stop loop, Resume, and Continue the loop after a re-plan that waits for the person.
   - `{loopAutonomy: "supervised" | "auto" | "unattended"}`, the level picker.
 
+## Next: Loop as a mode, plan slots, strategies and controls (proposed, L5)
+
+Proposed on 2026-11-07, after L3. Nothing in this section is built. It changes decision 2 (no new mode, no new format), so it needs the owner's go-ahead before code.
+
+### Loop as a mode
+
+**Loop** joins the mode picker: Chat, Plan, Agent, Loop. It works like this:
+
+- The first message starts a Plan-mode turn.
+- When the plan is presented, the loop starts by itself, with no Build in a loop click. It starts at the level the approval mode implies, as now.
+- Later messages become notes in the inbox, or steer the running item.
+- While the loop runs, the picker shows its status line.
+
+Underneath, nothing new is added to tool filtering, policies or the prompt cache. Every turn the loop sends is still an Agent turn or a Plan turn. The new state is "the picker says Loop" plus the strategy. The CLI gets the same: Shift+Tab reaches a loop entry, and the status bar shows the loop.
+
+Open:
+
+- What switching away from Loop does while a loop runs. Proposed: stop after the running item.
+- Whether a message typed mid-loop can start a new loop. Proposed: no; it is a note about the plan.
+
+### Plan slots
+
+Today an item run sees only its own prompt and the plan file's path. The task list block is sent only when the TaskList tool is offered, and the loop hides that tool while an item runs. The proposal is a **loop plan block**: a read-only checklist sent at the end of every request the loop makes, item runs and re-plans alike, where the task list block goes today. Each line is a slot holding the item's text, status, summary, notes and open questions, with the current item marked:
+
+```
+[x] Add a retry helper: added withRetry (notes: npm test works)
+[>] Use it in fetch  <- this item
+[?] Update the docs: waiting on q3
+```
+
+- **Built from existing state:** `LoopState.items`, the summaries, notes and questions, and `STATUS_MARK`, which the re-plan prompt already uses. That is one core formatter plus a hook in the gui and the CLI.
+- **Placement:** last in the request, so a change touches only the tail and the cached system message and tools still hit.
+- **Shorter prompt:** the item prompt shrinks to "work on the item marked in the plan below" plus the contract. Notes and answers move into their slots.
+- **Order stays with the harness:** the model is still never asked what comes next; the marker picks the item.
+
+### Strategies
+
+A second setting next to the autonomy level. Autonomy is how much the loop does without the person; the strategy is how it moves through the plan. Every strategy keeps the limits that hold today: the person's rules, held approvals, the repeat limit, the budgets, and the three-failures stop.
+
+| Strategy                            | Next item                                    | Re-plan when                                                                            | On failure                                      | Defaults                                                                                                                      |
+| ----------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Finish what you started** (today) | Plan order                                   | Nothing can run                                                                         | Run again, then failed                          | 2 attempts                                                                                                                    |
+| **Check in**                        | Plan order                                   | Every 3 finished items, and at once when an assumption is overruled or an item is stuck | As above                                        | A check-in that changes nothing does not count as a round                                                                     |
+| **Fix forward**                     | Plan order                                   | A re-plan of just the failed item                                                       | Retry once, then reword, split or drop the item | At most 2 re-plans per item, then failed and move on                                                                          |
+| **Recursive descent**               | Depth first                                  | When coming back up: the parent runs once to check its children                         | The item splits into child slots                | Depth at most 3 (one level is the usual case), at most 5 children per split, at most 50 slots. Supervised confirms each split |
+| **Ralph**                           | The model picks the most important open item | Every round                                                                             | Next iteration                                  | At most 20 iterations; offered with Auto and Unattended only                                                                  |
+
+**Defaults:**
+
+- Supervised: Finish what you started.
+- Auto: Fix forward.
+- Unattended: Fix forward, with the per-item re-plans counted against `maxRounds`.
+
+Recursive descent and Ralph are opt-in. Running items in parallel (best-of-N) stays in L4.
+
+**Why these defaults:**
+
+- **When to re-plan:**
+  - Re-planning at every step is costly and adds backtracking, and so does never re-planning; intermediate or event-triggered re-planning does better (Learning When to Plan, arXiv 2509.03581).
+  - Reflection works best at critical steps, not every step (arXiv 2506.12928; UNVERIFIED).
+  - One study found re-planning every step best (PilotRL; UNVERIFIED), so the best interval depends on the task.
+  - An item is many model steps, so "every few items" is already coarse.
+- **On failure:**
+  - Repair the failing piece: ADaPT splits a task only when the executor fails, and TDAG adjusts later sub-tasks.
+  - Kiro's Task Runner retries 3 times, then re-plans at most 2 times per step, and caps a run at 50 tasks.
+- **Depth:**
+  - ADaPT tested a maximum depth of 1 to 3, gained most from 1 to 2, and ran at 3 to 4.
+  - ReCAP re-injects the parent's plan on the way back up and keeps the prompt bounded.
+- **Self-reports need a check:** ADaPT's executors judged their own success, overstating it by more than 30 points on WebShop. So under recursive descent a parent counts as done only after its check, and preferably after the project's checks (L4).
+
+Recursive descent needs to-dos with a parent. The plan file would hold the tree as nested checkboxes: still markdown, but a format change that decision 2 ruled out.
+
+### Controls
+
+Plain controls under the loop's status, in the IDE, the CLI and `cn serve`:
+
+- **Stop after this item**, and **Stop now**. Both exist today: `requestStop` and `interruptLoop`.
+- **Skip item.** New core function `skipItem`; a skipped item counts as done, like a cancelled to-do.
+- **Run item again.** Reopens the item as redo.
+- **Re-plan:** never (one pass over the plan), up to N times, or until done. This is `budget.maxRounds` made visible.
+- **Limits:** rounds, tokens and time, defaulting to the level's values and editable while the loop runs. New core function `setLoopBudget`, with bounds. Changing the level resets them, as now. This answers open question 4.
+
+In `cn serve`, these are more `loopAction` values (`skip`, `again`) and a `loopBudget` field.
+
+### Order of work
+
+1. **Plan slots.** Small, and they close the gap where item runs never see the checklist.
+2. **Controls and editable limits.** Mostly UI over core functions that exist.
+3. **Strategies,** as a field on `LoopState` that `decideNext` and `replanDecision` read, with unit tests in core. Both surfaces get them through those functions.
+4. **Loop as a mode.**
+5. **Recursive descent,** after the nested plan file is agreed.
+
+The sources are listed under Sources below, under "Strategies".
+
 ## Safeguards
 
 - The loop never starts by itself after a reload: a loop saved mid-run comes back stopped.
@@ -341,19 +435,20 @@ The IDE was wired first. The CLI (L3) has its own streaming loop and tool set, s
   - Verification: an acceptance check per item, run by the harness before an item counts as done (a command from the plan, or a separate evaluator).
   - Parallel items as subagents, only for items the plan marks independent with disjoint files, at most 2 or 3, and ideally each in its own worktree (#314's Agents panel).
   - Checks the project names once (Ralph's `AGENTS.md` validation commands), run by the harness after each item as backpressure.
+- **L5 (proposed):** Loop as a mode, plan slots, strategies and controls, in the order given in "Order of work" above.
 
 ## Open questions
 
 1. **Notes or a file?** Ralph keeps its learnings in `AGENTS.md`, where they outlive the loop and any later session reads them. Here they live on the loop, so they end with it. Should accepting the last round offer to append them to the project's rules or AGENTS.md?
 2. **Dependencies between items.** To-dos have no dependency field, so "not blocked" means "not waiting on the person". Kiro and LLMCompiler schedule a DAG. A `depends:` note in the plan file would need a format change, which the brief rules out for now.
 3. **Overruled assumptions downstream.** Overruling reopens only the item that made the assumption. Items built on it are not marked stale; the re-plan prompt lists unconfirmed assumptions so the model can rework them. Should a commit or push wait until the assumptions it depends on are confirmed?
-4. **Budget defaults.** The budgets of each autonomy level are guesses. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet.
+4. **Budget defaults.** The budgets of each autonomy level are guesses. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet. L5's controls propose editable limits.
 5. **The 15-minute wait.** Unattended's wait is fixed. It could be a setting, or follow how long the person usually takes to answer.
 
 ## Decisions
 
 1. **The extension runs the loop, not the model.** This is the brief, and the research supports it: harness scheduling works, and model-driven re-prioritisation runs away.
-2. **No new mode, no new format.** Item runs are Agent mode and re-plans are Plan mode. Items come from the plan file and the task list. The new state is one session field.
+2. **No new mode, no new format.** Item runs are Agent mode and re-plans are Plan mode. Items come from the plan file and the task list. The new state is one session field. L5 proposes revisiting this: Loop as an entry in the mode picker (still Agent and Plan turns underneath), and nested checkboxes in the plan file for recursive descent.
 3. **`finish_item` is the one addition to "say when it's done".** A structured report is what makes "done" checkable, and no report never counts as done. It also ends the turn without another request.
 4. **Answers are routed when given, by the item's state, and kept on the loop.** A running item gets its answer by steering. The person's own messages keep the usual queue: they are sent at turn end as an ordinary turn, and the loop waits for that turn.
 5. **Parallel items and verification are later phases; the CLI was L3.** Each is a separable change, and the research argues against parallel items by default.
@@ -428,3 +523,15 @@ All fetched on 2026-11-07 by the research pass.
   - BabyAGI, https://github.com/yoheinakajima/babyagi_archive
   - AutoGPT classic, https://github.com/Significant-Gravitas/AutoGPT/blob/master/classic/original_autogpt/README.md
   - SWE-agent, https://swe-agent.com/latest/reference/model_config/
+- **Strategies** (fetched 2026-11-07 for L5):
+  - Learning When to Plan, https://arxiv.org/html/2509.03581v2
+  - Scaling Test-time Compute for LLM Agents, https://arxiv.org/pdf/2506.12928
+  - PilotRL, https://arxiv.org/pdf/2508.00344
+  - Plan-and-Act, https://arxiv.org/abs/2503.09572
+  - ADaPT (depth and self-assessment), https://ar5iv.labs.arxiv.org/html/2311.05772
+  - ReCAP, https://neurips.cc/virtual/2025/poster/115819
+  - THREAD, https://arxiv.org/abs/2405.17402
+  - TDAG, https://arxiv.org/html/2402.10178v2
+  - CodePlan, https://www.microsoft.com/en-us/research/publication/codeplan-repository-level-coding-using-llms-and-planning/
+  - Agentless, https://arxiv.org/abs/2407.01489
+  - The Ralph Playbook, https://claytonfarr.github.io/ralph-playbook
