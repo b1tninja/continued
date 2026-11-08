@@ -19,6 +19,7 @@ import { TASK_PLAN_LIMITS, taskPlanToMarkdown } from "core/util/taskPlan.js";
 import { safeStderr } from "../init.js";
 import {
   getSessionLoop,
+  isLoopEntry,
   requestLoopTurnEnd,
   startLoopFromPlan,
 } from "../loop/loopSession.js";
@@ -97,6 +98,19 @@ export async function savePlan(args: PresentPlanArgs, cwd = process.cwd()) {
  */
 export { reloadPlanFile };
 
+/** The plan question: Build, Build in a loop, Keep planning, or a change. */
+function askBuild(relativePath: string): Promise<string> {
+  return quizService.askQuestion({
+    question: `Build this plan? It is saved in ${relativePath}; edit the file first if you like. Or type what to change.`,
+    options: [
+      PRESENT_PLAN_BUILD,
+      PRESENT_PLAN_BUILD_IN_LOOP,
+      PRESENT_PLAN_KEEP_PLANNING,
+    ],
+    defaultAnswer: PRESENT_PLAN_BUILD,
+  });
+}
+
 export const presentPlanTool: Tool = {
   name: PRESENT_PLAN_CLI_TOOL_NAME,
   displayName: "Present Plan",
@@ -156,15 +170,10 @@ export const presentPlanTool: Tool = {
       return `Plan saved to ${relativePath} with ${plan.items.length} to-dos. This is a headless run, so nobody can approve it now: do not implement anything. Stop, and end your reply with the line "Plan: ${relativePath}".`;
     }
 
-    const answer = await quizService.askQuestion({
-      question: `Build this plan? It is saved in ${relativePath}; edit the file first if you like. Or type what to change.`,
-      options: [
-        PRESENT_PLAN_BUILD,
-        PRESENT_PLAN_BUILD_IN_LOOP,
-        PRESENT_PLAN_KEEP_PLANNING,
-      ],
-      defaultAnswer: PRESENT_PLAN_BUILD,
-    });
+    // The loop entry (Shift+Tab): the person already chose to build in a loop
+    const answer = isLoopEntry()
+      ? PRESENT_PLAN_BUILD_IN_LOOP
+      : await askBuild(relativePath);
 
     if (answer === PRESENT_PLAN_BUILD) {
       reloadPlanFile(file);

@@ -1,5 +1,11 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { LoopAutonomy, LoopBudget, LoopState, LoopStrategy } from "core";
+import {
+  LoopAutonomy,
+  LoopBudget,
+  LoopState,
+  LoopStrategy,
+  MessageModes,
+} from "core";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import {
   acceptReplan,
@@ -37,7 +43,9 @@ import {
   enqueueMessage,
   removeQueuedMessage,
   setLoop,
+  setLoopRequested,
   setMode,
+  setModeAfterLoop,
   setTaskPlan,
 } from "../slices/sessionSlice";
 import { AppThunkDispatch, RootState, ThunkApiType } from "../store";
@@ -155,6 +163,60 @@ export const acceptLoopPlan = createAsyncThunk<void, undefined, ThunkApiType>(
     );
   },
 );
+
+/** Whether the session's loop is going (any status but stopped). */
+function loopActive(state: RootState): boolean {
+  const { loop } = state.session;
+  return !!loop && loop.status !== "stopped";
+}
+
+/**
+ * Loop in the mode picker. It is not a mode: the first message is a Plan
+ * turn, and the plan it presents starts the loop (presentPlanImpl). A loop
+ * already going keeps the mode it runs in.
+ */
+export const chooseLoopMode = createAsyncThunk<void, undefined, ThunkApiType>(
+  "loop/chooseMode",
+  async (_, { dispatch, getState }) => {
+    dispatch(setModeAfterLoop(undefined));
+    dispatch(setLoopRequested(true));
+    if (!loopActive(getState())) dispatch(setMode("plan"));
+  },
+);
+
+/**
+ * Chat, Plan or Agent picked while in Loop: a running loop stops after the
+ * running item, and the mode is taken when it stops (setLoop), so the item
+ * finishes in its own mode. Otherwise the mode is taken at once.
+ */
+export const leaveLoopMode = createAsyncThunk<void, MessageModes, ThunkApiType>(
+  "loop/leaveMode",
+  async (mode, { dispatch, getState }) => {
+    dispatch(setLoopRequested(false));
+    if (loopActive(getState())) {
+      dispatch(setModeAfterLoop(mode));
+      await dispatch(stopLoopThunk());
+      return;
+    }
+    dispatch(setModeAfterLoop(undefined));
+    dispatch(setMode(mode));
+  },
+);
+
+/**
+ * A plan presented while the person is in Loop starts the loop by itself,
+ * unless a loop is already going (its own re-plan is accepted as before).
+ */
+export const startLoopIfRequested = createAsyncThunk<
+  boolean,
+  { planFile: string },
+  ThunkApiType
+>("loop/startIfRequested", async ({ planFile }, { dispatch, getState }) => {
+  const state = getState();
+  if (!state.session.loopRequested || loopActive(state)) return false;
+  await dispatch(startLoopFromPlan({ planFile }));
+  return loopActive(getState());
+});
 
 export const stopLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
   "loop/stop",

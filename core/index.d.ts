@@ -378,6 +378,11 @@ export interface Session {
    * answers. See core/util/loopMode.ts.
    */
   loop?: LoopState;
+  /**
+   * Optional: the person chose Loop in the mode picker. Not a mode: the turns
+   * stay Plan and Agent; a plan presented while it is set starts the loop.
+   */
+  loopRequested?: boolean;
 }
 
 /** Where one plan item is in Loop mode. The task list shows it too. */
