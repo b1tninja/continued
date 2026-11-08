@@ -7,6 +7,9 @@ const { rimrafSync } = require("rimraf");
 
 const { execCmdSync } = require("../../../scripts/util");
 
+const DOWNLOAD_ATTEMPTS = 6;
+const DOWNLOAD_RETRY_BASE_MS = 5000;
+
 /**
  * download a file using fetch API
  * @param {string} url
@@ -17,13 +20,34 @@ async function downloadFile(url, outputPath) {
   const proxy = process.env.https_proxy || process.env.HTTPS_PROXY;
   const agent = proxy ? new ProxyAgent(proxy) : undefined;
 
-  const response = await fetch(url, {
-    redirect: "follow", // Automatically follow redirects
-    dispatcher: agent,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to download file, status code: ${response.status}`);
+  // GitHub release downloads return 5xx for minutes at a time, so a server
+  // error or a dropped connection is worth waiting out. A 4xx is not.
+  let buffer;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await fetch(url, {
+        redirect: "follow", // Automatically follow redirects
+        dispatcher: agent,
+      });
+      if (!response.ok) {
+        const error = new Error(
+          `Failed to download file, status code: ${response.status}`,
+        );
+        error.retryable = response.status >= 500 || response.status === 429;
+        throw error;
+      }
+      buffer = await response.arrayBuffer();
+      break;
+    } catch (error) {
+      // fetch rejects with a TypeError when the connection fails
+      const retryable = error.retryable ?? true;
+      if (!retryable || attempt >= DOWNLOAD_ATTEMPTS) throw error;
+      const delayMs = DOWNLOAD_RETRY_BASE_MS * 2 ** (attempt - 1);
+      console.log(
+        `[info] Download failed (${error.message}); retrying in ${delayMs / 1000}s (${attempt}/${DOWNLOAD_ATTEMPTS})`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
 
   // Create output directory if it doesn't exist
@@ -32,8 +56,6 @@ async function downloadFile(url, outputPath) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  // Get the response as an array buffer and write it to the file
-  const buffer = await response.arrayBuffer();
   fs.writeFileSync(outputPath, Buffer.from(buffer));
 }
 
