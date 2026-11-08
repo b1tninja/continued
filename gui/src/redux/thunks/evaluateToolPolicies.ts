@@ -86,10 +86,9 @@ export async function evaluateToolPolicy(
     toolPolicies,
     approval,
   );
-  // YOLO approves everything, and Plan mode's hold is one more thing to approve
-  return mode === "plan" && approval?.mode !== "yolo"
-    ? holdInPlanMode(result, activeTools)
-    : result;
+  // Plan mode changes nothing until the plan is accepted, in every approval
+  // mode: YOLO is about what runs while building
+  return mode === "plan" ? holdInPlanMode(result, activeTools) : result;
 }
 
 async function evaluateBasePolicy(
