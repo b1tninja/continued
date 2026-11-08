@@ -13,6 +13,7 @@ import {
   markDelivered,
   enterWait,
   loopAutonomyFor,
+  loopTokensFromUsage,
   proceedUnanswered,
   reconcileLoop,
   replanDecision,
@@ -56,7 +57,7 @@ function doc(text: string) {
 
 function sessionTokens(state: RootState): number {
   const usage = state.session.usage;
-  return usage ? usage.promptTokens + usage.completionTokens : 0;
+  return usage ? loopTokensFromUsage(usage) : 0;
 }
 
 async function displayPath(

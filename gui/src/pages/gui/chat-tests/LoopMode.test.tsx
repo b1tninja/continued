@@ -345,6 +345,8 @@ describe("Loop mode", () => {
     await waitFor(() => expect(h.loop().status).toBe("waiting"));
     expect(ran).toBe(0);
     expect(h.loop().questions[0]).toMatchObject({ kind: "approval" });
+    // The inbox says what would run, so it can be answered from there
+    expect(h.loop().questions[0].question).toContain("npm run build");
     expect(h.requests[1].messages.map(text).join(" ")).toContain(
       "needs the person's approval",
     );
@@ -514,6 +516,152 @@ describe("Loop mode", () => {
     expect(
       document.querySelector("[data-testid=loop-status]")!.textContent,
     ).toContain("goes on without answers at");
+  });
+
+  test("a failed model request stops the loop as an error, not as the person's Stop", async () => {
+    const h = await setup(["Write the lexer"]);
+    h.turns.push(async function* () {
+      throw new Error("the server closed the connection");
+    });
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("error");
+    expect(h.loop().stopDetail).toContain("The model request failed");
+    expect(h.itemStatus("1")).toBe("pending");
+  });
+
+  test("an overloaded request is retried without stopping the loop", async () => {
+    const h = await setup(["Write the lexer"]);
+    h.turns.push(
+      async function* () {
+        throw new Error("Overloaded");
+      },
+      finish("done", "lexer written"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"), {
+      timeout: 15_000,
+    });
+    expect(h.itemStatus("1")).toBe("done");
+    expect(h.requests).toHaveLength(2);
+  }, 20_000);
+
+  async function startWithTurnLimit(h: Awaited<ReturnType<typeof setup>>) {
+    // The first read holds the run open while the limit is set
+    let release = () => {};
+    let started = () => {};
+    const firstRead = new Promise<void>((r) => (started = r));
+    let reads = 0;
+    h.ideMessenger.responseHandlers["tools/call"] = async () => {
+      reads++;
+      if (reads === 1) {
+        started();
+        await new Promise<void>((r) => (release = r));
+      }
+      return {
+        contextItems: [{ name: "a", description: "a", content: "src" }],
+      };
+    };
+    await h.start();
+    await firstRead;
+    await act(async () => {
+      h.store.dispatch(
+        setLoop({
+          ...h.loop(),
+          budget: { ...h.loop().budget, maxItemTurns: 2, maxRounds: 1 },
+        }),
+      );
+    });
+    await act(async () => release());
+    return () => reads;
+  }
+
+  const read = (filepath: string) =>
+    calls({ name: BuiltInToolNames.ReadFile, args: { filepath } });
+
+  test("at its turn limit an item may only report", async () => {
+    const h = await setup(["Write the lexer"]);
+    h.turns.push(read("a.ts"), read("b.ts"), finish("done", "wrapped up"));
+    const reads = await startWithTurnLimit(h);
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+    expect(reads()).toBe(1);
+    expect(h.requests[2].messages.map(text).join(" ")).toContain(
+      "requests on this item, so this call was not run",
+    );
+  });
+
+  test("an item that keeps going past its limit is ended as stuck", async () => {
+    const h = await setup(["Write the lexer"]);
+    h.turns.push(...Array.from({ length: 12 }, (_, i) => read(`f${i}.ts`)));
+    const reads = await startWithTurnLimit(h);
+    await waitFor(() => expect(h.loop().status).toBe("stopped"), {
+      timeout: 15_000,
+    });
+    expect(reads()).toBe(1);
+    expect(h.requests).toHaveLength(12);
+    expect(h.itemStatus("1")).toBe("failed");
+    expect(h.loop().items[0].summary).toBe(
+      "Ended after 12 requests without reporting.",
+    );
+    expect(h.loop().stopReason).toBe("rounds");
+  }, 20_000);
+
+  test("past its limit an item can still write what it researched", async () => {
+    const h = await setup(["Write the report"]);
+    h.turns.push(
+      read("a.ts"),
+      read("b.ts"),
+      calls({
+        name: BuiltInToolNames.RunTerminalCommand,
+        args: { command: "npm test" },
+      }),
+      finish("done", "written"),
+    );
+    // Not read-only, so it is not refused at the limit; policy still holds it
+    await startWithTurnLimit(h);
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    expect(h.loop().questions[0].kind).toBe("approval");
+    expect(h.requests[3].messages.map(text).join(" ")).not.toContain(
+      "Stop reading and searching. Write what the item needs now, in as few calls as you can, then call finish_item: outcome done",
+    );
+  });
+
+  test("a tool call cut off at the output limit is not run, and the model is told to write in parts", async () => {
+    const h = await setup(["Write the report"]);
+    let called = 0;
+    h.ideMessenger.responseHandlers["tools/call"] = async () => {
+      called++;
+      return {
+        contextItems: [{ name: "r", description: "r", content: "created" }],
+      };
+    };
+    const cutOff: Turn = async function* () {
+      yield [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "cut-off",
+              type: "function" as const,
+              function: {
+                name: BuiltInToolNames.ReadFile,
+                arguments: '{"filepath":"big.md","contents":"line 1',
+              },
+            },
+          ],
+        },
+      ];
+    };
+    h.turns.push(cutOff, finish("done", "written in parts"));
+    await h.start();
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+    await waitFor(() => expect(h.itemStatus("1")).not.toBe("running"));
+    expect(called).toBe(0);
+    expect(h.requests[1].messages.map(text).join(" ")).toContain(
+      "cut off at the output limit",
+    );
   });
 
   test("Stop stops the loop with the item back to pending, and Resume goes on", async () => {

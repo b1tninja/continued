@@ -7,6 +7,10 @@ import {
   consumeLoopGrant,
   createLoop,
   enterWait,
+  loopTokensFromUsage,
+  describeHeldCall,
+  itemTurnState,
+  itemTurnLimitReport,
   LOOP_AUTONOMY,
   loopAutonomyFor,
   proceedUnanswered,
@@ -908,4 +912,66 @@ describe("autonomy levels", () => {
       ),
     ).toMatch(/goes on without answers at/);
   });
+});
+
+describe("found by the sandbox run", () => {
+  test("a run may make maxItemTurns requests, then only report, then it ends", () => {
+    const loop = loopOn(PLAN, { maxItemTurns: 10 });
+    expect(itemTurnState(loop, 9)).toBe("ok");
+    expect(itemTurnState(loop, 10)).toBe("wrap-up");
+    expect(itemTurnState(loop, 19)).toBe("wrap-up");
+    expect(itemTurnState(loop, 20)).toBe("end");
+    expect(itemTurnState(loopOn(PLAN, { maxItemTurns: 0 }), 500)).toBe("ok");
+  });
+
+  test("a loop saved before the turn limit uses the default", () => {
+    const loop = loopOn();
+    const { maxItemTurns: _drop, ...budget } = loop.budget;
+    expect(itemTurnState({ ...loop, budget: budget as any }, 59)).toBe("ok");
+    expect(itemTurnState({ ...loop, budget: budget as any }, 60)).toBe(
+      "wrap-up",
+    );
+  });
+
+  test("a run ended at the limit is failed with the reason, not counted as done", () => {
+    const loop = runItem(loopOn(), "1", itemTurnLimitReport(33));
+    expect(status(loop, "1")).toBe("failed");
+    expect(loop.items[0].summary).toBe(
+      "Ended after 33 requests without reporting.",
+    );
+  });
+
+  test("a held call reads as what would actually run", () => {
+    expect(
+      describeHeldCall("run_terminal_command", { command: "npm publish" }),
+    ).toBe("npm publish");
+    expect(describeHeldCall("mcp_tool", { a: 1 })).toBe('mcp_tool {"a":1}');
+    expect(describeHeldCall("mcp_tool", {})).toBe("mcp_tool");
+    expect(describeHeldCall("mcp_tool", undefined)).toBe("mcp_tool");
+  });
+
+  test("a failed request stops the loop with its own reason, and Resume is possible", () => {
+    let loop = startItemRun(loopOn(), "1", 0, T0);
+    loop = stopLoop(loop, "error", "The model request failed: boom");
+    expect(loop).toMatchObject({ status: "stopped", stopReason: "error" });
+    expect(status(loop, "1")).toBe("pending");
+    expect(decideNext(resumeLoop(loop, ctx()), PLAN, ctx())).toEqual({
+      kind: "run",
+      itemId: "1",
+    });
+  });
+});
+
+test("the token budget counts output and uncached input, not re-sent prompts", () => {
+  expect(
+    loopTokensFromUsage({
+      promptTokens: 201_398,
+      completionTokens: 1283,
+      promptTokensDetails: { cachedTokens: 184_961 },
+    }),
+  ).toBe(17_720);
+  // A provider that reports no cache counts in full
+  expect(loopTokensFromUsage({ promptTokens: 100, completionTokens: 5 })).toBe(
+    105,
+  );
 });

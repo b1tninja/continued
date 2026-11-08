@@ -1,5 +1,9 @@
 import { ToolCallState } from "core";
 import { ContinueErrorReason } from "core/util/errors";
+import {
+  isTruncatedJson,
+  truncatedToolCallResult,
+} from "core/util/truncatedJson";
 
 import { IIdeMessenger } from "../../context/IdeMessenger";
 import {
@@ -8,6 +12,36 @@ import {
   updateToolCallOutput,
 } from "../slices/sessionSlice";
 import { AppThunkDispatch } from "../store";
+
+/**
+ * A call the model was still writing when it hit its output limit is not run.
+ * The lenient parser would turn its arguments into a valid-looking object, so
+ * create_new_file would write part of the file and report success.
+ */
+export function refuseTruncatedToolCalls(
+  dispatch: AppThunkDispatch,
+  generatedToolCalls: ToolCallState[],
+  maxTokens: number | undefined,
+): void {
+  for (const { toolCall, toolCallId } of generatedToolCalls) {
+    if (!isTruncatedJson(toolCall.function.arguments ?? "")) continue;
+    dispatch(errorToolCall({ toolCallId }));
+    dispatch(
+      updateToolCallOutput({
+        toolCallId,
+        contextItems: [
+          {
+            icon: "problems",
+            name: "Cut off",
+            description: "Hit the output limit; not run",
+            content: truncatedToolCallResult(toolCall.function.name, maxTokens),
+            hidden: false,
+          },
+        ],
+      }),
+    );
+  }
+}
 
 export async function preprocessToolCalls(
   dispatch: AppThunkDispatch,

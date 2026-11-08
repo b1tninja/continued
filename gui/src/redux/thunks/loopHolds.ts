@@ -1,6 +1,12 @@
 import {
   approvalHeldResult,
   consumeLoopGrant,
+  describeHeldCall,
+  FINISH_ITEM_TOOL_NAME,
+  HOLD_QUESTION_TOOL_NAME,
+  itemTurnLimitReport,
+  itemTurnLimitResult,
+  itemTurnState,
   holdQuestion,
   LOOP_REPEAT_LIMIT,
   REPLAN_HOLD_RESULT,
@@ -36,6 +42,32 @@ function refuse(
   );
 }
 
+/** Model requests the running item has made so far. */
+function itemTurns(state: RootState, historyIndex: number): number {
+  return state.session.history
+    .slice(historyIndex)
+    .filter((item) => item.message.role === "assistant").length;
+}
+
+/**
+ * True when the running item has gone past its turn limit and kept calling
+ * tools: records the run as stuck, and the caller ends the turn.
+ */
+export function endRunAtTurnLimit(
+  dispatch: AppThunkDispatch,
+  getState: () => RootState,
+): boolean {
+  const { loop } = getState().session;
+  if (loop?.current?.kind !== "item") return false;
+  const turns = itemTurns(getState(), loop.current.historyIndex);
+  if (itemTurnState(loop, turns) !== "end") return false;
+  commitLoop(dispatch, getState, {
+    ...loop,
+    current: { ...loop.current, report: itemTurnLimitReport(turns) },
+  });
+  return true;
+}
+
 /**
  * Loop mode's changes to the policy results, so the loop never stalls on a
  * prompt:
@@ -45,7 +77,8 @@ function refuse(
  *   question in the inbox and refused for now, so the item goes on (or
  *   reports waiting) and other items run;
  * - in a re-plan turn, which only reads, such a call is refused;
- * - a call repeated LOOP_REPEAT_LIMIT times in the item's run is refused.
+ * - a call repeated LOOP_REPEAT_LIMIT times in the item's run is refused;
+ * - past the item's turn limit, tools that only read are refused.
  *
  * Refused calls come back as "disabled", which the caller treats as done.
  */
@@ -65,12 +98,31 @@ export function applyLoopHolds(
     .filter((tc) => !newIds.has(tc.toolCallId))
     .map((tc) => grantKey(tc.toolCall.function.name, tc.parsedArgs ?? {}));
 
+  const turns = itemTurns(getState(), current.historyIndex);
+  const startLoop = loop;
   const result = policies.map((p): EvaluatedPolicy => {
     if (p.policy === "disabled") return p;
     const { toolCallState } = p;
     const name = toolCallState.toolCall.function.name;
     const key = grantKey(name, toolCallState.parsedArgs ?? {});
 
+    if (
+      current.kind === "item" &&
+      name !== HOLD_QUESTION_TOOL_NAME &&
+      name !== FINISH_ITEM_TOOL_NAME &&
+      // Only reading stops: research already done must still get written
+      toolCallState.tool?.readonly &&
+      startLoop &&
+      itemTurnState(startLoop, turns) === "wrap-up"
+    ) {
+      refuse(
+        dispatch,
+        toolCallState.toolCallId,
+        "Turn limit reached",
+        itemTurnLimitResult(turns),
+      );
+      return { ...p, policy: "disabled" };
+    }
     if (current.kind === "item") {
       const count = repeatCount(previous, key);
       previous.push(key);
@@ -105,7 +157,9 @@ export function applyLoopHolds(
         reason: "You allowed this call from the loop's inbox.",
       };
     }
-    const summary = (p.displayValue || name).slice(0, 300);
+    const summary = (
+      p.displayValue || describeHeldCall(name, toolCallState.parsedArgs)
+    ).slice(0, 300);
     const held = holdQuestion(
       loop,
       {

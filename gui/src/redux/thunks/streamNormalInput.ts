@@ -58,7 +58,8 @@ import {
   selectPendingToolCalls,
 } from "../selectors/selectToolCalls";
 import { callToolById } from "./callToolById";
-import { applyLoopHolds } from "./loopHolds";
+import { cancelStream } from "./cancelStream";
+import { applyLoopHolds, endRunAtTurnLimit } from "./loopHolds";
 import {
   selectApprovalSettings,
   selectAutoApproval,
@@ -67,7 +68,10 @@ import {
   buildReviewHistory,
   evaluateToolPolicies,
 } from "./evaluateToolPolicies";
-import { preprocessToolCalls } from "./preprocessToolCallArgs";
+import {
+  preprocessToolCalls,
+  refuseTruncatedToolCalls,
+} from "./preprocessToolCallArgs";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
 
 export const streamNormalInput = createAsyncThunk<
@@ -408,6 +412,13 @@ export const streamNormalInput = createAsyncThunk<
       );
     }
 
+    // A call cut off at the output limit must not run with partial arguments
+    refuseTruncatedToolCalls(
+      dispatch,
+      selectPendingToolCalls(getState()),
+      completionOptions.maxTokens,
+    );
+
     // 2. Pre-process args to catch invalid args before checking policies
     const state2 = getState();
     if (streamAborter.signal.aborted || !state2.session.isStreaming) {
@@ -439,6 +450,11 @@ export const streamNormalInput = createAsyncThunk<
       selectApprovalSettings(state3),
       state3.session.mode,
     );
+    // Loop mode: a run past its turn limit that keeps calling tools ends here
+    if (endRunAtTurnLimit(dispatch, getState)) {
+      await dispatch(cancelStream({ loop: "keep" }));
+      return;
+    }
     // Loop mode holds calls that would ask instead of waiting (loopHolds.ts)
     const policies = applyLoopHolds(dispatch, getState, evaluated);
     const autoApprovedPolicies = policies.filter(

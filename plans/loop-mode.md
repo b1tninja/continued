@@ -251,7 +251,7 @@ The loop stops when:
 
 - every item is done and no note about the plan is waiting;
 - it has run `maxRounds` rounds (default 5);
-- its own token use reaches `maxTokens` (default 2,000,000, counted from the session's usage when the loop started);
+- its own token use reaches `maxTokens` (default 10,000,000, by autonomy level), counting output and input the provider did not read from its cache, from the session's usage when the loop started;
 - it has run for `maxWallMs` (default 2 hours);
 - two rounds in a row finish no item, checked before paying for another re-plan;
 - three items in a row fail (`maxConsecutiveFailures`), like Claude Code auto mode pausing after 3 refusals in a row;
@@ -262,16 +262,25 @@ When every open item waits on the person, the loop pauses instead. An answer res
 
 Resume restarts the budgets from that moment.
 
+### Limits that must not get in the way of the work
+
+The first sandbox runs hit these, so they are recorded here:
+
+- **The token budget counts new work.** Each request re-sends the conversation, and counting whole prompts charges the same text again every time. In one run, 3.3M prompt tokens were 94% cached: about 250k tokens of real work read as 3.35M, and the loop stopped itself after one item. The budget is a guard against a runaway, not a target, so its defaults are also larger.
+- **One item's run has a limit of 60 model requests.** Past it, tools that only read are refused, and the model is told to write what it has and report. Writing goes on, because a run that has done its research must still be able to produce the result. If it keeps going for 10 more requests the run ends as stuck.
+- **A tool call cut off at the output limit is not run.** The lenient argument parser repairs a truncated object into a valid-looking one, so `create_new_file` would write part of the file and report success. A call that stops inside a string or an open value is refused, this applies outside the loop too, and the model is told to write in smaller pieces (`core/util/truncatedJson.ts`).
+- **Output limit for unknown models.** A model with no known limits gets 4,096 output tokens unless `defaultCompletionOptions.maxTokens` is set in its config, about 16 KB of text. This is a global default and is not changed here; local models that generate large files should set it.
+
 ### Autonomy
 
 How much the loop does without the person is one setting with three levels. It is not a second switch next to the approval mode: the loop starts at the level the approval mode implies, so "YOLO" means one thing. The inbox has a picker to change the level while the loop runs. Changing it gives the loop that level's budgets.
 
-|                                           | Supervised                                  | Auto                         | Unattended                                                                          |
-| ----------------------------------------- | ------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------- |
-| Starts from approval mode                 | Manual                                      | Auto-approve, Auto           | YOLO                                                                                |
-| A re-plan starts the next round by itself | Never: the card waits for Continue the loop | When it adds no new to-dos   | When it adds at most 5 new to-dos                                                   |
-| Every open item waits on the person       | Pause until an answer                       | Pause until an answer        | After 15 minutes without an answer, the waiting items go on with their best default |
-| Default budgets                           | 3 rounds, 1M tokens, 1 hour                 | 5 rounds, 2M tokens, 2 hours | 10 rounds, 5M tokens, 8 hours                                                       |
+|                                           | Supervised                                  | Auto                          | Unattended                                                                          |
+| ----------------------------------------- | ------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| Starts from approval mode                 | Manual                                      | Auto-approve, Auto            | YOLO                                                                                |
+| A re-plan starts the next round by itself | Never: the card waits for Continue the loop | When it adds no new to-dos    | When it adds at most 5 new to-dos                                                   |
+| Every open item waits on the person       | Pause until an answer                       | Pause until an answer         | After 15 minutes without an answer, the waiting items go on with their best default |
+| Default budgets                           | 3 rounds, 5M tokens, 1 hour                 | 5 rounds, 10M tokens, 2 hours | 10 rounds, 20M tokens, 8 hours                                                      |
 
 Whatever the level:
 
@@ -308,6 +317,8 @@ The decisions and prompts come from core, so it is mostly wiring.
 - Item runs keep Agent mode's permissions. A call that would ask is held, never run.
 - Re-plans are read-only, and anything the rules would ask about is refused during them.
 - A call repeated 4 times in one item's run is refused, and the model is told to try another way or report stuck.
+- A run has a limit of 60 model requests. Past it, reading stops and writing goes on; 10 requests later the run is ended as stuck.
+- A tool call cut off at the output limit is refused instead of run with partial arguments.
 - A turn that ends without `finish_item` is not counted as done. After 2 such runs the item is failed.
 - Caps apply to questions per item and per loop, to answer and question length, to summaries, and to the notes carried between items (12, at most 300 characters each), so the item prompt cannot bloat.
 - Subagents cannot use `hold_question` or `finish_item`: they would report the parent's item.
@@ -330,7 +341,7 @@ The decisions and prompts come from core, so it is mostly wiring.
 1. **Notes or a file?** Ralph keeps its learnings in `AGENTS.md`, where they outlive the loop and any later session reads them. Here they live on the loop, so they end with it. Should accepting the last round offer to append them to the project's rules or AGENTS.md?
 2. **Dependencies between items.** To-dos have no dependency field, so "not blocked" means "not waiting on the person". Kiro and LLMCompiler schedule a DAG. A `depends:` note in the plan file would need a format change, which the brief rules out for now.
 3. **Overruled assumptions downstream.** Overruling reopens only the item that made the assumption. Items built on it are not marked stale; the re-plan prompt lists unconfirmed assumptions so the model can rework them. Should a commit or push wait until the assumptions it depends on are confirmed?
-4. **Budget defaults.** The budgets of each autonomy level are guesses. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet.
+4. **Budget defaults.** The budgets of each autonomy level are guesses, raised once after the sandbox runs. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet.
 5. **The 15-minute wait.** Unattended's wait is fixed. It could be a setting, or follow how long the person usually takes to answer.
 
 ## Decisions

@@ -463,6 +463,7 @@ export type LoopStopReason =
   | "time"
   | "no_progress"
   | "failures"
+  | "error"
   | "stopped"
   | "replan_failed";
 
@@ -479,6 +480,8 @@ export interface LoopBudget {
   maxNoProgressRounds: number;
   /** Items in a row that fail before the loop stops */
   maxConsecutiveFailures: number;
+  /** Model requests one run of an item may make before it must report */
+  maxItemTurns: number;
 }
 
 /**

@@ -28,11 +28,12 @@ export const FINISH_ITEM_TOOL_NAME = "finish_item";
 
 export const DEFAULT_LOOP_BUDGET: LoopBudget = {
   maxRounds: 5,
-  maxTokens: 2_000_000,
+  maxTokens: 10_000_000,
   maxWallMs: 2 * 60 * 60 * 1000,
   maxAttempts: 2,
   maxNoProgressRounds: 2,
   maxConsecutiveFailures: 3,
+  maxItemTurns: 60,
 };
 
 const HOUR = 60 * 60 * 1000;
@@ -75,7 +76,7 @@ export const LOOP_AUTONOMY: Record<LoopAutonomy, LoopAutonomyPreset> = {
     budget: {
       ...DEFAULT_LOOP_BUDGET,
       maxRounds: 3,
-      maxTokens: 1_000_000,
+      maxTokens: 5_000_000,
       maxWallMs: HOUR,
     },
   },
@@ -98,7 +99,7 @@ export const LOOP_AUTONOMY: Record<LoopAutonomy, LoopAutonomyPreset> = {
     budget: {
       ...DEFAULT_LOOP_BUDGET,
       maxRounds: 10,
-      maxTokens: 5_000_000,
+      maxTokens: 20_000_000,
       maxWallMs: 8 * HOUR,
     },
   },
@@ -169,6 +170,48 @@ export function repeatCount(previous: string[], key: string): number {
 /** What the model sees when a call is refused for repeating. */
 export function repeatedCallResult(count: number): string {
   return `You have made this exact call ${count} times while working on this item, so it was not run again. Its result will not change. Try a different approach, or call ${FINISH_ITEM_TOOL_NAME} with outcome "stuck" and say what is in the way.`;
+}
+
+/** Requests past maxItemTurns before the run is ended for not reporting. */
+export const LOOP_ITEM_TURN_GRACE = 10;
+
+/**
+ * Where a run stands against its turn limit, counting the request just made:
+ * ok; wrap-up, when reading and searching stop but writing goes on, so work
+ * already researched still gets written; or end, when it kept going and the
+ * run is ended as stuck.
+ */
+export function itemTurnState(
+  loop: LoopState,
+  turns: number,
+): "ok" | "wrap-up" | "end" {
+  const limit = loop.budget.maxItemTurns ?? DEFAULT_LOOP_BUDGET.maxItemTurns;
+  if (limit <= 0 || turns < limit) return "ok";
+  return turns >= limit + LOOP_ITEM_TURN_GRACE ? "end" : "wrap-up";
+}
+
+/** What the model sees when a call is refused at the turn limit. */
+export function itemTurnLimitResult(turns: number): string {
+  return `You have made ${turns} requests on this item, so this call was not run. Stop reading and searching. Write what the item needs now, in as few calls as you can, then call ${FINISH_ITEM_TOOL_NAME}: outcome "done" if the item is finished, otherwise "stuck" and say what is left.`;
+}
+
+/** The report of a run ended at its turn limit. */
+export function itemTurnLimitReport(turns: number): {
+  outcome: FinishOutcome;
+  summary: string;
+} {
+  return {
+    outcome: "stuck",
+    summary: `Ended after ${turns} requests without reporting.`,
+  };
+}
+
+/** A held call, as the person reads it in the inbox: what would actually run. */
+export function describeHeldCall(name: string, args: unknown): string {
+  const a = (args ?? {}) as Record<string, unknown>;
+  if (typeof a.command === "string") return a.command;
+  const json = JSON.stringify(a);
+  return json && json !== "{}" ? `${name} ${json}` : name;
 }
 
 /** What the model sees when a re-plan turn tries a call that would ask. */
@@ -296,6 +339,21 @@ export function nextRunnableItem(
     const state = itemState(loop, task.id);
     return state !== undefined && OPEN_STATUSES.includes(state.status);
   });
+}
+
+/**
+ * What counts against the token budget: output, and input the provider did not
+ * read from its cache. Every request re-sends the conversation, so counting
+ * whole prompts charges the same text again each time: in a sandbox run on a
+ * local model, about 90% of the prompt tokens of a request were cached.
+ */
+export function loopTokensFromUsage(usage: {
+  promptTokens: number;
+  completionTokens: number;
+  promptTokensDetails?: { cachedTokens?: number };
+}): number {
+  const cached = usage.promptTokensDetails?.cachedTokens ?? 0;
+  return Math.max(0, usage.promptTokens - cached) + usage.completionTokens;
 }
 
 /** Tokens the loop has used, from the session's running total. */
