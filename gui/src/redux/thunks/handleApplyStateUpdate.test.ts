@@ -172,14 +172,18 @@ describe("handleApplyStateUpdate", () => {
       numDiffs: 1,
     };
 
-    async function finish(approvalMode: string, setting: string) {
+    async function finish(
+      approvalMode: string,
+      setting: string,
+      loop?: object,
+    ) {
       vi.mocked(findToolCallById).mockReturnValue({
         ...UNUSED_TOOL_CALL_PARAMS,
         toolCallId: "call",
         status: "calling",
       } as ToolCallState);
       mockGetState.mockReturnValue({
-        session: { history: [] },
+        session: { history: [], loop },
         ui: { approvalMode, toolSettings: { unused: setting } },
       });
       await handleApplyStateUpdate(done)(mockDispatch, mockGetState, mockExtra);
@@ -190,6 +194,14 @@ describe("handleApplyStateUpdate", () => {
 
     it("YOLO accepts it without waiting for a click", async () => {
       expect(await finish("yolo", "allowedWithPermission")).toBe(1);
+    });
+
+    it("a loop's item never waits on a diff", async () => {
+      expect(
+        await finish("manual", "allowedWithPermission", {
+          current: { kind: "item" },
+        }),
+      ).toBe(1);
     });
 
     it("Review mode leaves the diff for review", async () => {

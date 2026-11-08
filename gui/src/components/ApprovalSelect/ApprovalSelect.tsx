@@ -26,7 +26,7 @@ export const APPROVAL_DESCRIPTIONS: Record<ApprovalMode, string> = {
     "Tool calls in the categories you switched on (Settings > Tools) run without asking. Rules and protected paths still apply.",
   auto: "Like Auto-approve, and a reviewer model decides what is left: it allows, asks you, or refuses. Experimental.",
   review:
-    "Everything runs without asking, except what a deny rule, an ask rule, a protected path or the safety check stops. Dangerous.",
+    "Tools run without asking, and you review file edits as diffs. Deny rules, ask rules, protected paths and the safety check still apply.",
   yolo: "Absolutely everything runs without asking. Deny rules, ask rules, protected paths and the safety check are all ignored. Very dangerous.",
 };
 
@@ -119,7 +119,7 @@ export function YoloBanner() {
       <span className="flex-1">
         {mode === "yolo"
           ? "YOLO: every tool call runs without asking. Deny rules, ask rules, protected paths and the safety check are ignored."
-          : "Review mode: tool calls run without asking. Deny rules, ask rules, protected paths and the safety check still apply."}
+          : "Review mode: tools run without asking and you review file edits as diffs. Deny rules, ask rules, protected paths and the safety check still apply."}
       </span>
       <button
         type="button"

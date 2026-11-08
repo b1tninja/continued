@@ -164,7 +164,14 @@ export function applyLoopHolds(
         return { ...p, policy: "disabled" };
       }
     }
-    if (p.policy !== "allowedWithPermission" || !loop) return p;
+    // Edits are reviewed as a diff outside a loop. A loop cannot wait on one,
+    // so at the level that keeps the person in charge they ask first.
+    const heldEdit =
+      p.policy === "allowedWithoutPermission" &&
+      isEditTool(name) &&
+      current.kind === "item" &&
+      loop?.autonomy === "supervised";
+    if ((p.policy !== "allowedWithPermission" && !heldEdit) || !loop) return p;
 
     if (current.kind === "replan") {
       refuse(
