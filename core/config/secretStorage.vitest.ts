@@ -89,7 +89,7 @@ describe("storeSecret", () => {
     expect(fs.existsSync(path.join(dir, ".env"))).toBe(false);
   });
 
-  it("flags a plaintext copy in ~/.continue/.env without touching it", async () => {
+  it("flags a plaintext copy in ~/.continuous/.env without touching it", async () => {
     fs.writeFileSync(path.join(dir, ".env"), "K=old\n");
     const result = await storeSecret({
       ide: memoryIde().ide,

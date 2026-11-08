@@ -110,7 +110,7 @@ describe("provider instances", () => {
     const info = await listProviderInstances(ide, {
       workspaceFiles: [
         {
-          uri: "file:///ws/.continue/providers.yaml",
+          uri: "file:///ws/.continuous/providers.yaml",
           label: "providers.yaml (workspace)",
           content: "providers:\n  - { name: work, provider: openai }\n",
         },
@@ -284,7 +284,7 @@ models:
     );
   });
 
-  it("can use ~/.continue/.env", async () => {
+  it("can use ~/.continuous/.env", async () => {
     const ide = fakeIde({ "file:///c.yaml": config });
     const [first] = findPlaintextKeys([
       { uri: "file:///c.yaml", label: "Cloud", content: config },

@@ -46,7 +46,7 @@ describe("LocalPlatformClient secure storage lookup", () => {
     expect(result?.secretLocation?.secretType).toBe(SecretType.LocalEnv);
   });
 
-  it("reads secure storage before ~/.continue/.env, and .env before process.env", async () => {
+  it("reads secure storage before ~/.continuous/.env, and .env before process.env", async () => {
     process.env[fqsn.secretName] = "from-process";
     dotEnv[fqsn.secretName] = "from-dotenv";
     const ide = makeIde({ [fqsn.secretName]: "from-secure" });

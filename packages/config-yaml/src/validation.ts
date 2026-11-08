@@ -7,7 +7,7 @@ import { ConfigYaml, configYamlSchema } from "./schemas/index.js";
 export type ConfigErrorAction = {
   /**
    * A `${{ secrets.NAME }}` reference in a model's credentials has no value on
-   * this machine (not in ~/.continue/.env, the workspace .env files or the
+   * this machine (not in ~/.continuous/.env, the workspace .env files or the
    * environment).
    */
   kind: "setSecret";

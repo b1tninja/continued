@@ -83,7 +83,7 @@ describe("loadProviderInstances", () => {
     const ide = {
       getWorkspaceDirs: async () => ["file:///ws"],
       fileExists: async (uri: string) =>
-        uri === "file:///ws/.continue/providers.yaml",
+        uri === "file:///ws/.continuous/providers.yaml",
       readFile: async () =>
         "providers:\n  - { name: a, provider: anthropic }\n",
     };
