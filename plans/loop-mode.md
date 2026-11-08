@@ -428,9 +428,9 @@ In `cn serve`, these are more `loopAction` values (`skip`, `again`) and a `loopB
 
 The sources are listed under Sources below, under "Strategies".
 
-## Next: parallel work and plan-item improvements (proposed, L6)
+## Next: parallel work and plan-item improvements (L6; items 1 to 3 built)
 
-Proposed on 2026-11-07, from three research passes: how other tools run work in parallel, an audit of this repository, and research on plan items. Nothing here is built. Items 1, 2 and 8 add optional indented `key: value` lines under a to-do (a plain checklist ignores them), which is a plan-file change decision 2 ruled out, so they need the owner's go-ahead:
+Proposed on 2026-11-07, from three research passes: how other tools run work in parallel, an audit of this repository, and research on plan items. The owner approved the plan-file syntax the same day, and items 1 to 3 are built (see "Built: checks and dependencies" below). Items 1, 2 and 8 add optional indented `key: value` lines under a to-do; a plain checklist ignores them. The parallel-agents plan (`plans/parallel-agents.md` on `next/2.6`; the `after:` change is #342) uses the same lines, adding `folder:`:
 
 ```
 - [ ] 3. Parse config files
@@ -463,7 +463,7 @@ Proposed on 2026-11-07, from three research passes: how other tools run work in 
 
 ### What this repository has
 
-- **No Agents panel and no worktree manager.** The only worktree code is `cn review`, which forks a worker process per review in a temporary worktree and returns the patch as text.
+- **No Agents panel and no worktree manager yet.** The parallel-agents plan plans both (`plans/parallel-agents.md` on `next/2.6`: A1 the panel, A3 the worktree service). The only worktree code today is `cn review`, which forks a worker process per review in a temporary worktree and returns the patch as text.
 - **IDE subagents:** at most 3 at once (`core/subagents/scheduling.ts`), and depth 1. They **cannot edit files**: the edit tools are client tools, which `core/subagents/tools.ts` filters out.
 - **CLI subagents:** they run one at a time, and while one runs it swaps process-wide services (the chat history reads as not ready). Parallel items in one process are unsafe; the CLI would need worker processes, as `cn review` uses.
 - **Checkpoints:** IDE only, per turn, so each serial item can already be restored there. They miss terminal-command edits and anything a subagent writes. The CLI has none.
@@ -485,7 +485,81 @@ Proposed on 2026-11-07, from three research passes: how other tools run work in 
 | 9   | **Best-of-N for one hard item:** up to 3 attempts in worktrees; the person picks in the inbox                                                                                                                                                                                                                     | Off; Supervised first                            | Codex, Cursor; N times the tokens                                                                                                                                                                             | High       |
 | 10  | **Independent items in parallel:** waves of at most 3, only items whose `after:` is met and whose declared files do not overlap. Extra items run as subagents in their own worktrees (a worker process in the CLI) and merge one at a time after their check passes. A conflict sends the item back to run inline | Off                                              | Kiro and Jules use 3. The arguments above say most plan items are a poor fit. About 1,500-2,000 lines; running core tools in a worktree path is the first thing to prototype                                  | High       |
 
-Items 1 to 3 come first: they are small, and they make 10 safer later. Item 10 also needs IDE subagents that can edit files and a working-directory override for core's tools.
+Items 1 to 3 came first: they are small, and they make 10 safer later. Items 9 and 10 belong to the parallel-agents plan (`plans/parallel-agents.md` on `next/2.6`, #342) rather than to Loop mode: its A3 (the worktree service), A5 (Build in parallel from plan files, reading the same `after:` lines) and A6 (best of N). Loop mode would run its independent items through those once they exist. Item 10 also needs IDE subagents that can edit files and a working-directory override for core's tools.
+
+### Built: checks and dependencies
+
+Built on 2026-11-07, in core (`core/util/loopMode.ts`, `taskPlan.ts`, `planFile.ts`), and the CLI and `cn serve` (`extensions/cli/src/loop/loopChecks.ts`). The IDE side (running the check from `advanceLoop` under the gui's tool policies) is in progress.
+
+- **The syntax:**
+  - `after: 1, 2` and `check: <command>` lines under a to-do. Positions become ids (`TaskItem.after`) when the file is read, and are written back as positions.
+  - Circles, an item after itself, and numbers out of range are refused.
+  - The plan tool takes them as to-do objects or in `todo_details`. Its description asks for one reviewable change per to-do that one check can verify.
+- **Dependencies:**
+  - An item runs only after what it comes after is done; a skipped item does not count as done.
+  - A failed or skipped dependency blocks it (shown as "Blocked on N"), and the loop re-plans.
+  - Items held only by an item that waits on the person wait too.
+- **Checks:**
+  - An item that reports done with a check becomes `checking`. Before anything else, `decideNext` returns a `check` action, and the harness runs the command: it is not a model turn.
+  - Exit 0 makes the item done. Anything else sends it back for another attempt (up to `maxAttempts`), with the output tail in its next prompt.
+  - The command goes through the same permission decision as a terminal command the model makes. A call that would ask is held as an approval question in the inbox, and Allow once runs it on the next step. A refused one, by a rule or by the person, leaves the item done without its check.
+  - In the CLI it runs in the workspace with a 10-minute limit. In the IDE it runs through the IDE's `subprocess`, which reports pass or fail but no exit code.
+- **The slot row:** the plan block, the task list and the inboxes show what an item comes after or is blocked on, its check and the last result, and the running item's attempt (n of `maxAttempts`).
+- **Not built yet:**
+  - the plan-level `smoke:` command;
+  - rounds and tokens spent per item;
+  - PreToolUse hooks for check commands.
+
+### Proposed: what does done look like (Done first)
+
+Proposed on 2026-11-07 from the owner's idea: "perhaps one of our loop modes can focus on 'what does done look like?'". Not built; for the owner to review.
+
+**The idea.** Before any item runs, the loop writes what done looks like: for the whole goal, and for each item. These are observable acceptance criteria:
+
+- a `check:` command where one can be run;
+- otherwise a statement a read-only verifier can confirm from the code or the output.
+
+The person approves or edits the criteria once, like the plan. Vague ones ("works", "is clean") are rewritten into something checkable. From then on:
+
+- An item is done only when its criteria pass: its `check:` exits 0 and the verifier confirms each `done:` line. The agent saying so is not enough. A failing criterion runs the item again or re-plans it.
+- The loop ends when the goal's criteria are met. That may come before the listed items run out (the rest are dropped at a re-plan) or after (the re-plan adds the missing work).
+- A criterion that cannot be checked becomes a question in the inbox, not an assumption.
+
+**Syntax.** One more key line in the L6 format, repeatable:
+
+```
+# Retry failed fetches
+
+## Done
+
+- done: a fetch that fails twice with 503 and then succeeds returns the response
+  check: npm test -- retry.e2e
+
+## To-dos
+
+- [ ] Add a retry helper
+  check: npm test -- retry
+  done: retries use exponential backoff capped at 30 seconds
+```
+
+The goal's criteria sit under a `## Done` heading, before the to-dos. An item's go under it, next to `after:` and `check:`.
+
+**Where it belongs: a planning step and a stop condition, not a strategy.** A strategy decides how the loop moves through the items: in order, with check-ins, or by repairing a failure. "What does done look like" decides what counts as done, and that applies under every strategy. Fix forward with done criteria makes sense, and so does Check in with them. As one more strategy it would have to exclude the others. So the proposal has four parts:
+
+1. **A plan step.** The re-plan and plan prompts ask for the `## Done` section and per-item `done:` lines, rewriting vague ones. The plan card, or the inbox for a re-plan, shows them for approval. The existing "one reviewable change that one check can verify" sizing advice becomes "every item names how we will know it is done".
+2. **The item gate.** `checking` (L6) covers `check:` already. `done:` lines are confirmed by the read-only verifier (L6 item 6), which judges the diff and the check output against each line and never the agent's own report. A line the verifier cannot confirm either way becomes an inbox question.
+3. **A goal stop.** `decideNext` gets a "goal met" stop: when the goal's `check:` passes and its `done:` lines are confirmed. When every item is done but the goal is not met, the loop re-plans instead of stopping as done. This uses the round limit and the no-progress stop, so it cannot loop forever.
+4. **A setting, not a mode:** **Done first**, on or off, next to the strategy picker. The default:
+   - off in Supervised, since the person reads the plan anyway;
+   - on in Auto and Unattended, where nobody reads each item's result.
+
+**Open questions.**
+
+- **Verifier cost:** one model call per `done:` line, or one per item?
+- **No check at all:** whether a goal with no runnable `check:` may still stop as "met" on the verifier alone.
+- **Dropping items:** how a goal met early drops the remaining items without the person losing work they wanted. Proposed: a re-plan that lists them, accepted by the level's rules.
+
+**Depends on:** L6 item 6, the read-only verifier, which is not built. The `check:` half works today.
 
 ## Safeguards
 
@@ -511,15 +585,15 @@ Items 1 to 3 come first: they are small, and they make 10 safer later. Item 10 a
   - Tests: `src/ui/__tests__/TUIChat.loopMode.test.tsx` (the whole flow through the TUI), `src/commands/serve.loop.test.ts`, `src/loop/loopDriver.test.ts` (re-plans, reload, steering, holds) and `src/tools/loopTools.test.ts`.
 - **L4:**
   - Verification: an acceptance check per item, run by the harness before an item counts as done (a command from the plan, or a separate evaluator).
-  - Parallel items as subagents, only for items the plan marks independent with disjoint files, at most 2 or 3, each in its own worktree. (An Agents panel was assumed here; none exists. See "Next: parallel work and plan-item improvements".)
+  - Parallel items as subagents, only for items the plan marks independent with disjoint files, at most 2 or 3, each in its own worktree. (An Agents panel was assumed here; the parallel-agents plan, `plans/parallel-agents.md` on `next/2.6`, plans it, and none exists yet. See "Next: parallel work and plan-item improvements".)
   - Checks the project names once (Ralph's `AGENTS.md` validation commands), run by the harness after each item as backpressure.
 - **L5 (built, except recursive descent and Ralph):** Loop as a mode, plan slots, strategies and controls; see "Order of work" above.
-- **L6 (proposed):** parallel work and plan-item improvements; see the section of that name.
+- **L6 (checks, dependencies and the slot row built):** plan-item improvements; parallel work and best of N belong to the parallel-agents plan (`plans/parallel-agents.md` on `next/2.6`). See the section of that name.
 
 ## Open questions
 
 1. **Notes or a file?** Ralph keeps its learnings in `AGENTS.md`, where they outlive the loop and any later session reads them. Here they live on the loop, so they end with it. Should accepting the last round offer to append them to the project's rules or AGENTS.md?
-2. **Dependencies between items.** To-dos have no dependency field, so "not blocked" means "not waiting on the person". Kiro and LLMCompiler schedule a DAG. A `depends:` note in the plan file would need a format change, which the brief rules out for now.
+2. **Dependencies between items.** Settled by L6: an `after:` line under a to-do (TaskItem.after). What remains open is using them to run independent items at the same time, which is the parallel-agents plan's Build in parallel.
 3. **Overruled assumptions downstream.** Overruling reopens only the item that made the assumption. Items built on it are not marked stale; the re-plan prompt lists unconfirmed assumptions so the model can rework them. Should a commit or push wait until the assumptions it depends on are confirmed?
 4. **Budget defaults.** The budgets of each autonomy level are guesses. They are fields on `LoopState.budget` and follow the level, but there is no setting to change them yet. L5's controls made them editable while the loop runs.
 5. **The 15-minute wait.** Unattended's wait is fixed. It could be a setting, or follow how long the person usually takes to answer.
