@@ -759,6 +759,20 @@ Run on 2026-11-07 against Strata, a single-slot OpenAI-compatible server on this
 - **Measured, run 5:** 89% of all prompt tokens came from the cache, against 33 to 41% before, and 91% in the later requests of a run. Each request reused everything the one before it sent. Each later item's first request reused the 2,792 tokens of system message and tools.
 - **Still to do:** Requests that must end with something that changes, such as the Done-first reminder, need a checkpoint pinned before it: Strata's `strata_prefix` as a `requestBodyHints.conversation` field, or Anthropic's `cache_control`.
 
+### Runs on Amazon Nova
+
+Run on 2026-11-08 on Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`) through `cn serve`, in nine scenarios: planning, a basic loop, each strategy, a check that can never pass, deferral, stop and resume, and subagents alone and inside an item. A weaker model finds what a capable one steps around. Nova rarely caches here, so a loop re-sends everything: the basic run read 928,000 prompt tokens.
+
+**Bugs found, all fixed:**
+
+- `AskQuestion` was still offered during a loop's runs. In `cn serve` nobody can answer it, so the loop stalled for good. It is no longer offered while a loop runs an item or a re-plan.
+- A re-plan could change or remove a failing check, or drop a finished item, and the loop then reported every item done. In one run a repair replaced the failing check with `test -f`. `replanConcern` now makes such a re-plan wait for the person at every autonomy level and says why.
+- A new to-do could take the id of a dropped one and inherit its state. New ids now go above the previous list's. A check the accepted plan no longer has also loses its old result.
+- `cn serve` ignored `--beta-subagent-tool`, and a headless run refused the `Subagent` tool for having no session id.
+- A subagent never saw its own tool results: they were written to the main session's history, not to the subagent's. It re-read the same file and then gave up. This affected every CLI surface.
+
+**Behaviour to keep watching:** Nova called `remind_me` once in nine scenarios, against seven calls by Qwen in run 6, so under-use is real on some models. Deferral worked, including the refusal of a `later` with no reminder. A subagent can still repeat one call many times, because the repeat limit covers only the main session.
+
 ## Phases
 
 - **L1 (built):** `core/util/loopMode.ts` and `core/tools/definitions/loopTools.ts`, with unit tests in `core/util/loopMode.vitest.ts`.

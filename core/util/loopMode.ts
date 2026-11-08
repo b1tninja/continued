@@ -2034,10 +2034,15 @@ export function acceptReplan(
         : fresh;
     }
     const rerun = repairOf ? known.id === repairOf.id : !unchangedCheckIn;
-    if (known.status === "failed" && rerun) {
-      return { ...known, status: "pending" as const, attempts: 0 };
+    // The result of a check the plan no longer has says nothing about the item
+    const state =
+      known.check && known.check.command !== task.check
+        ? { ...known, check: undefined }
+        : known;
+    if (state.status === "failed" && rerun) {
+      return { ...state, status: "pending" as const, attempts: 0 };
     }
-    return known;
+    return state;
   });
   const strategyState: Partial<LoopState> = {
     replanned: undefined,

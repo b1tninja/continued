@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import type { LoopState, TaskPlan } from "../index.js";
 
 import {
+  acceptReplan,
   createLoop,
   endReplan,
   replanConcern,
@@ -130,6 +131,25 @@ describe("what a re-plan must not do quietly", () => {
       { plan: PLAN, itemId: "2" },
     );
     expect(endReplan(start, PLAN).accept).toBe(true);
+  });
+});
+
+describe("after a re-plan the person accepted", () => {
+  test("the result of a check the plan no longer has is forgotten", () => {
+    const loop = withStates("auto", { "1": done, "2": failedCheck });
+    const accepted = acceptReplan(
+      loop,
+      planOf({ id: "1", text: "A", check: "node a" }, { id: "2", text: "B" }),
+      { now: T0, sessionTokens: 0 },
+    );
+    expect(accepted.items[1].status).toBe("pending");
+    expect(accepted.items[1].check).toBeUndefined();
+  });
+
+  test("a check that stayed keeps its result", () => {
+    const loop = withStates("auto", { "2": failedCheck });
+    const accepted = acceptReplan(loop, PLAN, { now: T0, sessionTokens: 0 });
+    expect(accepted.items[1].check?.status).toBe("failed");
   });
 });
 
