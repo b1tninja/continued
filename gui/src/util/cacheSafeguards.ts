@@ -6,8 +6,10 @@ import {
 import {
   AUTO_ESCALATE_MAX_GAP_MS,
   AUTO_ESCALATE_MIN_GAP_MS,
+  LOCAL_CACHE_WARM_MS,
   modelSupportsOneHourCache,
   modelSupportsPromptCacheControl,
+  modelUsesLocalPrefixCache,
   promptCacheStatus,
   PROMPT_CACHE_TTL_MS,
   type PromptCacheKey,
@@ -26,6 +28,11 @@ import {
 export const NOTICE_MIN_EXTRA_USD = 0.25;
 /** The same bar in tokens, for models with no price in the table. */
 export const NOTICE_MIN_TOKENS_UNPRICED = 100_000;
+/**
+ * The bar for a model on the user's own server: nothing to pay, but a local
+ * model can take a minute or more to read this much again.
+ */
+export const NOTICE_MIN_TOKENS_LOCAL = 30_000;
 /** The context meter shows from this size, whatever share of the window it is. */
 export const CONTEXT_METER_TOKENS = 200_000;
 /** A model with a long-context price tier is flagged this far below its limit. */
@@ -36,6 +43,10 @@ export interface CacheLoss {
   tokens: number;
   /** Undefined when the model has no price in the table. */
   extraUsd?: number;
+  /** The cache is a local server's: the loss is time, not money. */
+  local?: boolean;
+  /** For a local server whose read speed is known: how long a re-read takes. */
+  seconds?: number;
 }
 
 /** Extra dollars to write `tokens` to the cache instead of reading them. */
@@ -60,9 +71,63 @@ function lossOf(
   };
 }
 
+/**
+ * Whether two model entries are the same model on the same server, such as
+ * two variants of one catalog model (`Name#plan`, `Name#act`) that differ
+ * only in settings. Switching between them keeps the prompt cache, unless
+ * a setting changes the prompt itself (a server that puts the reasoning
+ * effort at the start of the prompt, as Strata does unless
+ * `effort_position` is "end").
+ */
+export function sameServedModel(
+  a: ModelDescription,
+  b: ModelDescription,
+): boolean {
+  const base = (m: ModelDescription) =>
+    (m.apiBase ?? "").trim().replace(/\/+$/, "");
+  return (
+    a.provider === b.provider && a.model === b.model && base(a) === base(b)
+  );
+}
+
+/**
+ * What a model is asked to think with: the reasoning effort in the request
+ * body (a catalog variant's `reasoning_effort`), and the reasoning switch and
+ * budget in its completion options.
+ */
+function reasoningSettings(m: ModelDescription): string {
+  const effort = (
+    m.requestOptions?.extraBodyProperties as Record<string, unknown> | undefined
+  )?.reasoning_effort;
+  return JSON.stringify([
+    effort ?? null,
+    m.completionOptions?.reasoning ?? null,
+    m.completionOptions?.reasoningBudgetTokens ?? null,
+  ]);
+}
+
+/**
+ * Whether switching from one model to another keeps the prompt cache: the
+ * same served model, asked to reason the same way. A different reasoning
+ * effort can change the prompt itself (Strata puts it at the start unless
+ * `effort_position` is "end", and does not report which), so a switch
+ * between Plan and Act variants still warns; variants that differ only in
+ * sampling or limits do not.
+ */
+export function switchKeepsCache(
+  from: ModelDescription,
+  to: ModelDescription,
+): boolean {
+  return (
+    sameServedModel(from, to) &&
+    reasoningSettings(from) === reasoningSettings(to)
+  );
+}
+
 /** Whether a loss is big enough to interrupt the user about. */
 export function isSignificantLoss(loss: CacheLoss | undefined): boolean {
   if (!loss) return false;
+  if (loss.local) return loss.tokens >= NOTICE_MIN_TOKENS_LOCAL;
   return loss.extraUsd !== undefined
     ? loss.extraUsd >= NOTICE_MIN_EXTRA_USD
     : loss.tokens >= NOTICE_MIN_TOKENS_UNPRICED;
@@ -81,6 +146,22 @@ export function warmCacheLoss(
   /** The model the prompt would be sent to next, if not `model`. */
   target: ModelDescription = model,
 ): CacheLoss | undefined {
+  if (modelUsesLocalPrefixCache(model)) {
+    // No setting and no lifetime: warm while the last request was recent
+    if (
+      !state.lastInputTokens ||
+      state.lastRequestAt === undefined ||
+      now - state.lastRequestAt > LOCAL_CACHE_WARM_MS
+    ) {
+      return undefined;
+    }
+    const speed = state.promptTokensPerSecond;
+    return {
+      tokens: state.lastInputTokens,
+      local: true,
+      ...(speed && speed > 0 ? { seconds: state.lastInputTokens / speed } : {}),
+    };
+  }
   if (!modelSupportsPromptCacheControl(model)) return undefined;
   const status = promptCacheStatus(model, setting, state, now);
   if (!status.on || !status.warm || !state.lastInputTokens) return undefined;
@@ -200,13 +281,36 @@ export function promptCacheKey(
   systemMessage: string | undefined,
   /** The messages after the system message, in the order they are sent. */
   messages?: ChatMessage[],
+  /**
+   * For a model with routes, the account serving the request: each account
+   * has its own cache, so a different route is a different model here.
+   */
+  route?: string,
 ): PromptCacheKey {
   return {
-    model: `${model.provider}/${model.model}`,
+    model: `${model.provider}/${model.model}${route ? ` via ${route}` : ""}`,
     tools: hashString(toolNames.join("\u0000")),
     system: hashString(systemMessage ?? ""),
     ...(messages && { messages: messages.map(messageChecksum) }),
   };
+}
+
+/**
+ * The route a request to this model will most likely take: the one the
+ * previous request was answered on (core stays on it), else the first.
+ */
+export function expectedRoute(
+  model: ModelDescription,
+  lastKey?: PromptCacheKey,
+): string | undefined {
+  const routes = model.routes;
+  if (!routes?.length) return undefined;
+  const base = `${model.provider}/${model.model} via `;
+  if (lastKey?.model.startsWith(base)) {
+    const last = lastKey.model.slice(base.length);
+    if (routes.includes(last)) return last;
+  }
+  return routes[0];
 }
 
 /** The cause named when the model differs from the previous request's. */
@@ -253,6 +357,8 @@ export function keyChanges(
 export const MISS_MIN_PREFIX_TOKENS = 50_000;
 /** The miss notice appears after this many unseen misses in a session. */
 export const MISS_NOTICE_AFTER = 3;
+/** The same for a local server, where one miss can cost minutes of reading. */
+export const MISS_NOTICE_AFTER_LOCAL = 1;
 /**
  * A draft this big (typed, pasted or as code blocks) gets a notice before it
  * is sent: about 120 KB of text at 4 characters per token. It is sent again
@@ -284,12 +390,18 @@ export function detectCacheMiss(args: {
   totalInputTokens: number;
   /** The oldest messages were dropped to fit the window, which moves the start. */
   pruned?: boolean;
+  /**
+   * How long the cache is taken to last, when it is not a cache-control
+   * lifetime: a local server's (LOCAL_CACHE_WARM_MS).
+   */
+  lifetimeMs?: number;
 }): CacheMissReport | undefined {
   const { before, key, requestAt, readTokens, totalInputTokens } = args;
   const expected = before.lastInputTokens;
   if (!expected || expected < MISS_MIN_PREFIX_TOKENS) return undefined;
   if (before.lastRequestAt === undefined) return undefined;
-  const lifetime = PROMPT_CACHE_TTL_MS[before.lastTtl ?? "5m"];
+  const lifetime =
+    args.lifetimeMs ?? PROMPT_CACHE_TTL_MS[before.lastTtl ?? "5m"];
   if (requestAt - before.lastRequestAt > lifetime) return undefined;
   // A shorter prompt means history was cut or compacted: a new prefix by design.
   if (totalInputTokens < expected - 1000) return undefined;
@@ -329,12 +441,15 @@ export function expectedRebuildCauses(args: {
   requestAt: number;
   readTokens: number;
   totalInputTokens: number;
+  /** As in detectCacheMiss: a local server's assumed cache lifetime. */
+  lifetimeMs?: number;
 }): string[] | undefined {
   const { before, key, requestAt, readTokens, totalInputTokens } = args;
   const expected = before.lastInputTokens;
   if (!expected || expected < MISS_MIN_PREFIX_TOKENS) return undefined;
   if (before.lastRequestAt === undefined) return undefined;
-  const lifetime = PROMPT_CACHE_TTL_MS[before.lastTtl ?? "5m"];
+  const lifetime =
+    args.lifetimeMs ?? PROMPT_CACHE_TTL_MS[before.lastTtl ?? "5m"];
   if (requestAt - before.lastRequestAt > lifetime) return undefined;
   if (readTokens >= expected * MISS_READ_SHARE) return undefined;
 

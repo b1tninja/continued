@@ -20,6 +20,7 @@ import {
   McpUiState,
   MessageModes,
   PromptLog,
+  PromptProgress,
   RuleMetadata,
   Session,
   SessionUsage,
@@ -241,6 +242,16 @@ type SessionState = {
   hasReasoningEnabled?: boolean;
   /** What Auto learned about this session's pauses; see util/promptCache.ts. */
   promptCache?: PromptCacheSessionState;
+  /**
+   * How far a local server is in reading the current request's prompt, while
+   * it says so (llama.cpp's prompt_progress). Not saved.
+   */
+  promptProgress?: PromptProgress;
+  /**
+   * For a model with routes: the account that answered the last request.
+   * Not saved.
+   */
+  answeredRoute?: { model: string; route: string };
   isPruned?: boolean;
   contextPercentage?: number;
   /** Tokens and estimated cost of this session's requests, saved with it. */
@@ -607,6 +618,24 @@ export const sessionSlice = createSlice({
         (m) => m.id !== payload,
       );
     },
+    /**
+     * Move a queued message to another place in the queue, which is the
+     * order they are merged and sent in. `to` is clamped to the queue.
+     */
+    moveQueuedMessage: (
+      state,
+      { payload }: PayloadAction<{ id: string; to: number }>,
+    ) => {
+      const from = state.queuedMessages.findIndex((m) => m.id === payload.id);
+      if (from < 0) return;
+      const to = Math.max(
+        0,
+        Math.min(state.queuedMessages.length - 1, payload.to),
+      );
+      if (to === from) return;
+      const [message] = state.queuedMessages.splice(from, 1);
+      state.queuedMessages.splice(to, 0, message);
+    },
     clearQueuedMessages: (state) => {
       state.queuedMessages = [];
       state.isQueuePaused = false;
@@ -646,6 +675,8 @@ export const sessionSlice = createSlice({
       }
 
       state.isStreaming = false;
+      // Stopped or failed while the prompt was still being read
+      state.promptProgress = undefined;
     },
     abortStream: (state) => {
       state.streamAborter.abort();
@@ -840,6 +871,7 @@ export const sessionSlice = createSlice({
       state.inlineErrorMessage = undefined;
       state.isPruned = false;
       state.contextPercentage = undefined;
+      state.answeredRoute = undefined;
       state.usage = payload?.usage;
       // A different conversation shares nothing with the cached one: its size,
       // timing, misses and what Auto learned all start over. Each conversation
@@ -1227,10 +1259,40 @@ export const sessionSlice = createSlice({
     ) => {
       state.promptCache = action.payload;
     },
+    setPromptProgress: (
+      state,
+      action: PayloadAction<PromptProgress | undefined>,
+    ) => {
+      state.promptProgress = action.payload;
+    },
+    setAnsweredRoute: (
+      state,
+      action: PayloadAction<{ model: string; route: string } | undefined>,
+    ) => {
+      state.answeredRoute = action.payload;
+    },
     setPromptCacheInputTokens: (state, action: PayloadAction<number>) => {
       state.promptCache = {
         ...(state.promptCache ?? INITIAL_PROMPT_CACHE_STATE),
         lastInputTokens: action.payload,
+      };
+    },
+    /**
+     * When the last request to a local model server started. Models with
+     * cache control get it from resolvePromptCache; a local server's cache
+     * has no control, so this is what says it may still be warm.
+     */
+    setPromptCacheRequestAt: (state, action: PayloadAction<number>) => {
+      state.promptCache = {
+        ...(state.promptCache ?? INITIAL_PROMPT_CACHE_STATE),
+        lastRequestAt: action.payload,
+      };
+    },
+    /** A local server's last reported prompt-reading speed (tokens/s). */
+    setPromptReadSpeed: (state, action: PayloadAction<number>) => {
+      state.promptCache = {
+        ...(state.promptCache ?? INITIAL_PROMPT_CACHE_STATE),
+        promptTokensPerSecond: action.payload,
       };
     },
     setPromptCacheKey: (state, action: PayloadAction<PromptCacheKey>) => {
@@ -1364,6 +1426,7 @@ export const selectApplyStateByToolCallId = createSelector(
 export const {
   enqueueMessage,
   removeQueuedMessage,
+  moveQueuedMessage,
   clearQueuedMessages,
   setQueuePaused,
   requestQueuedMessagesSend,
@@ -1418,6 +1481,10 @@ export const {
   setHasReasoningEnabled,
   setPromptCacheState,
   setPromptCacheInputTokens,
+  setPromptCacheRequestAt,
+  setPromptReadSpeed,
+  setPromptProgress,
+  setAnsweredRoute,
   addRequestUsageToSession,
   setPromptCacheKey,
   recordCacheMiss,

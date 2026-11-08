@@ -31,6 +31,17 @@ import { globalProfileStatus } from "./llm/llms/bedrockHelpers";
 import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
+import {
+  convertConnectionToAccount,
+  saveProviderModelsToAccount,
+} from "./config/providers/accountSetup";
+import {
+  getGlobalModelsPath,
+  loadModelCatalog,
+} from "./config/providers/modelsFile";
+import { isIgnoreFile } from "./util/workspaceDirs";
+import { listCatalog, saveModelRoles } from "./config/yaml/saveModelRoles";
+import { detectLocalServers, serverConcurrency } from "./llm/localServers";
 import Ollama from "./llm/llms/Ollama";
 import { EditAggregator } from "./nextEdit/context/aggregateEdits";
 import { createNewPromptFileV2 } from "./promptFiles/createNewPromptFile";
@@ -109,6 +120,7 @@ import {
 } from "./config/providers/providerInstances";
 import {
   getGlobalProvidersPath,
+  loadProviderInstances,
   readWorkspaceProvidersFiles,
 } from "./config/providers/providersFile";
 import { setupLocalConfig } from "./config/onboarding";
@@ -182,7 +194,7 @@ export class Core {
     private readonly ide: IDE,
   ) {
     try {
-      // Ensure .continue directory is created
+      // Ensure .continuous directory is created
       migrateV1DevDataFiles();
 
       const ideInfoPromise = messenger.request("getIdeInfo", undefined);
@@ -319,6 +331,7 @@ export class Core {
 
       this.registerMessageHandlers(ideSettingsPromise);
       this.registerSubagentHandlers();
+      this.registerModelListHandlers();
     } catch (error) {
       Logger.error(error);
       throw error; // Re-throw to prevent partially initialized core
@@ -330,6 +343,52 @@ export class Core {
     this.messenger.on("subagents/list", async () =>
       loadSubagentDefinitions(this.ide),
     );
+  }
+
+  /** Live model lists, and the local servers running on this machine. */
+  private registerModelListHandlers() {
+    const on = this.messenger.on.bind(this.messenger);
+
+    on("models/fetch", async (msg) => {
+      try {
+        return await fetchModels(
+          msg.data.provider,
+          msg.data.apiKey,
+          msg.data.apiBase,
+        );
+      } catch (error: any) {
+        void this.ide.showToast("error", error.message);
+        return [];
+      }
+    });
+
+    on("models/detectLocal", async () => detectLocalServers());
+
+    on("models/catalog", async () => {
+      const [catalog, accounts] = await Promise.all([
+        loadModelCatalog(this.ide),
+        loadProviderInstances(this.ide),
+      ]);
+      return listCatalog(catalog.models, accounts.providers);
+    });
+
+    on("config/setModelRoles", async ({ data: { updates } }) => {
+      const saved = saveModelRoles(updates);
+      if (saved) {
+        await this.configHandler.reloadConfig(
+          "Model roles changed (config/setModelRoles message)",
+        );
+      }
+      return { saved };
+    });
+
+    // How many requests a chat model's own server takes at once (subagents)
+    on("models/serverConcurrency", async ({ data: { title } }) => {
+      const { config } = await this.configHandler.loadConfig();
+      const llm = config?.modelsByRole.chat.find((m) => m.title === title);
+      if (!llm?.apiBase) return undefined;
+      return serverConcurrency(llm.apiBase, llm.apiKey);
+    });
   }
 
   /** Config files, provider accounts and plaintext key handling. */
@@ -405,6 +464,28 @@ export class Core {
         );
       }
       return result;
+    });
+
+    on("config/convertConnectionToAccount", async (msg) => {
+      const { provider, connection, accountName } = msg.data;
+      try {
+        const result = convertConnectionToAccount(
+          provider,
+          connection,
+          accountName,
+        );
+        if (result.converted > 0) {
+          await this.configHandler.reloadConfig(
+            "Connection turned into an account (config/convertConnectionToAccount message)",
+          );
+        }
+        return result;
+      } catch (e) {
+        return {
+          converted: 0,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
     });
 
     on("config/addConnectedModel", async (msg) => {
@@ -712,7 +793,10 @@ export class Core {
     on("config/getProviderSetup", async () => {
       const secureStorageAvailable = await isSecureStorageAvailable(this.ide);
       const remembered = this.globalContext.get("preferredKeyStorage");
-      const { connections, editable } = readProviderConnections();
+      const { connections, editable } = readProviderConnections({
+        providers: getGlobalProvidersPath(),
+        models: getGlobalModelsPath(),
+      });
       return {
         connections: await annotateKeyStorage(connections, {
           ide: this.ide,
@@ -766,7 +850,14 @@ export class Core {
           : req;
       let saved: boolean;
       try {
-        saved = saveProviderModels(toSave);
+        // A setup that names an account becomes an account, catalog models
+        // and `from:` entries; one without keeps writing models inline
+        saved = toSave.account
+          ? saveProviderModelsToAccount({
+              ...toSave,
+              accountName: toSave.account.name,
+            }) !== undefined
+          : saveProviderModels(toSave);
       } catch (e) {
         if (e instanceof ProviderSetupError) {
           return { saved: false, error: e.message };
@@ -1384,7 +1475,7 @@ export class Core {
         await this.configHandler.refreshAll("Local config file created");
       } else if (nonColocatedRuleUris.some(isContinueConfigRelatedUri)) {
         await this.configHandler.reloadConfig(
-          ".continue config-related file created",
+          ".continuous config-related file created",
         );
       }
     });
@@ -1416,7 +1507,7 @@ export class Core {
         await this.configHandler.refreshAll("Local config file deleted");
       } else if (nonColocatedRuleUris.some(isContinueConfigRelatedUri)) {
         await this.configHandler.reloadConfig(
-          ".continue config-related file deleted",
+          ".continuous config-related file deleted",
         );
       }
     });
@@ -1665,19 +1756,6 @@ export class Core {
     on("process/killTerminalProcess", async ({ data: { toolCallId } }) => {
       await killTerminalProcess(toolCallId);
     });
-
-    on("models/fetch", async (msg) => {
-      try {
-        return await fetchModels(
-          msg.data.provider,
-          msg.data.apiKey,
-          msg.data.apiBase,
-        );
-      } catch (error: any) {
-        void this.ide.showToast("error", error.message);
-        return [];
-      }
-    });
   }
 
   private async handleToolCall(toolCall: ToolCall) {
@@ -1762,7 +1840,7 @@ export class Core {
   /**
    * After a config loads, offer once per session to move API keys written as
    * plain text into secure storage. Only offered when the editor has secure
-   * storage; ~/.continue/.env would still be plain text.
+   * storage; ~/.continuous/.env would still be plain text.
    */
   private async offerToMovePlaintextKeys(): Promise<void> {
     if (this.offeringPlaintextKeys) return;
@@ -1879,6 +1957,13 @@ export class Core {
           );
           continue;
         }
+        // Accounts and the model catalog are read by every config
+        if (/[\\/]\.continue[\\/](providers|models)\.yaml$/.test(uri)) {
+          await this.configHandler.reloadConfig(
+            "providers.yaml or models.yaml updated",
+          );
+          continue;
+        }
         if (isColocatedRulesFile(uri)) {
           try {
             const codebaseRulesCache = CodebaseRulesCache.getInstance();
@@ -1892,10 +1977,7 @@ export class Core {
           await this.configHandler.reloadConfig(
             "Local config-related file updated",
           );
-        } else if (
-          uri.endsWith(".continueignore") ||
-          uri.endsWith(".gitignore")
-        ) {
+        } else if (isIgnoreFile(uri) || uri.endsWith(".gitignore")) {
           // Reindex the workspaces
           this.invoke("index/forceReIndex", {
             shouldClearIndexes: true,
@@ -2042,7 +2124,7 @@ export class Core {
         //     .then((userSelection) => {
         //       if (userSelection === toastOption) {
         //         void this.ide.openUrl(
-        //           "https://b1tninja.github.io/continued/customize/model-roles/embeddings",
+        //           "https://b1tninja.github.io/continuous/customize/model-roles/embeddings",
         //         );
         //       }
         //     });

@@ -145,7 +145,7 @@ export interface KeyChoice {
 
 export const KEY_STORAGE_LABELS: Record<KeyStorage, string> = {
   secure: "Secure storage (this editor)",
-  env: "~/.continue/.env file",
+  env: "~/.continuous/.env file",
   envVar: "Environment variable (nothing is stored)",
   inline: "Inside config.yaml (not recommended)",
 };
@@ -210,6 +210,15 @@ export function sameConnection(
   return norm(a) === norm(b);
 }
 
+/** True for OpenAI's own API, false for any other OpenAI-compatible server. */
+export function isOpenAICloud(apiBase: string): boolean {
+  try {
+    return new URL(apiBase).hostname === "api.openai.com";
+  } catch {
+    return false;
+  }
+}
+
 /** The configured connection of a provider that matches the form's values. */
 export function findConnection(
   connections: ProviderSetupConnection[],
@@ -241,6 +250,12 @@ export interface BuildRequestArgs {
   key?: KeyChoice;
   /** Live Bedrock titles ("... (Bedrock)") are used as the name. */
   useLiveTitles?: boolean;
+  /**
+   * Save as a provider account with catalog models (and `from:` entries in
+   * the config) instead of models that carry their own connection. `name`
+   * is a suggestion for a new account.
+   */
+  account?: { name?: string };
 }
 
 /**
@@ -254,6 +269,7 @@ export function buildSaveRequest({
   diff,
   key,
   useLiveTitles,
+  account,
 }: BuildRequestArgs): SaveProviderModelsRequest {
   const add = diff.add
     .filter((row) => row.pkg)
@@ -288,6 +304,7 @@ export function buildSaveRequest({
   if (editing && !sameConnection(editing, connection)) {
     request.from = editing;
   }
+  if (account) request.account = account;
   if (key) {
     request.key = {
       storage: key.storage,
@@ -313,8 +330,8 @@ export function describeKeyPlan(
         : `Models refer to ${key.secretName} in secure storage.`;
     case "env":
       return key.value
-        ? `The ${providerTitle} key is saved in ~/.continue/.env as ${key.secretName}. config.yaml only refers to it.`
-        : `Models refer to ${key.secretName} in ~/.continue/.env.`;
+        ? `The ${providerTitle} key is saved in ~/.continuous/.env as ${key.secretName}. config.yaml only refers to it.`
+        : `Models refer to ${key.secretName} in ~/.continuous/.env.`;
     case "envVar":
       return `Models refer to the environment variable ${key.secretName}. Nothing is stored; set it before starting the editor.`;
     case "inline":

@@ -15,7 +15,7 @@ const SETUP = {
       models: [{ name: "Opus", model: "claude-opus" }],
       key: {
         state: "secret" as const,
-        secretName: "CONTINUED_ANTHROPIC_API_KEY",
+        secretName: "CONTINUOUS_ANTHROPIC_API_KEY",
       },
     },
     {
@@ -47,7 +47,7 @@ describe("Enter key in the missing-secret popover", () => {
       <MissingSecretsPanel
         missing={[
           {
-            secretName: "CONTINUED_ANTHROPIC_API_KEY",
+            secretName: "CONTINUOUS_ANTHROPIC_API_KEY",
             providers: ["anthropic"],
             modelNames: ["Opus"],
           },
@@ -58,14 +58,14 @@ describe("Enter key in the missing-secret popover", () => {
     );
 
     await user.click(
-      screen.getByTestId("enter-key-CONTINUED_ANTHROPIC_API_KEY"),
+      screen.getByTestId("enter-key-CONTINUOUS_ANTHROPIC_API_KEY"),
     );
 
     expect(onDone).toHaveBeenCalled();
     expect(store.getState().ui.showDialog).toBe(true);
     expect(store.getState().ui.dialogMessage?.props).toMatchObject({
       initialProvider: "anthropic",
-      enterKey: { secretName: "CONTINUED_ANTHROPIC_API_KEY" },
+      enterKey: { secretName: "CONTINUOUS_ANTHROPIC_API_KEY" },
     });
   });
 
@@ -93,7 +93,9 @@ describe("ProvidersCard", () => {
     );
 
     await user.click(
-      screen.getByTestId("provider-row-openai").querySelector("button")!,
+      within(screen.getByTestId("provider-row-openai")).getByRole("button", {
+        name: "Edit",
+      }),
     );
     expect(store.getState().ui.showDialog).toBe(true);
     expect(store.getState().ui.dialogMessage?.props).toMatchObject({
@@ -120,7 +122,7 @@ describe("Dialog content", () => {
       <MissingSecretsPanel
         missing={[
           {
-            secretName: "CONTINUED_OPENAI_API_KEY",
+            secretName: "CONTINUOUS_OPENAI_API_KEY",
             providers: ["openai"],
             modelNames: [],
           },
@@ -128,7 +130,7 @@ describe("Dialog content", () => {
       />,
       { mockIdeMessenger: messenger() },
     );
-    await user.click(screen.getByTestId("enter-key-CONTINUED_OPENAI_API_KEY"));
+    await user.click(screen.getByTestId("enter-key-CONTINUOUS_OPENAI_API_KEY"));
     const { container } = render(
       <Provider store={store}>{store.getState().ui.dialogMessage}</Provider>,
     );
@@ -136,7 +138,7 @@ describe("Dialog content", () => {
     expect(
       await dialog.findByRole("button", { name: "Save key" }),
     ).toBeTruthy();
-    expect(dialog.getByText("CONTINUED_OPENAI_API_KEY")).toBeTruthy();
+    expect(dialog.getByText("CONTINUOUS_OPENAI_API_KEY")).toBeTruthy();
   });
 });
 

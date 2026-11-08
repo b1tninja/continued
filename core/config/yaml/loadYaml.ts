@@ -38,6 +38,7 @@ import { getCleanUriPath } from "../../util/uri";
 import { loadConfigContextProviders } from "../loadContextProviders";
 import { getAllDotContinueDefinitionFiles } from "../loadLocalAssistants";
 import { unrollLocalYamlBlocks } from "./loadLocalYamlBlocks";
+import { loadModelCatalog } from "../providers/modelsFile";
 import { loadProviderInstances } from "../providers/providersFile";
 import { LocalPlatformClient } from "./LocalPlatformClient";
 import { llmsFromModelConfig } from "./models";
@@ -55,7 +56,7 @@ async function loadConfigYaml(options: {
 }): Promise<ConfigResult<AssistantUnrolled>> {
   const { overrideConfigYaml, ideSettings, ide, packageIdentifier } = options;
 
-  // Add local .continue blocks
+  // Add local .continuous blocks
   // Use "content" field to pass pre-read content directly, avoiding
   // fs.readFileSync which fails for vscode-remote:// URIs in WSL (#6242, #7810)
   const localBlockPromises = BLOCK_TYPES.map(async (blockType) => {
@@ -91,6 +92,9 @@ async function loadConfigYaml(options: {
   // `connection:`; shared by every config.
   const providerInstances = await loadProviderInstances(ide);
   errors.push(...providerInstances.errors);
+  // The model catalog (models.yaml) that config models use with `from:`
+  const modelCatalog = await loadModelCatalog(ide);
+  errors.push(...modelCatalog.errors);
 
   let config: AssistantUnrolled | undefined;
 
@@ -120,6 +124,7 @@ async function loadConfigYaml(options: {
         platformClient: new LocalPlatformClient(ide),
         injectBlocks: localPackageIdentifiers,
         providers: providerInstances.providers,
+        catalog: modelCatalog.models,
       },
     );
     config = unrollResult.config;

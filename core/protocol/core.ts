@@ -21,6 +21,7 @@ import type {
 } from "../config/providers/types";
 import type { ModeModelsInput } from "../config/yaml/saveModeModels";
 import type { SubagentLoadResult } from "../subagents/loadSubagents";
+import type { DetectedLocalServer } from "../llm/localServers";
 import type { RulesByModeInput } from "../config/yaml/saveRulesByMode";
 import type {
   AutoReviewReply,
@@ -269,23 +270,23 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    * config.yaml. Credentials become ${{ secrets.NAME }} references.
    */
   "config/importMcpServers": [McpImportRequest, McpImportResult];
-  /** Store one secret (secure storage or ~/.continue/.env) and reload. */
+  /** Store one secret (secure storage or ~/.continuous/.env) and reload. */
   "config/setSecret": [
     { secretName: string; value: string; storage: "secure" | "env" },
     {
       stored: boolean;
       error?: string;
       warning?: string;
-      /** The name also has a plaintext copy in ~/.continue/.env. */
+      /** The name also has a plaintext copy in ~/.continuous/.env. */
       envShadowed?: boolean;
     },
   ];
   /**
-   * Remove a secret's line from ~/.continue/.env. Only sent after the user
+   * Remove a secret's line from ~/.continuous/.env. Only sent after the user
    * agreed, and only honored when the value is in secure storage.
    */
   /**
-   * Move a key from ~/.continue/.env to secure storage, then remove the .env
+   * Move a key from ~/.continuous/.env to secure storage, then remove the .env
    * line. The value is handled in core and never returned. config.yaml keeps
    * its `${{ secrets.NAME }}` reference.
    */
@@ -299,10 +300,23 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   ];
   /** Provider instances (providers.yaml), with key state but no values. */
   "providers/list": [undefined, ProviderInstancesInfo];
-  /** Add or edit an instance in ~/.continue/providers.yaml. */
+  /** Add or edit an instance in ~/.continuous/providers.yaml. */
   "providers/save": [SaveProviderInstanceRequest, SaveProviderInstanceResult];
-  /** Remove an instance from ~/.continue/providers.yaml (its key is kept). */
+  /** Remove an instance from ~/.continuous/providers.yaml (its key is kept). */
   "providers/delete": [{ name: string }, { deleted: boolean; error?: string }];
+  /**
+   * Turn the selected config's models of one connection set up the old way
+   * into a provider account, catalog models (models.yaml) and `from:`
+   * entries. `converted` is how many models moved.
+   */
+  "config/convertConnectionToAccount": [
+    {
+      provider: string;
+      connection: import("../config/providerSetup").ProviderConnectionKey;
+      accountName?: string;
+    },
+    { account?: string; converted: number; error?: string },
+  ];
   /** Add a model that uses a provider instance to the selected config. */
   "config/addConnectedModel": [
     { connection: string; model: string; name?: string; roles?: string[] },
@@ -580,8 +594,25 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       contextLength?: number;
       maxTokens?: number;
       supportsTools?: boolean;
+      supportsImages?: boolean;
+      reasoningEfforts?: string[];
+      server?: string;
       createdAt?: string;
       deprecated?: boolean;
     }[],
   ];
+  /** OpenAI-compatible servers answering on this machine's common ports. */
+  "models/detectLocal": [undefined, DetectedLocalServer[]];
+  /** The model catalog (models.yaml): each model and each variant. */
+  "models/catalog": [
+    undefined,
+    import("../config/yaml/saveModelRoles").CatalogListEntry[],
+  ];
+  /** Set the roles of catalog references and config models in the selected config. */
+  "config/setModelRoles": [
+    { updates: import("../config/yaml/saveModelRoles").ModelRolesUpdate[] },
+    { saved: boolean },
+  ];
+  /** Requests the server of this chat model serves at once, when it says. */
+  "models/serverConcurrency": [{ title: string }, number | undefined];
 };

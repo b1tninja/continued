@@ -7,6 +7,7 @@ import {
   ConverseCommand,
   ConversationRole,
   ConverseStreamCommand,
+  ConverseStreamCommandInput,
   ConverseStreamCommandOutput,
   ImageFormat,
   InvokeModelCommand,
@@ -46,7 +47,16 @@ import {
   bedrockUsageToUsage,
   buildModelCatalog,
   getBedrockErrorHint,
+  isStopSequencesUnsupportedError,
+  normalizeToolUseIds,
 } from "./bedrockHelpers.js";
+
+/**
+ * Models that refused `stopSequences` in this process. They get requests
+ * without it from then on; callers that need stops (autocomplete) also cut the
+ * output at the stop tokens themselves.
+ */
+const modelsWithoutStopSequences = new Set<string>();
 
 interface ModelConfig {
   formatPayload: (text: string) => any;
@@ -68,6 +78,14 @@ class Bedrock extends BaseLLM {
     model: "anthropic.claude-3-sonnet-20240229-v1:0",
     profile: "bedrock",
   };
+
+  /**
+   * Autocomplete's modelTimeout counts from the request. On Bedrock the first
+   * token takes 0.5-1.1 s warm (Bedrock.tab.live.vitest.ts), and a multi-line
+   * body ends by about 1.5 s, so the 150 ms default cut every suggestion to
+   * one line and 1000 ms still cut multi-line bodies short.
+   */
+  providerAutocompleteDefaults = { modelTimeout: 2000 };
 
   private _promptCachingMetrics: PromptCachingMetrics = {
     cacheReadInputTokens: 0,
@@ -162,6 +180,9 @@ class Bedrock extends BaseLLM {
       endpoint: this.apiBase,
       ...(requestHandler ? { requestHandler } : {}),
       ...(await this._clientAuth()),
+      // A route with a fallback fails over rather than retrying (see
+      // BaseLLM.failOverQuickly); otherwise the SDK's standard retries
+      ...(this.failsOverQuickly ? { maxAttempts: 1 } : {}),
     });
   }
 
@@ -279,6 +300,9 @@ class Bedrock extends BaseLLM {
   ): AsyncGenerator<string> {
     const messages = [{ role: "user" as const, content: prompt }];
     for await (const update of this._streamChat(messages, signal, options)) {
+      // A completion is the answer only: reasoning (gpt-oss, thinking models)
+      // would otherwise be pasted into the editor as code.
+      if (update.role !== "assistant") continue;
       yield renderChatMessage(update);
     }
   }
@@ -308,6 +332,45 @@ class Bedrock extends BaseLLM {
       e.message = `${e.message}\n\n${hint}`;
     }
     return e;
+  }
+
+  /**
+   * Sends a ConverseStream request. A model that refuses `stopSequences` is
+   * retried once without them and remembered, so later requests skip the
+   * failing attempt.
+   */
+  private async _sendConverseStream(
+    client: BedrockRuntimeClient,
+    input: ConverseStreamCommandInput,
+    signal: AbortSignal,
+  ): Promise<ConverseStreamCommandOutput> {
+    const send = async () =>
+      (await client.send(new ConverseStreamCommand(input), {
+        abortSignal: signal,
+      })) as ConverseStreamCommandOutput;
+    const withoutStops = () => {
+      input.inferenceConfig = {
+        ...input.inferenceConfig,
+        stopSequences: undefined,
+      };
+    };
+
+    const modelKey = input.modelId ?? "";
+    if (modelsWithoutStopSequences.has(modelKey)) withoutStops();
+
+    try {
+      return await send();
+    } catch (e) {
+      if (
+        !input.inferenceConfig?.stopSequences?.length ||
+        !isStopSequencesUnsupportedError(e)
+      ) {
+        throw e;
+      }
+      modelsWithoutStopSequences.add(modelKey);
+      withoutStops();
+      return await send();
+    }
   }
 
   private async *_streamChatInner(
@@ -342,11 +405,7 @@ class Bedrock extends BaseLLM {
       ...options,
       stream: true,
     });
-    const command = new ConverseStreamCommand(input);
-
-    const response = (await client.send(command, {
-      abortSignal: signal,
-    })) as ConverseStreamCommandOutput;
+    const response = await this._sendConverseStream(client, input, signal);
 
     if (!response?.stream) {
       throw new Error("No stream received from Bedrock API");
@@ -561,10 +620,13 @@ class Bedrock extends BaseLLM {
       });
     }
 
-    const convertedMessages = this._convertMessages(messages, availableTools, {
-      conversation: parts.conversation,
-      ttl: cacheTtl,
-    });
+    const convertedMessages = normalizeToolUseIds(
+      this._convertMessages(messages, availableTools, {
+        conversation: parts.conversation,
+        ttl: cacheTtl,
+      }),
+      options.model,
+    );
 
     return {
       modelId: applyCrossRegionInference(

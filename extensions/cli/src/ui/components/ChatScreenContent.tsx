@@ -28,6 +28,7 @@ interface ChatScreenContentProps {
   isCompacting: boolean;
   inputMode: boolean;
   handleInterrupt: () => void;
+  handleSteerNow?: () => boolean;
   assistant?: AssistantConfig;
   wasInterrupted: boolean;
   handleFileAttached: (filePath: string, content: string) => void;
@@ -47,6 +48,7 @@ export const ChatScreenContent: React.FC<ChatScreenContentProps> = ({
   isCompacting,
   inputMode,
   handleInterrupt,
+  handleSteerNow,
   assistant,
   wasInterrupted,
   handleFileAttached,
@@ -88,6 +90,7 @@ export const ChatScreenContent: React.FC<ChatScreenContentProps> = ({
       isCompacting={isCompacting}
       inputMode={inputMode}
       onInterrupt={handleInterrupt}
+      onSteerNow={handleSteerNow}
       assistant={assistant}
       wasInterrupted={wasInterrupted}
       onFileAttached={handleFileAttached}
