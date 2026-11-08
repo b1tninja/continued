@@ -44,7 +44,7 @@ function messengerWith(setup: ProviderSetupInfo) {
 }
 
 describe("ProvidersCard key storage actions", () => {
-  it("moves a key that is only in ~/.continue/.env after confirmation", async () => {
+  it("moves a key that is only in ~/.continuous/.env after confirmation", async () => {
     const { m, calls } = messengerWith(setupWith({ secure: false, env: true }));
     const { user } = await renderWithProviders(<ProvidersCard />, {
       mockIdeMessenger: m,

@@ -27,7 +27,7 @@ Or, with the GitHub CLI (change `win32-x64` to your platform):
 gh release download --repo b1tninja/continuous --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continuous-vsix
 ```
 
-Continuous (`b1tninja.continuous`) installs alongside the original Continue extension and reads your existing `~/.continue` configuration. To update, install the next release's `.vsix` the same way. Releases up to 2.4.1 used the ID `b1tninja.continued`; after installing 2.4.2, uninstall that one ([details](docs/continuous-install.md#4-reload-vs-code)).
+Continuous (`b1tninja.continuous`) installs alongside the original Continue extension. Its configuration is in `~/.continuous`, which the first start copies from an existing `~/.continue`. To update, install the next release's `.vsix` the same way. Releases up to 2.4.1 used the ID `b1tninja.continued`; after installing 2.4.2, uninstall that one ([details](docs/continuous-install.md#4-reload-vs-code)).
 
 The [install guide](docs/continuous-install.md) has every platform's file name, checksum commands, unreleased builds from GitHub Actions, and troubleshooting.
 

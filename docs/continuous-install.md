@@ -65,7 +65,7 @@ Continuous uses the extension ID `b1tninja.continuous`. It installs alongside th
 
 To check which version is installed, run `code --list-extensions --show-versions` and look for `b1tninja.continuous@<version>`.
 
-**Coming from 2.4.1 or earlier?** Those releases used the ID `b1tninja.continued`, which is taken on the VS Code Marketplace by another extension, so from 2.4.2 the ID is `b1tninja.continuous`. VS Code treats it as a different extension: uninstall `b1tninja.continued` (`code --uninstall-extension b1tninja.continued`) after installing 2.4.2, so the two do not both run. Your settings and `~/.continue` (configs, provider accounts, models, sessions) carry over. API keys kept in VS Code's secure storage do not, as each extension has its own: enter them again, or keep them in `~/.continue/.env`. The welcome screen also shows once; close it, your models are already set up.
+**Coming from 2.4.1 or earlier?** Those releases used the ID `b1tninja.continued`, which is taken on the VS Code Marketplace by another extension, so from 2.4.2 the ID is `b1tninja.continuous`. VS Code treats it as a different extension: uninstall `b1tninja.continued` (`code --uninstall-extension b1tninja.continued`) after installing 2.4.2, so the two do not both run. Your settings and configuration carry over: the first start copies `~/.continue` to `~/.continuous` (the codebase index is rebuilt) and each `continue.*` setting to its `continuous.*` name, and a workspace's `.continue` folder is still read. Keyboard shortcuts bound to a `continue.*` command need the new `continuous.*` name. API keys kept in VS Code's secure storage do not carry over, as each extension has its own: enter them again, or keep them in `~/.continuous/.env`. The welcome screen also shows once; close it, your models are already set up.
 
 > Release files are named with the version only, for example `continuous-win32-x64-2.4.2.vsix`. GitHub Actions builds (Option 2) add the short commit SHA, for example `continuous-win32-x64-2.4.2-g62505d0.vsix`.
 
@@ -93,7 +93,7 @@ Replace `win32-x64-vsix` with `darwin-arm64-vsix` on a Mac and use `bash`/`zsh` 
 
 VS Code does not update side-loaded `.vsix` files automatically. To hear about new releases, select **Watch** → **Custom** → **Releases** on the [repository](https://github.com/b1tninja/continuous).
 
-To update, download the new release's `.vsix` and run the install command again with `--force`. Your settings and `~/.continue` configuration are kept.
+To update, download the new release's `.vsix` and run the install command again with `--force`. Your settings and `~/.continuous` configuration are kept.
 
 To go back to an earlier version, install that release's `.vsix` the same way. Older releases are on the [releases page](https://github.com/b1tninja/continuous/releases).
 

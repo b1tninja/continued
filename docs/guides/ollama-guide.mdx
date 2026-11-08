@@ -86,7 +86,7 @@ There are multiple ways to configure Ollama models in Continuous:
 
 The easiest way is to list the models in your configuration:
 
-```yaml title="~/.continue/configs/config.yaml"
+```yaml title="~/.continuous/configs/config.yaml"
 name: My Local Config
 version: 0.0.1
 schema: v1
@@ -116,7 +116,7 @@ models:
 
 Continuous can automatically detect available Ollama models. You can configure this in your YAML:
 
-```yaml title="~/.continue/config.yaml"
+```yaml title="~/.continuous/config.yaml"
 models:
   - name: Autodetect
     provider: ollama
@@ -322,7 +322,7 @@ ollama pull deepseek-r1:32b
 **Solution**: Create a config file:
 
 ```yaml
-# ~/.continue/configs/config.yaml
+# ~/.continuous/configs/config.yaml
 name: Local Config
 version: 0.0.1
 schema: v1

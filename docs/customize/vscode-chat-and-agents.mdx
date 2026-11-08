@@ -8,7 +8,7 @@ Continuous shares the selected config's chat models and MCP servers with VS Code
 
 The chat models of the selected config appear in VS Code's model picker under **Continuous**. Requests from VS Code's chat and agents run through Continuous with the keys from your config and [provider accounts](/customize/providers); VS Code never receives the keys. Models that support tool calling can be used in agent mode.
 
-Switching configs changes the list. Turn it off with the `continue.shareModelsWithVSCode` setting.
+Switching configs changes the list. Turn it off with the `continuous.shareModelsWithVSCode` setting.
 
 <Note>
   VS Code only shows models from extensions to users on an individual GitHub Copilot plan, and Copilot Business or Enterprise administrators can turn them off with the "Bring Your Own Language Model Key" policy.
@@ -18,7 +18,7 @@ Switching configs changes the list. Turn it off with the `continue.shareModelsWi
 
 The MCP servers of the selected config appear in VS Code's MCP server list under **Continuous**, so they are set up once for both. Stdio servers and HTTP (streamable HTTP and SSE) servers are shared; websocket servers are not, as VS Code has no equivalent. Servers disabled in Continuous are left out.
 
-Environment values, API keys and request headers are not part of the list VS Code caches; they are passed only when VS Code starts the server. Turn sharing off with the `continue.shareMcpServersWithVSCode` setting.
+Environment values, API keys and request headers are not part of the list VS Code caches; they are passed only when VS Code starts the server. Turn sharing off with the `continuous.shareMcpServersWithVSCode` setting.
 
 ## Experimental Continuous agent sessions
 

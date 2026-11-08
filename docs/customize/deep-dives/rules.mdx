@@ -28,7 +28,7 @@ Below is a quick example of setting up a new rule file:
 2. Add a file called `pirates-rule.md` to this folder.
 3. Write the following contents to `pirates-rule.md` and save.
 
-```md title=".continue/rules/pirates-rule.md"
+```md title=".continuous/rules/pirates-rule.md"
 ---
 name: Pirate rule
 ---
@@ -51,7 +51,7 @@ Rules can be added locally using the "Add Rules" button.
 <Info>
 **Automatically create local rules**: When in Agent mode, you can prompt the agent to create a rule for you using the `create_rule_block` tool if enabled.
 
-For example, you can say "Create a rule for this", and a rule will be created for you in `.continue/rules` based on your conversation.
+For example, you can say "Create a rule for this", and a rule will be created for you in `.continuous/rules` based on your conversation.
 </Info>
 
 ### How to Configure Rule Properties and Syntax
@@ -131,7 +131,7 @@ Rules files are loaded in lexicographical order, so you can prefix them with num
 
 ### Example: How to Create TypeScript-Specific Rules
 
-```md title=".continue/rules/typescript.md"
+```md title=".continuous/rules/typescript.md"
 ---
 name: TypeScript Best Practices
 globs: ["**/*.ts", "**/*.tsx"]
@@ -154,7 +154,7 @@ globs: ["**/*.ts", "**/*.tsx"]
 **Problem**: Your rules exist but don't show up in the rules toolbar.
 
 **Check These**:
-1. **File location**: Ensure rules are in `.continue/rules/` (not `.continue/rule/`)
+1. **File location**: Ensure rules are in `.continuous/rules/` (not `.continuous/rule/`)
 2. **File format**: Rules should be `.md` files with proper YAML frontmatter
 
 ### How to Customize Chat System Message

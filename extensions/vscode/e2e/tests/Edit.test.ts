@@ -59,7 +59,10 @@ describe("Edit Test", () => {
     // Best effort: leave edit mode and drop any diff that is still pending
     // (both are no-ops when the test already accepted/rejected), so nothing
     // leaks into the next test.
-    for (const command of ["continue.exitEditMode", "continue.rejectDiff"]) {
+    for (const command of [
+      "continuous.exitEditMode",
+      "continuous.rejectDiff",
+    ]) {
       try {
         await new Workbench().executeCommand(command);
       } catch (e) {

@@ -1,3 +1,4 @@
+import { isInWorkspaceConfigDir } from "core/util/workspaceDirs";
 import * as vscode from "vscode";
 
 export class DownloadYamlExtensionCodeLensProvider
@@ -12,7 +13,7 @@ export class DownloadYamlExtensionCodeLensProvider
     document: vscode.TextDocument,
     _: vscode.CancellationToken,
   ): vscode.CodeLens[] | Thenable<vscode.CodeLens[]> {
-    if (!document.uri.fsPath.includes(".continue")) {
+    if (!isInWorkspaceConfigDir(document.uri.fsPath)) {
       return [];
     }
 

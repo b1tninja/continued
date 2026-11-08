@@ -281,8 +281,8 @@ models:
 When Continuous encounters `${{ secrets.X }}`, it searches these sources **in order**:
 
 1. **IDE secure storage**: where the [provider setup flow](./customize/model-setup.mdx#where-api-keys-are-stored) keeps a key by default
-2. **Global `.env` file**: `~/.continue/.env`
-3. **Workspace Continuous `.env` file**: `<workspace-root>/.continue/.env`
+2. **Global `.env` file**: `~/.continuous/.env`
+3. **Workspace Continuous `.env` file**: `<workspace-root>/.continuous/.env`
 4. **Workspace `.env` file**: `<workspace-root>/.env`
 5. **Process environment variables**: Standard system environment variables
 
@@ -308,7 +308,7 @@ CUSTOM_API_URL=https://api.example.com
 
 ## How do I reset the state of the extension?
 
-Continuous stores its data in the `~/.continue` directory (`%USERPROFILE%\.continue` on Windows).
+Continuous stores its data in the `~/.continuous` directory (`%USERPROFILE%\.continuous` on Windows).
 
 If you'd like to perform a clean reset of the extension, including removing all configuration files, indices, etc, you can remove this directory, uninstall, and then reinstall.
 

@@ -72,6 +72,7 @@
       {
         "filenames": [
           "config.json",
+          ".continuousrc.json",
           ".continuerc.json"
         ],
         "id": "jsonc"
@@ -97,74 +98,74 @@
     "configuration": {
       "title": "Continuous",
       "properties": {
-        "continue.shareModelsWithVSCode": {
+        "continuous.shareModelsWithVSCode": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "Offer the chat models of the selected Continuous config to VS Code's own chat and agents (model picker vendor: Continuous). Requests still go through Continuous with your Continuous keys."
         },
-        "continue.shareMcpServersWithVSCode": {
+        "continuous.shareMcpServersWithVSCode": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "Offer the MCP servers of the selected Continuous config to VS Code's own chat and agents, so they are configured once."
         },
-        "continue.telemetryEnabled": {
+        "continuous.telemetryEnabled": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "Has no effect: Continuous does not collect telemetry or usage data. Kept so existing settings files stay valid.",
           "markdownDeprecationMessage": "Continuous does not collect telemetry, so this setting does nothing.",
           "deprecationMessage": "Continuous does not collect telemetry, so this setting does nothing."
         },
-        "continue.showInlineTip": {
+        "continuous.showInlineTip": {
           "type": "boolean",
           "default": true,
           "description": "Show inline suggestion to use the Continuous keyboard shortcuts (e.g. \"Cmd/Ctrl L to select code, Cmd/Ctrl I to edit\")."
         },
-        "continue.disableQuickFix": {
+        "continuous.disableQuickFix": {
           "type": "boolean",
           "default": false,
           "description": "Disable the quick fix feature."
         },
-        "continue.enableQuickActions": {
+        "continuous.enableQuickActions": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Enable the experimental Quick Actions feature. Read our walkthrough to learn about configuration and how to share feedback: [continue.dev › Walkthrough: Quick Actions (experimental)](https://b1tninja.github.io/continuous/customize/overview)"
+          "markdownDescription": "Enable the experimental Quick Actions feature. Read our walkthrough to learn about configuration and how to share feedback: [Continuous docs › Walkthrough: Quick Actions (experimental)](https://b1tninja.github.io/continuous/customize/overview)"
         },
-        "continue.enableTabAutocomplete": {
+        "continuous.enableTabAutocomplete": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable Continuous's tab autocomplete feature. Read our walkthrough to learn about configuration and how to share feedback: [continue.dev › Walkthrough: Tab Autocomplete (beta)](https://b1tninja.github.io/continuous/customize/deep-dives/autocomplete)"
+          "markdownDescription": "Enable Continuous's tab autocomplete feature. Read our walkthrough to learn about configuration and how to share feedback: [Continuous docs › Walkthrough: Tab Autocomplete (beta)](https://b1tninja.github.io/continuous/customize/deep-dives/autocomplete)"
         },
-        "continue.enableNextEdit": {
+        "continuous.enableNextEdit": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable Continuous's next edit feature. Read our docs to learn about configuration and how to share feedback: [continue.dev › Features › Autocomplete › Next Edit (experimental)](https://b1tninja.github.io/continuous/ide-extensions/autocomplete/next-edit)"
+          "markdownDescription": "Enable Continuous's next edit feature. Read our docs to learn about configuration and how to share feedback: [Continuous docs › Features › Autocomplete › Next Edit (experimental)](https://b1tninja.github.io/continuous/ide-extensions/autocomplete/next-edit)"
         },
-        "continue.pauseTabAutocompleteOnBattery": {
+        "continuous.pauseTabAutocompleteOnBattery": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "Pause Continuous's tab autocomplete feature when your battery is low."
         },
-        "continue.pauseCodebaseIndexOnStart": {
+        "continuous.pauseCodebaseIndexOnStart": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "Pause Continuous's codebase index on start."
         },
-        "continue.enableConsole": {
+        "continuous.enableConsole": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "Enable a console to log and explore model inputs and outputs. It can be found in the bottom panel."
         },
-        "continue.remoteConfigServerUrl": {
+        "continuous.remoteConfigServerUrl": {
           "type": "string",
           "default": null,
           "markdownDescription": "If your team is set up to use shared configuration, enter the server URL here and your user token below to enable automatic syncing."
         },
-        "continue.userToken": {
+        "continuous.userToken": {
           "type": "string",
           "default": null,
           "markdownDescription": "If your team is set up to use shared configuration, enter your user token here and your server URL above to enable automatic syncing."
         },
-        "continue.remoteConfigSyncPeriod": {
+        "continuous.remoteConfigSyncPeriod": {
           "type": "number",
           "default": 60,
           "description": "The period of time in minutes between automatic syncs."
@@ -173,232 +174,232 @@
     },
     "commands": [
       {
-        "command": "continue.applyCodeFromChat",
+        "command": "continuous.applyCodeFromChat",
         "category": "Continuous",
         "title": "Apply code from chat",
         "group": "Continuous"
       },
       {
-        "command": "continue.acceptDiff",
+        "command": "continuous.acceptDiff",
         "category": "Continuous",
         "title": "Accept Diff",
         "group": "Continuous"
       },
       {
-        "command": "continue.rejectDiff",
+        "command": "continuous.rejectDiff",
         "category": "Continuous",
         "title": "Reject Diff",
         "group": "Continuous",
         "icon": "$(stop)"
       },
       {
-        "command": "continue.acceptVerticalDiffBlock",
+        "command": "continuous.acceptVerticalDiffBlock",
         "category": "Continuous",
         "title": "Accept Vertical Diff Block",
         "group": "Continuous"
       },
       {
-        "command": "continue.rejectVerticalDiffBlock",
+        "command": "continuous.rejectVerticalDiffBlock",
         "category": "Continuous",
         "title": "Reject Vertical Diff Block",
         "group": "Continuous"
       },
       {
-        "command": "continue.focusEdit",
+        "command": "continuous.focusEdit",
         "category": "Continuous",
         "title": "Add to Edit",
         "group": "Continuous"
       },
       {
-        "command": "continue.focusContinueInput",
+        "command": "continuous.focusContinuousInput",
         "category": "Continuous",
         "title": "Add Highlighted Code to Context and Clear Chat",
         "group": "Continuous"
       },
       {
-        "command": "continue.focusContinueInputWithoutClear",
+        "command": "continuous.focusContinuousInputWithoutClear",
         "category": "Continuous",
         "title": "Add to Chat",
         "group": "Continuous"
       },
       {
-        "command": "continue.debugTerminal",
+        "command": "continuous.debugTerminal",
         "category": "Continuous",
         "title": "Debug Terminal",
         "group": "Continuous"
       },
       {
-        "command": "continue.exitEditMode",
+        "command": "continuous.exitEditMode",
         "category": "Continuous",
         "title": "Exit Edit Mode",
         "group": "Continuous"
       },
       {
-        "command": "continue.openConfigPage",
+        "command": "continuous.openConfigPage",
         "category": "Continuous",
         "title": "Open Settings",
         "icon": "$(gear)",
         "group": "Continuous"
       },
       {
-        "command": "continue.openModelSetup",
+        "command": "continuous.openModelSetup",
         "category": "Continuous",
         "title": "Manage Models and Providers",
         "group": "Continuous"
       },
       {
-        "command": "continue.toggleTabAutocompleteEnabled",
+        "command": "continuous.toggleTabAutocompleteEnabled",
         "category": "Continuous",
         "title": "Toggle Autocomplete Enabled",
         "group": "Continuous"
       },
       {
-        "command": "continue.forceAutocomplete",
+        "command": "continuous.forceAutocomplete",
         "title": "Continuous: Force Autocomplete",
         "category": "Continuous"
       },
       {
-        "command": "continue.selectFilesAsContext",
+        "command": "continuous.selectFilesAsContext",
         "category": "Continuous",
         "title": "Select Files as Context",
         "group": "Continuous"
       },
       {
-        "command": "continue.newSession",
+        "command": "continuous.newSession",
         "category": "Continuous",
         "title": "New Session",
         "icon": "$(add)",
         "group": "Continuous"
       },
       {
-        "command": "continue.shareSession",
+        "command": "continuous.shareSession",
         "category": "Continuous",
         "title": "Share Current Chat Session as Markdown",
         "group": "Continuous"
       },
       {
-        "command": "continue.viewHistory",
+        "command": "continuous.viewHistory",
         "category": "Continuous",
         "title": "View History",
         "icon": "$(history)",
         "group": "Continuous"
       },
       {
-        "command": "continue.viewLogs",
+        "command": "continuous.viewLogs",
         "category": "Continuous",
         "title": "View Logs",
         "group": "Continuous"
       },
       {
-        "command": "continue.clearConsole",
+        "command": "continuous.clearConsole",
         "category": "Continuous",
         "title": "Clear Console",
         "icon": "$(clear-all)",
         "group": "Continuous"
       },
       {
-        "command": "continue.navigateTo",
+        "command": "continuous.navigateTo",
         "category": "Continuous",
         "title": "Navigate to a path",
         "group": "Continuous"
       },
       {
-        "command": "continue.writeCommentsForCode",
+        "command": "continuous.writeCommentsForCode",
         "category": "Continuous",
         "title": "Write Comments for this Code",
         "group": "Continuous"
       },
       {
-        "command": "continue.writeDocstringForCode",
+        "command": "continuous.writeDocstringForCode",
         "category": "Continuous",
         "title": "Write a Docstring for this Code",
         "group": "Continuous"
       },
       {
-        "command": "continue.fixCode",
+        "command": "continuous.fixCode",
         "category": "Continuous",
         "title": "Fix this Code",
         "group": "Continuous"
       },
       {
-        "command": "continue.optimizeCode",
+        "command": "continuous.optimizeCode",
         "category": "Continuous",
         "title": "Optimize this Code",
         "group": "Continuous"
       },
       {
-        "command": "continue.fixGrammar",
+        "command": "continuous.fixGrammar",
         "category": "Continuous",
         "title": "Fix Grammar / Spelling",
         "group": "Continuous"
       },
       {
-        "command": "continue.codebaseForceReIndex",
+        "command": "continuous.codebaseForceReIndex",
         "category": "Continuous",
         "title": "Codebase Force Re-Index",
         "group": "Continuous"
       },
       {
-        "command": "continue.rebuildCodebaseIndex",
+        "command": "continuous.rebuildCodebaseIndex",
         "category": "Continuous",
         "title": "Rebuild codebase index",
         "group": "Continuous"
       },
       {
-        "command": "continue.docsIndex",
+        "command": "continuous.docsIndex",
         "category": "Continuous",
         "title": "Docs Index",
         "group": "Continuous"
       },
       {
-        "command": "continue.docsReIndex",
+        "command": "continuous.docsReIndex",
         "category": "Continuous",
         "title": "Docs Force Re-Index",
         "group": "Continuous"
       },
       {
-        "command": "continue.focusContinueInput",
+        "command": "continuous.focusContinuousInput",
         "category": "Continuous",
         "title": "Focus Continuous Chat",
         "group": "Continuous"
       },
       {
-        "command": "continue.enterEnterpriseLicenseKey",
+        "command": "continuous.enterEnterpriseLicenseKey",
         "category": "Continuous",
         "title": "Enter Enterprise License Key",
         "group": "Continuous"
       },
       {
-        "command": "continue.toggleNextEditEnabled",
+        "command": "continuous.toggleNextEditEnabled",
         "title": "Continuous: Toggle Next Edit"
       },
       {
-        "command": "continue.nextEditWindow.hideNextEditSuggestion",
+        "command": "continuous.nextEditWindow.hideNextEditSuggestion",
         "category": "Continuous",
         "title": "Hide Next Edit Suggestion"
       },
       {
-        "command": "continue.nextEditWindow.acceptNextEditSuggestion",
+        "command": "continuous.nextEditWindow.acceptNextEditSuggestion",
         "category": "Continuous",
         "title": "Accept Next Edit Suggestion"
       },
       {
-        "command": "continue.forceNextEdit",
+        "command": "continuous.forceNextEdit",
         "category": "Continuous",
         "title": "Continuous: Force Next Edit"
       },
       {
-        "command": "continue.acceptJump",
+        "command": "continuous.acceptJump",
         "category": "Continuous",
         "title": "Continuous: Accept Jump Suggestion"
       },
       {
-        "command": "continue.rejectJump",
+        "command": "continuous.rejectJump",
         "category": "Continuous",
         "title": "Continuous: Reject Jump Suggestion"
       },
       {
-        "command": "continue.openInNewWindow",
+        "command": "continuous.openInNewWindow",
         "category": "Continuous",
         "title": "Open in new window",
         "group": "Continuous"
@@ -406,216 +407,216 @@
     ],
     "keybindings": [
       {
-        "command": "continue.focusContinueInput",
+        "command": "continuous.focusContinuousInput",
         "mac": "cmd+l",
         "key": "ctrl+l"
       },
       {
-        "command": "continue.focusContinueInputWithoutClear",
+        "command": "continuous.focusContinuousInputWithoutClear",
         "mac": "cmd+shift+l",
         "key": "ctrl+shift+l"
       },
       {
-        "command": "continue.acceptDiff",
+        "command": "continuous.acceptDiff",
         "mac": "shift+cmd+enter",
         "key": "shift+ctrl+enter",
-        "when": "continue.diffVisible"
+        "when": "continuous.diffVisible"
       },
       {
-        "command": "continue.rejectDiff",
+        "command": "continuous.rejectDiff",
         "mac": "shift+cmd+backspace",
         "key": "shift+ctrl+backspace",
-        "when": "continue.diffVisible"
+        "when": "continuous.diffVisible"
       },
       {
-        "command": "continue.rejectDiff",
+        "command": "continuous.rejectDiff",
         "mac": "cmd+z",
         "key": "ctrl+z",
-        "when": "continue.diffVisible"
+        "when": "continuous.diffVisible"
       },
       {
-        "command": "continue.quickEditHistoryUp",
+        "command": "continuous.quickEditHistoryUp",
         "mac": "up",
         "key": "up",
-        "when": "false && continue.quickEditHistoryFocused"
+        "when": "false && continuous.quickEditHistoryFocused"
       },
       {
-        "command": "continue.quickEditHistoryDown",
+        "command": "continuous.quickEditHistoryDown",
         "mac": "down",
         "key": "down",
-        "when": "false && continue.quickEditHistoryFocused"
+        "when": "false && continuous.quickEditHistoryFocused"
       },
       {
-        "command": "continue.acceptVerticalDiffBlock",
+        "command": "continuous.acceptVerticalDiffBlock",
         "mac": "alt+cmd+y",
         "key": "alt+ctrl+y"
       },
       {
-        "command": "continue.rejectVerticalDiffBlock",
+        "command": "continuous.rejectVerticalDiffBlock",
         "mac": "alt+cmd+n",
         "key": "alt+ctrl+n"
       },
       {
-        "command": "continue.focusEdit",
+        "command": "continuous.focusEdit",
         "title": "Edit code with natural language",
         "mac": "cmd+i",
         "key": "ctrl+i"
       },
       {
-        "command": "continue.exitEditMode",
+        "command": "continuous.exitEditMode",
         "mac": "escape",
         "key": "escape",
-        "when": "continue.inEditMode && editorFocus"
+        "when": "continuous.inEditMode && editorFocus"
       },
       {
-        "command": "continue.debugTerminal",
+        "command": "continuous.debugTerminal",
         "mac": "cmd+shift+r",
         "key": "ctrl+shift+r"
       },
       {
-        "command": "continue.openInNewWindow",
+        "command": "continuous.openInNewWindow",
         "mac": "cmd+k cmd+m",
         "key": "ctrl+k ctrl+m",
         "when": "!terminalFocus"
       },
       {
-        "command": "continue.toggleTabAutocompleteEnabled",
+        "command": "continuous.toggleTabAutocompleteEnabled",
         "mac": "cmd+k cmd+a",
         "key": "ctrl+k ctrl+a",
         "when": "!terminalFocus"
       },
       {
-        "command": "continue.forceAutocomplete",
+        "command": "continuous.forceAutocomplete",
         "key": "ctrl+alt+space",
         "mac": "cmd+alt+space",
         "when": "editorTextFocus && !editorHasSelection && !editorReadOnly && !inSnippetMode"
       },
       {
-        "command": "continue.applyCodeFromChat",
+        "command": "continuous.applyCodeFromChat",
         "mac": "alt+a",
         "key": "alt+a"
       },
       {
-        "command": "continue.toggleNextEditEnabled",
+        "command": "continuous.toggleNextEditEnabled",
         "key": "ctrl+k ctrl+n",
         "mac": "cmd+k cmd+n",
         "when": "editorTextFocus"
       },
       {
-        "command": "continue.nextEditWindow.hideNextEditSuggestion",
+        "command": "continuous.nextEditWindow.hideNextEditSuggestion",
         "key": "escape",
-        "when": "editorTextFocus && nextEditWindowActive && !continue.jumpDecorationVisible"
+        "when": "editorTextFocus && nextEditWindowActive && !continuous.jumpDecorationVisible"
       },
       {
-        "command": "continue.nextEditWindow.acceptNextEditSuggestion",
+        "command": "continuous.nextEditWindow.acceptNextEditSuggestion",
         "key": "tab",
-        "when": "editorTextFocus && nextEditWindowActive && !continue.jumpDecorationVisible"
+        "when": "editorTextFocus && nextEditWindowActive && !continuous.jumpDecorationVisible"
       },
       {
-        "command": "continue.acceptJump",
+        "command": "continuous.acceptJump",
         "key": "tab",
-        "when": "editorTextFocus && continue.jumpDecorationVisible"
+        "when": "editorTextFocus && continuous.jumpDecorationVisible"
       },
       {
-        "command": "continue.rejectJump",
+        "command": "continuous.rejectJump",
         "key": "escape",
-        "when": "editorTextFocus && continue.jumpDecorationVisible"
+        "when": "editorTextFocus && continuous.jumpDecorationVisible"
       }
     ],
     "submenus": [
       {
-        "id": "continue.continueSubMenu",
+        "id": "continuous.continueSubMenu",
         "label": "Continuous"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "continue.focusContinueInput"
+          "command": "continuous.focusContinuousInput"
         },
         {
-          "command": "continue.focusContinueInputWithoutClear"
+          "command": "continuous.focusContinuousInputWithoutClear"
         },
         {
-          "command": "continue.debugTerminal"
+          "command": "continuous.debugTerminal"
         },
         {
-          "command": "continue.newSession"
+          "command": "continuous.newSession"
         },
         {
-          "command": "continue.enterEnterpriseLicenseKey"
+          "command": "continuous.enterEnterpriseLicenseKey"
         },
         {
-          "command": "continue.openInNewWindow"
+          "command": "continuous.openInNewWindow"
         }
       ],
       "editor/context": [
         {
-          "submenu": "continue.continueSubMenu",
+          "submenu": "continuous.continueSubMenu",
           "group": "0_acontinue"
         }
       ],
       "editor/title/run": [
         {
-          "command": "continue.rejectDiff",
+          "command": "continuous.rejectDiff",
           "group": "Continuous",
-          "when": "continue.streamingDiff"
+          "when": "continuous.streamingDiff"
         }
       ],
-      "continue.continueSubMenu": [
+      "continuous.continueSubMenu": [
         {
-          "command": "continue.focusContinueInputWithoutClear",
+          "command": "continuous.focusContinuousInputWithoutClear",
           "group": "Continuous"
         },
         {
-          "command": "continue.focusEdit",
+          "command": "continuous.focusEdit",
           "group": "Continuous",
           "when": "!editorReadonly"
         }
       ],
       "explorer/context": [
         {
-          "command": "continue.selectFilesAsContext",
+          "command": "continuous.selectFilesAsContext",
           "group": "1_debug@1"
         }
       ],
       "view/title": [
         {
-          "command": "continue.newSession",
+          "command": "continuous.newSession",
           "group": "navigation@1",
-          "when": "view == continue.continueGUIView"
+          "when": "view == continuous.continueGUIView"
         },
         {
-          "command": "continue.viewHistory",
+          "command": "continuous.viewHistory",
           "group": "navigation@2",
-          "when": "view == continue.continueGUIView"
+          "when": "view == continuous.continueGUIView"
         },
         {
-          "command": "continue.openConfigPage",
+          "command": "continuous.openConfigPage",
           "group": "navigation@4",
-          "when": "view == continue.continueGUIView"
+          "when": "view == continuous.continueGUIView"
         },
         {
-          "command": "continue.clearConsole",
+          "command": "continuous.clearConsole",
           "group": "navigation@1",
-          "when": "view == continue.continueConsoleView"
+          "when": "view == continuous.continueConsoleView"
         }
       ],
       "editor/title": [
         {
-          "command": "continue.newSession",
+          "command": "continuous.newSession",
           "group": "navigation@1",
-          "when": "activeWebviewPanelId == continue.continueGUIView"
+          "when": "activeWebviewPanelId == continuous.continueGUIView"
         },
         {
-          "command": "continue.viewHistory",
+          "command": "continuous.viewHistory",
           "group": "navigation@2",
-          "when": "activeWebviewPanelId == continue.continueGUIView"
+          "when": "activeWebviewPanelId == continuous.continueGUIView"
         }
       ],
       "terminal/context": [
         {
-          "command": "continue.debugTerminal",
+          "command": "continuous.debugTerminal",
           "group": "navigation@top"
         }
       ]
@@ -623,37 +624,37 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "continue",
+          "id": "continuous",
           "title": "Continuous",
           "icon": "media/sidebar-icon.svg"
         }
       ],
       "panel": [
         {
-          "id": "continueConsole",
+          "id": "continuousConsole",
           "title": "Continuous Console",
           "icon": "$(window)"
         }
       ]
     },
     "views": {
-      "continue": [
+      "continuous": [
         {
           "type": "webview",
-          "id": "continue.continueGUIView",
+          "id": "continuous.continueGUIView",
           "name": "Continuous",
           "icon": "media/sidebar-icon.svg",
           "visibility": "visible"
         }
       ],
-      "continueConsole": [
+      "continuousConsole": [
         {
           "type": "webview",
-          "id": "continue.continueConsoleView",
+          "id": "continuous.continueConsoleView",
           "name": "Continuous Console",
           "icon": "$(window)",
           "visibility": "visible",
-          "when": "config.continue.enableConsole"
+          "when": "config.continuous.enableConsole"
         }
       ]
     },
@@ -663,7 +664,10 @@
         "url": "./config_schema.json"
       },
       {
-        "fileMatch": ".continuerc.json",
+        "fileMatch": [
+          ".continuousrc.json",
+          ".continuerc.json"
+        ],
         "url": "./continue_rc_schema.json"
       },
       {

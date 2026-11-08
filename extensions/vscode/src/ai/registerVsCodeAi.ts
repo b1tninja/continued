@@ -12,8 +12,8 @@ import {
   MCP_PROVIDER_ID,
 } from "./mcpServerDefinitionProvider";
 
-const SHARE_MODELS = "continue.shareModelsWithVSCode";
-const SHARE_MCP = "continue.shareMcpServersWithVSCode";
+const SHARE_MODELS = "continuous.shareModelsWithVSCode";
+const SHARE_MCP = "continuous.shareMcpServersWithVSCode";
 
 /**
  * Offer the selected Continuous config's chat models and MCP servers to VS

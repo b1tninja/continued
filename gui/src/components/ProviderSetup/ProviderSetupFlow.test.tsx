@@ -224,7 +224,7 @@ describe("ProviderSetupFlow", () => {
     expect(saves).toEqual([]);
   });
 
-  it("asks before removing a plaintext copy from ~/.continue/.env", async () => {
+  it("asks before removing a plaintext copy from ~/.continuous/.env", async () => {
     const { messenger, secrets } = messengerWith();
     messenger.responseHandlers["config/setSecret"] = async (req) => {
       secrets.push(req);
