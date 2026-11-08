@@ -1,6 +1,6 @@
 # Loop mode
 
-Last updated: 2026-11-07. Status: L1 (core state machine), L2 (IDE, with autonomy levels), L3 (CLI and `cn serve`) and most of L5 (plan slots, controls, strategies, Loop as a mode) built, with unit tests, gui integration tests, and CLI flow tests through the TUI and `cn serve`. The sandbox run on a local model is pending; its report goes in the PR. L4 (parallel items, verification) is not built.
+Last updated: 2026-11-07. Status: L1 (core state machine), L2 (IDE, with autonomy levels), L3 (CLI and `cn serve`) and most of L5 (plan slots, controls, strategies, Loop as a mode) built, with unit tests, gui integration tests, and CLI flow tests through the TUI and `cn serve`. Four sandbox runs on a local model are done (see "Sandbox runs on a local model"); a rerun to measure the plan block's new place is pending. L4 (parallel items, verification) is not built.
 
 Build a plan item by item without the person driving each step. Questions go to an inbox the person can answer while the work continues.
 
@@ -343,7 +343,7 @@ There is still no `MessageModes` or CLI `PermissionMode` value: every turn the l
 
 ### Plan slots (built)
 
-Built on 2026-11-07. Before, an item run saw only its own prompt and the plan file's path: the task list block is sent only when the TaskList tool is offered, and the loop hides that tool while an item runs. Now every request of an item's run ends with a **plan block** (`loopPlanBlock` in core): a read-only checklist with one slot per item, the running item marked, then the notes earlier runs left and the person's standing instructions.
+Built on 2026-11-07. Before, an item run saw only its own prompt and the plan file's path: the task list block is sent only when the TaskList tool is offered, and the loop hides that tool while an item runs. Now every request of an item's run carries a **plan block** (`loopPlanBlock` in core): a read-only checklist with one slot per item, the running item marked, then the notes earlier runs left and the person's standing instructions.
 
 ```
 <task_list>
@@ -358,7 +358,9 @@ Notes from earlier items:
 </task_list>
 ```
 
-- **Where:** last in the request, where the task list block goes, with the same `<task_list>` tag. A change touches only the tail, and Bedrock's cache point and the token counter treat it as they treat the task list. The gui puts it in `buildChatRequest`'s `taskListMessage`, the CLI in `taskListBlockForRequest`. Neither sends it for a subagent's or compaction's request.
+- **Where:** after the item prompt, in the same message, with the task list's `<task_list>` tag. It is computed once, at the run's first request (`loopRunPlanBlock`, keyed by `loopRunKey`), and is the same for every request of the run, so each request only extends the one before it. The stored history keeps the prompt without it. The gui adds it in `buildChatRequest`, the CLI in `loopRequestHistory`. Neither sends it for a subagent's or compaction's request.
+  - It was first sent last in every request, where the task list block goes, and rebuilt each time. The sandbox runs showed what that costs: each request diverged from the one before right where the old block sat, so a local server reused only the system message and the tools. See "Sandbox runs on a local model".
+  - What changes during the run reaches the model where it happens: a held question in its tool result, an answer as a steered message. The block shows it from the next run on.
 - **What a slot shows:** the item's status and number. A done or failed item adds its run's summary (clipped to 160 characters); a waiting or redo item says so. Below the item go its open questions, each with the assumption it was made on.
 - **The prompt is shorter:** with the block, `loopItemPrompt` (`planBlock: true`) leaves out the notes and the standing instructions, which ride in the block. The answers for the item stay in the prompt, as they are delivered once.
 - **Order stays with the harness:** the block marks the item. It never asks the model to choose one, and a test checks it does not mention a next item or the loop.
@@ -577,7 +579,7 @@ Added on 2026-11-07 from the owner. In their words: "use some sort of base promp
    - It is never edited in place. A re-plan or an edited criterion is appended as a short amendment ("D2 now reads: …; step 4 dropped") until the next round rewrites the block once.
    - Criteria get stable ids (D1, D2, …) so later turns can refer to them cheaply.
    - With a fresh context per item (Decision 6), each item's request is the same system message, tools and block, then that item's prompt. So the whole prefix up to the item prompt is shared across items, not only within one item's run.
-   - The changing per-item state (the plan block's slots, built) stays at the tail, where it is now.
+   - The per-item state (the plan block's slots, built) goes after the item prompt, fixed for the run. It no longer goes at the tail: a block that changes at the tail cost a local server everything after the system message and the tools (see "Sandbox runs on a local model").
 3. **A short, constant reminder at the tail of each turn.** It has the same wording every time and comes after the latest tool results and the slots: "Which of D1..Dn are met now, with evidence? What is the next step towards the rest?"
    - Its answer feeds `decideNext` (the goal stop) and the verifier.
    - Because it is the same small tail, it costs a few tokens per turn and never moves the cached boundary.
@@ -616,7 +618,7 @@ Added on 2026-11-07 from the owner. In their words: "use some sort of base promp
 - `conversation` fields go on requests that continue the conversation: an item's turns.
 - `oneShot` fields go on requests nothing continues: the compaction summary today, and the verifier, a scout and a check-in's evaluation under this proposal.
 
-The block and the reminder need no new mechanism: they make the prefix stable, and the server's own prefix matching does the rest. A prefix hint already has a worked example: `extensions/cli/src/contextManagement.test.ts` configures `conversation: { strata_prefix: { messages: 1 } }` beside `oneShot: { strata_checkpoint: false }`, and checks that each lands only on its kind of request. `strata_prefix` is not a field the CLI knows; it is whatever the config passes through. A hint naming the block, for a server that takes one, would be one more such `conversation` field.
+The block and the reminder need no new mechanism: they make the prefix stable, and the server's own prefix matching does the rest. The sandbox runs qualify that for a hybrid model, which resumes only from a checkpoint: a reminder at the tail needs a checkpoint before it, which `strata_prefix` gives (see "Sandbox runs on a local model"). A prefix hint already has a worked example: `extensions/cli/src/contextManagement.test.ts` configures `conversation: { strata_prefix: { messages: 1 } }` beside `oneShot: { strata_checkpoint: false }`, and checks that each lands only on its kind of request. `strata_prefix` is not a field the CLI knows; it is whatever the config passes through. A hint naming the block, for a server that takes one, would be one more such `conversation` field.
 
 ## Safeguards
 
@@ -629,6 +631,48 @@ The block and the reminder need no new mechanism: they make the prefix stable, a
 - Caps apply to questions per item and per loop, to answer and question length, to summaries, and to the notes carried between items (12, at most 300 characters each), so the item prompt cannot bloat.
 - Subagents cannot use `hold_question` or `finish_item`: they would report the parent's item.
 - No autonomy level loosens the person's rules or confirms an answer for them; Unattended only stops waiting.
+
+## Sandbox runs on a local model
+
+Run on 2026-11-07 against Strata, a single-slot OpenAI-compatible server on this machine. The model was `qwen3.8-flash-next-nvfp4-nvfp4`, a hybrid reasoning model. The task was a five-item plan in a throwaway repository: `slugify` and `truncate`, their tests, and a README. Each item had a `check:` command.
+
+`cn serve` did the work, from the built CLI. A driver script played the person over `/state` and `POST /message`: it allowed held approvals, kept assumptions, answered blocking questions, and started the loop once the plan was presented.
+
+| Run | Result                                                                           | Approvals held | Cached share of prompt tokens                                      |
+| --- | -------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------ |
+| 1   | Stopped on no progress: 0 of 5 done, 1 waiting                                   | 19             | not counted yet                                                    |
+| 2   | 5 of 5 done, every check passed, the repository's 19 tests pass, about 5 minutes | 4              | not counted yet                                                    |
+| 3   | 5 of 5 done, every check passed                                                  | 4              | 41% over 45 requests (first request of a turn 64%, later ones 39%) |
+| 4   | stopped early, through a logging proxy that saved each request                   | 3              | 33% over 28 requests                                               |
+
+**Bugs run 1 found, fixed before run 2:**
+
+- `ToolPermissionService` started in plan mode kept no normal-mode policies, so every call of an item was held.
+- An item that ended "waiting" on a question answered meanwhile stayed waiting. It now runs again.
+- A grant was keyed on the exact arguments, so a held Write did not cover the same file written again. Grants are now keyed on the command or the resolved path (`loopGrantKey`).
+- `waitsOnPerson` treated a dependency it had already visited as not waiting. It now remembers each item's answer.
+
+**Bugs the counting found:**
+
+- The CLI read `cache_read_tokens` only. OpenAI-style servers report `cached_tokens`, so every cached share read 0.
+- `cn serve` sent two system messages per request: the session's stored copy and the current one. Now one is sent.
+
+**The cache break.** Within an item's run, every request reused exactly 2,792 tokens from the cache, which is the system message and the tools. Strata's log shows the same for another client's item loop: 47 of its last 60 requests reused exactly 2,792 tokens.
+
+- **Cause:** the plan block was the last message and was rebuilt for every request. A hybrid model's recurrent state cannot rewind to an arbitrary position. The engine resumes only from a checkpoint, and it takes two per request: the end of the system message and tools, and the start of the model's turn. The second one lies after the plan block, and the next request puts an assistant turn at that position, so it is never a prefix. Only the first is left.
+- **Not the cause:** the missing `reasoning_content`, since this model's template keeps earlier reasoning anyway; the tools; two user messages in a row.
+- **Modelled cached share,** requests 6 to 18 of run 4, with the engine's checkpoint rules applied to the captured requests (the live replay was blocked: another client held the slot):
+
+  | Plan block                                                                   | Cached share                                              |
+  | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
+  | Last, rebuilt per request (as run)                                           | 35%                                                       |
+  | Dropped                                                                      | 93% (the ceiling)                                         |
+  | After the item prompt, rebuilt per request                                   | 70%: it resets whenever a held question changes the block |
+  | After the item prompt, fixed for the run (built)                             | 94%                                                       |
+  | Last, with `strata_prefix: {messages: n - 1}` pinning a checkpoint before it | 89%                                                       |
+
+- **Fix, built:** the block goes after the item prompt and is fixed for the run (see "Plan slots"). It helps any provider whose cache matches a prefix, not only Strata.
+- **Still to do:** rerun the sandbox and measure the real cached share. Requests that must end with something that changes, such as the Done-first reminder, need a checkpoint pinned before it: Strata's `strata_prefix` as a `requestBodyHints.conversation` field, or Anthropic's `cache_control`.
 
 ## Phases
 
