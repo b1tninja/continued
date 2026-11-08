@@ -416,10 +416,11 @@ export function decideNext(
     if (hasUndeliveredPlanAnswers(loop)) {
       return replanOrStop(loop);
     }
+    const skipped = live.filter((i) => i.skipped).length;
     return {
       kind: "stop",
       reason: "done",
-      detail: `All ${live.length} items are done.`,
+      detail: `All ${live.length} items are done${skipped ? ` (${skipped} skipped)` : ""}.`,
     };
   }
   const open = live.filter((i) => i.status !== "done");
@@ -648,7 +649,7 @@ export function finishItemRun(
         ? 0
         : (loop.consecutiveFailures ?? 0);
   return {
-    ...withItem(next, itemId, { unanswered: undefined }),
+    ...withItem(next, itemId, { unanswered: undefined, again: undefined }),
     current: undefined,
     doneThisRound: loop.doneThisRound + (status === "done" ? 1 : 0),
     consecutiveFailures: failures,
@@ -668,6 +669,216 @@ export function requestStop(loop: LoopState): LoopState {
 /** Stop pressed during an item: it goes back to pending and the loop stops. */
 export function interruptLoop(loop: LoopState): LoopState {
   return stopLoop(loop, "stopped", "You stopped the loop.");
+}
+
+/** What a control the person used did to the loop, or why it was refused. */
+export type LoopControlResult =
+  { ok: true; loop: LoopState } | { ok: false; error: string };
+
+/** A loop that waited on the person goes on once something changed. */
+function wake(loop: LoopState): LoopState {
+  return loop.status === "waiting"
+    ? { ...loop, status: "running", waitingSince: undefined }
+    : loop;
+}
+
+/**
+ * The person skips an item that is not running. It counts as finished, so
+ * the loop goes past it, but the task list shows it cancelled and it does
+ * not count toward doneThisRound (it is no progress). Its open questions
+ * stay open; an answer to one is kept for the item's next run, should the
+ * person run it again. The running item cannot be skipped: Stop now, or Stop
+ * after this item, is for that.
+ */
+export function skipItem(loop: LoopState, itemId: string): LoopControlResult {
+  const state = itemState(loop, itemId);
+  if (!state) return { ok: false, error: `No item ${itemId} in the loop` };
+  if (state.status === "running") {
+    return {
+      ok: false,
+      error: `${itemId} is running: use Stop now, or Stop after this item, instead`,
+    };
+  }
+  if (state.skipped) {
+    return { ok: false, error: `${itemId} is already skipped` };
+  }
+  if (state.status === "done") {
+    return { ok: false, error: `${itemId} is already done` };
+  }
+  const { again: _again, unanswered: _unanswered, ...rest } = state;
+  return {
+    ok: true,
+    loop: wake({
+      ...loop,
+      items: loop.items.map((i) =>
+        i.id === itemId ? { ...rest, status: "done", skipped: true } : i,
+      ),
+    }),
+  };
+}
+
+/**
+ * The person runs a done, failed or skipped item again: it is pending with
+ * no attempts, and its next run's prompt says it is a repeat at their
+ * request (loopItemPrompt `again`). The running item cannot be.
+ */
+export function runItemAgain(
+  loop: LoopState,
+  itemId: string,
+): LoopControlResult {
+  const state = itemState(loop, itemId);
+  if (!state) return { ok: false, error: `No item ${itemId} in the loop` };
+  if (state.status === "running") {
+    return { ok: false, error: `${itemId} is running` };
+  }
+  if (state.status !== "done" && state.status !== "failed") {
+    return {
+      ok: false,
+      error:
+        state.status === "waiting"
+          ? `${itemId} waits on an answer: answer its question instead`
+          : `${itemId} has not run yet`,
+    };
+  }
+  const { skipped: _skipped, unanswered: _unanswered, ...rest } = state;
+  // A loop that stopped because everything was done can be resumed again;
+  // it never starts by itself
+  const finished = loop.status === "stopped" && loop.stopReason === "done";
+  return {
+    ok: true,
+    loop: wake({
+      ...loop,
+      ...(finished
+        ? {
+            stopReason: "stopped" as const,
+            stopDetail: "An item was reopened: Resume to run it.",
+          }
+        : {}),
+      items: loop.items.map((i) =>
+        i.id === itemId
+          ? { ...rest, status: "pending", attempts: 0, again: true }
+          : i,
+      ),
+    }),
+  };
+}
+
+/** The limits the person may change while the loop runs, and their bounds. */
+export const LOOP_BUDGET_BOUNDS = {
+  maxRounds: { min: 1, max: 50, unlimited: false },
+  maxTokens: { min: 10_000, max: 50_000_000, unlimited: true },
+  maxWallMs: { min: 60_000, max: 24 * HOUR, unlimited: true },
+  maxAttempts: { min: 1, max: 5, unlimited: false },
+  maxConsecutiveFailures: { min: 1, max: 10, unlimited: false },
+} as const;
+
+export type LoopBudgetLimit = keyof typeof LOOP_BUDGET_BOUNDS;
+
+export const LOOP_BUDGET_LIMITS = Object.keys(
+  LOOP_BUDGET_BOUNDS,
+) as LoopBudgetLimit[];
+
+/**
+ * Changes the loop's limits while it runs. Every limit given must be an
+ * integer within LOOP_BUDGET_BOUNDS (0 means no limit for tokens and time);
+ * otherwise nothing changes. A limit lowered below what the loop has used
+ * stops it at its next step. `input` may come from a request body, so it is
+ * checked whatever its type. setLoopAutonomy still resets the limits to the
+ * level's.
+ */
+export function setLoopBudget(
+  loop: LoopState,
+  input: unknown,
+): LoopControlResult {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { ok: false, error: "The limits must be an object" };
+  }
+  const change: Partial<LoopBudget> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined) continue;
+    if (!(LOOP_BUDGET_LIMITS as string[]).includes(key)) {
+      return {
+        ok: false,
+        error: `${key} is not a limit that can be changed (${LOOP_BUDGET_LIMITS.join(", ")})`,
+      };
+    }
+    const bounds = LOOP_BUDGET_BOUNDS[key as LoopBudgetLimit];
+    const inRange =
+      typeof value === "number" &&
+      Number.isInteger(value) &&
+      ((bounds.unlimited && value === 0) ||
+        (value >= bounds.min && value <= bounds.max));
+    if (!inRange) {
+      return {
+        ok: false,
+        error: `${key} must be ${bounds.unlimited ? "0 (no limit) or " : ""}an integer from ${bounds.min} to ${bounds.max}`,
+      };
+    }
+    change[key as LoopBudgetLimit] = value;
+  }
+  return { ok: true, loop: { ...loop, budget: { ...loop.budget, ...change } } };
+}
+
+/**
+ * How often the loop may re-plan, which is budget.maxRounds seen from the
+ * person's side: the first pass is round 1, so never is 1 round, up to N
+ * re-plans is N + 1 rounds, and until done is the autonomy level's default.
+ */
+export type LoopReplanSetting =
+  | { kind: "never" }
+  | { kind: "up_to"; replans: number }
+  | { kind: "until_done" };
+
+export function loopReplanSetting(loop: LoopState): LoopReplanSetting {
+  const rounds = loop.budget.maxRounds;
+  if (rounds <= 1) return { kind: "never" };
+  if (rounds === loopAutonomy(loop).budget.maxRounds) {
+    return { kind: "until_done" };
+  }
+  return { kind: "up_to", replans: rounds - 1 };
+}
+
+/** The maxRounds for a re-plan setting; pass it to setLoopBudget. */
+export function maxRoundsForReplan(
+  loop: LoopState,
+  setting: LoopReplanSetting,
+): number {
+  switch (setting.kind) {
+    case "never":
+      return 1;
+    case "up_to":
+      return setting.replans + 1;
+    case "until_done":
+      return loopAutonomy(loop).budget.maxRounds;
+  }
+}
+
+/** The re-plan setting in words, for the inbox. */
+export function describeLoopReplan(loop: LoopState): string {
+  const setting = loopReplanSetting(loop);
+  switch (setting.kind) {
+    case "never":
+      return "Re-plan never: one pass over the plan";
+    case "up_to":
+      return `Re-plan up to ${setting.replans} time${setting.replans === 1 ? "" : "s"}`;
+    case "until_done": {
+      const replans = loop.budget.maxRounds - 1;
+      return `Re-plan until done (at most ${replans} time${replans === 1 ? "" : "s"}, the ${loopAutonomy(loop).label} level's limit)`;
+    }
+  }
+}
+
+/** The limits in words, for the inbox: rounds, tokens and minutes. */
+export function describeLoopBudget(budget: LoopBudget): string {
+  const tokens =
+    budget.maxTokens > 0
+      ? `${budget.maxTokens.toLocaleString("en-US")} tokens`
+      : "no token limit";
+  const minutes =
+    budget.maxWallMs > 0
+      ? `${Math.round(budget.maxWallMs / 60000)} minutes`
+      : "no time limit";
+  return `${budget.maxRounds} round${budget.maxRounds === 1 ? "" : "s"}, ${tokens}, ${minutes}`;
 }
 
 export type HoldResult =
@@ -830,6 +1041,8 @@ function routeAnswer(
       return { route: confirmsAssumption ? "confirmed" : "steer" };
     case "done":
       if (confirmsAssumption) return { route: "confirmed" };
+      // The person skipped it: the answer waits for a run they ask for
+      if (state.skipped) return { route: "next-run" };
       if (question?.kind === "approval" && !input.approve) {
         return { route: "confirmed" };
       }
@@ -963,6 +1176,11 @@ export function taskPlanWithLoop(plan: TaskPlan, loop: LoopState): TaskPlan {
         note = undefined;
         break;
       case "done":
+        if (state.skipped) {
+          status = "cancelled";
+          note = "Skipped by you";
+          break;
+        }
         status = task.status === "cancelled" ? "cancelled" : "completed";
         note = state.summary;
         break;
@@ -980,7 +1198,7 @@ export function taskPlanWithLoop(plan: TaskPlan, loop: LoopState): TaskPlan {
         break;
       case "pending":
         status = "pending";
-        note = undefined;
+        note = state.again ? "Run again: you asked for it" : undefined;
         break;
     }
     note = note?.slice(0, 200);
@@ -1080,6 +1298,8 @@ export function loopItemPrompt(input: {
   answers: LoopAnswer[];
   questions: LoopQuestion[];
   redo?: boolean;
+  /** The person asked for the item to run again (LoopItemState.again) */
+  again?: boolean;
   attempt: number;
   /** What earlier runs learned (LoopState.notes) */
   notes?: string[];
@@ -1115,6 +1335,10 @@ export function loopItemPrompt(input: {
   if (input.redo) {
     lines.push(
       "This item was finished before on an assumption the person has now overruled. Redo it to match their answer below.",
+    );
+  } else if (input.again) {
+    lines.push(
+      "This item ran before, and the person asked for it to run again. Some or all of it may already be done: check what is done before you change anything, then finish or fix what is missing.",
     );
   } else if (input.attempt > 1) {
     lines.push(
@@ -1216,8 +1440,16 @@ export function loopPlanBlock(input: {
       line += " (to be redone: an assumption was overruled)";
     } else if (status === "waiting") {
       line += " (waiting on the person)";
+    } else if (state?.skipped) {
+      line += " (skipped by the person: not done)";
+    } else if (state?.again) {
+      line += " (to be run again at the person's request)";
     }
-    if ((status === "done" || status === "failed") && state?.summary) {
+    if (
+      (status === "done" || status === "failed") &&
+      !state?.skipped &&
+      state?.summary
+    ) {
       line += `: ${clip(state.summary, LOOP_PLAN_BLOCK_LIMITS.summaryLength)}`;
     }
     lines.push(line);
@@ -1262,6 +1494,12 @@ export function loopReplanPrompt(input: {
   for (const task of plan.items) {
     const state = itemState(loop, task.id);
     const status = state?.status ?? "pending";
+    if (state?.skipped) {
+      lines.push(
+        `- ${STATUS_MARK[status]} ${quote(task.text)} (skipped by the person)`,
+      );
+      continue;
+    }
     const detail =
       status === "waiting"
         ? `waiting on: ${openQuestions(loop, task.id)
@@ -1310,7 +1548,8 @@ export function formatLoopStatus(
   loop: LoopState,
   options: { level?: boolean } = {},
 ): string {
-  const done = loop.items.filter((i) => i.status === "done").length;
+  const skipped = loop.items.filter((i) => i.skipped).length;
+  const done = loop.items.filter((i) => i.status === "done").length - skipped;
   const waiting = loop.items.filter((i) => i.status === "waiting").length;
   const open = loop.questions.filter((q) => !q.answerId).length;
   const parts = [
@@ -1318,6 +1557,7 @@ export function formatLoopStatus(
     `Round ${loop.round}`,
     `${done}/${loop.items.length} done`,
   ];
+  if (skipped) parts.push(`${skipped} skipped`);
   if (waiting) parts.push(`${waiting} waiting on you`);
   if (open) parts.push(`${open} open question${open === 1 ? "" : "s"}`);
   if (loop.stopRequested) parts.push("stopping after this step");

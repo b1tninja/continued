@@ -397,6 +397,19 @@ export interface LoopItemState {
    * with its best default. The questions stay open in the inbox.
    */
   unanswered?: string[];
+  /**
+   * The person skipped the item (skipItem). Its status is done, so the loop
+   * goes past it, but the task list shows it cancelled and it does not count
+   * toward doneThisRound. Its open questions stay open. Cleared by
+   * runItemAgain.
+   */
+  skipped?: boolean;
+  /**
+   * The person asked for the item to run again (runItemAgain): its next
+   * run's prompt says so, and to check what is already done first. Cleared
+   * when that run ends.
+   */
+  again?: boolean;
 }
 
 /**
@@ -466,8 +479,16 @@ export type LoopStopReason =
   | "stopped"
   | "replan_failed";
 
+/**
+ * The loop's limits. The person can change most of them while the loop runs,
+ * within LOOP_BUDGET_BOUNDS (setLoopBudget in core/util/loopMode.ts);
+ * changing the autonomy level resets them to the level's.
+ */
 export interface LoopBudget {
-  /** Re-plans before the loop stops */
+  /**
+   * Rounds before the loop stops: the first pass over the plan is round 1,
+   * so 1 means never re-plan and N + 1 allows N re-plans
+   */
   maxRounds: number;
   /** Prompt plus completion tokens the loop may use (0: no limit) */
   maxTokens: number;

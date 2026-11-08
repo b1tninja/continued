@@ -6,8 +6,16 @@ import {
   answersToDeliver,
   consumeLoopGrant,
   createLoop,
+  describeLoopBudget,
+  describeLoopReplan,
   enterWait,
   LOOP_AUTONOMY,
+  type LoopControlResult,
+  loopReplanSetting,
+  maxRoundsForReplan,
+  runItemAgain,
+  setLoopBudget,
+  skipItem,
   loopAutonomyFor,
   proceedUnanswered,
   replanDecision,
@@ -1110,5 +1118,310 @@ describe("the plan block", () => {
     const without = loopItemPrompt(base);
     expect(without).toContain("- npm test works");
     expect(without).toContain("- Keep the public API");
+  });
+});
+
+describe("controls: skip, run again and the limits", () => {
+  function ok(result: LoopControlResult): LoopState {
+    if (!result.ok) throw new Error(result.error);
+    return result.loop;
+  }
+
+  test("a skipped item counts as finished, shows cancelled, and is no progress", () => {
+    let loop = loopOn();
+    loop = ok(skipItem(loop, "1"));
+    expect(loop.items[0]).toMatchObject({ status: "done", skipped: true });
+    expect(loop.doneThisRound).toBe(0);
+    expect(decideNext(loop, PLAN, ctx())).toEqual({ kind: "run", itemId: "2" });
+    const synced = taskPlanWithLoop(PLAN, loop);
+    expect(synced.items[0]).toMatchObject({
+      status: "cancelled",
+      note: "Skipped by you",
+    });
+    expect(formatLoopStatus(loop)).toContain("0/3 done · 1 skipped");
+    expect(loopPlanBlock({ loop, plan: PLAN })).toContain(
+      "[x] 1. Write the parser (skipped by the person: not done)",
+    );
+    loop = ok(skipItem(runItem(loop, "2", { outcome: "done" }), "3"));
+    expect(loop.doneThisRound).toBe(1);
+    expect(decideNext(loop, PLAN, ctx())).toMatchObject({
+      kind: "stop",
+      reason: "done",
+      detail: "All 3 items are done (2 skipped).",
+    });
+  });
+
+  test("skipping is refused for the running item and an item already done", () => {
+    const running = startItemRun(loopOn(), "1", 0, T0);
+    expect(skipItem(running, "1")).toEqual({
+      ok: false,
+      error: "1 is running: use Stop now, or Stop after this item, instead",
+    });
+    const done = runItem(loopOn(), "1", { outcome: "done" });
+    expect(skipItem(done, "1").ok).toBe(false);
+    expect(skipItem(done, "9")).toEqual({
+      ok: false,
+      error: "No item 9 in the loop",
+    });
+    const skipped = ok(skipItem(loopOn(), "2"));
+    expect(skipItem(skipped, "2").ok).toBe(false);
+  });
+
+  test("a skipped waiting item keeps its questions open, and an answer waits for a run", () => {
+    let loop = startItemRun(loopOn(plan("Only")), "1", 0, T0);
+    const held = holdQuestion(
+      loop,
+      { itemId: "1", question: "Which API?", kind: "blocking" },
+      T0,
+    );
+    if (!held.ok) throw new Error(held.error);
+    loop = enterWait(finishItemRun(held.loop, { outcome: "waiting" }), T0);
+    expect(loop.status).toBe("waiting");
+
+    loop = ok(skipItem(loop, "1"));
+    // The loop goes on
+    expect(loop.status).toBe("running");
+    expect(loop.questions[0].answerId).toBeUndefined();
+    const answered = answerLoop(
+      loop,
+      { questionId: "q1", text: "The v2 one" },
+      T0,
+    );
+    if (!answered.ok) throw new Error(answered.error);
+    expect(answered.answer.route).toBe("next-run");
+    expect(status(answered.loop, "1")).toBe("done");
+
+    // Run again: the answer goes with the run
+    const again = ok(runItemAgain(answered.loop, "1"));
+    expect(answersToDeliver(again, "1").map((a) => a.text)).toEqual([
+      "The v2 one",
+    ]);
+  });
+
+  test("run again reopens a done, failed or skipped item, with its own wording", () => {
+    let loop = runItem(loopOn(), "1", { outcome: "done", summary: "Parsed" });
+    loop = runItem(loop, "2", { outcome: "stuck" });
+    loop = ok(skipItem(loop, "3"));
+    for (const id of ["1", "2", "3"]) {
+      loop = ok(runItemAgain(loop, id));
+      expect(loop.items.find((i) => i.id === id)).toMatchObject({
+        status: "pending",
+        attempts: 0,
+        again: true,
+      });
+    }
+    expect(loop.items[2].skipped).toBeUndefined();
+    expect(taskPlanWithLoop(PLAN, loop).items[0]).toMatchObject({
+      status: "pending",
+      note: "Run again: you asked for it",
+    });
+    expect(loopPlanBlock({ loop, plan: PLAN })).toContain(
+      "[ ] 2. Add tests (to be run again at the person's request)",
+    );
+
+    const prompt = loopItemPrompt({
+      item: PLAN.items[0],
+      answers: [],
+      questions: [],
+      again: loop.items[0].again,
+      attempt: 1,
+    });
+    expect(prompt).toContain("the person asked for it to run again");
+    expect(prompt).toContain("check what is done before you change anything");
+    expect(prompt).not.toContain("overruled");
+
+    // The run ends: the flag goes
+    const ran = runItem(loop, "1", { outcome: "done" });
+    expect(ran.items[0].again).toBeUndefined();
+  });
+
+  test("run again is refused for the running item and an item still to run", () => {
+    const running = startItemRun(loopOn(), "1", 0, T0);
+    expect(runItemAgain(running, "1")).toEqual({
+      ok: false,
+      error: "1 is running",
+    });
+    expect(runItemAgain(loopOn(), "2")).toEqual({
+      ok: false,
+      error: "2 has not run yet",
+    });
+  });
+
+  test("run again on a loop that finished leaves it stopped, ready to resume", () => {
+    const one = plan("One");
+    const done = runItem(loopOn(one), "1", { outcome: "done" });
+    const action = decideNext(done, one, ctx());
+    if (action.kind !== "stop") throw new Error(action.kind);
+    const stopped = stopLoop(done, action.reason, action.detail);
+    const reopened = ok(runItemAgain(stopped, "1"));
+    expect(reopened).toMatchObject({
+      status: "stopped",
+      stopReason: "stopped",
+      stopDetail: "An item was reopened: Resume to run it.",
+    });
+    expect(decideNext(reopened, one, ctx())).toEqual({ kind: "none" });
+    const resumed = resumeLoop(reopened, ctx(1));
+    expect(decideNext(resumed, one, ctx(1))).toEqual({
+      kind: "run",
+      itemId: "1",
+    });
+  });
+
+  test("setLoopBudget changes the limits within bounds, and refuses anything else", () => {
+    const loop = loopOn();
+    const changed = ok(
+      setLoopBudget(loop, {
+        maxRounds: 1,
+        maxTokens: 0,
+        maxWallMs: 30 * 60_000,
+        maxAttempts: 5,
+        maxConsecutiveFailures: 10,
+      }),
+    );
+    expect(changed.budget).toEqual({
+      maxRounds: 1,
+      maxTokens: 0,
+      maxWallMs: 30 * 60_000,
+      maxAttempts: 5,
+      maxConsecutiveFailures: 10,
+      maxNoProgressRounds: loop.budget.maxNoProgressRounds,
+    });
+    // The bounds themselves are allowed
+    expect(
+      setLoopBudget(loop, {
+        maxRounds: 50,
+        maxTokens: 10_000,
+        maxWallMs: 86_400_000,
+      }).ok,
+    ).toBe(true);
+    expect(
+      setLoopBudget(loop, { maxTokens: 50_000_000, maxWallMs: 60_000 }).ok,
+    ).toBe(true);
+    const refused: [unknown, string][] = [
+      [{ maxRounds: 0 }, "maxRounds must be an integer from 1 to 50"],
+      [{ maxRounds: 51 }, "maxRounds must be an integer from 1 to 50"],
+      [{ maxRounds: 2.5 }, "maxRounds must be an integer from 1 to 50"],
+      [
+        { maxTokens: 9_999 },
+        "maxTokens must be 0 (no limit) or an integer from 10000 to 50000000",
+      ],
+      [
+        { maxTokens: 50_000_001 },
+        "maxTokens must be 0 (no limit) or an integer from 10000 to 50000000",
+      ],
+      [
+        { maxWallMs: 59_999 },
+        "maxWallMs must be 0 (no limit) or an integer from 60000 to 86400000",
+      ],
+      [
+        { maxWallMs: "1h" },
+        "maxWallMs must be 0 (no limit) or an integer from 60000 to 86400000",
+      ],
+      [{ maxAttempts: 0 }, "maxAttempts must be an integer from 1 to 5"],
+      [{ maxAttempts: 6 }, "maxAttempts must be an integer from 1 to 5"],
+      [
+        { maxConsecutiveFailures: 0 },
+        "maxConsecutiveFailures must be an integer from 1 to 10",
+      ],
+      [
+        { maxConsecutiveFailures: 11 },
+        "maxConsecutiveFailures must be an integer from 1 to 10",
+      ],
+      [{ maxNoProgressRounds: 3 }, "maxNoProgressRounds is not a limit"],
+      ["5 rounds", "The limits must be an object"],
+      [[1], "The limits must be an object"],
+    ];
+    for (const [input, error] of refused) {
+      const result = setLoopBudget(loop, input);
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.error).toContain(error);
+    }
+    // One bad limit changes nothing
+    expect(setLoopBudget(loop, { maxRounds: 2, maxAttempts: 9 }).ok).toBe(
+      false,
+    );
+    // The level resets them
+    expect(setLoopAutonomy(changed, "auto").budget).toEqual(
+      LOOP_AUTONOMY.auto.budget,
+    );
+  });
+
+  test("a lower limit stops the loop at its next step", () => {
+    const loop = ok(setLoopBudget(loopOn(), { maxTokens: 10_000 }));
+    expect(decideNext(loop, PLAN, ctx(0, 20_000))).toMatchObject({
+      kind: "stop",
+      reason: "tokens",
+    });
+    const timed = ok(setLoopBudget(loopOn(), { maxWallMs: 60_000 }));
+    expect(decideNext(timed, PLAN, ctx(2))).toMatchObject({
+      kind: "stop",
+      reason: "time",
+    });
+  });
+
+  test("re-plan never, up to N and until done map onto maxRounds", () => {
+    const one = plan("One");
+    const loop = loopOn(one);
+    const never = ok(
+      setLoopBudget(loop, {
+        maxRounds: maxRoundsForReplan(loop, { kind: "never" }),
+      }),
+    );
+    expect(never.budget.maxRounds).toBe(1);
+    expect(loopReplanSetting(never)).toEqual({ kind: "never" });
+    expect(describeLoopReplan(never)).toBe(
+      "Re-plan never: one pass over the plan",
+    );
+    // Round 1's item failed: never means stop rather than re-plan
+    const failed = runItem(never, "1", { outcome: "stuck" });
+    expect(decideNext(failed, one, ctx())).toMatchObject({
+      kind: "stop",
+      reason: "rounds",
+    });
+
+    const twice = ok(
+      setLoopBudget(loop, {
+        maxRounds: maxRoundsForReplan(loop, { kind: "up_to", replans: 2 }),
+      }),
+    );
+    expect(twice.budget.maxRounds).toBe(3);
+    expect(loopReplanSetting(twice)).toEqual({ kind: "up_to", replans: 2 });
+    expect(describeLoopReplan(twice)).toBe("Re-plan up to 2 times");
+    const stuck = runItem(twice, "1", { outcome: "stuck" });
+    expect(decideNext(stuck, one, ctx())).toEqual({ kind: "replan" });
+
+    const untilDone = ok(
+      setLoopBudget(never, {
+        maxRounds: maxRoundsForReplan(never, { kind: "until_done" }),
+      }),
+    );
+    expect(untilDone.budget.maxRounds).toBe(
+      LOOP_AUTONOMY.auto.budget.maxRounds,
+    );
+    expect(loopReplanSetting(untilDone)).toEqual({ kind: "until_done" });
+    expect(describeLoopReplan(untilDone)).toBe(
+      "Re-plan until done (at most 4 times, the Auto level's limit)",
+    );
+  });
+
+  test("describeLoopBudget says the limits in words", () => {
+    expect(describeLoopBudget(LOOP_AUTONOMY.auto.budget)).toBe(
+      "5 rounds, 2,000,000 tokens, 120 minutes",
+    );
+    expect(
+      describeLoopBudget({
+        ...LOOP_AUTONOMY.auto.budget,
+        maxRounds: 1,
+        maxTokens: 0,
+        maxWallMs: 0,
+      }),
+    ).toBe("1 round, no token limit, no time limit");
+  });
+
+  test("the re-plan prompt names skipped items", () => {
+    const loop = ok(skipItem(loopOn(), "2"));
+    expect(loopReplanPrompt({ loop, plan: PLAN })).toContain(
+      "- [x] Add tests (skipped by the person)",
+    );
   });
 });
