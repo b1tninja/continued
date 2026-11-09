@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-11-05 (at `origin/main` 7a348e49c, after #267). Track C was rebuilt from the cache work and audited against the code on 2026-11-04; Tracks D (hooks), E (upstream signals), F (task planning) and G (import from other tools) were added. Real-world cache data is in `cache-real-world-data.md`.
+Last updated: 2026-11-09 (Track I, command analysis, added; everything else as of 2026-11-05, at `origin/main` 7a348e49c, after #267). Track C was rebuilt from the cache work and audited against the code on 2026-11-04; Tracks D (hooks), E (upstream signals), F (task planning) and G (import from other tools) were added. Real-world cache data is in `cache-real-world-data.md`.
 
 This is the place to check what is done, what is in flight and what comes next. `fork-plan.md` stays as the original design record (why we forked, scope, risks, licensing, CI). Detailed plans for new work live next to this file.
 
@@ -207,6 +207,25 @@ Problem: one window runs one agent at a time; agents that edit the same reposito
 | H8  | The rest of parallel-agents (A4 to A8: background and worktree subagents, Build in parallel, best of N, local concurrency, bound checkpoints), and of agent-interop (M6, M7) | H3, H6           | Not started |
 | H9  | `cn` as an Agent Host Protocol server on the model catalog (provider-model-config C8)                                                                                        | H2, catalog (C1) | Not started |
 
+### Track I: command analysis
+
+Plan: [`command-analysis.md`](./command-analysis.md). Builds on the policy areas ([`policy-areas.md`](./policy-areas.md)). Target: 2.6.
+
+Problem: whether a terminal command only reads, writes, or is unknown decides most approvals, and it is decided today by five scanners that read the command as text, all in POSIX syntax, while the shell that runs it is PowerShell on Windows and the login shell elsewhere. A verdict needs the grammar of the shell that will run it, the program told from its subcommand, flags and operands, and a spec of what each does. The first read-only classifier shipped on `next/2.6` and is the starting point; its known gaps are in the plan.
+
+| PR  | Scope                                                                                                                                                   | Depends on | State       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
+| I0  | A corpus of (shell, command, expected verdict and effects) for bash, zsh, PowerShell and cmd, and a differential run of the current scanners            | none       | Not started |
+| I1  | Shell identity (`resolveShell()`) carried with every evaluation; the first classifier takes the shell; cmd and an unknown shell are unsure              | none       | Not started |
+| I2  | A POSIX front end and one shared command graph, replacing `parseCommand`, the read-only tokenizer and the splitting in `candidates.ts`                  | I0, D1     | Not started |
+| I3  | A PowerShell front end: aliases, parameter abbreviation, `iex` and `-EncodedCommand` as exec                                                            | I2, D2     | Not started |
+| I4  | A conservative cmd and batch front end                                                                                                                  | I2, D3     | Not started |
+| I5  | Command specs and the effect set, with a linter; first specs for git, the package managers, curl, rm, mv, cp, tee, find, sed and the PowerShell cmdlets | I2, I3     | Not started |
+| I6  | Policy on resolved commands: areas by effects, rules such as `git push` and `effect:network`, paths from the graph, plan mode refusing known writes     | I5         | Not started |
+| I7  | Wrappers and nesting: `sudo`, `env`, `timeout`, `xargs`, `find -exec`, `ssh`, `bash -c`, `powershell -Command`, `cmd /c`, `wsl -e`                      | I5         | Not started |
+| I8  | User specs and a per-project list of known commands, in user settings only                                                                              | I5, I6     | Not started |
+| I9  | Local data on which asks the person approved, to rank the specs worth writing                                                                           | I6         | Not started |
+
 ## Later
 
 Carried over from `fork-plan.md` section 4.7, item 4. The four items it listed (checkpoints #185, a global rules toggle per mode #187, context-window and cost display #182, the Cline MCP import #193) have shipped; see the Shipped table. What is left:
@@ -222,6 +241,8 @@ Carried over from `fork-plan.md` section 4.7, item 4. The four items it listed (
 | API key storage                                            | a user setting in the setup flow; default secure storage, else `~/.continue/.env` (see `model-config-ux.md` section 4.5)                           | no             |
 | Where tool-approval rules live                             | config.yaml under `toolPermissions`                                                                                                                | no             |
 | Reviewer model for Auto mode                               | a user setting: a new `reviewer` model role, unset by default, so Auto stays unavailable until one is chosen (`tool-auto-approval.md` section 7.3) | no             |
+| POSIX parser for command analysis                          | tree-sitter-bash with our own gate on top (`command-analysis.md` D1)                                                                               | yes            |
+| PowerShell parser for command analysis                     | our own strict subset at run time, PowerShell's parser as a CI oracle (`command-analysis.md` D2)                                                   | yes            |
 | Distribution channel for the `.vsix` (fork-plan section 6) | open                                                                                                                                               | yes            |
 
 ## How to use this file
