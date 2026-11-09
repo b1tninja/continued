@@ -1,4 +1,8 @@
 import { Usage } from "../..";
+import {
+  normalizeClaudeModelId,
+  normalizeNovaModelId,
+} from "@continuedev/llm-info";
 
 export interface CostBreakdown {
   cost: number;
@@ -128,32 +132,9 @@ export const NOVA_PRICING: Record<string, ModelPricing> = {
   "nova-micro": novaPricing(0.035, 0.14),
 };
 
-/**
- * `us.amazon.nova-2-lite-v1:0` -> `nova-2-lite`, for the four Nova models in
- * `NOVA_PRICING`; undefined for anything else, including Nova Premier and the
- * other Nova 2 models (`nova-2-pro` does not match `nova-pro`). The same
- * pattern as `bedrockCachePointFields` in core/llm/llms/bedrockHelpers.ts.
- */
-export function normalizeNovaModelId(model: string): string | undefined {
-  return model
-    .match(/(?:^|\.)amazon\.(nova-(?:2-lite|pro|lite|micro))-v\d/i)?.[1]
-    ?.toLowerCase();
-}
-
-/**
- * Reduce the model ID formats of Anthropic, Bedrock (`us.anthropic.claude-...-v1:0`),
- * Vertex (`claude-...@20250929`) and dotted names (`claude-sonnet-4.5`) to the
- * dash form used by `ANTHROPIC_PRICING`. Returns undefined for non-Claude IDs.
- */
-export function normalizeClaudeModelId(model: string): string | undefined {
-  let id = model.toLowerCase();
-  const claudeAt = id.indexOf("claude");
-  if (claudeAt === -1) return undefined;
-  id = id.slice(claudeAt);
-  id = id.replace(/@.*$/, "").replace(/-v\d+(:\d+)?$/, "");
-  id = id.replace(/(\d)\.(\d)/g, "$1-$2");
-  return id;
-}
+// The model ID normalizers live beside the prompt cache table in
+// @continuedev/llm-info; re-exported here for the many importers.
+export { normalizeClaudeModelId, normalizeNovaModelId };
 
 /**
  * Bare names without a date that mean one specific release (the original

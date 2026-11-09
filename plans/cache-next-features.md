@@ -215,7 +215,7 @@ Why six `cn serve` runs on Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`, 2026-11-08
 
 **What changed (branch `claude/bedrock-nova-cache`):**
 
-- `bedrockCachePointFields(modelId)` in both Bedrock helper copies says which fields take a cache point: Claude all three, the four Nova models `system` and `messages`, everything else none. `bedrockCachePartsForModel` masks the configured parts with it, so `promptCaching: true` on Nova caches the system prompt and the last two user messages and leaves the tool list alone; GPT, Grok and unlisted Nova models still get nothing. A core test fails if the two copies disagree.
+- `bedrockCachePointFields(modelId)` in both Bedrock helper copies says which fields take a cache point: Claude all three, the four Nova models `system` and `messages`, everything else none. `bedrockCachePartsForModel` masks the configured parts with it, so `promptCaching: true` on Nova caches the system prompt and the last two user messages and leaves the tool list alone; GPT, Grok and unlisted Nova models still get nothing. (Both copies are now lookups on one table; see "One table" below.)
 - `bedrockCacheTtl` already returned the default for a non-Claude model, so no `ttl` reaches Nova.
 - The CLI default turns caching on for the four Nova models too, with no lifetime (Nova takes 5 minutes only). `promptCaching: false` still wins.
 - `minCacheableTokens` knows Nova's 1,024-token minimum on Bedrock, so the CLI's cache line can say when a request was under it.
@@ -232,6 +232,18 @@ The Loop and cache plans assume the system prompt, the tool list and the history
 **Found and fixed:** on Anthropic, the last cache marker landed on the task list block. The CLI sends the list as a trailing user message, the Anthropic adapter merges it into the preceding user message, and `addCacheControlToLastTwoUserMessages` marked the last text block, which was the list. The list changes whenever the agent ticks an item, so the marker sat on content the next request did not repeat, and the conversation after the system prompt was written again on every turn (the Bedrock adapter already had the special case: `isTaskListBlockText`, now shared in `packages/openai-adapters/src/util/taskListBlock.ts`). The marker now goes on the block before the list; the list takes it only when it is the sole block.
 
 **Seen, not changed:** `constructSystemMessage` re-reads `AGENTS.md` and the rules on every request, so an agent that edits its own `AGENTS.md` mid-session rebuilds its prefix on the next request; and the base system message holds the date, fixed when the process starts, so a session running past midnight keeps the old date rather than rebuilding. Both are design choices, named here so the cost is known.
+
+## One table for what each model's cache can do (2026-11-08)
+
+The per-model cache facts used to live in several hand-kept lists: the 1-hour allowlist and the cache-field table, each twice (core's `bedrockHelpers.ts` and the adapter's, with agreement tests to catch drift), the minimums in `core/llm/utils/cacheMinimums.ts`, and the Claude and Nova ID normalizers in `calculateRequestCost.ts`. Adding Nova touched all of them.
+
+They are now one table: `PROMPT_CACHE_RULES` in `packages/llm-info/src/promptCache.ts`. One row per model pattern and provider, with the fields that take a cache point (tools, system, messages), the vendor's minimum tokens per checkpoint, the maximum checkpoints, the lifetimes a cache point may ask for, a cached-token cap where the vendor states one (Nova 20K), whether the model caches implicitly and whether usage reports it, and the source and the date it was read. Rows go from specific to general and the first match wins; Bedrock rows come before the any-provider Claude rows, so Opus 4.7 gets AWS's 4,096 on Bedrock and Anthropic's 2,048 elsewhere, as before.
+
+Lookups: `promptCacheRule`, `promptCacheFields`, `promptCacheMinTokens`, `promptCacheSupportsLifetime`, and `promptCacheModelKey` (Claude in dash form, Nova as `nova-...`, otherwise the ID without `models/` or a Bedrock vendor prefix). The normalizers `normalizeClaudeModelId` and `normalizeNovaModelId` moved there too; `calculateRequestCost.ts` re-exports them. `bedrockSupportsOneHourCache`, `bedrockCacheTtl`, `bedrockCachePointFields`, `bedrockCachePartsForModel` and `minCacheableTokens` keep their signatures and read the table, in core and in the adapter (which now depends on `@continuedev/llm-info`, a pure-data package already built by `scripts/build-packages.js`). The two agreement tests are gone; `core/llm/utils/promptCacheRules.vitest.ts` checks the table instead: every row sourced and dated, every row reachable from a real ID, and the vendors' facts for the IDs each provider uses.
+
+**To add a model:** one row in `PROMPT_CACHE_RULES`, with its source and date, placed before any more general row that would also match it, and an ID in the "reaches every row" test. Nothing goes in without a vendor source. GPT-on-Bedrock rows are in the table for the record (implicit caching, reported in usage, no cache point through Converse); nothing reads them yet (C18).
+
+**Left as it was:** `anthropicStyleSupportsOneHourCache` in core, the 1-hour list for Claude on Vertex AI and OpenRouter. Its own comment says it was not read from a vendor table (it is Bedrock's list plus Sonnet 4.5), so it has no row to move to; folding it would need provider-split Claude rows for two providers whose vendors publish no such table. It stays a one-line rule until Vertex's lifetimes are checked.
 
 ## Sources, read 2026-11-04
 
