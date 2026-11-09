@@ -64,6 +64,32 @@ export type SubagentToolExclusion =
   | "not-allowed" // not in the definition's `tools`, or in `disallowedTools`
   | "not-available"; // the definition names it, but the parent does not have it
 
+/** The Loop tools a worker of a parallel wave runs with (the IDE's names). */
+const LOOP_ITEM_TOOL_NAMES: string[] = [
+  BuiltInToolNames.FinishItem,
+  BuiltInToolNames.HoldQuestion,
+  BuiltInToolNames.RemindMe,
+];
+
+/**
+ * The edit tools a worker may use: exact replacements, applied by core in
+ * the worker's worktree; the merge of its patch is the review. The lazy
+ * edit (edit_existing_file) needs the client's apply and stays excluded.
+ */
+const EXACT_EDIT_TOOL_NAMES: string[] = [
+  BuiltInToolNames.SingleFindAndReplace,
+  BuiltInToolNames.MultiEdit,
+];
+
+export interface SubagentToolOptions {
+  /**
+   * The run is a Loop worker bound to one item of a parallel wave: it keeps
+   * the loop tools (the runner handles them for its item) and the exact
+   * edit tools (applied in its worktree, without a diff review).
+   */
+  loopItem?: boolean;
+}
+
 export interface ResolvedSubagentTools {
   tools: Tool[];
   excluded: { name: string; reason: SubagentToolExclusion }[];
@@ -115,20 +141,28 @@ export function toolMatchesEntry(tool: Tool, rawEntry: string): boolean {
 export function resolveSubagentTools(
   definition: Pick<SubagentDefinition, "tools" | "disallowedTools">,
   parentTools: Tool[],
+  options: SubagentToolOptions = {},
 ): ResolvedSubagentTools {
   const tools: Tool[] = [];
   const excluded: ResolvedSubagentTools["excluded"] = [];
   const allow = definition.tools;
   const deny = definition.disallowedTools ?? [];
+  const keptForLoopItem = (name: string) =>
+    !!options.loopItem &&
+    (LOOP_ITEM_TOOL_NAMES.includes(name) ||
+      EXACT_EDIT_TOOL_NAMES.includes(name));
 
   for (const tool of parentTools) {
     const name = tool.function.name;
     let reason: SubagentToolExclusion | undefined;
     if (name === BuiltInToolNames.Subagent) {
       reason = "nesting";
-    } else if (TASK_LIST_TOOL_NAMES.includes(name)) {
+    } else if (TASK_LIST_TOOL_NAMES.includes(name) && !keptForLoopItem(name)) {
       reason = "task-list";
-    } else if ((CLIENT_TOOLS_IMPLS as string[]).includes(name)) {
+    } else if (
+      (CLIENT_TOOLS_IMPLS as string[]).includes(name) &&
+      !keptForLoopItem(name)
+    ) {
       // These edits are applied as a diff the person reviews in the parent's
       // chat, keyed to the parent's tool call; a subagent has no such call.
       reason = "needs-diff-review";

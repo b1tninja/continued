@@ -12,6 +12,7 @@ import {
   listLoopWorktrees,
   loopBranchName,
   patchFiles,
+  removeStaleItemWorktree,
   removeWorktree,
   setupCommands,
   worktreePatch,
@@ -231,6 +232,25 @@ describe.skipIf(!hasGit)("worktree helper against a real repository", () => {
     await removeWorktree(repo, wt, { deleteBranch: false }, deps);
     const branches = await git(["branch", "--list", "continued/loop-*"], repo);
     expect(branches.trim()).toBe("continued/loop-demo-t1");
+  });
+
+  test("a worktree or a branch an interrupted wave left is removed, so the item can get a new one", async () => {
+    // Nothing to remove in a clean repository
+    expect(await removeStaleItemWorktree(repo, "demo", "t1", deps)).toBe(false);
+
+    // A whole worktree left behind
+    const left = await create("t1");
+    expect(await removeStaleItemWorktree(repo, "demo", "t1", deps)).toBe(true);
+    await expect(fs.access(left.path)).rejects.toThrow();
+    const again = await create("t1");
+    expect(again.branch).toBe("continued/loop-demo-t1");
+
+    // The branch alone, its folder gone
+    await removeWorktree(repo, again, { deleteBranch: false }, deps);
+    expect(await removeStaleItemWorktree(repo, "demo", "t1", deps)).toBe(true);
+    const branches = await git(["branch", "--list", "continued/loop-*"], repo);
+    expect(branches.trim()).toBe("");
+    expect((await create("t1")).branch).toBe("continued/loop-demo-t1");
   });
 
   test("listing finds only loop worktrees", async () => {

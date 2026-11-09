@@ -7,6 +7,7 @@ import {
   endReplan,
   enterWait,
   finishItemRun,
+  inlineInsteadOfWave,
   LOOP_AUTONOMY,
   loopItemPrompt,
   loopReplanTurnPrompt,
@@ -210,10 +211,13 @@ export function nextLoopTurn(
       return undefined;
     }
     loop = reconcileLoop(loop, plan);
-    const action = decideNext(loop, plan, {
-      now,
-      sessionTokens: sessionTokens(),
-    });
+    // Waves (run_parallel) run inline until the CLI runs workers (L4 P3)
+    const action = inlineInsteadOfWave(
+      decideNext(loop, plan, {
+        now,
+        sessionTokens: sessionTokens(),
+      }),
+    );
     const planFile = planFileDisplayPath();
     logger.debug("Loop step", { action });
 

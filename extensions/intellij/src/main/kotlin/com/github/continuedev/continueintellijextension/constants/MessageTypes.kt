@@ -181,7 +181,12 @@ class MessageTypes {
             "process/markAsBackgrounded",
             "process/isBackgrounded",
             "process/killTerminalProcess",
-            "models/fetch"
+            "models/fetch",
+            "loop/worktreeCreate",
+            "loop/worktreePatch",
+            "loop/worktreeApply",
+            "loop/worktreeRemove",
+            "loop/dirtyFiles"
         )
     }
 }

@@ -196,6 +196,42 @@ describe("a to-do's model: line", () => {
     expect(blank.ok && blank.plan.items[0].model).toBeUndefined();
   });
 });
+describe("a to-do's files: line", () => {
+  it("comes from the plan tool as a list or in todo_details, and is normalised", () => {
+    const args = validatePlanArgs({
+      title: "Retry",
+      todos: [
+        {
+          text: "Add a retry helper",
+          files: ["./src/retry.ts", "src\\retry.test.ts"],
+        },
+        "Document it",
+      ],
+      todo_details: [{ todo: 2, files: "docs/**, README.md" }],
+    });
+    const built = args.ok && taskPlanForProposal(args.items, undefined, now);
+    expect(built && built.ok && built.plan.items.map((i) => i.files)).toEqual([
+      ["src/retry.ts", "src/retry.test.ts"],
+      ["docs/**", "README.md"],
+    ]);
+  });
+
+  it("is refused when it is not a list of paths or lists too many", () => {
+    expect(
+      taskPlanForProposal([{ text: "A", files: 3 }], undefined, now),
+    ).toEqual({ ok: false, error: "Item 1: files must be a list of paths" });
+    const many = Array.from({ length: 21 }, (_, i) => `f${i}`);
+    expect(
+      taskPlanForProposal([{ text: "A", files: many }], undefined, now),
+    ).toEqual({ ok: false, error: "Item 1: files lists more than 20 paths" });
+    const none = taskPlanForProposal(
+      [{ text: "A", files: " , " }],
+      undefined,
+      now,
+    );
+    expect(none.ok && none.plan.items[0].files).toBeUndefined();
+  });
+});
 describe("file names", () => {
   it("slugifies titles", () => {
     expect(slugifyPlanTitle("Add retry to the Uploader!")).toBe(
