@@ -498,6 +498,24 @@ Problem: a review should not share context with the agent it judges (prompt inje
 | U4  | Isolation tests: no tool output in a review request; an injection set aimed at the reviewer's own prompt added to the B4 evaluation          | none       | Not started |
 | U5  | The same prefix rule and a clean context for `continuous review`, subagents and side calls                                                   | U1         | Not started |
 
+### Track V: memory and session history
+
+Plan: [`memory-and-history.md`](./memory-and-history.md). Builds on compaction (Track C), checkpoints and Loop mode. Target: 2.7.
+
+Problem: the model's context is bounded by compaction, but the session in memory, the chat in the DOM and the file on disk are not. Every message, tool output and image stays in Redux, every item is live DOM (no windowing was found in the chat), and a save rewrites the whole session as one JSON. A long agent session or loop can exhaust memory long before the context window is the problem. Nothing shows the person where the memory is going.
+
+| PR  | Scope                                                                                                                                                              | Depends on | State       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ----------- |
+| V0  | Measure with a synthetic long-session harness: heap, retained size by category, DOM nodes, render and save time, at 1k, 5k and 20k items, in the GUI, CLI and core | none       | Not started |
+| V1  | Statistics: byte counters by category, process figures, a memory panel in the IDE, `/memory` and a status segment in the CLI                                       | V0         | Not started |
+| V2  | Cheap wins from V0: cap what the IDE terminal path holds, ring buffer with spill to a file, externalise images, drop duplicate copies                              | V0         | Not started |
+| V3  | Windowed rendering in the chat, collapsed long outputs, load earlier                                                                                               | V0         | Not started |
+| V4  | Append-only session log with an offset index, large bodies as files, a loader for the old format, migration on first open                                          | V0         | Not started |
+| V5  | Hot, warm and cold tiers with an aging policy (count, bytes, age); the request builder can always recover an item inside the context window                        | V3, V4     | Not started |
+| V6  | "Free memory" and "Export and trim", a pressure warning, settings (`history.hotItems`, `history.memoryBudgetMb`)                                                   | V1, V5     | Not started |
+| V7  | Loop and workers: transcripts by reference, a retained-transcript budget, worker output spilled to files                                                           | V4, N0     | Not started |
+| V8  | Search over cold history and rewind to a cold item                                                                                                                 | V5         | Not started |
+
 ## Later
 
 Carried over from `fork-plan.md` section 4.7, item 4. The four items it listed (checkpoints #185, a global rules toggle per mode #187, context-window and cost display #182, the Cline MCP import #193) have shipped; see the Shipped table. What is left:
