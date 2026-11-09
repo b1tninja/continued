@@ -3,6 +3,10 @@
  */
 
 import { setAutoReviewEnabled } from "../permissions/coreRules.js";
+import {
+  parsePolicySpec,
+  setPolicyLevels,
+} from "../permissions/policyLevels.js";
 import { PermissionMode } from "../permissions/types.js";
 
 export interface PermissionOverrides {
@@ -69,9 +73,17 @@ export function processCommandFlags(options: {
   ask?: string[];
   exclude?: string[];
   autoReview?: boolean;
+  policy?: string;
 }): ProcessedFlags {
   // Experimental reviewer model for calls the rules leave open (--auto-review).
   setAutoReviewEnabled(options.autoReview === true);
+
+  // The level of each policy area (--policy)
+  if (options.policy !== undefined) {
+    const parsed = parsePolicySpec(options.policy);
+    if (!parsed.ok) throw new Error(`--policy: ${parsed.error}`);
+    setPolicyLevels(parsed.levels);
+  }
 
   // Convert legacy flags to mode
   const mode = convertLegacyModeFlags(options.readonly, options.auto);

@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import type {
   ChatHistoryItem,
   LoopAutonomy,
+  LoopPolicy,
   LoopQuestion,
   LoopState,
   LoopStrategy,
@@ -15,11 +16,12 @@ import {
   createLoop,
   interruptLoop,
   LOOP_CLI_TOOL_NAMES,
-  loopAutonomyFor,
+  loopPolicyOf,
   requestStop,
   resumeLoop,
   runItemAgain,
   setLoopAutonomy,
+  setLoopPolicy,
   setLoopBudget,
   skipItem,
   setLoopStrategy,
@@ -33,7 +35,12 @@ import {
 import { createHistoryItem } from "core/util/messageConversion.js";
 import { useForLoopTurn } from "core/util/modelUse.js";
 
-import { isAutoReviewEnabled } from "../permissions/coreRules.js";
+import {
+  effectiveLevels,
+  getPolicyLevels,
+  levelsForAutonomy,
+  setPolicyLevels,
+} from "../permissions/policyLevels.js";
 import type { PermissionMode } from "../permissions/types.js";
 import {
   applyModelForUse,
@@ -184,16 +191,11 @@ export function sessionTokens(): number {
 }
 
 /**
- * The CLI's approval setting in core's terms, for loopAutonomyFor: the
- * `auto` mode allows everything (YOLO); `--auto-review` lets a reviewer
- * model answer (Auto); otherwise the person approves (Manual).
+ * The Plan edits and Questions levels a loop follows: the person's levels,
+ * with the CLI's `auto` mode (`--auto`) raising Plan edits as it always did.
  */
-export function cliApprovalMode(
-  mode: PermissionMode,
-): "manual" | "auto" | "yolo" {
-  if (mode === "auto") return "yolo";
-  if (isAutoReviewEnabled()) return "auto";
-  return "manual";
+export function cliLoopPolicy(mode: PermissionMode): LoopPolicy {
+  return loopPolicyOf({ levels: effectiveLevels(mode) });
 }
 
 /** The plan file as a path for the model and the person, when there is one. */
@@ -278,7 +280,7 @@ export function startLoopFromPlan(
   const loop = createLoop(plan, {
     now,
     sessionTokens: sessionTokens(),
-    autonomy: loopAutonomyFor(cliApprovalMode(mode)),
+    policy: cliLoopPolicy(mode),
   });
   pendingSteers.length = 0;
   turnEndRequested = false;
@@ -324,10 +326,37 @@ export function resumeStoppedLoop(now = new Date()): boolean {
   return true;
 }
 
+/**
+ * A level name (the TUI's cycle key, `loopAutonomy` on `cn serve`) sets the
+ * Plan edits and Questions levels it stood for, and the loop's limits and
+ * strategy become that level's, as before.
+ */
 export function setRunningLoopAutonomy(autonomy: LoopAutonomy): boolean {
   const loop = getSessionLoop();
   if (!loop) return false;
-  commitLoop(setLoopAutonomy(loop, autonomy));
+  setPolicyLevels({ ...getPolicyLevels(), ...levelsForAutonomy(autonomy) });
+  commitLoop(
+    setLoopPolicy(
+      setLoopAutonomy(loop, autonomy),
+      cliLoopPolicy(services.toolPermissions.getCurrentMode()),
+    ),
+  );
+  return true;
+}
+
+/**
+ * Brings the running loop's policy up to date after `/policy` changed a
+ * level. Limits and strategy stay as they are.
+ */
+export function syncRunningLoopPolicy(): boolean {
+  const loop = getSessionLoop();
+  if (!loop) return false;
+  commitLoop(
+    setLoopPolicy(
+      loop,
+      cliLoopPolicy(services.toolPermissions.getCurrentMode()),
+    ),
+  );
   return true;
 }
 

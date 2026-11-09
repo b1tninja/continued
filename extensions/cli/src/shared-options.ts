@@ -17,6 +17,10 @@ export function addCommonOptions(command: Command): Command {
       "--auto-review",
       "Experimental: a model with the 'reviewer' role decides tool calls your rules and --allow/--ask/--exclude leave open. Needs a reviewer model in config.yaml. With -p, calls it will not allow are refused.",
     )
+    .option(
+      "--policy <spec>",
+      "Who decides what a rule leaves open, per area (context, tools, edits, plan, questions): a preset (careful, acceptEdits, handsOff, reviewer, yolo) or area=level pairs such as tools=permissive,plan=manual. Levels: manual, cautious, automatic, permissive, yolo (idgaf).",
+    )
     .option("--verbose", "Enable verbose logging")
     .option("--beta-status-tool", "Enable beta status tool")
     .option(

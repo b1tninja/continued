@@ -9,6 +9,14 @@ import { v4 as uuidv4 } from "uuid";
 import { getAllSlashCommands } from "./commands/commands.js";
 import { handleInit } from "./commands/init.js";
 import { handleInfoSlashCommand } from "./infoScreen.js";
+import { syncRunningLoopPolicy } from "./loop/loopSession.js";
+import {
+  describePolicy,
+  getPolicyLevels,
+  parsePolicySpec,
+  setPolicyLevels,
+} from "./permissions/policyLevels.js";
+import { POLICY_PRESET_ORDER } from "core/tools/permissions/policy.js";
 import { getCurrentSession, updateSessionTitle } from "./session.js";
 import { telemetryService } from "./telemetry/telemetryService.js";
 import { buildImportSkillPrompt } from "./tools/skills.js";
@@ -103,6 +111,27 @@ function handleTitle(args: string[]) {
       output: chalk.red(`Failed to update title: ${error.message}`),
     };
   }
+}
+
+function handlePolicy(args: string[]): SlashCommandResult {
+  const spec = args.join(" ").trim();
+  if (spec) {
+    const parsed = parsePolicySpec(spec);
+    if (!parsed.ok) {
+      return { exit: false, output: chalk.yellow(parsed.error) };
+    }
+    setPolicyLevels(parsed.levels);
+    syncRunningLoopPolicy();
+  }
+  const lines = describePolicy(getPolicyLevels());
+  if (!spec) {
+    lines.push(
+      "",
+      "Set with /policy <preset | area=level ...>. Presets: " +
+        POLICY_PRESET_ORDER.join(", "),
+    );
+  }
+  return { exit: false, output: lines.join("\n") };
 }
 
 function handleJobs() {
@@ -286,6 +315,7 @@ const commandHandlers: Record<string, CommandHandler> = {
     return { openUpdateSelector: true };
   },
   jobs: handleJobs,
+  policy: handlePolicy,
   // Loop mode's inbox: questions, answers, the level, Stop loop
   loop: () => ({ openLoopInbox: true }),
   skills: () => handleSkills(),

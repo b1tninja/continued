@@ -6,6 +6,7 @@ import {
   type AutoReviewDeps,
   type AutoReviewReply,
 } from "core/tools/permissions/auto/handler.js";
+import type { ApprovalSettings } from "core/tools/permissions/approval.js";
 import { buildReviewHistory } from "core/tools/permissions/auto/history.js";
 import { AutoReviewSessions } from "core/tools/permissions/auto/state.js";
 import {
@@ -174,6 +175,8 @@ export interface CoreRulesInput {
   assistantPermissions: CoreToolPermissions | undefined;
   reviewer?: ChatLike | null;
   autoReview?: boolean;
+  /** The level of each policy area (see policyLevels.ts) */
+  approval?: ApprovalSettings;
   isHeadless: boolean;
   history?: ChatHistoryItem[];
   cwd?: string;
@@ -195,7 +198,7 @@ export async function evaluateWithCoreRules(
     isHeadless,
   } = input;
   const useReviewer = !!input.autoReview;
-  if (!permissions && !useReviewer) return undefined;
+  if (!permissions && !useReviewer && !input.approval) return undefined;
   const call = toCoreCall(cliToolName, args);
   if (!call) return undefined;
 
@@ -224,6 +227,7 @@ export async function evaluateWithCoreRules(
         basePolicy,
         parsedArgs: call.parsedArgs,
         history: buildReviewHistory(input.history ?? []),
+        approval: input.approval,
         headless: isHeadless,
       },
     );
@@ -242,6 +246,7 @@ export async function evaluateWithCoreRules(
     basePolicy,
     parsedArgs: call.parsedArgs,
     permissions,
+    approval: input.approval,
   });
   return {
     decision:

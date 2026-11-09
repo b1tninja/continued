@@ -21,6 +21,7 @@ import { stableStringify } from "../tools/permissions/auto/state.js";
 import {
   DEFAULT_POLICY_LEVELS,
   planHandoff,
+  policyLevelLabel,
   questionDecider,
   type PolicyLevel,
   type PolicySettings,
@@ -293,6 +294,13 @@ export function autonomyForPolicy(policy: LoopPolicy): LoopAutonomy {
   if (policy.questions === "yolo") return "idgaf";
   if (EXPANSIVE.includes(policy.plan)) return "unattended";
   return policy.plan === "manual" ? "supervised" : "auto";
+}
+
+/** What the loop is running at, for its status line. */
+export function loopLevelLabel(loop: LoopState): string {
+  const policy = loop.policy;
+  if (!policy) return loopAutonomy(loop).label;
+  return `Plan ${policyLevelLabel("plan", policy.plan)}, Questions ${policyLevelLabel("questions", policy.questions)}`;
 }
 
 export function loopAutonomy(loop: LoopState): LoopAutonomyPreset {
@@ -1121,11 +1129,12 @@ export function repairDecision(
   itemText: string,
   plan: TaskPlan,
 ): { accept: boolean; reason: string } {
+  // Only Manual keeps a repair from going on: a repair that touches just the
+  // failed item is small, and Cautious and above let it through, as Auto did
   if (
-    loopAutonomy(loop).replan === "ask" ||
-    (loop.policy &&
-      loop.policy.plan !== "yolo" &&
-      loop.policy.plan !== "permissive")
+    loop.policy
+      ? loop.policy.plan === "manual"
+      : loopAutonomy(loop).replan === "ask"
   ) {
     return replanDecision(loop, previousTexts, plan);
   }
@@ -2752,7 +2761,7 @@ export function formatLoopStatus(
       ? [LOOP_STRATEGIES[loop.strategy].label]
       : [];
   const parts = [
-    ...(options.level === false ? [] : [loopAutonomy(loop).label]),
+    ...(options.level === false ? [] : [loopLevelLabel(loop)]),
     ...strategy,
     `Round ${loop.round}`,
     `${done}/${loop.items.length} done`,

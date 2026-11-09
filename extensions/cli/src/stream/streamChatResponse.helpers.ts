@@ -18,6 +18,11 @@ import {
   type CoreVerdict,
 } from "../permissions/coreRules.js";
 import { checkToolPermission } from "../permissions/permissionChecker.js";
+import {
+  effectiveLevels,
+  getPolicyLevels,
+  toolLevelsAreDefault,
+} from "../permissions/policyLevels.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import { withReadOnlyMcp } from "../permissions/readOnlyMcp.js";
 import { ToolCallRequest, ToolPermissions } from "../permissions/types.js";
@@ -149,6 +154,15 @@ async function promptForPermission(
  * for rules, and for the reviewer it is an unusable reviewer (asks, or refuses
  * when headless), never an allow.
  */
+/** The permission mode, or the normal one when the service is not up yet. */
+function currentPermissionMode(): "normal" | "plan" | "auto" {
+  try {
+    return services.toolPermissions.getCurrentMode();
+  } catch {
+    return "normal";
+  }
+}
+
 async function coreRulesVerdict(
   toolCall: PreprocessedToolCall,
   cliPermission: "allow" | "ask",
@@ -161,13 +175,18 @@ async function coreRulesVerdict(
     );
     const assistant = modelState?.assistant;
     const permissions = assistant?.toolPermissions;
-    if (!permissions && !autoReview) return undefined;
+    // The levels reach core's engine only when they change what the CLI
+    // does on its own: Manual, Permissive, YOLO or Automatic on a tool area
+    const levels = effectiveLevels(currentPermissionMode());
+    const approval = toolLevelsAreDefault(levels) ? undefined : { levels };
+    if (!permissions && !autoReview && !approval) return undefined;
     return await evaluateWithCoreRules({
       cliToolName: toolCall.name,
       args: toolCall.arguments,
       cliPermission,
       evaluateToolCallPolicy: toolCall.tool?.evaluateToolCallPolicy,
       assistantPermissions: permissions,
+      approval,
       autoReview,
       reviewer:
         autoReview && modelState?.authConfig
@@ -179,7 +198,9 @@ async function coreRulesVerdict(
   } catch (e) {
     logger.warn("Could not apply toolPermissions rules", { error: e });
     // Fail toward asking, and toward refusing when nobody can be asked.
-    return autoReview || assistantHasRules()
+    return autoReview ||
+      assistantHasRules() ||
+      !toolLevelsAreDefault(getPolicyLevels())
       ? { decision: "ask", by: "system", reason: "Could not check your rules." }
       : undefined;
   }
