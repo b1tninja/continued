@@ -13,8 +13,9 @@ import { TURN_SCENARIOS } from "./scenarios";
 /**
  * K2 probe (plans/turn-prompt-eval.md section 4, item 3): Nova 2 Lite, after
  * two rounds of reads in a plan turn, writes its deliberation as plain text
- * up to the output budget and never calls present_plan. Core sends Nova 2 no
- * `reasoningConfig` unless reasoning is switched on. This sends the eval's
+ * up to the output budget and never calls present_plan. Core used to send
+ * Nova 2 no `reasoningConfig` unless reasoning was switched on; since this
+ * probe it sends low by default (bedrockReasoningFields). This sends the eval's
  * reserved-choice conversation straight to Bedrock Converse under three
  * settings and reports what came back: text length, reasoning blocks, tool
  * calls, stop reason. It decides nothing by itself; read the table.
@@ -129,16 +130,16 @@ live("Nova 2 reasoningConfig and plain-text deliberation", () => {
           for (let round = 0; round <= MAX_READ_ROUNDS; round++) {
             let res: any;
             try {
-              res = await client.send(
-                new ConverseCommand({
-                  modelId: MODEL,
-                  system: [{ text: systemMessageFor("plan", PROFILE) }],
-                  messages: toConverse(history),
-                  toolConfig,
-                  inferenceConfig: { maxTokens: MAX_TOKENS, temperature: 0 },
-                  ...(fields ? { additionalModelRequestFields: fields } : {}),
-                }),
-              );
+              // Built loosely on purpose: the probe's point is the raw field.
+              const input: any = {
+                modelId: MODEL,
+                system: [{ text: systemMessageFor("plan", PROFILE) }],
+                messages: toConverse(history),
+                toolConfig,
+                inferenceConfig: { maxTokens: MAX_TOKENS, temperature: 0 },
+                ...(fields ? { additionalModelRequestFields: fields } : {}),
+              };
+              res = await client.send(new ConverseCommand(input));
             } catch (e: any) {
               error = String(e?.message ?? e).slice(0, 160);
               break;

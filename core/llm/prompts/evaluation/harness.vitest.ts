@@ -292,6 +292,51 @@ describe("scoring one reply", () => {
     expect(fine.truncated).toBe(false);
   });
 
+  it("a tool call written as text is named as such, in the shapes small models use", () => {
+    const python = scoreReply(presents, "full", {
+      text: 'present_plan(\n  title="Add formatDate helper",\n  plan="...",\n  todos=["a"]\n)',
+      calls: [],
+      ms: 1,
+    });
+    expect(python.leakedCall).toBe("function call in Python syntax");
+    expect(python.failures[0]).toMatch(/written as text, not made/);
+    expect(python.calledPresentPlan).toBe(false);
+    expect(
+      scoreReply(presents, "full", {
+        text: "<function=present_plan><parameter=title>x</parameter></function>",
+        calls: [],
+        ms: 1,
+      }).leakedCall,
+    ).toBe("tool-call markup");
+    expect(
+      scoreReply(presents, "full", {
+        text: '{"name": "present_plan", "arguments": {"title": "x"}}',
+        calls: [],
+        ms: 1,
+      }).leakedCall,
+    ).toBe("a JSON object naming the tool");
+    expect(
+      scoreReply(presents, "full", {
+        text: "Here is the plan. 1. Add the helper (see test/slugify.test.js).",
+        calls: [],
+        ms: 1,
+      }).leakedCall,
+    ).toBeUndefined();
+    // A real call beside leaked-looking text is a call.
+    expect(
+      scoreReply(presents, "full", {
+        text: "present_plan(title=...)",
+        calls: [
+          {
+            name: "present_plan",
+            args: { title: "t", plan: "p", todos: ["a"] },
+          },
+        ],
+        ms: 1,
+      }).leakedCall,
+    ).toBeUndefined();
+  });
+
   it("a task list while planning fails", () => {
     const r = scoreReply(noList, "full", {
       text: "",

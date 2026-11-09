@@ -45,6 +45,8 @@ export interface ReplyResult {
   stopReason?: string;
   /** The reply hit the output budget before it finished (stop reason max_tokens or length). */
   truncated: boolean;
+  /** A tool call written out in the text instead of made (its shape), when the reply made no call. */
+  leakedCall?: string;
   text: string;
   calls: ScoredCall[];
   /** The reply calls at least one tool (any tool, present_plan included). */
@@ -62,6 +64,34 @@ export interface ReplyResult {
 
 /** A present_plan call with this much text beside it repeats the plan in text. */
 const PLAN_REPEATED_IN_TEXT_CHARS = 400;
+
+/**
+ * The shapes a model uses when it writes a tool call as text instead of
+ * making it: a function call in Python syntax (Nova 2 Lite, 2026-11-08),
+ * Qwen's XML markup, Hermes-style <tool_call>, or a JSON object naming the
+ * tool. Only the first few hundred characters are looked at, since a leaked
+ * call opens the reply.
+ */
+const LEAKED_CALL_SHAPES: Array<[RegExp, string]> = [
+  [
+    /^\s*(present_plan|task_list|[a-z_]+)\(\s*\n?\s*[a-z_]+\s*=/i,
+    "function call in Python syntax",
+  ],
+  [/<function[=\s>]|<tool_call>|<\|tool_call\|>/i, "tool-call markup"],
+  [
+    /^\s*(`{3}\w*\s*)?\{\s*"(name|tool|tool_name|function)"\s*:/i,
+    "a JSON object naming the tool",
+  ],
+];
+
+/** The shape of a tool call written as text at the start of a reply, if any. */
+export function leakedCallShape(text: string): string | undefined {
+  const head = text.slice(0, 600);
+  for (const [re, label] of LEAKED_CALL_SHAPES) {
+    if (re.test(head)) return label;
+  }
+  return undefined;
+}
 
 function textOf(content: ChatMessage["content"]): string {
   if (typeof content === "string") return content;
@@ -126,6 +156,10 @@ export function scoreReply(
   }
 
   const calledTool = calls.length > 0;
+  const leakedCall = calledTool ? undefined : leakedCallShape(text);
+  if (leakedCall) {
+    failures.push(`a tool call written as text, not made (${leakedCall})`);
+  }
   const presentPlanCalls = calls.filter(
     (c) => c.name === BuiltInToolNames.PresentPlan,
   );
@@ -221,6 +255,7 @@ export function scoreReply(
     readRounds: reply.readRounds ?? 0,
     stopReason: reply.stopReason,
     truncated,
+    ...(leakedCall ? { leakedCall } : {}),
     text,
     calls,
     calledTool,
@@ -472,6 +507,8 @@ export interface ProfileSummary {
   errors: string[];
   /** Replies cut off at the output budget. */
   truncated: string[];
+  /** Replies that wrote a tool call as text instead of making one. */
+  leakedCalls: string[];
   medianLatencyMs: number | undefined;
   failures: string[];
   passed: boolean;
@@ -515,6 +552,7 @@ export function summarizeProfile(
     .map((r) => r.scenario.id);
   const errors = rs.filter((r) => r.error).map((r) => r.scenario.id);
   const truncated = rs.filter((r) => r.truncated).map((r) => r.scenario.id);
+  const leakedCalls = rs.filter((r) => r.leakedCall).map((r) => r.scenario.id);
   const medianLatencyMs = median(rs.map((r) => r.ms));
 
   const failures: string[] = [];
@@ -561,6 +599,7 @@ export function summarizeProfile(
     refusedRetried,
     errors,
     truncated,
+    leakedCalls,
     medianLatencyMs,
     failures,
     passed: failures.length === 0,
@@ -618,6 +657,7 @@ export function formatReport(
       `| Median latency per reply | ${p.medianLatencyMs === undefined ? "n/a" : `${Math.round(p.medianLatencyMs)} ms`} | max ${bar.medianLatencyMsMax} ms |`,
       `| Model calls that failed | ${p.errors.length} | not part of the bar |`,
       `| Replies cut off at the output budget (${REPLY_MAX_TOKENS} tokens) | ${p.truncated.length} | not part of the bar |`,
+      `| Tool calls written as text, not made | ${p.leakedCalls.length} | not part of the bar |`,
       "",
       "| Scenario | Kind | Reads | Called | Result |",
       "| --- | --- | --- | --- | --- |",

@@ -282,6 +282,8 @@ The act and plan turns each come in two texts, `full` and `short`, picked per mo
 | A plan turn with a choice the person kept ("that is my call") | puts the choice in `decisions`; neither the plan nor a to-do decides it          |
 | A plan turn for a change to an existing file                  | calls `present_plan`; a task list made any other way fails it                    |
 
+
+Beside the bar, the report counts replies cut off at the output budget and tool calls written out as text instead of made (a Python-style `present_plan(...)`, tool-call markup, or a JSON object naming the tool), since both look like "text only" and are different failures.
 The quality bar was fixed before any run and applies to each text separately:
 
 | Measure                                  | Bar                |
