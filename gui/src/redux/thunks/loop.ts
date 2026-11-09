@@ -49,9 +49,13 @@ import {
   replanReminderTarget,
   takeReminders,
 } from "core/util/loopReminders";
+import { planHandoff } from "core/tools/permissions/policy";
 import { parsePlanFile, taskPlanFromPlanFile } from "core/util/planFile";
 import { findUriInDirs } from "core/util/uri";
-import { selectLoopPolicy } from "../selectors/selectAutoApproval";
+import {
+  selectLoopPolicy,
+  selectPolicySettings,
+} from "../selectors/selectAutoApproval";
 import {
   enqueueMessage,
   removeQueuedMessage,
@@ -230,8 +234,12 @@ export const leaveLoopMode = createAsyncThunk<void, MessageModes, ThunkApiType>(
 );
 
 /**
- * A plan presented while the person is in Loop starts the loop by itself,
- * unless a loop is already going (its own re-plan is accepted as before).
+ * A plan presented while the person is in Loop is the first plan of the run,
+ * and Plan edits decides whether it goes on by itself: Permissive and IDGAF
+ * start the loop, Manual and Cautious leave the plan card for the person
+ * (Build or Build in a loop), and Automatic waits too, as no reviewer for
+ * plans exists yet. A loop already going is left alone: its own re-plan is
+ * accepted as before.
  */
 export const startLoopIfRequested = createAsyncThunk<
   boolean,
@@ -240,6 +248,12 @@ export const startLoopIfRequested = createAsyncThunk<
 >("loop/startIfRequested", async ({ planFile }, { dispatch, getState }) => {
   const state = getState();
   if (!state.session.loopRequested || loopActive(state)) return false;
+  const handoff = planHandoff({
+    policy: selectPolicySettings(state),
+    first: true,
+    added: state.session.taskPlan?.items.length ?? 0,
+  });
+  if (handoff.decision !== "go") return false;
   await dispatch(startLoopFromPlan({ planFile }));
   return loopActive(getState());
 });

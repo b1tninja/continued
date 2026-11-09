@@ -921,8 +921,12 @@ describe("Loop in the mode picker", () => {
     },
   });
 
-  test("choose Loop, the message plans, and the presented plan starts the loop with no click", async () => {
+  test("choose Loop with Plan edits Permissive, and the presented plan starts the loop with no click", async () => {
     const h = await setup([]);
+    // Plan edits Permissive: the first plan goes on without a click
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+    });
     h.turns.push(
       presentPlan,
       finish("done", "lexer written"),
@@ -958,8 +962,45 @@ describe("Loop in the mode picker", () => {
     expect(modeButton()).toContain("Loop");
   });
 
+  test.each(["cautious", "manual"] as const)(
+    "at %s the first plan waits for you; Build in a loop starts it",
+    async (level) => {
+      const h = await setup([]);
+      await act(async () => {
+        h.store.dispatch(setPolicyLevel({ area: "plan", level }));
+      });
+      h.turns.push(
+        presentPlan,
+        finish("done", "lexer written"),
+        finish("done", "tests added"),
+      );
+      await pickMode(h, "mode-option-loop");
+      await send("Plan the parser");
+
+      await waitFor(() =>
+        expect(
+          document.querySelector("[data-testid=plan-card-build-loop]"),
+        ).not.toBeNull(),
+      );
+      // Nothing started: one request, no loop
+      expect(h.requests).toHaveLength(1);
+      expect(h.store.getState().session.loop).toBeUndefined();
+
+      await act(async () => {
+        fireEvent.click(
+          document.querySelector("[data-testid=plan-card-build-loop]")!,
+        );
+      });
+      await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+    },
+  );
+
   test("the picker shows Loop while the loop runs, and leaving it stops after the running item", async () => {
     const h = await setup([]);
+    // Plan edits Permissive: the first plan goes on without a click
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+    });
     let release!: () => void;
     const held = new Promise<void>((r) => (release = r));
     h.turns.push(
@@ -1053,6 +1094,10 @@ describe("Loop mode's checks and dependencies", () => {
     document.querySelector<HTMLElement>(`[data-testid=${id}]`);
 
   async function startInLoop(h: Setup) {
+    // The first plan goes on by itself at Plan edits Permissive
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+    });
     await pickMode(h, "mode-option-loop");
     await send("Plan the retries");
   }
