@@ -1,12 +1,6 @@
 import type { LoopAutonomy } from "core/index.js";
 import type { ApprovalSettings } from "core/tools/permissions/approval.js";
 import {
-  readPolicyFile,
-  writePolicyFile,
-  type PolicyFileSettings,
-  type PolicyFileUpdate,
-} from "core/tools/permissions/settingsFile.js";
-import {
   DEFAULT_POLICY_LEVELS,
   POLICY_AREA_LABELS,
   POLICY_AREAS,
@@ -20,6 +14,13 @@ import {
   type PolicyLevel,
   type PolicyLevels,
 } from "core/tools/permissions/policy.js";
+import {
+  readPolicyFile,
+  writePolicyFile,
+  type PolicyFileSettings,
+  type PolicyFileUpdate,
+} from "core/tools/permissions/settingsFile.js";
+
 import { isAutoReviewEnabled } from "./coreRules.js";
 import { PERMISSIONS_YAML_PATH } from "./permissionsYamlLoader.js";
 import type { PermissionMode } from "./types.js";

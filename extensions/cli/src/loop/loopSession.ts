@@ -205,9 +205,9 @@ export function cliLoopPolicy(mode: PermissionMode): LoopPolicy {
   const extras = getPolicyExtras();
   return loopPolicyOf({
     levels: effectiveLevels(mode),
-    ...(extras.maxNewPlanItems !== undefined
-      ? { maxNewPlanItems: extras.maxNewPlanItems }
-      : {}),
+    ...(extras.maxNewPlanItems === undefined
+      ? {}
+      : { maxNewPlanItems: extras.maxNewPlanItems }),
     ...(extras.questions ? { questions: extras.questions } : {}),
   });
 }

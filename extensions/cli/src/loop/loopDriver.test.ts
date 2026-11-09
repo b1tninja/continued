@@ -14,6 +14,11 @@ import {
 } from "core/util/loopMode.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  getPolicyLevels,
+  resetPolicyLevels,
+  setPolicyLevels,
+} from "../permissions/policyLevels.js";
 import { services } from "../services/index.js";
 import {
   createSession,
@@ -30,11 +35,6 @@ import {
   ScriptedLlm,
 } from "../ui/__tests__/TUIChat.flowHarness.js";
 
-import {
-  getPolicyLevels,
-  resetPolicyLevels,
-  setPolicyLevels,
-} from "../permissions/policyLevels.js";
 import { runLoopCheck } from "./loopChecks.js";
 import { loopWakeDelay, nextLoopTurn, type LoopTurn } from "./loopDriver.js";
 import { holdLoopCall, loopRepeatGuard } from "./loopHolds.js";

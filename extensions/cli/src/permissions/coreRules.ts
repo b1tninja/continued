@@ -1,12 +1,12 @@
 import type { AssistantUnrolled, ModelConfig } from "@continuedev/config-yaml";
 import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { ChatHistoryItem } from "core/index.js";
+import type { ApprovalSettings } from "core/tools/permissions/approval.js";
 import {
   autoReviewToolCall,
   type AutoReviewDeps,
   type AutoReviewReply,
 } from "core/tools/permissions/auto/handler.js";
-import type { ApprovalSettings } from "core/tools/permissions/approval.js";
 import { buildReviewHistory } from "core/tools/permissions/auto/history.js";
 import { AutoReviewSessions } from "core/tools/permissions/auto/state.js";
 import {
@@ -14,7 +14,6 @@ import {
   type ToolPolicyResult,
 } from "core/tools/permissions/evaluate.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
-
 import { resolveShell } from "core/util/shell.js";
 
 import { createLlmApi } from "../config.js";

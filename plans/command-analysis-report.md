@@ -6,13 +6,13 @@ Each case says what is true of a command in a shell: it **reads**, it **writes**
 
 ## The read-only classifier
 
-| Shell      | Cases | Reads | Writes | Unsure | Vouched | Vouched share of reads | Unsound |
-| ---------- | ----- | ----- | ------ | ------ | ------- | ---------------------- | ------- |
-| bash       | 112   | 50    | 43     | 19     | 43      | 86%                    | 0       |
-| zsh        | 117   | 53    | 45     | 19     | 44      | 83%                    | 0       |
-| sh         | 111   | 49    | 43     | 19     | 42      | 86%                    | 0       |
-| powershell | 111   | 46    | 46     | 19     | 44      | 96%                    | 0       |
-| cmd        | 52    | 15    | 29     | 8      | 9       | 60%                    | 0       |
+| Shell | Cases | Reads | Writes | Unsure | Vouched | Vouched share of reads | Unsound |
+| ----- | ----- | ----- | ------ | ------ | ------- | ---------------------- | ------- |
+| bash | 112 | 50 | 43 | 19 | 43 | 86% | 0 |
+| zsh | 117 | 53 | 45 | 19 | 44 | 83% | 0 |
+| sh | 111 | 49 | 43 | 19 | 42 | 86% | 0 |
+| powershell | 111 | 46 | 46 | 19 | 44 | 96% | 0 |
+| cmd | 52 | 15 | 29 | 8 | 9 | 60% | 0 |
 
 ## Reads the classifier does not vouch for
 

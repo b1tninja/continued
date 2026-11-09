@@ -5,7 +5,6 @@ import {
   evaluateTerminalCommandSecurity,
   type ToolPolicy,
 } from "@continuedev/terminal-security";
-
 import { resolveShell } from "core/util/shell.js";
 
 import { backgroundJobService } from "../services/BackgroundJobService.js";

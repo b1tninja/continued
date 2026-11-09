@@ -8,8 +8,8 @@ import {
   parsePolicySpec,
   setPolicyLevels,
 } from "../permissions/policyLevels.js";
-import { logger } from "../util/logger.js";
 import { PermissionMode } from "../permissions/types.js";
+import { logger } from "../util/logger.js";
 
 export interface PermissionOverrides {
   allow?: string[];

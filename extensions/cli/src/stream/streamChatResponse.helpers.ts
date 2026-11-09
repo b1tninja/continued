@@ -18,13 +18,13 @@ import {
   type CoreVerdict,
 } from "../permissions/coreRules.js";
 import { checkToolPermission } from "../permissions/permissionChecker.js";
+import { toolPermissionManager } from "../permissions/permissionManager.js";
 import {
   effectiveLevels,
   getPolicyLevels,
   policyIsDefault,
   approvalExtras,
 } from "../permissions/policyLevels.js";
-import { toolPermissionManager } from "../permissions/permissionManager.js";
 import { withReadOnlyMcp } from "../permissions/readOnlyMcp.js";
 import { ToolCallRequest, ToolPermissions } from "../permissions/types.js";
 import {

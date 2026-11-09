@@ -3,6 +3,7 @@ import fs from "fs";
 import { type AssistantConfig } from "@continuedev/sdk";
 import chalk from "chalk";
 import type { Session } from "core/index.js";
+import { POLICY_PRESET_ORDER } from "core/tools/permissions/policy.js";
 import historyManager from "core/util/history.js";
 import { v4 as uuidv4 } from "uuid";
 
@@ -17,7 +18,6 @@ import {
   savePolicyFile,
   setPolicyLevels,
 } from "./permissions/policyLevels.js";
-import { POLICY_PRESET_ORDER } from "core/tools/permissions/policy.js";
 import { getCurrentSession, updateSessionTitle } from "./session.js";
 import { telemetryService } from "./telemetry/telemetryService.js";
 import { buildImportSkillPrompt } from "./tools/skills.js";
