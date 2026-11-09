@@ -282,6 +282,25 @@ Problem: the index under `~/.continuous/index/` (chunks, FTS5, tree-sitter snipp
 | L8  | Team index: a CI recipe that builds per push and publishes deltas by content hash, auth through the existing MCP OAuth, `cn index pull` for the nearest ancestor commit; documentation for Claude Code and Cursor clients                                                                                                                                          | L7         | Not started |
 | L9  | SCIP ingest: read `index.scip` from scip-typescript and scip-python into the symbol tables so definitions and references are compiler-accurate where an indexer exists; `find_symbol` and `references` prefer SCIP over tree-sitter when present                                                                                                                   | L7         | Not started |
 
+### Track M: which model does what
+
+Plan: the design is in `policy-areas.md` ("The reviewer model") and `docs/reference.mdx`; the handover for the seven `modeModels` entries (`chat`, `plan`, `agent`, `loop`, `replan`, `subagent`, `reviewer`) is in the session notes.
+
+Problem: the entries exist, but a use's `reasoningEffort` only reaches OpenAI-compatible servers and Bedrock from the CLI (#363). Claude on the direct Anthropic API ignores it, nothing lets a plan send one hard item to a stronger model, and no measurement says which split (cheap model on items, stronger on re-plans) pays.
+
+| PR  | Scope                                                                                                                                                                                                                 | Depends on | State                                  |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------- |
+| M0  | The CLI applies a use's `reasoningEffort` as `reasoning_effort` (OpenAI-compatible, Bedrock)                                                                                                                          | none       | In review (#372, carries #363 to main) |
+| M1  | Direct Anthropic adapter: send a thinking block for an effort and carry thinking blocks and signatures between turns (tool use after thinking is refused without them), then map efforts to budgets like the IDE does | M0         | Not started                            |
+| M2  | Per-item model: `TaskItem.model` so a plan routes one hard to-do to a stronger model, falling back to `loop`; shown on the item in the CLI strip and the IDE list                                                     | F1         | Shipped (#364)                         |
+| M3  | Escalation: when stuck detection fires (repeated identical tool calls, failed items), run the next attempt on the `replan` model once, then drop back                                                                 | M2         | Not started                            |
+| M4  | Measure the split: re-run the Bedrock Nova suite with `loop` cheap and `replan` strong; record cost and completion per split and set the documented defaults from it                                                  | M0         | Not started                            |
+| M5  | Prompt profiles beyond Qwen: only Qwen has the short turn texts (`promptProfile`); measure Mistral, Nova and Llama the same way before adding a profile                                                               | none       | Not started                            |
+| M6  | Reviewer effort: pass the reviewer's `reasoningEffort` through the adapter instead of the IDE-only budget, and measure it in B4                                                                                       | M0, B4     | Not started                            |
+| M7  | Visibility: show the model and effort a turn actually used (CLI header, IDE turn footer) and cost by use in the usage ledger, so a bad fallback is visible                                                            | none       | Not started                            |
+| M8  | A config check: warn when `reasoningEffort` is set on a provider that ignores it, and when a `modeModels` name is not a chat model (the CLI skips these silently now)                                                 | M0         | Not started                            |
+| M9  | CLI subagent definitions as files with an optional `model:` (and effort), filling in `modeModels.subagent` when absent; today CLI subagents are role models that always name their own                                | none       | Not started                            |
+
 ## Later
 
 Carried over from `fork-plan.md` section 4.7, item 4. The four items it listed (checkpoints #185, a global rules toggle per mode #187, context-window and cost display #182, the Cline MCP import #193) have shipped; see the Shipped table. What is left:
