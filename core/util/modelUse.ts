@@ -30,6 +30,10 @@ export const MODEL_USES = [
 export const PICKER_USES = ["chat", "plan", "agent"] as const;
 export type PickerUse = (typeof PICKER_USES)[number];
 
+/** The uses whose system prompt and tail can be chosen (`prompt`, `tail`). */
+export const PROMPT_USES = ["chat", "plan", "agent", "loop", "replan"] as const;
+export type PromptUse = (typeof PROMPT_USES)[number];
+
 /** A use with no entry of its own takes this one's model. */
 export const USE_FALLBACK: Partial<Record<ModelUse, ModelUse>> = {
   loop: "agent",

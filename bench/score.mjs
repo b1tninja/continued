@@ -661,9 +661,13 @@ const CHECKS = {
 };
 
 function seedCheck(e, r) {
+  // Match on the path for a file check and on the command otherwise: two
+  // file checks both have no command, so a match on either field would hand
+  // the second expectation the first check's verdict.
   const found = (r.seedChecks ?? []).find(
     (c) =>
-      c.check === e.check && (c.path === e.path || c.command === e.command),
+      c.check === e.check &&
+      (e.path !== undefined ? c.path === e.path : c.command === e.command),
   );
   if (!found)
     return {
@@ -760,6 +764,7 @@ function recordOf(result, checks, history = [], prefixChurn = null) {
     loop: loopStatsOf(result, history),
     repeatsRefused: result.repeatsRefused ?? 0,
     invalidCalls: result.invalidCalls ?? 0,
+    textLeaks: (result.textLeaks ?? []).length,
     truncations: result.truncations ?? 0,
     verdicts,
     questions: (result.questions ?? []).map((q) => ({
