@@ -71,6 +71,7 @@ function getShellCommand(command: string): { shell: string; args: string[] } {
 
 import { fileURLToPath } from "node:url";
 import { resolveShell } from "../../util/shell";
+import { commandLintGate } from "../permissions/commandLint";
 import { ToolImpl } from ".";
 import {
   isProcessBackgrounded,
@@ -140,6 +141,18 @@ const getColorEnv = () => ({
 // integrated terminal and executes in the correct remote environment.
 const LOCAL_ONLY = ["", "local"];
 
+/** The result of a command the lint stopped: nothing ran. */
+function commandNotRun(message: string) {
+  return [
+    {
+      name: "Terminal",
+      description: "Command not run",
+      content: message,
+      status: "Command not run",
+    },
+  ];
+}
+
 export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
   const command = getStringArg(args, "command");
   // Default to waiting for completion if not specified
@@ -148,6 +161,12 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
 
   const ideInfo = await extras.ide.getIdeInfo();
   const toolCallId = extras.toolCallId || "";
+
+  // Mistakes in how the command is written, before the shell reports them
+  const lintMessage = commandLintGate(command, resolveShell().kind);
+  if (lintMessage) {
+    return commandNotRun(lintMessage);
+  }
 
   if (LOCAL_ONLY.includes(ideInfo.remoteName)) {
     // For streaming output
