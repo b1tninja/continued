@@ -3,13 +3,14 @@ import { describe, expect, test } from "vitest";
 import { approvalLoosening } from "./approval";
 import { decideToolCall, type DecideInput } from "./decide";
 import { parsePermissions } from "./names";
+import { DEFAULT_POLICY_LEVELS } from "./policy";
 
 const denyRm = parsePermissions({ deny: ["runTerminalCommand(rm *)"] });
 const askGit = parsePermissions({ ask: ["runTerminalCommand(git *)"] });
 
-function looseningFor(mode: "yolo" | "review") {
+function looseningFor(level: "yolo" | "permissive") {
   return approvalLoosening({
-    approval: { mode },
+    approval: { levels: { ...DEFAULT_POLICY_LEVELS, tools: level } },
     toolName: "run_terminal_command",
     parsedArgs: {},
   } as never);
@@ -41,21 +42,21 @@ describe.each([
     });
   });
 
-  test("Review mode leaves it as it was", () => {
+  test("Permissive leaves it as it was", () => {
     const decided = decideToolCall(
-      call({ ...over, loosening: looseningFor("review") }),
+      call({ ...over, loosening: looseningFor("permissive") }),
     );
-    expect(decided.source).not.toBe("review");
+    expect(decided.source).not.toBe("permissive");
     expect(decided.policy).not.toBe("allowedWithoutPermission");
   });
 });
 
-test("Review mode allows a call nothing has settled", () => {
+test("Permissive allows a call nothing has settled", () => {
   expect(
-    decideToolCall(call({ loosening: looseningFor("review") })),
+    decideToolCall(call({ loosening: looseningFor("permissive") })),
   ).toMatchObject({
     policy: "allowedWithoutPermission",
-    source: "review",
+    source: "permissive",
   });
 });
 

@@ -1,4 +1,5 @@
 import { parseCommand } from "./command";
+import { canonicalCmdlet, isPowerShellAlias } from "./powershell";
 import {
   commandName,
   dequote,
@@ -34,6 +35,14 @@ const GIT_OPTS_WITH_ARG = new Set([
 const XARGS_OPTS_WITH_ARG = new Set(["-n", "-I", "-P", "-d", "-L", "-s", "-E"]);
 const MAX_DEPTH = 4;
 const MAX_CANDIDATES = 800;
+
+/** An alias's cmdlet in its usual capitalisation: `Remove-Item`, not `remove-item`. */
+function canonicalCmdletName(alias: string): string {
+  return (canonicalCmdlet(alias) ?? alias)
+    .split("-")
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join("-");
+}
 
 /** Text inside matching quotes, for scripts passed to `python -c`, `sh <<<` and similar. */
 function quotedLiterals(text: string): string[] {
@@ -103,6 +112,10 @@ function addPart(part: string, depth: number, out: Set<string>): void {
     for (const name of names) {
       if (!name) continue;
       out.add([name, ...tail].join(" "));
+      // PowerShell's `rm` is Remove-Item: a rule on either sees both
+      if (isPowerShellAlias(name)) {
+        out.add([canonicalCmdletName(name), ...tail].join(" "));
+      }
       if (name === "git") out.add(["git", ...skipGitOptions(tail)].join(" "));
       if (depth < MAX_DEPTH) nested(name, tail, depth, out);
     }

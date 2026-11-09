@@ -1,6 +1,6 @@
 # Tool-call styles per model family
 
-Written 2026-11-09. Roadmap: Track P in [`ROADMAP.md`](./ROADMAP.md). This file is the handoff: a person or agent who picks up Track P starts here. It records what was checked against primary sources, what was not, where our code stands, and the spikes that follow. Nothing here is built yet, and no spike has started.
+Written 2026-11-09. Roadmap: Track Q in [`ROADMAP.md`](./ROADMAP.md). This file is the handoff: a person or agent who picks up Track Q starts here. It records what was checked against primary sources, what was not, where our code stands, and the spikes that follow. Nothing here is built yet, and no spike has started.
 
 ## Start here
 

@@ -135,6 +135,7 @@ export function loopChecklist(
 
 type InboxAction =
   | { kind: "answer"; question: LoopQuestion }
+  | { kind: "choose"; question: LoopQuestion; option: string }
   | { kind: "confirm"; question: LoopQuestion }
   | { kind: "approve"; question: LoopQuestion; approve: boolean }
   | { kind: "note" }
@@ -164,8 +165,12 @@ function itemText(itemId: string | undefined): string | undefined {
 
 function actionLabel(action: InboxAction, loop: LoopState): string {
   switch (action.kind) {
+    case "choose":
+      return `Choose "${action.option}" (${action.question.id})`;
     case "answer":
-      return `Answer ${action.question.id}`;
+      return action.question.options?.length
+        ? `Other: answer ${action.question.id} in your own words`
+        : `Answer ${action.question.id}`;
     case "confirm":
       return `Keep the default (${action.question.id})`;
     case "approve":
@@ -199,6 +204,12 @@ function inboxActions(loop: LoopState): InboxAction[] {
       actions.push({ kind: "approve", question, approve: false });
     } else if (question.kind === "assumption") {
       actions.push({ kind: "confirm", question });
+    }
+    // The choices the agent offered come first, then "Other"
+    if (question.kind !== "approval") {
+      for (const option of question.options ?? []) {
+        actions.push({ kind: "choose", question, option });
+      }
     }
     actions.push({ kind: "answer", question });
   }
@@ -265,6 +276,14 @@ export const LoopInbox: React.FC<{
       case "note":
         setText("");
         setMode({ kind: "text" });
+        return;
+      case "choose":
+        report(
+          answerLoopQuestion({
+            questionId: action.question.id,
+            text: action.option,
+          }),
+        );
         return;
       case "confirm":
         report(
@@ -435,6 +454,9 @@ export const LoopInbox: React.FC<{
                 <Text>{q.question}</Text>
                 {q.assumption && (
                   <Text color="dim">Assumed: {q.assumption}</Text>
+                )}
+                {q.options && q.options.length > 0 && (
+                  <Text color="dim">Choices: {q.options.join(" | ")}</Text>
                 )}
               </Box>
             );

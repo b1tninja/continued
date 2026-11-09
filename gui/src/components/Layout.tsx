@@ -11,6 +11,7 @@ import { useAppDispatch, useAppSelector } from "../redux/hooks";
 import { setCodeToEdit } from "../redux/slices/editState";
 import { setShowDialog } from "../redux/slices/uiSlice";
 import { enterEdit, exitEdit } from "../redux/thunks/edit";
+import { loadPolicySettings } from "../redux/thunks/policySettings";
 import { saveCurrentSession } from "../redux/thunks/session";
 import { fontSize, isMetaEquivalentKeyPressed } from "../util";
 import { ROUTES } from "../util/navigation";
@@ -41,6 +42,12 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
+  // The shared settings file replaces what the webview remembered (YOLO is
+  // for one session only)
+  useEffect(() => {
+    void dispatch(loadPolicySettings());
+  }, [dispatch]);
+
   const onboardingCard = useOnboardingCard();
   const ideMessenger = useContext(IdeMessengerContext);
 

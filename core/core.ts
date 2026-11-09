@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { fetchwithRequestOptions } from "@continuedev/fetch";
 import * as URI from "uri-js";
 import { v4 as uuidv4 } from "uuid";
@@ -14,8 +15,15 @@ import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
+import { uriToPath } from "./tools/permissions/names";
+import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
+import { resolveShell } from "./util/shell";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
+import {
+  readPolicyFile,
+  writePolicyFile,
+} from "./tools/permissions/settingsFile";
 import { AutoReviewSessions } from "./tools/permissions/auto/state";
 import {
   suggestAllowRule,
@@ -211,6 +219,11 @@ export class Core {
     try {
       // Ensure .continuous directory is created
       migrateV1DevDataFiles();
+
+      // A second reader of POSIX commands for the read-only classifier. It
+      // loads in the background and changes nothing if it cannot: the strict
+      // scanner stands alone.
+      void initTreeSitterBash();
 
       const ideInfoPromise = messenger.request("getIdeInfo", undefined);
       const ideSettingsPromise = messenger.request("getIdeSettings", undefined);
@@ -1730,6 +1743,12 @@ export class Core {
       this.handleToolCall(toolCall, workspaceDirs),
     );
 
+    on("policy/load", async () => readPolicyFile(policyFilePath()));
+
+    on("policy/save", async ({ data }) => {
+      writePolicyFile(policyFilePath(), data);
+    });
+
     on(
       "tools/evaluatePolicy",
       async ({
@@ -1741,6 +1760,8 @@ export class Core {
         }
 
         const tool = config.tools.find((t) => t.function.name === toolName);
+        // The folder lets git be vouched as read-only after its config is checked
+        const dirs = await this.ide.getWorkspaceDirs();
         return evaluateToolPolicyWithRules({
           tool,
           toolName,
@@ -1749,6 +1770,9 @@ export class Core {
           processedArgs,
           permissions: config.toolPermissions,
           approval,
+          ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
+          // The shell terminal commands run in
+          shell: resolveShell().kind,
         });
       },
     );
@@ -1766,6 +1790,7 @@ export class Core {
           permissions: config.toolPermissions,
           enabled: config.experimental?.enableAutoApproval === true,
           reviewer: config.selectedModelByRole.reviewer,
+          shell: resolveShell().kind,
           reviewerReasoning: reasoningOptionsForEffort(
             config.modeModels?.reviewer?.reasoningEffort,
           ),
@@ -2230,4 +2255,9 @@ export class Core {
       return [];
     }
   };
+}
+
+/** The settings file the IDE and the CLI share. */
+function policyFilePath(): string {
+  return path.join(getContinueGlobalPath(), "permissions.yaml");
 }

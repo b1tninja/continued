@@ -99,6 +99,12 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
     category: "system",
   },
   {
+    name: "policy",
+    description:
+      "Show or set who decides per area: /policy, /policy yolo, /policy tools=permissive",
+    category: "system",
+  },
+  {
     name: "loop",
     description: "Open the loop's inbox: questions, answers, Stop loop",
     category: "system",

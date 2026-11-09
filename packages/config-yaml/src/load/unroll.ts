@@ -224,6 +224,11 @@ export interface BaseUnrollAssistantOptions {
    * `from: Name[#variant]` become that model; see resolveCatalogModels.
    */
   catalog?: CatalogModel[];
+  /**
+   * Add the catalog models (and variants) the config does not use, with no
+   * roles, for clients that offer every model (see resolveCatalogModels).
+   */
+  offerCatalog?: boolean;
 }
 
 export interface DoNotRenderSecretsUnrollAssistantOptions extends BaseUnrollAssistantOptions {
@@ -316,6 +321,7 @@ export async function unrollAssistantFromContent(
       unrolledAssistant.models,
       options.catalog,
       (unrolledAssistant as { modeModels?: unknown }).modeModels,
+      options.offerCatalog,
     );
     unrolledAssistant.models =
       fromCatalog.models as typeof unrolledAssistant.models;
