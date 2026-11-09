@@ -245,6 +245,14 @@ Lookups: `promptCacheRule`, `promptCacheFields`, `promptCacheMinTokens`, `prompt
 
 **Left as it was:** `anthropicStyleSupportsOneHourCache` in core, the 1-hour list for Claude on Vertex AI and OpenRouter. Its own comment says it was not read from a vendor table (it is Bedrock's list plus Sonnet 4.5), so it has no row to move to; folding it would need provider-split Claude rows for two providers whose vendors publish no such table. It stays a one-line rule until Vertex's lifetimes are checked.
 
+## Fork points (2026-11-08)
+
+Bedrock has no server-side conversation to branch from; a fork is a resend of the shared prefix with a cache point at the branch point, and every branch then reads that prefix at cache-read price. The adapters placed their conversation cache points on the last two user messages only, so an item's first message fell out of that window after two tool turns and its entry expired five minutes later; a retry, a branch or a subagent that started from the item's context then wrote the prefix again.
+
+`CACHE_PIN_FIELD` (`x_continue_cache_pin`, in `packages/openai-adapters/src/apis/cacheTtl.ts`) on an OpenAI-format message makes the Bedrock adapter put a `cachePoint` right after that message's content and the Anthropic adapter put `cache_control` on its last block; the pin counts as one of the two conversation cache points, so the budget of four holds (tools, system, pin, the last user message). Like the opt-out field, only those two adapters read it and neither forwards it; the CLI sets it for them only. `ChatHistoryItem.cachePin` carries it from the CLI's history: `loopRequestHistory` pins the item's first message, and `buildChatRequestBody` maps that item to the OpenAI message it produced. Tests: adapter placement (including before a merged task list block and on Nova), the CLI mapping, and a prefix-stability case where every request of a parent run and a branch from the same item start with the bytes the pin cached.
+
+Two things the pin does not solve, both on the roadmap: branches sent at the same instant each write (AWS: a request sent before an identical one has started its response writes a new entry), so a fan-out should wait for the first response to start (C51); and the per-process marker on the first user message keeps separate `cn` processes from sharing a cache at all (C52).
+
 ## Sources, read 2026-11-04
 
 What the vendors' own documentation says about each finding. Quotes are from the pages named. The AWS

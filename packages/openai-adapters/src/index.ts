@@ -248,6 +248,7 @@ export {
   bedrockCachePointFields,
   bedrockModelAccessMessage,
 } from "./apis/bedrockHelpers.js";
+export { CACHE_PIN_FIELD, NO_PROMPT_CACHE_FIELD } from "./apis/cacheTtl.js";
 export {
   alternateMantlePrefix,
   getMantleErrorHint,

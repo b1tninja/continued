@@ -1,6 +1,10 @@
 import type { ModelConfig } from "@continuedev/config-yaml";
+import { CACHE_PIN_FIELD } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
-import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
+import {
+  convertFromUnifiedHistory,
+  convertFromUnifiedHistoryWithSystemMessage,
+} from "core/util/messageConversion.js";
 import type {
   ChatCompletionCreateParamsStreaming,
   ChatCompletionMessageParam,
@@ -23,6 +27,13 @@ import { getDefaultCompletionOptions } from "./streamChatResponse.types.js";
  * to the list changes only the tail of the request and the Bedrock adapter can
  * put its cache point before it.
  */
+/**
+ * Providers whose adapters build their own request body and read
+ * CACHE_PIN_FIELD. Every other adapter passes the messages on to the provider,
+ * which would reject the unknown field, so the mark is set for these only.
+ */
+const PIN_PROVIDERS = new Set(["bedrock", "anthropic"]);
+
 export function buildChatRequestBody(args: {
   model: ModelConfig;
   chatHistory: ChatHistoryItem[];
@@ -40,6 +51,16 @@ export function buildChatRequestBody(args: {
   ) as ChatCompletionMessageParam[];
   if (taskListBlock) {
     messages.push({ role: "user", content: taskListBlock });
+  }
+  // A history item marked as a fork point (ChatHistoryItem.cachePin) becomes
+  // the mark on the message it produced: index 0 is the system message, then
+  // the messages the items before it produce.
+  const pinAt = chatHistory.findIndex((item) => item.cachePin);
+  if (pinAt >= 0 && PIN_PROVIDERS.has(model.provider)) {
+    const index =
+      1 + convertFromUnifiedHistory(chatHistory.slice(0, pinAt)).length;
+    const pinned = messages[index] as Record<string, unknown> | undefined;
+    if (pinned) pinned[CACHE_PIN_FIELD] = true;
   }
   return {
     model: model.model,

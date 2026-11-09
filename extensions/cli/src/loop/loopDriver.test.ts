@@ -155,7 +155,10 @@ describe("Loop mode's driver in the CLI", () => {
     expect(services.toolPermissions.getCurrentMode()).toBe("plan");
     // The re-plan's request starts at its own prompt
     append(user(replan!.prompt));
-    expect(loopRequestHistory(history())).toEqual([user(replan!.prompt)]);
+    // The run's first message is pinned as the prompt cache fork point.
+    expect(loopRequestHistory(history())).toEqual([
+      { ...user(replan!.prompt), cachePin: true },
+    ]);
 
     // The re-plan presents the same to-dos
     await planOf("One", "Two");

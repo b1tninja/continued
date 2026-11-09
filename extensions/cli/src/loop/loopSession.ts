@@ -368,7 +368,8 @@ export function answerLoopQuestion(
   input: LoopAnswerInput,
   now = new Date(),
 ):
-  { ok: true; route: string; answerId: string } | { ok: false; error: string } {
+  | { ok: true; route: string; answerId: string }
+  | { ok: false; error: string } {
   const loop = getSessionLoop();
   if (!loop) return { ok: false, error: "No loop is running" };
   const result = answerLoop(loop, input, now);
@@ -497,20 +498,29 @@ export function loopRequestHistory(
   if (!loop?.current || !isMainHistory(isCompacting)) return history;
   const start = Math.min(loop.current.historyIndex, history.length);
   const block = loopPlanBlockForRequest(isCompacting);
-  const withPlan =
-    block && history[start]
-      ? [
-          ...history.slice(0, start),
-          {
-            ...history[start],
-            message: {
-              ...history[start].message,
-              content: withLoopPlanBlock(history[start].message.content, block),
-            } as ChatHistoryItem["message"],
-          },
-          ...history.slice(start + 1),
-        ]
-      : history;
+  const item = history[start];
+  // The item's first message is the run's fork point: a prompt cache point
+  // goes right after it (ChatHistoryItem.cachePin), so every request of the
+  // run keeps that prefix warm and a retry, a branch or a subagent that
+  // starts from the same context reads it instead of writing it again.
+  const withPlan = item
+    ? [
+        ...history.slice(0, start),
+        {
+          ...item,
+          cachePin: true,
+          ...(block
+            ? {
+                message: {
+                  ...item.message,
+                  content: withLoopPlanBlock(item.message.content, block),
+                } as ChatHistoryItem["message"],
+              }
+            : {}),
+        },
+        ...history.slice(start + 1),
+      ]
+    : history;
   return loop.freshContext === false ? withPlan : withPlan.slice(start);
 }
 

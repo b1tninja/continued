@@ -42,6 +42,7 @@ import {
 } from "./bedrockHelpers.js";
 import {
   AutoCacheTtl,
+  isCachePinned,
   optsOutOfPromptCache,
   requestedCacheTtl,
 } from "./cacheTtl.js";
@@ -299,6 +300,7 @@ export class BedrockApi implements BaseLlmApi {
     let currentBlocks: ContentBlock[] = [];
     const converted: Message[] = [];
     const hasAddedToolCallIds = new Set<string>();
+    let pinned = 0;
 
     const pushCurrentMessage = () => {
       if (currentBlocks.length > 0) {
@@ -421,6 +423,20 @@ export class BedrockApi implements BaseLlmApi {
           }
         }
       }
+
+      // A message the client pinned (CACHE_PIN_FIELD, a fork point) gets a
+      // cache point right after its content, so every request of a run keeps
+      // that prefix warm and a branch from it reads it. Only when the
+      // conversation is cached at all: a model that takes no cache point in
+      // its messages gets none here either.
+      if (
+        cache?.conversation &&
+        isCachePinned(message) &&
+        currentBlocks.length > 0
+      ) {
+        currentBlocks.push(bedrockCachePoint(cache.ttl));
+        pinned += 1;
+      }
     }
 
     if (currentBlocks.length > 0) {
@@ -429,7 +445,7 @@ export class BedrockApi implements BaseLlmApi {
 
     // If caching is enabled, add cache points
     if (cache?.conversation) {
-      this._addCachingToLastTwoUserMessages(converted, cache.ttl);
+      this._addCachingToLastTwoUserMessages(converted, cache.ttl, pinned);
     }
 
     return converted;
@@ -452,7 +468,11 @@ export class BedrockApi implements BaseLlmApi {
    * it: the next request, which no longer has the block there, then starts
    * with exactly the bytes this one cached.
    */
-  private _addCachingToLastTwoUserMessages(converted: Message[], ttl?: "1h") {
+  private _addCachingToLastTwoUserMessages(
+    converted: Message[],
+    ttl?: "1h",
+    pinned = 0,
+  ) {
     const first = converted.find((m) => m.role === "user");
     first?.content?.forEach((block) => {
       if (block.text && !isTaskListBlockText(block.text)) {
@@ -460,22 +480,22 @@ export class BedrockApi implements BaseLlmApi {
       }
     });
 
-    let numCached = 0;
-    for (let i = converted.length - 1; i >= 0; i--) {
+    // Two cache points in the conversation at most (the tools and the system
+    // prompt take the other two of Bedrock's four). A pinned point counts as
+    // one of them, and a message that already carries one is not marked again.
+    let numCached = Math.min(pinned, 2);
+    for (let i = converted.length - 1; i >= 0 && numCached < 2; i--) {
       const message = converted[i];
-      if (message.role === "user") {
-        const content = message.content ?? [];
-        const last = content[content.length - 1];
-        if (content.length > 1 && isTaskListBlockText(last?.text)) {
-          content.splice(content.length - 1, 0, bedrockCachePoint(ttl));
-        } else {
-          content.push(bedrockCachePoint(ttl));
-        }
-        numCached++;
+      if (message.role !== "user") continue;
+      const content = message.content ?? [];
+      if (content.some((block) => !!block.cachePoint)) continue;
+      const last = content[content.length - 1];
+      if (content.length > 1 && isTaskListBlockText(last?.text)) {
+        content.splice(content.length - 1, 0, bedrockCachePoint(ttl));
+      } else {
+        content.push(bedrockCachePoint(ttl));
       }
-      if (numCached === 2) {
-        break;
-      }
+      numCached++;
     }
   }
 

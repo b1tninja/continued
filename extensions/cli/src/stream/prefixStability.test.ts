@@ -330,3 +330,90 @@ describe("consecutive CLI agent requests keep a byte-identical cached prefix", (
     });
   });
 });
+
+// --- Branching from a pinned fork point -------------------------------------
+
+/**
+ * A Loop item's run: the item prompt is pinned (ChatHistoryItem.cachePin), so
+ * every request of the run carries a cache point right after it. A branch
+ * from the same context (a retry with another strategy, a subagent) then
+ * starts with exactly the bytes that point cached, however long the parent's
+ * run went on.
+ */
+const pinned = (item: ChatHistoryItem): ChatHistoryItem => ({
+  ...item,
+  cachePin: true,
+});
+
+const itemPrompt = pinned(user("Item 3: make the tests pass."));
+const parentRun: ChatHistoryItem[][] = [
+  [itemPrompt],
+  [itemPrompt, toolTurn("p1", "Bash", { command: "npm test" }, "1 failed")],
+  [
+    itemPrompt,
+    toolTurn("p1", "Bash", { command: "npm test" }, "1 failed"),
+    toolTurn("p2", "Read", { filepath: "test/a.js" }, "expect(1).toBe(2)"),
+  ],
+  [
+    itemPrompt,
+    toolTurn("p1", "Bash", { command: "npm test" }, "1 failed"),
+    toolTurn("p2", "Read", { filepath: "test/a.js" }, "expect(1).toBe(2)"),
+    toolTurn("p3", "Bash", { command: "npm test" }, "12 passed"),
+  ],
+];
+const branch: ChatHistoryItem[] = [
+  itemPrompt,
+  toolTurn("b1", "Read", { filepath: "package.json" }, "{}"),
+];
+
+/** The content before the k-th cache point in the messages (0-based). */
+function prefixUpToPoint(body: any, k: number) {
+  let seen = -1;
+  for (let i = 0; i < body.messages.length; i++) {
+    let before = 0;
+    for (const block of body.messages[i].content ?? []) {
+      if (isPoint(block)) {
+        seen += 1;
+        if (seen === k) return prefixUpTo(body, { message: i, before });
+      } else before += 1;
+    }
+  }
+  throw new Error(`fewer than ${k + 1} cache points in the messages`);
+}
+
+describe("a branch from a pinned fork point reads what the parent's run cached", () => {
+  const buildRun = (m: ModelConfig, h: ChatHistoryItem[]) =>
+    buildChatRequestBody({
+      model: m,
+      chatHistory: h,
+      systemMessage: SYSTEM,
+      tools,
+      taskListBlock: plan(["in_progress"]),
+    });
+
+  describe.each([
+    ["Claude on Bedrock", "us.anthropic.claude-sonnet-4-6"],
+    ["Nova 2 Lite on Bedrock", "us.amazon.nova-2-lite-v1:0"],
+  ])("%s", (_name, id) => {
+    const m = model(id, "bedrock");
+
+    it("every request of the run carries the fork point, and the branch starts with it", () => {
+      const requests = parentRun.map((h) => toConverse(id, buildRun(m, h)));
+      const forked = toConverse(id, buildRun(m, branch));
+      const want = prefixUpToPoint(requests[0], 0);
+      for (const r of requests) expect(prefixUpToPoint(r, 0)).toBe(want);
+      expect(prefixUpToPoint(forked, 0)).toBe(want);
+      // and the fork point is not the only point: the last turn has its own
+      expect(lastCachePoint(requests.at(-1)!).message).toBeGreaterThan(0);
+    });
+  });
+
+  it("Claude on Anthropic", () => {
+    const m = model("claude-sonnet-4-6", "anthropic");
+    const requests = parentRun.map((h) => toMessages(buildRun(m, h)));
+    const forked = toMessages(buildRun(m, branch));
+    const want = prefixUpToPoint(requests[0], 0);
+    for (const r of requests) expect(prefixUpToPoint(r, 0)).toBe(want);
+    expect(prefixUpToPoint(forked, 0)).toBe(want);
+  });
+});

@@ -510,6 +510,119 @@ describe("BedrockApi cache points on non-Claude models", () => {
   });
 });
 
+describe("BedrockApi pinned cache point (a fork point)", () => {
+  const NL = String.fromCharCode(10);
+  const taskList = ["<task_list>", "[>] a", "</task_list>"].join(NL);
+  const tool = {
+    type: "function",
+    function: { name: "read", description: "d", parameters: {} },
+  };
+  const convert = (
+    messages: any[],
+    config: any = { promptCaching: true },
+    model = "anthropic.claude-sonnet-4-6",
+  ) =>
+    (
+      new TestApi({ provider: "bedrock", env: {}, ...config } as any) as any
+    )._convertBody({ model, messages, tools: [tool] });
+  const pointsIn = (body: any) =>
+    body.messages.map(
+      (m: any) => (m.content ?? []).filter((b: any) => b.cachePoint).length,
+    );
+  const pin = (m: any) => ({ ...m, x_continue_cache_pin: true });
+
+  it("puts a cache point right after the pinned message and one on the last user message", () => {
+    const body = convert([
+      { role: "system", content: "be brief" },
+      pin({ role: "user", content: "item prompt" }),
+      { role: "assistant", content: "ok" },
+      { role: "user", content: "next" },
+      { role: "assistant", content: "ok" },
+      { role: "user", content: "last" },
+    ]);
+    // user, assistant, user, assistant, user
+    expect(pointsIn(body)).toEqual([1, 0, 0, 0, 1]);
+    expect(body.messages[0].content.at(-1)).toEqual({
+      cachePoint: { type: "default" },
+    });
+    // four in all with the tools and the system prompt
+    expect(JSON.stringify(body).split("cachePoint").length - 1).toBe(4);
+    expect(JSON.stringify(body)).not.toContain("x_continue_cache_pin");
+  });
+
+  it("keeps the pinned point even when later tool turns push it out of the last-two window", () => {
+    const body = convert([
+      { role: "system", content: "be brief" },
+      pin({ role: "user", content: "item prompt" }),
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "c1",
+            type: "function",
+            function: { name: "read", arguments: "{}" },
+          },
+        ],
+      },
+      { role: "tool", tool_call_id: "c1", content: "one" },
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "c2",
+            type: "function",
+            function: { name: "read", arguments: "{}" },
+          },
+        ],
+      },
+      { role: "tool", tool_call_id: "c2", content: "two" },
+    ]);
+    // user(pinned), assistant, user(result), assistant, user(result)
+    expect(pointsIn(body)).toEqual([1, 0, 0, 0, 1]);
+  });
+
+  it("puts the pin before a task list block merged into the same message, with no second point", () => {
+    const body = convert([
+      { role: "system", content: "be brief" },
+      pin({ role: "user", content: "item prompt" }),
+      { role: "user", content: taskList },
+    ]);
+    const blocks = body.messages[0].content;
+    expect(blocks.map((b: any) => (b.cachePoint ? "point" : "text"))).toEqual([
+      "text",
+      "point",
+      "text",
+    ]);
+    expect(blocks.at(-1).text).toContain("<task_list>");
+  });
+
+  it("sends no pin when the conversation is not cached", () => {
+    const body = convert(
+      [{ role: "system", content: "s" }, pin({ role: "user", content: "x" })],
+      {},
+    );
+    expect(JSON.stringify(body)).not.toContain("cachePoint");
+    expect(JSON.stringify(body)).not.toContain("x_continue_cache_pin");
+  });
+
+  it("works on Nova, whose cache points go in the messages but not the tools", () => {
+    const body = convert(
+      [
+        { role: "system", content: "s" },
+        pin({ role: "user", content: "item prompt" }),
+        { role: "assistant", content: "ok" },
+        { role: "user", content: "next" },
+      ],
+      { promptCaching: true },
+      "us.amazon.nova-2-lite-v1:0",
+    );
+    expect(pointsIn(body)).toEqual([1, 0, 1]);
+    expect(JSON.stringify(body.toolConfig)).not.toContain("cachePoint");
+  });
+});
+
 describe("BedrockApi when the call is refused", () => {
   const AWS_TEXT =
     "anthropic.claude-haiku-5-5 is not available for this account. You can explore other available models on Amazon Bedrock.";

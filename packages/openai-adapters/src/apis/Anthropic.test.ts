@@ -146,6 +146,45 @@ describe("AnthropicApi", () => {
       expect(only.cache_control).toEqual({ type: "ephemeral" });
     });
 
+    it("marks a pinned message (a fork point) and one trailing message, never the mark itself", () => {
+      const result = (api as any)._convertBody({
+        model: "claude-sonnet-4-20250514",
+        messages: [
+          { role: "system", content: "You are helpful." },
+          { role: "user", content: "item prompt", x_continue_cache_pin: true },
+          { role: "assistant", content: "ok" },
+          { role: "user", content: "next" },
+          { role: "assistant", content: "ok" },
+          { role: "user", content: "last" },
+        ],
+      });
+      const marked = result.messages.map(
+        (m: any) => (m.content as any[]).filter((p) => p.cache_control).length,
+      );
+      expect(marked).toEqual([1, 0, 0, 0, 1]);
+      expect(JSON.stringify(result)).not.toContain("x_continue_cache_pin");
+      // system + pinned + last = 3 markers (no tools here)
+      expect(JSON.stringify(result).split("cache_control").length - 1).toBe(3);
+    });
+
+    it("strips the pin mark when the caching strategy is none", () => {
+      const quiet = new AnthropicApi({
+        provider: "anthropic",
+        apiKey: "test-key",
+        cachingStrategy: "none",
+      });
+      const result = (quiet as any)._convertBody({
+        model: "claude-sonnet-4-20250514",
+        messages: [
+          { role: "user", content: "item prompt", x_continue_cache_pin: true },
+          { role: "assistant", content: "ok" },
+          { role: "user", content: "next" },
+        ],
+      });
+      expect(JSON.stringify(result)).not.toContain("x_continue_cache_pin");
+      expect(JSON.stringify(result)).not.toContain("cache_control");
+    });
+
     it("does not cache user messages when caching strategy is none", () => {
       const api = new AnthropicApi({
         provider: "anthropic",
