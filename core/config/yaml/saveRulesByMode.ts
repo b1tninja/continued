@@ -1,7 +1,7 @@
 import type { ConfigYaml } from "@continuedev/config-yaml";
 import { editConfigFile } from "../../util/paths";
 
-const MODES = ["chat", "agent", "plan"] as const;
+const MODES = ["chat", "agent", "plan", "loop", "replan"] as const;
 
 /**
  * A mode set to true or false is written as given; `null` removes the entry

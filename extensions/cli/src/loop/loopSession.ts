@@ -7,6 +7,7 @@ import type {
   LoopQuestion,
   LoopState,
   LoopStrategy,
+  ModelUse,
   TaskPlan,
 } from "core/index.js";
 import {
@@ -535,6 +536,19 @@ export function loopRequestHistory(
 /** Whether the loop is running an item or a re-plan in the main session. */
 export function loopRunGoing(): boolean {
   return !!getSessionLoop()?.current;
+}
+
+/**
+ * What the next request is for, as `modeModels` keys it: a Loop item or
+ * re-plan while one runs, else the permission mode's use (Plan plans, the
+ * others act).
+ */
+export function currentModelUse(): ModelUse {
+  const current = getSessionLoop()?.current;
+  if (current) return useForLoopTurn(current.kind);
+  // Read as the stream does (getState), which test doubles provide
+  const mode = services.toolPermissions.getState?.()?.currentMode;
+  return mode === "plan" ? "plan" : "agent";
 }
 
 /** Whether the loop is running an item in the main session. */

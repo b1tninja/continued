@@ -432,6 +432,7 @@ export async function configYamlToContinueConfig(options: {
     config.modeModels,
     continueConfig.modelsByRole.chat,
     allLlms,
+    (config.prompts ?? []).filter((p): p is NonNullable<typeof p> => !!p),
   );
   continueConfig.modeModels = modeModelsResult.modeModels;
   localErrors.push(...modeModelsResult.errors);

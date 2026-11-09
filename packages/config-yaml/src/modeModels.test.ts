@@ -126,3 +126,23 @@ describe("modeModels: the uses beyond the modes", () => {
     expect(cfg.modeModels?.replan?.model).toBe("Opus");
   });
 });
+
+describe("modeModels: prompt per use", () => {
+  it("accepts a profile or a block name on the turn uses", () => {
+    const parsed = modeModelsSchema.parse({
+      agent: { model: "Sonnet", prompt: "short" },
+      loop: { prompt: "house" },
+      replan: { model: "Opus", prompt: "full" },
+    });
+    expect(parsed.loop).toEqual({ prompt: "house" });
+    expect(parsed.agent?.prompt).toBe("short");
+  });
+
+  it("a mode entry with only a prompt is enough", () => {
+    expect(modeModelsSchema.parse({ plan: { prompt: "short" } }).plan).toEqual({
+      prompt: "short",
+    });
+    expect(() => modeModelsSchema.parse({ loop: {} })).toThrow();
+    expect(() => modeModelsSchema.parse({ loop: { prompt: "" } })).toThrow();
+  });
+});
