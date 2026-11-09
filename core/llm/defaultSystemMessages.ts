@@ -1,8 +1,9 @@
+import { IDE_TURN_TOOL_NAMES } from "./prompts/turns.js";
 import {
-  actTurnFor,
-  IDE_TURN_TOOL_NAMES,
-  planTurnFor,
-} from "./prompts/turns.js";
+  actTurnTextFor,
+  planTurnTextFor,
+  PromptChoice,
+} from "./prompts/usePrompts.js";
 
 export const DEFAULT_SYSTEM_MESSAGES_URL =
   "https://github.com/b1tninja/continuous/blob/main/core/llm/defaultSystemMessages.ts";
@@ -68,12 +69,16 @@ ${EDIT_CODE_INSTRUCTIONS}
 /**
  * The act turn's instructions (core/llm/prompts/turns.ts), shared with the
  * CLI, plus the IDE's code-block rules. A Loop item run uses the same text.
- * `model` picks the turn text by prompt profile (short for Qwen).
+ * `model` picks the turn text by prompt profile (short for Qwen); `choice`
+ * (`modeModels.<use>.prompt`) names a profile or a block's text instead.
  */
-export function agentSystemMessageFor(model?: string): string {
+export function agentSystemMessageFor(
+  model?: string,
+  choice?: PromptChoice,
+): string {
   return `\
 <important_rules>
-${actTurnFor(model, IDE_TURN_TOOL_NAMES)}
+${actTurnTextFor(model, choice, IDE_TURN_TOOL_NAMES)}
 
 ${CODEBLOCK_FORMATTING_INSTRUCTIONS}
 ${BRIEF_LAZY_INSTRUCTIONS}
@@ -89,10 +94,13 @@ export const DEFAULT_AGENT_SYSTEM_MESSAGE = agentSystemMessageFor();
  * text states the limit rather than asking the model to keep it. A Loop
  * re-plan uses the same text. `model` picks the text by prompt profile.
  */
-export function planSystemMessageFor(model?: string): string {
+export function planSystemMessageFor(
+  model?: string,
+  choice?: PromptChoice,
+): string {
   return `\
 <important_rules>
-${planTurnFor(model, IDE_TURN_TOOL_NAMES)}
+${planTurnTextFor(model, choice, IDE_TURN_TOOL_NAMES)}
 
 ${CODEBLOCK_FORMATTING_INSTRUCTIONS}
 ${BRIEF_LAZY_INSTRUCTIONS}

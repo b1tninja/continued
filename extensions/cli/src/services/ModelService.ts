@@ -1,6 +1,6 @@
 import { AssistantUnrolled, ModelConfig } from "@continuedev/config-yaml";
-import type { ModelUse } from "core/index.js";
-import { modeModelFor } from "core/util/modelUse.js";
+import type { LoopItemModel, ModelUse } from "core/index.js";
+import { modeModelFor, modelForLoopItem } from "core/util/modelUse.js";
 
 import { AuthConfig, getModelName } from "../auth/workos.js";
 import { createLlmApi, getLlmApi } from "../config.js";
@@ -305,28 +305,69 @@ export class ModelService
   }
 
   /**
-   * Switch to the model configured for a use, when there is one and it is not
-   * the current model or effort. Returns true when something changed. The
-   * choice is not persisted as the person's: it follows the config, as a
-   * mode's model does in the IDE. A `reasoningEffort` reaches the server as
-   * `reasoning_effort` (see `withReasoningEffort`).
+   * The chat models as the shared resolver reads them: the config's `name`
+   * as the title, with each one's index among the chat models.
    */
-  async switchToModelForUse(use: ModelUse): Promise<boolean> {
-    const entry = this.entryForUse(use);
-    const index = entry ? this.getModelIndexByName(entry.name) : -1;
-    if (!entry || index === -1) return false;
+  private chatModelCandidates() {
+    const assistant = this.getState().assistant ?? this.assistant;
+    const available = (assistant?.models?.filter(
+      (model) =>
+        model && (model.roles?.includes("chat") || model.roles === undefined),
+    ) ?? []) as ModelConfig[];
+    return available.map((model, index) => ({
+      title: String((model as any).name ?? model.model),
+      model: String(model.model ?? ""),
+      provider: model.provider,
+      index,
+    }));
+  }
+
+  /**
+   * The model a use's turn goes to, as an index into the chat models (-1:
+   * keep the current one). With `itemModel`, a Loop item's own model
+   * (TaskItem.model): that model when it is configured, else the use's (or
+   * the current one), with what the item's run records about it.
+   */
+  resolveModelForUse(
+    use: ModelUse,
+    itemModel?: string,
+  ): { index: number; record?: LoopItemModel } {
+    const useIndex = this.modelIndexForUse(use);
+    if (!itemModel?.trim()) return { index: useIndex };
+    const candidates = this.chatModelCandidates();
+    const fallbackIndex =
+      useIndex === -1 ? this.getCurrentModelIndex() : useIndex;
+    const chosen = modelForLoopItem(
+      { model: itemModel },
+      candidates,
+      candidates[fallbackIndex],
+    );
+    return { index: chosen.model?.index ?? -1, record: chosen.record };
+  }
+
+  /**
+   * Switch to the model configured for a use, when there is one and it is not
+   * the current model or effort; a Loop item's own model (`itemModel`) wins
+   * over the use's, and the use's `reasoningEffort` reaches the server as
+   * `reasoning_effort` (see `withReasoningEffort`). Returns true when
+   * something changed. The choice is not persisted as the person's: it
+   * follows the config, as a mode's model does in the IDE.
+   */
+  async switchToModelForUse(
+    use: ModelUse,
+    itemModel?: string,
+  ): Promise<boolean> {
+    const { index } = this.resolveModelForUse(use, itemModel);
+    const effort = this.entryForUse(use)?.effort;
+    if (index === -1) return false;
     if (
       index === this.getCurrentModelIndex() &&
-      entry.effort === this.appliedEffort
+      effort === this.appliedEffort
     ) {
       return false;
     }
-    await this.switchModel(index, entry.effort);
-    logger.debug("Model switched for use", {
-      use,
-      index,
-      effort: entry.effort,
-    });
+    await this.switchModel(index, effort);
+    logger.debug("Model switched for use", { use, itemModel, index, effort });
     return true;
   }
 

@@ -3,11 +3,12 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { parseMarkdownRule, RuleObject } from "@continuedev/config-yaml";
+import { CLI_TURN_TOOL_NAMES } from "core/llm/prompts/turns.js";
 import {
-  actTurnFor,
-  CLI_TURN_TOOL_NAMES,
-  planTurnFor,
-} from "core/llm/prompts/turns.js";
+  actTurnTextFor,
+  planTurnTextFor,
+  type PromptChoice,
+} from "core/llm/prompts/usePrompts.js";
 
 import { processRule } from "./hubLoader.js";
 import { AGENT_FILES, rulesDirs } from "./instructionFiles.js";
@@ -137,14 +138,25 @@ export function loadMarkdownRulesWithMetadata(): RuleObject[] {
  * @param mode - Current permission mode
  * @returns The comprehensive system message with base message and rules section
  */
+/**
+ * Which turn text to build: the model id the message is for (its prompt
+ * profile picks the text) and, or, the prompt `modeModels.<use>.prompt`
+ * chose for the turn. A bare string is the model id alone.
+ */
+export interface TurnPromptInput {
+  model?: string;
+  promptChoice?: PromptChoice;
+}
+
 export async function constructSystemMessage(
   mode: PermissionMode,
   additionalRules?: string[],
   format?: "json",
   headless?: boolean,
-  /** The model id the message is for; picks the turn text's prompt profile. */
-  model?: string,
+  turn?: string | TurnPromptInput,
 ): Promise<string> {
+  const { model, promptChoice }: TurnPromptInput =
+    typeof turn === "string" ? { model: turn } : (turn ?? {});
   let agentContent = "";
 
   try {
@@ -195,11 +207,12 @@ export async function constructSystemMessage(
 
   // The turn's instructions: a plan turn in plan mode, an act turn otherwise.
   // The same texts serve the IDE, so the two surfaces cannot drift apart; the
-  // model's prompt profile picks the short text for small models (Qwen).
+  // use's prompt choice, else the model's prompt profile, picks the short
+  // text for small models (Qwen) or a prompt block of the person's own.
   if (mode === "plan") {
-    systemMessage += `\n<context name="planMode">\n${planTurnFor(model, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
+    systemMessage += `\n<context name="planMode">\n${planTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
   } else {
-    systemMessage += `\n<context name="agentMode">\n${actTurnFor(model, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
+    systemMessage += `\n<context name="agentMode">\n${actTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
     // Check if commit signature is disabled via environment variable
     if (!process.env.CONTINUE_CLI_DISABLE_COMMIT_SIGNATURE) {
       systemMessage += `\n<context name="commitSignature">When creating commits using any CLI or tool, include the following in the commit message:

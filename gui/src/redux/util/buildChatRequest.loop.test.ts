@@ -176,3 +176,44 @@ describe("a loop turn's reasoning effort", () => {
     });
   });
 });
+
+describe("a loop turn's system prompt and rules", () => {
+  const withConfig = (state: RootState, extra: object): RootState => ({
+    ...state,
+    config: {
+      ...state.config,
+      config: { ...state.config.config, ...extra },
+    },
+  });
+  const systemText = (state: RootState) =>
+    renderChatMessage(
+      buildChatRequest(state).messages.find((m) => m.role === "system")!,
+    );
+
+  it("an item takes modeModels.loop's prompt: the short text here", () => {
+    const state = withConfig(stateWith(), {
+      modeModels: { loop: { title: "Claude", prompt: "short" } },
+    });
+    expect(systemText(state)).toContain("Keep going until the request is done");
+    expect(systemText(stateWith())).toContain("Stopping");
+  });
+
+  it("an item follows the Agent rules switch unless loop has its own", () => {
+    const rule = {
+      name: "house",
+      rule: "Always write tests first.",
+      source: "default-chat",
+      alwaysApply: true,
+    };
+    const off = withConfig(stateWith(), {
+      rules: [rule],
+      rulesByMode: { agent: false },
+    });
+    expect(systemText(off)).not.toContain("Always write tests first.");
+    const on = withConfig(stateWith(), {
+      rules: [rule],
+      rulesByMode: { agent: false, loop: true },
+    });
+    expect(systemText(on)).toContain("Always write tests first.");
+  });
+});
