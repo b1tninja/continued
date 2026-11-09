@@ -29,7 +29,7 @@ export interface AutoReviewContext {
   onceGrants?: string[];
 }
 
-interface EvaluatedPolicy {
+export interface EvaluatedPolicy {
   policy: ToolPolicy;
   displayValue?: string;
   /** Why core decided, when the user has toolPermissions rules. "auto" means the reviewer model. */
@@ -86,6 +86,8 @@ export async function evaluateToolPolicy(
     toolPolicies,
     approval,
   );
+  // Plan mode changes nothing until the plan is accepted, in every approval
+  // mode: YOLO is about what runs while building
   return mode === "plan" ? holdInPlanMode(result, activeTools) : result;
 }
 
@@ -111,6 +113,7 @@ async function evaluateBasePolicy(
         basePolicy: "allowedWithoutPermission",
         parsedArgs: toolCallState.parsedArgs,
         processedArgs: toolCallState.processedArgs,
+        ...(approval ? { approval } : {}),
       });
       if (result.status === "success") {
         const { policy, source } = result.content;
@@ -165,6 +168,7 @@ async function evaluateBasePolicy(
     // call no rule, protected path or safety check has settled.
     details.source !== "allow-rule" &&
     details.source !== "category" &&
+    details.source !== "review" &&
     details.source !== "yolo"
   ) {
     return { ...details, policy: "allowedWithPermission", toolCallState }; // Cannot make more lenient
@@ -306,29 +310,37 @@ export function refusalMessage(
   reason: string | undefined,
   category?: string,
 ): { description: string; content: string } {
+  // One shape for every source: who refused, the call, what to do next. The
+  // text never says to stop and ask: whether the model must stop is the
+  // harness's decision (the refusal cap), not the prose's
+  // (plans/policy-areas.md, "Decision order"; policy-areas-prompts.md, 7.1).
   switch (source) {
     case "auto":
       return {
         description: `Blocked by Auto${category ? ` [${category}]` : ""}`,
-        content: `A reviewer model refused this call${category ? ` (${category})` : ""}: ${reason ?? "no reason given"}\n\n${command}\n\nDo not retry it or reach the same result another way. Find a safer route to the user's request, or tell the user what you need and ask how they want to proceed.`,
+        content: `A reviewer model refused this call${category ? ` (${category})` : ""}: ${reason ?? "no reason given"}\n\n${command}\n\nDo not retry this call or reach the same result another way. Find a safer route to the same end if one exists; otherwise do what else the request needs, then say what you could not do and why.`,
       };
     case "deny-rule":
       return {
         description: "Blocked by your rule",
-        content: `${reason ?? "Blocked by a rule in the user's config.yaml."}\n\n${command}\n\nDo not retry this or reach the same result another way. Tell the user what you were trying to do and ask how they want to proceed.`,
+        content: `${reason ?? "Blocked by a rule in the user's config.yaml."}\n\n${command}\n\n${CARRY_ON}`,
       };
     case "tool-setting":
       return {
         description: "Tool turned off",
-        content: `${reason ?? "This tool is turned off in the user's tool settings."}\n\n${command}\n\nDo not try to work around this. Tell the user what you needed and ask how they want to proceed.`,
+        content: `${reason ?? "This tool is turned off in the user's tool settings."}\n\n${command}\n\nDo not work around this. Do what else the request needs, then say what you could not do and why.`,
       };
     default:
       return {
         description: "Command Disabled",
-        content: `This command has been disabled by security policy:\n\n${command}\n\nThis command cannot be executed as it may pose a security risk.`,
+        content: `This command has been disabled by security policy:\n\n${command}\n\n${CARRY_ON}`,
       };
   }
 }
+
+/** The second half of every refusal: no retry, no detour, finish the rest. */
+const CARRY_ON =
+  "Do not retry this call or reach the same result another way. Do what else the request needs, then say what you could not do and why.";
 
 /*
     1. Get arg-dependent tool policies from core
@@ -403,6 +415,7 @@ export async function evaluateToolPolicies(
         source === "auto" ||
         source === "once" ||
         source === "category" ||
+        source === "review" ||
         source === "yolo")
     ) {
       dispatch(

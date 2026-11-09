@@ -310,6 +310,12 @@ export interface SessionUsage extends Usage {
    * to models without a known price add nothing (see `ModelUsage.pricedRequests`).
    */
   totalCost: number;
+  /**
+   * True when part of `totalCost` was priced at a fallback rate because the
+   * model has no entry in the price tables, so the figure is an estimate and
+   * is shown as one.
+   */
+  costEstimated?: boolean;
   /** Totals per model, keyed `provider/model`. */
   byModel?: Record<string, ModelUsage>;
   /** The latest request, for the context-window display. */
@@ -363,7 +369,7 @@ export interface Session {
   taskPlan?: TaskPlan;
   /**
    * Optional: URI of the plan file this session is working from
-   * (`.continue/plans/<slug>.md`), written by the plan tool in Plan mode. See
+   * (`.continuous/plans/<slug>.md`), written by the plan tool in Plan mode. See
    * core/util/planFile.ts.
    */
   planFile?: string;
@@ -372,6 +378,333 @@ export interface Session {
    * Saved as soon as they change, so a reload or crash does not lose them.
    */
   queuedMessages?: SessionQueuedMessage[];
+  /**
+   * Optional: Loop mode's state, when the session builds a plan in a loop:
+   * each item's run status, the questions held for the person and their
+   * answers. See core/util/loopMode.ts.
+   */
+  loop?: LoopState;
+  /**
+   * Optional: the person chose Loop in the mode picker. Not a mode: the turns
+   * stay Plan and Agent; a plan presented while it is set starts the loop.
+   */
+  loopRequested?: boolean;
+}
+
+/** Where one plan item is in Loop mode. The task list shows it too. */
+/**
+ * checking: the item reported done and has a check (TaskItem.check) that
+ * has not passed yet; the loop runs it next (decideNext's "check" action).
+ */
+export type LoopItemStatus =
+  "pending" | "running" | "checking" | "done" | "waiting" | "redo" | "failed";
+
+/** The last time an item's check (TaskItem.check) ran, or why it did not. */
+export interface LoopCheckResult {
+  /**
+   * passed: exit 0. failed: another exit code (the item runs again).
+   * refused: a rule refused the command or the person did not allow it, so
+   * the item counts as done without its check.
+   */
+  status: "passed" | "failed" | "refused";
+  command: string;
+  exitCode?: number | null;
+  /** The tail of what it printed, at most LOOP_LIMITS.maxCheckOutput */
+  output?: string;
+  at: string;
+}
+
+export interface LoopItemState {
+  /** The task list item's id */
+  id: string;
+  status: LoopItemStatus;
+  /** Runs started for this item, reset when an answer requeues it */
+  attempts: number;
+  /** Times a run set this item aside (finish_item outcome "later") */
+  deferrals?: number;
+  /** Set aside and not run since: it goes behind the other runnable items */
+  setAside?: boolean;
+  /** What the run said it did (finish_item), or why it stopped */
+  summary?: string;
+  /**
+   * Unattended: questions that got no answer in time, so the item went on
+   * with its best default. The questions stay open in the inbox.
+   */
+  unanswered?: string[];
+  /**
+   * The person skipped the item (skipItem). Its status is done, so the loop
+   * goes past it, but the task list shows it cancelled and it does not count
+   * toward doneThisRound. Its open questions stay open. Cleared by
+   * runItemAgain.
+   */
+  skipped?: boolean;
+  /**
+   * The person asked for the item to run again (runItemAgain): its next
+   * run's prompt says so, and to check what is already done first. Cleared
+   * when that run ends.
+   */
+  again?: boolean;
+  /** The last run of the item's check (TaskItem.check) */
+  check?: LoopCheckResult;
+  /**
+   * Fix forward: re-plans scoped to this item after it failed (at most
+   * LOOP_MAX_REPAIRS_PER_ITEM). To-dos a repair splits it into inherit it.
+   */
+  repairs?: number;
+}
+
+/**
+ * - blocking: the item cannot go on without the answer; it waits.
+ * - assumption: the item goes on with `assumption`; the person may overrule it.
+ * - approval: a tool call that would have asked; held instead of stalling the loop.
+ */
+export type LoopQuestionKind = "blocking" | "assumption" | "approval";
+
+/**
+ * What a wrong answer to a question would cost, as the agent labels it
+ * (plans/policy-areas.md, "Questions are about who decides"). Recorded with
+ * the question; the Questions level will route on it, with checks. The list
+ * is QUESTION_TYPES in core/util/loopMode.ts.
+ */
+export type QuestionType =
+  | "access"
+  | "irreversible"
+  | "security"
+  | "cost"
+  | "scope"
+  | "design"
+  | "detail";
+
+export interface LoopQuestion {
+  /** IDGAF: the agent decided this itself; it never reached the inbox */
+  decidedAlone?: boolean;
+  id: string;
+  /** The item it is about; none for a question about the whole plan */
+  itemId?: string;
+  question: string;
+  kind: LoopQuestionKind;
+  /** The agent's label for what a wrong answer would cost */
+  type?: QuestionType;
+  /** The default the item continued with (kind assumption) */
+  assumption?: string;
+  /** The held tool call (kind approval) */
+  approval?: { toolName: string; summary: string; grantKey: string };
+  askedAt: string;
+  /** Set once answered */
+  answerId?: string;
+}
+
+/** How an answer was routed, from the item's state when it was given. */
+export type LoopAnswerRoute =
+  | "requeue" // the item was waiting: it runs again with the answer
+  | "next-run" // the item had not run yet: the answer goes with its run
+  | "steer" // the item was running: steered in at its next tool boundary
+  | "redo" // the item was done on an overruled assumption: it runs again
+  | "confirmed" // the assumption stands: nothing to do
+  | "replan" // about the plan as a whole: read at the next re-plan
+  | "standing"; // an instruction for every item from now on (a "sign")
+
+export interface LoopAnswer {
+  id: string;
+  questionId?: string;
+  itemId?: string;
+  text: string;
+  /** For a plan-wide answer: re-plan as soon as the running item ends */
+  replanNow?: boolean;
+  /** For an approval question: the person allowed the call */
+  approve?: boolean;
+  route: LoopAnswerRoute;
+  givenAt: string;
+  /** Sent to the model (in a run's prompt, by steering or in a re-plan) */
+  delivered?: boolean;
+}
+
+export type LoopStatus =
+  | "running"
+  /** A read-only Plan-mode turn is proposing the next round's plan */
+  | "replanning"
+  /** The re-plan's card is waiting for the person to accept it */
+  | "awaiting_plan"
+  /** Every open item waits on the person; an answer resumes the loop */
+  | "waiting"
+  | "stopped";
+
+export type LoopStopReason =
+  | "done"
+  | "rounds"
+  | "tokens"
+  | "time"
+  | "no_progress"
+  | "failures"
+  | "error"
+  | "stopped"
+  | "replan_failed";
+
+/**
+ * The loop's limits. The person can change most of them while the loop runs,
+ * within LOOP_BUDGET_BOUNDS (setLoopBudget in core/util/loopMode.ts);
+ * changing the autonomy level resets them to the level's.
+ */
+export interface LoopBudget {
+  /**
+   * Rounds before the loop stops: the first pass over the plan is round 1,
+   * so 1 means never re-plan and N + 1 allows N re-plans
+   */
+  maxRounds: number;
+  /** Prompt plus completion tokens the loop may use (0: no limit) */
+  maxTokens: number;
+  /** Wall time in milliseconds (0: no limit) */
+  maxWallMs: number;
+  /** Runs of one item without finishing before it is marked failed */
+  maxAttempts: number;
+  /** Rounds in a row that finish no item before the loop stops */
+  maxNoProgressRounds: number;
+  /** Items in a row that fail before the loop stops */
+  maxConsecutiveFailures: number;
+  /** Model requests one run of an item may make before it must report */
+  maxItemTurns: number;
+}
+
+/**
+ * How much the loop does without the person. It follows the approval mode
+ * the person picked when the loop starts (Manual: supervised; Auto-approve
+ * and Auto: auto; YOLO: unattended) and can be changed while it runs. See
+ * LOOP_AUTONOMY in core/util/loopMode.ts.
+ */
+export type LoopAutonomy = "supervised" | "auto" | "unattended" | "idgaf";
+
+/**
+ * How the loop moves through the plan, next to the autonomy level (how much
+ * it does without the person). See LOOP_STRATEGIES in core/util/loopMode.ts.
+ * - finish: plan order; re-plan only when nothing can run;
+ * - check-in: also re-plan every few finished items, and at once when an
+ *   assumption is overruled or an item fails;
+ * - fix-forward: a failed item gets a re-plan of just that item.
+ */
+export type LoopStrategy = "finish" | "check-in" | "fix-forward";
+
+export type LoopReminderWhen = "item" | "next_items" | "retry" | "replan";
+
+/** A file a reminder refers to, and its content when the reminder was saved. */
+export interface LoopReminderFile {
+  path: string;
+  /** core/util/loopReminders.ts reminderFileStamp */
+  stamp: string;
+}
+
+/** What a run saved for one later run (remind_me). */
+export interface LoopReminder {
+  id: string;
+  note: string;
+  when: LoopReminderWhen;
+  /** The item saving it */
+  fromItemId: string;
+  /** The item it is for, with when "item" */
+  itemId?: string;
+  files?: LoopReminderFile[];
+  savedAt: string;
+  /** Set when a run's opening prompt carried it; it is delivered once */
+  deliveredAt?: string;
+}
+
+export interface LoopState {
+  status: LoopStatus;
+  /** 1 for the plan the loop started with, +1 at each accepted re-plan */
+  round: number;
+  startedAt: string;
+  /** Session tokens when the loop started, so the budget counts only its own */
+  tokensAtStart: number;
+  budget: LoopBudget;
+  /** Missing on loops saved before autonomy levels: treated as "auto" */
+  autonomy?: LoopAutonomy;
+  /** Missing on loops saved before strategies: treated as "finish" */
+  strategy?: LoopStrategy;
+  /**
+   * The person picked the strategy; otherwise changing the level changes it
+   * to the new level's default.
+   */
+  strategyPicked?: boolean;
+  items: LoopItemState[];
+  /**
+   * What is running: one item, the re-plan turn, or an item's check (a
+   * command the harness runs, not a model turn)
+   */
+  current?: {
+    kind: "item" | "replan" | "check";
+    /** The item that runs; for a repair re-plan, the failed item it is about */
+    itemId?: string;
+    /** History length when it started; its messages come after */
+    historyIndex: number;
+    startedAt: string;
+    /** What finish_item reported during this run */
+    report?: {
+      outcome: "done" | "stuck" | "waiting" | "later";
+      summary?: string;
+      /** What a later item should know (finish_item notes) */
+      notes?: string;
+    };
+    /** A re-plan: the to-dos it started from, to tell whether it adds scope */
+    planTexts?: string[];
+    /** A check-in re-plan (check-in strategy): why it was due */
+    checkIn?: string;
+    /** A repair re-plan (fix forward): the failed item's text */
+    itemText?: string;
+    /**
+     * The run ended once without its report (finish_item, or a re-plan's
+     * present_plan) and was told to call it; a second such end counts
+     * (core/util/turnEnd.ts)
+     */
+    nudged?: boolean;
+  };
+  /**
+   * The re-plan whose plan waits to be accepted: what it was for, so
+   * acceptReplan can tell a check-in or a repair from a round's re-plan.
+   * For a repair (fix forward), itemId is the failed item.
+   */
+  replanned?: {
+    planTexts: string[];
+    checkIn?: string;
+    itemId?: string;
+    itemText?: string;
+  };
+  /** Check in: items done since the start or the last accepted re-plan */
+  doneSinceReplan?: number;
+  /** Check in: an event (a redo, a failed item) asks for a check-in now */
+  checkInDue?: string;
+  /** Fix forward: the failed item waiting for its scoped re-plan */
+  repairItemId?: string;
+  questions: LoopQuestion[];
+  answers: LoopAnswer[];
+  /** Items finished in this round, for the no-progress check */
+  doneThisRound: number;
+  noProgressRounds: number;
+  /** Items in a row that ended failed; reset by one that is done */
+  consecutiveFailures?: number;
+  /** When every open item started waiting on the person (status waiting) */
+  waitingSince?: string;
+  /** Why the last re-plan did or did not start the next round by itself */
+  replanReason?: string;
+  /** Tool calls the person allowed from an approval question (grantKey) */
+  grants: string[];
+  /** A plan-wide answer asked to re-plan now */
+  replanRequested?: boolean;
+  /**
+   * Each item and re-plan is sent without the turns before it: the plan
+   * file, the notes and the answers carry what it needs. On unless false.
+   */
+  freshContext?: boolean;
+  /**
+   * What runs learned that later items should know (finish_item notes),
+   * newest last, capped; sent with every item prompt.
+   */
+  notes?: string[];
+  /** What runs saved for later runs with remind_me; they end with the loop */
+  reminders?: LoopReminder[];
+  /** The person asked to stop once the running item or re-plan ends */
+  stopRequested?: boolean;
+  stopReason?: LoopStopReason;
+  /** One line for the person: what stopped it */
+  stopDetail?: string;
 }
 
 /** A message queued in the chat input; `editorState` is the editor's JSON. */
@@ -393,6 +726,18 @@ export interface TaskItem {
   note?: string;
   /** Present-tense label shown while the item is in progress ("Running migrations") */
   activeForm?: string;
+  /**
+   * Ids of the items this one comes after: Loop mode does not run it before
+   * they are done. The plan file writes them as `after: 1, 2` (positions)
+   * under the to-do.
+   */
+  after?: string[];
+  /**
+   * A shell command that confirms the item is done (exit 0). Loop mode runs
+   * it after the item reports done, under the same rules as any terminal
+   * command. The plan file writes it as `check: <command>` under the to-do.
+   */
+  check?: string;
 }
 
 export interface TaskPlan {
@@ -1021,6 +1366,18 @@ export interface Problem {
   filepath: string;
   range: Range;
   message: string;
+  /** Unset when the IDE does not report it. */
+  severity?: "error" | "warning" | "information" | "hint";
+  /** The tool that reported it, such as "ts" or "eslint". */
+  source?: string;
+}
+
+/** A symbol found by a workspace-wide search (LSP workspace/symbol). */
+export interface WorkspaceSymbol {
+  name: string;
+  kind: SymbolKind;
+  containerName?: string;
+  location: RangeInFile;
 }
 
 export interface Thread {
@@ -1175,6 +1532,14 @@ export interface IDE {
   getSignatureHelp(location: Location): Promise<SignatureHelp | null>; // TODO: add to jetbrains
   getReferences(location: Location): Promise<RangeInFile[]>;
   getDocumentSymbols(textDocumentIdentifier: string): Promise<DocumentSymbol[]>;
+  /** Symbols whose names match `query`, across the workspace. */
+  getWorkspaceSymbols(query: string): Promise<WorkspaceSymbol[]>;
+  /**
+   * A file's problems once its language servers have caught up with a
+   * change: waits for the file's diagnostics to change, at most `timeoutMs`,
+   * then returns them. IDEs without diagnostics return [].
+   */
+  waitForProblems(fileUri: string, timeoutMs: number): Promise<Problem[]>;
 
   // Callbacks
   onDidChangeActiveTextEditor(callback: (fileUri: string) => void): void;
@@ -1655,6 +2020,8 @@ export interface MCPTool {
     properties?: Record<string, any>;
   };
   _meta?: Record<string, unknown> | undefined;
+  /** MCP tool annotations; `readOnlyHint` says the tool changes nothing */
+  annotations?: { readOnlyHint?: boolean };
 }
 
 type BaseInternalMCPOptions = {
@@ -2056,11 +2423,11 @@ export type ContinueRcJson = Partial<SerializedContinueConfig> & {
 
 // config.ts - give users simplified interfaces
 export interface Config {
-  /** Has no effect: Continued collects no telemetry. Kept so existing configs stay valid. */
+  /** Has no effect: Continuous collects no telemetry. Kept so existing configs stay valid. */
   allowAnonymousTelemetry?: boolean;
   /** Each entry in this array will originally be a JSONModelDescription, the same object from your config.json, but you may add CustomLLMs.
    * A CustomLLM requires you only to define an AsyncGenerator that calls the LLM and yields string updates. You can choose to define either `streamCompletion` or `streamChat` (or both).
-   * Continue will do the rest of the work to construct prompt templates, handle context items, prune context, etc.
+   * Continuous will do the rest of the work to construct prompt templates, handle context items, prune context, etc.
    */
   models: (CustomLLM | JSONModelDescription)[];
   /** A system message to be followed by all of your models */
@@ -2072,18 +2439,18 @@ export interface Config {
   /** The list of slash commands that will be available in the sidebar */
   slashCommands?: (SlashCommand | SlashCommandWithSource)[];
   /** Each entry in this array will originally be a ContextProviderWithParams, the same object from your config.json, but you may add CustomContextProviders.
-   * A CustomContextProvider requires you only to define a title and getContextItems function. When you type '@title <query>', Continue will call `getContextItems(query)`.
+   * A CustomContextProvider requires you only to define a title and getContextItems function. When you type '@title <query>', Continuous will call `getContextItems(query)`.
    */
   contextProviders?: (CustomContextProvider | ContextProviderWithParams)[];
-  /** If set to true, Continue will not index your codebase for retrieval */
+  /** If set to true, Continuous will not index your codebase for retrieval */
   disableIndexing?: boolean;
-  /** If set to true, Continue will not make extra requests to the LLM to generate a summary title of each session. */
+  /** If set to true, Continuous will not make extra requests to the LLM to generate a summary title of each session. */
   disableSessionTitles?: boolean;
-  /** An optional token to identify a user. Not used by Continue unless you write custom coniguration that requires such a token */
+  /** An optional token to identify a user. Not used by Continuous unless you write custom coniguration that requires such a token */
   userToken?: string;
-  /** The provider used to calculate embeddings. If left empty, Continue will use transformers.js to calculate the embeddings with all-MiniLM-L6-v2 */
+  /** The provider used to calculate embeddings. If left empty, Continuous will use transformers.js to calculate the embeddings with all-MiniLM-L6-v2 */
   embeddingsProvider?: EmbeddingsProviderDescription | ILLM;
-  /** The model that Continue will use for tab autocompletions. */
+  /** The model that Continuous will use for tab autocompletions. */
   tabAutocompleteModel?:
     CustomLLM | JSONModelDescription | (CustomLLM | JSONModelDescription)[];
   /** Options for tab autocomplete */
@@ -2100,7 +2467,7 @@ export interface Config {
   data?: DataDestination[];
 }
 
-// in the actual Continue source code
+// in the actual Continuous source code
 /** Reasoning effort requested for a chat mode. */
 export type ModeReasoningEffort = "off" | "low" | "medium" | "high";
 
@@ -2121,10 +2488,15 @@ export type RulesByModeConfig = Partial<
   Record<"chat" | "agent" | "plan", boolean>
 >;
 
-/** Per-mode model selection from `modeModels:` in config.yaml. */
-export type ModeModelsConfig = Partial<
-  Record<"chat" | "agent" | "plan", ModeModelSetting>
->;
+/**
+ * What a model can be used for: the three chat modes, Loop item turns,
+ * Loop re-plans, the Auto reviewer and subagents (see core/util/modelUse.ts).
+ */
+export type ModelUse =
+  "chat" | "agent" | "plan" | "loop" | "replan" | "reviewer" | "subagent";
+
+/** Which model does what, from `modeModels:` in config.yaml. */
+export type ModeModelsConfig = Partial<Record<ModelUse, ModeModelSetting>>;
 
 export interface ContinueConfig {
   allowAnonymousTelemetry?: boolean;
@@ -2271,6 +2643,8 @@ export interface CompiledMessagesResult {
   compiledChatMessages: ChatMessage[];
   didPrune: boolean;
   contextPercentage: number;
+  /** Tokens the context has left for the reply, after the prompt. */
+  outputTokensAvailable?: number;
 }
 
 export interface AddToChatPayload {

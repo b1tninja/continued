@@ -18,11 +18,23 @@ export interface StreamCallbacks {
   ) => void;
   onSystemMessage?: (message: string) => void;
   /**
+   * A short notice about the request for the person, not the model: for
+   * example that the reply was cut off at the output limit. The TUI shows it
+   * on its status line; `cn serve` writes it to its log.
+   */
+  onStatusMessage?: (message: string) => void;
+  /**
    * Called after a round of tool calls has finished and before the next model
    * request. A returned item (a user message the person asked to steer with)
    * is appended to the conversation, so the model reads it in the same turn.
    */
   onToolBoundary?: () => Promise<ChatHistoryItem | undefined>;
+  /**
+   * True while the model's reply streams, false once it has ended (before any
+   * of its tool calls run). "Steer now" interrupts only while it is true, so a
+   * running tool is never cut short.
+   */
+  onModelStreaming?: (streaming: boolean) => void;
 }
 
 export function getDefaultCompletionOptions(

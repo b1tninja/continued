@@ -2,13 +2,22 @@ import { getContinueRcPath, getTsConfigPath } from "core/util/paths";
 import * as vscode from "vscode";
 
 import { VsCodeExtension } from "../extension/VsCodeExtension";
+import { removeStaleYamlSchemaEntries } from "../lang-server/yamlSchemas";
 import { isUnsupportedPlatform } from "../util/util";
+import { migrateContinueSettings } from "../util/migrateSettings";
 
 import { GlobalContext } from "core/util/GlobalContext";
 import { VsCodeContinueApi } from "./api";
 import setupInlineTips from "./InlineTipManager";
 
 export async function activateExtension(context: vscode.ExtensionContext) {
+  // Before anything reads a setting: continue.* became continuous.* in 2.4.2
+  try {
+    await migrateContinueSettings(context);
+  } catch (error) {
+    console.warn("Could not copy the continue.* settings", error);
+  }
+
   const platformCheck = isUnsupportedPlatform();
   const globalContext = new GlobalContext();
   const hasShownUnsupportedPlatformWarning = globalContext.get(
@@ -20,7 +29,7 @@ export async function activateExtension(context: vscode.ExtensionContext) {
 
     globalContext.update("hasShownUnsupportedPlatformWarning", true);
     void vscode.window.showInformationMessage(
-      `Continued detected that you are using ${platformTarget}. Due to native dependencies, Continued may not be able to start`,
+      `Continuous detected that you are using ${platformTarget}. Due to native dependencies, Continuous may not be able to start`,
     );
   }
 
@@ -33,35 +42,19 @@ export async function activateExtension(context: vscode.ExtensionContext) {
 
   const vscodeExtension = new VsCodeExtension(context);
 
-  // Load Continued configuration
+  // Load Continuous configuration
   if (!context.globalState.get("hasBeenInstalled")) {
     void context.globalState.update("hasBeenInstalled", true);
   }
 
-  // Register config.yaml schema by removing old entries and adding new one (uri.fsPath changes with each version)
-  const yamlMatcher = ".continue/**/*.yaml";
-  const yamlConfig = vscode.workspace.getConfiguration("yaml");
-  const yamlSchemas = yamlConfig.get<object>("schemas", {});
-
-  const newPath = vscode.Uri.joinPath(
-    context.extension.extensionUri,
-    "config-yaml-schema.json",
-  ).toString();
-
+  // The YAML schemas are declared in package.json (yamlValidation), one per
+  // file. Earlier versions wrote the config schema into the user's
+  // yaml.schemas setting instead, once per installed version, and never
+  // removed it; take those entries out.
   try {
-    await yamlConfig.update(
-      "schemas",
-      {
-        ...yamlSchemas,
-        [newPath]: [yamlMatcher],
-      },
-      vscode.ConfigurationTarget.Global,
-    );
+    await removeStaleYamlSchemaEntries();
   } catch (error) {
-    console.error(
-      "Failed to register Continued config.yaml schema, most likely, YAML extension is not installed",
-      error,
-    );
+    console.warn("Could not clean up yaml.schemas", error);
   }
 
   const api = new VsCodeContinueApi(vscodeExtension);

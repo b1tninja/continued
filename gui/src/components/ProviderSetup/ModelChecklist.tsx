@@ -14,6 +14,11 @@ interface ModelChecklistProps {
   isLive?: boolean;
 }
 
+const USE_CASE_ROW_TITLE =
+  "Won't work until the Anthropic use-case form is completed in the Bedrock console. You can still select it.";
+const ACCESS_ROW_TITLE =
+  "This account cannot use the model yet: request access under Model access in the Bedrock console. You can still select it.";
+
 function Row({
   row,
   checked,
@@ -34,9 +39,18 @@ function Row({
         checked={checked}
         onChange={onToggle}
         aria-label={row.title}
+        aria-description={
+          row.needsAnthropicUseCase
+            ? USE_CASE_ROW_TITLE
+            : row.accessNote
+              ? ACCESS_ROW_TITLE
+              : undefined
+        }
       />
       <span className="flex min-w-0 flex-col">
-        <span className="truncate">
+        <span
+          className={`truncate${row.accessNote ? "text-description-muted" : ""}`}
+        >
           {row.title}
           {row.configured && (
             <span className="ml-1.5 text-description-muted">(in config)</span>
@@ -45,8 +59,29 @@ function Row({
             <span className="ml-1.5 text-description-muted">(legacy)</span>
           )}
         </span>
-        {row.description && (
+        {(row.description || row.needsAnthropicUseCase || row.accessNote) && (
           <span className="truncate text-description-muted">
+            {/* First on the line, so truncation can't hide it */}
+            {row.accessNote && (
+              <span
+                className="text-warning"
+                title={ACCESS_ROW_TITLE}
+                data-testid={`model-row-access-${row.model}`}
+              >
+                {row.accessNote}
+                {row.needsAnthropicUseCase || row.description ? " · " : ""}
+              </span>
+            )}
+            {row.needsAnthropicUseCase && (
+              <span
+                className="text-warning"
+                title={USE_CASE_ROW_TITLE}
+                data-testid={`model-row-needs-use-case-${row.model}`}
+              >
+                Needs use-case form
+                {row.description ? " · " : ""}
+              </span>
+            )}
             {row.description}
           </span>
         )}

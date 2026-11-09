@@ -4,7 +4,6 @@ import { LLMFullCompletionOptions, ModelDescription } from "core";
 import { getRuleId } from "core/llm/rules/getSystemMessageWithRules";
 import { ToCoreProtocol } from "core/protocol";
 import { renderChatMessage } from "core/util/messageContent";
-import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
 import { selectSelectedChatModel } from "../slices/configSlice";
 import {
   abortStream,
@@ -57,7 +56,10 @@ import {
   selectCurrentToolCalls,
   selectPendingToolCalls,
 } from "../selectors/selectToolCalls";
+import { localOutputLimit } from "core/llm/outputLimit";
 import { callToolById } from "./callToolById";
+import { cancelStream } from "./cancelStream";
+import { applyLoopHolds, endRunAtTurnLimit } from "./loopHolds";
 import {
   selectApprovalSettings,
   selectAutoApproval,
@@ -66,7 +68,10 @@ import {
   buildReviewHistory,
   evaluateToolPolicies,
 } from "./evaluateToolPolicies";
-import { preprocessToolCalls } from "./preprocessToolCallArgs";
+import {
+  preprocessToolCalls,
+  refuseTruncatedToolCalls,
+} from "./preprocessToolCallArgs";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
 
 export const streamNormalInput = createAsyncThunk<
@@ -185,8 +190,25 @@ export const streamNormalInput = createAsyncThunk<
       }
     }
 
-    const { compiledChatMessages, didPrune, contextPercentage } =
-      precompiledRes.content;
+    const {
+      compiledChatMessages,
+      didPrune,
+      contextPercentage,
+      outputTokensAvailable,
+    } = precompiledRes.content;
+
+    // A local model with no configured limit may use the room that is left,
+    // so a large tool call is not cut off for no gain
+    const localMaxTokens = localOutputLimit({
+      apiBase: selectedChatModel.apiBase,
+      maxTokens:
+        completionOptions.maxTokens ??
+        selectedChatModel.completionOptions?.maxTokens,
+      outputTokensAvailable,
+    });
+    if (localMaxTokens) {
+      completionOptions = { ...completionOptions, maxTokens: localMaxTokens };
+    }
 
     dispatch(setIsPruned(didPrune));
     dispatch(setContextPercentage(contextPercentage));
@@ -407,6 +429,14 @@ export const streamNormalInput = createAsyncThunk<
       );
     }
 
+    // A call cut off at the output limit must not run with partial arguments
+    refuseTruncatedToolCalls(
+      dispatch,
+      selectPendingToolCalls(getState()),
+      completionOptions.maxTokens ??
+        selectedChatModel.completionOptions?.maxTokens,
+    );
+
     // 2. Pre-process args to catch invalid args before checking policies
     const state2 = getState();
     if (streamAborter.signal.aborted || !state2.session.isStreaming) {
@@ -422,7 +452,7 @@ export const streamNormalInput = createAsyncThunk<
     }
     const generatedCalls3 = selectPendingToolCalls(state3);
     const toolPolicies = state3.ui.toolSettings;
-    const policies = await evaluateToolPolicies(
+    const evaluated = await evaluateToolPolicies(
       dispatch,
       extra.ideMessenger,
       activeTools,
@@ -438,6 +468,18 @@ export const streamNormalInput = createAsyncThunk<
       selectApprovalSettings(state3),
       state3.session.mode,
     );
+    // Loop mode: a run past its turn limit that keeps calling tools ends here
+    if (endRunAtTurnLimit(dispatch, getState)) {
+      await dispatch(cancelStream({ loop: "keep" }));
+      return;
+    }
+    // Loop mode holds calls that would ask instead of waiting (loopHolds.ts)
+    const policies = applyLoopHolds(dispatch, getState, evaluated);
+    // A hold can end the run (a call repeated after it was refused)
+    if (getState().session.loop?.current?.report) {
+      await dispatch(cancelStream({ loop: "keep" }));
+      return;
+    }
     const autoApprovedPolicies = policies.filter(
       ({ policy }) => policy === "allowedWithoutPermission",
     );
@@ -452,19 +494,14 @@ export const streamNormalInput = createAsyncThunk<
       // while it worked can go now (waiting for approval is not an end)
       dispatch(requestQueuedMessagesSend());
     } else if (needsApprovalPolicies.length > 0) {
-      const builtInReadonlyAutoApproved = autoApprovedPolicies.filter(
-        ({ toolCallState }) =>
-          toolCallState.tool?.group === BUILT_IN_GROUP_NAME &&
-          toolCallState.tool?.readonly,
-      );
-
-      if (builtInReadonlyAutoApproved.length > 0) {
+      // What needs no approval runs now; only the rest waits for the person
+      if (autoApprovedPolicies.length > 0) {
         const state4 = getState();
         if (streamAborter.signal.aborted || !state4.session.isStreaming) {
           return;
         }
         await Promise.all(
-          builtInReadonlyAutoApproved.map(async ({ toolCallState }) => {
+          autoApprovedPolicies.map(async ({ toolCallState }) => {
             unwrapResult(
               await dispatch(
                 callToolById({

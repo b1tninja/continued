@@ -60,6 +60,7 @@ import {
 } from "../util/editLoggingUtils";
 import type { VsCodeWebviewProtocol } from "../webviewProtocol";
 import { registerVsCodeAi } from "../ai/registerVsCodeAi";
+import { registerConfigLanguageSupport } from "../lang-server/configLanguageSupport";
 
 export class VsCodeExtension {
   // Currently some of these are public so they can be used in testing (test/test-suites)
@@ -137,7 +138,7 @@ export class VsCodeExtension {
             );
           } else if (selection === "Select different model") {
             vscode.commands.executeCommand(
-              "continue.openTabAutocompleteConfigMenu",
+              "continuous.openTabAutocompleteConfigMenu",
             );
           }
         });
@@ -254,7 +255,7 @@ export class VsCodeExtension {
     // Sidebar
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
-        "continue.continueGUIView",
+        "continuous.continueGUIView",
         this.sidebar,
         {
           webviewOptions: { retainContextWhenHidden: true },
@@ -285,7 +286,7 @@ export class VsCodeExtension {
 
     void this.configHandler.loadConfig();
 
-    // Offer Continued's models and MCP servers to VS Code's own chat/agents.
+    // Offer Continuous's models and MCP servers to VS Code's own chat/agents.
     registerVsCodeAi(context, this.configHandler);
 
     this.verticalDiffManager = new VerticalDiffManager(
@@ -397,7 +398,7 @@ export class VsCodeExtension {
 
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
-        "continue.continueConsoleView",
+        "continuous.continueConsoleView",
         this.consoleView,
       ),
     );
@@ -609,6 +610,9 @@ export class VsCodeExtension {
       new ConfigYamlDocumentLinkProvider(),
     );
     context.subscriptions.push(linkProvider);
+
+    // Problems and name completion in config.yaml, models.yaml, providers.yaml
+    registerConfigLanguageSupport(context, this.ide);
 
     this.ide.onDidChangeActiveTextEditor((filepath) => {
       void this.core.invoke("files/opened", { uris: [filepath] });

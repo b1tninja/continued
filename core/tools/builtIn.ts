@@ -20,6 +20,10 @@ export enum BuiltInToolNames {
   Subagent = "subagent",
   TaskList = "task_list",
   PresentPlan = "present_plan",
+  HoldQuestion = "hold_question",
+  FinishItem = "finish_item",
+  RemindMe = "remind_me",
+  CodeNavigation = "code_navigation",
 
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",
@@ -39,4 +43,8 @@ export const CLIENT_TOOLS_IMPLS = [
   BuiltInToolNames.TaskList,
   // Writes the plan file and seeds the task list, both through the gui
   BuiltInToolNames.PresentPlan,
+  // Loop mode: the loop's state lives in the session, which the gui holds
+  BuiltInToolNames.HoldQuestion,
+  BuiltInToolNames.FinishItem,
+  BuiltInToolNames.RemindMe,
 ];

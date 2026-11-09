@@ -99,7 +99,7 @@ export class VsCodeMessenger {
     });
 
     this.onWebview("toggleDevTools", (msg) => {
-      vscode.commands.executeCommand("continue.viewLogs");
+      vscode.commands.executeCommand("continuous.viewLogs");
     });
 
     this.onWebview("reloadWindow", (msg) => {
@@ -109,12 +109,12 @@ export class VsCodeMessenger {
       vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
     });
     this.onWebview("toggleFullScreen", (msg) => {
-      vscode.commands.executeCommand("continue.openInNewWindow");
+      vscode.commands.executeCommand("continuous.openInNewWindow");
     });
 
     this.onWebview("acceptDiff", async ({ data: { filepath, streamId } }) => {
       await vscode.commands.executeCommand(
-        "continue.acceptDiff",
+        "continuous.acceptDiff",
         filepath,
         streamId,
       );
@@ -122,7 +122,7 @@ export class VsCodeMessenger {
 
     this.onWebview("rejectDiff", async ({ data: { filepath, streamId } }) => {
       await vscode.commands.executeCommand(
-        "continue.rejectDiff",
+        "continuous.rejectDiff",
         filepath,
         streamId,
       );
@@ -253,7 +253,7 @@ export class VsCodeMessenger {
 
     this.onWebview("session/share", async (msg) => {
       await vscode.commands.executeCommand(
-        "continue.shareSession",
+        "continuous.shareSession",
         msg.data.sessionId,
       );
     });
@@ -385,6 +385,14 @@ export class VsCodeMessenger {
 
     this.onWebviewOrCore("getDocumentSymbols", async (msg) => {
       return await ide.getDocumentSymbols(msg.data.textDocumentIdentifier);
+    });
+
+    this.onWebviewOrCore("getWorkspaceSymbols", async (msg) => {
+      return await ide.getWorkspaceSymbols(msg.data.query);
+    });
+
+    this.onWebviewOrCore("waitForProblems", async (msg) => {
+      return await ide.waitForProblems(msg.data.filepath, msg.data.timeoutMs);
     });
 
     this.onWebviewOrCore("getFileStats", async (msg) => {

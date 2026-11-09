@@ -15,7 +15,18 @@ models:
     roles: [reviewer]
 ```
 
-A model is a reviewer only if its `roles` list includes `reviewer`. It is not part of the default roles, and no chat model is used in its place. If you have not chosen a reviewer, Auto is unavailable and the switch says "Choose a reviewer model in Settings > Models".
+A model is a reviewer only if its `roles` list includes `reviewer`, or if `modeModels.reviewer` names it. It is not part of the default roles, and no chat model is used in its place. If you have not chosen a reviewer, Auto is unavailable and the switch says "Choose a reviewer model in Settings > Models".
+
+To say in config.yaml which model reviews, and how much it may think first, use [`modeModels`](/reference#modemodels):
+
+```yaml title="config.yaml"
+modeModels:
+  reviewer:
+    model: Claude Sonnet # any model, whatever its roles
+    reasoningEffort: off
+```
+
+The named model joins the reviewer role and is selected when the config loads; a reviewer picked in Settings holds until the window reloads. `reasoningEffort` turns thinking on or off for the review and sets its budget (the CLI ignores it; use a catalog variant there). Without it the reviewer answers with its own defaults, at temperature 0 and in at most 300 tokens.
 
 ## Turn it on
 
@@ -71,7 +82,7 @@ A "refuse" answer for an "ask" reason is turned into an ask. An answer the revie
 
 ## Instructions hidden in tool output
 
-Files, web pages and command output can contain text written to hijack an agent ("ignore previous instructions and ..."). Continued checks every tool result for wording like that. When it finds some, it puts a short notice in front of the result that tells the model the text is data and not an instruction from you, and it tells the reviewer that the earlier call's output was flagged (the reviewer still never sees the output itself). This is a pattern check, not a guarantee: wording it does not know goes through unchanged, and harmless text can be flagged by accident. It never blocks a tool call by itself.
+Files, web pages and command output can contain text written to hijack an agent ("ignore previous instructions and ..."). Continuous checks every tool result for wording like that. When it finds some, it puts a short notice in front of the result that tells the model the text is data and not an instruction from you, and it tells the reviewer that the earlier call's output was flagged (the reviewer still never sees the output itself). This is a pattern check, not a guarantee: wording it does not know goes through unchanged, and harmless text can be flagged by accident. It never blocks a tool call by itself.
 
 ## Settings
 

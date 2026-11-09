@@ -1,19 +1,23 @@
+/* eslint-disable max-lines */
 import fs from "fs";
-import os from "os";
 import path from "path";
 
 import type {
   BaseSessionMetadata,
   ChatHistoryItem,
+  LoopState,
   Session,
   SessionUsage,
   TaskPlan,
   Usage,
 } from "core/index.js";
+import { totalInputTokens } from "core/llm/utils/cacheStats.js";
 import historyManager from "core/util/history.js";
+import { restoreLoop } from "core/util/loopMode.js";
 import { v4 as uuidv4 } from "uuid";
 
 import { DEFAULT_SESSION_TITLE } from "./constants/session.js";
+import { env } from "./env.js";
 import { logger } from "./util/logger.js";
 
 // Re-export BaseSessionMetadata for external consumers
@@ -46,10 +50,8 @@ function getSessionDir(): string {
     return sessionDir;
   }
 
-  // Use CONTINUE_GLOBAL_DIR if set (for testing)
-  const continueHome =
-    process.env.CONTINUE_GLOBAL_DIR || path.join(os.homedir(), ".continue");
-  const sessionDir = path.join(continueHome, "sessions");
+  // ~/.continuous, or CONTINUOUS_GLOBAL_DIR / CONTINUE_GLOBAL_DIR
+  const sessionDir = path.join(env.continueHome, "sessions");
 
   // Create directory if it doesn't exist
   if (!fs.existsSync(sessionDir)) {
@@ -110,9 +112,20 @@ class SessionManager {
   }
 
   setSession(session: Session): void {
+    // A loop saved mid-run comes back stopped, so a resumed session never
+    // starts work by itself (core/util/loopMode.ts restoreLoop).
+    if (session.loop !== undefined) {
+      const loop = restoreLoop(session.loop);
+      if (loop) {
+        session.loop = loop;
+      } else {
+        delete session.loop;
+      }
+    }
     this.currentSession = session;
     this.syncUsageFromSession();
     notifyTaskPlanListeners(session.taskPlan);
+    notifyLoopListeners(session.loop);
   }
 
   updateHistory(history: ChatHistoryItem[]): void {
@@ -138,6 +151,17 @@ class SessionManager {
     notifyTaskPlanListeners(session.taskPlan);
   }
 
+  updateLoop(loop: LoopState | undefined): void {
+    const session = this.getCurrentSession();
+    if (loop) {
+      session.loop = loop;
+    } else {
+      delete session.loop;
+    }
+    saveSession();
+    notifyLoopListeners(session.loop);
+  }
+
   updatePlanFile(planFile: string | undefined): void {
     const session = this.getCurrentSession();
     if (planFile) {
@@ -151,6 +175,7 @@ class SessionManager {
   clear(): void {
     this.currentSession = null;
     notifyTaskPlanListeners(undefined);
+    notifyLoopListeners(undefined);
     this.sessionUsage = {
       totalCost: 0,
       promptTokens: 0,
@@ -170,12 +195,35 @@ class SessionManager {
     return this.getCurrentSession().sessionId;
   }
 
-  trackUsage(cost: number, usage: Usage): void {
+  /**
+   * Add one request. `promptTokens` in the session totals is the input the
+   * provider processed: uncached input plus cache reads plus cache writes
+   * (`totalInputTokens`), whatever the provider's own count leaves out. A
+   * Bedrock request whose whole prompt was a cache write reports
+   * `inputTokens` 0 and still counts its write here. Without a provider the
+   * provider's count is taken as the whole input. `estimated` marks a cost
+   * priced at the fallback rate (no price table for the model): the session
+   * total is then an estimate and is shown as one.
+   */
+  trackUsage(
+    cost: number,
+    usage: Usage,
+    provider?: string,
+    model?: string,
+    estimated = false,
+  ): void {
     // Accumulate cost
     this.sessionUsage.totalCost += cost;
+    if (estimated) {
+      this.sessionUsage.costEstimated = true;
+    }
 
     // Accumulate token counts
-    this.sessionUsage.promptTokens += usage.promptTokens;
+    const processedInput =
+      provider && model
+        ? totalInputTokens(provider, model, usage)
+        : usage.promptTokens;
+    this.sessionUsage.promptTokens += processedInput;
     this.sessionUsage.completionTokens += usage.completionTokens;
 
     // Accumulate cache tokens if present
@@ -647,11 +695,57 @@ export function onTaskPlanChange(listener: TaskPlanListener): () => void {
   return () => taskPlanListeners.delete(listener);
 }
 
+type LoopListener = (loop: LoopState | undefined) => void;
+const loopListeners = new Set<LoopListener>();
+
+function notifyLoopListeners(loop: LoopState | undefined): void {
+  for (const listener of loopListeners) {
+    try {
+      listener(loop);
+    } catch (error) {
+      logger.error("Loop listener failed:", error);
+    }
+  }
+}
+
+/** The current session's Loop mode state (core/util/loopMode.ts). */
+export function getSessionLoop(): LoopState | undefined {
+  return SessionManager.getInstance().getCurrentSession().loop;
+}
+
 /**
- * Track cost for the current session
+ * Replaces the current session's loop and saves the session. Callers go
+ * through src/loop/loopSession.ts commitLoop, which also keeps the task list
+ * in step with the loop.
  */
-export function trackSessionUsage(cost: number, usage: Usage): void {
-  SessionManager.getInstance().trackUsage(cost, usage);
+export function updateSessionLoop(loop: LoopState | undefined): void {
+  SessionManager.getInstance().updateLoop(loop);
+}
+
+/** Calls `listener` whenever the loop changes; returns an unsubscribe. */
+export function onLoopChange(listener: LoopListener): () => void {
+  loopListeners.add(listener);
+  return () => loopListeners.delete(listener);
+}
+
+/**
+ * Track cost and tokens for the current session. `provider` and `model` let
+ * the input total count what the provider's own `promptTokens` leaves out.
+ */
+export function trackSessionUsage(
+  cost: number,
+  usage: Usage,
+  provider?: string,
+  model?: string,
+  estimated = false,
+): void {
+  SessionManager.getInstance().trackUsage(
+    cost,
+    usage,
+    provider,
+    model,
+    estimated,
+  );
 }
 
 /**

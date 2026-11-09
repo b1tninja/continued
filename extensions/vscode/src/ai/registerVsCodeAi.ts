@@ -6,21 +6,21 @@ import { registerAgentSessions } from "./agentSessions";
 import { setExternalAccount } from "core/config/providers/externalAccounts";
 
 import {
-  ContinuedLanguageModelChatProvider,
+  ContinuousLanguageModelChatProvider,
   groupToAccount,
   LM_VENDOR,
 } from "./languageModelChatProvider";
 import {
-  ContinuedMcpServerDefinitionProvider,
+  ContinuousMcpServerDefinitionProvider,
   MCP_PROVIDER_ID,
 } from "./mcpServerDefinitionProvider";
 
-const SHARE_MODELS = "continue.shareModelsWithVSCode";
-const SHARE_MCP = "continue.shareMcpServersWithVSCode";
-const ACCOUNTS_FROM_VSCODE = "continue.accountsFromVSCode";
+const SHARE_MODELS = "continuous.shareModelsWithVSCode";
+const SHARE_MCP = "continuous.shareMcpServersWithVSCode";
+const ACCOUNTS_FROM_VSCODE = "continuous.accountsFromVSCode";
 
 /**
- * Offer the selected Continued config's chat models (then the rest of the
+ * Offer the selected Continuous config's chat models (then the rest of the
  * model catalog) and MCP servers to VS Code's own chat and agents, through the stable language model and MCP
  * provider APIs. Each can be turned off in settings.
  */
@@ -28,8 +28,8 @@ export function registerVsCodeAi(
   context: vscode.ExtensionContext,
   configHandler: ConfigHandler,
 ) {
-  const models = new ContinuedLanguageModelChatProvider();
-  const mcp = new ContinuedMcpServerDefinitionProvider();
+  const models = new ContinuousLanguageModelChatProvider();
+  const mcp = new ContinuousMcpServerDefinitionProvider();
   context.subscriptions.push(models, mcp);
 
   const lm = vscode.lm as Partial<typeof vscode.lm> | undefined;
@@ -46,10 +46,10 @@ export function registerVsCodeAi(
     }
   } catch (e) {
     // An editor without these APIs (some VS Code forks) keeps working.
-    console.warn("Continued: could not register with VS Code AI APIs", e);
+    console.warn("Continuous: could not register with VS Code AI APIs", e);
   }
 
-  // Groups added for Continued in VS Code's Language Models editor become
+  // Groups added for Continuous in VS Code's Language Models editor become
   // accounts (in memory; see core/config/providers/externalAccounts.ts)
   const groupAccounts = new Set<string>();
   const onGroupConfiguration = async (

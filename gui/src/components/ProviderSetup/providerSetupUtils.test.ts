@@ -63,6 +63,20 @@ describe("buildChecklistRows / initialChecked", () => {
     );
     expect([...initialChecked(groups, [])]).toEqual(["a"]);
   });
+
+  it("does not pre-check models the account cannot use, and carries the note", () => {
+    const groups = buildChecklistRows(
+      {
+        top: [
+          pkg("locked", "Locked", { accessNote: "Needs access" }),
+          pkg("a"),
+        ],
+      },
+      [],
+    );
+    expect(groups.top[0].accessNote).toBe("Needs access");
+    expect([...initialChecked(groups, [])]).toEqual(["a"]);
+  });
 });
 
 describe("filterRows", () => {
@@ -187,7 +201,7 @@ describe("buildSaveRequest", () => {
       diff: { add: rows, remove: [], keep: [] },
       key: {
         storage: "secure",
-        secretName: "CONTINUED_ANTHROPIC_API_KEY",
+        secretName: "CONTINUOUS_ANTHROPIC_API_KEY",
         value: "sk-ant-hunter2",
       },
     });
@@ -196,7 +210,7 @@ describe("buildSaveRequest", () => {
     expect(JSON.stringify(request.add)).not.toContain("hunter2");
     expect(request.key).toEqual({
       storage: "secure",
-      secretName: "CONTINUED_ANTHROPIC_API_KEY",
+      secretName: "CONTINUOUS_ANTHROPIC_API_KEY",
       value: "sk-ant-hunter2",
     });
   });

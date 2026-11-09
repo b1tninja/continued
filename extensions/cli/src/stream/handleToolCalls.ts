@@ -4,7 +4,9 @@ import { createHistoryItem } from "core/util/messageConversion.js";
 
 import { isAutoReviewEnabled } from "src/permissions/coreRules.js";
 import { checkToolPermission } from "src/permissions/permissionChecker.js";
+import { withReadOnlyMcp } from "src/permissions/readOnlyMcp.js";
 
+import { loopItemRunning } from "../loop/loopSession.js";
 import {
   SERVICE_NAMES,
   serviceContainer,
@@ -19,6 +21,13 @@ import {
 } from "../tools/index.js";
 import { logger } from "../util/logger.js";
 
+import { recordRefusals } from "./refusalCap.js";
+import {
+  checkRepeatedCall,
+  recordInvalidCalls,
+  recordRepeatOutcome,
+  startRepeatRound,
+} from "./repeatGuard.js";
 import {
   executeStreamedToolCalls,
   preprocessStreamedToolCalls,
@@ -34,6 +43,100 @@ interface HandleToolCallsOptions {
   usage?: any;
   /** The turn's signal, passed on to tool runs. */
   abortSignal?: AbortSignal;
+}
+
+/** Records a tool's result on the local history's assistant message. */
+function setLocalToolResult(
+  chatHistory: ChatHistoryItem[],
+  toolCallId: string,
+  content: string,
+  status: ToolStatus,
+): void {
+  const owner = chatHistory.findLast(
+    (item) =>
+      item.message.role === "assistant" &&
+      item.toolCallStates?.some((ts) => ts.toolCallId === toolCallId),
+  );
+  const toolState = owner?.toolCallStates?.find(
+    (ts) => ts.toolCallId === toolCallId,
+  );
+  if (toolState) {
+    toolState.status = status;
+    toolState.output = [
+      { content, name: `Tool Result`, description: "Tool execution result" },
+    ];
+  }
+}
+
+/**
+ * The repeat guard's first pass: calls identical to the ones before them are
+ * answered with a refusal (written as a canceled tool result) and left out
+ * of `toRun`; `endTurn` says the repeats have reached the cap.
+ */
+function refuseRepeatedCalls(
+  toolCalls: ToolCall[],
+  ctx: {
+    callbacks: HandleToolCallsOptions["callbacks"];
+    useService: boolean;
+    chatHistorySvc: typeof services.chatHistory;
+    chatHistory: ChatHistoryItem[];
+  },
+): { toRun: ToolCall[]; endTurn: boolean } {
+  startRepeatRound();
+  let endTurn = false;
+  const toRun: ToolCall[] = [];
+  for (const tc of toolCalls) {
+    const verdict = checkRepeatedCall(tc);
+    endTurn ||= verdict.endTurn;
+    if (!verdict.refusal) {
+      toRun.push(tc);
+      continue;
+    }
+    ctx.callbacks?.onToolStart?.(tc.name, tc.arguments);
+    ctx.callbacks?.onToolResult?.(verdict.refusal, tc.name, "canceled");
+    if (ctx.useService) {
+      ctx.chatHistorySvc.addToolResult(tc.id, verdict.refusal, "canceled");
+    } else {
+      setLocalToolResult(ctx.chatHistory, tc.id, verdict.refusal, "canceled");
+    }
+  }
+  return { toRun, endTurn };
+}
+
+/**
+ * A round of calls that fail validation (missing parameters, an unknown
+ * tool) counts like a repeat, whatever the arguments: a model whose tool
+ * input arrives truncated sends a different broken call every time. The
+ * guard's note is appended to each error so the model reads it; returns
+ * whether the cap ends the turn.
+ */
+function noteInvalidRound(
+  errorChatEntries: { tool_call_id: string; content: unknown }[],
+  toRun: ToolCall[],
+): boolean {
+  const invalid = recordInvalidCalls(errorChatEntries.length > 0);
+  for (const errorEntry of errorChatEntries) {
+    const call = toRun.find((tc) => tc.id === errorEntry.tool_call_id);
+    if (call) recordRepeatOutcome(call, true);
+    if (invalid.refusal && typeof errorEntry.content === "string") {
+      errorEntry.content = `${errorEntry.content}\n\n${invalid.refusal}`;
+    }
+  }
+  return invalid.endTurn;
+}
+
+/**
+ * How each call went, so a refusal of the next repeat can say whether the
+ * earlier identical calls failed or succeeded.
+ */
+function recordRunOutcomes(
+  chatHistoryEntries: { tool_call_id: string; status: string }[],
+  toRun: ToolCall[],
+): void {
+  for (const entry of chatHistoryEntries) {
+    const call = toRun.find((tc) => tc.id === entry.tool_call_id);
+    if (call) recordRepeatOutcome(call, entry.status !== "done");
+  }
 }
 
 export async function handleToolCalls(
@@ -116,9 +219,22 @@ export async function handleToolCalls(
     chatHistory.push(createHistoryItem(messageWithUsage, [], toolCallStates));
   }
 
+  // The repeat guard: a call identical to the ones before it is refused
+  // without running, and enough repeats end the turn (repeatGuard.ts).
+  const repeats = refuseRepeatedCalls(toolCalls, {
+    callbacks,
+    useService,
+    chatHistorySvc,
+    chatHistory,
+  });
+  const { toRun } = repeats;
+  let repeatEndsTurn = repeats.endTurn;
+
   // First preprocess the tool calls
   const { preprocessedCalls, errorChatEntries } =
-    await preprocessStreamedToolCalls(isHeadless, toolCalls, callbacks);
+    await preprocessStreamedToolCalls(isHeadless, toRun, callbacks);
+
+  repeatEndsTurn ||= noteInvalidRound(errorChatEntries, toRun);
 
   // Add any preprocessing errors to the toolCallStates on the assistant message
   // (NOT as separate history items, which would cause duplicate tool_result messages)
@@ -132,45 +248,58 @@ export async function handleToolCalls(
       );
     } else {
       // Fallback only when service is unavailable: update local tool state
-      const lastAssistantIndex = chatHistory.findLastIndex(
-        (item) => item.message.role === "assistant" && item.toolCallStates,
+      setLocalToolResult(
+        chatHistory,
+        errorEntry.tool_call_id,
+        errorContent,
+        "errored",
       );
-      if (
-        lastAssistantIndex >= 0 &&
-        chatHistory[lastAssistantIndex].toolCallStates
-      ) {
-        const toolState = chatHistory[lastAssistantIndex].toolCallStates.find(
-          (ts) => ts.toolCallId === errorEntry.tool_call_id,
-        );
-        if (toolState) {
-          toolState.status = "errored";
-          toolState.output = [
-            {
-              content: errorContent,
-              name: `Tool Result`,
-              description: "Tool execution result",
-            },
-          ];
-        }
-      }
     }
   });
 
   // Execute the valid preprocessed tool calls
   // Note: executeStreamedToolCalls adds tool results to toolCallStates via
   // services.chatHistory.addToolResult() internally
-  const { hasRejection } = await executeStreamedToolCalls(
+  const { hasRejection, chatHistoryEntries } = await executeStreamedToolCalls(
     preprocessedCalls,
     callbacks,
     isHeadless,
     abortSignal,
   );
 
-  if (isHeadless && hasRejection) {
-    logger.debug(
-      "Tool call rejected in headless mode - returning current content",
-    );
-    return true; // Signal early return needed
+  // A subagent keeps its own history and turns the service off, so the results
+  // written to the service never reached it: it saw every call as unanswered.
+  if (!useService) {
+    for (const entry of chatHistoryEntries) {
+      setLocalToolResult(
+        chatHistory,
+        entry.tool_call_id,
+        stripImages(entry.content) || "",
+        entry.status,
+      );
+    }
+  }
+
+  recordRunOutcomes(chatHistoryEntries, toRun);
+  if (repeatEndsTurn) {
+    logger.debug("Repeat guard reached; ending the turn");
+    return true;
+  }
+
+  // A refusal is a tool result the model reads and carries on from ("do what
+  // else the request needs, then say what you could not do"): the turn goes
+  // on. What ends it is the refusal cap, so that a model cannot spend the
+  // turn retrying around a rule. Headless used to end the turn on the first
+  // refusal, which made the refusal text unreachable
+  // (policy-areas-test-findings.md, agent-deny).
+  if (isHeadless) {
+    const refused = hasRejection
+      ? chatHistoryEntries.filter((e) => e.status === "canceled").length
+      : 0;
+    if (recordRefusals(refused, hasRejection)) {
+      logger.debug("Refusal cap reached in headless mode; ending the turn");
+      return true; // Signal early return needed
+    }
   }
 
   // Tool results are already added to toolCallStates in executeStreamedToolCalls
@@ -190,16 +319,22 @@ export async function getRequestTools(isHeadless: boolean) {
 
   const allowedTools: Tool[] = [];
   for (const tool of availableTools) {
-    const result = checkToolPermission(
-      { name: tool.name, arguments: {} },
-      permissionsState.permissions,
+    const result = withReadOnlyMcp(
+      checkToolPermission(
+        { name: tool.name, arguments: {} },
+        permissionsState.permissions,
+      ),
+      tool,
     );
 
     // Headless runs have no one to ask, so "ask" tools are normally not offered.
     // With --auto-review the reviewer model answers instead of a person, so they are.
+    // Under Loop mode an item's "ask" call is held as a question for the
+    // person (src/loop/loopHolds.ts), so they are offered too.
     if (
       result.permission === "allow" ||
-      (result.permission === "ask" && (!isHeadless || isAutoReviewEnabled()))
+      (result.permission === "ask" &&
+        (!isHeadless || isAutoReviewEnabled() || loopItemRunning()))
     ) {
       allowedTools.push(tool);
     }

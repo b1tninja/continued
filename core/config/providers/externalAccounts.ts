@@ -2,7 +2,7 @@ import type { CatalogModel, ProviderInstance } from "@continuedev/config-yaml";
 
 /**
  * Accounts (and the catalog models they serve) that an IDE supplies from
- * its own settings: in VS Code, the groups a user adds for Continued in the
+ * its own settings: in VS Code, the groups a user adds for Continuous in the
  * Language Models editor. They live in memory only, so their keys, which
  * the IDE keeps in its secret storage, are never written to a file.
  *

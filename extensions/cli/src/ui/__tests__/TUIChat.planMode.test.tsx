@@ -38,7 +38,7 @@ describe("TUIChat - plan mode", () => {
 
   beforeEach(async () => {
     await resetFlowState();
-    // PresentPlan writes .continue/plans under the working directory
+    // PresentPlan writes .continuous/plans under the working directory
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cn-plan-"));
     vi.spyOn(process, "cwd").mockReturnValue(cwd);
   });
@@ -60,7 +60,7 @@ describe("TUIChat - plan mode", () => {
       ui.lastFrame,
     );
     const frame = ui.lastFrame() ?? "";
-    expect(frame).toContain(".continue/plans/add-retry.md");
+    expect(frame).toContain(".continuous/plans/add-retry.md");
     expect(frame).toContain("Build");
     expect(frame).toContain("Keep planning");
     for (const key of answerKeys) await type(ui.stdin, key);
@@ -84,7 +84,7 @@ describe("TUIChat - plan mode", () => {
       expect(offered).not.toContain("Write");
       expect(offered).not.toContain("Edit");
 
-      const file = path.join(cwd, ".continue", "plans", "add-retry.md");
+      const file = path.join(cwd, ".continuous", "plans", "add-retry.md");
       expect(fs.readFileSync(file, "utf-8")).toContain(
         "Retry failed fetches with backoff.",
       );
@@ -100,6 +100,8 @@ describe("TUIChat - plan mode", () => {
       const nextTools = llm.requests[1].tools.map((t) => t.function.name);
       expect(nextTools).not.toContain("PresentPlan");
       expect(nextTools).toContain("Write");
+      // The plan's checklist goes on being used
+      expect(nextTools).toContain("TaskList");
 
       await waitUntil(
         () => ui.allOutput().includes("building now"),
@@ -120,7 +122,8 @@ describe("TUIChat - plan mode", () => {
       toolTurn("PresentPlan", planArgs),
       textTurn("what should change?"),
     ]);
-    const ui = await presentPlan([DOWN, ENTER], llm);
+    // Build, Build in a loop, Keep planning
+    const ui = await presentPlan([DOWN, DOWN, ENTER], llm);
     try {
       const result = llm.requests[1].messages.find((m) => m.role === "tool");
       expect(messageText(result!)).toContain("The user wants to keep planning");

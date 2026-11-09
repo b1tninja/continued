@@ -6,6 +6,11 @@ import { AppThunkDispatch, RootState } from "../../redux/store";
 import { editToolImpl } from "./editImpl";
 import { multiEditImpl } from "./multiEditImpl";
 import { runSubagentTool } from "../subagents/runSubagent";
+import {
+  finishItemImpl,
+  holdQuestionImpl,
+  remindMeImpl,
+} from "./loopToolsImpl";
 import { presentPlanImpl } from "./presentPlanImpl";
 import { singleFindAndReplaceImpl } from "./singleFindAndReplaceImpl";
 import { taskListImpl } from "./taskListImpl";
@@ -65,6 +70,15 @@ export async function callClientTool(
         break;
       case BuiltInToolNames.PresentPlan:
         output = await presentPlanImpl(parsedArgs, toolCall.id, extras);
+        break;
+      case BuiltInToolNames.HoldQuestion:
+        output = await holdQuestionImpl(parsedArgs, toolCall.id, extras);
+        break;
+      case BuiltInToolNames.FinishItem:
+        output = await finishItemImpl(parsedArgs, toolCall.id, extras);
+        break;
+      case BuiltInToolNames.RemindMe:
+        output = await remindMeImpl(parsedArgs, toolCall.id, extras);
         break;
       default:
         throw new Error(`Invalid client tool name ${toolCall.function.name}`);

@@ -1,17 +1,17 @@
 ---
 title: "config.yaml Reference"
-description: "Comprehensive guide to the config.yaml format used by Continued for building custom coding agents. Learn how to define models, context providers, rules, prompts, and more using YAML configuration."
+description: "Comprehensive guide to the config.yaml format used by Continuous for building custom coding agents. Learn how to define models, context providers, rules, prompts, and more using YAML configuration."
 ---
 
 ## Introduction
 
-Continued Agents are defined using the `config.yaml` specification.
+Continuous Agents are defined using the `config.yaml` specification.
 
 **Agents** are composed of models, rules, and tools (MCP servers).
 
 <Columns cols={2}>
 <Card title="Configuring Models, Rules, and Tools" icon="cube" href="./guides/configuring-models-rules-tools.mdx">
-Learn how to work with Continued's configuration system, including using hub models, rules, and tools, creating local configurations, and organizing your setup.
+Learn how to work with Continuous's configuration system, including using hub models, rules, and tools, creating local configurations, and organizing your setup.
 </Card>
 
   <Card title="Understanding Configs" icon="robot" href="./guides/understanding-configs.mdx">
@@ -78,12 +78,12 @@ The `models` section defines the language models used in your configuration. Mod
 
 - `roles`: An array specifying the roles this model can fulfill, such as `chat`, `autocomplete`, `embed`, `rerank`, `edit`, `apply`, `summarize`, `reviewer` (experimental, see [Reviewer Role](./customize/model-roles/reviewer.mdx)). The default value is `[chat, edit, apply, summarize]`. Note that the `summarize` role is not currently used.
 
-- `capabilities`: Array of strings denoting model capabilities, which will overwrite Continued's autodetection based on provider and model. See the [Model Capabilities guide](./customize/deep-dives/model-capabilities.mdx) for detailed information. Supported capabilities include:
+- `capabilities`: Array of strings denoting model capabilities, which will overwrite Continuous's autodetection based on provider and model. See the [Model Capabilities guide](./customize/deep-dives/model-capabilities.mdx) for detailed information. Supported capabilities include:
 
   - `tool_use`: Enables function/tool calling support (required for Agent mode)
   - `image_input`: Enables image upload and processing support
 
-  Continued automatically detects these capabilities for most models, but you can override this when using custom deployments or if autodetection isn't working correctly.
+  Continuous automatically detects these capabilities for most models, but you can override this when using custom deployments or if autodetection isn't working correctly.
 
 - `maxStopWords`: Maximum number of stop words allowed, to avoid API errors with extensive lists.
 
@@ -94,6 +94,13 @@ The `models` section defines the language models used in your configuration. Mod
   - `baseSystemMessage`: Can be used to override the default system prompt for **Chat** mode.
   - `baseAgentSystemMessage`: Can be used to override the default system prompt for **Agent** mode.
   - `basePlanSystemMessage`: Can be used to override the default system prompt for **Plan** mode.
+
+- `contextManagement`: Context window settings for the CLI (`continuous`). Each defaults to today's behavior. For a server whose prompt cache holds one conversation at a time, such as Strata, set `requestBodyHints.oneShot: { strata_checkpoint: false }` so the compaction summary does not replace the cached conversation, and a lower `subagent.contextLength` so sub-agents stay cheap.
+
+  - `autoCompactRatio`: Compact once input reaches this fraction (0 to 1) of `contextLength - maxTokens`.
+  - `autoCompactTokens`: Compact once input reaches this many tokens.
+  - `subagent`: Budget when the model runs as a sub-agent: `contextLength`, `autoCompactRatio`, `autoCompactTokens`.
+  - `requestBodyHints`: Extra request body fields for `oneShot` requests (the compaction summary) and `conversation` requests (all other chat requests).
 
 - `embedOptions`: If the model includes role `embed`, these settings apply for embeddings:
 
@@ -110,7 +117,7 @@ The `models` section defines the language models used in your configuration. Mod
   - `stop`: An array of stop tokens that will terminate the completion.
   - `reasoning`: Boolean to enable thinking/reasoning for Anthropic Claude 3.7+ and some Ollama models.
   - `reasoningBudgetTokens`: Budget tokens for thinking/reasoning in Anthropic Claude 3.7+ models.
-  - `promptCaching`: Boolean to cache the tool definitions, system prompt and conversation for Claude models on Anthropic, Amazon Bedrock, Vertex AI and OpenRouter. On Anthropic and Bedrock it is on by default in Agent, Plan and Background modes (and in the CLI) when neither this nor `cacheBehavior` says anything; off in Chat, and off by default on Vertex AI and OpenRouter. `false` turns it off and also overrides `cacheBehavior`. See [Prompt Caching](./customize/deep-dives/prompt-caching.mdx).
+  - `promptCaching`: Boolean to cache the tool definitions, system prompt and conversation for Claude models on Anthropic, Amazon Bedrock, Vertex AI and OpenRouter, and the system prompt and conversation for Amazon Nova 2 Lite, Pro, Lite and Micro on Bedrock. On Anthropic and Bedrock it is on by default in Agent, Plan and Background modes (and in the CLI) when neither this nor `cacheBehavior` says anything; off in Chat, and off by default on Vertex AI and OpenRouter. `false` turns it off and also overrides `cacheBehavior`. See [Prompt Caching](./customize/deep-dives/prompt-caching.mdx).
   - `keepAlive`: For Ollama, the number of seconds to keep the model loaded after the last request (default: `1800`).
 
 - `cacheBehavior`: Which parts of a request to cache. Read only when `defaultCompletionOptions.promptCaching` is not set. The toolbar in the chat window can override the lifetime. See [Prompt Caching](./customize/deep-dives/prompt-caching.mdx).
@@ -202,7 +209,7 @@ models:
 
 ### `modeModels`
 
-Use a different chat model (and reasoning effort) in each mode, for example a stronger model to plan and a faster one to act. Each entry names a model defined under `models` (by its `name`).
+Which model does what: a different model (and reasoning effort) for each mode, for Loop items and re-plans, for the Auto reviewer and for subagents. For example a stronger model to plan and review, and a faster one to act. Each entry names a model defined under `models` (by its `name`) or in your [model catalog](/customize/model-catalog).
 
 ```yaml title="config.yaml"
 models:
@@ -216,6 +223,11 @@ models:
     model: us.anthropic.claude-sonnet-4-6
     env:
       region: us-east-1
+  - name: Nova Lite
+    provider: bedrock
+    model: us.amazon.nova-2-lite-v1:0
+    env:
+      region: us-east-1
 
 modeModels:
   plan:
@@ -224,17 +236,39 @@ modeModels:
   agent:
     model: Claude Sonnet
     reasoningEffort: low
+  loop:
+    model: Nova Lite # each to-do of a loop
+  replan:
+    model: Claude Opus # the plan between rounds
+  reviewer:
+    model: Claude Sonnet
+    reasoningEffort: off
+  subagent:
+    model: Nova Lite
 ```
 
-- `chat`, `agent`, `plan`: the modes you can set. Each takes:
+The entries, and what each falls back to when it is not set:
+
+| Entry      | Used for                                                                | Without an entry                                      |
+| ---------- | ----------------------------------------------------------------------- | ----------------------------------------------------- |
+| `chat`     | Chat mode                                                               | whichever model is selected                           |
+| `plan`     | Plan mode                                                               | whichever model is selected                           |
+| `agent`    | Agent mode                                                              | whichever model is selected                           |
+| `loop`     | each item of a Loop (the to-do turns)                                   | `agent`                                               |
+| `replan`   | a Loop's re-plans, check-ins and repairs                                | `plan`                                                |
+| `reviewer` | the [reviewer](/customize/model-roles/reviewer) in Auto approval mode   | the model picked for the reviewer role in Settings    |
+| `subagent` | subagents whose definition does not name a model                        | the model of the turn that started the subagent       |
+
+- `chat`, `agent` and `plan` each take:
   - `model`: the `name` of one of your chat models, selected when you switch into the mode.
   - `models` (optional): a list of model `name`s to offer in the mode. Give `model`, `models`, or both. With only `models`, the default is the first entry that exists. The default is always part of the list and is listed first, and duplicates are removed. The model picker shows these first, and the model shortcut cycles only through them.
   - `reasoningEffort` (optional): `off`, `low`, `medium` or `high`. This maps to a thinking budget of about 1K, 4K or 16K tokens for models that support extended thinking.
-- Switching mode switches the selected chat model, and the mode menu shows which model and effort each mode uses.
-- A mode without an entry keeps whichever model is currently selected.
+- `loop`, `replan`, `reviewer` and `subagent` take `model` and `reasoningEffort` only: nothing offers a picker there, so there is no list. `loop`, `replan` and `subagent` name chat models. `reviewer` may name any model, whatever its `roles`; it is added to the reviewer role and selected, and a reviewer picked in Settings then holds until the window reloads.
+- Switching mode switches the selected chat model, and the mode menu shows which model and effort each mode uses. A Loop switches the model for each turn it sends: the `loop` model for an item, the `replan` model for a re-plan.
 - If you pick a model by hand in the model selector, that choice is used for the current mode until you reload the window. The reasoning toggle in the chat input overrides `reasoningEffort`.
 - A name that doesn't match one of your models is ignored, with a warning in the config errors. If nothing in an entry matches, the entry is ignored.
-- You can also set all of this from **Settings > Models > Models per mode**: tick the models each mode offers, star the default, pick a reasoning effort and press Save. Saving edits `config.yaml` in place and keeps your comments. It needs a `config.yaml` (not a `config.json`), and is not shown in the JetBrains plugin yet.
+- You can also set all of this from **Settings > Models > Which model does what**: tick the models each mode offers, star the default, star one model for Loop, Re-plan and Subagent, pick a reasoning effort and press Save. Saving edits `config.yaml` in place and keeps your comments. It needs a `config.yaml` (not a `config.json`), and is not shown in the JetBrains plugin yet. The reviewer is picked under **Additional model roles**.
+- **In the CLI** (`cn`, `cn serve`), `modeModels` picks the model the same way: switching to Plan mode takes the `plan` model, leaving it the `agent` model, and a Loop takes `loop` and `replan` per turn; `reviewer` names the model `--auto-review` asks. The CLI does not apply `reasoningEffort`: set the effort in the model's own options, or pick a [catalog variant](/customize/model-catalog#variants) such as `Claude Opus#high`. Subagents in the CLI are models with the `subagent` role, so `modeModels.subagent` does not apply there.
 
 ---
 
@@ -284,12 +318,12 @@ The snake_case tool name also works as a rule name, for example `read_file(**/.e
 **Protected paths always ask.** Some paths are guarded even if you write no rules, and no allow rule or tool setting can switch that off (a deny rule still refuses them outright):
 
 - **Credentials** are protected for every tool and for commands: `.env`, `.env.*` and `*.env` (but not `.env.example`, `.sample`, `.template`), `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`, `~/.azure`, `~/.docker`, `~/.config/gh`, `~/.config/gcloud`, `~/.terraform.d`, `~/.git-credentials`, `~/.pgpass`, `~/.my.cnf`, `.netrc`, `.npmrc`, `.pypirc`, private-key files such as `id_rsa`, files ending in `.pem`, `.key`, `.pfx`, `.p12`, `.tfvars` or `.tfstate`, `terraform.tfstate`, `/etc/shadow` and `/proc/self/environ`.
-- **Files that change what runs later** are protected for edits, new files and commands: anything under `.git/`, `.continue/`, `.vscode/`, `.idea/`, `.husky/`, `.devcontainer/`, `.cargo/`, `.claude/`, `.cursor/`, `.github/workflows/` or `.github/actions/`; `.continuerc.*`, `.mcp.json`, `.envrc`, `.gitlab-ci.yml`; and shell startup files such as `~/.bashrc`, `~/.zshrc`, `~/.gitconfig`, fish config and LaunchAgents. Just reading or listing these is fine. Instruction files such as `AGENTS.md` and `CLAUDE.md` are not on this list because they are edited all the time; add `writeFile(AGENTS.md)` to `ask` if you want them guarded.
+- **Files that change what runs later** are protected for edits, new files and commands: anything under `.git/`, `.continuous/`, `.vscode/`, `.idea/`, `.husky/`, `.devcontainer/`, `.cargo/`, `.claude/`, `.cursor/`, `.github/workflows/` or `.github/actions/`; `.continuousrc.*`, `.mcp.json`, `.envrc`, `.gitlab-ci.yml`; and shell startup files such as `~/.bashrc`, `~/.zshrc`, `~/.gitconfig`, fish config and LaunchAgents. Just reading or listing these is fine. Instruction files such as `AGENTS.md` and `CLAUDE.md` are not on this list because they are edited all the time; add `writeFile(AGENTS.md)` to `ask` if you want them guarded.
 - **Commands that print credentials** ask even when they name no file: `env` and `printenv` with no argument, `dir env:`, and a variable whose name is a credential word, such as `echo $AWS_SECRET_ACCESS_KEY`, `echo %GITHUB_TOKEN%` or `printenv NPM_TOKEN`. `echo $KEYBOARD_LAYOUT` is fine. Network paths such as `\\host\share` also ask, because looking one up contacts that computer and on Windows can send your login to it.
 
 The home directory is recognised however it is written (`~`, `$HOME`, `%USERPROFILE%`, or the full path). The approval prompt says which path caused the question. A command is checked by looking for these paths among its words, including after `sudo` and inside `bash -c '...'`, so `echo .env` also asks. It cannot see a path built from a variable, a wildcard, or a bare file name after `cd`.
 
-**These rules are a guard against mistakes, not a sandbox.** They do not see aliases, a command name built from something other than plain assignments (a glob such as `/usr/bin/gi? push`, or the output of another command), encodings such as `echo ... | base64 -d | sh`, or a script that runs a denied command inside itself (`npm run deploy` can do anything its script does). Anything that can edit your config can also add its own allow rule, which is why edits to `.continue/` always ask. Use deny rules for things you never want to happen by accident, and keep real secrets out of reach by other means too.
+**These rules are a guard against mistakes, not a sandbox.** They do not see aliases, a command name built from something other than plain assignments (a glob such as `/usr/bin/gi? push`, or the output of another command), encodings such as `echo ... | base64 -d | sh`, or a script that runs a denied command inside itself (`npm run deploy` can do anything its script does). Anything that can edit your config can also add its own allow rule, which is why edits to `.continuous/` always ask. Use deny rules for things you never want to happen by accident, and keep real secrets out of reach by other means too.
 
 **Edits.** File edits are normally shown as a diff for you to accept or reject. A `writeFile` deny rule refuses them before that. An `ask` or `allow` rule on edits changes nothing, because the diff review is already the check. The exception is a protected file (see above): an edit to `.github/workflows/ci.yml`, a git hook or `.env` waits for your approval before it is applied.
 
@@ -316,9 +350,10 @@ If a narrow rule cannot be made, the button says why and does nothing: commands 
 | **Manual**       | You approve each call that your tool settings and rules leave open. Nothing changes from before.                                     |
 | **Auto-approve** | The switches under **Settings > Tools > Auto-approve** also allow calls: read files, edit files, run safe commands, run all commands, browser, and MCP servers (one switch for all, plus one per server). |
 | **Auto**         | Auto-approve, and then a [reviewer model](./customize/model-roles/reviewer.mdx) decides what is left. Experimental.                       |
-| **YOLO**         | Everything that is left runs without asking. A warning stays above the input for as long as YOLO is on.                              |
+| **Review** | Tools run without asking, and you review file edits as diffs. Deny rules, ask rules, protected paths and the safety check still apply. |
+| **YOLO** | Everything runs without asking, and file edits are accepted automatically. Deny rules, ask rules, protected paths and the safety check are ignored. Plan mode stays read-only. A warning stays above the input for as long as YOLO is on. |
 
-The modes sit on top of the rules, never above them. The order is: deny rules, then tools you switched off and commands the safety check refuses, then protected paths, then ask rules, then allow rules, and only then the mode. So **YOLO still refuses** what a deny rule or the safety check refuses, and **still asks** for a protected path or an ask rule. A switch never reaches past the tool's own check either: "Read files" does not cover a file outside the project, and "Run safe commands" covers only commands the safety check calls safe. "Run all commands" covers the rest, except what the safety check refuses. "Edit files" does not change the diff review of edits; protected files still wait for approval.
+Except for YOLO, the modes sit on top of the rules, never above them. The order is: deny rules, then tools you switched off and commands the safety check refuses, then protected paths, then ask rules, then allow rules, and only then the mode. A tool you switched off stays off even in YOLO.
 
 ---
 
@@ -437,7 +472,7 @@ docs:
 
 ### `mcpServers`
 
-The [Model Context Protocol](https://modelcontextprotocol.io/introduction) is a standard proposed by Anthropic to unify prompts, context, and tool use. Continued supports any MCP server with the MCP context provider.
+The [Model Context Protocol](https://modelcontextprotocol.io/introduction) is a standard proposed by Anthropic to unify prompts, context, and tool use. Continuous supports any MCP server with the MCP context provider.
 
 **Properties:**
 

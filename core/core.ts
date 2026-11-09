@@ -39,6 +39,7 @@ import {
   getGlobalModelsPath,
   loadModelCatalog,
 } from "./config/providers/modelsFile";
+import { isIgnoreFile } from "./util/workspaceDirs";
 import { listCatalog, saveModelRoles } from "./config/yaml/saveModelRoles";
 import { detectLocalServers, serverConcurrency } from "./llm/localServers";
 import Ollama from "./llm/llms/Ollama";
@@ -48,6 +49,7 @@ import { callTool } from "./tools/callTool";
 import { ChatDescriber } from "./util/chatDescriber";
 import { compactConversation } from "./util/conversationCompaction";
 import { GlobalContext } from "./util/GlobalContext";
+import { reasoningOptionsForEffort } from "./util/modelUse";
 import historyManager from "./util/history";
 import {
   editConfigFile,
@@ -88,6 +90,10 @@ import {
 } from "./config/loadLocalAssistants";
 import { CodebaseRulesCache } from "./config/markdown/loadCodebaseRules";
 import { openSecretLocation } from "./config/openSecretLocation";
+import {
+  moveCredentialsToSecrets,
+  requestHasCredentials,
+} from "./config/providers/modelCredentials";
 import {
   defaultSecretName,
   readProviderConnections,
@@ -193,7 +199,7 @@ export class Core {
     private readonly ide: IDE,
   ) {
     try {
-      // Ensure .continue directory is created
+      // Ensure .continuous directory is created
       migrateV1DevDataFiles();
 
       const ideInfoPromise = messenger.request("getIdeInfo", undefined);
@@ -812,7 +818,7 @@ export class Core {
     });
 
     on("config/saveProviderModels", async (msg) => {
-      const req = msg.data;
+      let req = msg.data;
       const invalid = validateSaveRequest(req);
       if (invalid) {
         return { saved: false, error: invalid };
@@ -836,6 +842,25 @@ export class Core {
           if (stored.envShadowed) envShadowedSecret = key.secretName;
         }
         this.globalContext.update("preferredKeyStorage", key.storage);
+      }
+
+      // Bedrock's access keys are on the models. Stored first, like the key.
+      if (requestHasCredentials(req)) {
+        const moved = await moveCredentialsToSecrets({
+          req,
+          ide: this.ide,
+          storage:
+            this.globalContext.get("preferredKeyStorage") !== "env" &&
+            (await isSecureStorageAvailable(this.ide))
+              ? "secure"
+              : "env",
+          continueDir: getContinueGlobalPath(),
+        });
+        if (moved.error) {
+          return { saved: false, error: moved.error };
+        }
+        req = moved.req as typeof req;
+        envShadowedSecret ??= moved.envShadowedSecret;
       }
 
       // The value goes no further than the secret store, unless the user
@@ -1143,10 +1168,12 @@ export class Core {
             models: await mantle.listAvailableModels(),
           };
         }
+        // "Test connection" is the user asking for a fresh answer, so the
+        // hour-long catalog cache is bypassed and refilled here.
         const bedrock = new Bedrock({ ...params, model: "" });
         return {
           ok: true as const,
-          models: await bedrock.listAvailableModels(),
+          models: await bedrock.listAvailableModels({ refresh: true }),
         };
       } catch (e) {
         return {
@@ -1156,7 +1183,8 @@ export class Core {
       }
     });
     // Does the account list the global profile of this configured Bedrock
-    // model? Lists models and profiles (control plane, no inference).
+    // model? Reads the catalog through its hour-long cache (control plane, no
+    // inference), so asking per model costs one listing an hour at most.
     on("bedrock/globalProfile", async (msg) => {
       try {
         const { config } = await this.configHandler.loadConfig();
@@ -1474,7 +1502,7 @@ export class Core {
         await this.configHandler.refreshAll("Local config file created");
       } else if (nonColocatedRuleUris.some(isContinueConfigRelatedUri)) {
         await this.configHandler.reloadConfig(
-          ".continue config-related file created",
+          ".continuous config-related file created",
         );
       }
     });
@@ -1506,7 +1534,7 @@ export class Core {
         await this.configHandler.refreshAll("Local config file deleted");
       } else if (nonColocatedRuleUris.some(isContinueConfigRelatedUri)) {
         await this.configHandler.reloadConfig(
-          ".continue config-related file deleted",
+          ".continuous config-related file deleted",
         );
       }
     });
@@ -1691,6 +1719,9 @@ export class Core {
           permissions: config.toolPermissions,
           enabled: config.experimental?.enableAutoApproval === true,
           reviewer: config.selectedModelByRole.reviewer,
+          reviewerReasoning: reasoningOptionsForEffort(
+            config.modeModels?.reviewer?.reasoningEffort,
+          ),
           environment: {
             workspaceDirs: dirs,
             gitRemotes: repo ? [repo] : undefined,
@@ -1839,7 +1870,7 @@ export class Core {
   /**
    * After a config loads, offer once per session to move API keys written as
    * plain text into secure storage. Only offered when the editor has secure
-   * storage; ~/.continue/.env would still be plain text.
+   * storage; ~/.continuous/.env would still be plain text.
    */
   private async offerToMovePlaintextKeys(): Promise<void> {
     if (this.offeringPlaintextKeys) return;
@@ -1976,10 +2007,7 @@ export class Core {
           await this.configHandler.reloadConfig(
             "Local config-related file updated",
           );
-        } else if (
-          uri.endsWith(".continueignore") ||
-          uri.endsWith(".gitignore")
-        ) {
+        } else if (isIgnoreFile(uri) || uri.endsWith(".gitignore")) {
           // Reindex the workspaces
           this.invoke("index/forceReIndex", {
             shouldClearIndexes: true,
@@ -2126,7 +2154,7 @@ export class Core {
         //     .then((userSelection) => {
         //       if (userSelection === toastOption) {
         //         void this.ide.openUrl(
-        //           "https://b1tninja.github.io/continued/customize/model-roles/embeddings",
+        //           "https://b1tninja.github.io/continuous/customize/model-roles/embeddings",
         //         );
         //       }
         //     });

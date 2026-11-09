@@ -1,4 +1,5 @@
 export { codebaseTool } from "./codebaseTool";
+export { codeNavigationTool } from "./codeNavigation";
 export { createNewFileTool } from "./createNewFile";
 export { createRuleBlock } from "./createRuleBlock";
 export { editFileTool } from "./editFile";
@@ -22,3 +23,4 @@ export { viewDiffTool } from "./viewDiff";
 export { viewRepoMapTool } from "./viewRepoMap";
 export { viewSubdirectoryTool } from "./viewSubdirectory";
 export { subagentTool } from "./subagent";
+export { finishItemTool, holdQuestionTool, remindMeTool } from "./loopTools";

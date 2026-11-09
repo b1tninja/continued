@@ -29,6 +29,7 @@ import {
   Tool,
   ToolCallDelta,
   ToolCallState,
+  LoopState,
   TaskPlan,
   TurnCheckpoint,
   Usage,
@@ -37,6 +38,7 @@ import { mergeReasoningDetails } from "core/llm/openaiTypeConverters";
 import { addRequestUsage } from "core/llm/utils/sessionUsage";
 import { interruptSubagentRuns } from "../../util/subagents/interrupt";
 import { addFileSnapshot } from "core/util/checkpoints";
+import { restoreLoop } from "core/util/loopMode";
 import { isTaskPlan } from "core/util/taskPlan";
 import { NEW_SESSION_TITLE } from "core/util/constants";
 import {
@@ -262,6 +264,19 @@ type SessionState = {
   taskPlan?: TaskPlan;
   /** URI of the plan file this session works from; see core/util/planFile.ts */
   planFile?: string;
+  /** Loop mode's state, saved with the session; see core/util/loopMode.ts */
+  loop?: LoopState;
+  /**
+   * The person chose Loop in the mode picker. Not a mode: the turns stay
+   * Plan (the first message plans) and Agent (the items). With it set, a
+   * presented plan starts the loop by itself. Saved with the session.
+   */
+  loopRequested?: boolean;
+  /**
+   * The mode picked while a loop item ran: the loop stops after the item and
+   * the mode is taken then, so the item finishes in its own mode.
+   */
+  modeAfterLoop?: MessageModes;
   /** Messages typed while the agent was working, sent when the turn ends */
   queuedMessages: QueuedMessage[];
   /** Stop, an error or a new session pauses the queue until it is sent by hand */
@@ -279,6 +294,11 @@ export interface QueuedMessage {
    * running finish, before the next model request, instead of at turn end.
    */
   steer?: boolean;
+  /**
+   * Loop mode: this is the person's answer to a question of the running item
+   * (LoopAnswer.id). It is only ever steered in; the turn-end send skips it.
+   */
+  loopAnswerId?: string;
 }
 
 export const INITIAL_SESSION_STATE: SessionState = {
@@ -523,6 +543,55 @@ export const sessionSlice = createSlice({
     setPlanFile: (state, { payload }: PayloadAction<string | undefined>) => {
       state.planFile = payload || undefined;
     },
+    /**
+     * A tool call cut off at the output limit: drop its partial arguments. The
+     * history is sent back with every request, and invalid JSON there can fail
+     * a provider's template, besides re-sending text that was never used.
+     */
+    clearToolCallArguments: (
+      state,
+      { payload }: PayloadAction<{ toolCallId: string }>,
+    ) => {
+      for (let i = state.history.length - 1; i >= 0; i--) {
+        const item = state.history[i];
+        const toolCallState = item.toolCallStates?.find(
+          (tc) => tc.toolCallId === payload.toolCallId,
+        );
+        if (!toolCallState) continue;
+        toolCallState.toolCall.function.arguments = "{}";
+        toolCallState.parsedArgs = {};
+        if (item.message.role === "assistant") {
+          for (const call of item.message.toolCalls ?? []) {
+            if (call.id === payload.toolCallId && call.function) {
+              call.function.arguments = "{}";
+            }
+          }
+        }
+        return;
+      }
+    },
+    setLoop: (state, { payload }: PayloadAction<LoopState | undefined>) => {
+      const wasActive = !!state.loop && state.loop.status !== "stopped";
+      state.loop = payload;
+      if (!wasActive || (payload && payload.status !== "stopped")) return;
+      // The loop ended: take the mode picked while it ran, or, still in
+      // Loop, plan again so the next message proposes the next plan
+      if (state.modeAfterLoop) {
+        state.mode = state.modeAfterLoop;
+        state.modeAfterLoop = undefined;
+      } else if (state.loopRequested) {
+        state.mode = "plan";
+      }
+    },
+    setLoopRequested: (state, { payload }: PayloadAction<boolean>) => {
+      state.loopRequested = payload || undefined;
+    },
+    setModeAfterLoop: (
+      state,
+      { payload }: PayloadAction<MessageModes | undefined>,
+    ) => {
+      state.modeAfterLoop = payload;
+    },
     deleteCompaction: (state, action: PayloadAction<number>) => {
       // Removes the conversation summary from the specified message
       const historyItem = state.history[action.payload];
@@ -592,7 +661,12 @@ export const sessionSlice = createSlice({
       state,
       {
         payload,
-      }: PayloadAction<{ editorState: JSONContent; modifiers: InputModifiers }>,
+      }: PayloadAction<{
+        editorState: JSONContent;
+        modifiers: InputModifiers;
+        steer?: boolean;
+        loopAnswerId?: string;
+      }>,
     ) => {
       state.queuedMessages.push({ id: uuidv4(), ...payload });
     },
@@ -600,6 +674,24 @@ export const sessionSlice = createSlice({
       state.queuedMessages = state.queuedMessages.filter(
         (m) => m.id !== payload,
       );
+    },
+    /**
+     * Move a queued message to another place in the queue, which is the
+     * order they are merged and sent in. `to` is clamped to the queue.
+     */
+    moveQueuedMessage: (
+      state,
+      { payload }: PayloadAction<{ id: string; to: number }>,
+    ) => {
+      const from = state.queuedMessages.findIndex((m) => m.id === payload.id);
+      if (from < 0) return;
+      const to = Math.max(
+        0,
+        Math.min(state.queuedMessages.length - 1, payload.to),
+      );
+      if (to === from) return;
+      const [message] = state.queuedMessages.splice(from, 1);
+      state.queuedMessages.splice(to, 0, message);
     },
     clearQueuedMessages: (state) => {
       state.queuedMessages = [];
@@ -610,7 +702,10 @@ export const sessionSlice = createSlice({
       state.isQueuePaused = payload;
     },
     requestQueuedMessagesSend: (state) => {
-      state.isQueueSendRequested = state.queuedMessages.length > 0;
+      // Loop answers are only steered in, never sent as a turn of their own
+      state.isQueueSendRequested = state.queuedMessages.some(
+        (m) => !m.loopAnswerId,
+      );
     },
     /** Deliver these at the next tool boundary (see QueuedMessage.steer) */
     steerQueuedMessages: (state, { payload }: PayloadAction<string[]>) => {
@@ -818,9 +913,15 @@ export const sessionSlice = createSlice({
       // session (including the one reopened after a reload or crash) brings
       // its queue back paused: nothing is sent until the person says so.
       // Steering belongs to the turn that was running, so it is not kept.
-      state.queuedMessages = (payload?.queuedMessages ?? []).map(
-        ({ id, editorState, modifiers }) => ({ id, editorState, modifiers }),
-      );
+      // A loop answer waiting to be steered is kept on the loop instead
+      // (LoopAnswer.delivered), which gives it to the item's next run.
+      state.queuedMessages = (payload?.queuedMessages ?? [])
+        .filter((m: QueuedMessage) => !m.loopAnswerId)
+        .map(({ id, editorState, modifiers }) => ({
+          id,
+          editorState,
+          modifiers,
+        }));
       state.isQueuePaused = state.queuedMessages.length > 0;
       state.isQueueSendRequested = false;
 
@@ -886,6 +987,9 @@ export const sessionSlice = createSlice({
           : undefined;
         state.planFile =
           typeof payload.planFile === "string" ? payload.planFile : undefined;
+        state.loop = restoreLoop(payload.loop);
+        state.loopRequested = payload.loopRequested === true || undefined;
+        state.modeAfterLoop = undefined;
         if (payload.mode) {
           state.mode = payload.mode;
         }
@@ -896,6 +1000,9 @@ export const sessionSlice = createSlice({
         state.checkpoints = [];
         state.taskPlan = undefined;
         state.planFile = undefined;
+        state.loop = undefined;
+        state.loopRequested = undefined;
+        state.modeAfterLoop = undefined;
       }
     },
     updateSessionTitle: (state, { payload }: PayloadAction<string>) => {
@@ -1380,6 +1487,7 @@ export const selectApplyStateByToolCallId = createSelector(
 export const {
   enqueueMessage,
   removeQueuedMessage,
+  moveQueuedMessage,
   clearQueuedMessages,
   setQueuePaused,
   requestQueuedMessagesSend,
@@ -1408,6 +1516,10 @@ export const {
   setCheckpoints,
   setTaskPlan,
   setPlanFile,
+  clearToolCallArguments,
+  setLoop,
+  setLoopRequested,
+  setModeAfterLoop,
   setIsGatheringContext,
   resetNextCodeBlockToApplyIndex,
   updateApplyState,

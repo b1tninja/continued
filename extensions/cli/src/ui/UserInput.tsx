@@ -9,13 +9,8 @@ import {
   type SlashCommand,
 } from "../commands/commands.js";
 import { useServices } from "../hooks/useService.js";
-import type { PermissionMode } from "../permissions/types.js";
+import { cycleModeEntry } from "../loop/loopSession.js";
 import type { FileIndexServiceState } from "../services/FileIndexService.js";
-import {
-  SERVICE_NAMES,
-  serviceContainer,
-  services,
-} from "../services/index.js";
 import { messageQueue, renamePlaceholders } from "../stream/messageQueue.js";
 import { escapeEvents } from "../util/cli.js";
 import { InputHistory } from "../util/inputHistory.js";
@@ -105,6 +100,8 @@ interface UserInputProps {
   isCompacting?: boolean;
   inputMode: boolean;
   onInterrupt?: () => void;
+  /** Steer now (a second Enter on an empty prompt); false when it did nothing */
+  onSteerNow?: () => boolean;
   assistant?: AssistantConfig;
   wasInterrupted?: boolean;
   onFileAttached?: (filePath: string, content: string) => void;
@@ -122,6 +119,7 @@ const UserInput: React.FC<UserInputProps> = ({
   isCompacting = false,
   inputMode,
   onInterrupt,
+  onSteerNow,
   assistant,
   wasInterrupted = false,
   onFileAttached,
@@ -155,8 +153,21 @@ const UserInput: React.FC<UserInputProps> = ({
   const [cursorPosition, setCursorPosition] = useState(0);
   const [showSlashCommands, setShowSlashCommands] = useState(false);
 
+  // The prompt holds messages Up took back from the queue (until sent)
+  const takenBackRef = useRef(false);
+
   // Clear input function for Ctrl+C
   const clearInput = useCallback(() => {
+    // Messages taken back from the queue are not thrown away by a Ctrl+C:
+    // the prompt, edits included, goes back to the front of the queue
+    const text = textBuffer.text.trim();
+    if (takenBackRef.current && text && !isRemoteMode) {
+      const images = textBuffer.getAllImages();
+      textBuffer.expandAllPasteBlocks();
+      const restored = textBuffer.text.trim();
+      messageQueue.putBack(restored, images.size > 0 ? images : undefined);
+    }
+    takenBackRef.current = false;
     textBuffer.clear();
     setInputText("");
     setCursorPosition(0);
@@ -164,7 +175,7 @@ const UserInput: React.FC<UserInputProps> = ({
     setShowFileSearch(false);
     setShowBashMode(false);
     inputHistory.resetNavigation();
-  }, [textBuffer]);
+  }, [textBuffer, isRemoteMode]);
 
   const [slashCommandFilter, setSlashCommandFilter] = useState("");
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
@@ -203,26 +214,10 @@ const UserInput: React.FC<UserInputProps> = ({
     void loadCommands();
   }, [assistant?.prompts, assistant?.rules]);
 
-  // Cycle through permission modes
-  const cycleModes = async () => {
-    const modes: PermissionMode[] = ["normal", "plan", "auto"];
-    const currentMode = services.toolPermissions.getCurrentMode();
-    const currentIndex = modes.indexOf(currentMode);
-    const nextIndex = (currentIndex + 1) % modes.length;
-    const nextMode = modes[nextIndex];
-
-    services.toolPermissions.switchMode(nextMode);
-
-    // Update the service container with the new tool permissions state
-    // Since TOOL_PERMISSIONS was registered with registerValue(), we need to
-    // update its value directly rather than reloading from a factory
-    const updatedState = services.toolPermissions.getState();
-    serviceContainer.set(SERVICE_NAMES.TOOL_PERMISSIONS, updatedState);
-
-    // Show a brief indicator of the mode change
-    // This will be reflected in the ModeIndicator component
-    return nextMode;
-  };
+  // Cycle through the modes, forward (Shift+Tab, Right) or back (Left):
+  // normal, plan, loop (plan mode plus the loop entry,
+  // src/loop/loopSession.ts) and auto
+  const cycleModes = async (step: 1 | -1 = 1) => cycleModeEntry(step);
 
   // Update shell mode state based on input
   const updateBashModeState = (text: string) => {
@@ -528,10 +523,16 @@ const UserInput: React.FC<UserInputProps> = ({
   // Up with messages queued takes them back into the input (as Claude Code
   // does): out of the queue, one per line, ahead of any draft. Enter then
   // queues the edited text again as one message, or sends it when idle.
-  const takeBackQueuedMessages = (): boolean => {
+  // With `onlyId`, just that message comes back (Enter on a selected line).
+  const takeBackQueuedMessages = (onlyId?: string): boolean => {
     if (isRemoteMode || messageQueue.getQueueLength() === 0) return false;
 
-    const items = messageQueue.takeAll();
+    const one = onlyId
+      ? messageQueue.list().find((m) => m.id === onlyId)
+      : undefined;
+    if (onlyId && !one) return false;
+    if (one) messageQueue.remove(one.id);
+    const items = one ? [one] : messageQueue.takeAll();
     const parts = items.map((item) => {
       if (!item.imageMap || item.imageMap.size === 0) return item.message;
       const renames = new Map<string, string>();
@@ -556,7 +557,73 @@ const UserInput: React.FC<UserInputProps> = ({
     updateFileSearchState(newText, taken.length);
     updateBashModeState(newText);
     inputHistory.resetNavigation();
+    takenBackRef.current = true;
     return true;
+  };
+
+  /**
+   * Reordering the queue: Down on an empty prompt highlights the first
+   * queued message; Up and Down move the highlight (past either end, or Esc,
+   * returns to the prompt); + and - move the message up and down, Delete
+   * removes it and Enter takes it back into the prompt. Any other key leaves
+   * the queue and is handled as usual.
+   */
+  const handleQueueSelection = (input: string, key: any): boolean => {
+    if (isRemoteMode) return false;
+    const items = messageQueue.list();
+    const selectedId = messageQueue.getSelectedId();
+    if (!selectedId) {
+      if (
+        key.downArrow &&
+        !key.ctrl &&
+        !key.meta &&
+        items.length > 0 &&
+        !textBuffer.text &&
+        !showSlashCommands &&
+        !showFileSearch
+      ) {
+        messageQueue.select(items[0].id);
+        return true;
+      }
+      return false;
+    }
+
+    const index = items.findIndex((m) => m.id === selectedId);
+    if (key.escape) {
+      messageQueue.select(null);
+      return true;
+    }
+    if (key.upArrow) {
+      messageQueue.select(index > 0 ? items[index - 1].id : null);
+      return true;
+    }
+    if (key.downArrow) {
+      messageQueue.select(
+        index < items.length - 1 ? items[index + 1].id : null,
+      );
+      return true;
+    }
+    if (input === "+" || input === "=") {
+      messageQueue.move(selectedId, index - 1);
+      return true;
+    }
+    if (input === "-" || input === "_") {
+      messageQueue.move(selectedId, index + 1);
+      return true;
+    }
+    if (key.delete || key.backspace) {
+      // The highlight stays at this place in the queue
+      const next = items[index + 1] ?? items[index - 1];
+      messageQueue.remove(selectedId);
+      messageQueue.select(next?.id ?? null);
+      return true;
+    }
+    if (key.return) {
+      takeBackQueuedMessages(selectedId);
+      return true;
+    }
+    messageQueue.select(null);
+    return false;
   };
 
   const handleHistoryNavigation = (key: any): boolean => {
@@ -615,6 +682,15 @@ const UserInput: React.FC<UserInputProps> = ({
       // Enter on an empty prompt with messages queued
       if (!textBuffer.text.trim() && !isRemoteMode) {
         if (isWaitingForResponse || isCompacting) {
+          // A second Enter steers now: the model's reply ends where it is
+          // and the queue goes at once (not while a tool runs).
+          if (
+            isWaitingForResponse &&
+            messageQueue.isSteerRequested() &&
+            onSteerNow?.()
+          ) {
+            return true;
+          }
           // Steer: deliver the queue at the next tool boundary, inside the
           // running turn. Without tool calls it goes when the reply ends.
           messageQueue.requestSteer();
@@ -637,6 +713,7 @@ const UserInput: React.FC<UserInputProps> = ({
         const submittedText = textBuffer.text.trim();
 
         inputHistory.addEntry(submittedText);
+        takenBackRef.current = false;
 
         // We don't queue, we just send in remote mode because the server handles queueing
         if (!isRemoteMode && (isWaitingForResponse || isCompacting)) {
@@ -782,6 +859,12 @@ const UserInput: React.FC<UserInputProps> = ({
         onTextBufferUpdate: handleTextBufferUpdate,
       })
     ) {
+      return;
+    }
+
+    // A highlighted queued message takes the keys first (Esc included, so
+    // leaving the queue does not also stop the agent)
+    if (handleQueueSelection(input, key)) {
       return;
     }
 

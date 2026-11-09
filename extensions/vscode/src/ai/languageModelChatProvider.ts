@@ -12,24 +12,24 @@ import { renderChatMessage } from "core/util/messageContent";
 import * as vscode from "vscode";
 
 /** Must match contributes.languageModelChatProviders[].vendor in package.json. */
-export const LM_VENDOR = "continued";
+export const LM_VENDOR = "continuous";
 
 const DEFAULT_CONTEXT_LENGTH = 32_768;
 const DEFAULT_MAX_TOKENS = 4_096;
 
-interface ContinuedModelInfo extends vscode.LanguageModelChatInformation {
-  /** The title of the Continued model this entry stands for. */
+interface ContinuousModelInfo extends vscode.LanguageModelChatInformation {
+  /** The title of the Continuous model this entry stands for. */
   readonly llmTitle: string;
 }
 
 /**
- * Offers the chat models of the selected Continued config, then the rest of
+ * Offers the chat models of the selected Continuous config, then the rest of
  * the model catalog (models.yaml, each variant too), to VS Code's chat and
- * agents. Requests run through Continued's own LLM classes, so they use the
+ * agents. Requests run through Continuous's own LLM classes, so they use the
  * keys and settings from the config and providers.yaml; keys never pass to
  * VS Code.
  */
-export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelChatProvider<ContinuedModelInfo> {
+export class ContinuousLanguageModelChatProvider implements vscode.LanguageModelChatProvider<ContinuousModelInfo> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeLanguageModelChatInformation = this.changed.event;
 
@@ -69,7 +69,7 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
 
   async provideLanguageModelChatInformation(
     options?: vscode.PrepareLanguageModelChatModelOptions,
-  ): Promise<ContinuedModelInfo[]> {
+  ): Promise<ContinuousModelInfo[]> {
     if (!this.enabled) return [];
     let models = this.models;
     // A group from the Language Models editor (proposed; see package.json)
@@ -96,7 +96,7 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
   }
 
   async provideLanguageModelChatResponse(
-    model: ContinuedModelInfo,
+    model: ContinuousModelInfo,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
@@ -107,7 +107,7 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
     const sub = token.onCancellationRequested(() => abort.abort());
     try {
       const tools = options.tools?.length
-        ? options.tools.map(toContinuedTool)
+        ? options.tools.map(toContinuousTool)
         : undefined;
       const toolCalls = new ToolCallCollector();
       for await (const chunk of llm.streamChat(
@@ -115,7 +115,7 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
         abort.signal,
         {
           ...(tools ? { tools } : {}),
-          // Continued can force one named tool, not "any tool": honour
+          // Continuous can force one named tool, not "any tool": honour
           // Required mode when exactly one tool is offered.
           ...(tools?.length === 1 &&
           options.toolMode === vscode.LanguageModelChatToolMode.Required
@@ -147,7 +147,7 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
   }
 
   async provideTokenCount(
-    model: ContinuedModelInfo,
+    model: ContinuousModelInfo,
     text: string | vscode.LanguageModelChatRequestMessage,
   ): Promise<number> {
     const llm = this.models.find(
@@ -162,13 +162,13 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
     return countTokens(content, llm?.model ?? model.version);
   }
 
-  private findModel(model: ContinuedModelInfo): ILLM {
+  private findModel(model: ContinuousModelInfo): ILLM {
     const llm = this.models.find(
       (m) => (m.title ?? m.model) === model.llmTitle,
     );
     if (!llm) {
       throw new Error(
-        `${model.name} is no longer in the selected Continued config.`,
+        `${model.name} is no longer in the selected Continuous config.`,
       );
     }
     return llm;
@@ -179,7 +179,7 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
   }
 }
 
-export function modelInfo(llm: ILLM, title: string): ContinuedModelInfo {
+export function modelInfo(llm: ILLM, title: string): ContinuousModelInfo {
   const maxOutputTokens =
     llm.completionOptions?.maxTokens ?? DEFAULT_MAX_TOKENS;
   const contextLength = llm.contextLength ?? DEFAULT_CONTEXT_LENGTH;
@@ -196,10 +196,10 @@ export function modelInfo(llm: ILLM, title: string): ContinuedModelInfo {
     name: title,
     family: llm.providerName,
     version: llm.model,
-    detail: "Continued",
+    detail: "Continuous",
     tooltip: `${llm.providerName} · ${llm.model}${
       routes ? ` (routes: ${routes.join(", ")})` : ""
-    } (from your Continued setup)`,
+    } (from your Continuous setup)`,
     maxInputTokens: Math.max(1, contextLength - maxOutputTokens),
     maxOutputTokens,
     capabilities: { toolCalling: !!toolCalling, imageInput: false },
@@ -211,7 +211,7 @@ export function modelInfo(llm: ILLM, title: string): ContinuedModelInfo {
   };
 }
 
-/** VS Code request messages to Continued chat messages. */
+/** VS Code request messages to Continuous chat messages. */
 export function toChatMessages(
   messages: readonly vscode.LanguageModelChatRequestMessage[],
 ): ChatMessage[] {
@@ -266,7 +266,7 @@ export function toChatMessages(
   return out;
 }
 
-export function toContinuedTool(tool: vscode.LanguageModelChatTool): Tool {
+export function toContinuousTool(tool: vscode.LanguageModelChatTool): Tool {
   return {
     type: "function",
     function: {
@@ -331,7 +331,7 @@ export class ToolCallCollector {
 const ACCOUNT_NAME = /[^A-Za-z0-9_.-]+/g;
 
 /**
- * A group from VS Code's Language Models editor as a Continued account and
+ * A group from VS Code's Language Models editor as a Continuous account and
  * the catalog models it offers. Undefined without a provider.
  */
 export function groupToAccount(

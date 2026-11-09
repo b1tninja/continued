@@ -25,6 +25,8 @@ vi.mock("../session.js", () => ({
   updateSessionPlanFile: (file: string | undefined) => {
     store.planFile = file;
   },
+  // No loop in these sessions
+  getSessionLoop: () => undefined,
 }));
 vi.mock("../services/index.js", () => ({
   services: {
@@ -67,7 +69,7 @@ let file: string;
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "cn-plan-"));
-  file = path.join(dir, ".continue", "plans", "add-retry.md");
+  file = path.join(dir, ".continuous", "plans", "add-retry.md");
   vi.spyOn(process, "cwd").mockReturnValue(dir);
   Object.assign(store, {
     plan: undefined,
@@ -112,17 +114,66 @@ describe("PresentPlan", () => {
     const result = await presentPlanTool.run(args);
 
     expect(quizService.askQuestion).toHaveBeenCalledWith(
-      expect.objectContaining({ options: ["Build", "Keep planning"] }),
+      expect.objectContaining({
+        options: ["Build", "Build in a loop", "Keep planning"],
+      }),
     );
     expect(store.mode).toBe("normal");
     expect(result).toContain("approved the plan");
-    expect(result).toContain("Build the plan in .continue/plans/add-retry.md");
+    expect(result).toContain(
+      "Build the plan in .continuous/plans/add-retry.md",
+    );
     expect(store.plan?.updatedBy).toBe("user");
     expect(store.plan?.items.map((i) => i.text)).toEqual([
       "Add a helper",
       "Use it everywhere",
     ]);
     expect(result).toContain("Use it everywhere");
+  });
+
+  it("asks the decisions first, writes the answers to the file and tells the model", async () => {
+    vi.mocked(quizService.askQuestion)
+      .mockImplementationOnce(async () => "November 8, 2026")
+      .mockImplementationOnce(async () => "Build");
+    const result = await presentPlanTool.run({
+      ...args,
+      decisions: [
+        {
+          question: "Which format should formatDate return?",
+          options: ["ISO 8601", "November 8, 2026"],
+          pick: "ISO 8601",
+          type: "scope",
+          todos: [1],
+        },
+      ],
+    });
+
+    expect(quizService.askQuestion).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        question: "Decision 1 of 1: Which format should formatDate return?",
+        options: ["ISO 8601", "November 8, 2026"],
+        defaultAnswer: "ISO 8601",
+      }),
+    );
+    const text = fs.readFileSync(file, "utf-8");
+    expect(text).toContain("## Decisions");
+    expect(text).toContain("  - answer: November 8, 2026");
+    expect(result).toContain(
+      "1. Which format should formatDate return? (to-dos 1): decided: November 8, 2026",
+    );
+    expect(store.mode).toBe("normal");
+  });
+
+  it("headless: the decisions wait in the file and the model is told not to settle them", async () => {
+    store.headless = true;
+    const result = await presentPlanTool.run({
+      ...args,
+      decisions: [{ question: "Which format?" }],
+    });
+    expect(quizService.askQuestion).not.toHaveBeenCalled();
+    expect(result).toContain("Its decision waits for the person in the file");
+    expect(fs.readFileSync(file, "utf-8")).toContain("- Which format?");
   });
 
   it("Keep planning stays in plan mode, with or without feedback", async () => {
@@ -159,9 +210,9 @@ describe("PresentPlan", () => {
     expect(store.mode).toBe("plan");
     expect(fs.existsSync(file)).toBe(true);
     expect(store.stderr.join("")).toContain(
-      "Plan saved to .continue/plans/add-retry.md",
+      "Plan saved to .continuous/plans/add-retry.md",
     );
-    expect(result).toContain("Plan: .continue/plans/add-retry.md");
+    expect(result).toContain("Plan: .continuous/plans/add-retry.md");
   });
 
   it("refuses bad arguments in preprocess, before anything is written", async () => {
@@ -174,6 +225,6 @@ describe("PresentPlan", () => {
       "text",
       "checklist",
     ]);
-    expect(fs.existsSync(path.join(dir, ".continue"))).toBe(false);
+    expect(fs.existsSync(path.join(dir, ".continuous"))).toBe(false);
   });
 });

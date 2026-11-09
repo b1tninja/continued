@@ -9,15 +9,23 @@ import {
   describePromptBlocked,
   runUserPromptSubmitHooks,
 } from "../../hooks/promptHook.js";
+import { LoopRunner } from "../../loop/loopDriver.js";
+import {
+  getSessionLoop,
+  interruptRunningLoop,
+  withLoopSteering,
+} from "../../loop/loopSession.js";
 import { toolPermissionManager } from "../../permissions/permissionManager.js";
 import { services } from "../../services/index.js";
 import {
   createSession,
   loadSession,
+  onLoopChange,
   updateSessionHistory,
 } from "../../session.js";
 import { handleSlashCommands } from "../../slashCommands.js";
 import {
+  isQueuedCommand,
   mergeQueuedMessages,
   messageQueue,
 } from "../../stream/messageQueue.js";
@@ -70,6 +78,7 @@ export function useChat({
   onShowSessionSelector,
   onShowJobsSelector,
   onShowExportSelector,
+  onShowLoopInbox,
   onClear,
   onRefreshStatic,
   isRemoteMode = false,
@@ -165,6 +174,10 @@ export function useChat({
     useState<AbortController | null>(null);
   const [compactionAbortController, setCompactionAbortController] =
     useState<AbortController | null>(null);
+  // The model's reply is streaming (not a tool run or an approval wait)
+  const modelStreamingRef = useRef(false);
+  // The running response was ended by "Steer now": send the queue at once
+  const steerNowRef = useRef(false);
   const [isChatHistoryInitialized, setIsChatHistoryInitialized] = useState(
     // If we're resuming and found a saved session, we're already initialized
     // If we're forking and found a session to fork from, we're already initialized
@@ -290,10 +303,42 @@ export function useChat({
     }
   }, [initialPrompt, additionalPrompts, isChatHistoryInitialized]);
 
+  // Loop mode: the runner sends the loop's turns when nothing else is going
+  // on (src/loop/loopDriver.ts). `busy` counts the turns and messages in
+  // flight, which a turn's stale closures cannot read from state.
+  const busyRef = useRef(0);
+  const sendLoopTurnRef = useRef<(prompt: string) => Promise<void>>(
+    async () => {},
+  );
+  const loopRunnerRef = useRef<LoopRunner | null>(null);
+  if (!loopRunnerRef.current && !isRemoteMode) {
+    loopRunnerRef.current = new LoopRunner({
+      isIdle: () =>
+        busyRef.current === 0 &&
+        !(messageQueue.getQueueLength() > 0 && !messageQueue.isPaused()),
+      historyLength: () => getLatestHistory().length,
+      send: (turn) => sendLoopTurnRef.current(turn.prompt),
+    });
+  }
+  useEffect(() => {
+    const runner = loopRunnerRef.current;
+    if (!runner) return;
+    // An answer, Resume or a new loop can give the loop something to do;
+    // the kick waits for the change to settle and does nothing while busy.
+    const unsubscribe = onLoopChange(() => {
+      setTimeout(() => runner.kick(), 0);
+    });
+    return () => {
+      unsubscribe();
+      runner.dispose();
+    };
+  }, []);
+
   const executeStreamingResponse = async (
     newHistory: ChatHistoryItem[],
     currentCompactionIndex: number | null,
   ) => {
+    busyRef.current++;
     // Clean up previous abort controller if it exists
     if (abortController && !abortController.signal.aborted) {
       abortController.abort();
@@ -309,24 +354,40 @@ export function useChat({
       historyLength: newHistory.length,
     });
 
+    // The model as it is now, not as it was when this render happened: a
+    // Loop turn or a mode change may have just switched it (`modeModels`),
+    // and the props follow a render later
+    const live = services.model?.getState?.();
+    const turnModel = live?.model ?? model;
+    const turnLlmApi = live?.llmApi ?? llmApi;
+
     let failed = false;
     try {
       const streamCallbacks = createStreamCallbacks({
         setChatHistory: setChatHistory,
         setActivePermissionRequest,
-        llmApi,
-        model,
+        llmApi: turnLlmApi,
+        model: turnModel,
+        onShowStatusMessage,
       });
       // Steering: deliver queued messages at the next tool boundary when the
-      // person asked for it (Enter on an empty prompt while the agent works).
-      streamCallbacks.onToolBoundary = () =>
-        buildSteeringMessage(messageQueue, { onShowStatusMessage, model });
+      // person asked for it (Enter on an empty prompt while the agent works),
+      // and Loop mode's answers for the running item at the same boundary.
+      streamCallbacks.onToolBoundary = withLoopSteering(() =>
+        buildSteeringMessage(messageQueue, {
+          onShowStatusMessage,
+          model: turnModel,
+        }),
+      );
+      streamCallbacks.onModelStreaming = (streaming: boolean) => {
+        modelStreamingRef.current = streaming;
+      };
 
       // Execute streaming chat response
       await executeStreaming({
         chatHistory: newHistory,
-        model,
-        llmApi,
+        model: turnModel,
+        llmApi: turnLlmApi,
         controller,
         streamCallbacks,
         currentCompactionIndex,
@@ -367,13 +428,36 @@ export function useChat({
       setInputMode(true);
 
       // Stop and errors pause the queue: what was queued stays visible but
-      // is not sent until the person resumes or sends a new message.
-      if (failed || controller.signal.aborted) {
+      // is not sent until the person resumes or sends a new message. "Steer
+      // now" also aborts, but to send the queue right away.
+      const steeredNow = steerNowRef.current;
+      steerNowRef.current = false;
+      modelStreamingRef.current = false;
+      if (failed || (controller.signal.aborted && !steeredNow)) {
         messageQueue.pause();
       }
+      // A turn that failed during a loop step stops the loop, as Stop does
+      if (failed && getSessionLoop()?.current) {
+        interruptRunningLoop(
+          "A turn failed while the loop was running. Resume to go on.",
+        );
+      }
 
-      await drainQueue();
+      try {
+        await drainQueue();
+      } finally {
+        busyRef.current--;
+      }
+      loopRunnerRef.current?.kick();
     }
+  };
+
+  /** Loop mode: send the loop's prompt as the next user message. */
+  sendLoopTurnRef.current = async (prompt: string) => {
+    const message = await formatMessageWithFiles(prompt, [], undefined);
+    const newHistory = [...getLatestHistory(), message];
+    setChatHistory(newHistory);
+    await executeStreamingResponse(newHistory, compactionIndex);
   };
 
   /**
@@ -485,6 +569,7 @@ export function useChat({
       onShowJobsSelector,
       onShowUpdateSelector,
       onShowExportSelector,
+      onShowLoopInbox,
       onClear,
     });
 
@@ -510,6 +595,22 @@ export function useChat({
   };
 
   const processMessage = async (
+    message: string,
+    imageMap?: Map<string, Buffer>,
+    isQueuedMessage: boolean = false,
+    baseHistory?: ChatHistoryItem[],
+  ) => {
+    busyRef.current++;
+    try {
+      await processMessageNow(message, imageMap, isQueuedMessage, baseHistory);
+    } finally {
+      busyRef.current--;
+    }
+    // The loop waited for this message's turn
+    loopRunnerRef.current?.kick();
+  };
+
+  const processMessageNow = async (
     message: string,
     imageMap?: Map<string, Buffer>,
     isQueuedMessage: boolean = false,
@@ -725,6 +826,37 @@ export function useChat({
     await processMessage(message, imageMap, false);
   };
 
+  /**
+   * Steer now: end the model's reply where it is and send the queued
+   * messages at once, instead of after the next tool round. Only while the
+   * model itself streams; a running tool or an approval wait is left alone.
+   * Returns false when it did nothing (the steer then waits as before).
+   */
+  const handleSteerNow = (): boolean => {
+    if (isRemoteMode || !abortController || !isWaitingForResponse) {
+      return false;
+    }
+    if (!modelStreamingRef.current) return false;
+    if (!messageQueue.list().some((m) => !isQueuedCommand(m.message))) {
+      return false;
+    }
+    steerNowRef.current = true;
+    abortController.abort();
+    // The partial reply goes, as on Stop: the steered request starts from
+    // the conversation before it, which the server already has cached
+    setChatHistory((current) => {
+      const lastMessage = current[current.length - 1];
+      if (
+        lastMessage?.message.role === "assistant" &&
+        !lastMessage.toolCallStates?.length
+      ) {
+        return current.slice(0, -1);
+      }
+      return current;
+    });
+    return true;
+  };
+
   const handleInterrupt = () => {
     // In remote mode, send interrupt signal to server
     if (isRemoteMode && remoteUrl) {
@@ -751,6 +883,8 @@ export function useChat({
 
     // If response is running, abort response
     if (abortController && isWaitingForResponse) {
+      // Stop during a loop step stops the loop; its item goes back to pending
+      interruptRunningLoop();
       // Keep the queue but do not send it: the person stopped the agent,
       // possibly to change course. Enter on an empty prompt resumes.
       messageQueue.pause();
@@ -785,9 +919,10 @@ export function useChat({
       additionalRules,
     );
     setChatHistory(newHistory);
-    // Queued messages belonged to the conversation that was cleared
-    messageQueue.clear();
-    messageQueue.resume();
+    // Queued messages were written for the conversation that was reset, but
+    // are never thrown away unasked: they stay, paused, until the person
+    // sends, edits or removes them
+    messageQueue.pause();
     setPendingMessage(null);
   };
 
@@ -809,9 +944,9 @@ export function useChat({
     });
 
     // Queued messages were written after the message being edited, for a
-    // conversation that is being rewound, so they are dropped
-    messageQueue.clear();
-    messageQueue.resume();
+    // conversation that is being rewound. An Esc too many reaches this
+    // picker, so they are kept, paused, not dropped: the person decides
+    messageQueue.pause();
     setPendingMessage(null);
 
     // Clear attached files
@@ -916,9 +1051,11 @@ export function useChat({
     queuedMessages: queueView.items,
     queuePaused: queueView.paused,
     queueSteerRequested: queueView.steerRequested,
+    queueSelectedId: queueView.selectedId,
     pendingMessage,
     handleUserMessage,
     handleInterrupt,
+    handleSteerNow,
     handleFileAttached,
     resetChatHistory,
     handleEditMessage,

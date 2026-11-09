@@ -20,6 +20,13 @@ export const TASK_LIST_TOOL_NAMES = [
   "present_plan",
   "PresentPlan",
   "ExitPlanMode",
+  // Loop mode's tools hold questions for and report the parent's item
+  "hold_question",
+  "finish_item",
+  "HoldQuestion",
+  "FinishItem",
+  "remind_me",
+  "RemindMe",
 ];
 
 /**
@@ -33,6 +40,7 @@ const CLAUDE_TOOL_ALIASES: Record<string, string[]> = {
     BuiltInToolNames.ReadCurrentlyOpenFile,
   ],
   grep: [BuiltInToolNames.GrepSearch],
+  lsp: [BuiltInToolNames.CodeNavigation],
   glob: [BuiltInToolNames.FileGlobSearch],
   ls: [BuiltInToolNames.LSTool, BuiltInToolNames.ViewSubdirectory],
   bash: [BuiltInToolNames.RunTerminalCommand],

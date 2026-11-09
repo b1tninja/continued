@@ -224,9 +224,11 @@ const TUIChat: React.FC<TUIChatProps> = ({
     queuedMessages,
     queuePaused,
     queueSteerRequested,
+    queueSelectedId,
     pendingMessage,
     handleUserMessage,
     handleInterrupt,
+    handleSteerNow,
     handleFileAttached,
     resetChatHistory,
     handleEditMessage,
@@ -247,6 +249,7 @@ const TUIChat: React.FC<TUIChatProps> = ({
     onShowUpdateSelector: () => navigateTo("update"),
     onShowSessionSelector: () => navigateTo("session"),
     onShowJobsSelector: () => navigateTo("jobs"),
+    onShowLoopInbox: () => navigateTo("loop"),
     onShowExportSelector: () => navigateTo("export"),
     onReload: handleReload,
     onClear: handleClear,
@@ -417,6 +420,7 @@ const TUIChat: React.FC<TUIChatProps> = ({
           queuedMessages={queuedMessages}
           queuePaused={queuePaused}
           queueSteerRequested={queueSteerRequested}
+          queueSelectedId={queueSelectedId}
           pendingMessage={pendingMessage}
           renderMessage={renderMessage}
           refreshTrigger={staticRefreshTrigger}
@@ -471,6 +475,7 @@ const TUIChat: React.FC<TUIChatProps> = ({
           isCompacting={isCompacting}
           inputMode={inputMode}
           handleInterrupt={handleInterrupt}
+          handleSteerNow={handleSteerNow}
           handleFileAttached={handleFileAttached}
           isInputDisabled={isInputDisabled}
           wasInterrupted={wasInterrupted}

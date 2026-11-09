@@ -24,7 +24,9 @@ import ContinueInputBox from "../../components/mainInput/ContinueInputBox";
 import { CacheMissNotice } from "../../components/mainInput/CacheMissNotice";
 import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
+import { LoopInbox } from "../../components/mainInput/LoopInbox";
 import { TaskListPanel } from "../../components/mainInput/TaskListPanel";
+import { useLoopDriver } from "../../hooks/useLoopDriver";
 import { LargeMessageNotice } from "../../components/mainInput/LargeMessageNotice";
 import { QueuedMessages } from "../../components/mainInput/QueuedMessages";
 import { useMainEditor } from "../../components/mainInput/TipTapEditor";
@@ -47,6 +49,7 @@ import {
   enqueueMessage,
   newSession,
   QueuedMessage,
+  moveQueuedMessage,
   removeQueuedMessage,
   steerQueuedMessages,
   takeQueuedMessages,
@@ -66,7 +69,7 @@ import InlineErrorMessage from "../../components/mainInput/InlineErrorMessage";
 import { resolveEditorContent } from "../../components/mainInput/TipTapEditor/utils/resolveEditorContent";
 import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
 import { RootState } from "../../redux/store";
-import { cancelStream } from "../../redux/thunks/cancelStream";
+import { cancelStream, interruptStream } from "../../redux/thunks/cancelStream";
 import { getLocalStorage, setLocalStorage } from "../../util/localStorage";
 import { EmptyChatBody } from "./EmptyChatBody";
 import { ExploreDialogWatcher } from "./ExploreDialogWatcher";
@@ -118,6 +121,8 @@ function fallbackRender({ error, resetErrorBoundary }: any) {
 }
 
 export function Chat() {
+  // Loop mode: take the next step whenever nothing is running
+  useLoopDriver();
   useApplyModeModel();
   const dispatch = useAppDispatch();
   const ideMessenger = useContext(IdeMessengerContext);
@@ -268,14 +273,17 @@ export function Chat() {
 
   const sendQueuedMessages = useCallback(
     async (ids?: string[]) => {
-      const { queuedMessages } = reduxStore.getState().session;
+      // Loop answers are steered into the item's run (or kept for its next
+      // one by the loop), never sent as a turn of their own
+      const all = reduxStore.getState().session.queuedMessages;
+      const queuedMessages = all.filter((m) => !m.loopAnswerId);
       const chosen = ids
         ? queuedMessages.filter((m) => ids.includes(m.id))
         : queuedMessages;
       const merged = mergeQueuedMessages(chosen);
       if (!merged) return;
 
-      if (chosen.length === queuedMessages.length) {
+      if (chosen.length === all.length) {
         dispatch(takeQueuedMessages());
       } else {
         chosen.forEach((m) => dispatch(removeQueuedMessage(m.id)));
@@ -306,6 +314,26 @@ export function Chat() {
       }
     },
     [dispatch, reduxStore, sendQueuedMessages],
+  );
+
+  // "Steer now" while the model writes: end its reply where it is (what it
+  // wrote stays, unfinished tool calls are cancelled) and send these at once,
+  // instead of after the next tool round. Other queued messages keep waiting
+  // for the end of the new turn. A running tool is never cut short.
+  const steerNow = useCallback(
+    async (ids: string[]) => {
+      const state = reduxStore.getState();
+      const isToolRunning = selectCurrentToolCalls(state).some(
+        (tc) => tc.status === "calling",
+      );
+      if (!state.session.isStreaming || isToolRunning) {
+        sendNowOrSteer(ids);
+        return;
+      }
+      await dispatch(interruptStream());
+      await sendQueuedMessages(ids);
+    },
+    [dispatch, reduxStore, sendNowOrSteer, sendQueuedMessages],
   );
 
   useEffect(() => {
@@ -518,10 +546,13 @@ export function Chat() {
         <CachingOffNotice />
         <LargeMessageNotice />
         <TaskListPanel />
+        <LoopInbox />
         <QueuedMessages
           onSendNow={sendNowOrSteer}
+          onSteerNow={(ids) => void steerNow(ids)}
           onEdit={editQueuedMessage}
           onRemove={(id) => dispatch(removeQueuedMessage(id))}
+          onMove={(id, to) => dispatch(moveQueuedMessage({ id, to }))}
         />
         <ContinueInputBox
           isMainInput

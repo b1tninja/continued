@@ -2,13 +2,15 @@ import { Tool } from "../..";
 import {
   PLAN_LIMITS,
   PLANS_DIR,
+  PRESENT_PLAN_DECISIONS_PARAMETER,
+  PRESENT_PLAN_TODO_DETAILS_PARAMETER,
   PRESENT_PLAN_TOOL_DESCRIPTION,
 } from "../../util/planFile";
 import { TASK_PLAN_LIMITS } from "../../util/taskPlan";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "../builtIn";
 
 /**
- * Ends Plan mode's work: the gui writes the plan to `.continue/plans/<slug>.md`,
+ * Ends Plan mode's work: the gui writes the plan to `.continuous/plans/<slug>.md`,
  * makes its to-dos the task list, ends the turn and shows the plan with Build
  * and Keep planning. Offered in Plan mode only (selectActiveTools).
  */
@@ -18,7 +20,7 @@ export const presentPlanTool: Tool = {
   wouldLikeTo: "present the plan",
   isCurrently: "presenting the plan",
   hasAlready: "presented the plan",
-  // It writes only its own plan file under .continue/plans, never the
+  // It writes only its own plan file under .continuous/plans, never the
   // person's code, so Plan mode (which keeps read-only built-ins) keeps it.
   readonly: true,
   isInstant: true,
@@ -44,6 +46,8 @@ export const presentPlanTool: Tool = {
           description: `The implementation steps in order, at most ${TASK_PLAN_LIMITS.maxItems}, each at most ${TASK_PLAN_LIMITS.maxTextLength} characters.`,
           items: { type: "string" },
         },
+        todo_details: PRESENT_PLAN_TODO_DETAILS_PARAMETER,
+        decisions: PRESENT_PLAN_DECISIONS_PARAMETER,
       },
     },
   },

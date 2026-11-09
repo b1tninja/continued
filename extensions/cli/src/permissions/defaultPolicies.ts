@@ -16,6 +16,10 @@ export function getDefaultToolPolicies(
     { tool: "AskQuestion", permission: "allow" },
     { tool: "Checklist", permission: "allow" },
     { tool: "TaskList", permission: "allow" },
+    // Loop mode's tools, offered only while the loop runs an item
+    { tool: "HoldQuestion", permission: "allow" },
+    { tool: "FinishItem", permission: "allow" },
+    { tool: "RemindMe", permission: "allow" },
     { tool: "Diff", permission: "allow" },
     { tool: "Skills", permission: "allow" },
     { tool: "Exit", permission: "allow" }, // Exit tool is generally safe (headless mode only)
@@ -44,7 +48,7 @@ export function getDefaultToolPolicies(
 // workspace runs without asking. Write tools are excluded. Bash and MCP tools
 // can write too, so they ask (and headless runs, with nobody to ask, are not
 // offered them; see getRequestTools). PresentPlan writes only its own plan file
-// under .continue/plans and is offered in plan mode only.
+// under .continuous/plans and is offered in plan mode only.
 export const PLAN_MODE_POLICIES: ToolPermissionPolicy[] = [
   { tool: "Edit", permission: "exclude" },
   { tool: "MultiEdit", permission: "exclude" },

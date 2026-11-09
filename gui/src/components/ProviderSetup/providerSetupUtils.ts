@@ -27,6 +27,10 @@ export interface ChecklistRow {
   /** Absent for a configured model the provider's list does not offer. */
   pkg?: ModelPackage;
   deprecated?: boolean;
+  /** Bedrock: won't work until the account fills out Anthropic's use-case form. */
+  needsAnthropicUseCase?: boolean;
+  /** Bedrock: why the account cannot use the model yet (needs access, pending, legacy). */
+  accessNote?: string;
 }
 
 export interface ChecklistGroups {
@@ -44,6 +48,8 @@ function rowOf(pkg: ModelPackage, configured: Set<string>): ChecklistRow {
     configured: configured.has(pkg.params.model),
     pkg,
     deprecated: pkg.deprecated,
+    needsAnthropicUseCase: pkg.needsAnthropicUseCase,
+    accessNote: pkg.accessNote,
   };
 }
 
@@ -85,7 +91,7 @@ export function initialChecked(
   }
   return new Set(
     groups.top
-      .filter((r) => !r.deprecated)
+      .filter((r) => !r.deprecated && !r.needsAnthropicUseCase && !r.accessNote)
       .slice(0, count)
       .map((r) => r.model),
   );
@@ -145,7 +151,7 @@ export interface KeyChoice {
 
 export const KEY_STORAGE_LABELS: Record<KeyStorage, string> = {
   secure: "Secure storage (this editor)",
-  env: "~/.continue/.env file",
+  env: "~/.continuous/.env file",
   envVar: "Environment variable (nothing is stored)",
   inline: "Inside config.yaml (not recommended)",
 };
@@ -330,8 +336,8 @@ export function describeKeyPlan(
         : `Models refer to ${key.secretName} in secure storage.`;
     case "env":
       return key.value
-        ? `The ${providerTitle} key is saved in ~/.continue/.env as ${key.secretName}. config.yaml only refers to it.`
-        : `Models refer to ${key.secretName} in ~/.continue/.env.`;
+        ? `The ${providerTitle} key is saved in ~/.continuous/.env as ${key.secretName}. config.yaml only refers to it.`
+        : `Models refer to ${key.secretName} in ~/.continuous/.env.`;
     case "envVar":
       return `Models refer to the environment variable ${key.secretName}. Nothing is stored; set it before starting the editor.`;
     case "inline":

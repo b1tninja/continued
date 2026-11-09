@@ -4,6 +4,7 @@ import { ChatCompletionTool } from "openai/resources.mjs";
 
 import { isModelCapable } from "src/utils/modelCapability.js";
 
+import { loopItemRunning, loopRunGoing } from "../loop/loopSession.js";
 import {
   SERVICE_NAMES,
   serviceContainer,
@@ -14,6 +15,7 @@ import type {
   MCPTool,
   ModelServiceState,
 } from "../services/types.js";
+import { getSessionTaskPlan } from "../session.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { logger } from "../util/logger.js";
 
@@ -21,9 +23,9 @@ import { ALL_BUILT_IN_TOOLS } from "./allBuiltIns.js";
 import { askQuestionTool } from "./askQuestion.js";
 import { checkBackgroundJobTool } from "./checkBackgroundJob.js";
 import { editTool } from "./edit.js";
-import { exitTool } from "./exit.js";
 import { fetchTool } from "./fetch.js";
 import { listFilesTool } from "./listFiles.js";
+import { finishItemTool, holdQuestionTool, remindMeTool } from "./loopTools.js";
 import { multiEditTool } from "./multiEdit.js";
 import { presentPlanTool } from "./presentPlan.js";
 import { readFileTool } from "./readFile.js";
@@ -81,7 +83,40 @@ const BUILTIN_SEARCH_TOOLS: Tool[] = [searchCodeTool];
 export async function getAllAvailableTools(
   isHeadless: boolean,
 ): Promise<Tool[]> {
-  const tools = [...BASE_BUILTIN_TOOLS];
+  // Loop mode: while it runs an item, the item reports with FinishItem and
+  // asks with HoldQuestion, and the loop owns the task list.
+  const loopItem =
+    loopItemRunning() && services.toolPermissions.getCurrentMode() !== "plan";
+  const tools = loopItem
+    ? [
+        ...BASE_BUILTIN_TOOLS.filter((t) => t !== taskListTool),
+        holdQuestionTool,
+        remindMeTool,
+        finishItemTool,
+      ]
+    : [...BASE_BUILTIN_TOOLS];
+  // Plan mode does not offer the task list: PresentPlan's to-dos become the
+  // list, and a model offered both resent the list instead of planning
+  // (research-bedrock-families.md item 3). Outside plan mode the model acts
+  // and gets the tool only to keep a list a plan left.
+  const mode = services.toolPermissions.getCurrentMode();
+  if (mode === "plan" || (!loopItem && !getSessionTaskPlan()?.items.length)) {
+    const at = tools.indexOf(taskListTool);
+    if (at !== -1) tools.splice(at, 1);
+  }
+
+  // A loop's questions go through HoldQuestion. Headless runs and `cn serve`
+  // keep AskQuestion in plan mode only: there it does not wait (the question
+  // is held in the inbox, src/util/pendingQuestions.ts) and a model that
+  // asked in text would otherwise end its turn with no plan. While acting,
+  // a headless model decides for itself and reports what it assumed.
+  const headlessRun = isHeadless || services.toolPermissions.isHeadless();
+  if (
+    loopRunGoing() ||
+    (headlessRun && services.toolPermissions.getCurrentMode() !== "plan")
+  ) {
+    tools.splice(tools.indexOf(askQuestionTool), 1);
+  }
 
   const isRipgrepInstalled = await checkIfRipgrepIsInstalled();
   if (isRipgrepInstalled) {
@@ -126,9 +161,9 @@ export async function getAllAvailableTools(
     isCapable,
   });
 
-  if (isHeadless) {
-    tools.push(exitTool);
-  }
+  // Exit is not offered to the model. In headless runs and `cn serve` a model
+  // that could not ask a question called it and killed the process; the
+  // tool stays registered (allBuiltIns) for permission policies that name it.
 
   // Presenting a plan is how plan mode ends, so only plan mode offers it.
   if (services.toolPermissions.getCurrentMode() === "plan") {
@@ -216,7 +251,8 @@ export function convertMcpToolToContinueTool(mcpTool: MCPTool): Tool {
       >,
       required: mcpTool.inputSchema.required,
     },
-    readonly: undefined, // MCP tools don't have readonly property
+    // A server's own word that the tool changes nothing
+    readonly: mcpTool.annotations?.readOnlyHint === true ? true : undefined,
     isBuiltIn: false,
     run: async (args: any) => {
       const result = await services.mcp?.runTool(mcpTool.name, args);

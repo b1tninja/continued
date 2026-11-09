@@ -172,9 +172,9 @@ process.on("SIGINT", async () => {
 const program = new Command();
 
 program
-  .name("cn")
+  .name("continuous")
   .description(
-    "Continue CLI - AI-powered development assistant. Starts an interactive session by default, use -p/--print for non-interactive output.",
+    "Continuous CLI - AI-powered development assistant. Starts an interactive session by default, use -p/--print for non-interactive output.",
   )
   .version(getVersion(), "-v, --version", "Display version number");
 
@@ -199,7 +199,7 @@ addCommonOptions(program)
   )
   .option(
     "--trust-project-hooks",
-    "Run this project's hooks for this session without asking (see `cn hooks`)",
+    "Run this project's hooks for this session without asking (see `continuous hooks`)",
   )
   .action(async (prompt, options) => {
     // Handle piped input - detect it early and decide on mode
@@ -322,6 +322,15 @@ program
     "300",
   )
   .option("--port <port>", "Port to run the server on (default: 8000)", "8000")
+  .option(
+    "--host <host>",
+    "Interface to listen on (default: 127.0.0.1). Anything but loopback needs --token",
+    "127.0.0.1",
+  )
+  .option(
+    "--token <token>",
+    "Bearer token every request must carry (at least 16 characters); required when --host is not loopback",
+  )
   .option(
     "--id <storageId>",
     "Upload session snapshots to Continue-managed storage using the provided identifier",

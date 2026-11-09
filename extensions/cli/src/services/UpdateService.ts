@@ -5,7 +5,12 @@ import { GlobalContext } from "core/util/GlobalContext.js";
 
 import { logger } from "src/util/logger.js";
 
-import { compareVersions, getLatestVersion, getVersion } from "../version.js";
+import {
+  compareVersions,
+  getLatestVersion,
+  getVersion,
+  RELEASES_URL,
+} from "../version.js";
 
 import { BaseService } from "./BaseService.js";
 import { serviceContainer } from "./ServiceContainer.js";
@@ -16,6 +21,9 @@ const execAsync = promisify(exec);
  * Service for checking and performing CLI updates
  */
 export class UpdateService extends BaseService<UpdateServiceState> {
+  /** Off for Continuous; tests turn it on to cover the update flow. */
+  selfUpdate = false;
+
   constructor() {
     super("update", {
       autoUpdate: true,
@@ -35,7 +43,9 @@ export class UpdateService extends BaseService<UpdateServiceState> {
   async doInitialize(headless?: boolean) {
     // Don't automatically check in tests/headless
     if (!headless && process.env.NODE_ENV !== "test") {
-      void this.checkAndAutoUpdate();
+      // After this tick: initialize() and the service container each store
+      // what this returns, and would overwrite a result that came sooner.
+      setImmediate(() => void this.checkAndAutoUpdate());
     }
 
     return this.currentState;
@@ -54,7 +64,7 @@ export class UpdateService extends BaseService<UpdateServiceState> {
       if (this.currentState.currentVersion === "0.0.0-dev") {
         this.setState({
           status: UpdateStatus.IDLE,
-          message: `Continue CLI`,
+          message: "Continuous",
         });
         return; // Uncomment to test auto-update behavior in dev
       }
@@ -73,7 +83,7 @@ export class UpdateService extends BaseService<UpdateServiceState> {
       if (!latestVersion) {
         this.setState({
           status: UpdateStatus.IDLE,
-          message: "Continue CLI",
+          message: "Continuous",
           isUpdateAvailable: false,
         });
         return;
@@ -101,7 +111,7 @@ export class UpdateService extends BaseService<UpdateServiceState> {
           status: UpdateStatus.IDLE,
           message: isUpdateAvailable
             ? `Update available: v${latestVersion}`
-            : `Continue CLI v${this.currentState.currentVersion}`,
+            : `Continuous v${this.currentState.currentVersion}`,
           isUpdateAvailable,
           latestVersion,
         });
@@ -110,7 +120,7 @@ export class UpdateService extends BaseService<UpdateServiceState> {
       logger.error("Error checking for updates:", error);
       this.setState({
         status: UpdateStatus.ERROR,
-        message: `Continue CLI v${this.currentState.currentVersion}`,
+        message: `Continuous v${this.currentState.currentVersion}`,
         error,
       });
     }
@@ -134,6 +144,17 @@ export class UpdateService extends BaseService<UpdateServiceState> {
 
   async performUpdate(isAutoUpdate?: boolean) {
     if (this.currentState.status === "updating") {
+      return;
+    }
+
+    // Continuous is not on npm: `npm i -g @continuedev/cli` would replace it
+    // with upstream's CLI. New versions come from the GitHub releases.
+    if (!this.selfUpdate) {
+      this.setState({
+        status: UpdateStatus.IDLE,
+        message: `Install a new version from ${RELEASES_URL}`,
+        isUpdateAvailable: false,
+      });
       return;
     }
 

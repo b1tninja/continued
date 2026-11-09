@@ -35,7 +35,7 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   },
   {
     name: "update",
-    description: "Update the Continue CLI",
+    description: "Update Continuous",
     category: "system",
   },
   {
@@ -96,6 +96,11 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   {
     name: "jobs",
     description: "List background jobs",
+    category: "system",
+  },
+  {
+    name: "loop",
+    description: "Open the loop's inbox: questions, answers, Stop loop",
     category: "system",
   },
   {

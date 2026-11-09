@@ -8,6 +8,7 @@ import type {
 } from "../hooks/useChat.types.js";
 import { UserInput } from "../UserInput.js";
 
+import { LoopStrip, useLoopState } from "./LoopInbox.js";
 import { QuizPrompt } from "./QuizPrompt.js";
 import { TaskProgressStrip } from "./TaskProgressStrip.js";
 import { ToolPermissionSelector } from "./ToolPermissionSelector.js";
@@ -27,6 +28,7 @@ interface ChatScreenContentProps {
   isCompacting: boolean;
   inputMode: boolean;
   handleInterrupt: () => void;
+  handleSteerNow?: () => boolean;
   assistant?: AssistantConfig;
   wasInterrupted: boolean;
   handleFileAttached: (filePath: string, content: string) => void;
@@ -46,6 +48,7 @@ export const ChatScreenContent: React.FC<ChatScreenContentProps> = ({
   isCompacting,
   inputMode,
   handleInterrupt,
+  handleSteerNow,
   assistant,
   wasInterrupted,
   handleFileAttached,
@@ -54,6 +57,7 @@ export const ChatScreenContent: React.FC<ChatScreenContentProps> = ({
   onImageInClipboardChange,
   onShowEditSelector,
 }) => {
+  const loop = useLoopState();
   if (activeQuizQuestion) {
     return (
       <QuizPrompt
@@ -86,6 +90,7 @@ export const ChatScreenContent: React.FC<ChatScreenContentProps> = ({
       isCompacting={isCompacting}
       inputMode={inputMode}
       onInterrupt={handleInterrupt}
+      onSteerNow={handleSteerNow}
       assistant={assistant}
       wasInterrupted={wasInterrupted}
       onFileAttached={handleFileAttached}
@@ -102,7 +107,8 @@ export const ChatScreenContent: React.FC<ChatScreenContentProps> = ({
   }
   return (
     <Box flexDirection="column">
-      <TaskProgressStrip />
+      {/* A loop shows its checklist; otherwise the one-line task strip */}
+      {loop ? <LoopStrip /> : <TaskProgressStrip />}
       {input}
     </Box>
   );
