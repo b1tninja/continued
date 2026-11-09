@@ -225,6 +225,14 @@ Why six `cn serve` runs on Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`, 2026-11-08
 
 **Verified live** (2026-11-08): Nova 2 Lite accepted a request with a tool list, a cache point after the system prompt and one on each of the last two user messages, and reported the write and the read in `metadata.usage`. The field table otherwise comes from the AWS guide and the 2026-11-04 refusal.
 
+## Prefix stability, checked offline (2026-11-08)
+
+The Loop and cache plans assume the system prompt, the tool list and the history so far form a stable prefix that the provider's cache reads on the next request. That was checked only by live runs. `extensions/cli/src/stream/prefixStability.test.ts` now checks it with no model call: `buildChatRequestBody` (`extensions/cli/src/stream/requestBody.ts`, the request the CLI sends, pulled out of `processStreamingResponse` as a pure function) builds the requests of four consecutive agent turns, including a tool call with its result and a task list that changes between turns; each is converted through the Bedrock adapter (Claude and Nova 2 Lite) and the Anthropic adapter with caching on, and the content before the last cache point of one request must be byte-identical to the same span of the next. Three cases prove the check bites: a system prompt carrying the time, a reordered tool list, an edited earlier message.
+
+**Found and fixed:** on Anthropic, the last cache marker landed on the task list block. The CLI sends the list as a trailing user message, the Anthropic adapter merges it into the preceding user message, and `addCacheControlToLastTwoUserMessages` marked the last text block, which was the list. The list changes whenever the agent ticks an item, so the marker sat on content the next request did not repeat, and the conversation after the system prompt was written again on every turn (the Bedrock adapter already had the special case: `isTaskListBlockText`, now shared in `packages/openai-adapters/src/util/taskListBlock.ts`). The marker now goes on the block before the list; the list takes it only when it is the sole block.
+
+**Seen, not changed:** `constructSystemMessage` re-reads `AGENTS.md` and the rules on every request, so an agent that edits its own `AGENTS.md` mid-session rebuilds its prefix on the next request; and the base system message holds the date, fixed when the process starts, so a session running past midnight keeps the old date rather than rebuilding. Both are design choices, named here so the cost is known.
+
 ## Sources, read 2026-11-04
 
 What the vendors' own documentation says about each finding. Quotes are from the pages named. The AWS

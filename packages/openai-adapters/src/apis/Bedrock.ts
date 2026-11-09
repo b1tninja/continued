@@ -71,16 +71,13 @@ import {
   RerankCreateParams,
 } from "./base.js";
 
-/**
- * First line of the agent's task list block, which clients send as the last
- * user text of a request. Must equal TASK_LIST_BLOCK_OPEN in
- * core/util/taskPlan.ts (core/util/taskPlan.vitest.ts checks it).
- */
-export const TASK_LIST_BLOCK_OPEN = "<task_list>";
+import {
+  isTaskListBlockText,
+  TASK_LIST_BLOCK_OPEN,
+} from "../util/taskListBlock.js";
 
-function isTaskListBlockText(text: string | undefined): boolean {
-  return !!text && text.startsWith(TASK_LIST_BLOCK_OPEN);
-}
+// Re-exported for the check in core/util/taskPlan.vitest.ts.
+export { TASK_LIST_BLOCK_OPEN };
 
 // Utility function to get or generate UUID for prompt caching
 function getSecureID(): string {

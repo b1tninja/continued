@@ -9,6 +9,7 @@ import {
   ChatCompletionTool,
   ChatCompletionToolChoiceOption,
 } from "openai/resources";
+import { isTaskListBlockText } from "../util/taskListBlock.js";
 
 export function getAnthropicErrorMessage(response: ErrorResponse): string {
   switch (response.error.type) {
@@ -106,20 +107,30 @@ export function addCacheControlToLastTwoUserMessages(messages: MessageParam[]) {
         // In an agent loop the user-role messages after the first are tool
         // results, so the breakpoint cannot be limited to text blocks. Empty
         // text and empty results cannot carry one; thinking blocks never can.
-        for (let j = msg.content.length - 1; j >= 0; j--) {
-          const part = msg.content[j];
-          if (part.type === "text" && part.text) {
-            part.cache_control = { type: "ephemeral" };
-            break;
-          }
-          if (
-            part.type === "tool_result" &&
-            part.content &&
-            part.content.length > 0
-          ) {
-            part.cache_control = { type: "ephemeral" };
-            break;
-          }
+        // The task list block is the last text of the last user message and
+        // changes between requests, so the marker goes on the block before it
+        // when there is one: the next request then starts with exactly the
+        // bytes this one cached. Only when it is the sole block does it take
+        // the marker, which caches nothing useful but costs no slot elsewhere.
+        const carries = (part: (typeof msg.content)[number]) =>
+          (part.type === "text" && !!part.text) ||
+          (part.type === "tool_result" &&
+            !!part.content &&
+            part.content.length > 0);
+        const candidates = msg.content
+          .map((part, j) => ({ part, j }))
+          .filter(({ part }) => carries(part));
+        const marked =
+          candidates
+            .filter(
+              ({ part }) =>
+                !(part.type === "text" && isTaskListBlockText(part.text)),
+            )
+            .at(-1) ?? candidates.at(-1);
+        if (marked) {
+          (marked.part as { cache_control?: object }).cache_control = {
+            type: "ephemeral",
+          };
         }
       }
       // Checked for string content too: a string message counts as one of the

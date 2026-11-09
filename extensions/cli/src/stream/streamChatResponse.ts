@@ -2,15 +2,10 @@
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
-import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
 import * as dotenv from "dotenv";
-import type {
-  ChatCompletionMessageParam,
-  ChatCompletionTool,
-} from "openai/resources.mjs";
+import type { ChatCompletionTool } from "openai/resources.mjs";
 
 import { pruneLastMessage } from "../compaction.js";
-import { getRequestBodyHints } from "../contextManagement.js";
 import { consumeLoopTurnEnd, loopRequestHistory } from "../loop/loopSession.js";
 import { services } from "../services/index.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
@@ -38,10 +33,8 @@ import {
   recordStreamTelemetry,
   trackFirstTokenTime,
 } from "./streamChatResponse.helpers.js";
-import {
-  getDefaultCompletionOptions,
-  StreamCallbacks,
-} from "./streamChatResponse.types.js";
+import { StreamCallbacks } from "./streamChatResponse.types.js";
+import { buildChatRequestBody } from "./requestBody.js";
 import { taskListBlockForRequest } from "./taskListBlock.js";
 
 dotenv.config();
@@ -235,16 +228,16 @@ export async function processStreamingResponse(
     throw new Error(`Context length validation failed: ${validation.error}`);
   }
 
-  // Create OpenAI format history with validated system message
-  const openaiChatHistory = convertFromUnifiedHistoryWithSystemMessage(
+  // The request: system message, validated history, task list block last
+  // (see buildChatRequestBody for why the order matters to the prompt cache).
+  const requestBody = buildChatRequestBody({
+    model,
     chatHistory,
     systemMessage,
-  ) as ChatCompletionMessageParam[];
-  // Last, after the history: a change to the list then changes only the tail
-  // of the request, and Bedrock puts its cache point before it.
-  if (taskListBlock) {
-    openaiChatHistory.push({ role: "user", content: taskListBlock });
-  }
+    tools,
+    taskListBlock,
+    isCompacting,
+  });
   const requestStartTime = Date.now();
 
   const streamFactory = async (retryAbortSignal: AbortSignal) => {
@@ -255,18 +248,7 @@ export async function processStreamingResponse(
     });
     return await chatCompletionStreamWithBackoff(
       llmApi,
-      {
-        model: model.model,
-        messages: openaiChatHistory,
-        stream: true,
-        tools,
-        ...getDefaultCompletionOptions(model.defaultCompletionOptions),
-        // A compaction summary is never continued, so it is a one-shot request
-        ...getRequestBodyHints(
-          model,
-          isCompacting ? "oneShot" : "conversation",
-        ),
-      },
+      requestBody,
       retryAbortSignal,
     );
   };
