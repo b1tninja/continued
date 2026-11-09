@@ -272,7 +272,7 @@ The entries, and what each falls back to when it is not set:
 
 The model and the prompt are one decision: a small model running Loop items wants the short turn text, a strong one planning wants the full text, and a team may want a text of its own for a use. `prompt` takes one of:
 
-- `full` or `short`: the two built-in turn texts. Without `prompt`, the model's id decides (the short text for small models such as Qwen, the full text otherwise).
+- `full`, `short` or `tailored`: the built-in turn texts. `tailored` is the short text plus a group on tool calls that quotes the tool-call markup the model was trained on, for models that write tool calls as text. Without `prompt`, the model's id decides: the tailored text for the Qwen coder and MoE models, the short text for other Qwen models, the full text otherwise.
 - The `name` of a block under `prompts:`. Its text replaces the turn text (the IDE's code-block rules and the no-tools notice still follow it; in Chat it replaces the whole default). The block is written for the use it serves: an act text should say how a turn ends, a plan text that the turn ends by presenting the plan.
 
 ```yaml title="config.yaml"

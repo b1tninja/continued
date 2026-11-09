@@ -5,11 +5,14 @@ import {
   actTurn,
   actTurnFor,
   actTurnShort,
+  actTurnTailored,
   IDE_TURN_TOOL_NAMES,
   PLAN_TURN_TAIL,
   planTurn,
   planTurnFor,
   planTurnShort,
+  planTurnTailored,
+  PROMPT_PROFILES,
   promptProfile,
   PromptProfile,
   TurnToolNames,
@@ -18,12 +21,13 @@ import {
 /**
  * Which system prompt a use gets (`modeModels.<use>.prompt`). The model and
  * the prompt are one decision: a small model on Loop items wants the short
- * turn text, a strong one planning wants the full text, and a team may want
- * its own text for a use. Design: plans/policy-areas.md, docs/reference.mdx.
+ * turn text, a strong one planning wants the full text, a Qwen coder wants
+ * the tailored one, and a team may want its own text for a use. Design:
+ * plans/policy-areas.md, docs/reference.mdx.
  */
 
-/** The two built-in texts a use can ask for by name. */
-export const PROMPT_PROFILES: readonly PromptProfile[] = ["full", "short"];
+/** The built-in texts a use can ask for by name: full, short, tailored. */
+export { PROMPT_PROFILES };
 
 /**
  * A use's prompt, resolved: one of the built-in profiles, or the text of a
@@ -101,6 +105,7 @@ export function actTurnTextFor(
   if (choice?.text !== undefined) return choice.text;
   if (choice?.profile === "short") return actTurnShort(names);
   if (choice?.profile === "full") return actTurn(names);
+  if (choice?.profile === "tailored") return actTurnTailored(model, names);
   return actTurnFor(model, names);
 }
 
@@ -113,6 +118,7 @@ export function planTurnTextFor(
   if (choice?.text !== undefined) return choice.text;
   if (choice?.profile === "short") return planTurnShort(names);
   if (choice?.profile === "full") return planTurn(names);
+  if (choice?.profile === "tailored") return planTurnTailored(model, names);
   return planTurnFor(model, names);
 }
 
@@ -167,9 +173,9 @@ export function builtInTailFor(
  * The text to append to the user messages of a request for a use, or
  * undefined for none. The setting is the use's own `tail`, else its
  * fallback's. Without one: on for Loop items (a small model on an item is the
- * case the line was written for) and wherever the turn text is the `short`
- * profile, by the use's prompt choice or, failing that, the model id; off
- * elsewhere. `on` is the built-in line of the turn kind; a text is used as
+ * case the line was written for) and wherever the turn text is a small
+ * model's (the `short` or `tailored` profile), by the use's prompt choice or,
+ * failing that, the model id; off elsewhere. `on` is the built-in line of the turn kind; a text is used as
  * given. The `reviewer` and `subagent` uses get none; a surface has to ask
  * with that use for its reviewer and subagent requests (the CLI does).
  */
@@ -234,7 +240,9 @@ function tailText(
       choice?.text !== undefined
         ? undefined
         : (choice?.profile ?? promptProfile(modelId));
-    if (use !== "loop" && profile !== "short") return undefined;
+    if (use !== "loop" && profile !== "short" && profile !== "tailored") {
+      return undefined;
+    }
     return builtInTailFor(use, names);
   }
   if (setting === "on" || setting === true) return builtInTailFor(use, names);
