@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ShellKind } from "../../util/shell";
+import { isPosixShell, type ShellKind } from "../../util/shell";
+import { runBashCrossCheck } from "./bashCrossCheck";
 import { canonicalCmdlet, checkReadCmdlet } from "./powershell";
 import { scanCommand } from "./shellScan";
 
@@ -329,6 +330,12 @@ export function classifyReadOnly(
   }
   const scanned = scanCommand(command, shell);
   if (!scanned.ok) return no(scanned.why);
+  // A second reader, when one is loaded: if the bash grammar sees other
+  // commands than the scanner does, the scanner is not to be trusted here
+  if (isPosixShell(shell)) {
+    const disagreement = runBashCrossCheck(command, scanned.graph);
+    if (disagreement) return no(disagreement);
+  }
 
   const names: string[] = [];
   // After a cd the command runs somewhere whose git config was not checked

@@ -48,6 +48,17 @@ export function scanCommand(command: string, shell: ShellKind): ScanResult {
   return fail("this shell is not parsed");
 }
 
+/** In a POSIX shell, NAME=value before a command sets its environment. */
+function envPrefixOf(words: string[], posix: boolean): string | undefined {
+  if (posix) {
+    return /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])
+      ? "an environment prefix"
+      : undefined;
+  }
+  // PowerShell's dot-source operator runs a script in the current scope
+  return words[0] === "." ? "dot-sourcing is not understood" : undefined;
+}
+
 function scanSimple(command: string, shell: ShellKind): ScanResult {
   const powershell = shell === "powershell";
   const discard = powershell ? POWERSHELL_DISCARD : POSIX_DISCARD;
@@ -66,6 +77,8 @@ function scanSimple(command: string, shell: ShellKind): ScanResult {
   const endCommand = (op: JoinOperator): string | undefined => {
     endWord();
     if (words.length === 0) return `an empty command before ${op}`;
+    const prefix = envPrefixOf(words, !powershell);
+    if (prefix) return prefix;
     commands.push({ words });
     joins.push(op);
     words = [];
@@ -161,6 +174,13 @@ function scanSimple(command: string, shell: ShellKind): ScanResult {
         );
       }
       const op = (two === "||" || two === "&&" ? two : c) as JoinOperator;
+      // Windows PowerShell 5.1 is the shell on Windows and has no && or ||:
+      // it reports a syntax error, so the text is not a command there
+      if (powershell && (op === "&&" || op === "||")) {
+        return fail(
+          `${op} exists only in PowerShell 7, not in Windows PowerShell`,
+        );
+      }
       const err = endCommand(op);
       if (err) return fail(err);
       i += op.length;
@@ -179,7 +199,11 @@ function scanSimple(command: string, shell: ShellKind): ScanResult {
   if (trailingOperator && words.length === 0) {
     return fail("the command ends on an operator");
   }
-  if (words.length) commands.push({ words });
+  if (words.length) {
+    const prefix = envPrefixOf(words, !powershell);
+    if (prefix) return fail(prefix);
+    commands.push({ words });
+  }
   if (commands.length === 0) return fail("an empty command");
   return {
     ok: true,

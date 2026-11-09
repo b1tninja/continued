@@ -16,6 +16,7 @@ import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { uriToPath } from "./tools/permissions/names";
+import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
 import { resolveShell } from "./util/shell";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
@@ -208,6 +209,11 @@ export class Core {
     try {
       // Ensure .continuous directory is created
       migrateV1DevDataFiles();
+
+      // A second reader of POSIX commands for the read-only classifier. It
+      // loads in the background and changes nothing if it cannot: the strict
+      // scanner stands alone.
+      void initTreeSitterBash();
 
       const ideInfoPromise = messenger.request("getIdeInfo", undefined);
       const ideSettingsPromise = messenger.request("getIdeSettings", undefined);
