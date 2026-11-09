@@ -1,4 +1,5 @@
 import type { ChatHistoryItem, ModelDescription } from "core";
+import { ACT_TURN_TAIL } from "core/llm/prompts/turns";
 import { readFileTool } from "core/tools/definitions/readFile";
 import { createLoop, startItemRun } from "core/util/loopMode";
 import { renderChatMessage } from "core/util/messageContent";
@@ -66,16 +67,19 @@ const texts = (state: RootState) =>
     .messages.filter((m) => m.role !== "system")
     .map(renderChatMessage);
 
+// A Loop item's newest message carries the act reminder by default
+const TAIL = `\n${ACT_TURN_TAIL}`;
+
 describe("a loop item's request", () => {
   it("carries only the turns since the item started", () => {
-    expect(texts(stateWith())).toEqual(["item two prompt"]);
+    expect(texts(stateWith())).toEqual([`item two prompt${TAIL}`]);
   });
 
   it("carries the whole conversation when fresh context is off", () => {
     expect(texts(stateWith(false))).toEqual([
       "item one prompt",
       "item one done",
-      "item two prompt",
+      `item two prompt${TAIL}`,
     ]);
   });
 
@@ -108,6 +112,8 @@ describe("a loop item's plan block", () => {
     expect(prompt).toContain("[x] 1. Write the lexer");
     expect(prompt).toContain("[>] 2. Add tests  <- this item");
     expect(prompt).toContain("report it with finish_item");
+    // The tail comes last, after the block
+    expect(prompt.endsWith(`</task_list>${TAIL}`)).toBe(true);
   });
 
   it("stays as the run started while the run goes on", () => {
@@ -174,6 +180,63 @@ describe("a loop turn's reasoning effort", () => {
       reasoning: true,
       reasoningBudgetTokens: 1024,
     });
+  });
+});
+
+describe("a turn's tail (modeModels.<use>.tail)", () => {
+  const withConfig = (state: RootState, extra: object): RootState => ({
+    ...state,
+    config: {
+      ...state.config,
+      config: { ...state.config.config, ...extra },
+    },
+  });
+  const request = (state: RootState) => buildChatRequest(state).messages;
+
+  it("goes on the newest user message only: the system message and every earlier message are byte-identical with and without it", () => {
+    const base = stateWith(false);
+    const on = request(
+      withConfig(base, { modeModels: { loop: { tail: "on" } } }),
+    );
+    const off = request(
+      withConfig(base, { modeModels: { loop: { tail: "off" } } }),
+    );
+    expect(on).toHaveLength(off.length);
+    expect(on[0].role).toBe("system");
+    expect(JSON.stringify(on.slice(0, -1))).toBe(
+      JSON.stringify(off.slice(0, -1)),
+    );
+    expect(renderChatMessage(off.at(-1)!)).toBe("item two prompt");
+    expect(renderChatMessage(on.at(-1)!)).toBe(`item two prompt${TAIL}`);
+    // Nothing is written back to the history
+    expect(renderChatMessage(base.session.history.at(-1)!.message)).toBe(
+      "item two prompt",
+    );
+  });
+
+  it("is off by default for Agent mode on a full-profile model, and follows modeModels.agent for a loop item", () => {
+    const state = stateWith();
+    const agent = {
+      ...state,
+      session: { ...state.session, loop: undefined },
+    };
+    const whole = ["item one prompt", "item one done"];
+    expect(texts(agent)).toEqual([...whole, "item two prompt"]);
+    expect(
+      texts(withConfig(agent, { modeModels: { agent: { tail: "on" } } })),
+    ).toEqual([...whole, `item two prompt${TAIL}`]);
+    expect(
+      texts(withConfig(state, { modeModels: { agent: { tail: "off" } } })),
+    ).toEqual(["item two prompt"]);
+  });
+
+  it("takes a text as given", () => {
+    const state = withConfig(stateWith(), {
+      modeModels: { loop: { tail: "Finish the item, then report it." } },
+    });
+    expect(texts(state)).toEqual([
+      "item two prompt\nFinish the item, then report it.",
+    ]);
   });
 });
 

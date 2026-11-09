@@ -2,6 +2,7 @@
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
+import { withTurnTail } from "core/llm/prompts/usePrompts.js";
 import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
 import {
   ACT_TURN_NUDGE,
@@ -181,6 +182,12 @@ interface ProcessStreamingResponseOptions {
   tools?: ChatCompletionTool[];
   systemMessage: string;
   isCompacting?: boolean; // also: compaction gets no Loop mode plan block
+  /**
+   * The use's tail (`modeModels.<use>.tail`), appended to the newest user
+   * message of this request and to no other, so the system message and the
+   * history before it keep their cached prefix.
+   */
+  turnTail?: string;
 }
 
 /** Bedrock's request ID or the provider's response ID, from the first chunk that has one. */
@@ -317,6 +324,7 @@ export async function processStreamingResponse(
     tools,
     systemMessage,
     isCompacting = false,
+    turnTail,
   } = options;
 
   // The request carries one system message, the current `systemMessage`.
@@ -334,11 +342,11 @@ export async function processStreamingResponse(
   const SAFETY_BUFFER = 100;
 
   // Validate context length INCLUDING system message and tools
-  // The task list block is counted with the system message: it is sent with
-  // every request and is never pruned.
-  const fixedText = taskListBlock
-    ? `${systemMessage}\n${taskListBlock}`
-    : systemMessage;
+  // The task list block and the tail are counted with the system message:
+  // they are sent with every request and are never pruned.
+  const fixedText = [systemMessage, turnTail, taskListBlock]
+    .filter(Boolean)
+    .join("\n");
   let validation = validateContextLength({
     chatHistory,
     model,
@@ -371,12 +379,18 @@ export async function processStreamingResponse(
 
   // Create OpenAI format history with validated system message. The date and
   // git status go on the first user message, after the system checkpoint of
-  // the prompt cache, so the system text is the same across sessions.
-  const openaiChatHistory = withEnvironmentBlock(
-    convertFromUnifiedHistoryWithSystemMessage(
-      chatHistory,
-      systemMessage,
-    ) as ChatCompletionMessageParam[],
+  // the prompt cache, so the system text is the same across sessions. The
+  // use's tail goes on the newest user message (the item prompt with its
+  // plan block, or a message the person steered with), and on that one
+  // only, so everything before it is the same bytes with or without it.
+  const openaiChatHistory = withTurnTail(
+    withEnvironmentBlock(
+      convertFromUnifiedHistoryWithSystemMessage(
+        chatHistory,
+        systemMessage,
+      ) as ChatCompletionMessageParam[],
+    ),
+    turnTail,
   );
   // Last, after the history: a change to the list then changes only the tail
   // of the request, and Bedrock puts its cache point before it.
@@ -608,11 +622,17 @@ export async function streamChatResponse(
     logger.debug("Starting conversation iteration");
 
     // Get system message once per iteration (can change based on tool
-    // permissions mode, and a Loop turn has a use of its own)
+    // permissions mode, and a Loop turn has a use of its own), and the use's
+    // tail for the newest user message. A compaction's request gets no tail;
+    // test doubles of the service may not have the method.
+    const use = currentModelUse();
     const systemMessage = await services.systemMessage.getSystemMessage(
       services.toolPermissions.getState().currentMode,
-      currentModelUse(),
+      use,
     );
+    const turnTail = isCompacting
+      ? undefined
+      : services.systemMessage.turnTail?.(use);
 
     // Recompute tools on each iteration to handle mode changes during streaming
     const rawTools = await getRequestTools(isHeadless);
@@ -654,6 +674,7 @@ export async function streamChatResponse(
         tools,
         systemMessage,
         isCompacting,
+        turnTail,
       }).finally(() => callbacks?.onModelStreaming?.(false));
 
     if (abortController?.signal.aborted) {

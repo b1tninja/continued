@@ -1,7 +1,11 @@
 import type { LLMFullCompletionOptions, ModelDescription, Tool } from "core";
 import type { ChatMessage, RuleMetadata } from "core";
 import { modelSupportsNativeTools } from "core/llm/toolSupport";
-import { promptChoiceFor } from "core/llm/prompts/usePrompts";
+import {
+  promptChoiceFor,
+  tailFor,
+  withTurnTail,
+} from "core/llm/prompts/usePrompts";
 import { rulesEnabledForUse } from "core/llm/rules/rulesByMode";
 import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
@@ -204,7 +208,7 @@ export function buildChatRequest(
   });
 
   const {
-    messages,
+    messages: constructed,
     appliedRules,
     appliedRuleIndex: runRuleIndex,
   } = constructMessages(
@@ -218,6 +222,17 @@ export function buildChatRequest(
       : [],
     state.ui.ruleSettings,
     systemToolsFramework,
+  );
+
+  // The use's tail (`modeModels.<use>.tail`): a one-line reminder on the
+  // newest user message of the request, after the Loop plan block when there
+  // is one. On that message only, so the system message and every earlier
+  // message are the same bytes with or without it and keep their cache
+  // entries; a per-use line in the system message would break the whole
+  // conversation's cache instead.
+  const messages = withTurnTail(
+    constructed,
+    use ? tailFor(state.config.config.modeModels, use, model.model) : undefined,
   );
 
   const appliedRuleIndex =

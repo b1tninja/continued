@@ -2492,6 +2492,13 @@ export interface ModeModelSetting {
   prompt?: string;
   /** The prompt block's text, when `prompt` names one. */
   promptText?: string;
+  /**
+   * The reminder appended to the newest user message of the use's requests
+   * (`modeModels.<use>.tail`): `"on"` for the built-in line of the turn kind,
+   * `"off"`, or a short text. Absent: on for Loop items and for the `short`
+   * prompt profile, off elsewhere (core/llm/prompts/usePrompts.ts).
+   */
+  tail?: string;
 }
 
 /**

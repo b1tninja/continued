@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { actTurn, actTurnShort, planTurn, planTurnShort } from "./turns";
+import {
+  ACT_TURN_TAIL,
+  actTurn,
+  actTurnShort,
+  CLI_TURN_TOOL_NAMES,
+  PLAN_TURN_TAIL,
+  planTurn,
+  planTurnShort,
+} from "./turns";
 import {
   actTurnTextFor,
   planTurnTextFor,
   promptChoiceFor,
   promptChoiceFromRaw,
+  tailFor,
+  tailFromRaw,
   turnKindForUse,
+  withTurnTail,
 } from "./usePrompts";
 
 const modeModels = {
@@ -64,6 +75,135 @@ it("turnKindForUse: chat is chat, plans plan, everything else acts", () => {
   expect(turnKindForUse("replan")).toBe("plan");
   expect(turnKindForUse("agent")).toBe("act");
   expect(turnKindForUse("loop")).toBe("act");
+});
+
+describe("tailFor: the reminder on the newest user message", () => {
+  it("is on for a Loop item by default, and off for Agent on a full-profile model", () => {
+    expect(tailFor({ agent: { title: "Sonnet" } }, "loop", "claude")).toBe(
+      ACT_TURN_TAIL,
+    );
+    expect(tailFor(undefined, "loop", "claude")).toBe(ACT_TURN_TAIL);
+    expect(tailFor(undefined, "agent", "claude")).toBeUndefined();
+    expect(tailFor(undefined, "plan", "claude")).toBeUndefined();
+  });
+
+  it("is on wherever the short profile is: by the prompt choice or the model id", () => {
+    expect(tailFor({ agent: { prompt: "short" } }, "agent", "claude")).toBe(
+      ACT_TURN_TAIL,
+    );
+    expect(tailFor(undefined, "plan", "qwen3-coder")).toBe(PLAN_TURN_TAIL());
+    expect(tailFor({ plan: { prompt: "full" } }, "plan", "qwen3-coder")).toBe(
+      undefined,
+    );
+    // A block's text is not the short profile
+    expect(
+      tailFor(
+        { agent: { prompt: "house", promptText: "Do it." } },
+        "agent",
+        "qwen",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("the setting wins: off, on, or a text as given", () => {
+    expect(tailFor({ loop: { tail: "off" } }, "loop", "nova")).toBeUndefined();
+    expect(tailFor({ agent: { tail: "on" } }, "agent", "claude")).toBe(
+      ACT_TURN_TAIL,
+    );
+    expect(tailFor({ replan: { tail: "on" } }, "replan", "claude")).toBe(
+      PLAN_TURN_TAIL(),
+    );
+    expect(
+      tailFor({ agent: { tail: "Report when done." } }, "agent", "x"),
+    ).toBe("Report when done.");
+  });
+
+  it("falls back loop → agent and replan → plan, on the tail alone", () => {
+    expect(tailFor({ agent: { tail: "off" } }, "loop", "nova")).toBeUndefined();
+    expect(tailFor({ plan: { tail: "on" } }, "replan", "claude")).toBe(
+      PLAN_TURN_TAIL(),
+    );
+    // The loop's own setting wins over agent's
+    expect(
+      tailFor({ agent: { tail: "off" }, loop: { tail: "on" } }, "loop", "nova"),
+    ).toBe(ACT_TURN_TAIL);
+  });
+
+  it("names the surface's tools, and chat has no built-in line", () => {
+    expect(tailFor(undefined, "replan", "qwen", CLI_TURN_TOOL_NAMES)).toBe(
+      PLAN_TURN_TAIL(CLI_TURN_TOOL_NAMES),
+    );
+    expect(tailFor({ chat: { tail: "on" } }, "chat", "qwen")).toBeUndefined();
+    expect(tailFor({ chat: { tail: "Be brief." } }, "chat", "x")).toBe(
+      "Be brief.",
+    );
+    expect(
+      tailFor({ reviewer: { title: "x", tail: "on" } }, "reviewer", "qwen"),
+    ).toBe(undefined);
+  });
+});
+
+describe("tailFromRaw (the CLI reads config as written)", () => {
+  const prompts = [{ name: "house", prompt: "Be brief." }];
+
+  it("reads on, off, a text or a boolean, with the same fallback", () => {
+    expect(
+      tailFromRaw({ loop: { tail: false } }, prompts, "loop", "nova"),
+    ).toBe(undefined);
+    expect(
+      tailFromRaw({ agent: { tail: true } }, prompts, "loop", "claude"),
+    ).toBe(ACT_TURN_TAIL);
+    expect(
+      tailFromRaw({ plan: { tail: "Plan it." } }, prompts, "replan", "claude"),
+    ).toBe("Plan it.");
+  });
+
+  it("defaults by the prompt choice, a block name looked up in prompts", () => {
+    expect(
+      tailFromRaw({ agent: { prompt: "short" } }, prompts, "agent", "claude"),
+    ).toBe(ACT_TURN_TAIL);
+    expect(
+      tailFromRaw({ agent: { prompt: "house" } }, prompts, "agent", "qwen"),
+    ).toBeUndefined();
+    expect(tailFromRaw(undefined, prompts, "agent", "qwen")).toBe(
+      ACT_TURN_TAIL,
+    );
+    expect(tailFromRaw(undefined, prompts, "agent", "claude")).toBeUndefined();
+  });
+});
+
+describe("withTurnTail", () => {
+  const messages = [
+    { role: "system", content: "sys" },
+    { role: "user", content: "first" },
+    { role: "assistant", content: "ok" },
+    { role: "user", content: "second" },
+    { role: "tool", content: "result" },
+  ];
+
+  it("appends to the newest user message only; everything before is the same object", () => {
+    const out = withTurnTail(messages, "Act.");
+    expect(out[3]).toEqual({ role: "user", content: "second\n\nAct." });
+    expect(out[0]).toBe(messages[0]);
+    expect(out[1]).toBe(messages[1]);
+    expect(out[2]).toBe(messages[2]);
+    expect(out[4]).toBe(messages[4]);
+    expect(messages[3].content).toBe("second");
+  });
+
+  it("adds a text part to a list of parts", () => {
+    const parts = [{ role: "user", content: [{ type: "text", text: "hi" }] }];
+    expect(withTurnTail(parts, "Act.")[0].content).toEqual([
+      { type: "text", text: "hi" },
+      { type: "text", text: "Act." },
+    ]);
+  });
+
+  it("returns the same array without a tail or without a user message", () => {
+    expect(withTurnTail(messages, undefined)).toBe(messages);
+    const none = [{ role: "system", content: "sys" }];
+    expect(withTurnTail(none, "Act.")).toBe(none);
+  });
 });
 
 describe("the turn text for a choice", () => {
