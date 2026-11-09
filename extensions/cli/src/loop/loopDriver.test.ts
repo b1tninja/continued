@@ -30,6 +30,11 @@ import {
   ScriptedLlm,
 } from "../ui/__tests__/TUIChat.flowHarness.js";
 
+import {
+  getPolicyLevels,
+  resetPolicyLevels,
+  setPolicyLevels,
+} from "../permissions/policyLevels.js";
 import { runLoopCheck } from "./loopChecks.js";
 import { loopWakeDelay, nextLoopTurn, type LoopTurn } from "./loopDriver.js";
 import { holdLoopCall, loopRepeatGuard } from "./loopHolds.js";
@@ -121,6 +126,7 @@ describe("Loop mode's driver in the CLI", () => {
 
   beforeEach(async () => {
     await resetFlowState();
+    resetPolicyLevels();
     updateSessionLoop(undefined);
     resetLoopMemory();
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cn-loop-driver-"));
@@ -146,7 +152,8 @@ describe("Loop mode's driver in the CLI", () => {
   it("re-plans in Plan mode, and a re-plan that adds nothing starts the next round by itself (Auto)", async () => {
     await planOf("One", "Two");
     const loop = startLoopFromPlan("normal")!;
-    commitLoop({ ...loop, autonomy: "auto" });
+    // The whole-plan re-plan: Finish, not Fix forward
+    commitLoop(setLoopStrategy({ ...loop, autonomy: "auto" }, "finish"));
 
     runItem("done");
     runItem("stuck");
@@ -214,6 +221,11 @@ describe("Loop mode's driver in the CLI", () => {
 
   it("a supervised re-plan waits for Continue the loop", async () => {
     await planOf("One");
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "manual",
+      questions: "manual",
+    });
     startLoopFromPlan("normal");
     expect(loopNow().autonomy).toBe("supervised");
     runItem("stuck");
@@ -223,9 +235,7 @@ describe("Loop mode's driver in the CLI", () => {
 
     expect(nextTurn(history().length)).toBeUndefined();
     expect(loopNow().status).toBe("awaiting_plan");
-    expect(loopNow().replanReason).toBe(
-      "Supervised: every re-plan waits for you.",
-    );
+    expect(loopNow().replanReason).toBe("Every plan waits for you.");
     expect(acceptLoopPlan()).toBe(true);
     const next = nextTurn(history().length);
     expect(next?.prompt).toContain("only this item: One");
@@ -475,6 +485,11 @@ describe("Loop mode's driver in the CLI", () => {
 
   it("skips an item, runs a done one again, and changes the limits", async () => {
     await planOf("One", "Two", "Three");
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "manual",
+      questions: "manual",
+    });
     startLoopFromPlan("normal");
     expect(skipLoopItem("9")).toEqual({
       ok: false,

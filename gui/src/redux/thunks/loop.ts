@@ -30,13 +30,14 @@ import {
   loopReplanTurnPrompt,
   markDelivered,
   enterWait,
-  loopAutonomyFor,
+  loopDecidesAlone,
+  loopPolicyOf,
   loopTokensFromUsage,
   proceedUnanswered,
   reconcileLoop,
   releaseEmptyWait,
   replanDecision,
-  setLoopAutonomy,
+  setLoopPolicy,
   setLoopParallel,
   setLoopStrategy,
   requestStop,
@@ -61,11 +62,15 @@ import {
   saveReminder,
   takeReminders,
 } from "core/util/loopReminders";
+import { planHandoff } from "core/tools/permissions/policy";
 import { modelForLoopItem } from "core/util/modelUse";
 import { parsePlanFile, taskPlanFromPlanFile } from "core/util/planFile";
 import type { WorktreeInfo } from "core/util/worktree";
 import { findUriInDirs } from "core/util/uri";
-import { selectEffectiveApprovalMode } from "../selectors/selectAutoApproval";
+import {
+  selectLoopPolicy,
+  selectPolicySettings,
+} from "../selectors/selectAutoApproval";
 import {
   enqueueMessage,
   removeQueuedMessage,
@@ -178,16 +183,20 @@ export const startLoopFromPlan = createAsyncThunk<
 >(
   "loop/start",
   async ({ planFile, parallel }, { dispatch, getState, extra }) => {
-    await readPlanIntoTaskList(planFile, dispatch, getState, (uri) =>
-      extra.ideMessenger.ide.readFile(uri),
+    const { title } = await readPlanIntoTaskList(
+      planFile,
+      dispatch,
+      getState,
+      (uri) => extra.ideMessenger.ide.readFile(uri),
     );
     const plan = getState().session.taskPlan;
     if (!plan) return;
     let loop = createLoop(plan, {
+      ...(title ? { title } : {}),
       now: new Date(),
       sessionTokens: sessionTokens(getState()),
-      // How much it does alone follows the approval mode in force
-      autonomy: loopAutonomyFor(selectEffectiveApprovalMode(getState())),
+      // Plans and questions follow the levels chosen for them
+      policy: selectLoopPolicy(getState()),
     });
     if (parallel) loop = setLoopParallel(loop, true);
     dispatch(setMode("agent"));
@@ -260,8 +269,12 @@ export const leaveLoopMode = createAsyncThunk<void, MessageModes, ThunkApiType>(
 );
 
 /**
- * A plan presented while the person is in Loop starts the loop by itself,
- * unless a loop is already going (its own re-plan is accepted as before).
+ * A plan presented while the person is in Loop is the first plan of the run,
+ * and Plan edits decides whether it goes on by itself: Permissive and IDGAF
+ * start the loop, Manual and Cautious leave the plan card for the person
+ * (Build or Build in a loop), and Automatic waits too, as no reviewer for
+ * plans exists yet. A loop already going is left alone: its own re-plan is
+ * accepted as before.
  */
 export const startLoopIfRequested = createAsyncThunk<
   boolean,
@@ -270,6 +283,12 @@ export const startLoopIfRequested = createAsyncThunk<
 >("loop/startIfRequested", async ({ planFile }, { dispatch, getState }) => {
   const state = getState();
   if (!state.session.loopRequested || loopActive(state)) return false;
+  const handoff = planHandoff({
+    policy: selectPolicySettings(state),
+    first: true,
+    added: state.session.taskPlan?.items.length ?? 0,
+  });
+  if (handoff.decision !== "go") return false;
   await dispatch(startLoopFromPlan({ planFile }));
   return loopActive(getState());
 });
@@ -317,17 +336,21 @@ export const resumeLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
   },
 );
 
-/** Ends the loop and forgets it (the task list stays). */
-/** The inbox's level picker: change how much the running loop does alone. */
-export const setLoopAutonomyThunk = createAsyncThunk<
-  void,
-  LoopAutonomy,
-  ThunkApiType
->("loop/setAutonomy", async (autonomy, { dispatch, getState }) => {
-  const { loop } = getState().session;
-  if (!loop) return;
-  commitLoop(dispatch, getState, setLoopAutonomy(loop, autonomy));
-});
+/**
+ * Brings the running loop's Plan edits and Questions levels up to date with
+ * the levels the person has set, so changing them in the toolbar takes effect
+ * on the loop at once.
+ */
+export const syncLoopPolicy = createAsyncThunk<void, undefined, ThunkApiType>(
+  "loop/syncPolicy",
+  async (_, { dispatch, getState }) => {
+    const { loop } = getState().session;
+    if (!loop) return;
+    const policy = selectLoopPolicy(getState());
+    if (JSON.stringify(loop.policy) === JSON.stringify(policy)) return;
+    commitLoop(dispatch, getState, setLoopPolicy(loop, policy));
+  },
+);
 
 type LoopControlOutcome = { ok: boolean; error?: string };
 
@@ -512,7 +535,7 @@ async function itemRunPrompt(
     planBlock: true,
     reminders: taken.reminders,
     returning: itemState?.setAside,
-    decideAlone: loop.autonomy === "idgaf",
+    decideAlone: loopDecidesAlone(loop),
     unanswered: loop.questions.filter((q) =>
       itemState?.unanswered?.includes(q.id),
     ),

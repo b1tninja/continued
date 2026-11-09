@@ -5,6 +5,11 @@ import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLoopMemory } from "../../loop/loopSession.js";
+import {
+  getPolicyLevels,
+  resetPolicyLevels,
+  setPolicyLevels,
+} from "../../permissions/policyLevels.js";
 import { services } from "../../services/index.js";
 import {
   getSessionLoop,
@@ -72,6 +77,13 @@ describe("TUIChat - Loop mode", () => {
 
   beforeEach(async () => {
     await resetFlowState();
+    resetPolicyLevels();
+    // Every plan and question waits for the person: what this test is about
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "manual",
+      questions: "manual",
+    });
     updateSessionLoop(undefined);
     resetLoopMemory();
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cn-loop-"));
@@ -194,7 +206,9 @@ describe("TUIChat - Loop mode", () => {
       ]);
       await waitLong(
         () =>
-          (ui.lastFrame() ?? "").includes("Loop (/loop to answer) Supervised"),
+          (ui.lastFrame() ?? "").includes(
+            "Loop (/loop to answer) Plan Manual, Questions Manual",
+          ),
         "the loop strip",
         () => (ui.lastFrame() ?? "").split("\n").slice(-15).join("\n"),
       );

@@ -22,7 +22,7 @@ import {
   setSelectedProfile,
 } from "../../../redux/slices/profilesSlice";
 import { setLoop, setPlanFile } from "../../../redux/slices/sessionSlice";
-import { setApprovalMode } from "../../../redux/slices/uiSlice";
+import { setPolicyLevel } from "../../../redux/slices/uiSlice";
 import { startLoopFromPlan } from "../../../redux/thunks/loop";
 import {
   LoopWorktreeOps,
@@ -70,10 +70,16 @@ const ask = (
   question: string,
   kind: "blocking" | "assumption",
   assumption?: string,
+  options?: string[],
 ) =>
   calls({
     name: BuiltInToolNames.HoldQuestion,
-    args: { question, kind, ...(assumption ? { assumption } : {}) },
+    args: {
+      question,
+      kind,
+      ...(assumption ? { assumption } : {}),
+      ...(options ? { options } : {}),
+    },
   });
 
 const text = (m: ChatMessage | undefined) => (m ? renderChatMessage(m) : "");
@@ -177,9 +183,11 @@ async function setup(
 
   const start = async (options: { parallel?: boolean } = {}) => {
     await act(async () => {
-      // Waves need a level that does not ask before each edit; YOLO is
-      // Unattended, and the switch is on from the start
-      if (options.parallel) store.dispatch(setApprovalMode("yolo"));
+      // Waves need a level that does not ask before each edit: Plan edits
+      // Permissive is Unattended, and the switch is on from the start
+      if (options.parallel) {
+        store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+      }
       store.dispatch(setPlanFile(PLAN_FILE));
       await store.dispatch(
         startLoopFromPlan({ planFile: PLAN_FILE, parallel: options.parallel }),
@@ -227,6 +235,181 @@ beforeEach(() => {
 });
 
 describe("Loop mode", () => {
+  test("a loop is one card in the Loops panel, named by its plan, with the plan inside it", async () => {
+    const h = await setup(["Pick the grammar", "Write the lexer"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
+      finish("waiting", "needs the grammar choice"),
+      finish("done", "lexer written"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+
+    const panel = document.querySelector("[data-testid=loops-panel]")!;
+    expect(panel.textContent).toContain("Loops");
+    // Named by its plan, not just "Loop"
+    expect(
+      panel.querySelector("[data-testid=loop-status]")!.textContent,
+    ).toContain("Build the parser");
+    // The plan is in the loop's card, shown open
+    const controls = panel.querySelector<HTMLDetailsElement>(
+      "[data-testid=loop-controls]",
+    )!;
+    expect(controls.open).toBe(true);
+    expect(controls.textContent).toContain("Pick the grammar");
+    // And not a second time in a separate task list
+    expect(document.querySelector("[data-testid=task-list-panel]")).toBeNull();
+  });
+
+  test("a held question with choices shows them in the Questions panel, and a choice answers it", async () => {
+    const h = await setup(["Pick the grammar"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking", undefined, [
+        "ABNF",
+        "PEG",
+        "Both",
+      ]),
+      finish("waiting", "needs the grammar choice"),
+      finish("done", "grammar picked"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+
+    // The model's choices were kept, and they appear in their own panel
+    expect(h.loop().questions[0].options).toEqual(["ABNF", "PEG", "Both"]);
+    const panel = document.querySelector("[data-testid=question-panel]")!;
+    expect(panel.textContent).toContain("1 question for you");
+    expect(
+      [...panel.querySelectorAll("[data-testid=loop-choice-option]")].map(
+        (b) => b.textContent,
+      ),
+    ).toEqual(["ABNF", "PEG", "Both"]);
+    // The inbox points at the panel instead of listing the question again
+    expect(
+      document.querySelector("[data-testid=loop-questions-pointer]"),
+    ).not.toBeNull();
+
+    await act(async () =>
+      fireEvent.click(
+        panel.querySelectorAll("[data-testid=loop-choice-option]")[1],
+      ),
+    );
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.prompt(2)).toContain(": PEG");
+    expect(document.querySelector("[data-testid=question-panel]")).toBeNull();
+  });
+
+  test("Other opens a field for an answer of your own", async () => {
+    const h = await setup(["Pick the grammar"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking", undefined, [
+        "ABNF",
+        "PEG",
+      ]),
+      finish("waiting", "needs the grammar choice"),
+      finish("done", "grammar picked"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+
+    expect(
+      document.querySelector("[data-testid=loop-choice-other-input]"),
+    ).toBeNull();
+    await act(async () =>
+      fireEvent.click(
+        document.querySelector("[data-testid=loop-choice-other]")!,
+      ),
+    );
+    const input = document.querySelector<HTMLInputElement>(
+      "[data-testid=loop-choice-other-input]",
+    )!;
+    await act(async () =>
+      fireEvent.change(input, {
+        target: { value: "Neither: use a hand parser" },
+      }),
+    );
+    await act(async () =>
+      fireEvent.click(
+        document.querySelector("[data-testid=loop-choice-other-send]")!,
+      ),
+    );
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.prompt(2)).toContain("Neither: use a hand parser");
+  });
+
+  test("a plan's decisions are answered in the Questions panel, and the answer lands in the plan file", async () => {
+    const h = await setup([]);
+    h.turns.push(
+      calls({
+        name: BuiltInToolNames.PresentPlan,
+        args: {
+          title: "Build the parser",
+          plan: "Parse the grammar.",
+          todos: ["Write the lexer", "Add tests"],
+          decisions: [
+            {
+              question: "Where does the fix land?",
+              options: ["Workspace copy", "Upstream", "Both"],
+              pick: "Workspace copy",
+              type: "scope",
+              todos: [1],
+            },
+          ],
+        },
+      }),
+    );
+    await pickMode(h, "mode-option-loop");
+    await send("Plan the parser");
+
+    // Plan edits Cautious: the first plan waits, and its decision is a question
+    const panel = await waitFor(() => {
+      const el = document.querySelector("[data-testid=question-panel]");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(panel.textContent).toContain("1 question for you");
+    expect(panel.textContent).toContain("Where does the fix land?");
+    expect(panel.textContent).toContain("Workspace copy (recommended)");
+    // The card points at the panel instead of repeating the question
+    expect(
+      document.querySelector("[data-testid=plan-card-decisions-pointer]"),
+    ).not.toBeNull();
+    expect(
+      document.querySelector("[data-testid=plan-card-decisions]"),
+    ).toBeNull();
+
+    await act(async () =>
+      fireEvent.click(
+        panel.querySelectorAll("[data-testid=plan-decision-option]")[1],
+      ),
+    );
+    await waitFor(() =>
+      expect(document.querySelector("[data-testid=question-panel]")).toBeNull(),
+    );
+    // The harness seeds one plan file; the presented plan is the new one
+    const file = Object.entries(h.files).find(([k]) =>
+      k.endsWith("build-the-parser-2.md"),
+    )![1];
+    expect(file).toContain("Where does the fix land?");
+    expect(file).toContain("Upstream");
+  });
+
+  test("a question without choices keeps the free-text field", async () => {
+    const h = await setup(["Pick the grammar"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
+      finish("waiting", "needs the grammar choice"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+    expect(
+      document.querySelector("[data-testid=loop-answer-input]"),
+    ).not.toBeNull();
+    expect(
+      document.querySelector("[data-testid=loop-choice-option]"),
+    ).toBeNull();
+  });
+
   test("seeds the items, parks a blocking question while the others run, and requeues it when answered", async () => {
     const h = await setup(["Pick the grammar", "Write the lexer", "Add tests"]);
     h.turns.push(
@@ -319,6 +502,10 @@ describe("Loop mode", () => {
 
   test("a round that runs dry is re-planned in Plan mode, and accepting the card starts the next round", async () => {
     const h = await setup(["Write the lexer", "Add tests"]);
+    // Every re-plan waits for the person: what this test is about
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "manual" }));
+    });
     h.turns.push(
       finish("done", "lexer written"),
       finish("stuck", "no test runner installed"),
@@ -337,6 +524,28 @@ describe("Loop mode", () => {
     await h.start();
 
     await waitFor(() => expect(h.loop().status).toBe("awaiting_plan"));
+    // The card says why it asks and what changed, not just the whole document
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-testid=plan-card-diff]"),
+      ).not.toBeNull(),
+    );
+    expect(
+      document.querySelector("[data-testid=plan-card-diff]")!.textContent,
+    ).toContain("2 kept, 1 added, 0 dropped");
+    expect(
+      document.querySelector("[data-testid=plan-card-diff]")!.textContent,
+    ).toContain("Install vitest");
+    expect(
+      document.querySelector("[data-testid=plan-card-replan-reason]")!
+        .textContent,
+    ).toContain("Why you are asked");
+    const marks = [
+      ...document.querySelectorAll("[data-testid=plan-card-todos] li"),
+    ].map((li) => li.textContent);
+    expect(marks[0]).toContain("[x] Write the lexer");
+    expect(marks[1]).toContain("[ ] Install vitest");
+    expect(marks[2]).toContain("[!] Add tests");
     expect(h.store.getState().session.mode).toBe("plan");
     expect(h.prompt(2)).toContain("Re-evaluate the plan");
     expect(h.prompt(2)).toContain("(failed: no test runner installed)");
@@ -477,10 +686,10 @@ describe("Loop mode", () => {
     expect(shown).toContain("only this item: Write the lexer");
   });
 
-  test("in YOLO the loop starts unattended, fixing forward: a failed item's repair starts the next round without the card", async () => {
+  test("with Plan edits Permissive the loop fixes forward: a failed item's repair starts the next round without the card", async () => {
     const h = await setup(["Write the lexer", "Add tests"]);
     await act(async () => {
-      h.store.dispatch(setApprovalMode("yolo"));
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
     });
     h.turns.push(
       finish("done", "lexer written"),
@@ -514,35 +723,20 @@ describe("Loop mode", () => {
     expect(h.prompt(3)).toContain("only this item: Install vitest");
   });
 
-  test("unattended: when the wait for an answer runs out, the item goes on with its default and the question stays open", async () => {
+  test("Permissive on Plan edits does not start a timer: a question waits until you answer", async () => {
     const h = await setup(["Pick the database"]);
     await act(async () => {
-      h.store.dispatch(setApprovalMode("yolo"));
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
     });
     h.turns.push(
       ask("Item 'Pick the database': Postgres or SQLite?", "blocking"),
       finish("waiting", "needs the database choice"),
-      finish("done", "picked SQLite as the default"),
     );
     await h.start();
     await waitFor(() => expect(h.loop().status).toBe("waiting"));
     expect(
       document.querySelector("[data-testid=loop-status]")!.textContent,
-    ).toContain("goes on without answers at");
-
-    // As if 16 minutes had passed: the driver's timer fires at once
-    await act(async () => {
-      h.store.dispatch(
-        setLoop({
-          ...h.loop(),
-          waitingSince: new Date(Date.now() - 16 * 60_000).toISOString(),
-        }),
-      );
-    });
-    await waitFor(() => expect(h.loop().status).toBe("stopped"));
-    expect(h.loop().stopReason).toBe("done");
-    expect(h.prompt(2)).toContain("Nobody answered these questions in time");
-    expect(h.prompt(2)).toContain("Postgres or SQLite?");
+    ).toContain("paused until you answer");
     // Not confirmed on the person's behalf: still in the inbox
     expect(h.loop().questions[0].answerId).toBeUndefined();
     expect(
@@ -550,36 +744,36 @@ describe("Loop mode", () => {
     ).not.toBeNull();
   });
 
-  test("the level picker changes how much the running loop does alone", async () => {
+  test("moving Plan edits or Questions changes the running loop", async () => {
     const h = await setup(["Pick the grammar"]);
     h.turns.push(
       ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
       finish("waiting", "needs the grammar"),
     );
     await h.start();
-    // Manual approval mode: supervised
-    expect(h.loop().autonomy).toBe("supervised");
+    // The defaults: Plan edits and Questions are Cautious
+    expect(h.loop().policy).toMatchObject({
+      plan: "cautious",
+      questions: "cautious",
+    });
     await waitFor(() => expect(h.loop().status).toBe("waiting"));
     expect(
-      document.querySelector("[data-testid=loop-status]")!.textContent,
-    ).toContain("paused until you answer");
+      document.querySelector("[data-testid=loop-policy]")!.textContent,
+    ).toContain("Plan Cautious");
 
     await act(async () => {
-      fireEvent.change(document.querySelector("[data-testid=loop-autonomy]")!, {
-        target: { value: "unattended" },
-      });
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
     });
+    await waitFor(() => expect(h.loop().policy?.plan).toBe("permissive"));
     expect(h.loop().autonomy).toBe("unattended");
-    expect(h.loop().budget.maxRounds).toBe(10);
     expect(
-      document.querySelector("[data-testid=loop-status]")!.textContent,
-    ).toContain("goes on without answers at");
+      document.querySelector("[data-testid=loop-policy]")!.textContent,
+    ).toContain("Plan Permissive");
 
-    // The strategy picker sits next to the level picker
+    // The strategy picker is independent of the levels
     const strategy = document.querySelector<HTMLSelectElement>(
       "[data-testid=loop-strategy]",
     )!;
-    expect(strategy.value).toBe("fix-forward");
     await act(async () => {
       fireEvent.change(strategy, { target: { value: "check-in" } });
     });
@@ -782,7 +976,7 @@ describe("Loop mode", () => {
         args: { filepath: `new${n}.ts`, contents: "x" },
       });
     await act(async () => {
-      h.store.dispatch(setApprovalMode("yolo"));
+      h.store.dispatch(setPolicyLevel({ area: "tools", level: "yolo" }));
     });
     h.ideMessenger.responseHandlers["tools/evaluatePolicy"] = async () => ({
       policy: "allowedWithoutPermission",
@@ -865,6 +1059,10 @@ describe("Loop mode", () => {
 
   test("the controls edit the limits, skip a waiting item and run a done one again", async () => {
     const h = await setup(["Pick the grammar", "Write the lexer"]);
+    // Every re-plan waits for the person: what this test is about
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "manual" }));
+    });
     h.turns.push(
       ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
       finish("waiting", "needs the grammar"),
@@ -965,8 +1163,12 @@ describe("Loop in the mode picker", () => {
     },
   });
 
-  test("choose Loop, the message plans, and the presented plan starts the loop with no click", async () => {
+  test("choose Loop with Plan edits Permissive, and the presented plan starts the loop with no click", async () => {
     const h = await setup([]);
+    // Plan edits Permissive: the first plan goes on without a click
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+    });
     h.turns.push(
       presentPlan,
       finish("done", "lexer written"),
@@ -1002,8 +1204,45 @@ describe("Loop in the mode picker", () => {
     expect(modeButton()).toContain("Loop");
   });
 
+  test.each(["cautious", "manual"] as const)(
+    "at %s the first plan waits for you; Build in a loop starts it",
+    async (level) => {
+      const h = await setup([]);
+      await act(async () => {
+        h.store.dispatch(setPolicyLevel({ area: "plan", level }));
+      });
+      h.turns.push(
+        presentPlan,
+        finish("done", "lexer written"),
+        finish("done", "tests added"),
+      );
+      await pickMode(h, "mode-option-loop");
+      await send("Plan the parser");
+
+      await waitFor(() =>
+        expect(
+          document.querySelector("[data-testid=plan-card-build-loop]"),
+        ).not.toBeNull(),
+      );
+      // Nothing started: one request, no loop
+      expect(h.requests).toHaveLength(1);
+      expect(h.store.getState().session.loop).toBeUndefined();
+
+      await act(async () => {
+        fireEvent.click(
+          document.querySelector("[data-testid=plan-card-build-loop]")!,
+        );
+      });
+      await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+    },
+  );
+
   test("the picker shows Loop while the loop runs, and leaving it stops after the running item", async () => {
     const h = await setup([]);
+    // Plan edits Permissive: the first plan goes on without a click
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+    });
     let release!: () => void;
     const held = new Promise<void>((r) => (release = r));
     h.turns.push(
@@ -1173,6 +1412,10 @@ describe("Loop mode's checks and dependencies", () => {
     document.querySelector<HTMLElement>(`[data-testid=${id}]`);
 
   async function startInLoop(h: Setup) {
+    // The first plan goes on by itself at Plan edits Permissive
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+    });
     await pickMode(h, "mode-option-loop");
     await send("Plan the retries");
   }

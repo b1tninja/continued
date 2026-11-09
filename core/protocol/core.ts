@@ -562,6 +562,18 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       mcpUiState?: McpUiState;
     },
   ];
+  /** The settings file shared with the CLI (plans/policy-areas.md, Settings). */
+  "policy/load": [
+    undefined,
+    {
+      settings: import("../tools/permissions/settingsFile").PolicyFileSettings;
+      notices: string[];
+    },
+  ];
+  "policy/save": [
+    import("../tools/permissions/settingsFile").PolicyFileUpdate,
+    void,
+  ];
   "tools/evaluatePolicy": [
     {
       toolName: string;
@@ -578,6 +590,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       source?: ToolDecisionSource;
       /** A sentence saying why, for the prompt or the refusal. */
       reason?: string;
+      /** A command the parser vouched as only reading */
+      readOnly?: string;
       /** The rule that decided, as written in config.yaml. */
       rule?: string;
     },

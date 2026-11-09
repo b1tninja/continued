@@ -6,6 +6,7 @@ import {
   type AutoReviewDeps,
   type AutoReviewReply,
 } from "core/tools/permissions/auto/handler.js";
+import type { ApprovalSettings } from "core/tools/permissions/approval.js";
 import { buildReviewHistory } from "core/tools/permissions/auto/history.js";
 import { AutoReviewSessions } from "core/tools/permissions/auto/state.js";
 import {
@@ -13,6 +14,8 @@ import {
   type ToolPolicyResult,
 } from "core/tools/permissions/evaluate.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
+
+import { resolveShell } from "core/util/shell.js";
 
 import { createLlmApi } from "../config.js";
 import { logger } from "../util/logger.js";
@@ -175,6 +178,8 @@ export interface CoreRulesInput {
   assistantPermissions: CoreToolPermissions | undefined;
   reviewer?: ChatLike | null;
   autoReview?: boolean;
+  /** The level of each policy area (see policyLevels.ts) */
+  approval?: ApprovalSettings;
   isHeadless: boolean;
   history?: ChatHistoryItem[];
   cwd?: string;
@@ -196,7 +201,7 @@ export async function evaluateWithCoreRules(
     isHeadless,
   } = input;
   const useReviewer = !!input.autoReview;
-  if (!permissions && !useReviewer) return undefined;
+  if (!permissions && !useReviewer && !input.approval) return undefined;
   const call = toCoreCall(cliToolName, args);
   if (!call) return undefined;
 
@@ -212,6 +217,7 @@ export async function evaluateWithCoreRules(
         tool,
         permissions,
         enabled: true,
+        shell: resolveShell().kind,
         reviewer: input.reviewer ?? null,
         environment: {
           workspaceDirs: [input.cwd ?? process.cwd()],
@@ -225,6 +231,7 @@ export async function evaluateWithCoreRules(
         basePolicy,
         parsedArgs: call.parsedArgs,
         history: buildReviewHistory(input.history ?? []),
+        approval: input.approval,
         headless: isHeadless,
       },
     );
@@ -243,6 +250,10 @@ export async function evaluateWithCoreRules(
     basePolicy,
     parsedArgs: call.parsedArgs,
     permissions,
+    approval: input.approval,
+    cwd: input.cwd ?? process.cwd(),
+    // The shell the CLI runs commands in: its login shell, PowerShell on Windows
+    shell: resolveShell().kind,
   });
   return {
     decision:

@@ -33,7 +33,7 @@ import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
 import { updateConfig } from "../../../redux/slices/configSlice";
 import { ConfigHeader } from "../components/ConfigHeader";
 import { ImportClineMcpButton } from "../components/ImportClineMcp";
-import { AutoApproveCard } from "../components/AutoApproveCard";
+import { PolicyCard } from "../../../components/PolicyControls";
 import { ToolPoliciesGroup } from "../components/ToolPoliciesGroup";
 
 interface MCPServerStatusProps {
@@ -514,7 +514,7 @@ export function ToolsSection() {
         </div>
       )}
       <div className="mb-4 space-y-6">
-        <AutoApproveCard />
+        <PolicyCard />
         <ToolPoliciesGroup
           showIcon={false}
           groupName={BUILT_IN_GROUP_NAME}

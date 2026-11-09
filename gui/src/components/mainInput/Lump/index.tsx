@@ -1,5 +1,5 @@
 import { RecentlyBlocked } from "../../RecentlyBlocked";
-import { YoloBanner } from "../../ApprovalSelect";
+import { YoloBanner } from "../../PolicyControls";
 import { LumpToolbar } from "./LumpToolbar/LumpToolbar";
 
 /**

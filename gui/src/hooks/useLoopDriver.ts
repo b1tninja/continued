@@ -1,10 +1,11 @@
-import { LOOP_AUTONOMY } from "core/util/loopMode";
+import { loopAutonomy } from "core/util/loopMode";
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "react-redux";
 import { useAppDispatch, useAppSelector } from "../redux/hooks";
 import { RootState } from "../redux/store";
 import { selectCurrentToolCalls } from "../redux/selectors/selectToolCalls";
-import { advanceLoop } from "../redux/thunks/loop";
+import { selectLoopPolicy } from "../redux/selectors/selectAutoApproval";
+import { advanceLoop, syncLoopPolicy } from "../redux/thunks/loop";
 
 /**
  * Runs Loop mode: whenever the loop is active and nothing is going on (no
@@ -37,7 +38,9 @@ export function useLoopDriver() {
   );
   // Unattended: when the wait for answers runs out, take a step anyway
   const waitingSince = useAppSelector((s) => s.session.loop?.waitingSince);
-  const autonomy = useAppSelector((s) => s.session.loop?.autonomy);
+  const hasLoop = useAppSelector((s) => !!s.session.loop);
+  // The Plan edits and Questions levels the loop follows
+  const policyKey = useAppSelector((s) => JSON.stringify(selectLoopPolicy(s)));
   const busy = useRef(false);
   const [tick, setTick] = useState(0);
 
@@ -58,7 +61,7 @@ export function useLoopDriver() {
 
   useEffect(() => {
     if (loopStatus !== "waiting" || !waitingSince) return;
-    const wait = LOOP_AUTONOMY[autonomy ?? "auto"].waitTimeoutMs;
+    const wait = loopAutonomy(store.getState().session.loop!).waitTimeoutMs;
     if (wait <= 0) return;
     const due = new Date(waitingSince).getTime() + wait - Date.now();
     const timer = setTimeout(
@@ -73,5 +76,10 @@ export function useLoopDriver() {
       Math.max(0, due),
     );
     return () => clearTimeout(timer);
-  }, [loopStatus, waitingSince, autonomy, dispatch]);
+  }, [loopStatus, waitingSince, policyKey, dispatch, store]);
+
+  // Moving Plan edits or Questions in the toolbar changes the running loop
+  useEffect(() => {
+    if (hasLoop) void dispatch(syncLoopPolicy());
+  }, [hasLoop, policyKey, dispatch]);
 }
