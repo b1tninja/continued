@@ -574,6 +574,43 @@ export class Core {
   }
 
   /* eslint-disable max-lines-per-function */
+  /**
+   * Loop mode's parallel waves: the worktrees live in core (git runs here, in
+   * the extension host); the gui asks for each step (core/util/worktree.ts).
+   */
+  private registerLoopWorktreeHandlers() {
+    const on = this.messenger.on.bind(this.messenger);
+    const worktreeDeps = { git: execFileGit };
+    on("loop/worktreeCreate", async ({ data }) => {
+      // What a wave interrupted by a reload left on this item's branch goes
+      // first; the new worktree takes the branch
+      await removeStaleItemWorktree(
+        data.repo,
+        data.slug,
+        data.itemId,
+        worktreeDeps,
+      );
+      return createItemWorktree(data, worktreeDeps);
+    });
+    on("loop/worktreePatch", async ({ data }) =>
+      worktreePatch(data, worktreeDeps),
+    );
+    on("loop/worktreeApply", async ({ data: { repo, patch, touchedSince } }) =>
+      applyPatch(repo, patch, { touchedSince }, worktreeDeps),
+    );
+    on("loop/worktreeRemove", async ({ data: { repo, path, branch } }) =>
+      removeWorktree(
+        repo,
+        { path, branch },
+        { deleteBranch: true },
+        worktreeDeps,
+      ),
+    );
+    on("loop/dirtyFiles", async ({ data: { repo } }) =>
+      dirtyFiles(repo, worktreeDeps),
+    );
+  }
+
   private registerMessageHandlers(ideSettingsPromise: Promise<IdeSettings>) {
     const on = this.messenger.on.bind(this.messenger);
 
@@ -1785,37 +1822,7 @@ export class Core {
       return this.isItemTooBig(item);
     });
 
-    // Loop mode's parallel waves: the worktrees live in core (git runs here,
-    // in the extension host); the gui asks for each step
-    const worktreeDeps = { git: execFileGit };
-    on("loop/worktreeCreate", async ({ data }) => {
-      // What a wave interrupted by a reload left on this item's branch goes
-      // first; the new worktree takes the branch
-      await removeStaleItemWorktree(
-        data.repo,
-        data.slug,
-        data.itemId,
-        worktreeDeps,
-      );
-      return createItemWorktree(data, worktreeDeps);
-    });
-    on("loop/worktreePatch", async ({ data }) =>
-      worktreePatch(data, worktreeDeps),
-    );
-    on("loop/worktreeApply", async ({ data: { repo, patch, touchedSince } }) =>
-      applyPatch(repo, patch, { touchedSince }, worktreeDeps),
-    );
-    on("loop/worktreeRemove", async ({ data: { repo, path, branch } }) =>
-      removeWorktree(
-        repo,
-        { path, branch },
-        { deleteBranch: true },
-        worktreeDeps,
-      ),
-    );
-    on("loop/dirtyFiles", async ({ data: { repo } }) =>
-      dirtyFiles(repo, worktreeDeps),
-    );
+    this.registerLoopWorktreeHandlers();
 
     // Process state handlers
     on("process/markAsBackgrounded", async ({ data: { toolCallId } }) => {

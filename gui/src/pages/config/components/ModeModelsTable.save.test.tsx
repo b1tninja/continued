@@ -1,6 +1,14 @@
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { box, saveButton, setupTable, star } from "./modeModelsTableTestUtils";
+import {
+  box,
+  promptSelect,
+  saveButton,
+  setupTable,
+  star,
+  tailSelect,
+  tailText,
+} from "./modeModelsTableTestUtils";
 
 describe("ModeModelsTable: saving", () => {
   it("ticking two models sends a list with the first as default", async () => {
@@ -80,6 +88,58 @@ describe("ModeModelsTable: saving", () => {
     expect(box("Chat", "Alpha").checked).toBe(true);
     expect(saveButton().disabled).toBe(false);
     expect(saveButton().textContent).toBe("Save");
+  });
+});
+
+describe("ModeModelsTable: Prompt and Reminder rows", () => {
+  it("the selects send prompt and tail beside the model", async () => {
+    const { user, calls } = await setupTable({ agent: { title: "Alpha" } });
+    await user.selectOptions(promptSelect("Agent"), "short");
+    await user.selectOptions(tailSelect("Agent"), "off");
+    await user.click(saveButton());
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toEqual({
+      agent: { model: "Alpha", prompt: "short", tail: "off" },
+    });
+  });
+
+  it("Text... reveals a line whose text is the tail; a prompt alone needs no model", async () => {
+    const { user, calls } = await setupTable();
+    await user.selectOptions(tailSelect("Plan"), "text");
+    // An empty line is not a reminder yet
+    expect(saveButton().disabled).toBe(true);
+    await user.type(tailText("Plan"), "Ask first.");
+    await user.selectOptions(promptSelect("Loop"), "short");
+    await user.click(saveButton());
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toEqual({
+      plan: { tail: "Ask first." },
+      loop: { prompt: "short" },
+    });
+  });
+
+  it("Default clears a prompt and a reminder with null", async () => {
+    const { user, calls } = await setupTable({
+      loop: { title: "Alpha", prompt: "short", tail: "Keep going." },
+    });
+    await user.selectOptions(promptSelect("Loop"), "");
+    await user.selectOptions(tailSelect("Loop"), "");
+    expect(screen.queryByLabelText("Reminder text for Loop")).toBeNull();
+    await user.click(saveButton());
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toEqual({
+      loop: { model: "Alpha", prompt: null, tail: null },
+    });
+  });
+
+  it("clearing the star keeps an entry that has a prompt", async () => {
+    const { user, calls } = await setupTable({
+      replan: { title: "Alpha", prompt: "short" },
+    });
+    await user.click(star("Re-plan", "Alpha"));
+    await user.click(saveButton());
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toEqual({ replan: { model: null } });
   });
 });
 

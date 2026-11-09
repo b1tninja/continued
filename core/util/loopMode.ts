@@ -1100,6 +1100,12 @@ function todos(n: number): string {
  * changed or removed a check that had failed, which is an easy way to make an
  * item pass, or it dropped an item that was finished. Undefined if neither.
  * A model did both in a sandbox run and the loop then reported all items done.
+ *
+ * An item that ended stuck has not run its check, so its check has no
+ * status; the check it would have run is in `current.planChecks` (set by
+ * startReplan). Changing that is held too: in six fix-forward runs on
+ * Haiku 5.5 and Sonnet 5.5, three reported the item stuck and then replaced
+ * its check in the re-plan, and the hold never fired.
  */
 export function replanConcern(
   loop: LoopState,
@@ -1110,12 +1116,20 @@ export function replanConcern(
     (i) =>
       i.check?.status === "failed" && task(i.id)?.check !== i.check.command,
   );
+  const stuckCheck = loop.items.filter((i) => {
+    if (i.status !== "failed" || i.check?.status === "failed") return false;
+    const previous = loop.current?.planChecks?.[i.id];
+    return previous !== undefined && task(i.id)?.check !== previous;
+  });
   const droppedDone = loop.items.filter(
     (i) => i.status === "done" && !i.skipped && !task(i.id),
   );
   const parts = [
     failedCheck.length
       ? `It changes or removes the failing check of ${failedCheck.length === 1 ? "item" : "items"} ${failedCheck.map((i) => i.id).join(", ")}.`
+      : "",
+    stuckCheck.length
+      ? `It changes or removes the check of ${stuckCheck.length === 1 ? "item" : "items"} ${stuckCheck.map((i) => i.id).join(", ")}, which ended stuck without running it.`
       : "",
     droppedDone.length
       ? `It drops finished ${droppedDone.length === 1 ? "item" : "items"} ${droppedDone.map((i) => i.id).join(", ")}.`
@@ -1388,7 +1402,14 @@ export function startReplan(
       kind: "replan",
       historyIndex,
       startedAt: iso(now),
-      ...(plan ? { planTexts: plan.items.map((i) => i.text) } : {}),
+      ...(plan
+        ? {
+            planTexts: plan.items.map((i) => i.text),
+            planChecks: Object.fromEntries(
+              plan.items.flatMap((i) => (i.check ? [[i.id, i.check]] : [])),
+            ),
+          }
+        : {}),
       ...(checkIn ? { checkIn } : {}),
       ...(itemId ? { itemId } : {}),
       ...(itemText !== undefined ? { itemText } : {}),
@@ -2553,7 +2574,7 @@ export function loopItemPrompt(input: {
   }
   if (input.item.check) {
     lines.push(
-      `When you report it done, its check runs: \`${quote(input.item.check)}\`. It must exit 0, so run it yourself first.`,
+      `When you report it done, its check runs: \`${quote(input.item.check)}\`. It must exit 0, so run it yourself first. If it cannot pass as written, do not report done: report stuck and say what the check does.`,
     );
   }
   if (input.lastCheck?.status === "failed") {

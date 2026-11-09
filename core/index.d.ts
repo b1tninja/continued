@@ -676,6 +676,12 @@ export interface LoopState {
     };
     /** A re-plan: the to-dos it started from, to tell whether it adds scope */
     planTexts?: string[];
+    /**
+     * A re-plan: the check of each to-do it started from, by item id, so a
+     * re-plan that changes the check of an item that ended stuck (its check
+     * never ran) is held like one that changes a failed check
+     */
+    planChecks?: Record<string, string>;
     /** A check-in re-plan (check-in strategy): why it was due */
     checkIn?: string;
     /** A repair re-plan (fix forward): the failed item's text */
@@ -2565,6 +2571,13 @@ export interface ModeModelSetting {
   prompt?: string;
   /** The prompt block's text, when `prompt` names one. */
   promptText?: string;
+  /**
+   * The reminder appended to every user message of the use's requests
+   * (`modeModels.<use>.tail`): `"on"` for the built-in line of the turn kind,
+   * `"off"`, or a short text. Absent: on for Loop items and for the `short`
+   * prompt profile, off elsewhere (core/llm/prompts/usePrompts.ts).
+   */
+  tail?: string;
 }
 
 /**

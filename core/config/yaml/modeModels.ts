@@ -2,16 +2,10 @@ import type { ModeModels } from "@continuedev/config-yaml";
 import type { ConfigValidationError } from "@continuedev/config-yaml";
 import type { ILLM, ModeModelsConfig, ModelUse } from "../..";
 import { isPromptProfile } from "../../llm/prompts/usePrompts";
-import { MODEL_USES, PICKER_USES } from "../../util/modelUse";
+import { MODEL_USES, PICKER_USES, PROMPT_USES } from "../../util/modelUse";
 
-/** The uses whose system prompt can be chosen (`prompt`). */
-const PROMPT_USES: readonly ModelUse[] = [
-  "chat",
-  "plan",
-  "agent",
-  "loop",
-  "replan",
-];
+/** The uses whose system prompt and tail can be chosen (`prompt`, `tail`). */
+const promptUses: readonly ModelUse[] = PROMPT_USES;
 
 /**
  * Resolve `modeModels:` (which names models) against the loaded models.
@@ -29,6 +23,8 @@ const PROMPT_USES: readonly ModelUse[] = [
  * - `prompt` (chat, plan, agent, loop, replan): `full`, `short`, or the name
  *   of one of `prompts`, whose text is copied in as `promptText`. An unknown
  *   name is dropped with an error; the entry keeps its model.
+ * - `tail` (the same uses): `on`, `off` or a text, kept as written; a boolean
+ *   (YAML 1.1 reads a bare on/off as one) becomes `on` or `off`.
  */
 export function resolveModeModels(
   modeModels: ModeModels | undefined,
@@ -83,7 +79,7 @@ export function resolveModeModels(
 
     // The prompt: a built-in profile, or a prompt block's name and text
     let prompt: { prompt: string; promptText?: string } | undefined;
-    const wanted = PROMPT_USES.includes(use)
+    const wanted = promptUses.includes(use)
       ? (entry as { prompt?: string }).prompt
       : undefined;
     if (wanted) {
@@ -102,8 +98,15 @@ export function resolveModeModels(
       }
     }
 
+    // The tail: on, off or a text, for the same uses as the prompt
+    const rawTail = promptUses.includes(use)
+      ? (entry as { tail?: string | boolean }).tail
+      : undefined;
+    const tail =
+      typeof rawTail === "boolean" ? (rawTail ? "on" : "off") : rawTail;
+
     const title = preferred ?? listed[0];
-    if (title === undefined && !prompt) continue; // nothing usable: drop the entry
+    if (title === undefined && !prompt && !tail) continue; // nothing usable: drop the entry
 
     const offered = list
       ? [title!, ...listed.filter((name) => name !== title)]
@@ -115,6 +118,7 @@ export function resolveModeModels(
         ? { reasoningEffort: entry.reasoningEffort }
         : {}),
       ...prompt,
+      ...(tail ? { tail } : {}),
     } as ModeModelsConfig[ModelUse];
   }
 

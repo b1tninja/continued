@@ -137,4 +137,38 @@ From the 2026-11-08 runs: a plan scenario is 2 to 4 requests and 10k to 40k inpu
 - Plan quality beyond structure needs a judge; keep it a separate column, scored by the reviewer model with the plan turn's rubric.
 - Provider bills lag; reconcile the accounting column against the bill weekly, not per run.
 - Local servers vary run to run in timing; compare tokens and turns, not seconds, between local and hosted.
+- A scenario that writes files can leave a process behind: on 2026-11-09 a Nova 2 Lite loop ran `node --test --watch` in its seed, the watcher outlived the run and held the run folder, and the next invocation could not move it. The sandbox of section 7 is the fix; until then, check for stray `node` processes after a slice.
 - Models on the account not yet in the matrix: Kimi K3 and K3.1, Kimi K2 Thinking, Grok, GLM 5, MiniMax M2.5, Nemotron; each gets the Tier 1 probe first.
+
+## 10. Results
+
+### 10.1 The tail reminder on Nova 2 Lite (2026-11-09, roadmap row I6)
+
+The question: does `modeModels.<use>.tail` (#362), the one-line reminder appended to every user message of a request, make a small model stop less often after announcing a step, what does it do to the finish report, and what does it cost in cache and tokens? Three arms on `nova2lite` (default profile, `full`), `loop-basic` and `agent-acts`, three runs each: `--tail on` (the built-in act line, "Act until the request is done. A reply with no tool call ends the turn."), `--tail off`, and a text that names the report tool, "Act until the item is done, then report it with FinishItem. A reply with no tool call ends the turn." Eighteen runs, $1.44 at list price. The six loop runs of the first two arms were rerun after the runner's token budget was found to count Nova's cache reads twice (every loop died at about 45 requests, half its budget); the killed runs ($0.50) are left out below. `nudges` are the CLI's own end-of-turn nudges by kind (`core/util/turnEnd.ts`, at most four per agent turn and one per Loop item turn); "without FinishItem" counts item attempts the CLI had to nudge for the report; "churn" is the prefix churn column, requests that did not extend the one before them over all requests.
+
+`loop-basic` (supervised loop, approvals answered by the harness; budget 90 requests or 900k tokens):
+
+| Arm             | Outcomes          | Nudges act / finish / plan | Attempts | Without FinishItem | Requests per attempt | Cache read | Churn  | Cost  |
+| --------------- | ----------------- | -------------------------- | -------- | ------------------ | -------------------- | ---------- | ------ | ----- |
+| tail on         | done 2, killed 1  | 2 / 6 / 1                  | 18       | 6                  | 10.9                 | 78%        | 19/230 | $0.38 |
+| tail off        | killed 3          | 0 / 6 / 0                  | 15       | 6                  | 14.5                 | 75%        | 15/244 | $0.54 |
+| FinishItem text | stuck 1, killed 2 | 1 / 5 / 0                  | 10       | 5                  | 18.7                 | 83%        | 10/215 | $0.39 |
+
+`agent-acts` (`--auto`, one turn, "create the module, the test, run it, report"):
+
+| Arm             | Outcomes | Nudges act / finish / plan | Runs at the four-nudge cap | Turns (median) | Cache read | Churn | Cost   |
+| --------------- | -------- | -------------------------- | -------------------------- | -------------- | ---------- | ----- | ------ |
+| tail on         | done 3   | 8 / 0 / 0                  | 2 of 3                     | 14             | 57%        | 0/39  | $0.061 |
+| tail off        | done 3   | 12 / 0 / 0                 | 3 of 3                     | 10             | 70%        | 0/34  | $0.037 |
+| FinishItem text | done 3   | 12 / 0 / 0                 | 3 of 3                     | 11             | 71%        | 0/34  | $0.038 |
+
+What the numbers say, at n=3 per cell (suggestive, not settled; the scorecard flags it):
+
+- The built-in line helped the loop finish: two of three loops ended `done` with all four items with it, none without it and none with the FinishItem text (one of those stopped after three items failed in a row, the other two hit the token budget). Requests per item attempt were lowest with the line (10.9 against 14.5 and 18.7).
+- It did not make the model report. Item attempts that ended without `FinishItem` and had to be nudged: 6 of 18 with the line, 6 of 15 without, 5 of 10 with the text that names the tool. The nudge stays the backstop, and the text that names the tool did not win: the built-in texts in `core/llm/prompts/turns.ts` stay as they are.
+- In agent turns the announce-and-stop pattern is what the act nudge catches: "Let me check the contents of the existing directories to understand the structure better:" and no tool call. With the line, two of three runs still reached the four-nudge cap; without it, and with the FinishItem text, all three did. Every agent run ended `done` with 7 or 8 of 8 checks whatever the arm, so on this scenario the line changes how the turn gets there, not whether.
+- The line on every user message costs nothing in prefix: zero churn inside any item attempt or agent turn in all eighteen runs (the first live run of #362, with the line on the newest message only, broke the prefix at the first user message on every request that followed an answer). The breaks the column does show are conversation starts, one per item attempt and one per plan-to-act switch, which the Loop makes by design. Cache read ratios: 75 to 83% on the loops, 57 to 71% on the agent turns.
+- Cost: the loops with the line cost less in total because two finished before the budget; the agent turns with it cost more because they ran 14 turns against 10. A `loop-basic` run on Nova 2 Lite that runs to its budget costs $0.09 to $0.21, not the ten cents the first (budget-killed) run suggested.
+- Not measured: Qwen3 Coder (row I6 names it), the `short` profile, and any arm beyond n=3.
+
+Runs and scorecards (outside the repository): the session's scratchpad `bench/tail-on`, `bench/tail-off`, `bench/tail-text`, each with `scorecards/records.jsonl`; the per-arm table is `arms-final.md` beside them, and a copy of the records is in the side-session notes folder (`tail-measurement.md`).

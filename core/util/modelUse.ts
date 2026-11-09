@@ -30,6 +30,10 @@ export const MODEL_USES = [
 export const PICKER_USES = ["chat", "plan", "agent"] as const;
 export type PickerUse = (typeof PICKER_USES)[number];
 
+/** The uses whose system prompt and tail can be chosen (`prompt`, `tail`). */
+export const PROMPT_USES = ["chat", "plan", "agent", "loop", "replan"] as const;
+export type PromptUse = (typeof PROMPT_USES)[number];
+
 /** A use with no entry of its own takes this one's model. */
 export const USE_FALLBACK: Partial<Record<ModelUse, ModelUse>> = {
   loop: "agent",
@@ -38,9 +42,13 @@ export const USE_FALLBACK: Partial<Record<ModelUse, ModelUse>> = {
 
 /**
  * The entry for a use: its own, else its fallback's (`loop` → `agent`,
- * `replan` → `plan`). Undefined when neither is set: `subagent` then means
- * the parent turn's model, `reviewer` the model selected for that role, and a
- * mode keeps whichever model is selected.
+ * `replan` → `plan`). An own entry that names no model (one that chooses
+ * only a `prompt` or a `tail`, as `loop: { tail: off }`) takes the model,
+ * the list and the effort from its fallback's entry, with its own fields on
+ * top, so choosing a prompt for Loop items does not also undo the model the
+ * agent entry gives them. Undefined when neither is set: `subagent` then
+ * means the parent turn's model, `reviewer` the model selected for that
+ * role, and a mode keeps whichever model is selected.
  */
 export function modeModelFor(
   modeModels: ModeModelsConfig | undefined,
@@ -48,9 +56,15 @@ export function modeModelFor(
 ): ModeModelSetting | undefined {
   if (!modeModels) return undefined;
   const own = modeModels[use];
-  if (own) return own;
   const fallback = USE_FALLBACK[use];
-  return fallback ? modeModels[fallback] : undefined;
+  const parent = fallback ? modeModels[fallback] : undefined;
+  if (!own) return parent;
+  if (own.title !== undefined || own.titles?.length || !parent) return own;
+  const merged: ModeModelSetting = { ...parent };
+  for (const [key, value] of Object.entries(own)) {
+    if (value !== undefined) (merged as Record<string, unknown>)[key] = value;
+  }
+  return merged;
 }
 
 /** The use a Loop turn is: items act, everything else re-plans. */

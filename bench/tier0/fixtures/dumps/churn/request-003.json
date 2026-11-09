@@ -1,0 +1,53 @@
+{
+  "model": "fixture",
+  "messages": [
+    {
+      "role": "system",
+      "content": "ACT"
+    },
+    {
+      "role": "user",
+      "content": "Plan the thing"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "c1",
+          "type": "function",
+          "function": {
+            "name": "List",
+            "arguments": "{\"dirpath\":\".\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c1",
+      "content": "a.js"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "c2",
+          "type": "function",
+          "function": {
+            "name": "PresentPlan",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c2",
+      "content": "ok"
+    }
+  ],
+  "stream": true,
+  "max_tokens": 100
+}

@@ -72,6 +72,26 @@ describe("what a re-plan must not do quietly", () => {
     ).toContain("failing check of item 2");
   });
 
+  test("changing the check of an item that ended stuck without running it", () => {
+    // finish_item "stuck" marks the item failed; its check never ran, so it
+    // has no result. The re-plan knows the check from startReplan.
+    const stuck = withStates("auto", { "1": done, "2": { status: "failed" } });
+    const started = startReplan(stuck, 0, T0, { plan: PLAN, itemId: "2" });
+    const easier = planOf(
+      { id: "1", text: "A", check: "node a" },
+      { id: "2", text: "B", check: "node --check b" },
+    );
+    expect(replanConcern(started, easier)).toBe(
+      "It changes or removes the check of item 2, which ended stuck without running it.",
+    );
+    expect(replanConcern(started, PLAN)).toBeUndefined();
+    const ended = endReplan(started, easier);
+    expect(ended.accept).toBe(false);
+    expect(ended.loop.replanReason).toContain("ended stuck");
+    // Without the plan the re-plan started from, nothing can be compared
+    expect(replanConcern(stuck, easier)).toBeUndefined();
+  });
+
   test("dropping a finished item", () => {
     const loop = withStates("auto", { "1": done });
     expect(replanConcern(loop, planOf({ id: "2", text: "B" }))).toBe(
