@@ -9,6 +9,9 @@ function getNumUserMsgs(history: ChatHistoryItemWithMessageId[]) {
   return history.filter((msg) => msg.message.role === "user").length;
 }
 
+/** Pixels from the bottom that still count as being at the bottom. */
+export const AT_BOTTOM_TOLERANCE = 8;
+
 export const useAutoScroll = (
   ref: React.RefObject<HTMLDivElement | null>,
   history: ChatHistoryItemWithMessageId[],
@@ -23,18 +26,27 @@ export const useAutoScroll = (
   useEffect(() => {
     if (!ref.current || history.length === 0) return;
 
+    let lastScrollTop = ref.current.scrollTop;
     const handleScroll = () => {
       const elem = ref.current;
       if (!elem) return;
 
-      const isAtBottom =
-        Math.abs(elem.scrollHeight - elem.scrollTop - elem.clientHeight) < 1;
+      const distance = elem.scrollHeight - elem.scrollTop - elem.clientHeight;
+      const movedUp = elem.scrollTop < lastScrollTop - 1;
+      lastScrollTop = elem.scrollTop;
 
       /**
-       * We stop auto scrolling if a user manually scrolled up.
-       * We resume auto scrolling if a user manually scrolled to the bottom.
+       * We resume auto scrolling when the view is at the bottom, within a few
+       * pixels (a fractional scrollTop never lands exactly on it). We stop
+       * only when the user moved up: a scroll event that arrives after the
+       * content below grew, or the box shrank because a panel under it grew
+       * (Loop's plan and inbox do that all the time), is not the user leaving.
        */
-      setUserHasScrolled(!isAtBottom);
+      if (distance <= AT_BOTTOM_TOLERANCE) {
+        setUserHasScrolled(false);
+      } else if (movedUp) {
+        setUserHasScrolled(true);
+      }
     };
 
     const resizeObserver = new ResizeObserver(() => {
