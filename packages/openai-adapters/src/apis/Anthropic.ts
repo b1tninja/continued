@@ -53,6 +53,12 @@ import {
   requestedCacheTtl,
 } from "./cacheTtl.js";
 import {
+  canThink,
+  StoredThinkingBlock,
+  ThinkingStash,
+  thinkingRequestFor,
+} from "./anthropicThinking.js";
+import {
   BaseLlmApi,
   CreateRerankResponse,
   FimCreateParamsStreaming,
@@ -81,6 +87,9 @@ export class AnthropicApi implements BaseLlmApi {
 
   /** Counts this instance's cached requests for `cacheBehavior.ttl: auto`. */
   private autoTtl = new AutoCacheTtl();
+
+  /** Thinking blocks of this instance's replies, to send back with their tool calls. */
+  private thinkingStash = new ThinkingStash();
 
   constructor(
     protected config: AnthropicConfig & {
@@ -177,9 +186,29 @@ export class AnthropicApi implements BaseLlmApi {
       }
     }
 
-    const anthropicBody: MessageCreateParams = {
+    const toolChoice = openAiToolChoiceToAnthropicToolChoice(
+      oaiBody.tool_choice,
+    );
+    // Thinking is refused with a forced tool choice, and with a tool loop
+    // whose earlier thinking blocks are not on hand (see canThink).
+    let thinking = thinkingRequestFor(
+      oaiBody.model,
+      oaiBody.reasoning_effort,
+      this.config.requestOptions?.extraBodyProperties?.reasoning_effort,
+    );
+    if (
+      thinking &&
+      (toolChoice?.type === "any" ||
+        toolChoice?.type === "tool" ||
+        !canThink(oaiBody.messages as any, this.thinkingStash))
+    ) {
+      thinking = undefined;
+    }
+
+    const anthropicBody = {
       messages: this._convertMessages(
         oaiBody.messages.filter((msg) => msg.role !== "system"),
+        thinking !== undefined,
       ),
       system:
         typeof systemMessage === "string"
@@ -190,19 +219,30 @@ export class AnthropicApi implements BaseLlmApi {
               },
             ]
           : systemMessage,
-      // This adapter sends no thinking block, so only the both-set rule applies
       ...anthropicSamplingParams(
         oaiBody.temperature ?? undefined,
         oaiBody.top_p ?? undefined,
-        false,
+        thinking !== undefined,
       ),
-      max_tokens: oaiBody.max_tokens ?? this.maxTokensForModel(oaiBody.model), // max_tokens is required
+      // max_tokens is required, and must exceed the thinking budget
+      max_tokens: Math.max(
+        oaiBody.max_tokens ?? this.maxTokensForModel(oaiBody.model),
+        thinking?.minMaxTokens ?? 0,
+      ),
+      ...(thinking
+        ? {
+            thinking: thinking.thinking,
+            ...(thinking.output_config
+              ? { output_config: thinking.output_config }
+              : {}),
+          }
+        : {}),
       model: oaiBody.model,
       stop_sequences: stop,
       stream: oaiBody.stream ?? undefined,
       tools,
-      tool_choice: openAiToolChoiceToAnthropicToolChoice(oaiBody.tool_choice),
-    };
+      tool_choice: toolChoice,
+    } as MessageCreateParams;
 
     return anthropicBody;
   }
@@ -289,6 +329,7 @@ export class AnthropicApi implements BaseLlmApi {
 
   private getContentBlocksFromChatMessage(
     message: OpenAI.Chat.Completions.ChatCompletionMessageParam,
+    withThinking = false,
   ): ContentBlockParam[] {
     switch (message.role) {
       // One tool message = one tool_result block
@@ -307,9 +348,18 @@ export class AnthropicApi implements BaseLlmApi {
       case "user":
         return this.convertMessageContentToBlocks(message.content);
       case "assistant":
-        const blocks: ContentBlockParam[] = message.content
-          ? this.convertMessageContentToBlocks(message.content)
-          : [];
+        const blocks: ContentBlockParam[] = [];
+        // Thinking blocks come first, exactly as Anthropic returned them
+        if (withThinking && message.tool_calls?.length) {
+          blocks.push(
+            ...((this.thinkingStash.recall(
+              message.tool_calls.map((t) => t.id),
+            ) ?? []) as ContentBlockParam[]),
+          );
+        }
+        if (message.content) {
+          blocks.push(...this.convertMessageContentToBlocks(message.content));
+        }
         // If any tool calls are present, always put them last
         // Loses order vs what was originally sent, but they typically come last
         for (const toolCall of message.tool_calls ?? []) {
@@ -331,6 +381,7 @@ export class AnthropicApi implements BaseLlmApi {
 
   private _convertMessages(
     msgs: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+    withThinking = false,
   ): MessageParam[] {
     const nonSystemMessages = msgs.filter((m) => m.role !== "system");
 
@@ -357,7 +408,9 @@ export class AnthropicApi implements BaseLlmApi {
         flushCurrentMessage();
         currentRole = newRole;
       }
-      currentParts.push(...this.getContentBlocksFromChatMessage(message));
+      currentParts.push(
+        ...this.getContentBlocksFromChatMessage(message, withThinking),
+      );
     }
     flushCurrentMessage();
 
@@ -406,7 +459,10 @@ export class AnthropicApi implements BaseLlmApi {
           finish_reason: "stop",
           message: {
             role: "assistant",
-            content: completion.content[0].text,
+            // With thinking on, content[0] may be a thinking block
+            content:
+              completion.content?.find((b: any) => b.type === "text")?.text ??
+              "",
             refusal: null,
           },
           index: 0,
@@ -426,6 +482,10 @@ export class AnthropicApi implements BaseLlmApi {
     // Set while a content block has started (or streamed) and not stopped.
     let blockOpen = false;
     let sawStop = false;
+    // This reply's thinking blocks, kept for the next request (see ThinkingStash)
+    let thinkingBlock: StoredThinkingBlock | undefined;
+    const thinkingBlocks: StoredThinkingBlock[] = [];
+    const toolUseIds: string[] = [];
 
     const usage: CompletionUsage = {
       completion_tokens: 0,
@@ -442,6 +502,21 @@ export class AnthropicApi implements BaseLlmApi {
           if (blockStartEvent.content_block.type === "tool_use") {
             lastToolUseId = blockStartEvent.content_block.id;
             lastToolUseName = blockStartEvent.content_block.name;
+            toolUseIds.push(blockStartEvent.content_block.id);
+          } else if (blockStartEvent.content_block.type === "thinking") {
+            thinkingBlock = { type: "thinking", thinking: "", signature: "" };
+          } else if (
+            (blockStartEvent.content_block.type as string) ===
+            "redacted_thinking"
+          ) {
+            const data = (blockStartEvent.content_block as any).data ?? "";
+            thinkingBlocks.push({ type: "redacted_thinking", data });
+            yield chatChunkFromDelta({
+              model,
+              delta: {
+                reasoning_details: [{ type: "reasoning.encrypted", data }],
+              } as any,
+            });
           }
           break;
         case "message_start":
@@ -472,6 +547,30 @@ export class AnthropicApi implements BaseLlmApi {
                 model,
               });
               break;
+            case "thinking_delta":
+              if (thinkingBlock?.type === "thinking") {
+                thinkingBlock.thinking += blockDeltaEvent.delta.thinking;
+              }
+              yield chatChunkFromDelta({
+                model,
+                delta: {
+                  reasoning_content: blockDeltaEvent.delta.thinking,
+                } as any,
+              });
+              break;
+            case "signature_delta":
+              if (thinkingBlock?.type === "thinking") {
+                thinkingBlock.signature = blockDeltaEvent.delta.signature;
+              }
+              yield chatChunkFromDelta({
+                model,
+                delta: {
+                  reasoning_details: [
+                    { signature: blockDeltaEvent.delta.signature },
+                  ],
+                } as any,
+              });
+              break;
             case "input_json_delta":
               if (!lastToolUseId || !lastToolUseName) {
                 throw new Error("No tool use found");
@@ -497,6 +596,11 @@ export class AnthropicApi implements BaseLlmApi {
           break;
         case "content_block_stop":
           blockOpen = false;
+          // A thinking block without its signature cannot be sent back
+          if (thinkingBlock?.type === "thinking" && thinkingBlock.signature) {
+            thinkingBlocks.push(thinkingBlock);
+          }
+          thinkingBlock = undefined;
           lastToolUseId = undefined;
           lastToolUseName = undefined;
           break;
@@ -518,6 +622,8 @@ export class AnthropicApi implements BaseLlmApi {
         "The Anthropic stream ended before the response was complete (no message_stop).",
       );
     }
+
+    this.thinkingStash.remember(toolUseIds, thinkingBlocks);
 
     yield usageChatChunk({
       model,

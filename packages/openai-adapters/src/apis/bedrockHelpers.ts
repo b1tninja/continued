@@ -514,7 +514,7 @@ export function effortToBudgetTokens(effort: BedrockReasoningEffort): number {
  * with `output_config.effort`. Same as `supportsAdaptiveThinking` in
  * core/llm/llms/anthropicThinking.ts.
  */
-const ADAPTIVE_THINKING_MODEL =
+export const ADAPTIVE_THINKING_MODEL =
   /claude-(opus|sonnet|haiku|fable|mythos)-(4-[6-9]|[5-9])/;
 
 /** What a Converse request sends to turn a model's reasoning on or off. */
