@@ -290,7 +290,10 @@ describe("a turn's tail (modeModels.<use>.tail)", () => {
     ];
     const messages = buildChatRequest({
       ...state,
-      session: { ...state.session, history },
+      session: {
+        ...state.session,
+        history: history as RootState["session"]["history"],
+      },
     }).messages;
     const users = messages
       .filter((m) => m.role === "user")
