@@ -26,16 +26,24 @@ import { BuiltInToolNames } from "../../tools/builtIn.js";
 export interface TurnToolNames {
   presentPlan: string;
   taskList: string;
+  /** The file-reading tool, for the tailored profile's worked example. */
+  read: string;
+  /** The file-writing tool, for the tailored profile's shell-route line. */
+  write: string;
 }
 
 export const IDE_TURN_TOOL_NAMES: TurnToolNames = {
   presentPlan: BuiltInToolNames.PresentPlan,
   taskList: BuiltInToolNames.TaskList,
+  read: BuiltInToolNames.ReadFile,
+  write: BuiltInToolNames.CreateNewFile,
 };
 
 export const CLI_TURN_TOOL_NAMES: TurnToolNames = {
   presentPlan: "PresentPlan",
   taskList: "TaskList",
+  read: "Read",
+  write: "Write",
 };
 
 /** An act turn: Agent mode, or a Loop item run. */
@@ -74,52 +82,135 @@ You can call several read-only tools at once.`;
  * (research-qwen-harness.md): on Qwen3 the short turns won or tied in every
  * scenario, and on Qwen3-Coder-30B the full plan turn took 22 requests with
  * seven tool calls leaked as text where the short one took 10 and none.
- * Other families keep the full text until they are measured; a model's own
- * `baseAgentSystemMessage` or `basePlanSystemMessage` wins over both.
+ *
+ * "tailored" is the short text plus a "Tool calls" group that names the
+ * tool-call markup the model was trained on and says it does nothing as
+ * text. Measured on 2026-11-09 (research-qwen-tailoring.md) on Bedrock:
+ * Qwen3-Coder-30B leaked tool calls as text in 3 of 6 short plan-ask runs
+ * and 0 of 6 tailored ones, and finished the loop scenario in 1 of 3 short
+ * runs against 3 of 3 tailored; dropping only the markup line brought the
+ * leaks back (2 of 3). Qwen3-Coder-Next and Qwen3-Next-80B presented no plan
+ * at all under the full text and presented one under short and tailored,
+ * with tailored the cheapest. Dense Qwen3-32B and the local Qwen3.8 never
+ * leaked under any text, and the extra group cost them turns, so they stay
+ * on short. Other families keep the full text until they are measured; a
+ * model's own `baseAgentSystemMessage` or `basePlanSystemMessage` wins over
+ * all three.
  */
-export type PromptProfile = "full" | "short";
+export type PromptProfile = "full" | "short" | "tailored";
 
 const SHORT_PROMPT_MODELS = /qwen/i;
+const TAILORED_PROMPT_MODELS = /qwen3[-._]?coder|coder-next|qwen3[-._]?next/i;
 
 /**
- * Set to "full" or "short", picks the profile for every model, so the
- * benchmark (bench/runner.mjs --profile) can compare the two texts on one
+ * Set to "full", "short" or "tailored", picks the profile for every model, so
+ * the benchmark (bench/runner.mjs --profile) can compare the texts on one
  * model. Any other value is ignored. A `promptProfile` field per model in
  * config is Track K and not this.
  */
 export const PROMPT_PROFILE_ENV = "CONTINUE_PROMPT_PROFILE";
 
+/** The built-in texts, by the names config and the override know them by. */
+export const PROMPT_PROFILES: readonly PromptProfile[] = [
+  "full",
+  "short",
+  "tailored",
+];
+
 /** The environment override, when the runtime has one (not the browser). */
 function promptProfileOverride(): PromptProfile | undefined {
   if (typeof process === "undefined" || !process.env) return undefined;
   const value = process.env[PROMPT_PROFILE_ENV];
-  return value === "full" || value === "short" ? value : undefined;
+  return PROMPT_PROFILES.find((profile) => profile === value);
 }
 
 export function promptProfile(model: string | undefined): PromptProfile {
   const override = promptProfileOverride();
   if (override) return override;
-  return model && SHORT_PROMPT_MODELS.test(model) ? "short" : "full";
+  if (!model) return "full";
+  if (TAILORED_PROMPT_MODELS.test(model)) return "tailored";
+  return SHORT_PROMPT_MODELS.test(model) ? "short" : "full";
 }
 
-/** The act turn for a model: the short text where the profile says so. */
+/** The act turn for a model, by its profile. */
 export function actTurnFor(
   model: string | undefined,
   names: TurnToolNames = IDE_TURN_TOOL_NAMES,
 ): string {
-  return promptProfile(model) === "short"
-    ? actTurnShort(names)
-    : actTurn(names);
+  switch (promptProfile(model)) {
+    case "tailored":
+      return actTurnTailored(model, names);
+    case "short":
+      return actTurnShort(names);
+    default:
+      return actTurn(names);
+  }
 }
 
-/** The plan turn for a model: the short text where the profile says so. */
+/** The plan turn for a model, by its profile. */
 export function planTurnFor(
   model: string | undefined,
   names: TurnToolNames = IDE_TURN_TOOL_NAMES,
 ): string {
-  return promptProfile(model) === "short"
-    ? planTurnShort(names)
-    : planTurn(names);
+  switch (promptProfile(model)) {
+    case "tailored":
+      return planTurnTailored(model, names);
+    case "short":
+      return planTurnShort(names);
+    default:
+      return planTurn(names);
+  }
+}
+
+/**
+ * The tool-call markup a Qwen model was trained on, so the tailored text can
+ * name the exact string it must not write. Qwen3-Coder and the Flash line
+ * use the XML function format; the other Qwen3 models the Hermes JSON one.
+ */
+function qwenToolCallMarkup(model: string | undefined): string {
+  return /coder|flash/i.test(model ?? "")
+    ? "<tool_call><function=Name><parameter=key>value</parameter></function></tool_call>"
+    : '<tool_call>{"name": "Name", "arguments": {...}}</tool_call>';
+}
+
+/**
+ * The "Tool calls" group of the tailored profile: the markup line is the one
+ * that stops the leaks (the no-markup ablation leaked again); the example,
+ * refused-call and shell lines cover the three failures the Bedrock Qwen runs
+ * showed (a missing required parameter, a refused call retried through a
+ * command, a file written with a shell redirect).
+ */
+function toolCallsGroup(
+  model: string | undefined,
+  kind: "act" | "plan",
+  names: TurnToolNames,
+): string {
+  const finish =
+    kind === "act"
+      ? "Keep going until the request is completely resolved, or report the specific blocker that prevents completion."
+      : `Keep going until the plan is presented with ${names.presentPlan}, or report the specific blocker that prevents it.`;
+  return `Tool calls
+- Call tools through the API's tool-call field, never as text. Markup like ${qwenToolCallMarkup(model)} written in your reply does nothing.
+- Right: one ${names.read} call with arguments {"filepath": "src/a.js"}, every required parameter given. Wrong: that call pasted into your message.
+- A refused call, such as "${names.write} refused by rule": do not retry it and do not do it through a shell command; do the rest and report what was refused.
+- Write files with ${names.write}, never echo > or cat <<EOF.
+- ${finish}`;
+}
+
+/** The act turn for Qwen coder and MoE models: the short text plus the tool-calls group. */
+export function actTurnTailored(
+  model: string | undefined,
+  names: TurnToolNames = IDE_TURN_TOOL_NAMES,
+): string {
+  return `${actTurnShort(names)}\n\n${toolCallsGroup(model, "act", names)}`;
+}
+
+/** The plan turn for Qwen coder and MoE models: the short text plus the tool-calls group. */
+export function planTurnTailored(
+  model: string | undefined,
+  names: TurnToolNames = IDE_TURN_TOOL_NAMES,
+): string {
+  return `${planTurnShort(names)}\n\n${toolCallsGroup(model, "plan", names)}`;
 }
 
 /**
