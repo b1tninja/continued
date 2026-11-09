@@ -3,10 +3,12 @@ import {
   ACT_TURN_TAIL,
   actTurn,
   actTurnShort,
+  actTurnTailored,
   CLI_TURN_TOOL_NAMES,
   PLAN_TURN_TAIL,
   planTurn,
   planTurnShort,
+  planTurnTailored,
 } from "./turns";
 import {
   actTurnTextFor,
@@ -87,11 +89,16 @@ describe("tailFor: the reminder on the user messages", () => {
     expect(tailFor(undefined, "plan", "claude")).toBeUndefined();
   });
 
-  it("is on wherever the short profile is: by the prompt choice or the model id", () => {
+  it("is on wherever a small model's profile is: by the prompt choice or the model id", () => {
     expect(tailFor({ agent: { prompt: "short" } }, "agent", "claude")).toBe(
       ACT_TURN_TAIL,
     );
+    // qwen3-coder is the tailored profile, qwen3-32b the short one
     expect(tailFor(undefined, "plan", "qwen3-coder")).toBe(PLAN_TURN_TAIL());
+    expect(tailFor(undefined, "plan", "qwen3-32b")).toBe(PLAN_TURN_TAIL());
+    expect(tailFor({ agent: { prompt: "tailored" } }, "agent", "claude")).toBe(
+      ACT_TURN_TAIL,
+    );
     expect(tailFor({ plan: { prompt: "full" } }, "plan", "qwen3-coder")).toBe(
       undefined,
     );
@@ -228,6 +235,15 @@ describe("the turn text for a choice", () => {
 
   it("with no choice the model id decides", () => {
     expect(actTurnTextFor("claude-sonnet", undefined)).toBe(actTurn());
-    expect(planTurnTextFor("qwen3-coder", undefined)).toBe(planTurnShort());
+    expect(planTurnTextFor("qwen3-coder", undefined)).toBe(
+      planTurnTailored("qwen3-coder"),
+    );
+    expect(planTurnTextFor("qwen3-32b", undefined)).toBe(planTurnShort());
+  });
+
+  it("a named tailored profile applies to any model", () => {
+    expect(actTurnTextFor("claude-sonnet", { profile: "tailored" })).toBe(
+      actTurnTailored("claude-sonnet"),
+    );
   });
 });

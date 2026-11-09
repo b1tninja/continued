@@ -98,7 +98,7 @@ export function resolveModeModels(
           const names = prompts.map((p) => p.name);
           errors.push({
             fatal: false,
-            message: `modeModels.${use}.prompt: "${wanted}" is not "full", "short" or the name of a prompt block.${names.length ? ` Prompt blocks: ${names.join(", ")}.` : ""}`,
+            message: `modeModels.${use}.prompt: "${wanted}" is not "full", "short", "tailored" or the name of a prompt block.${names.length ? ` Prompt blocks: ${names.join(", ")}.` : ""}`,
           });
         }
       }
