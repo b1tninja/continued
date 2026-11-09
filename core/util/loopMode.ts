@@ -228,12 +228,7 @@ export const LOOP_AUTONOMY_LEVELS: readonly LoopAutonomy[] = [
 /** The level a loop starts at, from the approval mode in force. */
 export function loopAutonomyFor(
   approvalMode:
-    | "manual"
-    | "autoApprove"
-    | "auto"
-    | "review"
-    | "yolo"
-    | undefined,
+    "manual" | "autoApprove" | "auto" | "review" | "yolo" | undefined,
 ): LoopAutonomy {
   switch (approvalMode) {
     case "review":
@@ -1471,8 +1466,7 @@ function statusAfterRun(
 export function finishItemRun(
   loop: LoopState,
   report:
-    | { outcome: FinishOutcome; summary?: string; notes?: string }
-    | undefined,
+    { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
   /** The item's check (TaskItem.check): done then waits for it to pass */
   options: { check?: string } = {},
 ): LoopState {
@@ -1575,8 +1569,7 @@ function finishRunOf(
   loop: LoopState,
   itemId: string,
   report:
-    | { outcome: FinishOutcome; summary?: string; notes?: string }
-    | undefined,
+    { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
   options: { check?: string },
   unreported: string[],
 ): LoopState {
@@ -1689,8 +1682,7 @@ export function interruptLoop(loop: LoopState): LoopState {
 
 /** What a control the person used did to the loop, or why it was refused. */
 export type LoopControlResult =
-  | { ok: true; loop: LoopState }
-  | { ok: false; error: string };
+  { ok: true; loop: LoopState } | { ok: false; error: string };
 
 /** A loop that waited on the person goes on once something changed. */
 function wake(loop: LoopState): LoopState {

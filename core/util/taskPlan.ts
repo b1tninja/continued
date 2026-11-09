@@ -88,8 +88,7 @@ export interface TaskItemInput {
 }
 
 export type TaskPlanResult =
-  | { ok: true; plan: TaskPlan }
-  | { ok: false; error: string };
+  { ok: true; plan: TaskPlan } | { ok: false; error: string };
 
 function isStatus(value: unknown): value is TaskStatus {
   return (
@@ -705,10 +704,7 @@ export function parseMarkdownChecklist(markdown: string): TaskItemInput[] {
     if (attribute && items.length > 0) {
       const last = items[items.length - 1];
       const key = attribute[1].toLowerCase() as
-        | "after"
-        | "check"
-        | "model"
-        | "files";
+        "after" | "check" | "model" | "files";
       last[key] = attribute[2].trim();
       continue;
     }

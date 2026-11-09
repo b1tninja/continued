@@ -88,8 +88,7 @@ const OPUS = {
 
 async function setup(
   todos: (
-    | string
-    | { text: string; model?: string; files?: string[]; check?: string }
+    string | { text: string; model?: string; files?: string[]; check?: string }
   )[],
 ) {
   const rendered = await renderWithProviders(<Chat />);

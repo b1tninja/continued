@@ -28,7 +28,7 @@ export function ModelSwitchCacheNotice() {
 
   return (
     <div
-      className="border-t-border text-description-muted border-0 border-t border-solid px-2 py-1 text-[10px]"
+      className="border-0 border-t border-solid border-t-border px-2 py-1 text-[10px] text-description-muted"
       data-testid="model-switch-cache-notice"
     >
       Prompt cache is warm. Switching model re-reads {formatSwitchCost(cost)} at

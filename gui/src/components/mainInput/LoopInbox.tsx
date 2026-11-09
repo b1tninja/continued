@@ -51,15 +51,15 @@ function QuestionRow({
   return (
     <li
       data-testid={`loop-question-${question.id}`}
-      className="border-border mt-1 rounded border border-solid px-1.5 py-1"
+      className="mt-1 rounded border border-solid border-border px-1.5 py-1"
     >
       <div className="text-2xs text-description-muted">
         {question.id} · {KIND_LABEL[question.kind]}
         {itemText ? ` · ${itemText}` : ""}
       </div>
-      <div className="text-foreground break-words">{question.question}</div>
+      <div className="break-words text-foreground">{question.question}</div>
       {question.assumption && (
-        <div className="text-description break-words">
+        <div className="break-words text-description">
           Assumed: {question.assumption}
         </div>
       )}
@@ -69,7 +69,7 @@ function QuestionRow({
             <button
               type="button"
               data-testid="loop-approve"
-              className="border-border text-foreground hover:bg-input cursor-pointer rounded border border-solid bg-transparent px-1.5 text-xs"
+              className="cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input"
               onClick={() => void answer({ text: "", approve: true })}
             >
               Allow once
@@ -77,7 +77,7 @@ function QuestionRow({
             <button
               type="button"
               data-testid="loop-deny"
-              className="border-border text-foreground hover:bg-input cursor-pointer rounded border border-solid bg-transparent px-1.5 text-xs"
+              className="cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input"
               onClick={() => void answer({ text: text, approve: false })}
             >
               Don't allow
@@ -101,13 +101,13 @@ function QuestionRow({
                   void answer({ text });
                 }
               }}
-              className="border-border bg-input text-foreground placeholder:text-description-muted min-w-0 flex-1 basis-32 rounded border border-solid px-1 text-xs"
+              className="min-w-0 flex-1 basis-32 rounded border border-solid border-border bg-input px-1 text-xs text-foreground placeholder:text-description-muted"
             />
             <button
               type="button"
               data-testid="loop-answer-send"
               disabled={!text.trim()}
-              className="border-border text-foreground hover:bg-input cursor-pointer rounded border border-solid bg-transparent px-1.5 text-xs disabled:cursor-default disabled:opacity-50"
+              className="cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input disabled:cursor-default disabled:opacity-50"
               onClick={() => void answer({ text })}
             >
               Answer
@@ -116,7 +116,7 @@ function QuestionRow({
               <button
                 type="button"
                 data-testid="loop-confirm"
-                className="border-border text-foreground hover:bg-input cursor-pointer rounded border border-solid bg-transparent px-1.5 text-xs"
+                className="cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input"
                 onClick={() => void answer({ text: "", confirm: true })}
               >
                 Keep the default
@@ -126,7 +126,7 @@ function QuestionRow({
         )}
       </div>
       {error && (
-        <div role="alert" className="text-error mt-0.5 break-words">
+        <div role="alert" className="mt-0.5 break-words text-error">
           {error}
         </div>
       )}
@@ -165,13 +165,13 @@ export function LoopInbox() {
   return (
     <div
       data-testid="loop-inbox"
-      className="border-border mx-1 mb-1 min-w-0 rounded border border-solid px-2 py-1 text-xs"
+      className="mx-1 mb-1 min-w-0 rounded border border-solid border-border px-2 py-1 text-xs"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <ArrowPathIcon className="text-description h-3 w-3 shrink-0" />
+        <ArrowPathIcon className="h-3 w-3 shrink-0 text-description" />
         <span
           data-testid="loop-status"
-          className="text-description min-w-0 flex-1 basis-40 break-words"
+          className="min-w-0 flex-1 basis-40 break-words text-description"
         >
           Loop · {formatLoopStatus(loop, { level: false })}
         </span>
@@ -182,7 +182,7 @@ export function LoopInbox() {
           onChange={(e) =>
             void dispatch(setLoopAutonomyThunk(e.target.value as LoopAutonomy))
           }
-          className="border-border bg-input text-foreground shrink-0 cursor-pointer rounded border border-solid px-1 text-xs"
+          className="shrink-0 cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
         >
           {LOOP_AUTONOMY_LEVELS.map((level) => (
             <option key={level} value={level}>
@@ -197,7 +197,7 @@ export function LoopInbox() {
           onChange={(e) =>
             void dispatch(setLoopStrategyThunk(e.target.value as LoopStrategy))
           }
-          className="border-border bg-input text-foreground shrink-0 cursor-pointer rounded border border-solid px-1 text-xs"
+          className="shrink-0 cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
         >
           {LOOP_STRATEGY_ORDER.map((strategy) => (
             <option key={strategy} value={strategy}>
@@ -206,7 +206,7 @@ export function LoopInbox() {
           ))}
         </select>
         <label
-          className="text-description flex shrink-0 items-center gap-0.5"
+          className="flex shrink-0 items-center gap-0.5 text-description"
           title={
             supervised
               ? "Parallel waves run only at a level that does not ask before each edit"
@@ -230,7 +230,7 @@ export function LoopInbox() {
               <button
                 type="button"
                 data-testid="loop-resume"
-                className="text-link shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs hover:underline"
+                className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
                 onClick={() => void dispatch(resumeLoopThunk())}
               >
                 Resume
@@ -239,7 +239,7 @@ export function LoopInbox() {
             <button
               type="button"
               data-testid="loop-end"
-              className="text-description-muted hover:text-foreground shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs"
+              className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-description-muted hover:text-foreground"
               onClick={() => void dispatch(endLoopThunk())}
             >
               Close
@@ -256,7 +256,7 @@ export function LoopInbox() {
                     ? "Stop the wave's workers now; their items go back to pending"
                     : "Stop once the running item or re-plan ends"
                 }
-                className="text-link shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs hover:underline"
+                className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
                 onClick={() => void dispatch(stopLoopThunk())}
               >
                 {waveRunning ? "Stop the wave" : "Stop after this item"}
@@ -267,7 +267,7 @@ export function LoopInbox() {
                 type="button"
                 data-testid="loop-stop-now"
                 title="Stop the running item now; it goes back to pending"
-                className="text-link shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs hover:underline"
+                className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
                 onClick={() => void dispatch(cancelStream())}
               >
                 Stop now
@@ -279,7 +279,7 @@ export function LoopInbox() {
       {loop.current?.kind === "check" && (
         <div
           data-testid="loop-check-running"
-          className="text-description mt-0.5 truncate"
+          className="mt-0.5 truncate text-description"
         >
           Running the check for {loop.current.itemId}:{" "}
           <code>
@@ -291,7 +291,7 @@ export function LoopInbox() {
       {loop.status === "awaiting_plan" && loop.replanReason && (
         <div
           data-testid="loop-replan-reason"
-          className="text-description mt-0.5"
+          className="mt-0.5 text-description"
         >
           New plan waiting on its card: {loop.replanReason}
         </div>
@@ -311,7 +311,7 @@ export function LoopInbox() {
       {standingNotes.length > 0 && (
         <ul
           data-testid="loop-standing-list"
-          className="text-description m-0 mt-1 list-none p-0"
+          className="m-0 mt-1 list-none p-0 text-description"
         >
           {standingNotes.map((text, i) => (
             <li key={i} className="break-words">
@@ -327,9 +327,9 @@ export function LoopInbox() {
           maxLength={LOOP_LIMITS.maxAnswerLength}
           placeholder="A note about the whole plan (read at the next re-plan, or by every item)"
           onChange={(e) => setNote(e.target.value)}
-          className="border-border text-foreground placeholder:text-description-muted min-w-0 flex-1 basis-40 rounded border border-solid bg-transparent px-1 text-xs"
+          className="min-w-0 flex-1 basis-40 rounded border border-solid border-border bg-transparent px-1 text-xs text-foreground placeholder:text-description-muted"
         />
-        <label className="text-description flex shrink-0 items-center gap-0.5">
+        <label className="flex shrink-0 items-center gap-0.5 text-description">
           <input
             type="checkbox"
             data-testid="loop-replan-now"
@@ -342,7 +342,7 @@ export function LoopInbox() {
           Re-plan now
         </label>
         <label
-          className="text-description flex shrink-0 items-center gap-0.5"
+          className="flex shrink-0 items-center gap-0.5 text-description"
           title="Send this with every item from now on, instead of waiting for the re-plan"
         >
           <input
@@ -360,7 +360,7 @@ export function LoopInbox() {
           type="button"
           data-testid="loop-plan-note-send"
           disabled={!note.trim()}
-          className="border-border text-foreground hover:bg-input shrink-0 cursor-pointer rounded border border-solid bg-transparent px-1.5 text-xs disabled:cursor-default disabled:opacity-50"
+          className="shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input disabled:cursor-default disabled:opacity-50"
           onClick={async () => {
             const failed = await onAnswer({ text: note, replanNow, standing });
             setNoteError(failed);
@@ -375,7 +375,7 @@ export function LoopInbox() {
         </button>
       </div>
       {noteError && (
-        <div role="alert" className="text-error mt-0.5 break-words">
+        <div role="alert" className="mt-0.5 break-words text-error">
           {noteError}
         </div>
       )}

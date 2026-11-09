@@ -671,7 +671,6 @@ Added on 2026-11-07 from the owner. In their words: "use some sort of base promp
 **The payoff is cached input reuse.** Every loop turn, and every item, should re-read the same prefix from the cache. Only the new tool results and the short reminder should be fresh input. The three pieces below exist for that:
 
 1. **A fixed base prompt for planning.** It is the same text every time, so it caches. It asks for two separate outputs:
-
    - the task restated as a repeatable list of steps (the to-dos);
    - the end state, on its own and independent of the steps: the `## Done` criteria.
 

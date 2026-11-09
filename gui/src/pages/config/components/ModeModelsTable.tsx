@@ -53,9 +53,7 @@ const SELECT_CLASS =
   "rounded-sm border border-command-border bg-input px-1 py-0.5 text-xs";
 
 type Status =
-  | { kind: "idle" }
-  | { kind: "saving" }
-  | { kind: "error"; message: string };
+  { kind: "idle" } | { kind: "saving" } | { kind: "error"; message: string };
 
 /**
  * Choose which chat models each mode offers (`modeModels.<mode>.models`), a
@@ -133,7 +131,7 @@ export function ModeModelsTable() {
     <Card>
       <div className="mb-3">
         <div className="text-base font-medium">Which model does what</div>
-        <p className="text-description mt-1 text-xs">
+        <p className="mt-1 text-xs text-description">
           Tick the models each mode offers. The star marks the one selected when
           you switch into the mode. Loop items, re-plans and subagents take one
           model each; left blank, they use the Agent model, the Plan model and
@@ -145,7 +143,7 @@ export function ModeModelsTable() {
 
       <table className="w-full text-sm" data-testid="mode-models-table">
         <thead>
-          <tr className="text-description text-left text-xs">
+          <tr className="text-left text-xs text-description">
             <th className="py-1 font-normal">Model</th>
             {TABLE_MODES.map((mode) => (
               <th
@@ -160,7 +158,7 @@ export function ModeModelsTable() {
         </thead>
         <tbody>
           {models.map((model) => (
-            <tr key={model.title} className="border-command-border border-t">
+            <tr key={model.title} className="border-t border-command-border">
               <td className="py-1.5 pr-2">
                 <span className="line-clamp-1">{model.title}</span>
               </td>
@@ -176,8 +174,8 @@ export function ModeModelsTable() {
               ))}
             </tr>
           ))}
-          <tr className="border-command-border border-t">
-            <td className="text-description py-1.5 pr-2 text-xs">
+          <tr className="border-t border-command-border">
+            <td className="py-1.5 pr-2 text-xs text-description">
               Reasoning effort
             </td>
             {TABLE_MODES.map((mode) => (
@@ -192,8 +190,7 @@ export function ModeModelsTable() {
                       setEffort(
                         draft[mode],
                         (e.target.value || undefined) as
-                          | ModeReasoningEffort
-                          | undefined,
+                          ModeReasoningEffort | undefined,
                       ),
                     )
                   }
@@ -208,8 +205,8 @@ export function ModeModelsTable() {
               </td>
             ))}
           </tr>
-          <tr className="border-command-border border-t">
-            <td className="text-description py-1.5 pr-2 text-xs">Prompt</td>
+          <tr className="border-t border-command-border">
+            <td className="py-1.5 pr-2 text-xs text-description">Prompt</td>
             {TABLE_MODES.map((mode) => {
               if (!isTurnMode(mode)) return <td key={mode} />;
               const prompt = draft[mode].prompt;
@@ -244,8 +241,8 @@ export function ModeModelsTable() {
               );
             })}
           </tr>
-          <tr className="border-command-border border-t">
-            <td className="text-description py-1.5 pr-2 text-xs">Reminder</td>
+          <tr className="border-t border-command-border">
+            <td className="py-1.5 pr-2 text-xs text-description">Reminder</td>
             {TABLE_MODES.map((mode) => {
               if (!isTurnMode(mode)) return <td key={mode} />;
               const tail = draft[mode].tail;
@@ -319,7 +316,7 @@ export function ModeModelsTable() {
           Reset
         </Button>
         {status.kind === "error" && (
-          <span className="text-error text-xs" role="alert">
+          <span className="text-xs text-error" role="alert">
             {status.message}
           </span>
         )}

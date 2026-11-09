@@ -74,8 +74,7 @@ export function buildChatRequestBody(args: {
     const index =
       1 + convertFromUnifiedHistory(chatHistory.slice(0, pinAt)).length;
     const pinned = messages[index] as unknown as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     if (pinned) pinned[CACHE_PIN_FIELD] = true;
   }
   return {

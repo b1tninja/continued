@@ -85,7 +85,7 @@ function CheckLine({
   return (
     <div
       data-testid={`loop-check-${task.id}`}
-      className="text-2xs text-description-muted ml-3 min-w-0"
+      className="ml-3 min-w-0 text-2xs text-description-muted"
     >
       <div className="truncate" title={task.check ?? check?.command}>
         check: <code>{task.check ?? check?.command}</code>
@@ -105,7 +105,7 @@ function CheckLine({
       {check?.status === "failed" && check.output && (
         <pre
           data-testid={`loop-check-output-${task.id}`}
-          className="m-0 max-h-16 overflow-auto whitespace-pre-wrap break-words"
+          className="m-0 max-h-16 overflow-auto break-words whitespace-pre-wrap"
         >
           {check.output.trim()}
         </pre>
@@ -120,7 +120,7 @@ function FilesLine({ task }: { task: TaskItem }) {
   return (
     <div
       data-testid={`loop-files-${task.id}`}
-      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
+      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
       title="The files this item changes; items with disjoint files may run at the same time"
     >
       files: <code>{task.files.join(", ")}</code>
@@ -144,7 +144,7 @@ function WorkerLine({
   return (
     <div
       data-testid={`loop-worker-${task.id}`}
-      className="text-2xs text-description-muted ml-3 flex min-w-0 items-center gap-1"
+      className="ml-3 flex min-w-0 items-center gap-1 text-2xs text-description-muted"
     >
       <span className="min-w-0 flex-1 truncate" title={run.worktree}>
         in its own worktree{run.worktree ? `: ${run.worktree}` : ""}
@@ -172,7 +172,7 @@ function ModelLine({ task, model }: { task: TaskItem; model?: LoopItemModel }) {
   return (
     <div
       data-testid={`loop-model-${task.id}`}
-      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
+      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
       title={model?.fallbackReason ?? "The model this item runs with"}
     >
       model: {task.model}
@@ -227,7 +227,7 @@ export function LoopControls({
   const replan = loopReplanSetting(loop);
 
   return (
-    <details data-testid="loop-controls" className="text-description mt-1">
+    <details data-testid="loop-controls" className="mt-1 text-description">
       <summary className="cursor-pointer">
         Items and limits · {describeLoopReplan(loop)}
       </summary>
@@ -252,18 +252,18 @@ export function LoopControls({
                   data-testid={`loop-item-${task.id}`}
                   className="flex min-w-0 items-center gap-1"
                 >
-                  <span className="text-foreground min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1 truncate text-foreground">
                     {task.id}. {task.text}
                   </span>
                   {dependency && (
                     <span
                       data-testid={`loop-after-${task.id}`}
-                      className="text-description-muted shrink-0"
+                      className="shrink-0 text-description-muted"
                     >
                       {dependency}
                     </span>
                   )}
-                  <span className="text-description-muted shrink-0">
+                  <span className="shrink-0 text-description-muted">
                     {statusLabel(loop, task.id)}
                   </span>
                   {canSkip && (
@@ -322,7 +322,7 @@ export function LoopControls({
                   : { kind },
               );
             }}
-            className="border-border bg-input text-foreground cursor-pointer rounded border border-solid px-1 text-xs"
+            className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
           >
             <option value="never">never</option>
             <option value="up_to">up to N times</option>
@@ -388,7 +388,7 @@ export function LoopControls({
         <div
           role="alert"
           data-testid="loop-controls-error"
-          className="text-error mt-0.5 break-words"
+          className="mt-0.5 break-words text-error"
         >
           {error}
         </div>

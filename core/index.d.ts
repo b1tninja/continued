@@ -101,7 +101,8 @@ type RequiredLLMOptions =
   | "completionOptions";
 
 export interface ILLM
-  extends Omit<LLMOptions, RequiredLLMOptions>,
+  extends
+    Omit<LLMOptions, RequiredLLMOptions>,
     Required<Pick<LLMOptions, RequiredLLMOptions>> {
   get providerName(): string;
   get underlyingProviderName(): string;
@@ -198,10 +199,7 @@ export interface ModelInstaller {
 
 export type ContextProviderType = "normal" | "query" | "submenu";
 export type ContextIndexingType =
-  | "chunk"
-  | "embeddings"
-  | "fullTextSearch"
-  | "codeSnippets";
+  "chunk" | "embeddings" | "fullTextSearch" | "codeSnippets";
 
 export interface ContextProviderDescription {
   title: ContextProviderName;
@@ -399,13 +397,7 @@ export interface Session {
  * has not passed yet; the loop runs it next (decideNext's "check" action).
  */
 export type LoopItemStatus =
-  | "pending"
-  | "running"
-  | "checking"
-  | "done"
-  | "waiting"
-  | "redo"
-  | "failed";
+  "pending" | "running" | "checking" | "done" | "waiting" | "redo" | "failed";
 
 /**
  * One item of a parallel wave (L4): a run with a fresh context in its own
@@ -780,11 +772,7 @@ export interface SessionQueuedMessage {
 }
 
 export type TaskStatus =
-  | "pending"
-  | "in_progress"
-  | "completed"
-  | "cancelled"
-  | "blocked";
+  "pending" | "in_progress" | "completed" | "cancelled" | "blocked";
 
 export interface TaskItem {
   /** Stable across updates, so a person's edit and a model update meet */
@@ -900,11 +888,7 @@ export interface CompletionOptions extends BaseCompletionOptions {
 }
 
 export type ChatMessageRole =
-  | "user"
-  | "assistant"
-  | "thinking"
-  | "system"
-  | "tool";
+  "user" | "assistant" | "thinking" | "system" | "tool";
 
 export type TextMessagePart = {
   type: "text";
@@ -2077,10 +2061,7 @@ export interface StreamableHTTPOptions {
 }
 
 export type TransportOptions =
-  | StdioOptions
-  | WebSocketOptions
-  | SSEOptions
-  | StreamableHTTPOptions;
+  StdioOptions | WebSocketOptions | SSEOptions | StreamableHTTPOptions;
 
 export type MCPConnectionStatus =
   | "disabled"
@@ -2259,8 +2240,7 @@ interface StreamDiffLinesOptionsApply extends StreamDiffLinesOptionsBase {
 }
 
 type StreamDiffLinesPayload =
-  | StreamDiffLinesOptionsApply
-  | StreamDiffLinesOptionsEdit;
+  StreamDiffLinesOptionsApply | StreamDiffLinesOptionsEdit;
 
 export interface HighlightedCodePayload {
   rangeInFileWithContents: RangeInFileWithContents;
@@ -2559,9 +2539,7 @@ export interface Config {
   embeddingsProvider?: EmbeddingsProviderDescription | ILLM;
   /** The model that Continuous will use for tab autocompletions. */
   tabAutocompleteModel?:
-    | CustomLLM
-    | JSONModelDescription
-    | (CustomLLM | JSONModelDescription)[];
+    CustomLLM | JSONModelDescription | (CustomLLM | JSONModelDescription)[];
   /** Options for tab autocomplete */
   tabAutocompleteOptions?: Partial<TabAutocompleteOptions>;
   /** UI styles customization */
@@ -2623,13 +2601,7 @@ export type RulesByModeConfig = Partial<
  * Loop re-plans, the Auto reviewer and subagents (see core/util/modelUse.ts).
  */
 export type ModelUse =
-  | "chat"
-  | "agent"
-  | "plan"
-  | "loop"
-  | "replan"
-  | "reviewer"
-  | "subagent";
+  "chat" | "agent" | "plan" | "loop" | "replan" | "reviewer" | "subagent";
 
 /** Which model does what, from `modeModels:` in config.yaml. */
 export type ModeModelsConfig = Partial<Record<ModelUse, ModeModelSetting>>;

@@ -116,8 +116,7 @@ export const REASONING_EFFORT_BUDGET_TOKENS = {
 } as const;
 
 export type ReasoningEffort =
-  | "off"
-  | keyof typeof REASONING_EFFORT_BUDGET_TOKENS;
+  "off" | keyof typeof REASONING_EFFORT_BUDGET_TOKENS;
 
 /**
  * Completion-option fields for a reasoning effort. Undefined when none is set,
