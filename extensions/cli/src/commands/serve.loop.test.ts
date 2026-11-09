@@ -253,6 +253,17 @@ describe("cn serve: Loop mode", () => {
     expect(unattended.loop.autonomy).toBe("unattended");
     // Not picked yet, so the strategy follows the level
     expect(unattended.loop.strategy).toBe("fix-forward");
+    // The parallel switch (L4): on, off, and nothing else
+    expect(await post({ loopParallel: "yes" })).toEqual({
+      status: 400,
+      body: { error: "loopParallel must be true or false" },
+    });
+    expect((await post({ loopParallel: true })).body.loop.parallelOn).toBe(
+      true,
+    );
+    expect(
+      (await post({ loopParallel: false })).body.loop.parallelOn,
+    ).toBeUndefined();
     expect(await post({ loopStrategy: "ralph" })).toEqual({
       status: 400,
       body: {

@@ -2,21 +2,16 @@ import fs from "fs";
 
 import type { ChatHistoryItem, LoopState } from "core/index.js";
 import {
-  answersToDeliver,
   decideNext,
   endReplan,
   enterWait,
   finishItemRun,
-  inlineInsteadOfWave,
   LOOP_AUTONOMY,
-  loopItemPrompt,
   loopReplanTurnPrompt,
-  markDelivered,
   proceedUnanswered,
   reconcileLoop,
   releaseEmptyWait,
   settleSteeredAnswers,
-  standingInstructions,
   startCheck,
   startItemRun,
   startReplan,
@@ -38,6 +33,7 @@ import { getSessionLoop, getSessionTaskPlan } from "../session.js";
 import { logger } from "../util/logger.js";
 
 import { type LoopCheckStep, runLoopCheck } from "./loopChecks.js";
+import { prepareItemRun } from "./loopItemRun.js";
 import { stampFiles } from "./loopReminderFiles.js";
 import {
   acceptLoopPlan,
@@ -52,6 +48,7 @@ import {
   sessionTokens,
   prepareLoopTurn,
 } from "./loopSession.js";
+import { startWave } from "./loopWave.js";
 
 /**
  * Loop mode's driver in the CLI, the counterpart of the IDE's advanceLoop
@@ -68,8 +65,17 @@ export interface LoopTurn {
   itemId?: string;
 }
 
-/** What the loop does next: a model turn to send, or an item's check to run. */
-export type LoopStep = LoopTurn | LoopCheckStep;
+/** A parallel wave to start (loopWave.ts): these items run as workers at once. */
+export interface LoopWaveStep {
+  kind: "wave";
+  itemIds: string[];
+}
+
+/**
+ * What the loop does next: a model turn to send, an item's check to run, or
+ * a wave of workers to start.
+ */
+export type LoopStep = LoopTurn | LoopCheckStep | LoopWaveStep;
 
 function historyNow(): ChatHistoryItem[] {
   try {
@@ -211,13 +217,10 @@ export function nextLoopTurn(
       return undefined;
     }
     loop = reconcileLoop(loop, plan);
-    // Waves (run_parallel) run inline until the CLI runs workers (L4 P3)
-    const action = inlineInsteadOfWave(
-      decideNext(loop, plan, {
-        now,
-        sessionTokens: sessionTokens(),
-      }),
-    );
+    const action = decideNext(loop, plan, {
+      now,
+      sessionTokens: sessionTokens(),
+    });
     const planFile = planFileDisplayPath();
     logger.debug("Loop step", { action });
 
@@ -246,52 +249,22 @@ export function nextLoopTurn(
         };
       case "run": {
         const item = plan.items.find((i) => i.id === action.itemId)!;
-        const reminderTarget = { kind: "item", itemId: action.itemId } as const;
-        const taken = takeReminders(
-          loop,
-          reminderTarget,
-          stampFiles(reminderPathsDue(loop, reminderTarget)),
-          now,
-        );
-        loop = taken.loop;
-        const itemState = loop.items.find((i) => i.id === action.itemId);
-        const answers = answersToDeliver(loop, action.itemId);
-        const prompt = loopItemPrompt({
-          item,
-          planFile,
-          answers,
-          questions: loop.questions,
-          redo: itemState?.status === "redo",
-          again: itemState?.again,
-          attempt: (itemState?.attempts ?? 0) + 1,
-          notes: loop.notes,
-          standing: standingInstructions(loop),
-          freshContext: loop.freshContext !== false,
-          // The request carries the plan block (loopPlanBlock)
-          planBlock: true,
-          unanswered: loop.questions.filter((q) =>
-            itemState?.unanswered?.includes(q.id),
-          ),
-          toolNames: CLI_LOOP_TOOL_NAMES,
-          lastCheck: itemState?.check,
-          reminders: taken.reminders,
-          returning: itemState?.setAside,
-          decideAlone: loop.autonomy === "idgaf",
-        });
-        loop = markDelivered(
-          loop,
-          answers.map((a) => a.id),
-        );
+        const prepared = prepareItemRun(loop, plan, item, now, { planFile });
         // The to-do's own model (TaskItem.model) wins over modeModels.loop;
         // one that is not configured falls back to it, noted on the run.
         // prepareLoopTurn makes the switch before the turn is sent.
-        loop = startItemRun(loop, action.itemId, historyLength, now, {
+        loop = startItemRun(prepared.loop, action.itemId, historyLength, now, {
           model: loopItemModelRecord(item.model),
         });
         enterItemMode();
         commitLoop(loop);
-        return { kind: "item", prompt, itemId: action.itemId };
+        return { kind: "item", prompt: prepared.prompt, itemId: action.itemId };
       }
+      case "run_parallel":
+        // The host starts the wave (loopWave.ts startWave); each worker's
+        // end comes back through the loop, and the host looks again
+        commitLoop(loop);
+        return { kind: "wave", itemIds: action.itemIds };
       case "replan": {
         // A round's re-plan, a check-in, or a repair of one failed item
         const replanTarget = replanReminderTarget(action);
@@ -373,6 +346,9 @@ export class LoopRunner {
         if (!step) break;
         if (step.kind === "check") {
           await runLoopCheck(step);
+        } else if (step.kind === "wave") {
+          // Resolves once the workers have started; each one's end kicks
+          await startWave(step.itemIds, () => this.kick());
         } else {
           await prepareLoopTurn(step);
           await this.host.send(step);

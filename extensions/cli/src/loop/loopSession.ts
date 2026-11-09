@@ -21,6 +21,7 @@ import {
   runItemAgain,
   setLoopAutonomy,
   setLoopBudget,
+  setLoopParallel,
   skipItem,
   setLoopStrategy,
   loopRunPlanBlock,
@@ -333,13 +334,28 @@ export function requestLoopStop(): void {
   commitLoop(requestStop(loop));
 }
 
-/** Esc or a failed turn during a step: the item goes back to pending. */
+/**
+ * Esc or a failed turn during a step: the item goes back to pending. A wave
+ * of workers (loopWave.ts) is aborted first, so its items come back too.
+ */
 export function interruptRunningLoop(detail?: string): void {
   const loop = getSessionLoop();
-  if (!loop?.current) return;
+  if (!loop?.current && !loop?.parallel?.length) return;
   pendingSteers.length = 0;
   turnEndRequested = false;
+  waveAbort?.();
   commitLoop(detail ? stopLoop(loop, "stopped", detail) : interruptLoop(loop));
+}
+
+let waveAbort: (() => void) | undefined;
+
+/**
+ * loopWave.ts registers how to abort the running wave's workers while one
+ * runs, so Stop now and a failed turn can end them (the modules must not
+ * import each other).
+ */
+export function setWaveAbort(abort: (() => void) | undefined): void {
+  waveAbort = abort;
 }
 
 export function resumeStoppedLoop(now = new Date()): boolean {
@@ -389,6 +405,14 @@ export function setRunningLoopStrategy(strategy: LoopStrategy): boolean {
   const loop = getSessionLoop();
   if (!loop) return false;
   commitLoop(setLoopStrategy(loop, strategy));
+  return true;
+}
+
+/** The parallel switch: items with disjoint files run as workers at once (L4). */
+export function setRunningLoopParallel(on: boolean): boolean {
+  const loop = getSessionLoop();
+  if (!loop) return false;
+  commitLoop(setLoopParallel(loop, on));
   return true;
 }
 
@@ -567,6 +591,11 @@ export function loopItemRunning(): boolean {
   return getSessionLoop()?.current?.kind === "item";
 }
 
+/** Whether a wave of workers is running (loopWave.ts). */
+export function loopWaveRunning(): boolean {
+  return !!getSessionLoop()?.parallel?.length;
+}
+
 /**
  * The plan block of the running item's run (core's loopRunPlanBlock): every
  * slot, the notes and the standing instructions as they stood at the run's
@@ -595,6 +624,7 @@ const runPlanMemo: { key?: string; block?: string } = {};
 export function resetLoopMemory(): void {
   pendingSteers.length = 0;
   turnEndRequested = false;
+  waveAbort = undefined;
   modeBeforeReplan = undefined;
   loopEntry = false;
   modeAfterLoop = undefined;

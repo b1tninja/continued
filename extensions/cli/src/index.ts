@@ -401,6 +401,12 @@ export async function runCli(): Promise<void> {
     await runReviewWorker();
     return;
   }
+  // A worker of Loop mode's parallel wave (src/loop/loopWorker.ts)
+  if (process.argv.includes("--internal-loop-worker")) {
+    const { runLoopWorker } = await import("./loop/loopWorker.js");
+    await runLoopWorker();
+    return;
+  }
 
   // Parse arguments and handle errors
   try {

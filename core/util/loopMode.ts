@@ -1474,6 +1474,11 @@ export interface ParallelRunResult {
    * whatever it reported. The text says why, for its next prompt.
    */
   mergeFailed?: string;
+  /**
+   * The worker died or was stopped before it reported (a crash, the time
+   * limit): the run counts as an attempt with this as the item's summary.
+   */
+  error?: string;
 }
 
 /**
@@ -1521,16 +1526,41 @@ export function finishParallelRun(
       parallel,
     };
   }
+  const finished = finishRunOf(
+    next,
+    itemId,
+    result.report,
+    options,
+    result.report ? [] : [run.startedAt],
+  );
+  const error = result.error?.trim();
   return {
-    ...finishRunOf(
-      next,
-      itemId,
-      result.report,
-      options,
-      result.report ? [] : [run.startedAt],
-    ),
+    ...(error && !result.report
+      ? withItem(finished, itemId, {
+          summary: `The worker ended without reporting: ${error}`.slice(
+            0,
+            LOOP_LIMITS.maxSummaryLength,
+          ),
+        })
+      : finished),
     parallel,
   };
+}
+
+/**
+ * The harness could not give an item a worktree (or anything else a wave
+ * needs): it runs inline instead, on the next step, and never joins a wave
+ * until that run ends.
+ */
+export function runItemInline(
+  loop: LoopState,
+  itemId: string,
+  reason: string,
+): LoopState {
+  return withItem(loop, itemId, {
+    runInline: true,
+    mergeFailed: reason.trim().slice(0, LOOP_LIMITS.maxSummaryLength),
+  });
 }
 
 function appendNote(notes: string[] | undefined, note: string): string[] {

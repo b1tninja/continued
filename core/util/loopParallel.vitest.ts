@@ -15,6 +15,7 @@ import {
   recordCheck,
   requestStop,
   restoreLoop,
+  runItemInline,
   setLoopParallel,
   startItemRun,
   startParallelRun,
@@ -254,6 +255,30 @@ describe("a wave's runs", () => {
     expect(loop.consecutiveFailures).toBe(1);
     expect(loop.parallel).toBeUndefined();
     expect(decideNext(loop, p, ctx).kind).not.toBe("none");
+  });
+
+  test("an item that could not get a worktree runs inline on the next step", () => {
+    const p2 = plan({ text: "A", files: ["a"] }, { text: "B", files: ["b"] });
+    const loop = runItemInline(
+      waveLoop(p2),
+      "1",
+      "could not create a worktree: disk full",
+    );
+    expect(loop.items[0]).toMatchObject({
+      status: "pending",
+      runInline: true,
+      mergeFailed: "could not create a worktree: disk full",
+    });
+    expect(parallelWave(loop, p2).map((t) => t.id)).toEqual(["2"]);
+    expect(decideNext(loop, p2, ctx)).toEqual({ kind: "run", itemId: "1" });
+  });
+
+  test("a worker that died is an attempt with the error as the item's summary", () => {
+    const loop = finishParallelRun(wave(), "3", { error: "exit code 1" }, T0);
+    expect(status(loop, "3")).toBe("pending");
+    expect(loop.items[2].summary).toBe(
+      "The worker ended without reporting: exit code 1",
+    );
   });
 
   test("a run that ended without a report counts as an attempt and the item is pending", () => {

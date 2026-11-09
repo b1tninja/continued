@@ -16,6 +16,7 @@ import {
   runLoopItemAgain,
   setRunningLoopAutonomy,
   setRunningLoopBudget,
+  setRunningLoopParallel,
   skipLoopItem,
   setRunningLoopStrategy,
   startLoopFromPlan,
@@ -41,6 +42,9 @@ import {
  *   it resets the limits to the level's.
  * - `loopStrategy: "finish" | "check-in" | "fix-forward"` is the strategy
  *   picker; a picked strategy stays when the level changes.
+ * - `loopParallel: true | false` turns parallel waves on or off: at the
+ *   levels that do not ask, items whose `files:` do not overlap run at the
+ *   same time as workers in their own worktrees (plans/loop-mode.md, L4).
  * - `loopBudget: {maxRounds?, maxTokens?, maxWallMs?, maxAttempts?,
  *   maxConsecutiveFailures?}` changes the limits while the loop runs, checked
  *   by core's setLoopBudget: maxRounds 1 is "never re-plan" and N + 1 is "up
@@ -131,6 +135,38 @@ function applyLoopAction(
   }
 }
 
+/** Why a picker field of POST /message is invalid, if one is. */
+function invalidLoopField(fields: {
+  loopAction: unknown;
+  loopAutonomy: unknown;
+  loopStrategy: unknown;
+  loopParallel: unknown;
+}): string | undefined {
+  const { loopAction, loopAutonomy, loopStrategy, loopParallel } = fields;
+  if (
+    loopAction !== undefined &&
+    !LOOP_ACTIONS.includes(loopAction as LoopAction)
+  ) {
+    return `loopAction must be one of ${LOOP_ACTIONS.join(", ")}`;
+  }
+  if (
+    loopAutonomy !== undefined &&
+    !LOOP_AUTONOMY_LEVELS.includes(loopAutonomy as LoopAutonomy)
+  ) {
+    return `loopAutonomy must be one of ${LOOP_AUTONOMY_LEVELS.join(", ")}`;
+  }
+  if (
+    loopStrategy !== undefined &&
+    !LOOP_STRATEGY_ORDER.includes(loopStrategy as LoopStrategy)
+  ) {
+    return `loopStrategy must be one of ${LOOP_STRATEGY_ORDER.join(", ")}`;
+  }
+  if (loopParallel !== undefined && typeof loopParallel !== "boolean") {
+    return "loopParallel must be true or false";
+  }
+  return undefined;
+}
+
 export interface LoopMessageResponse {
   status: number;
   json: Record<string, unknown>;
@@ -148,6 +184,7 @@ export function handleLoopMessage(
     loopAction,
     loopAutonomy,
     loopStrategy,
+    loopParallel,
     loopBudget,
     itemId,
   } = body;
@@ -156,34 +193,19 @@ export function handleLoopMessage(
     loopAction === undefined &&
     loopAutonomy === undefined &&
     loopStrategy === undefined &&
+    loopParallel === undefined &&
     loopBudget === undefined
   ) {
     return undefined;
   }
   const fail = (error: string) => ({ status: 400, json: { error } });
-
-  if (
-    loopAction !== undefined &&
-    !LOOP_ACTIONS.includes(loopAction as LoopAction)
-  ) {
-    return fail(`loopAction must be one of ${LOOP_ACTIONS.join(", ")}`);
-  }
-  if (
-    loopAutonomy !== undefined &&
-    !LOOP_AUTONOMY_LEVELS.includes(loopAutonomy as LoopAutonomy)
-  ) {
-    return fail(
-      `loopAutonomy must be one of ${LOOP_AUTONOMY_LEVELS.join(", ")}`,
-    );
-  }
-  if (
-    loopStrategy !== undefined &&
-    !LOOP_STRATEGY_ORDER.includes(loopStrategy as LoopStrategy)
-  ) {
-    return fail(
-      `loopStrategy must be one of ${LOOP_STRATEGY_ORDER.join(", ")}`,
-    );
-  }
+  const invalid = invalidLoopField({
+    loopAction,
+    loopAutonomy,
+    loopStrategy,
+    loopParallel,
+  });
+  if (invalid) return fail(invalid);
   const parsed =
     loopAnswer === undefined ? undefined : parseLoopAnswer(loopAnswer);
   if (parsed && !parsed.ok) return fail(parsed.error);
@@ -208,6 +230,12 @@ export function handleLoopMessage(
   if (
     loopStrategy !== undefined &&
     !setRunningLoopStrategy(loopStrategy as LoopStrategy)
+  ) {
+    return fail("No loop in this session");
+  }
+  if (
+    loopParallel !== undefined &&
+    !setRunningLoopParallel(loopParallel as boolean)
   ) {
     return fail("No loop in this session");
   }
