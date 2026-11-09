@@ -23,6 +23,7 @@
     "@continuedev/config-types": "file:../config-types",
     "@continuedev/config-yaml": "file:../config-yaml",
     "@continuedev/fetch": "file:../fetch",
+    "@continuedev/llm-info": "file:../llm-info",
     "@google/genai": "^1.30.0",
     "@smithy/node-http-handler": "^4.14.1",
     "ai": "^6.0.86",

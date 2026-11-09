@@ -1,5 +1,5 @@
 import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
-import { findAnthropicPricing } from "core/llm/utils/calculateRequestCost";
+import { findModelPricing } from "core/llm/utils/calculateRequestCost";
 import {
   formatSwitchCost,
   modelSupportsPromptCacheControl,
@@ -22,13 +22,13 @@ export function ModelSwitchCacheNotice() {
   if (!model || !state || !modelSupportsPromptCacheControl(model)) return null;
 
   const status = promptCacheStatus(model, setting, state, Date.now());
-  const price = findAnthropicPricing(model.model)?.input;
-  const cost = switchCost(status, state, price);
+  const pricing = findModelPricing(model.model, state.lastInputTokens);
+  const cost = switchCost(status, state, pricing);
   if (!cost) return null;
 
   return (
     <div
-      className="border-0 border-t border-solid border-t-border px-2 py-1 text-[10px] text-description-muted"
+      className="border-t-border text-description-muted border-0 border-t border-solid px-2 py-1 text-[10px]"
       data-testid="model-switch-cache-notice"
     >
       Prompt cache is warm. Switching model re-reads {formatSwitchCost(cost)} at

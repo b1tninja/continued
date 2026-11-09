@@ -8,8 +8,11 @@ import {
   buildUpdate,
   draftFromConfig,
   hasChanges,
+  isTurnMode,
   ModeDrafts,
   setEffort,
+  setPrompt,
+  setTail,
   TABLE_MODES,
   TableMode,
 } from "../../../util/modeModelsDraft";
@@ -23,8 +26,36 @@ const EFFORTS: { value: ModeReasoningEffort | ""; label: string }[] = [
   { value: "high", label: "High" },
 ];
 
+/** The two built-in turn texts; prompt blocks from config.yaml follow them. */
+const PROMPT_PROFILES: { value: string; label: string }[] = [
+  { value: "", label: "Default" },
+  { value: "full", label: "Full" },
+  { value: "short", label: "Short" },
+];
+
+/** The select's value for "a text of my own": the text lives in the input below. */
+const TAIL_TEXT = "text";
+const TAILS: { value: string; label: string }[] = [
+  { value: "", label: "Default" },
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+  { value: TAIL_TEXT, label: "Text..." },
+];
+
+/** Which option of the Reminder select a draft's `tail` is. */
+function tailOption(tail: string | undefined): string {
+  if (tail === undefined) return "";
+  if (tail === "on" || tail === "off") return tail;
+  return TAIL_TEXT;
+}
+
+const SELECT_CLASS =
+  "rounded-sm border border-command-border bg-input px-1 py-0.5 text-xs";
+
 type Status =
-  { kind: "idle" } | { kind: "saving" } | { kind: "error"; message: string };
+  | { kind: "idle" }
+  | { kind: "saving" }
+  | { kind: "error"; message: string };
 
 /**
  * Choose which chat models each mode offers (`modeModels.<mode>.models`), a
@@ -47,6 +78,16 @@ export function ModeModelsTable() {
         .map((c) => ({ title: c.ref })),
     ];
   }, [config.modelsByRole.chat, catalog]);
+
+  // Prompt blocks (`prompts:` in config.yaml) reach the GUI as slash commands;
+  // their names are the Prompt options after the two built-in texts
+  const promptBlocks = useMemo(
+    () =>
+      config.slashCommands
+        .filter((c) => c.source === "yaml-prompt-block")
+        .map((c) => c.name),
+    [config.slashCommands],
+  );
 
   // What config.yaml says now. The draft resets when it changes underneath us
   // (a save, a reload, or an edit made in the file).
@@ -92,17 +133,19 @@ export function ModeModelsTable() {
     <Card>
       <div className="mb-3">
         <div className="text-base font-medium">Which model does what</div>
-        <p className="mt-1 text-xs text-description">
+        <p className="text-description mt-1 text-xs">
           Tick the models each mode offers. The star marks the one selected when
           you switch into the mode. Loop items, re-plans and subagents take one
           model each; left blank, they use the Agent model, the Plan model and
-          the starting turn's model. Saved to config.yaml.
+          the starting turn's model. Prompt picks the system text of a mode
+          (full, short, or a block from prompts), and Reminder the one-line note
+          added to your messages. Saved to config.yaml.
         </p>
       </div>
 
       <table className="w-full text-sm" data-testid="mode-models-table">
         <thead>
-          <tr className="text-left text-xs text-description">
+          <tr className="text-description text-left text-xs">
             <th className="py-1 font-normal">Model</th>
             {TABLE_MODES.map((mode) => (
               <th
@@ -117,7 +160,7 @@ export function ModeModelsTable() {
         </thead>
         <tbody>
           {models.map((model) => (
-            <tr key={model.title} className="border-t border-command-border">
+            <tr key={model.title} className="border-command-border border-t">
               <td className="py-1.5 pr-2">
                 <span className="line-clamp-1">{model.title}</span>
               </td>
@@ -133,8 +176,8 @@ export function ModeModelsTable() {
               ))}
             </tr>
           ))}
-          <tr className="border-t border-command-border">
-            <td className="py-1.5 pr-2 text-xs text-description">
+          <tr className="border-command-border border-t">
+            <td className="text-description py-1.5 pr-2 text-xs">
               Reasoning effort
             </td>
             {TABLE_MODES.map((mode) => (
@@ -149,11 +192,12 @@ export function ModeModelsTable() {
                       setEffort(
                         draft[mode],
                         (e.target.value || undefined) as
-                          ModeReasoningEffort | undefined,
+                          | ModeReasoningEffort
+                          | undefined,
                       ),
                     )
                   }
-                  className="rounded-sm border border-command-border bg-input px-1 py-0.5 text-xs"
+                  className={SELECT_CLASS}
                 >
                   {EFFORTS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -163,6 +207,93 @@ export function ModeModelsTable() {
                 </select>
               </td>
             ))}
+          </tr>
+          <tr className="border-command-border border-t">
+            <td className="text-description py-1.5 pr-2 text-xs">Prompt</td>
+            {TABLE_MODES.map((mode) => {
+              if (!isTurnMode(mode)) return <td key={mode} />;
+              const prompt = draft[mode].prompt;
+              // A hand-written name that is not a loaded block still shows
+              const options = [
+                ...PROMPT_PROFILES,
+                ...promptBlocks.map((name) => ({ value: name, label: name })),
+              ];
+              if (prompt && !options.some((o) => o.value === prompt)) {
+                options.push({ value: prompt, label: prompt });
+              }
+              return (
+                <td key={mode} className="px-2 py-1.5 text-center">
+                  <select
+                    aria-label={`Prompt for ${MODE_LABEL[mode]}`}
+                    value={prompt ?? ""}
+                    onChange={(e) =>
+                      edit(
+                        mode,
+                        setPrompt(draft[mode], e.target.value || undefined),
+                      )
+                    }
+                    className={SELECT_CLASS}
+                  >
+                    {options.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              );
+            })}
+          </tr>
+          <tr className="border-command-border border-t">
+            <td className="text-description py-1.5 pr-2 text-xs">Reminder</td>
+            {TABLE_MODES.map((mode) => {
+              if (!isTurnMode(mode)) return <td key={mode} />;
+              const tail = draft[mode].tail;
+              const option = tailOption(tail);
+              return (
+                <td key={mode} className="px-2 py-1.5 text-center">
+                  <select
+                    aria-label={`Reminder for ${MODE_LABEL[mode]}`}
+                    value={option}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // "Text..." starts with an empty line, which counts as
+                      // not set until something is typed
+                      edit(
+                        mode,
+                        setTail(
+                          draft[mode],
+                          value === TAIL_TEXT
+                            ? option === TAIL_TEXT
+                              ? tail
+                              : ""
+                            : value || undefined,
+                        ),
+                      );
+                    }}
+                    className={SELECT_CLASS}
+                  >
+                    {TAILS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  {option === TAIL_TEXT && (
+                    <input
+                      type="text"
+                      aria-label={`Reminder text for ${MODE_LABEL[mode]}`}
+                      value={tail ?? ""}
+                      placeholder="One line, added to your messages"
+                      onChange={(e) =>
+                        edit(mode, setTail(draft[mode], e.target.value))
+                      }
+                      className={`mt-1 w-full ${SELECT_CLASS}`}
+                    />
+                  )}
+                </td>
+              );
+            })}
           </tr>
         </tbody>
       </table>
@@ -188,7 +319,7 @@ export function ModeModelsTable() {
           Reset
         </Button>
         {status.kind === "error" && (
-          <span className="text-xs text-error" role="alert">
+          <span className="text-error text-xs" role="alert">
             {status.message}
           </span>
         )}

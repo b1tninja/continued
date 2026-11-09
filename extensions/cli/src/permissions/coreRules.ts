@@ -88,7 +88,8 @@ type ChatLike = NonNullable<AutoReviewDeps["reviewer"]>;
 /**
  * The reviewer model, wrapped so core's reviewer can call it: the one
  * `modeModels.reviewer` names (any model), else the first with the `reviewer`
- * role. `modeModels.reviewer.reasoningEffort` is not applied in the CLI; a
+ * role. `modeModels.reviewer.reasoningEffort` is not applied here (the reviewer is not
+ * a chat model, so it never goes through `withReasoningEffort`); a
  * catalog variant (`Name#variant`) sets the effort there.
  */
 export function reviewerModel(
@@ -138,7 +139,8 @@ export function createReviewer(
 }
 
 let cachedReviewer:
-  { assistant: unknown; reviewer: ChatLike | null } | undefined;
+  | { assistant: unknown; reviewer: ChatLike | null }
+  | undefined;
 
 /** One reviewer per loaded assistant, so a client is not built for every call. */
 export function getReviewer(

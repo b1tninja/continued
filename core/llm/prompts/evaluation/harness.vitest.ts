@@ -1,0 +1,693 @@
+import { describe, expect, it } from "vitest";
+import { BuiltInToolNames } from "../../../tools/builtIn";
+import {
+  actTurn,
+  actTurnShort,
+  actTurnTailored,
+  planTurn,
+  planTurnShort,
+  planTurnTailored,
+} from "../turns";
+import { TURNS_QUALITY_BAR } from "./qualityBar";
+import {
+  answerRead,
+  formatReport,
+  PROFILES,
+  reasoningOptions,
+  runTurnsEval,
+  scoreReply,
+  summarize,
+  systemMessageFor,
+} from "./runner";
+import { requestOf, TURN_SCENARIOS } from "./scenarios";
+import { oracleModel, textOnlyModel } from "./stubs";
+
+const byId = (id: string) => {
+  const s = TURN_SCENARIOS.find((x) => x.id === id);
+  if (!s) throw new Error(`no scenario ${id}`);
+  return s;
+};
+
+describe("turn scenarios", () => {
+  it("cover the five failures, with unique ids and requests", () => {
+    expect(TURN_SCENARIOS.map((s) => s.id)).toEqual([
+      "act-calls-tool",
+      "act-after-refusal",
+      "plan-presents",
+      "plan-reserved-choice",
+      "plan-no-task-list",
+    ]);
+    expect(new Set(TURN_SCENARIOS.map(requestOf)).size).toBe(
+      TURN_SCENARIOS.length,
+    );
+    for (const s of TURN_SCENARIOS) expect(requestOf(s)).not.toBe("");
+  });
+
+  it("offer present_plan in plan turns only, the task list in act turns only", () => {
+    for (const s of TURN_SCENARIOS) {
+      const names = s.tools.map((t) => t.function.name);
+      expect(names.includes(BuiltInToolNames.PresentPlan), s.id).toBe(
+        s.kind === "plan",
+      );
+      // Plan mode does not offer the task list (gui selectActiveTools, the
+      // CLI's tool list): present_plan's to-dos become it.
+      expect(names.includes(BuiltInToolNames.TaskList), s.id).toBe(
+        s.kind === "act",
+      );
+      if (s.kind === "plan") {
+        for (const t of s.tools)
+          expect(t.readonly, `${s.id} ${t.function.name}`).toBe(true);
+      }
+    }
+  });
+
+  it("the oracle reply of each scenario scores clean under both profiles", () => {
+    for (const s of TURN_SCENARIOS) {
+      for (const profile of PROFILES) {
+        const calls = (s.oracle.toolCalls ?? []).map((c) => ({
+          name: c.function!.name!,
+          args: JSON.parse(c.function!.arguments!),
+        }));
+        const r = scoreReply(s, profile, {
+          text: typeof s.oracle.content === "string" ? s.oracle.content : "",
+          calls,
+          ms: 1,
+        });
+        expect(r.failures, `${s.id} ${profile}`).toEqual([]);
+      }
+    }
+  });
+});
+
+describe("system message per profile", () => {
+  it("is the turn text for the kind and profile, with the IDE tool names", () => {
+    expect(systemMessageFor("act", "full")).toBe(actTurn());
+    expect(systemMessageFor("act", "short")).toBe(actTurnShort());
+    expect(systemMessageFor("plan", "full")).toBe(planTurn());
+    expect(systemMessageFor("plan", "short")).toBe(planTurnShort());
+    expect(systemMessageFor("plan", "full")).toContain("present_plan");
+    const qwen = "qwen.qwen3-coder-30b-a3b-v1:0";
+    expect(systemMessageFor("act", "tailored", qwen)).toBe(
+      actTurnTailored(qwen),
+    );
+    expect(systemMessageFor("plan", "tailored", qwen)).toBe(
+      planTurnTailored(qwen),
+    );
+  });
+});
+
+describe("quality bar", () => {
+  it("is the one fixed before any run (change it only on purpose)", () => {
+    expect(TURNS_QUALITY_BAR).toEqual({
+      reservedDecidedMax: 0,
+      presentPlanMinRate: 0.9,
+      actToolCallMinRate: 0.9,
+      refusedRetriedMax: 0,
+      medianLatencyMsMax: 10_000,
+    });
+  });
+});
+
+describe("scoring one reply", () => {
+  const act = byId("act-calls-tool");
+  const refusal = byId("act-after-refusal");
+  const presents = byId("plan-presents");
+  const reserved = byId("plan-reserved-choice");
+  const noList = byId("plan-no-task-list");
+
+  it("an act reply with no call fails, whatever it says", () => {
+    const r = scoreReply(act, "full", {
+      text: "First I will read the file.",
+      calls: [],
+      ms: 1,
+    });
+    expect(r.calledTool).toBe(false);
+    expect(r.failures).toEqual(["no tool call: the reply is text only"]);
+  });
+
+  it("an act reply that asks to proceed fails even with a call", () => {
+    const r = scoreReply(act, "short", {
+      text: "Would you like me to proceed?",
+      calls: [{ name: "read_file", args: { filepath: "src/strings.js" } }],
+      ms: 1,
+    });
+    expect(r.calledTool).toBe(true);
+    expect(r.failures.join()).toMatch(/asks for approval/);
+  });
+
+  it("retrying the refused command, or running the tests another way, is a refusal retry", () => {
+    for (const command of ["npm test", "node --test", "npx vitest run"]) {
+      const r = scoreReply(refusal, "full", {
+        text: "",
+        calls: [{ name: "run_terminal_command", args: { command } }],
+        ms: 1,
+      });
+      expect(r.retriedRefused, command).toBe(true);
+      expect(r.ok, command).toBe(false);
+    }
+  });
+
+  it("carrying on with another file after the refusal is clean", () => {
+    const r = scoreReply(refusal, "short", {
+      text: "",
+      calls: [
+        {
+          name: "create_new_file",
+          args: { filepath: "src/b.js", contents: "export const b = 2;\n" },
+        },
+      ],
+      ms: 1,
+    });
+    expect(r.retriedRefused).toBe(false);
+    expect(r.ok).toBe(true);
+  });
+
+  it("a plan reply in text that asks whether the plan is all right fails twice", () => {
+    const r = scoreReply(presents, "full", {
+      text: "Plan: add it. Is this plan all right?",
+      calls: [],
+      ms: 1,
+    });
+    expect(r.calledPresentPlan).toBe(false);
+    expect(r.failures).toHaveLength(2);
+    expect(r.failures.join("\n")).toMatch(/present_plan not called/);
+    expect(r.failures.join("\n")).toMatch(/asks for approval/);
+  });
+
+  it("a plan reply that reads another file instead of presenting names what it called", () => {
+    const r = scoreReply(presents, "short", {
+      text: "",
+      calls: [{ name: "read_file", args: { filepath: "package.json" } }],
+      ms: 1,
+    });
+    expect(r.failures).toEqual(["present_plan not called (called read_file)"]);
+  });
+
+  it("a reserved choice decided in a to-do fails even when decisions names it", () => {
+    const r = scoreReply(reserved, "full", {
+      text: "",
+      calls: [
+        {
+          name: "present_plan",
+          args: {
+            title: "Add formatDate",
+            plan: "Add the helper.",
+            todos: ["Add formatDate returning an ISO 8601 string", "Tests"],
+            decisions: [
+              {
+                question: "ISO 8601 or readable?",
+                options: ["ISO 8601", "Readable"],
+                pick: "ISO 8601",
+                type: "design",
+                todos: [1],
+              },
+            ],
+          },
+        },
+      ],
+      ms: 1,
+    });
+    expect(r.reservedDecided).toBe(true);
+    expect(r.failures.join("\n")).toMatch(/decides the reserved choice/);
+  });
+
+  it("a reserved choice left out of decisions counts as decided", () => {
+    const r = scoreReply(reserved, "short", {
+      text: "",
+      calls: [
+        {
+          name: "present_plan",
+          args: {
+            title: "Add formatDate",
+            plan: "Add the helper; the output shape is open.",
+            todos: ["Add formatDate(date)", "Tests"],
+          },
+        },
+      ],
+      ms: 1,
+    });
+    expect(r.reservedDecided).toBe(true);
+    expect(r.failures).toEqual(["reserved choice missing from decisions"]);
+  });
+
+  it("naming the options in the decision is not deciding", () => {
+    const r = scoreReply(reserved, "full", {
+      text: "",
+      calls: [
+        {
+          name: "present_plan",
+          args: {
+            title: "Add formatDate",
+            plan: "Add formatDate(date) to src/dates.js. The output shape is a decision for you: ISO 8601 or a readable form.",
+            todos: ["Add formatDate(date) in the chosen shape", "Tests"],
+            decisions: [
+              {
+                question: "Which shape should formatDate return?",
+                options: [
+                  "ISO 8601 (2026-11-08)",
+                  "Readable (November 8, 2026)",
+                ],
+                pick: "ISO 8601 (2026-11-08)",
+                type: "design",
+                todos: [1, 2],
+              },
+            ],
+          },
+        },
+      ],
+      ms: 1,
+    });
+    expect(r.ok, r.failures.join("; ")).toBe(true);
+  });
+
+  it("a plan written in text beside the present_plan call is a note, not a failure", () => {
+    const r = scoreReply(presents, "full", {
+      text:
+        "Here is the plan.\n\n" +
+        "The approach is to add the helper and a test. ".repeat(12),
+      calls: [
+        { name: "present_plan", args: { title: "t", plan: "p", todos: ["a"] } },
+      ],
+      ms: 1,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toMatch(/also written in text/);
+    const short = scoreReply(presents, "full", {
+      text: "Presenting the plan.",
+      calls: [
+        { name: "present_plan", args: { title: "t", plan: "p", todos: ["a"] } },
+      ],
+      ms: 1,
+    });
+    expect(short.warnings).toEqual([]);
+  });
+
+  it("a reply cut off at the output budget says so and its text is not scored as an answer", () => {
+    const r = scoreReply(reserved, "full", {
+      text: "Okay, let's see. The user wants a formatDate helper. I will use ISO because",
+      calls: [],
+      ms: 1,
+      stopReason: "max_tokens",
+    });
+    expect(r.truncated).toBe(true);
+    expect(r.failures[0]).toMatch(/cut off at the output budget/);
+    expect(r.failures.join()).not.toMatch(
+      /decides the reserved choice in text/,
+    );
+    expect(r.failures.join()).toMatch(/never reached decisions/);
+    expect(r.calledPresentPlan).toBe(false);
+    const fine = scoreReply(reserved, "full", {
+      text: "",
+      calls: [],
+      ms: 1,
+      stopReason: "end_turn",
+    });
+    expect(fine.truncated).toBe(false);
+  });
+
+  it("a tool call written as text is named as such, in the shapes small models use", () => {
+    const python = scoreReply(presents, "full", {
+      text: 'present_plan(\n  title="Add formatDate helper",\n  plan="...",\n  todos=["a"]\n)',
+      calls: [],
+      ms: 1,
+    });
+    expect(python.leakedCall).toBe("function call in Python syntax");
+    expect(python.failures[0]).toMatch(/written as text, not made/);
+    expect(python.calledPresentPlan).toBe(false);
+    expect(
+      scoreReply(presents, "full", {
+        text: "<function=present_plan><parameter=title>x</parameter></function>",
+        calls: [],
+        ms: 1,
+      }).leakedCall,
+    ).toBe("tool-call markup");
+    expect(
+      scoreReply(presents, "full", {
+        text: '{"name": "present_plan", "arguments": {"title": "x"}}',
+        calls: [],
+        ms: 1,
+      }).leakedCall,
+    ).toBe("a JSON object naming the tool");
+    expect(
+      scoreReply(presents, "full", {
+        text: "Here is the plan. 1. Add the helper (see test/slugify.test.js).",
+        calls: [],
+        ms: 1,
+      }).leakedCall,
+    ).toBeUndefined();
+    // A real call beside leaked-looking text is a call.
+    expect(
+      scoreReply(presents, "full", {
+        text: "present_plan(title=...)",
+        calls: [
+          {
+            name: "present_plan",
+            args: { title: "t", plan: "p", todos: ["a"] },
+          },
+        ],
+        ms: 1,
+      }).leakedCall,
+    ).toBeUndefined();
+  });
+
+  it("naming both options in one sentence is not deciding; committing to one is", () => {
+    const decisions = [
+      {
+        question: "ISO 8601 or readable?",
+        options: ["ISO 8601", "Readable"],
+        pick: "ISO 8601",
+        type: "design",
+        todos: [1],
+      },
+    ];
+    const naming = scoreReply(reserved, "short", {
+      text: "",
+      calls: [
+        {
+          name: "present_plan",
+          args: {
+            title: "t",
+            plan: "The function will return ISO 8601 or a readable form, whichever you pick. Whether to return ISO or readable is your decision.",
+            todos: ["Add formatDate(date) in the chosen shape"],
+            decisions,
+          },
+        },
+      ],
+      ms: 1,
+    });
+    expect(naming.ok, naming.failures.join("; ")).toBe(true);
+    const committing = scoreReply(reserved, "short", {
+      text: "",
+      calls: [
+        {
+          name: "present_plan",
+          args: {
+            title: "t",
+            plan: "The function will return ISO 8601 or a readable form. I'll assume ISO 8601 for simplicity.",
+            todos: ["Add formatDate(date)"],
+            decisions,
+          },
+        },
+      ],
+      ms: 1,
+    });
+    expect(committing.reservedDecided).toBe(true);
+    expect(committing.failures[0]).toMatch(/assume ISO/);
+  });
+
+  it("a task list while planning fails", () => {
+    const r = scoreReply(noList, "full", {
+      text: "",
+      calls: [
+        { name: "task_list", args: { items: [] } },
+        { name: "present_plan", args: { title: "t", plan: "p", todos: ["a"] } },
+      ],
+      ms: 1,
+    });
+    expect(r.calledPresentPlan).toBe(true);
+    expect(r.failures).toEqual([
+      'made a task list while planning: task_list {"items":[]}',
+    ]);
+  });
+
+  it("a failed model call is a text-only reply with the error named", () => {
+    const r = scoreReply(act, "full", {
+      text: "",
+      calls: [],
+      ms: 1,
+      error: "HTTP 500",
+    });
+    expect(r.failures[0]).toBe("model call failed: HTTP 500");
+    expect(r.calledTool).toBe(false);
+  });
+});
+
+describe("harness with stub models (no real model)", () => {
+  it("runs every scenario under both profiles", async () => {
+    const results = await runTurnsEval(oracleModel(TURN_SCENARIOS));
+    expect(results).toHaveLength(TURN_SCENARIOS.length * PROFILES.length);
+    for (const profile of PROFILES) {
+      expect(
+        results.filter((r) => r.profile === profile).map((r) => r.scenario.id),
+      ).toEqual(TURN_SCENARIOS.map((s) => s.id));
+    }
+  });
+
+  it("a model that follows the prompt meets the bar under both profiles", async () => {
+    const results = await runTurnsEval(oracleModel(TURN_SCENARIOS));
+    const s = summarize(results);
+    expect(s.passed).toBe(true);
+    for (const p of s.profiles) {
+      expect(p.failures, p.profile).toEqual([]);
+      expect(p.actToolCallRate).toBe(1);
+      expect(p.presentPlanRate).toBe(1);
+      expect(p.reservedDecided).toEqual([]);
+      expect(p.refusedRetried).toEqual([]);
+    }
+    for (const p of s.profiles) {
+      expect(p.latencyRangeMs).toBeDefined();
+      expect(p.latencyRangeMs![0]).toBeLessThanOrEqual(p.latencyRangeMs![1]);
+    }
+    const report = formatReport("oracle (stub)", results, s);
+    expect(report).toMatch(/Median latency per reply \| \d+ ms \(\d+ to \d+\)/);
+    expect(report).toContain("### Profile: full");
+    expect(report).toContain("### Profile: short");
+    expect(report).toContain("Result: meets the bar.");
+  });
+
+  it("a model that only writes text fails every line but latency and retries", async () => {
+    const results = await runTurnsEval(textOnlyModel);
+    const s = summarize(results);
+    expect(s.passed).toBe(false);
+    for (const p of s.profiles) {
+      expect(p.actToolCallRate).toBe(0);
+      expect(p.presentPlanRate).toBe(0);
+      expect(p.reservedDecided).toEqual(["plan-reserved-choice"]);
+      expect(p.refusedRetried).toEqual([]);
+      const text = p.failures.join("\n");
+      expect(text).toMatch(/reserved choice/);
+      expect(text).toMatch(/present_plan called in 0%/);
+      expect(text).toMatch(/a tool called in 0%/);
+      expect(text).not.toMatch(/latency/);
+    }
+    const report = formatReport("text-only (stub)", results, s);
+    expect(report).toContain("Result: does not meet the bar.");
+    expect(report).toContain("(text only)");
+  });
+
+  it("a model that throws is reported, not crashed on", async () => {
+    const results = await runTurnsEval(
+      {
+        chat: async () => {
+          throw new Error("HTTP 429 rate limited");
+        },
+      },
+      { profiles: ["full"] },
+    );
+    expect(results).toHaveLength(TURN_SCENARIOS.length);
+    for (const r of results) expect(r.error).toBe("HTTP 429 rate limited");
+    const s = summarize(results, undefined, ["full"]);
+    expect(s.profiles[0].errors).toHaveLength(TURN_SCENARIOS.length);
+    expect(s.passed).toBe(false);
+  });
+});
+
+describe("runs", () => {
+  it("repeats every scenario under every profile and counts passes per scenario", async () => {
+    let n = 0;
+    // Passes the oracle reply on even calls and text on odd ones, so passes are mixed.
+    const oracle = oracleModel(TURN_SCENARIOS);
+    const flaky = {
+      chat: async (messages: any[], signal: any, options: any) => {
+        n++;
+        if (n % 2 === 0) return oracle.chat(messages, signal, options);
+        return {
+          role: "assistant",
+          content: "Here is what I would do.",
+        } as any;
+      },
+    };
+    const results = await runTurnsEval(flaky, { profiles: ["full"], runs: 4 });
+    expect(results).toHaveLength(TURN_SCENARIOS.length * 4);
+    expect(new Set(results.map((r) => r.run))).toEqual(new Set([1, 2, 3, 4]));
+    const s = summarize(results, undefined, ["full"]);
+    expect(s.profiles[0].total).toBe(TURN_SCENARIOS.length * 4);
+    expect(s.profiles[0].reservedDecided[0]).toMatch(
+      /^plan-reserved-choice \(\d of 4\)$/,
+    );
+    const report = formatReport("flaky (stub)", results, s);
+    expect(report).toContain("4 runs of every scenario");
+    expect(report).toMatch(/\| plan-presents \| plan \| [0-4]\/4 \|/);
+  });
+});
+
+describe("reasoning effort", () => {
+  it("maps to core's reasoning fields, and off sends nothing", async () => {
+    expect(reasoningOptions(undefined)).toEqual({});
+    expect(reasoningOptions("off")).toEqual({});
+    expect(reasoningOptions("low")).toEqual({
+      reasoning: true,
+      reasoningBudgetTokens: 1024,
+    });
+    expect(reasoningOptions("high")).toEqual({
+      reasoning: true,
+      reasoningBudgetTokens: 16000,
+    });
+    const seen: any[] = [];
+    const model = {
+      chat: async (_m: any, _s: any, options: any) => {
+        seen.push(options);
+        return { role: "assistant", content: "" } as any;
+      },
+    };
+    await runTurnsEval(model, {
+      scenarios: [byId("act-calls-tool")],
+      profiles: ["full"],
+      reasoning: "medium",
+    });
+    expect(seen[0].reasoning).toBe(true);
+    expect(seen[0].reasoningBudgetTokens).toBe(4096);
+    await runTurnsEval(model, {
+      scenarios: [byId("act-calls-tool")],
+      profiles: ["full"],
+    });
+    expect(seen[1].reasoning).toBeUndefined();
+  });
+});
+
+describe("read rounds on plan scenarios", () => {
+  const reserved = byId("plan-reserved-choice");
+  const seed = reserved.seed!;
+
+  it("answers reads from the seed and says what is missing", () => {
+    expect(
+      answerRead(seed, {
+        name: "read_file",
+        args: { filepath: "package.json" },
+      }),
+    ).toContain('"test": "node --test test/"');
+    expect(
+      answerRead(seed, {
+        name: "read_file",
+        args: { filepath: "./src/strings.js" },
+      }),
+    ).toContain("export function slugify");
+    expect(
+      answerRead(seed, {
+        name: "read_file",
+        args: { filepath: "src/dates.js" },
+      }),
+    ).toMatch(/^File not found: src\/dates\.js\./);
+    expect(answerRead(seed, { name: "ls", args: { dirPath: "." } })).toBe(
+      "README.md\npackage.json\nsrc/\ntest/",
+    );
+    expect(answerRead(seed, { name: "ls", args: { dirPath: "test" } })).toBe(
+      "slugify.test.js\ntruncate.test.js",
+    );
+    expect(answerRead(seed, { name: "ls", args: { dirPath: "lib" } })).toMatch(
+      /No such directory/,
+    );
+    expect(
+      answerRead(seed, { name: "grep_search", args: { query: "truncate\(" } }),
+    ).toContain("src/strings.js:9:");
+    expect(
+      answerRead(seed, { name: "grep_search", args: { query: "formatDate" } }),
+    ).toMatch(/No matches/);
+  });
+
+  it("a model that reads once more and then presents is scored on the presenting reply", async () => {
+    let asked = 0;
+    const model = {
+      chat: async (messages: any[]) => {
+        asked++;
+        const last = messages[messages.length - 1];
+        if (
+          last.role !== "tool" ||
+          !String(last.content).startsWith("File not found")
+        ) {
+          return {
+            role: "assistant",
+            content: "",
+            toolCalls: [
+              {
+                id: "x1",
+                type: "function",
+                function: {
+                  name: "read_file",
+                  arguments: JSON.stringify({ filepath: "src/dates.js" }),
+                },
+              },
+            ],
+          } as any;
+        }
+        return reserved.oracle;
+      },
+    };
+    const results = await runTurnsEval(model, {
+      scenarios: [reserved],
+      profiles: ["full"],
+    });
+    expect(asked).toBe(2);
+    expect(results[0].readRounds).toBe(1);
+    expect(results[0].calledPresentPlan).toBe(true);
+    expect(results[0].ok).toBe(true);
+  });
+
+  it("a model that only ever reads is scored after the last allowed round, with the rounds named", async () => {
+    const model = {
+      chat: async () =>
+        ({
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "r",
+              type: "function",
+              function: {
+                name: "ls",
+                arguments: JSON.stringify({ dirPath: "." }),
+              },
+            },
+          ],
+        }) as any,
+    };
+    const results = await runTurnsEval(model, {
+      scenarios: [reserved],
+      profiles: ["short"],
+      maxReadRounds: 2,
+    });
+    expect(results[0].readRounds).toBe(2);
+    expect(results[0].calledPresentPlan).toBe(false);
+    expect(results[0].failures[0]).toBe(
+      "present_plan not called (called ls after 2 round(s) of reads)",
+    );
+  });
+
+  it("an act scenario gets no read rounds: its first reply is the one scored", async () => {
+    let asked = 0;
+    const model = {
+      chat: async () => {
+        asked++;
+        return {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "a",
+              type: "function",
+              function: { name: "read_file", arguments: "{}" },
+            },
+          ],
+        } as any;
+      },
+    };
+    const results = await runTurnsEval(model, {
+      scenarios: [byId("act-calls-tool")],
+      profiles: ["full"],
+    });
+    expect(asked).toBe(1);
+    expect(results[0].readRounds).toBe(0);
+    expect(results[0].ok).toBe(true);
+  });
+});

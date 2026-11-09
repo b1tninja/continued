@@ -7,6 +7,7 @@ import {
   setSteeredMessages,
 } from "../slices/sessionSlice";
 import { interruptLoop, stopLoop } from "core/util/loopMode";
+import { abortLoopWorkers } from "../../util/subagents/loopWorkers";
 import { ThunkApiType } from "../store";
 import { commitLoop } from "../util/loopCommit";
 
@@ -33,9 +34,11 @@ export const cancelStream = createAsyncThunk<
     dispatch(setSteeredMessages([]));
   }
 
-  // Stop during Loop mode stops the loop too; the item goes back to pending
+  // Stop during Loop mode stops the loop too; the item goes back to pending.
+  // A wave's workers are ended with it.
   const loop = getState().session.loop;
-  if (loop?.current && options?.loop !== "keep") {
+  if (loop?.parallel?.length && options?.loop !== "keep") abortLoopWorkers();
+  if ((loop?.current || loop?.parallel?.length) && options?.loop !== "keep") {
     commitLoop(
       dispatch,
       getState,

@@ -9,10 +9,23 @@ const model = (title: string) =>
   ({ title, model: title, provider: "openai" }) as any;
 export const ALL_MODELS = ["Alpha", "Bravo", "Charlie"].map(model);
 
-/** Render the table with a config, recording every `config/setModeModels` call. */
+/** A prompt block from `prompts:` in config.yaml, as the GUI receives it. */
+export const promptBlock = (name: string) =>
+  ({
+    name,
+    description: "",
+    prompt: "...",
+    source: "yaml-prompt-block",
+  }) as any;
+
+/**
+ * Render the table with a config, recording every `config/setModeModels`
+ * call. `extra` is merged into the config (for example `slashCommands`).
+ */
 export async function setupTable(
   modeModels?: any,
   response: { saved: boolean } | "fail" = { saved: true },
+  extra: Record<string, any> = {},
 ) {
   const ideMessenger = new MockIdeMessenger();
   const calls: any[] = [];
@@ -32,6 +45,7 @@ export async function setupTable(
         ...EMPTY_CONFIG,
         modelsByRole: { ...EMPTY_CONFIG.modelsByRole, chat: ALL_MODELS },
         ...(modeModels ? { modeModels } : {}),
+        ...extra,
       }),
     );
   });
@@ -44,3 +58,9 @@ export const star = (mode: string, title: string) =>
   screen.getByLabelText(`Default for ${mode}: ${title}`);
 export const saveButton = () =>
   screen.getByTestId("mode-models-save") as HTMLButtonElement;
+export const promptSelect = (mode: string) =>
+  screen.getByLabelText(`Prompt for ${mode}`) as HTMLSelectElement;
+export const tailSelect = (mode: string) =>
+  screen.getByLabelText(`Reminder for ${mode}`) as HTMLSelectElement;
+export const tailText = (mode: string) =>
+  screen.getByLabelText(`Reminder text for ${mode}`) as HTMLInputElement;

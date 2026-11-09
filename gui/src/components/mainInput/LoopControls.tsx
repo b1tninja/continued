@@ -1,4 +1,11 @@
-import type { LoopCheckResult, LoopState, TaskItem, TaskPlan } from "core";
+import type {
+  LoopCheckResult,
+  LoopItemModel,
+  LoopParallelRun,
+  LoopState,
+  TaskItem,
+  TaskPlan,
+} from "core";
 import {
   blockingDependencies,
   describeLoopBudget,
@@ -15,6 +22,7 @@ import {
   setLoopBudgetThunk,
   skipLoopItemThunk,
 } from "../../redux/thunks/loop";
+import { stopLoopWorker } from "../../util/subagents/loopWorkers";
 
 const BUTTON =
   "shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input";
@@ -31,9 +39,12 @@ function statusLabel(loop: LoopState, itemId: string): string {
       return loop.current?.kind === "check" && loop.current.itemId === itemId
         ? "checking"
         : "check waits";
+    case "running":
+      return loop.parallel?.some((r) => r.itemId === itemId)
+        ? "running in parallel"
+        : "running";
     case "pending":
     case "redo":
-    case "running":
     case "done":
     case "waiting":
     case "failed":
@@ -74,7 +85,7 @@ function CheckLine({
   return (
     <div
       data-testid={`loop-check-${task.id}`}
-      className="ml-3 min-w-0 text-2xs text-description-muted"
+      className="text-2xs text-description-muted ml-3 min-w-0"
     >
       <div className="truncate" title={task.check ?? check?.command}>
         check: <code>{task.check ?? check?.command}</code>
@@ -94,10 +105,85 @@ function CheckLine({
       {check?.status === "failed" && check.output && (
         <pre
           data-testid={`loop-check-output-${task.id}`}
-          className="m-0 max-h-16 overflow-auto break-words whitespace-pre-wrap"
+          className="m-0 max-h-16 overflow-auto whitespace-pre-wrap break-words"
         >
           {check.output.trim()}
         </pre>
+      )}
+    </div>
+  );
+}
+
+/** The files the to-do declares (TaskItem.files): what a parallel run may change. */
+function FilesLine({ task }: { task: TaskItem }) {
+  if (!task.files?.length) return null;
+  return (
+    <div
+      data-testid={`loop-files-${task.id}`}
+      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
+      title="The files this item changes; items with disjoint files may run at the same time"
+    >
+      files: <code>{task.files.join(", ")}</code>
+    </div>
+  );
+}
+
+/**
+ * An item running as a worker of a parallel wave: its worktree, the model it
+ * runs on, and a Stop for this worker alone (its item runs again later).
+ */
+function WorkerLine({
+  task,
+  run,
+  model,
+}: {
+  task: TaskItem;
+  run: LoopParallelRun;
+  model?: LoopItemModel;
+}) {
+  return (
+    <div
+      data-testid={`loop-worker-${task.id}`}
+      className="text-2xs text-description-muted ml-3 flex min-w-0 items-center gap-1"
+    >
+      <span className="min-w-0 flex-1 truncate" title={run.worktree}>
+        in its own worktree{run.worktree ? `: ${run.worktree}` : ""}
+        {model?.title ? ` · ${model.title}` : ""}
+      </span>
+      <button
+        type="button"
+        data-testid={`loop-worker-stop-${task.id}`}
+        className={BUTTON}
+        title="Stop this worker; its changes are dropped and the item runs again later"
+        onClick={() => stopLoopWorker(task.id)}
+      >
+        Stop
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The model the to-do names (TaskItem.model) and, once a run started, the one
+ * it went to when that was not it: the item's own model is not configured.
+ */
+function ModelLine({ task, model }: { task: TaskItem; model?: LoopItemModel }) {
+  if (!task.model) return null;
+  return (
+    <div
+      data-testid={`loop-model-${task.id}`}
+      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
+      title={model?.fallbackReason ?? "The model this item runs with"}
+    >
+      model: {task.model}
+      {model?.fallbackReason && (
+        <span
+          data-testid={`loop-model-fallback-${task.id}`}
+          className="text-warning"
+        >
+          {" "}
+          · not configured, ran on {model.title}
+        </span>
       )}
     </div>
   );
@@ -141,7 +227,7 @@ export function LoopControls({
   const replan = loopReplanSetting(loop);
 
   return (
-    <details data-testid="loop-controls" className="mt-1 text-description">
+    <details data-testid="loop-controls" className="text-description mt-1">
       <summary className="cursor-pointer">
         Items and limits · {describeLoopReplan(loop)}
       </summary>
@@ -159,24 +245,25 @@ export function LoopControls({
             const canAgain =
               state.status === "done" || state.status === "failed";
             const dependency = dependencyLabel(loop, taskPlan, task);
+            const worker = loop.parallel?.find((r) => r.itemId === task.id);
             return (
               <li key={task.id} className="min-w-0">
                 <div
                   data-testid={`loop-item-${task.id}`}
                   className="flex min-w-0 items-center gap-1"
                 >
-                  <span className="min-w-0 flex-1 truncate text-foreground">
+                  <span className="text-foreground min-w-0 flex-1 truncate">
                     {task.id}. {task.text}
                   </span>
                   {dependency && (
                     <span
                       data-testid={`loop-after-${task.id}`}
-                      className="shrink-0 text-description-muted"
+                      className="text-description-muted shrink-0"
                     >
                       {dependency}
                     </span>
                   )}
-                  <span className="shrink-0 text-description-muted">
+                  <span className="text-description-muted shrink-0">
                     {statusLabel(loop, task.id)}
                   </span>
                   {canSkip && (
@@ -210,7 +297,12 @@ export function LoopControls({
                     </button>
                   )}
                 </div>
+                {worker && (
+                  <WorkerLine task={task} run={worker} model={state.model} />
+                )}
                 <CheckLine task={task} check={state.check} />
+                <FilesLine task={task} />
+                <ModelLine task={task} model={state.model} />
               </li>
             );
           })}
@@ -230,7 +322,7 @@ export function LoopControls({
                   : { kind },
               );
             }}
-            className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+            className="border-border bg-input text-foreground cursor-pointer rounded border border-solid px-1 text-xs"
           >
             <option value="never">never</option>
             <option value="up_to">up to N times</option>
@@ -296,7 +388,7 @@ export function LoopControls({
         <div
           role="alert"
           data-testid="loop-controls-error"
-          className="mt-0.5 break-words text-error"
+          className="text-error mt-0.5 break-words"
         >
           {error}
         </div>

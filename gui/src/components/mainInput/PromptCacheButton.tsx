@@ -15,10 +15,12 @@ import {
 import { cacheExportText } from "../../util/cacheExport";
 import { dismissedTipCount } from "../../util/cacheTips";
 import {
+  modelHasFixedCacheLifetime,
   modelSupportsOneHourCache,
   cachingIsDefaulted,
   modelSupportsPromptCacheControl,
   PROMPT_CACHE_SETTING_LABELS,
+  promptCacheSettingDetail,
   promptCacheStatus,
   promptCacheTooltip,
   type PromptCacheSetting,
@@ -142,8 +144,13 @@ export function PromptCacheButton() {
     summarizeLedger(state.ledger ?? []),
     now,
   );
+  // No 1 hour where the provider would not apply it; no Auto either for a
+  // model whose only lifetime is 5 minutes, since Auto could only sit there.
   const canOneHour = modelSupportsOneHourCache(model);
-  const choices = CHOICES.filter((c) => canOneHour || c !== "1h");
+  const fixedLifetime = modelHasFixedCacheLifetime(model);
+  const choices = CHOICES.filter(
+    (c) => (canOneHour || c !== "1h") && (!fixedLifetime || c !== "auto"),
+  );
   const dismissedCount = dismissedTipCount(dismissedTips, model.title);
 
   const showRing = status.on && status.warm;
@@ -197,7 +204,7 @@ export function PromptCacheButton() {
           <ListboxButton
             data-testid="prompt-cache-button"
             aria-label="Prompt cache"
-            className="m-0 flex-none border-none bg-transparent p-0 text-description hover:brightness-150"
+            className="text-description m-0 flex-none border-none bg-transparent p-0 hover:brightness-150"
           >
             <HoverItem as="span" className="flex items-center gap-1">
               {showRing ? (
@@ -206,7 +213,7 @@ export function PromptCacheButton() {
                   {!isStreaming && (
                     <span
                       data-testid="prompt-cache-countdown"
-                      className={`hidden text-[10px] tabular-nums xs:inline ${warn ? "text-warning" : ""}`}
+                      className={`xs:inline hidden text-[10px] tabular-nums ${warn ? "text-warning" : ""}`}
                     >
                       {formatCountdown(msLeft)}
                     </span>
@@ -220,7 +227,7 @@ export function PromptCacheButton() {
             </HoverItem>
           </ListboxButton>
         </ToolTip>
-        <ListboxOptions className="max-w-72 min-w-48">
+        <ListboxOptions className="min-w-48 max-w-72">
           {choices.map((choice) => (
             <ListboxOption
               key={choice}
@@ -229,8 +236,8 @@ export function PromptCacheButton() {
             >
               <div className="flex flex-col">
                 <span>{PROMPT_CACHE_SETTING_LABELS[choice].label}</span>
-                <span className="text-xs text-description-muted">
-                  {PROMPT_CACHE_SETTING_LABELS[choice].detail}
+                <span className="text-description-muted text-xs">
+                  {promptCacheSettingDetail(choice, model)}
                 </span>
               </div>
             </ListboxOption>
@@ -242,7 +249,7 @@ export function PromptCacheButton() {
             >
               <div className="flex flex-col">
                 <span>Copy cache record</span>
-                <span className="text-xs text-description-muted">
+                <span className="text-description-muted text-xs">
                   Counts and timings of this conversation's requests, no message
                   text
                 </span>
@@ -256,7 +263,7 @@ export function PromptCacheButton() {
             >
               <div className="flex flex-col">
                 <span>Show dismissed tips</span>
-                <span className="text-xs text-description-muted">
+                <span className="text-description-muted text-xs">
                   {dismissedCount} hidden for this model
                 </span>
               </div>

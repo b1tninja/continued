@@ -4,8 +4,10 @@ import type {
   LoopAutonomy,
   LoopBudget,
   LoopCheckResult,
+  LoopItemModel,
   LoopItemState,
   LoopItemStatus,
+  LoopParallelRun,
   LoopQuestion,
   LoopQuestionKind,
   LoopState,
@@ -22,6 +24,7 @@ import {
   LOOP_REMINDER_LIMITS,
   rehomedReminders,
   releasedReminders,
+  unreportedRun,
   reminderFilePaths,
   type LoopDeliveredReminder,
 } from "./loopReminders.js";
@@ -225,7 +228,12 @@ export const LOOP_AUTONOMY_LEVELS: readonly LoopAutonomy[] = [
 /** The level a loop starts at, from the approval mode in force. */
 export function loopAutonomyFor(
   approvalMode:
-    "manual" | "autoApprove" | "auto" | "review" | "yolo" | undefined,
+    | "manual"
+    | "autoApprove"
+    | "auto"
+    | "review"
+    | "yolo"
+    | undefined,
 ): LoopAutonomy {
   switch (approvalMode) {
     case "review":
@@ -452,6 +460,11 @@ export function deferralSpent(loop: LoopState, itemId: string): boolean {
 /** What the loop should do next; see decideNext. */
 export type LoopAction =
   | { kind: "run"; itemId: string }
+  /**
+   * Run these items at the same time, each as a worker in its own worktree
+   * (a parallel wave, L4): items with declared files that do not overlap.
+   */
+  | { kind: "run_parallel"; itemIds: string[] }
   /** Run an item's check (TaskItem.check): the harness runs the command */
   | { kind: "check"; itemId: string; command: string }
   /**
@@ -663,6 +676,103 @@ export function nextRunnableItem(
   );
 }
 
+/** Items one wave runs at once, each in its own worktree (the subagent limit). */
+export const LOOP_MAX_PARALLEL = 3;
+
+/**
+ * Whether parallel waves apply: the person turned them on, and the level
+ * does not ask before edits (a Supervised loop cannot run unattended
+ * workers).
+ */
+export function parallelAllowed(loop: LoopState): boolean {
+  return !!loop.parallelOn && (loop.autonomy ?? "auto") !== "supervised";
+}
+
+/** The person turns parallel waves on or off; the change applies at the next step. */
+export function setLoopParallel(loop: LoopState, on: boolean): LoopState {
+  return { ...loop, parallelOn: on ? true : undefined };
+}
+
+const GLOB_CHARS = ["*", "?", "[", "{"];
+
+/**
+ * What a declared path covers, for overlap: the path itself, or for a glob
+ * the directory before its first wildcard segment (`src/util/*.ts` covers
+ * `src/util`, `**` covers everything). Conservative on purpose: a glob is
+ * taken to touch its whole directory, so two items never share one.
+ */
+function declaredPathKey(path: string): string {
+  const parts = path.split("/");
+  const fixed: string[] = [];
+  for (const part of parts) {
+    if (GLOB_CHARS.some((c) => part.includes(c))) break;
+    fixed.push(part);
+  }
+  return fixed.join("/");
+}
+
+function pathsOverlap(a: string, b: string): boolean {
+  const ka = declaredPathKey(a);
+  const kb = declaredPathKey(b);
+  if (ka === "" || kb === "") return true;
+  return ka === kb || ka.startsWith(`${kb}/`) || kb.startsWith(`${ka}/`);
+}
+
+/**
+ * Two items' declared files (TaskItem.files) overlap when a path of one is
+ * the other's, is under it, or shares a directory a glob of the other covers.
+ */
+export function filesOverlap(a: string[], b: string[]): boolean {
+  return a.some((x) => b.some((y) => pathsOverlap(x, y)));
+}
+
+/**
+ * The items that may run together now, in plan order, at most
+ * LOOP_MAX_PARALLEL counting the wave already running: open, dependencies
+ * met, not set aside or marked to run inline, with declared files that
+ * overlap neither another chosen item's nor a running one's. An item that
+ * declares no files never joins a wave: the harness does not guess what it
+ * touches.
+ */
+export function parallelWave(loop: LoopState, plan: TaskPlan): TaskItem[] {
+  const running = (loop.parallel ?? [])
+    .map((run) => plan.items.find((t) => t.id === run.itemId))
+    .filter((t): t is TaskItem => !!t);
+  const chosen: TaskItem[] = [];
+  const taken = [...running];
+  for (const task of plan.items) {
+    if (running.length + chosen.length >= LOOP_MAX_PARALLEL) break;
+    const state = itemState(loop, task.id);
+    if (
+      !state ||
+      !OPEN_STATUSES.includes(state.status) ||
+      state.setAside ||
+      state.runInline ||
+      !task.files?.length ||
+      unmetDependencies(loop, plan, task).length > 0
+    ) {
+      continue;
+    }
+    if (taken.some((t) => filesOverlap(t.files ?? [], task.files ?? []))) {
+      continue;
+    }
+    chosen.push(task);
+    taken.push(task);
+  }
+  return chosen;
+}
+
+/**
+ * A harness that does not run waves yet (the IDE and the CLI until L4's P3
+ * and P4) runs the wave's first item inline instead; the others follow one
+ * at a time, as before waves.
+ */
+export function inlineInsteadOfWave(action: LoopAction): LoopAction {
+  return action.kind === "run_parallel"
+    ? { kind: "run", itemId: action.itemIds[0] }
+    : action;
+}
+
 /**
  * What counts against the token budget: output, and input the provider did not
  * read from its cache. Every request re-sends the conversation, so counting
@@ -755,11 +865,24 @@ export function decideNext(
   if (checking?.check) {
     return { kind: "check", itemId: checking.id, command: checking.check };
   }
+  // A wave runs: its items finish one at a time (finishParallelRun), and
+  // nothing else starts meanwhile, so no inline run races a worker on a file
+  if (loop.parallel?.length) {
+    return { kind: "none" };
+  }
   if (loop.replanRequested) {
     return replanOrStop(loop);
   }
   const strategic = strategyReplan(loop, plan);
   if (strategic) return strategic;
+  if (parallelAllowed(loop)) {
+    // Two or more items with disjoint files go together; one alone runs
+    // inline, without a worktree
+    const wave = parallelWave(loop, plan);
+    if (wave.length >= 2) {
+      return { kind: "run_parallel", itemIds: wave.map((t) => t.id) };
+    }
+  }
   const next = nextRunnableItem(loop, plan);
   if (next) {
     return { kind: "run", itemId: next.id };
@@ -860,18 +983,30 @@ export function stopLoop(
   reason: LoopStopReason,
   detail: string,
 ): LoopState {
-  const items = loop.current?.itemId
+  // The inline run and every worker of a wave go back to pending: the
+  // harness ends them, and their next run checks what is already done
+  const running = new Set(
+    [
+      loop.current?.itemId,
+      ...(loop.parallel ?? []).map((r) => r.itemId),
+    ].filter((id): id is string => !!id),
+  );
+  const items = running.size
     ? loop.items.map((i) =>
-        i.id === loop.current?.itemId && i.status === "running"
+        running.has(i.id) && i.status === "running"
           ? { ...i, status: "pending" as const }
           : i,
       )
     : loop.items;
   return {
     ...loop,
-    ...releasedReminders(loop),
+    ...releasedReminders(loop, [
+      ...unreportedRun(loop),
+      ...(loop.parallel ?? []).map((r) => r.startedAt),
+    ]),
     items,
     current: undefined,
+    parallel: undefined,
     status: "stopped",
     stopRequested: undefined,
     waitingSince: undefined,
@@ -970,6 +1105,12 @@ function todos(n: number): string {
  * changed or removed a check that had failed, which is an easy way to make an
  * item pass, or it dropped an item that was finished. Undefined if neither.
  * A model did both in a sandbox run and the loop then reported all items done.
+ *
+ * An item that ended stuck has not run its check, so its check has no
+ * status; the check it would have run is in `current.planChecks` (set by
+ * startReplan). Changing that is held too: in six fix-forward runs on
+ * Haiku 5.5 and Sonnet 5.5, three reported the item stuck and then replaced
+ * its check in the re-plan, and the hold never fired.
  */
 export function replanConcern(
   loop: LoopState,
@@ -980,12 +1121,20 @@ export function replanConcern(
     (i) =>
       i.check?.status === "failed" && task(i.id)?.check !== i.check.command,
   );
+  const stuckCheck = loop.items.filter((i) => {
+    if (i.status !== "failed" || i.check?.status === "failed") return false;
+    const previous = loop.current?.planChecks?.[i.id];
+    return previous !== undefined && task(i.id)?.check !== previous;
+  });
   const droppedDone = loop.items.filter(
     (i) => i.status === "done" && !i.skipped && !task(i.id),
   );
   const parts = [
     failedCheck.length
       ? `It changes or removes the failing check of ${failedCheck.length === 1 ? "item" : "items"} ${failedCheck.map((i) => i.id).join(", ")}.`
+      : "",
+    stuckCheck.length
+      ? `It changes or removes the check of ${stuckCheck.length === 1 ? "item" : "items"} ${stuckCheck.map((i) => i.id).join(", ")}, which ended stuck without running it.`
       : "",
     droppedDone.length
       ? `It drops finished ${droppedDone.length === 1 ? "item" : "items"} ${droppedDone.map((i) => i.id).join(", ")}.`
@@ -1079,6 +1228,13 @@ export function startItemRun(
   itemId: string,
   historyIndex: number,
   now: Date,
+  options: {
+    /**
+     * The model this run goes to when the item names one (TaskItem.model,
+     * resolved by modelForLoopItem); replaces what the last run recorded
+     */
+    model?: LoopItemModel;
+  } = {},
 ): LoopState {
   const state = itemState(loop, itemId);
   return {
@@ -1086,9 +1242,44 @@ export function startItemRun(
       status: "running",
       attempts: (state?.attempts ?? 0) + 1,
       setAside: undefined,
+      model: options.model,
     }),
     status: "running",
     current: { kind: "item", itemId, historyIndex, startedAt: iso(now) },
+  };
+}
+
+/**
+ * One item of a wave starts (decideNext's "run_parallel" action), as a
+ * worker in its own worktree: the item runs, counting an attempt, and the
+ * run joins `parallel`. `current` is untouched; the wave is not a turn of
+ * the session's conversation. The harness starts the items one by one as
+ * their worktrees are ready, so a wave may be in `parallel` in part.
+ */
+export function startParallelRun(
+  loop: LoopState,
+  itemId: string,
+  now: Date,
+  options: { worktree?: string; model?: LoopItemModel } = {},
+): LoopState {
+  const state = itemState(loop, itemId);
+  const run: LoopParallelRun = {
+    itemId,
+    startedAt: iso(now),
+    ...(options.worktree ? { worktree: options.worktree } : {}),
+  };
+  return {
+    ...withItem(loop, itemId, {
+      status: "running",
+      attempts: (state?.attempts ?? 0) + 1,
+      setAside: undefined,
+      model: options.model,
+    }),
+    status: "running",
+    parallel: [
+      ...(loop.parallel ?? []).filter((r) => r.itemId !== itemId),
+      run,
+    ],
   };
 }
 
@@ -1124,9 +1315,12 @@ export function recordCheck(
     output?: string;
   },
   now: Date,
+  /** The item checked; by default the one `current` names */
+  checkedItemId?: string,
 ): LoopState {
   const itemId =
-    loop.current?.kind === "check" ? loop.current.itemId : undefined;
+    checkedItemId ??
+    (loop.current?.kind === "check" ? loop.current.itemId : undefined);
   if (!itemId) return loop;
   const state = itemState(loop, itemId);
   const check: LoopCheckResult = {
@@ -1153,9 +1347,11 @@ export function recordCheck(
       : status === "done"
         ? 0
         : (loop.consecutiveFailures ?? 0);
+  const ownCheck =
+    loop.current?.kind === "check" && loop.current.itemId === itemId;
   return {
     ...withItem(loop, itemId, { status, check, summary }),
-    current: undefined,
+    current: ownCheck ? undefined : loop.current,
     doneThisRound: loop.doneThisRound + (status === "done" ? 1 : 0),
     consecutiveFailures: failures,
     ...strategyAfterRun(loop, state, status),
@@ -1211,7 +1407,14 @@ export function startReplan(
       kind: "replan",
       historyIndex,
       startedAt: iso(now),
-      ...(plan ? { planTexts: plan.items.map((i) => i.text) } : {}),
+      ...(plan
+        ? {
+            planTexts: plan.items.map((i) => i.text),
+            planChecks: Object.fromEntries(
+              plan.items.flatMap((i) => (i.check ? [[i.id, i.check]] : [])),
+            ),
+          }
+        : {}),
       ...(checkIn ? { checkIn } : {}),
       ...(itemId ? { itemId } : {}),
       ...(itemText !== undefined ? { itemText } : {}),
@@ -1268,12 +1471,115 @@ function statusAfterRun(
 export function finishItemRun(
   loop: LoopState,
   report:
-    { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
+    | { outcome: FinishOutcome; summary?: string; notes?: string }
+    | undefined,
   /** The item's check (TaskItem.check): done then waits for it to pass */
   options: { check?: string } = {},
 ): LoopState {
   const itemId = loop.current?.itemId;
   if (!itemId || loop.current?.kind !== "item") return loop;
+  return {
+    ...finishRunOf(loop, itemId, report, options, unreportedRun(loop)),
+    current: undefined,
+  };
+}
+
+/** What a worker of a parallel wave brings back when its run ends. */
+export interface ParallelRunResult {
+  /** What finish_item said, if it was called */
+  report?: { outcome: FinishOutcome; summary?: string; notes?: string };
+  /** The questions the run held, filed now as the item's (holdQuestion) */
+  questions?: {
+    question: unknown;
+    kind: unknown;
+    assumption?: unknown;
+    type?: unknown;
+  }[];
+  /**
+   * The harness could not merge the run's changes (a refused patch): the
+   * item goes back to pending and runs inline on the merged tree next,
+   * whatever it reported. The text says why, for its next prompt.
+   */
+  mergeFailed?: string;
+}
+
+/**
+ * A worker's run of an item ended (a parallel wave). Its questions are
+ * filed first, so a blocking one makes the item wait as it would inline;
+ * then the report is applied as finishItemRun would, and the run leaves
+ * `parallel`. Completions reach the loop one at a time through the harness,
+ * so the loop-wide counters see them in finish order.
+ */
+export function finishParallelRun(
+  loop: LoopState,
+  itemId: string,
+  result: ParallelRunResult,
+  now: Date,
+  /** The item's check (TaskItem.check): done then waits for it to pass */
+  options: { check?: string } = {},
+): LoopState {
+  const run = loop.parallel?.find((r) => r.itemId === itemId);
+  if (!run) return loop;
+  let next = loop;
+  for (const q of result.questions ?? []) {
+    const held = holdQuestion(next, { ...q, itemId }, now);
+    if (held.ok) next = held.loop;
+  }
+  const rest = (loop.parallel ?? []).filter((r) => r.itemId !== itemId);
+  const parallel = rest.length ? rest : undefined;
+  if (result.mergeFailed) {
+    const reason = result.mergeFailed
+      .trim()
+      .slice(0, LOOP_LIMITS.maxSummaryLength);
+    const note = result.report?.notes?.trim().replace(/\s+/g, " ");
+    return {
+      ...withItem(next, itemId, {
+        status: "pending",
+        runInline: true,
+        mergeFailed: reason,
+        summary: `Its changes could not be merged: ${reason}`.slice(
+          0,
+          LOOP_LIMITS.maxSummaryLength,
+        ),
+        unanswered: undefined,
+        again: undefined,
+      }),
+      ...(note ? { notes: appendNote(loop.notes, note) } : {}),
+      parallel,
+    };
+  }
+  return {
+    ...finishRunOf(
+      next,
+      itemId,
+      result.report,
+      options,
+      result.report ? [] : [run.startedAt],
+    ),
+    parallel,
+  };
+}
+
+function appendNote(notes: string[] | undefined, note: string): string[] {
+  return [...(notes ?? []), note.slice(0, LOOP_LIMITS.maxNoteLength)].slice(
+    -LOOP_LIMITS.maxNotes,
+  );
+}
+
+/**
+ * The item's run ended, inline or as a worker: its status from the report,
+ * the notes it left, the reminders it took but did not report on
+ * (`unreported`: the starts of such runs), and the loop-wide counters.
+ */
+function finishRunOf(
+  loop: LoopState,
+  itemId: string,
+  report:
+    | { outcome: FinishOutcome; summary?: string; notes?: string }
+    | undefined,
+  options: { check?: string },
+  unreported: string[],
+): LoopState {
   const state = itemState(loop, itemId);
   const summary = report?.summary?.slice(0, LOOP_LIMITS.maxSummaryLength);
   const later = report?.outcome === "later" && !hasOpenBlocking(loop, itemId);
@@ -1303,11 +1609,7 @@ export function finishItemRun(
       : {}),
   });
   const note = report?.notes?.trim().replace(/\s+/g, " ");
-  const notes = note
-    ? [...(loop.notes ?? []), note.slice(0, LOOP_LIMITS.maxNoteLength)].slice(
-        -LOOP_LIMITS.maxNotes,
-      )
-    : loop.notes;
+  const notes = note ? appendNote(loop.notes, note) : loop.notes;
   const failures =
     status === "failed"
       ? (loop.consecutiveFailures ?? 0) + 1
@@ -1315,9 +1617,13 @@ export function finishItemRun(
         ? 0
         : (loop.consecutiveFailures ?? 0);
   return {
-    ...withItem(next, itemId, { unanswered: undefined, again: undefined }),
-    ...(report ? {} : releasedReminders(loop)),
-    current: undefined,
+    ...withItem(next, itemId, {
+      unanswered: undefined,
+      again: undefined,
+      runInline: undefined,
+      mergeFailed: undefined,
+    }),
+    ...(report ? {} : releasedReminders(loop, unreported)),
     doneThisRound: loop.doneThisRound + (status === "done" ? 1 : 0),
     consecutiveFailures: failures,
     ...(notes ? { notes } : {}),
@@ -1370,7 +1676,9 @@ function checkInOnRedo(loop: LoopState, reason: string): LoopState {
  * item or re-plan ends (decideNext then stops).
  */
 export function requestStop(loop: LoopState): LoopState {
-  if (!loop.current) return stopLoop(loop, "stopped", "You stopped the loop.");
+  if (!loop.current && !loop.parallel?.length) {
+    return stopLoop(loop, "stopped", "You stopped the loop.");
+  }
   return { ...loop, stopRequested: true };
 }
 
@@ -1381,7 +1689,8 @@ export function interruptLoop(loop: LoopState): LoopState {
 
 /** What a control the person used did to the loop, or why it was refused. */
 export type LoopControlResult =
-  { ok: true; loop: LoopState } | { ok: false; error: string };
+  | { ok: true; loop: LoopState }
+  | { ok: false; error: string };
 
 /** A loop that waited on the person goes on once something changed. */
 function wake(loop: LoopState): LoopState {
@@ -1973,6 +2282,7 @@ export function consumeLoopGrant(
 
 /** The task list as the loop sees it: statuses and notes follow the loop. */
 export function taskPlanWithLoop(plan: TaskPlan, loop: LoopState): TaskPlan {
+  const parallelIds = new Set((loop.parallel ?? []).map((r) => r.itemId));
   let changed = false;
   const items = plan.items.map((task): TaskItem => {
     const state = itemState(loop, task.id);
@@ -1983,7 +2293,13 @@ export function taskPlanWithLoop(plan: TaskPlan, loop: LoopState): TaskPlan {
     switch (state.status) {
       case "running":
         status = "in_progress";
-        note = undefined;
+        // An item whose own model is not configured runs on the loop model;
+        // a worker of a wave says where it runs
+        note =
+          state.model?.fallbackReason ??
+          (parallelIds.has(task.id)
+            ? "Running in its own worktree, beside other items"
+            : undefined);
         break;
       case "checking":
         status = "in_progress";
@@ -2219,6 +2535,13 @@ export function loopItemPrompt(input: {
   returning?: boolean;
   /** IDGAF: nobody answers, so the agent makes every decision itself */
   decideAlone?: boolean;
+  /**
+   * The run is a worker of a parallel wave, in its own worktree, beside
+   * other items; it may change only the item's declared files
+   */
+  worker?: { worktree?: string; files?: string[] };
+  /** An earlier worker run's changes could not be merged (LoopItemState.mergeFailed) */
+  mergeFailed?: string;
 }): string {
   const { item } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
@@ -2243,6 +2566,10 @@ export function loopItemPrompt(input: {
     lines.push(
       "This item ran before, and the person asked for it to run again. Some or all of it may already be done: check what is done before you change anything, then finish or fix what is missing.",
     );
+  } else if (input.mergeFailed) {
+    lines.push(
+      `An earlier run of this item worked in its own copy of the repository, but its changes could not be merged: ${quote(input.mergeFailed)}. That copy is gone. Check what is already done here before you change anything, then do the item in this checkout.`,
+    );
   } else if (input.attempt > 1) {
     lines.push(
       "An earlier run of this item ended without reporting. Check what is already done before you change anything.",
@@ -2255,7 +2582,7 @@ export function loopItemPrompt(input: {
   }
   if (input.item.check) {
     lines.push(
-      `When you report it done, its check runs: \`${quote(input.item.check)}\`. It must exit 0, so run it yourself first.`,
+      `When you report it done, its check runs: \`${quote(input.item.check)}\`. It must exit 0, so run it yourself first. If it cannot pass as written, do not report done: report stuck and say what the check does.`,
     );
   }
   if (input.lastCheck?.status === "failed") {
@@ -2297,6 +2624,16 @@ export function loopItemPrompt(input: {
     }
   }
   lines.push(...reminderLines(input.reminders));
+  if (input.worker) {
+    const files = input.worker.files?.length
+      ? `: ${input.worker.files.map(quote).join(", ")}`
+      : "";
+    lines.push(
+      "",
+      `This item runs in its own copy of the repository${input.worker.worktree ? ` at ${quote(input.worker.worktree)}` : ""}, while other items run in theirs at the same time. Change only the files this item declares${files} (new files under those paths are fine); anything else would collide with another item.`,
+      `Nobody answers questions during this run: record each choice with ${names.holdQuestion} kind "assumption" and go on; a blocking question ends the item as waiting. Do not commit, push or edit the plan file: your changes are merged when you report done.`,
+    );
+  }
   lines.push(
     "",
     "Search the code before you add anything: do not assume something is missing because one search did not find it. Implement the item fully, with no placeholders or stubs.",
@@ -2349,12 +2686,18 @@ export function loopPlanBlock(input: {
   loop: LoopState;
   plan: TaskPlan;
   toolNames?: LoopToolNames;
+  /** The item the block is for: a worker's own item; default the inline run's */
+  itemId?: string;
 }): string {
   const { loop, plan } = input;
   if (plan.items.length === 0) return "";
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
   const currentId =
-    loop.current?.kind === "item" ? loop.current.itemId : undefined;
+    input.itemId ??
+    (loop.current?.kind === "item" ? loop.current.itemId : undefined);
+  const parallelIds = new Set(
+    (loop.parallel ?? []).map((r) => r.itemId).filter((id) => id !== currentId),
+  );
   const lines = [
     TASK_LIST_BLOCK_OPEN,
     `The plan, kept for you and read-only. Work only on the item marked "<- this item"; report it with ${names.finishItem} and ask with ${names.holdQuestion}. Markers: [ ] to do, [>] this item, [~] its check runs next, [x] done, [?] waiting on the person, [!] failed.`,
@@ -2367,6 +2710,8 @@ export function loopPlanBlock(input: {
     const unmet = unmetDependencies(loop, plan, task);
     if (task.id === currentId) {
       line += `  <- this item (attempt ${state?.attempts ?? 1} of ${loop.budget.maxAttempts})`;
+    } else if (parallelIds.has(task.id)) {
+      line += " (running now, in its own copy of the repository)";
     } else if (status === "checking") {
       line += " (its check runs next)";
     } else if (blocked.length) {
@@ -2423,7 +2768,15 @@ export function loopPlanBlock(input: {
  * and new for the next. A harness keeps the plan block it computed for this
  * key (loopRunPlanBlock) instead of rebuilding it per request.
  */
-export function loopRunKey(loop: LoopState): string | undefined {
+export function loopRunKey(
+  loop: LoopState,
+  /** A worker's item (LoopState.parallel); default the inline run */
+  itemId?: string,
+): string | undefined {
+  if (itemId) {
+    const run = loop.parallel?.find((r) => r.itemId === itemId);
+    return run ? `${itemId}:parallel:${run.startedAt}` : undefined;
+  }
   const current = loop.current;
   if (current?.kind !== "item") return undefined;
   return `${current.itemId}:${current.historyIndex}:${current.startedAt}`;
@@ -2442,9 +2795,15 @@ export function loopRunKey(loop: LoopState): string | undefined {
  */
 export function loopRunPlanBlock(
   memo: { key?: string; block?: string },
-  input: { loop: LoopState; plan: TaskPlan; toolNames?: LoopToolNames },
+  input: {
+    loop: LoopState;
+    plan: TaskPlan;
+    toolNames?: LoopToolNames;
+    /** A worker's item; its block marks that item (one memo per worker) */
+    itemId?: string;
+  },
 ): string {
-  const key = loopRunKey(input.loop);
+  const key = loopRunKey(input.loop, input.itemId);
   if (!key) return "";
   if (memo.key !== key || memo.block === undefined) {
     memo.key = key;
@@ -2693,7 +3052,13 @@ export function isLoopState(value: unknown): value is LoopState {
  */
 export function restoreLoop(value: unknown): LoopState | undefined {
   if (!isLoopState(value)) return undefined;
-  if (!value.current && value.status !== "replanning") return value;
+  if (
+    !value.current &&
+    !value.parallel?.length &&
+    value.status !== "replanning"
+  ) {
+    return value;
+  }
   return stopLoop(
     {
       ...value,

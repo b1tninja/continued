@@ -250,15 +250,15 @@ modeModels:
 
 The entries, and what each falls back to when it is not set:
 
-| Entry      | Used for                                                                | Without an entry                                      |
-| ---------- | ----------------------------------------------------------------------- | ----------------------------------------------------- |
-| `chat`     | Chat mode                                                               | whichever model is selected                           |
-| `plan`     | Plan mode                                                               | whichever model is selected                           |
-| `agent`    | Agent mode                                                              | whichever model is selected                           |
-| `loop`     | each item of a Loop (the to-do turns)                                   | `agent`                                               |
-| `replan`   | a Loop's re-plans, check-ins and repairs                                | `plan`                                                |
-| `reviewer` | the [reviewer](/customize/model-roles/reviewer) in Auto approval mode   | the model picked for the reviewer role in Settings    |
-| `subagent` | subagents whose definition does not name a model                        | the model of the turn that started the subagent       |
+| Entry      | Used for                                                              | Without an entry                                   |
+| ---------- | --------------------------------------------------------------------- | -------------------------------------------------- |
+| `chat`     | Chat mode                                                             | whichever model is selected                        |
+| `plan`     | Plan mode                                                             | whichever model is selected                        |
+| `agent`    | Agent mode                                                            | whichever model is selected                        |
+| `loop`     | each item of a Loop (the to-do turns)                                 | `agent`                                            |
+| `replan`   | a Loop's re-plans, check-ins and repairs                              | `plan`                                             |
+| `reviewer` | the [reviewer](/customize/model-roles/reviewer) in Auto approval mode | the model picked for the reviewer role in Settings |
+| `subagent` | subagents whose definition does not name a model                      | the model of the turn that started the subagent    |
 
 - `chat`, `agent` and `plan` each take:
   - `model`: the `name` of one of your chat models, selected when you switch into the mode.
@@ -272,7 +272,7 @@ The entries, and what each falls back to when it is not set:
 
 The model and the prompt are one decision: a small model running Loop items wants the short turn text, a strong one planning wants the full text, and a team may want a text of its own for a use. `prompt` takes one of:
 
-- `full` or `short`: the two built-in turn texts. Without `prompt`, the model's id decides (the short text for small models such as Qwen, the full text otherwise).
+- `full`, `short` or `tailored`: the built-in turn texts. `tailored` is the short text plus a group on tool calls that quotes the tool-call markup the model was trained on, for models that write tool calls as text. Without `prompt`, the model's id decides: the tailored text for the Qwen coder and MoE models, the short text for other Qwen models, the full text otherwise.
 - The `name` of a block under `prompts:`. Its text replaces the turn text (the IDE's code-block rules and the no-tools notice still follow it; in Chat it replaces the whole default). The block is written for the use it serves: an act text should say how a turn ends, a plan text that the turn ends by presenting the plan.
 
 ```yaml title="config.yaml"
@@ -320,10 +320,12 @@ modeModels:
     tail: Decide what you can from the code; ask only what it cannot settle.
 ```
 - Switching mode switches the selected chat model, and the mode menu shows which model and effort each mode uses. A Loop switches the model for each turn it sends: the `loop` model for an item, the `replan` model for a re-plan.
+- One to-do of a plan can name its own model: a `model: <name>` line indented under it in the plan file (the model's `name` under `models`), or `model` in the plan tool's `todo_details`. A Loop runs that item on the named model instead of the `loop` model; the prompt and `reasoningEffort` still come from the `loop` entry. A name that is not configured falls back to the `loop` model, and the item's row in the inbox says so.
+- A Loop can run to-dos at the same time when they touch different files. A `files: src/retry.ts, src/retry.test.ts` line indented under a to-do (paths or globs; `files` in the plan tool's `todo_details`) says which files it changes. With **Parallel** ticked in the loop's inbox, up to three such to-dos whose files do not overlap run together, each as a worker in its own git worktree (`~/.continuous/worktrees/<repo>/`, on a `continued/loop-*` branch) on the `loop` model or its own; the inbox lists each worker's worktree and model with a Stop. A worker's changes come back as a patch applied to your checkout when it finishes, in finish order; a patch that does not apply, or touches a file you changed meanwhile, is refused and the to-do runs again in your checkout with the reason. A to-do without `files` runs after the wave, one at a time as before. Workers hold questions for the inbox but nobody answers mid-run, so a blocking one ends the to-do as waiting, and a call that would ask for permission is refused. Parallel is off by default and not available at the Supervised level; it is not in the CLI yet.
 - If you pick a model by hand in the model selector, that choice is used for the current mode until you reload the window. The reasoning toggle in the chat input overrides `reasoningEffort`.
 - A name that doesn't match one of your models is ignored, with a warning in the config errors. If nothing in an entry matches, the entry is ignored.
-- You can also set all of this from **Settings > Models > Which model does what**: tick the models each mode offers, star the default, star one model for Loop, Re-plan and Subagent, pick a reasoning effort and press Save. Saving edits `config.yaml` in place and keeps your comments. It needs a `config.yaml` (not a `config.json`), and is not shown in the JetBrains plugin yet. The reviewer is picked under **Additional model roles**.
-- **In the CLI** (`cn`, `cn serve`), `modeModels` picks the model, the prompt and the tail the same way: switching to Plan mode takes the `plan` model, leaving it the `agent` model, and a Loop takes `loop` and `replan` per turn, each with its `prompt` and `tail`; `reviewer` names the model `--auto-review` asks. The CLI does not apply `reasoningEffort`: set the effort in the model's own options, or pick a [catalog variant](/customize/model-catalog#variants) such as `Claude Opus#high`. Subagents in the CLI are models with the `subagent` role, so `modeModels.subagent` does not apply there.
+- You can also set all of this from **Settings > Models > Which model does what**: tick the models each mode offers, star the default, star one model for Loop, Re-plan and Subagent, pick a reasoning effort and press Save. The Prompt and Reminder rows set `prompt` (Default, Full, Short or one of your `prompts:` blocks) and `tail` (Default, On, Off or a text of your own) for Chat, Plan, Agent, Loop and Re-plan, and a prompt or reminder can be set with no model starred. Saving edits `config.yaml` in place and keeps your comments. It needs a `config.yaml` (not a `config.json`), and is not shown in the JetBrains plugin yet. The reviewer is picked under **Additional model roles**.
+- **In the CLI** (`cn`, `cn serve`), `modeModels` picks the model, the prompt and the tail the same way: switching to Plan mode takes the `plan` model, leaving it the `agent` model, and a Loop takes `loop` and `replan` per turn, each with its `prompt` and `tail`; `reviewer` names the model `--auto-review` asks. The CLI does not apply `reasoningEffort`: set the effort in the model's own options, or pick a [catalog variant](/customize/model-catalog#variants) such as `Claude Opus#high`. A subagent's requests in the CLI are their own use: the act turn text with the definition's prompt, and no `prompt` or `tail` of the parent's mode or of a running Loop item. Subagents in the CLI are defined as models with the `subagent` role, each with its own provider and model, so `modeModels.subagent` does not pick a model there.
 
 ---
 
@@ -341,6 +343,58 @@ rulesByMode:
 - `chat`, `agent`, `plan`, `loop`, `replan`: `true` or `false`.
 - The same switches are in **Settings > Rules**, saved to `config.yaml`.
 - The CLI sends its rules on every turn and does not read `rulesByMode`.
+
+#### Evaluation
+
+The act and plan turns each come in two texts, `full` and `short`, picked per model (Qwen gets `short`, everything else `full` until it is measured). `core/llm/prompts/evaluation/` holds five fixed conversations and a runner that sends each to a model under both texts and scores the reply by what it calls and says, without running anything it calls. A plan conversation already contains the research (every file read, every directory listed); if the model still answers with reads, they are answered from a fixed copy of those files for up to three rounds, and the first reply that is not a read is scored, with the rounds shown in the report:
+
+| Scenario                                                      | A good first reply                                                               |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| An act turn with a clear request                              | calls a tool, rather than describing the step or asking to proceed               |
+| An act turn after a tool call was refused by a rule           | does the next part; does not retry the call or reach the same result another way |
+| A plan turn with the research done                            | calls `present_plan`; does not ask "is this plan all right"                      |
+| A plan turn with a choice the person kept ("that is my call") | puts the choice in `decisions`; neither the plan nor a to-do decides it          |
+| A plan turn for a change to an existing file                  | calls `present_plan`; a task list made any other way fails it                    |
+
+
+Beside the bar, the report counts replies cut off at the output budget and tool calls written out as text instead of made (a Python-style `present_plan(...)`, tool-call markup, or a JSON object naming the tool), since both look like "text only" and are different failures.
+The quality bar was fixed before any run and applies to each text separately:
+
+| Measure                                  | Bar                |
+| ---------------------------------------- | ------------------ |
+| Reserved choices decided or dropped      | 0                  |
+| `present_plan` called, of plan scenarios | at least 90%       |
+| A tool called, of act scenarios          | at least 90%       |
+| Refused calls retried or routed around   | 0                  |
+| Median time per reply                    | at most 10 seconds |
+
+To run it against a model, from a checkout of the repository:
+
+```bash
+cd core
+npm run eval:turns -- --help
+```
+
+It prints the report (the bar, then per text the measures and one row per scenario) and exits 0, or 1 with `--strict` when a text misses the bar. A full run is 10 requests plus any read rounds. `--runs <n>` repeats every scenario under every text (five is the practitioner minimum for a temperature-0 eval; the report then shows passes per scenario and the bar is a rate over all runs); `--profile full|short|tailored` runs one text (`all` runs the three; `tailored` is the Qwen coder text and reads the model id); `--reasoning low|medium|high` switches the model's reasoning on at that effort for every request (Bedrock gets the family's own switch, OpenAI-compatible servers `reasoning_effort`, Anthropic a thinking budget), which is how to measure a model under the `reasoningEffort` a `modeModels` entry would give it; `--max-tokens <n>` sets the output budget per reply (default 4,000; on Bedrock reasoning tokens count against it, and AWS suggests about 15,000 at low and 30,000 at medium for Nova 2); `--out <file>` also writes the report to a file; `--dump <file>` writes every reply (text, calls, failures) as JSON, which is how to read what a model said before changing a scenario or a prompt.
+
+**With a hosted API key.** The script refuses to call a hosted API unless you pass `--yes`, because the provider bills the requests.
+
+```bash
+OPENAI_API_KEY=... npm run eval:turns -- --provider openai --model gpt-4.1-mini --yes --strict
+ANTHROPIC_API_KEY=... npm run eval:turns -- --provider anthropic --model claude-haiku-4-5 --yes
+```
+
+Use `--api-key-env NAME` if your key is in another variable, and `--base-url` for another OpenAI-compatible endpoint; the model must support tool calling.
+
+**On Amazon Bedrock.** `--provider bedrock` sends the request through Continue's own Bedrock provider, so it is built as the IDE builds it. Credentials come from the AWS credential chain; `--aws-profile <name>` picks a profile from `~/.aws/config` and `--region` the region (default `us-east-1`). It is a hosted run, so it needs `--yes`.
+
+```bash
+npm run eval:turns -- --provider bedrock --model us.amazon.nova-2-lite-v1:0 --aws-profile torgate --yes --dump nova.json
+```
+
+**With Ollama (local, no key, no cost).** `npm run eval:turns -- --ollama --model qwen3:8b`; `--host` points at a server that is not on `http://localhost:11434`. A `localhost` URL needs neither `--yes` nor a key.
+
+**Without a model**, to check that the harness and the bar work: `npm run eval:turns -- --stub oracle` meets the bar, and `--stub text-only` (a model that writes the steps instead of taking them) does not.
 
 ---
 
@@ -364,16 +418,16 @@ toolPermissions:
 
 A rule is `toolName(pattern)` or just `toolName` (any call to that tool).
 
-| Rule name                                                                                              | Covers                                                                      | Pattern is matched against        |
-| ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | --------------------------------- |
-| `runTerminalCommand`                                                                                   | `run_terminal_command`                                                      | the command                       |
-| `readFile`                                                                                             | `read_file`, `read_file_range`, `read_currently_open_file`                  | the file path                     |
-| `writeFile`                                                                                            | `create_new_file`, `edit_existing_file`, `single_find_and_replace`, `multi_edit` | the file path                |
-| `listDirectory`                                                                                        | `ls`, `view_subdirectory`                                                   | the directory (`.` if none given) |
-| `fetchUrl`, `grepSearch`, `globSearch`, `searchWeb`                                                    | the matching tool                                                           | the URL, query or glob            |
-| `mcp__<server>__<tool>`, `mcp__<server>__*`                                                            | an MCP server's tools                                                       | (no pattern; use the name)        |
+| Rule name                                           | Covers                                                                           | Pattern is matched against        |
+| --------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------- |
+| `runTerminalCommand`                                | `run_terminal_command`                                                           | the command                       |
+| `readFile`                                          | `read_file`, `read_file_range`, `read_currently_open_file`                       | the file path                     |
+| `writeFile`                                         | `create_new_file`, `edit_existing_file`, `single_find_and_replace`, `multi_edit` | the file path                     |
+| `listDirectory`                                     | `ls`, `view_subdirectory`                                                        | the directory (`.` if none given) |
+| `fetchUrl`, `grepSearch`, `globSearch`, `searchWeb` | the matching tool                                                                | the URL, query or glob            |
+| `mcp__<server>__<tool>`, `mcp__<server>__*`         | an MCP server's tools                                                            | (no pattern; use the name)        |
 
-The snake_case tool name also works as a rule name, for example `read_file(**/.env)`. For MCP, `<server>` is the server's name in lowercase with other characters turned into `_` (the server "My Server" is `my_server`).
+The snake*case tool name also works as a rule name, for example `read_file(**/.env)`. For MCP, `<server>` is the server's name in lowercase with other characters turned into `*`(the server "My Server" is`my_server`).
 
 **Which rule wins.** Deny beats ask, and ask beats allow, whatever order you write them in. A deny rule refuses the call in every case. Nothing loosens a tool you switched off in the Tools tab, or a command the built-in safety check refuses: an allow rule does not override those. With no matching rule, nothing changes from before.
 
@@ -417,13 +471,13 @@ If a narrow rule cannot be made, the button says why and does nothing: commands 
 
 **Approval modes.** The **Approval** menu next to the model picker sets how much runs without asking. It is saved per user, not in `config.yaml`, and the default is **Manual**.
 
-| Mode             | What it does                                                                                                                          |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Manual**       | You approve each call that your tool settings and rules leave open. Nothing changes from before.                                     |
-| **Auto-approve** | The switches under **Settings > Tools > Auto-approve** also allow calls: read files, edit files, run safe commands, run all commands, browser, and MCP servers (one switch for all, plus one per server). |
-| **Auto**         | Auto-approve, and then a [reviewer model](./customize/model-roles/reviewer.mdx) decides what is left. Experimental.                       |
-| **Review** | Tools run without asking, and you review file edits as diffs. Deny rules, ask rules, protected paths and the safety check still apply. |
-| **YOLO** | Everything runs without asking, and file edits are accepted automatically. Deny rules, ask rules, protected paths and the safety check are ignored. Plan mode stays read-only. A warning stays above the input for as long as YOLO is on. |
+| Mode             | What it does                                                                                                                                                                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Manual**       | You approve each call that your tool settings and rules leave open. Nothing changes from before.                                                                                                                                          |
+| **Auto-approve** | The switches under **Settings > Tools > Auto-approve** also allow calls: read files, edit files, run safe commands, run all commands, browser, and MCP servers (one switch for all, plus one per server).                                 |
+| **Auto**         | Auto-approve, and then a [reviewer model](./customize/model-roles/reviewer.mdx) decides what is left. Experimental.                                                                                                                       |
+| **Review**       | Tools run without asking, and you review file edits as diffs. Deny rules, ask rules, protected paths and the safety check still apply.                                                                                                    |
+| **YOLO**         | Everything runs without asking, and file edits are accepted automatically. Deny rules, ask rules, protected paths and the safety check are ignored. Plan mode stays read-only. A warning stays above the input for as long as YOLO is on. |
 
 Except for YOLO, the modes sit on top of the rules, never above them. The order is: deny rules, then tools you switched off and commands the safety check refuses, then protected paths, then ask rules, then allow rules, and only then the mode. A tool you switched off stays off even in YOLO.
 
@@ -462,7 +516,7 @@ context:
 
 ### `rules`
 
-Rules are concatenated into the system message for all [Agent](./ide-extensions/agent/quick-start.mdx), [Chat](./ide-extensions/chat/quick-start.mdx), and [Edit](./ide-extensions/edit/quick-start.mdx) requests. 
+Rules are concatenated into the system message for all [Agent](./ide-extensions/agent/quick-start.mdx), [Chat](./ide-extensions/chat/quick-start.mdx), and [Edit](./ide-extensions/edit/quick-start.mdx) requests.
 
 Configuration example:
 

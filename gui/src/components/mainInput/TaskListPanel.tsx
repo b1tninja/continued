@@ -109,7 +109,7 @@ function TaskRow(props: {
           onKeyDown={onKeyDown}
           onBlur={commit}
           aria-label="Edit task"
-          className="min-w-0 flex-1 rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+          className="border-border bg-input text-foreground min-w-0 flex-1 rounded border border-solid px-1 text-xs"
         />
       ) : (
         <span
@@ -123,11 +123,11 @@ function TaskRow(props: {
               setDraft(item.text);
             }
           }}
-          className={`min-w-0 flex-1 cursor-text text-xs break-words ${
+          className={`min-w-0 flex-1 cursor-text break-words text-xs ${
             done
               ? "text-description-muted line-through"
               : active
-                ? "font-medium text-foreground"
+                ? "text-foreground font-medium"
                 : "text-description"
           }`}
         >
@@ -136,6 +136,16 @@ function TaskRow(props: {
             (item.status === "blocked" || item.status === "cancelled") && (
               <span className="text-description-muted"> ({item.note})</span>
             )}
+          {item.model && (
+            <span
+              data-testid={`task-model-${item.id}`}
+              title="The model a loop runs this item with"
+              className="text-description-muted"
+            >
+              {" "}
+              · {item.model}
+            </span>
+          )}
         </span>
       )}
       <button
@@ -144,7 +154,7 @@ function TaskRow(props: {
         aria-label={`Remove ${item.text}`}
         title="Remove"
         onClick={props.onDelete}
-        className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-description-muted opacity-0 group-hover:opacity-100 hover:text-foreground focus:opacity-100"
+        className="text-description-muted hover:text-foreground shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs opacity-0 focus:opacity-100 group-hover:opacity-100"
       >
         ×
       </button>
@@ -204,7 +214,7 @@ export function TaskListPanel() {
   return (
     <div
       data-testid="task-list-panel"
-      className="mx-1 mb-1 min-w-0 rounded border border-solid border-border px-2 py-1 text-xs"
+      className="border-border mx-1 mb-1 min-w-0 rounded border border-solid px-2 py-1 text-xs"
     >
       <div className="flex min-w-0 items-start gap-1">
         <button
@@ -212,7 +222,7 @@ export function TaskListPanel() {
           data-testid="task-list-toggle"
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
-          className="flex min-w-0 flex-1 cursor-pointer items-start gap-1 border-none bg-transparent p-0 text-left text-xs text-description hover:text-foreground"
+          className="text-description hover:text-foreground flex min-w-0 flex-1 cursor-pointer items-start gap-1 border-none bg-transparent p-0 text-left text-xs"
         >
           <ListIcon className="mt-0.5 h-3 w-3 shrink-0" />
           <span
@@ -228,7 +238,7 @@ export function TaskListPanel() {
             data-testid="task-list-plan-file"
             title={`Open the plan file (${planFile.split("/").pop()})`}
             onClick={() => void ideMessenger.ide.openFile(planFile)}
-            className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+            className="text-link shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs hover:underline"
           >
             Plan
           </button>
@@ -239,7 +249,7 @@ export function TaskListPanel() {
             data-testid="task-list-clear"
             title="Remove the task list"
             onClick={() => update([])}
-            className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-description-muted hover:text-foreground"
+            className="text-description-muted hover:text-foreground shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs"
           >
             Clear
           </button>
@@ -281,11 +291,11 @@ export function TaskListPanel() {
                   setAdding("");
                 }
               }}
-              className="mt-1 w-full min-w-0 rounded border border-solid border-border bg-transparent px-1 text-xs text-foreground placeholder:text-description-muted"
+              className="border-border text-foreground placeholder:text-description-muted mt-1 w-full min-w-0 rounded border border-solid bg-transparent px-1 text-xs"
             />
           )}
           {error && (
-            <div role="alert" className="mt-1 break-words text-error">
+            <div role="alert" className="text-error mt-1 break-words">
               {error}
             </div>
           )}

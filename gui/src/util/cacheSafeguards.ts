@@ -1,6 +1,6 @@
 import type { ChatMessage, ModelDescription } from "core";
 import {
-  findAnthropicPricing,
+  findModelPricing,
   type ModelPricing,
 } from "core/llm/utils/calculateRequestCost";
 import {
@@ -64,7 +64,7 @@ function lossOf(
   tokens: number,
   ttl: PromptCacheTtl,
 ): CacheLoss {
-  const pricing = findAnthropicPricing(model.model, tokens);
+  const pricing = findModelPricing(model.model, tokens);
   return {
     tokens,
     extraUsd: pricing ? missExtraUsd(pricing, tokens, ttl) : undefined,
@@ -198,7 +198,7 @@ export function cachingOffCost(
   if (promptCacheStatus(model, setting, state, 0).on) return undefined;
   const tokens = state.lastInputTokens;
   if (!tokens) return undefined;
-  const pricing = findAnthropicPricing(model.model, tokens);
+  const pricing = findModelPricing(model.model, tokens);
   if (!pricing) {
     return tokens >= NOTICE_MIN_TOKENS_UNPRICED ? { tokens } : undefined;
   }

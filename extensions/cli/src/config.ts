@@ -3,7 +3,9 @@ import {
   BaseLlmApi,
   bedrockCachePointFields,
   constructLlmApi,
+  formatFieldFallback,
   LLMConfig,
+  onFieldFallback,
 } from "@continuedev/openai-adapters";
 import {
   Configuration,
@@ -12,6 +14,7 @@ import {
 
 import { AuthConfig } from "./auth/workos.js";
 import { env } from "./env.js";
+import { logger } from "./util/logger.js";
 import { getUniqueId } from "./util/uniqueId.js";
 import { getVersion } from "./version.js";
 
@@ -91,12 +94,26 @@ export function anthropicTtl(
 }
 
 /**
+ * Once per process: when an adapter drops a request field a model refused
+ * (the request-field policy, plans/ROADMAP.md C58), say so once, with the
+ * config line that makes the choice permanent. The exit summary lists them
+ * again.
+ */
+let fieldFallbacksWatched = false;
+function watchFieldFallbacks(): void {
+  if (fieldFallbacksWatched) return;
+  fieldFallbacksWatched = true;
+  onFieldFallback((fallback) => logger.warn(formatFieldFallback(fallback)));
+}
+
+/**
  * Creates an LLM API instance from a ModelConfig and auth configuration
  */
 export function createLlmApi(
   model: ModelConfig,
   _authConfig: AuthConfig,
 ): BaseLlmApi | null {
+  watchFieldFallbacks();
   const config: LLMConfig = {
     provider: model.provider as any,
     model: model.model,

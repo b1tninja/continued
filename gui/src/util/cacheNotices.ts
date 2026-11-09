@@ -1,5 +1,5 @@
 import type { ModelDescription } from "core";
-import { findAnthropicPricing } from "core/llm/utils/calculateRequestCost";
+import { findModelPricing } from "core/llm/utils/calculateRequestCost";
 import {
   LONG_CONTEXT_WARN_FRACTION,
   CONTEXT_METER_TOKENS,
@@ -61,7 +61,7 @@ export function formatRereadCost(loss: {
 export function contextMeterTokens(
   model: ModelDescription | null | undefined,
 ): number {
-  const tier = model && findAnthropicPricing(model.model)?.longContext;
+  const tier = model && findModelPricing(model.model)?.longContext;
   return tier
     ? Math.round(tier.aboveTokens * LONG_CONTEXT_WARN_FRACTION)
     : CONTEXT_METER_TOKENS;
@@ -73,7 +73,7 @@ export function perMessageCost(
   tokens: number,
   ttl: PromptCacheTtl = "5m",
 ): { warmUsd: number; coldUsd: number } | undefined {
-  const pricing = findAnthropicPricing(model.model, tokens);
+  const pricing = findModelPricing(model.model, tokens);
   if (!pricing) return undefined;
   const write = ttl === "1h" ? pricing.cacheWrite1h : pricing.cacheWrite;
   return {
@@ -90,7 +90,7 @@ export function longContextNote(
   model: ModelDescription,
   tokens: number,
 ): string | undefined {
-  const base = findAnthropicPricing(model.model);
+  const base = findModelPricing(model.model);
   const tier = base?.longContext;
   if (!base || !tier) return undefined;
   const times = Math.round(tier.pricing.input / base.input);

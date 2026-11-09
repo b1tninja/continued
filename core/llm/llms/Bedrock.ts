@@ -45,6 +45,13 @@ import { PROVIDER_TOOL_SUPPORT } from "../toolSupport.js";
 import { createBedrockRequestHandler } from "./bedrockHttp.js";
 import { withResponseInfo } from "../utils/cacheStats.js";
 import { isTaskPlanBlockText } from "../../util/taskPlan.js";
+import {
+  type BedrockRefusableField,
+  bedrockRefusedField,
+  converseRequestHasField,
+  converseRequestWithoutField,
+} from "@continuedev/llm-info";
+
 import { resolvePromptCacheTtl } from "./anthropicCache.js";
 import {
   bedrockCatalogCacheKey,
@@ -71,7 +78,6 @@ import {
   inferenceProfileSuggestion,
   inferenceProfileWarning,
   isInvalidModelIdentifierError,
-  isStopSequencesUnsupportedError,
   isStreamingToolUseUnsupportedError,
   isUseCaseFormMissingError,
   leaksDsmlMarker,
@@ -95,11 +101,32 @@ const ACCESS_LOOKUP_CONCURRENCY = 5;
 const ACCESS_LOOKUP_DEADLINE_MS = 10000;
 
 /**
- * Models that refused `stopSequences` in this process. They get requests
- * without it from then on; callers that need stops (autocomplete) also cut the
- * output at the stop tokens themselves.
+ * Fields each model refused this process (the request-field policy,
+ * plans/ROADMAP.md C58): left out of later requests. In memory only. Callers
+ * that need stop sequences (autocomplete) also cut the output at the stop
+ * tokens themselves, so a model that refuses them still completes.
  */
-const modelsWithoutStopSequences = new Set<string>();
+const refusedFieldsByModel = new Map<string, Set<BedrockRefusableField>>();
+
+/** The request without the fields this model refused earlier in the process. */
+function withoutRefusedFields(
+  input: ConverseStreamCommandInput,
+): ConverseStreamCommandInput {
+  let request = input;
+  for (const field of refusedFieldsByModel.get(input.modelId ?? "") ?? []) {
+    request = converseRequestWithoutField(request, field);
+  }
+  return request;
+}
+
+function rememberRefusedField(
+  modelId: string,
+  field: BedrockRefusableField,
+): void {
+  const refused = refusedFieldsByModel.get(modelId) ?? new Set();
+  refused.add(field);
+  refusedFieldsByModel.set(modelId, refused);
+}
 
 /**
  * Prefixed model IDs (`us.qwen...`) that Bedrock refused as invalid in this
@@ -214,7 +241,8 @@ function* deltaMessages(
   }
   // A tool-call input fragment; the id and name came with the block start
   const toolUse = delta.toolUse as
-    (ToolUseBlockDelta & ToolUseBlock) | undefined;
+    | (ToolUseBlockDelta & ToolUseBlock)
+    | undefined;
   if (toolUse) {
     yield {
       role: "assistant",
@@ -675,12 +703,15 @@ class Bedrock extends BaseLLM {
   }
 
   /**
-   * Sends a ConverseStream request. A model that refuses `stopSequences` is
-   * retried once without them, and a prefixed model ID that Bedrock does not
-   * know is retried once as `fallbackModelId` (the bare ID, when the prefix
-   * came from `crossRegionInference: auto`). Both are remembered, so later
-   * requests skip the failing attempt. Both can apply to one model (Qwen
-   * refuses the prefix and then the stops), so each is retried at most once.
+   * Sends a ConverseStream request, with two kinds of retry, both remembered
+   * so later requests skip the failing attempt. A model that refuses an
+   * optional field that only changes cost (`stopSequences`, a `cachePoint`;
+   * the request-field policy, plans/ROADMAP.md C58) is sent the request once
+   * more without it, and fields that change the answer are never dropped. A
+   * prefixed model ID that Bedrock does not know is retried once as
+   * `fallbackModelId` (the bare ID, when the prefix came from
+   * `crossRegionInference: auto`). Both can apply to one model (Qwen refuses
+   * the prefix and then the stops).
    */
   private _sendConverseStream(
     client: BedrockRuntimeClient,
@@ -691,8 +722,8 @@ class Bedrock extends BaseLLM {
     return this._sendWithRetries(
       input,
       fallbackModelId,
-      async () =>
-        (await client.send(new ConverseStreamCommand(input), {
+      async (request) =>
+        (await client.send(new ConverseStreamCommand(request), {
           abortSignal: signal,
         })) as ConverseStreamCommandOutput,
     );
@@ -708,8 +739,8 @@ class Bedrock extends BaseLLM {
     return this._sendWithRetries(
       input,
       fallbackModelId,
-      async () =>
-        (await client.send(new ConverseCommand(input), {
+      async (request) =>
+        (await client.send(new ConverseCommand(request), {
           abortSignal: signal,
         })) as ConverseCommandOutput,
     );
@@ -718,45 +749,39 @@ class Bedrock extends BaseLLM {
   private async _sendWithRetries<T>(
     input: ConverseStreamCommandInput,
     fallbackModelId: string | undefined,
-    send: () => Promise<T>,
+    send: (request: ConverseStreamCommandInput) => Promise<T>,
   ): Promise<T> {
-    const withoutStops = () => {
-      input.inferenceConfig = {
-        ...input.inferenceConfig,
-        stopSequences: undefined,
-      };
-    };
-
     if (fallbackModelId && modelsWithoutInferencePrefix.has(input.modelId!)) {
       input.modelId = fallbackModelId;
     }
-    if (modelsWithoutStopSequences.has(input.modelId ?? "")) withoutStops();
+    let request = withoutRefusedFields(input);
 
-    let retriedStops = false;
     let retriedPrefix = false;
     for (;;) {
       try {
-        return await send();
+        return await send(request);
       } catch (e) {
-        if (
-          !retriedStops &&
-          input.inferenceConfig?.stopSequences?.length &&
-          isStopSequencesUnsupportedError(e)
-        ) {
-          retriedStops = true;
-          modelsWithoutStopSequences.add(input.modelId ?? "");
-          withoutStops();
+        // Once per field: the resent request no longer carries it, so the
+        // same refusal again is thrown.
+        const field = bedrockRefusedField(e);
+        if (field && converseRequestHasField(request, field)) {
+          rememberRefusedField(request.modelId ?? "", field);
+          request = converseRequestWithoutField(request, field);
           continue;
         }
         if (
           !retriedPrefix &&
           fallbackModelId &&
-          input.modelId !== fallbackModelId &&
+          request.modelId !== fallbackModelId &&
           isInvalidModelIdentifierError(e)
         ) {
           retriedPrefix = true;
-          modelsWithoutInferencePrefix.add(input.modelId!);
+          modelsWithoutInferencePrefix.add(request.modelId!);
           input.modelId = fallbackModelId;
+          request = withoutRefusedFields({
+            ...request,
+            modelId: fallbackModelId,
+          });
           continue;
         }
         throw e;

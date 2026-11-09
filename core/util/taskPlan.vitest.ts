@@ -209,11 +209,11 @@ describe("formatTaskPlanBlock", () => {
     expect(history).toHaveLength(2);
   });
 
-  it("uses the same tag as the openai-adapters Bedrock conversion", () => {
+  it("uses the same tag as the openai-adapters conversions", () => {
     const adapter = fs.readFileSync(
       path.join(
         __dirname,
-        "../../packages/openai-adapters/src/apis/Bedrock.ts",
+        "../../packages/openai-adapters/src/util/taskListBlock.ts",
       ),
       "utf8",
     );
@@ -259,6 +259,31 @@ describe("parseMarkdownChecklist", () => {
       { text: "three", status: "in_progress" },
       { text: "four", status: "blocked" },
       { text: "five", status: "cancelled" },
+    ]);
+  });
+
+  it("gives indented after:, check: and model: lines to the item above", () => {
+    expect(
+      parseMarkdownChecklist(
+        [
+          "- [ ] one",
+          "  after: 2",
+          "  check: npm test",
+          "  model: Claude Opus",
+          "- [ ] two",
+          "\tmodel: fast",
+          "model: not indented",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      {
+        text: "one",
+        status: "pending",
+        after: "2",
+        check: "npm test",
+        model: "Claude Opus",
+      },
+      { text: "two", status: "pending", model: "fast" },
     ]);
   });
 });

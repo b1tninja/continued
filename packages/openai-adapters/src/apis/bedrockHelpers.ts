@@ -2,6 +2,11 @@
  * Pure helpers for the Bedrock adapter. Keep in sync with
  * core/llm/llms/bedrockHelpers.ts (core cannot import this package's sources).
  */
+import {
+  promptCacheFields,
+  promptCacheSupportsLifetime,
+} from "@continuedev/llm-info";
+
 import type { CacheTtl } from "./cacheTtl.js";
 
 /** Geographic prefixes Bedrock uses for cross-region inference profile IDs. */
@@ -17,7 +22,15 @@ export const INFERENCE_PROFILE_PREFIXES = [
 ] as const;
 
 export type CrossRegionInference =
-  "auto" | "us" | "us-gov" | "eu" | "apac" | "jp" | "au" | "ca" | "global";
+  | "auto"
+  | "us"
+  | "us-gov"
+  | "eu"
+  | "apac"
+  | "jp"
+  | "au"
+  | "ca"
+  | "global";
 
 /** Map an AWS region (e.g. eu-west-1) to the matching inference profile prefix. */
 export function inferenceProfilePrefixForRegion(
@@ -209,7 +222,8 @@ export interface BedrockCacheParts {
 export function resolveBedrockCacheParts(
   requested: boolean | undefined,
   behavior:
-    { cacheSystemMessage?: boolean; cacheConversation?: boolean } | undefined,
+    | { cacheSystemMessage?: boolean; cacheConversation?: boolean }
+    | undefined,
   hasSystem: boolean,
 ): BedrockCacheParts {
   if (requested === false) {
@@ -226,53 +240,40 @@ export function resolveBedrockCacheParts(
 }
 
 /**
- * Amazon Nova models that take explicit cache checkpoints: the Nova rows of the
- * "Supported models" table in the AWS Bedrock prompt caching guide (checked
- * 2026-11-08) are Nova 2 Lite, Nova Pro, Nova Lite and Nova Micro, each with a
- * 1K-token minimum, 4 checkpoints, a 5-minute lifetime only, and checkpoints
- * in `system` and `messages` but not `tools`. Nova Premier and the other Nova
- * 2 models are not in the table and get nothing. `us.amazon.nova-2-lite-v1:0`
- * and `amazon.nova-pro-v1:0` match; `nova-premier` and `nova-2-pro` do not.
- */
-const NOVA_CACHE_MODELS = /(^|\.)amazon\.nova-(2-lite|pro|lite|micro)-v\d/i;
-
-/**
  * Which fields of a Converse request accept a `cachePoint` on this model, or
- * undefined for a model that accepts none. Claude takes one in `tools`,
- * `system` and `messages`. Nova takes `system` and `messages` only: checked
- * live on 2026-11-04, a Nova model refused a request whose tool list carried a
- * cache point, which is what `promptCaching: true` used to send it, and the
- * AWS table lists `system` and `messages` for Nova. GPT and Grok on Bedrock
- * cache by themselves and refuse any cache point. A `ttl` is a separate
- * question (`bedrockCacheTtl`): Nova takes only the 5-minute default.
- *
- * There are two copies, this one and core/llm/llms/bedrockHelpers.ts; see
- * `bedrockSupportsOneHourCache` for why, and
- * core/llm/llms/bedrockCacheFields.vitest.ts fails if they disagree.
+ * undefined for a model that accepts none: the Bedrock rows of the prompt
+ * cache table in @continuedev/llm-info (`PROMPT_CACHE_RULES`, one place to
+ * add a model). Claude takes one in `tools`, `system` and `messages`; the four
+ * Nova models the AWS table lists take `system` and `messages` only (a cache
+ * point in the tool list is refused, seen live 2026-11-04); GPT and Grok cache
+ * by themselves and refuse any cache point. A `ttl` is a separate question
+ * (`bedrockCacheTtl`).
  */
 export function bedrockCachePointFields(
   modelId: string,
 ): BedrockCacheParts | undefined {
-  if (/claude/i.test(modelId)) {
-    return { tools: true, system: true, conversation: true };
-  }
-  if (NOVA_CACHE_MODELS.test(modelId)) {
-    return { tools: false, system: true, conversation: true };
-  }
-  return undefined;
+  const fields = promptCacheFields(modelId, "bedrock");
+  return (
+    fields && {
+      tools: fields.tools,
+      system: fields.system,
+      conversation: fields.messages,
+    }
+  );
 }
 
 /**
- * `resolveBedrockCacheParts`, limited to the fields this model accepts a
- * cache point in, and nothing at all for a model that accepts none, so
- * `promptCaching: true` on a GPT, Grok or unlisted Nova model sends no
- * `cachePoint` field (the request would be refused).
+ * `resolveBedrockCacheParts`, limited to the fields this model accepts a cache point
+ * in, and nothing at all for a model that accepts none, so `promptCaching:
+ * true` on a GPT, Grok or unlisted Nova model sends no `cachePoint` field (the
+ * request would be refused).
  */
 export function bedrockCachePartsForModel(
   modelId: string,
   requested: boolean | undefined,
   behavior:
-    { cacheSystemMessage?: boolean; cacheConversation?: boolean } | undefined,
+    | { cacheSystemMessage?: boolean; cacheConversation?: boolean }
+    | undefined,
   hasSystem: boolean,
 ): BedrockCacheParts {
   const fields = bedrockCachePointFields(modelId);
@@ -285,37 +286,18 @@ export function bedrockCachePartsForModel(
   };
 }
 
-/** `us.anthropic.claude-sonnet-4-6-v1:0` -> `claude-sonnet-4-6`; undefined if not Claude. */
-function claudeKey(modelId: string): string | undefined {
-  let id = modelId.toLowerCase();
-  const at = id.indexOf("claude");
-  if (at === -1) return undefined;
-  id = id.slice(at);
-  id = id.replace(/@.*$/, "").replace(/-v\d+(:\d+)?$/, "");
-  return id.replace(/(\d)\.(\d)/g, "$1-$2");
-}
-
 /**
- * Claude models on Bedrock that accept a 1-hour cache lifetime (`ttl: "1h"` on a
- * cache point): every Claude row of the "Supported models" table in the AWS
- * Bedrock prompt caching guide lists "5 minutes, 1 hour" (checked 2026-11-04):
- * Haiku 4.5 and 5.5, Sonnet 4.6, 5 and 5.5, Opus 4.5 to 4.8, 5 and 5.5, Fable
- * and Mythos. Sending `ttl` to a model that only supports 5 minutes "can result
- * in a ValidationException", so a model that table does not list gets the
- * default. That leaves out Sonnet 4.5 (not in the table), Sonnet 4, Opus 4 and
- * 4.1, and Claude 3.x. Confirmed live with a 1-hour write and `cacheDetails`
- * on Haiku 4.5, Haiku 5.5, Sonnet 5.5 and Opus 5.5; the others follow the table.
- *
- * There are two copies, this one and core/llm/llms/bedrockHelpers.ts: core's
- * is imported by the chat window, which cannot take this Node-only package.
- * core/llm/llms/bedrockOneHourCache.vitest.ts fails if they disagree.
+ * Whether a cache point on this Bedrock model may carry `ttl: "1h"`: the rows
+ * of the prompt cache table that list "5 minutes, 1 hour" (every Claude row of
+ * the AWS table, checked 2026-11-04: Haiku 4.5 and 5.5, Sonnet 4.6, 5 and
+ * 5.5, Opus 4.5 to 4.8, 5 and 5.5, Fable and Mythos). Sending `ttl` to a model
+ * that only takes 5 minutes "can result in a ValidationException", so a model
+ * the table does not list gets the default: Sonnet 4.5, Sonnet 4, Opus 4 and
+ * 4.1, Claude 3.x, and Nova. Confirmed live with a 1-hour write and
+ * `cacheDetails` on Haiku 4.5, Haiku 5.5, Sonnet 5.5 and Opus 5.5.
  */
-const ONE_HOUR_CACHE_MODELS =
-  /^claude-(haiku-4-5|haiku-5|sonnet-4-6|sonnet-5|opus-4-5|opus-4-6|opus-4-7|opus-4-8|opus-5|fable|mythos)/;
-
 export function bedrockSupportsOneHourCache(modelId: string): boolean {
-  const id = claudeKey(modelId);
-  return !!id && ONE_HOUR_CACHE_MODELS.test(id);
+  return promptCacheSupportsLifetime(modelId, "bedrock", "1h");
 }
 
 /** The `ttl` to put on a Bedrock cache point, or undefined for the default. */
@@ -526,6 +508,8 @@ export interface BedrockReasoningRequest {
 }
 
 const NOVA_2_MODEL = /nova-2-/i;
+/** Nova 2's effort when the config says nothing about reasoning. */
+const NOVA_2_DEFAULT_EFFORT = "low";
 /** Qwen3 and DeepSeek V3.2 share a backend that takes `reasoning_effort`. */
 const REASONING_EFFORT_MODEL = /(^|\.)(qwen\.|deepseek\.v3)/i;
 
@@ -564,8 +548,14 @@ export function bedrockReasoningFields(
     };
   }
   if (NOVA_2_MODEL.test(modelId)) {
-    if (!reasoning) return none;
-    const effort = budgetTokensToEffort(budgetTokens);
+    if (reasoning === false) return none;
+    // On at low by default: with no reasoningConfig Nova 2 Lite writes its
+    // deliberation as plain text to the output budget and makes no tool call
+    // (plans/turn-prompt-eval.md section 4, item 4, measured 2026-11-08).
+    const effort =
+      reasoning === undefined
+        ? NOVA_2_DEFAULT_EFFORT
+        : budgetTokensToEffort(budgetTokens);
     return {
       additionalModelRequestFields: {
         reasoningConfig: { type: "enabled", maxReasoningEffort: effort },

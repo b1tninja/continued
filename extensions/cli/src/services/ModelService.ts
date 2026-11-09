@@ -1,6 +1,6 @@
 import { AssistantUnrolled, ModelConfig } from "@continuedev/config-yaml";
-import type { ModelUse } from "core/index.js";
-import { modeModelFor } from "core/util/modelUse.js";
+import type { LoopItemModel, ModelUse } from "core/index.js";
+import { modeModelFor, modelForLoopItem } from "core/util/modelUse.js";
 
 import { AuthConfig, getModelName } from "../auth/workos.js";
 import { createLlmApi, getLlmApi } from "../config.js";
@@ -20,6 +20,8 @@ export class ModelService
   private availableModels: ModelConfig[] = [];
   private assistant: AssistantUnrolled | null = null;
   private authConfig: AuthConfig | null = null;
+  /** The effort a use's `modeModels` entry last put on the current model. */
+  private appliedEffort: string | undefined;
 
   constructor() {
     super("ModelService", {
@@ -180,7 +182,10 @@ export class ModelService
   /**
    * Switch to a different chat model by index
    */
-  async switchModel(modelIndex: number): Promise<ModelServiceState> {
+  async switchModel(
+    modelIndex: number,
+    effort?: string,
+  ): Promise<ModelServiceState> {
     // Get assistant and authConfig from state, but fall back to instance properties
     // This is needed during initialization when state isn't set yet
     const stateValues = this.getState();
@@ -225,7 +230,11 @@ export class ModelService
       );
     }
 
-    const selectedModel = availableModels[modelIndex];
+    const selectedModel = withReasoningEffort(
+      availableModels[modelIndex],
+      effort,
+    );
+    this.appliedEffort = effort;
     logger.debug("Switching to model", {
       modelIndex,
       provider: selectedModel.provider,
@@ -265,34 +274,100 @@ export class ModelService
    * names none for it (and its fallback) or the name is not a chat model.
    */
   modelIndexForUse(use: ModelUse): number {
+    const entry = this.entryForUse(use);
+    return entry ? this.getModelIndexByName(entry.name) : -1;
+  }
+
+  /** The model name and reasoning effort `modeModels` gives a use. */
+  private entryForUse(
+    use: ModelUse,
+  ): { name: string; effort?: string } | undefined {
     const assistant = this.getState().assistant ?? this.assistant;
     // The config names models (`model`, or the first of `models`); the shared
     // helper reads resolved titles, so each name stands in as its title
     const raw = (assistant?.modeModels ?? {}) as Record<
       string,
-      { model?: string; models?: string[] } | undefined
+      | { model?: string; models?: string[]; reasoningEffort?: string }
+      | undefined
     >;
     const named: Parameters<typeof modeModelFor>[0] = {};
     for (const [key, entry] of Object.entries(raw)) {
       const name = entry?.model ?? entry?.models?.[0];
-      if (name) named[key as ModelUse] = { title: name };
+      if (name) {
+        named[key as ModelUse] = {
+          title: name,
+          reasoningEffort: entry?.reasoningEffort as any,
+        };
+      }
     }
     const entry = modeModelFor(named, use);
-    if (!entry) return -1;
-    return this.getModelIndexByName(entry.title);
+    return entry && { name: entry.title, effort: entry.reasoningEffort };
+  }
+
+  /**
+   * The chat models as the shared resolver reads them: the config's `name`
+   * as the title, with each one's index among the chat models.
+   */
+  private chatModelCandidates() {
+    const assistant = this.getState().assistant ?? this.assistant;
+    const available = (assistant?.models?.filter(
+      (model) =>
+        model && (model.roles?.includes("chat") || model.roles === undefined),
+    ) ?? []) as ModelConfig[];
+    return available.map((model, index) => ({
+      title: String((model as any).name ?? model.model),
+      model: String(model.model ?? ""),
+      provider: model.provider,
+      index,
+    }));
+  }
+
+  /**
+   * The model a use's turn goes to, as an index into the chat models (-1:
+   * keep the current one). With `itemModel`, a Loop item's own model
+   * (TaskItem.model): that model when it is configured, else the use's (or
+   * the current one), with what the item's run records about it.
+   */
+  resolveModelForUse(
+    use: ModelUse,
+    itemModel?: string,
+  ): { index: number; record?: LoopItemModel } {
+    const useIndex = this.modelIndexForUse(use);
+    if (!itemModel?.trim()) return { index: useIndex };
+    const candidates = this.chatModelCandidates();
+    const fallbackIndex =
+      useIndex === -1 ? this.getCurrentModelIndex() : useIndex;
+    const chosen = modelForLoopItem(
+      { model: itemModel },
+      candidates,
+      candidates[fallbackIndex],
+    );
+    return { index: chosen.model?.index ?? -1, record: chosen.record };
   }
 
   /**
    * Switch to the model configured for a use, when there is one and it is not
-   * the current model. Returns true when the model changed. The choice is not
-   * persisted as the person's: it follows the config, as a mode's model does
-   * in the IDE.
+   * the current model or effort; a Loop item's own model (`itemModel`) wins
+   * over the use's, and the use's `reasoningEffort` reaches the server as
+   * `reasoning_effort` (see `withReasoningEffort`). Returns true when
+   * something changed. The choice is not persisted as the person's: it
+   * follows the config, as a mode's model does in the IDE.
    */
-  async switchToModelForUse(use: ModelUse): Promise<boolean> {
-    const index = this.modelIndexForUse(use);
-    if (index === -1 || index === this.getCurrentModelIndex()) return false;
-    await this.switchModel(index);
-    logger.debug("Model switched for use", { use, index });
+  async switchToModelForUse(
+    use: ModelUse,
+    itemModel?: string,
+  ): Promise<boolean> {
+    const { index } = this.resolveModelForUse(use, itemModel);
+    const effort = this.entryForUse(use)?.effort;
+    if (index === -1) return false;
+    if (
+      index === this.getCurrentModelIndex() &&
+      effort === this.appliedEffort
+    ) {
+      return false;
+    }
+    await this.switchModel(index, effort);
+    logger.debug("Model switched for use", { use, itemModel, index, effort });
     return true;
   }
 
@@ -365,4 +440,28 @@ export class ModelService
       authConfig: modelState.authConfig,
     }));
   }
+}
+
+/**
+ * The model with a use's reasoning effort set as `reasoning_effort` in its
+ * request body (`requestOptions.extraBodyProperties`, which the OpenAI adapter
+ * sends). The use's setting wins over a catalog variant's. `off` and no effort
+ * leave the model as configured: there is no portable "off" value, and the
+ * token budgets the IDE maps efforts to do not apply to this field.
+ */
+export function withReasoningEffort(
+  model: ModelConfig,
+  effort: string | undefined,
+): ModelConfig {
+  if (!effort || effort === "off") return model;
+  return {
+    ...model,
+    requestOptions: {
+      ...model.requestOptions,
+      extraBodyProperties: {
+        ...model.requestOptions?.extraBodyProperties,
+        reasoning_effort: effort,
+      },
+    },
+  } as ModelConfig;
 }

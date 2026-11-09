@@ -4,7 +4,16 @@ import { setupStore } from "../../../redux/store";
 import { MockIdeMessenger } from "../../../context/MockIdeMessenger";
 import { renderWithProviders } from "../../../util/test/render";
 import { ModeModelsTable } from "./ModeModelsTable";
-import { box, saveButton, setupTable, star } from "./modeModelsTableTestUtils";
+import {
+  box,
+  promptBlock,
+  promptSelect,
+  saveButton,
+  setupTable,
+  star,
+  tailSelect,
+  tailText,
+} from "./modeModelsTableTestUtils";
 
 describe("ModeModelsTable: what it shows", () => {
   it("renders nothing when there are no chat models", async () => {
@@ -35,6 +44,39 @@ describe("ModeModelsTable: what it shows", () => {
         .value,
     ).toBe("high");
     expect(box("Agent", "Alpha").checked).toBe(false);
+  });
+
+  it("shows the prompt and reminder of each turn use, with prompt blocks as options", async () => {
+    await setupTable(
+      {
+        loop: { title: "Alpha", prompt: "terse", tail: "on" },
+        plan: { prompt: "short", tail: "Ask first." },
+        agent: { title: "Bravo", prompt: "missing-block" },
+      },
+      { saved: true },
+      { slashCommands: [promptBlock("terse"), promptBlock("careful")] },
+    );
+    expect(promptSelect("Loop").value).toBe("terse");
+    expect(
+      Array.from(promptSelect("Loop").options).map((o) => o.textContent),
+    ).toEqual(["Default", "Full", "Short", "terse", "careful"]);
+    expect(tailSelect("Loop").value).toBe("on");
+    expect(screen.queryByLabelText("Reminder text for Loop")).toBeNull();
+
+    // A prompt or a reminder with no model is shown too
+    expect(promptSelect("Plan").value).toBe("short");
+    expect(tailSelect("Plan").value).toBe("text");
+    expect(tailText("Plan").value).toBe("Ask first.");
+
+    // A hand-written name that matches no loaded block is kept visible
+    expect(promptSelect("Agent").value).toBe("missing-block");
+    expect(promptSelect("Chat").value).toBe("");
+    expect(tailSelect("Chat").value).toBe("");
+
+    // Subagents take the prompt of their definition: nothing to pick
+    expect(screen.queryByLabelText("Prompt for Subagent")).toBeNull();
+    expect(screen.queryByLabelText("Reminder for Subagent")).toBeNull();
+    expect(saveButton().disabled).toBe(true);
   });
 
   it("Save is disabled until something changes", async () => {

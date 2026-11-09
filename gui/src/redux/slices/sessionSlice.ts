@@ -37,6 +37,7 @@ import {
 import { mergeReasoningDetails } from "core/llm/openaiTypeConverters";
 import { addRequestUsage } from "core/llm/utils/sessionUsage";
 import { interruptSubagentRuns } from "../../util/subagents/interrupt";
+import { abortLoopWorkers } from "../../util/subagents/loopWorkers";
 import { addFileSnapshot } from "core/util/checkpoints";
 import { restoreLoop } from "core/util/loopMode";
 import { isTaskPlan } from "core/util/taskPlan";
@@ -116,7 +117,8 @@ export function handleToolCallsInMessage(
     // Update the message's toolCalls array to reflect the processed tool calls
     // We can safely cast because we verified the role above
     const curMessage = lastItem.message as
-      AssistantChatMessage | ThinkingChatMessage;
+      | AssistantChatMessage
+      | ThinkingChatMessage;
     curMessage.toolCalls = lastItem.toolCallStates.map(
       (state) => state.toolCall,
     );
@@ -906,6 +908,10 @@ export const sessionSlice = createSlice({
 
       state.streamAborter.abort();
       state.streamAborter = new AbortController();
+      // A loop's wave belongs to the session that started it: its workers
+      // end with it (their worktrees go as each one settles), and a loop
+      // loaded mid-wave comes back stopped (restoreLoop)
+      abortLoopWorkers("The session changed");
 
       state.isStreaming = false;
       state.symbols = {};
