@@ -4,9 +4,14 @@ import {
   buildTaskPlan,
   formatTaskProgress,
   TASK_PLAN_LIMITS,
-  TASK_STATUS_MARKERS,
 } from "core/util/taskPlan";
-import { useContext, useState, type KeyboardEvent } from "react";
+import {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { setTaskPlan } from "../../redux/slices/sessionSlice";
@@ -18,15 +23,6 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   completed: "Completed",
   cancelled: "Cancelled",
   blocked: "Blocked",
-};
-
-/** What a click on the marker moves an item to. */
-const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
-  pending: "in_progress",
-  in_progress: "completed",
-  completed: "pending",
-  blocked: "pending",
-  cancelled: "pending",
 };
 
 /**
@@ -50,16 +46,93 @@ export function applyUserEdit(
   return result.plan.items.length ? result.plan : undefined;
 }
 
+/** True for an item that is finished: it is a record, not something to edit. */
+function isDone(status: TaskStatus): boolean {
+  return status === "completed" || status === "cancelled";
+}
+
+/** Moves the item `id` to position `to` (clamped), or returns the list as it is. */
+export function moveItem<T extends { id: string }>(
+  items: T[],
+  id: string,
+  to: number,
+): T[] {
+  const from = items.findIndex((i) => i.id === id);
+  if (from < 0) {
+    return items;
+  }
+  const target = Math.max(0, Math.min(items.length - 1, to));
+  if (target === from) {
+    return items;
+  }
+  const next = items.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(target, 0, moved);
+  return next;
+}
+
+/** A button that needs a second click, so one stray click removes nothing. */
+function ConfirmButton(props: {
+  label: string;
+  confirmLabel: string;
+  testId: string;
+  ariaLabel: string;
+  onConfirm: () => void;
+}) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) {
+      return;
+    }
+    const timer = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [armed]);
+  return (
+    <button
+      type="button"
+      data-testid={props.testId}
+      aria-label={armed ? `Confirm: ${props.ariaLabel}` : props.ariaLabel}
+      onClick={() => {
+        if (armed) {
+          setArmed(false);
+          props.onConfirm();
+        } else {
+          setArmed(true);
+        }
+      }}
+      onBlur={() => setArmed(false)}
+      className={`shrink-0 cursor-pointer rounded border border-solid bg-transparent px-1 text-[10px] ${
+        armed
+          ? "border-error text-error"
+          : "border-border text-description-muted hover:text-foreground"
+      }`}
+    >
+      {armed ? props.confirmLabel : props.label}
+    </button>
+  );
+}
+
 function TaskRow(props: {
   item: TaskItem;
-  onStatus: () => void;
+  index: number;
+  count: number;
+  onStatus: (status: TaskStatus) => void;
   onText: (text: string) => void;
   onDelete: () => void;
+  onMove: (id: string, to: number) => void;
 }) {
   const { item } = props;
   const [draft, setDraft] = useState<string | undefined>(undefined);
-  const done = item.status === "completed" || item.status === "cancelled";
+  const [dragOver, setDragOver] = useState(false);
+  const checkboxRef = useRef<HTMLInputElement>(null);
+  const done = isDone(item.status);
   const active = item.status === "in_progress";
+
+  useEffect(() => {
+    if (checkboxRef.current) {
+      checkboxRef.current.indeterminate = active;
+    }
+  }, [active]);
 
   const commit = () => {
     if (draft !== undefined && draft.trim() && draft.trim() !== item.text) {
@@ -76,29 +149,69 @@ function TaskRow(props: {
       setDraft(undefined);
     }
   };
+  const smallButton =
+    "shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-1 text-[10px] text-description-muted hover:text-foreground";
 
   return (
     <li
       data-testid={`task-item-${item.id}`}
       data-status={item.status}
-      className="group flex min-w-0 items-start gap-1.5 py-0.5"
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const id = e.dataTransfer.getData("text/plain");
+        if (id) {
+          props.onMove(id, props.index);
+        }
+      }}
+      className={`flex min-w-0 items-start gap-1.5 border-0 border-t-2 border-solid py-0.5 ${
+        dragOver ? "border-t-link" : "border-t-transparent"
+      }`}
     >
       <button
         type="button"
-        data-testid={`task-status-${item.id}`}
-        title={`${STATUS_LABEL[item.status]}. Click to mark ${STATUS_LABEL[NEXT_STATUS[item.status]].toLowerCase()}.`}
-        aria-label={`${STATUS_LABEL[item.status]}: ${item.text}`}
-        onClick={props.onStatus}
-        className={`shrink-0 cursor-pointer border-none bg-transparent p-0 font-mono text-xs ${
-          active
-            ? "text-link"
-            : item.status === "blocked"
-              ? "text-warning"
-              : "text-description-muted"
-        } hover:text-foreground`}
+        draggable
+        data-testid={`task-grab-${item.id}`}
+        title="Drag to reorder (or use the up and down arrow keys)"
+        aria-label={`Move ${item.text}, position ${props.index + 1} of ${props.count}`}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", item.id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp") {
+            e.preventDefault();
+            props.onMove(item.id, props.index - 1);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            props.onMove(item.id, props.index + 1);
+          }
+        }}
+        className="text-description-muted hover:text-foreground shrink-0 cursor-grab border-none bg-transparent p-0 text-xs leading-none active:cursor-grabbing"
       >
-        {TASK_STATUS_MARKERS[item.status]}
+        ⋮⋮
       </button>
+      <input
+        ref={checkboxRef}
+        type="checkbox"
+        data-testid={`task-status-${item.id}`}
+        checked={item.status === "completed"}
+        aria-label={`${STATUS_LABEL[item.status]}: ${item.text}`}
+        title={`${STATUS_LABEL[item.status]}. ${
+          item.status === "completed"
+            ? "Uncheck to reopen."
+            : "Check to finish."
+        }`}
+        onChange={() =>
+          props.onStatus(item.status === "completed" ? "pending" : "completed")
+        }
+        className="mt-0.5 shrink-0 cursor-pointer"
+      />
       {draft !== undefined ? (
         <input
           data-testid={`task-input-${item.id}`}
@@ -109,25 +222,16 @@ function TaskRow(props: {
           onKeyDown={onKeyDown}
           onBlur={commit}
           aria-label="Edit task"
-          className="min-w-0 flex-1 rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+          className="border-border bg-input text-foreground min-w-0 flex-1 rounded border border-solid px-1 text-xs"
         />
       ) : (
         <span
           data-testid={`task-text-${item.id}`}
-          role="button"
-          tabIndex={0}
-          title="Click to edit"
-          onClick={() => setDraft(item.text)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              setDraft(item.text);
-            }
-          }}
-          className={`min-w-0 flex-1 cursor-text text-xs break-words ${
+          className={`min-w-0 flex-1 break-words text-xs ${
             done
               ? "text-description-muted line-through"
               : active
-                ? "font-medium text-foreground"
+                ? "text-foreground font-medium"
                 : "text-description"
           }`}
         >
@@ -148,16 +252,35 @@ function TaskRow(props: {
           )}
         </span>
       )}
-      <button
-        type="button"
-        data-testid={`task-delete-${item.id}`}
-        aria-label={`Remove ${item.text}`}
-        title="Remove"
-        onClick={props.onDelete}
-        className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-description-muted opacity-0 group-hover:opacity-100 hover:text-foreground focus:opacity-100"
-      >
-        ×
-      </button>
+      {draft === undefined && item.status === "pending" && (
+        <button
+          type="button"
+          data-testid={`task-start-${item.id}`}
+          title="Mark this the item in progress"
+          onClick={() => props.onStatus("in_progress")}
+          className={smallButton}
+        >
+          Start
+        </button>
+      )}
+      {draft === undefined && !done && (
+        <button
+          type="button"
+          data-testid={`task-edit-${item.id}`}
+          aria-label={`Edit ${item.text}`}
+          onClick={() => setDraft(item.text)}
+          className={smallButton}
+        >
+          Edit
+        </button>
+      )}
+      <ConfirmButton
+        testId={`task-delete-${item.id}`}
+        label="Delete"
+        confirmLabel="Sure?"
+        ariaLabel={`Delete ${item.text}`}
+        onConfirm={props.onDelete}
+      />
     </li>
   );
 }
@@ -193,10 +316,7 @@ export function TaskListPanel() {
     );
   };
 
-  const setStatus = (id: string) => {
-    const target = plan.items.find((i) => i.id === id);
-    if (!target) return;
-    const status = NEXT_STATUS[target.status];
+  const setStatus = (id: string, status: TaskStatus) => {
     update(
       plan.items.map((i) =>
         i.id === id
@@ -208,13 +328,20 @@ export function TaskListPanel() {
     );
   };
 
+  const move = (id: string, to: number) => {
+    const next = moveItem(plan.items, id, to);
+    if (next !== plan.items) {
+      update(next);
+    }
+  };
+
   const progress = formatTaskProgress(plan);
   const ListIcon = expanded ? ChevronDownIcon : ChevronRightIcon;
 
   return (
     <div
       data-testid="task-list-panel"
-      className="mx-1 mb-1 min-w-0 rounded border border-solid border-border px-2 py-1 text-xs"
+      className="border-border mx-1 mb-1 min-w-0 rounded border border-solid px-2 py-1 text-xs"
     >
       <div className="flex min-w-0 items-start gap-1">
         <button
@@ -222,7 +349,7 @@ export function TaskListPanel() {
           data-testid="task-list-toggle"
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
-          className="flex min-w-0 flex-1 cursor-pointer items-start gap-1 border-none bg-transparent p-0 text-left text-xs text-description hover:text-foreground"
+          className="text-description hover:text-foreground flex min-w-0 flex-1 cursor-pointer items-start gap-1 border-none bg-transparent p-0 text-left text-xs"
         >
           <ListIcon className="mt-0.5 h-3 w-3 shrink-0" />
           <span
@@ -238,31 +365,32 @@ export function TaskListPanel() {
             data-testid="task-list-plan-file"
             title={`Open the plan file (${planFile.split("/").pop()})`}
             onClick={() => void ideMessenger.ide.openFile(planFile)}
-            className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+            className="text-link shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs hover:underline"
           >
             Plan
           </button>
         )}
         {expanded && (
-          <button
-            type="button"
-            data-testid="task-list-clear"
-            title="Remove the task list"
-            onClick={() => update([])}
-            className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-description-muted hover:text-foreground"
-          >
-            Clear
-          </button>
+          <ConfirmButton
+            testId="task-list-clear"
+            label="Clear"
+            confirmLabel="Remove all?"
+            ariaLabel="Remove the task list"
+            onConfirm={() => update([])}
+          />
         )}
       </div>
       {expanded && (
         <>
           <ul className="m-0 mt-1 max-h-48 list-none overflow-y-auto p-0">
-            {plan.items.map((item) => (
+            {plan.items.map((item, index) => (
               <TaskRow
                 key={item.id}
                 item={item}
-                onStatus={() => setStatus(item.id)}
+                index={index}
+                count={plan.items.length}
+                onMove={move}
+                onStatus={(status) => setStatus(item.id, status)}
                 onText={(text) =>
                   update(
                     plan.items.map((i) =>
@@ -291,11 +419,11 @@ export function TaskListPanel() {
                   setAdding("");
                 }
               }}
-              className="mt-1 w-full min-w-0 rounded border border-solid border-border bg-transparent px-1 text-xs text-foreground placeholder:text-description-muted"
+              className="border-border text-foreground placeholder:text-description-muted mt-1 w-full min-w-0 rounded border border-solid bg-transparent px-1 text-xs"
             />
           )}
           {error && (
-            <div role="alert" className="mt-1 break-words text-error">
+            <div role="alert" className="text-error mt-1 break-words">
               {error}
             </div>
           )}
