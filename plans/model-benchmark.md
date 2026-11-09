@@ -175,7 +175,7 @@ Runs and scorecards (outside the repository): the session's scratchpad `bench/ta
 
 ### 10.2 The tail reminder on Qwen3 Coder 30B (2026-11-09, roadmap row I6)
 
-The same question on the second model row I6 names: `qwen3-coder-30b` (`qwen.qwen3-coder-30b-a3b-v1:0` on Bedrock, $0.15 in / $0.60 out per MTok), `loop-basic` and `agent-acts`, `--tail on` against `--tail off`, three runs per cell, on the `full` profile and again on the `short` profile, where the tail is on by default, so that pair is the one the CLI ships for a small model. Twenty-four runs, $1.24 at list price, bundle built from commit c5a824d45 (the core of 10.1). Columns as in 10.1, plus "leaks": assistant replies that wrote a tool call as text (`<function=Write>...</function>`, Qwen's own form) instead of making it, which the `no-text-leaks` check counts and the record now carries as `textLeaks`.
+The same question on the second model row I6 names: `qwen3-coder-30b` (`qwen.qwen3-coder-30b-a3b-v1:0` on Bedrock, $0.15 in / $0.60 out per MTok), `loop-basic` and `agent-acts`, `--tail on` against `--tail off`, three runs per cell, on the `full` profile and again on the `short` profile, where the tail is on by default, so that pair is the one the CLI ships for a small model. Twenty-four runs, $1.24 at list price, bundle built from commit c5a824d45 (the core of 10.1); the same four arms on the local Strata server's Qwen3.8-Flash follow at the end of this section. Columns as in 10.1, plus "leaks": assistant replies that wrote a tool call as text (`<function=Write>...</function>`, Qwen's own form) instead of making it, which the `no-text-leaks` check counts and the record now carries as `textLeaks`.
 
 `loop-basic` (supervised loop, approvals answered by the harness; budget 90 requests or 900k tokens):
 
@@ -207,3 +207,32 @@ What the numbers say, at n=3 per cell:
 - Decision for row I6: the built-in texts in `core/llm/prompts/turns.ts` stay. Nothing in these 24 runs argues for changing either line; what they argued for, the leak handling, is the prompt side of #366 plus the `turnEnd.ts` rule above.
 
 Runs and scorecards (outside the repository): the session's scratchpad `bench/qwen-tail-on`, `bench/qwen-tail-off`, `bench/qwen-short-tail-on`, `bench/qwen-short-tail-off`, each with `scorecards/records.jsonl`; the per-arm table is `arms-qwen.md` beside them, and a copy of the records and scorecards is in the side-session notes folder (`qwen-tail-measurement/`).
+
+#### The same four arms on Qwen3.8-Flash, local Strata (2026-11-09)
+
+The `strata` row (`qwen3.8-flash-next-nvfp4-nvfp4`, 524k context, reasoning on by the server's default, free) with the same bundle, scenarios, arms and n=3, one arm at a time so the server's four conversation-cache slots were never shared between arms. Twenty-four runs, about 1h50 of wall time, 26 to 30 minutes per arm. The server reports cache reads in the usage block, so the cache column is measured here, and the runner's `/metrics` delta adds the server's own `reused` count over the requests its sliding window kept.
+
+`loop-basic`:
+
+| Profile, arm    | Outcomes         | Nudges act / finish / plan | Attempts | Without FinishItem | Requests per attempt | Cache read | Server reused | Churn  | Leaks |
+| --------------- | ---------------- | -------------------------- | -------- | ------------------ | -------------------- | ---------- | ------------- | ------ | ----- |
+| full, tail on   | done 1, killed 2 | 0 / 0 / 0                  | 14       | 0                  | 14.0                 | 92%        | 92%           | 14/214 | 0     |
+| full, tail off  | done 1, killed 2 | 0 / 0 / 0                  | 12       | 0                  | 15.9                 | 93%        | 94%           | 12/209 | 0     |
+| short, tail on  | done 2, killed 1 | 0 / 0 / 0                  | 14       | 0                  | 12.2                 | 91%        | 93%           | 14/189 | 0     |
+| short, tail off | done 2, killed 1 | 0 / 1 / 0                  | 14       | 1                  | 13.6                 | 92%        | 73%           | 14/211 | 0     |
+
+`agent-acts`:
+
+| Profile, arm    | Outcomes | Checks of 8 | Nudges act / finish / plan | Turns (median) | Cache read | Churn | Leaks |
+| --------------- | -------- | ----------- | -------------------------- | -------------- | ---------- | ----- | ----- |
+| full, tail on   | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 10             | 84%        | 0/30  | 0     |
+| full, tail off  | done 3   | 8, 8, 8     | 1 / 0 / 0                  | 13             | 89%        | 0/41  | 0     |
+| short, tail on  | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 11             | 88%        | 0/38  | 0     |
+| short, tail off | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 11             | 87%        | 0/34  | 0     |
+
+- This model does by itself what the line asks: no tool call written as text in 24 runs, no announced-step stop, and FinishItem called without a nudge in 53 of 54 item attempts. The one act nudge was a false positive: a finished report whose last paragraph offered a change ("say so and I'll switch the split"), which `announcesNextStep` reads as a next step. The one finish nudge followed a reply that stopped to wait for an approval the harness had not answered yet. On a model like this the line has nothing to do, and the four cells agree: loops done 1 and 1 on `full`, 2 and 2 on `short`, with and without it.
+- Where the loops lost is planning width, not stopping: this model turned the four-line request into 4 to 6 items (Qwen3 Coder made 3) and 7 of 12 loops ran into the 900k-token budget with 2 to 4 items done; the five done loops needed 63 to 74 turns.
+- Cache: 84 to 93% of input tokens read from the cache in every cell, and the server reused 92 to 94% of prompt tokens over the requests its window kept (73% in the short/off arm, where restores and evictions show the cache slots turning over). The request dumps agree: zero prefix churn inside any attempt or agent turn in all 24 runs, every break an attempt start. The line on every user message costs this server nothing.
+- What the Strata set adds to row I6: the tail is a no-op on a model that already acts, reports and formats its calls, and a reasoning model of this size planned more than it could finish in the budget, which is a budget or a plan-width question, not a tail one.
+
+Runs and scorecards: the session's scratchpad `bench/strata-tail-on`, `bench/strata-tail-off`, `bench/strata-short-tail-on`, `bench/strata-short-tail-off`; the per-arm table is `arms-strata.md` beside them, and the records and scorecards are copied to the side-session notes folder (`qwen-tail-measurement/`, `records-strata-*.jsonl`).
