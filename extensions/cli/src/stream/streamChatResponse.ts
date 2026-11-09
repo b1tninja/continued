@@ -342,9 +342,18 @@ export async function processStreamingResponse(
   const SAFETY_BUFFER = 100;
 
   // Validate context length INCLUDING system message and tools
-  // The task list block and the tail are counted with the system message:
-  // they are sent with every request and are never pruned.
-  const fixedText = [systemMessage, turnTail, taskListBlock]
+  // The task list block is counted with the system message: it is sent with
+  // every request and is never pruned. The tail goes on every user message,
+  // so it is counted once per user message of the unpruned history (a
+  // pruned history has fewer, so the count errs on the long side).
+  const userMessages = chatHistory.filter(
+    (item) => item.message.role === "user",
+  ).length;
+  const fixedText = [
+    systemMessage,
+    ...(turnTail ? Array<string>(userMessages).fill(turnTail) : []),
+    taskListBlock,
+  ]
     .filter(Boolean)
     .join("\n");
   let validation = validateContextLength({
@@ -590,6 +599,25 @@ export interface StreamChatResponseOptions {
   persistSession?: boolean;
 }
 
+/**
+ * The system message for this request and the use's tail for its newest user
+ * message. A compaction's request gets no tail; test doubles of the service
+ * may not have the method.
+ */
+async function turnTextsForRequest(
+  isCompacting: boolean,
+): Promise<{ systemMessage: string; turnTail: string | undefined }> {
+  const use = currentModelUse();
+  const systemMessage = await services.systemMessage.getSystemMessage(
+    services.toolPermissions.getState().currentMode,
+    use,
+  );
+  const turnTail = isCompacting
+    ? undefined
+    : services.systemMessage.turnTail?.(use);
+  return { systemMessage, turnTail };
+}
+
 // Main function that handles the conversation loop
 // eslint-disable-next-line max-params
 export async function streamChatResponse(
@@ -623,18 +651,9 @@ export async function streamChatResponse(
     chatHistory = refreshChatHistoryFromService(chatHistory, isCompacting);
     logger.debug("Starting conversation iteration");
 
-    // Get system message once per iteration (can change based on tool
-    // permissions mode, and a Loop turn has a use of its own), and the use's
-    // tail for the newest user message. A compaction's request gets no tail;
-    // test doubles of the service may not have the method.
-    const use = currentModelUse();
-    const systemMessage = await services.systemMessage.getSystemMessage(
-      services.toolPermissions.getState().currentMode,
-      use,
-    );
-    const turnTail = isCompacting
-      ? undefined
-      : services.systemMessage.turnTail?.(use);
+    // The system message and the use's tail, once per iteration (both can
+    // change with the permission mode, and a Loop turn has a use of its own)
+    const { systemMessage, turnTail } = await turnTextsForRequest(isCompacting);
 
     // Recompute tools on each iteration to handle mode changes during streaming
     const rawTools = await getRequestTools(isHeadless);

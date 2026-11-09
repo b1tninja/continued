@@ -184,11 +184,12 @@ export function planTurnShort(
 }
 
 /**
- * One-line reminders for the end of the newest user message of a request
+ * One-line reminders for the end of every user message of a request
  * (`modeModels.<use>.tail`, usePrompts.ts tailFor). Claude Code's output
  * styles append a reminder like this per turn; it keeps the turn's rule close
- * to the model without touching the cached prefix: the system prompt and the
- * history before the newest message are the same bytes with or without it.
+ * to the model without touching the cached prefix: the system prompt is the
+ * same bytes with or without it, and a message's bytes never change once
+ * sent.
  */
 export const ACT_TURN_TAIL =
   "Act until the request is done. A reply with no tool call ends the turn.";
