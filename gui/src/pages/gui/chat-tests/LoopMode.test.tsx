@@ -87,7 +87,9 @@ const OPUS = {
 };
 
 async function setup(
-  todos: (string | { text: string; model?: string; files?: string[] })[],
+  todos: (
+    string | { text: string; model?: string; files?: string[]; check?: string }
+  )[],
 ) {
   const rendered = await renderWithProviders(<Chat />);
   const { store, ideMessenger } = rendered;
@@ -1464,10 +1466,26 @@ describe("Loop mode's parallel waves", () => {
   test("two items with disjoint files run as two workers at once, merge in finish order, and the third runs inline after", async () => {
     const h = await setup([
       { text: "Add the retry helper", files: ["src/retry.ts"] },
-      { text: "Document the config", files: ["docs/config.md"] },
+      {
+        text: "Document the config",
+        files: ["docs/config.md"],
+        check: "npm run docs:check",
+      },
       "Wire it up",
     ]);
     const calls = fakeWorktrees();
+    // The check may run: the person's rules allow the terminal
+    h.ideMessenger.responseHandlers["tools/evaluatePolicy"] = async (
+      data: any,
+    ) =>
+      data.toolName === BuiltInToolNames.RunTerminalCommand
+        ? ({ policy: "allowedWithoutPermission", source: "allow-rule" } as any)
+        : { policy: data.basePolicy };
+    const checks: { command: string; cwd?: string }[] = [];
+    h.ideMessenger.responseHandlers["subprocess"] = async (data: any) => {
+      checks.push(data);
+      return ["docs ok", ""];
+    };
     const first = heldFinish("retry added");
     const second = heldFinish("documented");
     h.turns.push(first.turn, second.turn, finish("done", "wired"));
@@ -1526,10 +1544,17 @@ describe("Loop mode's parallel waves", () => {
       undefined,
     ]);
 
-    // Item 2 finishes first: its patch is merged first; item 1 still runs,
-    // and nothing else starts while the wave is out
+    // Item 2 finishes first: its patch is merged first and its check runs in
+    // the checkout while item 1 still runs; no item starts meanwhile
     await act(async () => second.release());
     await waitFor(() => expect(h.itemStatus("2")).toBe("done"));
+    expect(checks).toEqual([
+      { command: "npm run docs:check", cwd: "/Users/user/workspace1" },
+    ]);
+    expect(h.loop().items[1].check).toMatchObject({
+      status: "passed",
+      output: "docs ok",
+    });
     expect(h.itemStatus("1")).toBe("running");
     expect(h.loop().parallel?.map((r) => r.itemId)).toEqual(["1"]);
     expect(h.requests).toHaveLength(2);
@@ -1591,6 +1616,28 @@ describe("Loop mode's parallel waves", () => {
     expect(h.loop().items[1]).toMatchObject({ status: "done", attempts: 1 });
     // Both worktrees went, the refused one too
     expect(calls.filter((c) => c.startsWith("remove"))).toHaveLength(2);
+  });
+
+  test("a session switch ends the workers; their worktrees go and the loop they belonged to is not touched", async () => {
+    const h = await setup([
+      { text: "Add the retry helper", files: ["src/retry.ts"] },
+      { text: "Document the config", files: ["docs/config.md"] },
+    ]);
+    const calls = fakeWorktrees();
+    h.turns.push(untilStopped, untilStopped);
+    await h.start({ parallel: true });
+    await waitFor(() => expect(h.requests).toHaveLength(2));
+
+    const { newSession } = await import("../../../redux/slices/sessionSlice");
+    await act(async () => {
+      h.store.dispatch(newSession());
+    });
+    await waitFor(() =>
+      expect(calls.filter((c) => c.startsWith("remove"))).toHaveLength(2),
+    );
+    expect(calls.some((c) => c.startsWith("apply"))).toBe(false);
+    expect(h.store.getState().session.loop).toBeUndefined();
+    expect(h.requests).toHaveLength(2);
   });
 
   test("Stop ends the wave's workers at once: their items go back to pending and the worktrees go", async () => {

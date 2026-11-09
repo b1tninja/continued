@@ -452,6 +452,45 @@ export async function removeWorktree(
   }
 }
 
+/**
+ * What an earlier wave left for this item (a reload or a crash mid-wave: the
+ * loop comes back stopped and nothing removes its worktrees): the worktree on
+ * the item's branch, or the branch alone when its folder is gone. Removed, so
+ * `createItemWorktree` can make the item's branch again. True when there was
+ * something to remove.
+ */
+export async function removeStaleItemWorktree(
+  repo: string,
+  slug: string,
+  itemId: string,
+  deps: WorktreeDeps,
+): Promise<boolean> {
+  const branch = loopBranchName(slug, itemId);
+  const stale = (await listLoopWorktrees(repo, deps)).find(
+    (w) => w.branch === branch,
+  );
+  if (stale) {
+    await removeWorktree(
+      repo,
+      { path: stale.path, branch },
+      { deleteBranch: true },
+      deps,
+    );
+    return true;
+  }
+  await deps.git(["worktree", "prune"], repo);
+  try {
+    await deps.git(
+      ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`],
+      repo,
+    );
+  } catch {
+    return false;
+  }
+  await deps.git(["branch", "-D", branch], repo);
+  return true;
+}
+
 export interface LoopWorktree {
   path: string;
   branch: string;

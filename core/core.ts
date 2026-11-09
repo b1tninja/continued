@@ -52,6 +52,7 @@ import {
   createItemWorktree,
   dirtyFiles,
   execFileGit,
+  removeStaleItemWorktree,
   removeWorktree,
   worktreePatch,
 } from "./util/worktree";
@@ -1787,9 +1788,17 @@ export class Core {
     // Loop mode's parallel waves: the worktrees live in core (git runs here,
     // in the extension host); the gui asks for each step
     const worktreeDeps = { git: execFileGit };
-    on("loop/worktreeCreate", async ({ data }) =>
-      createItemWorktree(data, worktreeDeps),
-    );
+    on("loop/worktreeCreate", async ({ data }) => {
+      // What a wave interrupted by a reload left on this item's branch goes
+      // first; the new worktree takes the branch
+      await removeStaleItemWorktree(
+        data.repo,
+        data.slug,
+        data.itemId,
+        worktreeDeps,
+      );
+      return createItemWorktree(data, worktreeDeps);
+    });
     on("loop/worktreePatch", async ({ data }) =>
       worktreePatch(data, worktreeDeps),
     );

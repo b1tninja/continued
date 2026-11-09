@@ -792,9 +792,6 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
 
     // 2. Decide what is next.
     state = getState();
-    // A wave runs: its workers finish by themselves (settleWorker), and
-    // nothing else starts meanwhile; the driver comes back when it empties
-    if (loop.parallel?.length) return;
     const plan = state.session.taskPlan;
     if (!plan) {
       commitLoop(
@@ -809,6 +806,11 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
       now,
       sessionTokens: sessionTokens(state),
     });
+    // A wave runs: its workers finish by themselves (settleWorker), and no
+    // item starts meanwhile; a finished worker's check may run (in the
+    // checkout, which has its patch). Nothing is committed, or the driver
+    // would see a change and look again at once.
+    if (action.kind === "none" && loop.parallel?.length) return;
     const planFile = await displayPath(state.session.planFile, () =>
       ide.getWorkspaceDirs(),
     );
