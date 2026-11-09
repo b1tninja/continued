@@ -442,7 +442,7 @@ Problem: a tool call fails either as text that never parses or as arguments that
 
 ### Track R: command lint
 
-Plan: [`command-lint.md`](./command-lint.md). Builds on the command analysis in Track P. Target: 2.7.
+Plan: [`command-lint.md`](./command-lint.md). Builds on the command analysis in Track P. Target: 2.8.
 
 Problem: the agent writes files through the shell (`cat > f <<EOF`, `echo ... > f`, `python -c "..."`), and quotes, backslashes and `$` are changed on the way, or the heredoc never ends, or the command is bash on a PowerShell host. The shell reports it only after the call has run, or not at all because the command succeeds with the wrong text. A lint before the call can say so and point to the edit tool.
 
@@ -458,7 +458,7 @@ Problem: the agent writes files through the shell (`cat > f <<EOF`, `echo ... > 
 
 ### Track S: stuck detection
 
-Plan: [`stuck-detection.md`](./stuck-detection.md). Builds on the repeated-call guard, Loop mode's stops, M3 escalation and the toolbox drawer. Target: 2.7.
+Plan: [`stuck-detection.md`](./stuck-detection.md). Builds on the repeated-call guard, Loop mode's stops, M3 escalation and the toolbox drawer. Target: 2.8.
 
 Problem: the only detector is an identical-call counter. An agent that varies a failing command, edits and reverts, re-reads the same files or restates its plan is not caught until a budget runs out, and nothing reads back what it tried or offers a way out.
 
@@ -474,7 +474,7 @@ Problem: the only detector is an identical-call counter. An agent that varies a 
 
 ### Track T: loop budgets and their controls
 
-Plan: [`loop-budgets.md`](./loop-budgets.md). Builds on Loop mode, the usage ledger and the autonomy levels. Target: 2.7.
+Plan: [`loop-budgets.md`](./loop-budgets.md). Builds on Loop mode, the usage ledger and the autonomy levels. Target: 2.8.
 
 Problem: a loop stops on a budget, and today the budgets are rounds, tokens and time (the rest are not in the UI). There is no cost budget, nothing shows which limit will fire first, and a limit stops the loop without warning.
 
@@ -488,7 +488,7 @@ Problem: a loop stops on a budget, and today the budgets are rounds, tokens and 
 
 ### Track U: reviewer isolation and a cached review prefix
 
-Plan: [`reviewer-isolation.md`](./reviewer-isolation.md). Builds on the reviewer role (Track B), prompt caching (Track C) and the review uses in Track M. Target: 2.7.
+Plan: [`reviewer-isolation.md`](./reviewer-isolation.md). Builds on the reviewer role (Track B), prompt caching (Track C) and the review uses in Track M. Target: 2.8.
 
 Problem: a review should not share context with the agent it judges (prompt injection, a reviewer persuaded by the author's reasoning) and should cost little per call. Reviews are already separate stateless requests over a fenced digest, so isolation is largely in place; what is open is whether the reviewer's system prompt and session block are cached, how the prompt is ordered for a stable prefix, and whether provider conversation threads (Bedrock Converse has none; Bedrock Responses, OpenAI and Anthropic's beta do) beat a cached prefix.
 
@@ -503,7 +503,7 @@ Problem: a review should not share context with the agent it judges (prompt inje
 
 ### Track V: memory and session history
 
-Plan: [`memory-and-history.md`](./memory-and-history.md). Builds on compaction (Track C), checkpoints and Loop mode. Target: 2.7.
+Plan: [`memory-and-history.md`](./memory-and-history.md). Builds on compaction (Track C), checkpoints and Loop mode. Target: 2.8.
 
 Problem: the model's context is bounded by compaction, but the session in memory, the chat in the DOM and the file on disk are not. Every message, tool output and image stays in Redux, every item is live DOM (no windowing was found in the chat), and a save rewrites the whole session as one JSON. A long agent session or loop can exhaust memory long before the context window is the problem. Nothing shows the person where the memory is going.
 
@@ -521,7 +521,7 @@ Problem: the model's context is bounded by compaction, but the session in memory
 
 ### Track W: isolation (WSL, containers, dev containers, sandboxes)
 
-Plan: [`isolation.md`](./isolation.md). Builds on the policy areas (the reserved `sandbox` axis), command analysis and Loop mode. Target: 2.7 for W0 and W1, the rest as measured.
+Plan: [`isolation.md`](./isolation.md). Builds on the policy areas (the reserved `sandbox` axis), command analysis and Loop mode. Target: 2.8 for W0 and W1, the rest as measured.
 
 Problem: policy is a guard against accidents, not a sandbox, and commands can only run on the host (or where the VS Code window already is). People would grant an agent far more autonomy if what it can touch were guaranteed, and "run commands in WSL" is wanted on its own. The track starts with an executor abstraction and WSL, then containers and dev containers, an OS sandbox, a jail for whole loop runs with the model key kept outside, network policy, escape tests that generate the claim the UI makes, and the policy axis that uses it.
 
