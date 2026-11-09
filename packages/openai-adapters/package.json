@@ -25,7 +25,7 @@
     "@continuedev/config-yaml": "file:../config-yaml",
     "@continuedev/fetch": "file:../fetch",
     "@continuedev/llm-info": "file:../llm-info",
-    "@google/genai": "^1.30.0",
+    "@google/genai": "^3.0.0",
     "@smithy/node-http-handler": "^4.14.1",
     "ai": "^6.0.86",
     "dotenv": "^18.0.9",

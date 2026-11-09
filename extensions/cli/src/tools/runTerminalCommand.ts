@@ -5,6 +5,7 @@ import {
   evaluateTerminalCommandSecurity,
   type ToolPolicy,
 } from "@continuedev/terminal-security";
+import { commandLintGate } from "core/tools/permissions/commandLint.js";
 import { resolveShell } from "core/util/shell.js";
 
 import { backgroundJobService } from "../services/BackgroundJobService.js";
@@ -189,6 +190,12 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
     const baseMaxLines = getBashMaxLines();
     const maxChars = Math.floor(baseMaxChars / parallelCount);
     const maxLines = Math.floor(baseMaxLines / parallelCount);
+
+    // Mistakes in how the command is written, before the shell reports them
+    const lintMessage = commandLintGate(command, resolveShell().kind);
+    if (lintMessage) {
+      return lintMessage;
+    }
 
     emitBashToolStarted();
 

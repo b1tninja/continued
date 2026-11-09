@@ -5,7 +5,7 @@ import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import { setTaskPlan } from "../../redux/slices/sessionSlice";
 import { setupStore } from "../../redux/store";
 import { renderWithProviders } from "../../util/test/render";
-import { applyUserEdit, TaskListPanel } from "./TaskListPanel";
+import { applyUserEdit, moveItem, TaskListPanel } from "./TaskListPanel";
 
 const plan: TaskPlan = {
   items: [
@@ -66,7 +66,7 @@ describe("TaskListPanel", () => {
   it("edits an item's text in place, as the user", async () => {
     const store = await setup();
     fireEvent.click(screen.getByTestId("task-list-toggle"));
-    fireEvent.click(screen.getByTestId("task-text-4"));
+    fireEvent.click(screen.getByTestId("task-edit-4"));
     const input = screen.getByTestId("task-input-4");
     fireEvent.change(input, { target: { value: "Announce in #eng" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -82,26 +82,70 @@ describe("TaskListPanel", () => {
   it("Escape cancels an edit", async () => {
     const store = await setup();
     fireEvent.click(screen.getByTestId("task-list-toggle"));
-    fireEvent.click(screen.getByTestId("task-text-4"));
+    fireEvent.click(screen.getByTestId("task-edit-4"));
     const input = screen.getByTestId("task-input-4");
     fireEvent.change(input, { target: { value: "changed" } });
     fireEvent.keyDown(input, { key: "Escape" });
     expect(store.getState().session.taskPlan).toEqual(plan);
   });
 
-  it("cycles status and keeps one item in progress", async () => {
+  it("starts an item and keeps one item in progress", async () => {
     const store = await setup();
     fireEvent.click(screen.getByTestId("task-list-toggle"));
     // pending -> in progress; the previous in-progress item goes back to pending
-    fireEvent.click(screen.getByTestId("task-status-4"));
+    fireEvent.click(screen.getByTestId("task-start-4"));
     const items = store.getState().session.taskPlan!.items;
     expect(items.find((i) => i.id === "4")?.status).toBe("in_progress");
     expect(items.find((i) => i.id === "2")?.status).toBe("pending");
   });
 
+  it("uses real checkboxes: check to finish, uncheck to reopen", async () => {
+    const store = await setup();
+    fireEvent.click(screen.getByTestId("task-list-toggle"));
+    const done = screen.getByTestId("task-status-1") as HTMLInputElement;
+    expect(done.type).toBe("checkbox");
+    expect(done.checked).toBe(true);
+    fireEvent.click(done);
+    expect(
+      store.getState().session.taskPlan!.items.find((i) => i.id === "1")
+        ?.status,
+    ).toBe("pending");
+    fireEvent.click(screen.getByTestId("task-status-4"));
+    expect(
+      store.getState().session.taskPlan!.items.find((i) => i.id === "4")
+        ?.status,
+    ).toBe("completed");
+  });
+
+  it("does not offer to edit a finished item", async () => {
+    await setup();
+    fireEvent.click(screen.getByTestId("task-list-toggle"));
+    expect(screen.queryByTestId("task-edit-1")).toBeNull();
+    expect(screen.getByTestId("task-edit-2")).toBeTruthy();
+    // Clicking the text of a finished item does nothing either
+    fireEvent.click(screen.getByTestId("task-text-1"));
+    expect(screen.queryByTestId("task-input-1")).toBeNull();
+  });
+
+  it("reorders with the keyboard on the grab handle and by dropping", async () => {
+    const store = await setup();
+    fireEvent.click(screen.getByTestId("task-list-toggle"));
+    const ids = () => store.getState().session.taskPlan!.items.map((i) => i.id);
+    fireEvent.keyDown(screen.getByTestId("task-grab-4"), { key: "ArrowUp" });
+    expect(ids()).toEqual(["1", "2", "4", "3"]);
+    const data: Record<string, string> = { "text/plain": "1" };
+    fireEvent.drop(screen.getByTestId("task-item-3"), {
+      dataTransfer: { getData: (k: string) => data[k] },
+    });
+    expect(ids()).toEqual(["2", "4", "3", "1"]);
+  });
+
   it("removes, adds and clears items", async () => {
     const store = await setup();
     fireEvent.click(screen.getByTestId("task-list-toggle"));
+    // One click only asks; nothing is removed until it is confirmed
+    fireEvent.click(screen.getByTestId("task-delete-3"));
+    expect(store.getState().session.taskPlan!.items).toHaveLength(4);
     fireEvent.click(screen.getByTestId("task-delete-3"));
     expect(store.getState().session.taskPlan!.items.map((i) => i.id)).toEqual([
       "1",
@@ -118,6 +162,8 @@ describe("TaskListPanel", () => {
       status: "pending",
     });
 
+    fireEvent.click(screen.getByTestId("task-list-clear"));
+    expect(store.getState().session.taskPlan).toBeDefined();
     fireEvent.click(screen.getByTestId("task-list-clear"));
     expect(store.getState().session.taskPlan).toBeUndefined();
     expect(screen.queryByTestId("task-list-panel")).toBeNull();
@@ -136,5 +182,17 @@ describe("applyUserEdit", () => {
 
   it("reports an invalid edit instead of storing it", () => {
     expect(typeof applyUserEdit(plan, [{ text: " " }])).toBe("string");
+  });
+});
+
+describe("moveItem", () => {
+  const list = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  it("moves and clamps", () => {
+    expect(moveItem(list, "c", 0).map((i) => i.id)).toEqual(["c", "a", "b"]);
+    expect(moveItem(list, "a", 99).map((i) => i.id)).toEqual(["b", "c", "a"]);
+  });
+  it("returns the same list when nothing moves", () => {
+    expect(moveItem(list, "a", 0)).toBe(list);
+    expect(moveItem(list, "zz", 1)).toBe(list);
   });
 });

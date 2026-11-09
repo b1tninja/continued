@@ -103,6 +103,7 @@ export function mcpNameMatch(pattern: string, toolName: string): boolean {
 }
 
 import { commandCandidates } from "./candidates";
+import { effectsOfCommand, isEffect } from "./commandSpecs";
 import {
   commandGlobMatch,
   hasUnsafeShellConstruct,
@@ -110,6 +111,28 @@ import {
 } from "./command";
 
 export { hasUnsafeShellConstruct, splitCommandParts } from "./command";
+
+/**
+ * A rule written `runTerminalCommand(effect:network)` (or `effect:delete,exec`)
+ * matches a command with any of the named effects, whichever program has it
+ * (commandSpecs.ts). Only programs with a spec have effects, so this catches
+ * what the table knows and says nothing about the rest. An unknown effect
+ * name matches nothing.
+ */
+const EFFECT_PREFIX = "effect:";
+
+function matchesEffectRule(pattern: string, candidates: string[]): boolean {
+  const wanted = pattern
+    .slice(EFFECT_PREFIX.length)
+    .split(",")
+    .map((n) => n.trim().toLowerCase())
+    .filter(isEffect);
+  if (wanted.length === 0) return false;
+  return candidates.some((c) => {
+    const effects = effectsOfCommand(c);
+    return wanted.some((w) => effects.has(w));
+  });
+}
 
 /**
  * Terminal commands are split into parts (quotes respected). A deny rule on
@@ -135,7 +158,9 @@ export function matchTerminalCommand(
   // protection must not depend on how a command is capitalised.
   const hits = (rule: ParsedRule) =>
     rule.pattern === undefined ||
-    candidates.some((c) => commandGlobMatch(rule.pattern!, c, true));
+    (rule.pattern.startsWith(EFFECT_PREFIX)
+      ? matchesEffectRule(rule.pattern, candidates)
+      : candidates.some((c) => commandGlobMatch(rule.pattern!, c, true)));
 
   for (const rule of toolRules) {
     if (rule.decision === "deny" && hits(rule))

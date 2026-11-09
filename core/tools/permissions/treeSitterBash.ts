@@ -224,3 +224,37 @@ export function crossCheckBash(
     ? undefined
     : "the bash grammar reads it as different commands than the scanner does";
 }
+
+/**
+ * The first syntax error the bash grammar finds (an error node or a missing
+ * token), or undefined when the command parses or the grammar is not loaded.
+ */
+export function bashSyntaxProblem(
+  command: string,
+): { what: string; line: number; column: number } | undefined {
+  if (!parser) return undefined;
+  const tree = parser.parse(command);
+  try {
+    if (!tree.rootNode.hasError()) return undefined;
+    const find = (node: Parser.SyntaxNode): Parser.SyntaxNode | undefined => {
+      if (node.isMissing() || node.type === "ERROR") return node;
+      for (const child of node.children) {
+        if (child.hasError() || child.isMissing()) {
+          const hit = find(child);
+          if (hit) return hit;
+        }
+      }
+      return undefined;
+    };
+    const node = find(tree.rootNode) ?? tree.rootNode;
+    return {
+      what: node.isMissing()
+        ? `a missing "${node.type}"`
+        : `unexpected ${JSON.stringify(node.text.slice(0, 20))}`,
+      line: node.startPosition.row + 1,
+      column: node.startPosition.column + 1,
+    };
+  } finally {
+    tree.delete();
+  }
+}
