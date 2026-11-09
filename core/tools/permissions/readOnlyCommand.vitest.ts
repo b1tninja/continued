@@ -9,7 +9,14 @@ const CLEAN: ReadOnlyOptions = {
   cwd: "/repo",
   home: "/home/u",
   readGitConfig: () => "[core]\n\tbare = false\n",
+  // /repo is a repository
+  probe: (file) => (posix(file) === "/repo/.git" ? "dir" : undefined),
 };
+
+const posix = (file: string) => file.split(String.fromCharCode(92)).join("/");
+const RUNS_A_PROGRAM = ["[core]", "	fsmonitor = /tmp/x", ""].join(
+  String.fromCharCode(10),
+);
 
 const vouched = (command: string, opts: ReadOnlyOptions = CLEAN) =>
   classifyReadOnly(command, opts).vouched;
@@ -141,6 +148,46 @@ describe("arguments that make a read-only command write or run", () => {
 });
 
 describe("git", () => {
+  it("is not vouched after a cd: the folder it runs in was not checked", () => {
+    expect(why("cd other && git log")).toContain("after cd");
+    expect(why("cd /elsewhere; git status")).toContain("after cd");
+    // a cd that follows git, or no git at all, changes nothing
+    expect(vouched("git log && cd src")).toBe(true);
+    expect(vouched("cd src && ls")).toBe(true);
+  });
+
+  it("looks up the tree for the repository, so a subfolder is checked too", () => {
+    const scanned: string[] = [];
+    const opts: ReadOnlyOptions = {
+      ...CLEAN,
+      cwd: "/repo/packages/app",
+      readGitConfig: (file) => {
+        scanned.push(posix(file));
+        return posix(file) === "/repo/.git/config" ? RUNS_A_PROGRAM : "";
+      },
+    };
+    expect(vouched("git status", opts)).toBe(false);
+    expect(scanned).toContain("/repo/.git/config");
+  });
+
+  it("is not vouched in a worktree or submodule, where .git is a file", () => {
+    const opts: ReadOnlyOptions = {
+      ...CLEAN,
+      probe: (file) => (posix(file) === "/repo/.git" ? "file" : undefined),
+    };
+    expect(why("git status", opts)).toContain("worktree or submodule");
+    // reading files needs no git at all
+    expect(vouched("ls", opts)).toBe(true);
+  });
+
+  it("outside any repository only the user's config can matter", () => {
+    const opts: ReadOnlyOptions = { ...CLEAN, probe: () => undefined };
+    expect(vouched("git status", opts)).toBe(true);
+    expect(
+      vouched("git status", { ...opts, readGitConfig: () => RUNS_A_PROGRAM }),
+    ).toBe(false);
+  });
+
   it("is not vouched without a folder to check", () => {
     expect(why("git status", { ...CLEAN, cwd: undefined })).toContain(
       "without a folder",

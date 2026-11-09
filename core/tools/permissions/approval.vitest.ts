@@ -340,7 +340,7 @@ describe("a command that only reads is Context use", () => {
       );
       const withCwd = (cwd?: string) =>
         evaluateToolPolicyWithRules({
-          tool: terminalTool,
+          tool: terminalTool as any,
           toolName: "run_terminal_command",
           basePolicy: ASK,
           parsedArgs: { command: "git status" },

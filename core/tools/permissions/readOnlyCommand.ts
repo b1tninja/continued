@@ -207,7 +207,17 @@ export interface ReadOnlyOptions {
   cwd?: string;
   /** For tests: the text of a git config file, or undefined when absent */
   readGitConfig?: (file: string) => string | undefined;
+  /** For tests: what a path is, "dir" or "file", or undefined when absent */
+  probe?: (file: string) => "dir" | "file" | undefined;
   home?: string;
+}
+
+function defaultProbe(file: string): "dir" | "file" | undefined {
+  try {
+    return fs.statSync(file).isDirectory() ? "dir" : "file";
+  } catch {
+    return undefined;
+  }
 }
 
 function defaultReadGitConfig(file: string): string | undefined {
@@ -232,12 +242,27 @@ function gitIsSafe(opts: ReadOnlyOptions): string | undefined {
   const home = opts.home ?? os.homedir();
   // A file URI's path is "/C:/..." on Windows, which fs does not take
   const cwd = opts.cwd.replace(/^\/([A-Za-z]:)/, "$1");
-  const gitDir = path.join(cwd, ".git");
+  const probe = opts.probe ?? defaultProbe;
+  // The repository is the nearest folder up the tree with a .git: the
+  // workspace is often a subfolder of it
   const files = [
-    path.join(gitDir, "config"),
     path.join(home, ".gitconfig"),
     path.join(home, ".config", "git", "config"),
   ];
+  for (let dir = cwd; ;) {
+    const kind = probe(path.join(dir, ".git"));
+    if (kind === "file") {
+      // A worktree or submodule: its config is somewhere this does not look
+      return `${dir} is a git worktree or submodule, whose config was not checked`;
+    }
+    if (kind === "dir") {
+      files.unshift(path.join(dir, ".git", "config"));
+      break;
+    }
+    const up = path.dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
   for (const file of files) {
     const text = read(file);
     if (text && GIT_RUNS_THINGS.test(text)) {
@@ -363,6 +388,8 @@ export function classifyReadOnly(
   if ("why" in parsed) return no(parsed.why);
 
   const names: string[] = [];
+  // After a cd the command runs somewhere whose git config was not checked
+  let movedDirectory = false;
   for (const { words } of parsed.segments) {
     const [first, ...rest] = words;
     // An environment prefix (FOO=bar cmd) can change what a command does
@@ -373,7 +400,13 @@ export function classifyReadOnly(
     if (!/^[a-z][a-z0-9_-]*$/.test(name)) {
       return no(`"${first}" is not a plain command name`);
     }
+    if (name === "cd") movedDirectory = true;
     if (name === "git") {
+      if (movedDirectory) {
+        return no(
+          "git after cd runs in a folder whose git config was not checked",
+        );
+      }
       const unsafe = gitIsSafe(opts);
       if (unsafe) return no(unsafe);
       // Global flags before the subcommand: only the ones that run nothing
