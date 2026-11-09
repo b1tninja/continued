@@ -162,7 +162,7 @@ models:
     family: gemma
     efforts: [default]
     effort: none
-    notes: no price in the repository tables and not yet probed (Tier 1 first)
+    notes: no price in the repository tables; on 2026-11-09 it wrote every tool call as text and used no tool in four runs (research-qwen-tailoring.md), so it is a comparator for prose, not an agent row
 
   - id: strata
     provider: strata
