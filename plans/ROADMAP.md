@@ -215,7 +215,7 @@ Problem: whether a terminal command only reads, writes, or is unknown decides mo
 
 | PR  | Scope                                                                                                                                                   | Depends on | State                                      |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------ |
-| I0  | A corpus of (shell, command, expected verdict and effects) for bash, zsh, PowerShell and cmd, and a differential run of the current scanners            | none       | Not started                                |
+| I0  | A corpus of (shell, command, expected verdict and effects) for bash, zsh, PowerShell and cmd, and a differential run of the current scanners            | none       | Built on `claude/policy-wiring`, no PR yet |
 | I1  | Shell identity (`resolveShell()`) carried with every evaluation; the first classifier takes the shell; cmd and an unknown shell are unsure              | none       | Built on `claude/policy-wiring`, no PR yet |
 | I2  | A POSIX front end and one shared command graph, replacing `parseCommand`, the read-only tokenizer and the splitting in `candidates.ts`                  | I0, D1     | Not started                                |
 | I3  | A PowerShell front end: aliases, parameter abbreviation, `iex` and `-EncodedCommand` as exec                                                            | I2, D2     | Not started                                |
