@@ -12,13 +12,27 @@
 
 ## Install
 
-Continuous is not published to the VS Code Marketplace or Open VSX. Install it from a GitHub release. It needs VS Code 1.105 or newer.
+Continuous needs a recent VS Code (1.105 or newer).
 
-1. Download the `.vsix` for your platform from the [latest release](https://github.com/b1tninja/continuous/releases/latest) ([Continuous 2.4.4](https://github.com/b1tninja/continuous/releases/tag/v2.4.4-vscode)). There are builds for Windows (x64, Arm64), macOS (Apple Silicon, Intel), and Linux (x64, Arm64). Each release has a `SHA256SUMS.txt` to check the download against.
+**From VS Code or the Marketplace** (the usual way):
+
+- In VS Code, open the Extensions view (`Ctrl+Shift+X`), search for **Continuous**, and select **Install**. Check the publisher is `b1tninja`.
+- Or open the [Continuous page on the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=b1tninja.continuous) and select **Install**.
+- Or from a terminal:
+
+  ```bash
+  code --install-extension b1tninja.continuous
+  ```
+
+VS Code keeps the extension up to date. The Marketplace extension ID is `b1tninja.continuous`.
+
+**From a GitHub release** (to install by hand, or where the Marketplace is not reachable):
+
+1. Download the `.vsix` for your platform from the [latest release](https://github.com/b1tninja/continuous/releases/latest). There are builds for Windows (x64, Arm64), macOS (Apple Silicon, Intel), and Linux (x64, Arm64). Each release has a `SHA256SUMS.txt` to check the download against.
 2. Install it, then reload VS Code (**Developer: Reload Window**):
 
    ```bash
-   code --install-extension continuous-win32-x64-2.4.4.vsix --force
+   code --install-extension <the file you downloaded>.vsix --force
    ```
 
 Or, with the GitHub CLI (change `win32-x64` to your platform):
@@ -27,7 +41,7 @@ Or, with the GitHub CLI (change `win32-x64` to your platform):
 gh release download --repo b1tninja/continuous --pattern "continuous-win32-x64-*.vsix" --pattern SHA256SUMS.txt --dir continuous-vsix
 ```
 
-Continuous (`b1tninja.continuous`) installs alongside the original Continue extension. Its configuration is in `~/.continuous`, which the first start copies from an existing `~/.continue`. To update, install the next release's `.vsix` the same way. Releases up to 2.4.1 used the ID `b1tninja.continued`; after installing 2.4.2, uninstall that one ([details](docs/continuous-install.md#4-reload-vs-code)).
+Continuous installs alongside the original Continue extension. Its configuration is in `~/.continuous`, which the first start copies from an existing `~/.continue`. If you installed one of the early releases, which used the ID `b1tninja.continued`, uninstall that one after installing Continuous ([details](docs/continuous-install.md#4-reload-vs-code)).
 
 The [install guide](docs/continuous-install.md) has every platform's file name, checksum commands, unreleased builds from GitHub Actions, and troubleshooting.
 
@@ -44,7 +58,7 @@ The documentation is at [b1tninja.github.io/continuous](https://b1tninja.github.
 
 ## Upstream
 
-This fork starts from the final release of Continue (`continuedev/continue`, VS Code extension 2.0.0). Upstream is no longer maintained, and its CLI, JetBrains plugin and Marketplace listings are not part of this fork. Upstream's project history and contributors are at [continuedev/continue](https://github.com/continuedev/continue).
+This fork starts from the final release of Continue (`continuedev/continue`, VS Code extension 2.0.0). Upstream is no longer maintained, and its CLI, JetBrains plugin and its own Marketplace listing are not part of this fork. Upstream's project history and contributors are at [continuedev/continue](https://github.com/continuedev/continue).
 
 ## License
 
