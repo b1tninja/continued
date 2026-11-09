@@ -1,7 +1,9 @@
 import { ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 import { ToolCallState } from "core";
+import { replanDiff, type ReplanDiffItem } from "core/util/loopMode";
 import { validatePlanArgs, type PlanDecision } from "core/util/planFile";
 import { useContext, useState } from "react";
+import { QuestionPanelContext } from "../../../components/QuestionPanel";
 import { useMainEditor } from "../../../components/mainInput/TipTapEditor";
 import StyledMarkdownPreview from "../../../components/StyledMarkdownPreview";
 import { Button } from "../../../components/ui";
@@ -11,6 +13,21 @@ import { setMode } from "../../../redux/slices/sessionSlice";
 import { buildPlan } from "../../../redux/thunks/buildPlan";
 import { acceptLoopPlan, startLoopFromPlan } from "../../../redux/thunks/loop";
 import { recordPlanAnswer } from "../../../util/planDecisions";
+
+/** The mark of a to-do in a re-plan: what the loop already did with it. */
+function todoMark(text: string, kept: ReplanDiffItem[] | undefined): string {
+  const status = kept?.find((k) => k.text === text)?.status;
+  switch (status) {
+    case "done":
+      return "[x]";
+    case "failed":
+      return "[!]";
+    case "waiting":
+      return "[?]";
+    default:
+      return "[ ]";
+  }
+}
 
 interface PlanCardProps {
   toolCallState: ToolCallState;
@@ -41,6 +58,8 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
 
   // Loop mode: this card is the loop's re-plan, waiting to be accepted
   const loopStatus = useAppSelector((s) => s.session.loop?.status);
+  const loop = useAppSelector((s) => s.session.loop);
+  const taskPlan = useAppSelector((s) => s.session.taskPlan);
   const isLatestPlanCard = useAppSelector((s) => {
     const later = s.session.history
       .slice(historyIndex + 1)
@@ -74,10 +93,14 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
   }
 
   const awaitingLoop = loopStatus === "awaiting_plan" && isLatestPlanCard;
+  const diff =
+    awaitingLoop && loop && taskPlan ? replanDiff(loop, taskPlan) : undefined;
   const loopActive = !!loopStatus && loopStatus !== "stopped";
 
   const showActions =
     (!answered && !isStreaming && !loopActive) || awaitingLoop;
+  // The Questions panel above the input answers the latest plan's decisions
+  const panelAnswers = useContext(QuestionPanelContext) && showActions;
 
   /** Writes the answer into the plan file's Decisions section and shows it. */
   const answerDecision = async (decision: PlanDecision, answer: string) => {
@@ -119,16 +142,75 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
           {relativePath ?? "Open plan"}
         </button>
       </div>
-      {args.ok && args.body && (
-        <div className="mt-1 max-h-96 overflow-y-auto text-sm">
-          <StyledMarkdownPreview
-            source={args.body}
-            itemIndex={historyIndex}
-            useParentBackgroundColor
-          />
+      {awaitingLoop && (
+        <div data-testid="plan-card-replan" className="mt-1 text-xs">
+          {loop?.replanReason && (
+            <div data-testid="plan-card-replan-reason">
+              <span className="text-description">Why you are asked: </span>
+              {loop.replanReason}
+            </div>
+          )}
+          {diff && (
+            <div data-testid="plan-card-diff" className="mt-1">
+              <div className="text-description">
+                {diff.kept.length} kept, {diff.added.length} added,{" "}
+                {diff.dropped.length} dropped
+              </div>
+              <ul className="m-0 mt-0.5 list-none p-0">
+                {diff.dropped.map((item, i) => (
+                  <li
+                    key={`d${i}`}
+                    className="py-0.5 break-words text-description-muted line-through"
+                  >
+                    <span className="font-mono">−</span> {item.text}
+                    {item.status && item.status !== "pending" && (
+                      <span> ({item.status})</span>
+                    )}
+                  </li>
+                ))}
+                {diff.added.map((text, i) => (
+                  <li key={`a${i}`} className="py-0.5 break-words">
+                    <span className="font-mono text-description-muted">+</span>{" "}
+                    {text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
-      {args.ok && args.decisions.length > 0 && (
+      {args.ok && args.body && (
+        <details
+          open={!awaitingLoop}
+          data-testid="plan-card-body"
+          className="mt-1 text-sm"
+        >
+          {awaitingLoop && (
+            <summary className="cursor-pointer text-xs text-description">
+              Full plan text
+            </summary>
+          )}
+          <div className="max-h-96 overflow-y-auto">
+            <StyledMarkdownPreview
+              source={args.body}
+              itemIndex={historyIndex}
+              useParentBackgroundColor
+            />
+          </div>
+        </details>
+      )}
+      {args.ok && args.decisions.length > 0 && panelAnswers && (
+        <div
+          data-testid="plan-card-decisions-pointer"
+          className="mt-1 text-xs text-description"
+        >
+          {args.decisions.length} decision
+          {args.decisions.length === 1 ? "" : "s"} for you: answer
+          {args.decisions.length === 1 ? "s" : ""} in the Questions panel above
+          the input, or in the plan file.
+        </div>
+      )}
+      {args.ok && args.decisions.length > 0 && !panelAnswers && (
         <div data-testid="plan-card-decisions" className="mt-1 text-xs">
           <div className="text-description">
             Decisions for you (answer here, in the plan file, or in your
@@ -226,7 +308,9 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
         >
           {args.items.map((item, i) => (
             <li key={i} className="py-0.5 break-words">
-              <span className="font-mono text-description-muted">[ ]</span>{" "}
+              <span className="font-mono text-description-muted">
+                {todoMark(String(item.text), diff?.kept)}
+              </span>{" "}
               {String(item.text)}
             </li>
           ))}

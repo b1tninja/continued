@@ -25,6 +25,10 @@ import { CacheMissNotice } from "../../components/mainInput/CacheMissNotice";
 import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
 import { LoopInbox } from "../../components/mainInput/LoopInbox";
+import {
+  QuestionPanel,
+  QuestionPanelContext,
+} from "../../components/QuestionPanel";
 import { TaskListPanel } from "../../components/mainInput/TaskListPanel";
 import { useLoopDriver } from "../../hooks/useLoopDriver";
 import { LargeMessageNotice } from "../../components/mainInput/LargeMessageNotice";
@@ -510,7 +514,7 @@ export function Chat() {
   const showScrollbar = showChatScrollbar ?? window.innerHeight > 5000;
 
   return (
-    <>
+    <QuestionPanelContext.Provider value={true}>
       {!!showSessionTabs && !isInEdit && <TabBar ref={tabsRef} />}
       {widget}
 
@@ -547,6 +551,7 @@ export function Chat() {
         <LargeMessageNotice />
         <TaskListPanel />
         <LoopInbox />
+        <QuestionPanel />
         <QueuedMessages
           onSendNow={sendNowOrSteer}
           onSteerNow={(ids) => void steerNow(ids)}
@@ -590,6 +595,6 @@ export function Chat() {
           )}
         </div>
       </div>
-    </>
+    </QuestionPanelContext.Provider>
   );
 }

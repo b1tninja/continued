@@ -23,114 +23,6 @@ import {
   stopLoopThunk,
 } from "../../redux/thunks/loop";
 
-const KIND_LABEL: Record<LoopQuestion["kind"], string> = {
-  blocking: "Waiting on you",
-  assumption: "Going on with a default",
-  approval: "Needs your approval",
-};
-
-function QuestionRow({
-  question,
-  itemText,
-  onAnswer,
-}: {
-  question: LoopQuestion;
-  itemText?: string;
-  onAnswer: (input: LoopAnswerInput) => Promise<string | undefined>;
-}) {
-  const [text, setText] = useState("");
-  const [error, setError] = useState<string>();
-  const answer = async (input: Omit<LoopAnswerInput, "questionId">) => {
-    const failed = await onAnswer({ ...input, questionId: question.id });
-    setError(failed);
-    if (!failed) setText("");
-  };
-  return (
-    <li
-      data-testid={`loop-question-${question.id}`}
-      className="mt-1 rounded border border-solid border-border px-1.5 py-1"
-    >
-      <div className="text-2xs text-description-muted">
-        {question.id} · {KIND_LABEL[question.kind]}
-        {itemText ? ` · ${itemText}` : ""}
-      </div>
-      <div className="break-words text-foreground">{question.question}</div>
-      {question.assumption && (
-        <div className="break-words text-description">
-          Assumed: {question.assumption}
-        </div>
-      )}
-      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
-        {question.kind === "approval" ? (
-          <>
-            <button
-              type="button"
-              data-testid="loop-approve"
-              className="cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input"
-              onClick={() => void answer({ text: "", approve: true })}
-            >
-              Allow once
-            </button>
-            <button
-              type="button"
-              data-testid="loop-deny"
-              className="cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input"
-              onClick={() => void answer({ text: text, approve: false })}
-            >
-              Don't allow
-            </button>
-          </>
-        ) : (
-          <>
-            <input
-              data-testid="loop-answer-input"
-              value={text}
-              maxLength={LOOP_LIMITS.maxAnswerLength}
-              placeholder={
-                question.kind === "assumption"
-                  ? "Overrule with your answer"
-                  : "Your answer"
-              }
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && text.trim()) {
-                  e.preventDefault();
-                  void answer({ text });
-                }
-              }}
-              className="min-w-0 flex-1 basis-32 rounded border border-solid border-border bg-input px-1 text-xs text-foreground placeholder:text-description-muted"
-            />
-            <button
-              type="button"
-              data-testid="loop-answer-send"
-              disabled={!text.trim()}
-              className="cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input disabled:cursor-default disabled:opacity-50"
-              onClick={() => void answer({ text })}
-            >
-              Answer
-            </button>
-            {question.kind === "assumption" && (
-              <button
-                type="button"
-                data-testid="loop-confirm"
-                className="cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input"
-                onClick={() => void answer({ text: "", confirm: true })}
-              >
-                Keep the default
-              </button>
-            )}
-          </>
-        )}
-      </div>
-      {error && (
-        <div role="alert" className="mt-0.5 break-words text-error">
-          {error}
-        </div>
-      )}
-    </li>
-  );
-}
-
 /**
  * Loop mode's inbox, above the input: where the loop is, the questions its
  * items hold, and a note about the whole plan. Answers can be given at any
@@ -148,8 +40,6 @@ export function LoopInbox() {
 
   const open = loop.questions.filter((q) => !q.answerId);
   const standingNotes = standingInstructions(loop);
-  const itemText = (id?: string) =>
-    taskPlan?.items.find((i) => i.id === id)?.text;
   const onAnswer = async (input: LoopAnswerInput) => {
     const result = await dispatch(answerLoopQuestion(input)).unwrap();
     return result.ok ? undefined : result.error;
@@ -262,16 +152,13 @@ export function LoopInbox() {
         </div>
       )}
       {open.length > 0 && (
-        <ul className="m-0 max-h-64 list-none overflow-y-auto p-0">
-          {open.map((q) => (
-            <QuestionRow
-              key={q.id}
-              question={q}
-              itemText={itemText(q.itemId)}
-              onAnswer={onAnswer}
-            />
-          ))}
-        </ul>
+        <div
+          data-testid="loop-questions-pointer"
+          className="mt-0.5 text-description"
+        >
+          {open.length} open question{open.length === 1 ? "" : "s"}: answer them
+          in the Questions panel above the input.
+        </div>
       )}
       {standingNotes.length > 0 && (
         <ul

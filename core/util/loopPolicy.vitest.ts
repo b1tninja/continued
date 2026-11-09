@@ -11,6 +11,7 @@ import {
   loopQuestionDecider,
   replanDecision,
   repairDecision,
+  replanDiff,
   setLoopPolicy,
   startItemRun,
 } from "./loopMode.js";
@@ -192,5 +193,108 @@ describe("Questions decides who answers", () => {
       T0,
     );
     expect(held.ok && held.question.decidedAlone).toBeUndefined();
+  });
+});
+
+describe("replanDiff", () => {
+  const awaiting = (): LoopState => {
+    const base = createLoop(plan("One", "Two", "Three"), {
+      now: T0,
+      sessionTokens: 0,
+    });
+    return {
+      ...base,
+      status: "awaiting_plan",
+      items: base.items.map((i, n) => ({
+        ...i,
+        status:
+          n === 0
+            ? ("done" as const)
+            : n === 1
+              ? ("failed" as const)
+              : i.status,
+      })),
+      replanned: { planTexts: ["One", "Two", "Three"] },
+    };
+  };
+
+  test("is undefined when no re-plan is waiting", () => {
+    expect(
+      replanDiff(
+        createLoop(plan("A"), { now: T0, sessionTokens: 0 }),
+        plan("A"),
+      ),
+    ).toBeUndefined();
+  });
+
+  test("a to-do the loop has keeps its state; a reworded one is dropped and added", () => {
+    const diff = replanDiff(awaiting(), {
+      items: [
+        { id: "1", text: "One", status: "pending" },
+        { id: "4", text: "Two, first half", status: "pending" },
+        { id: "5", text: "Two, second half", status: "pending" },
+        { id: "3", text: "Three", status: "pending" },
+      ],
+      updatedAt: T0.toISOString(),
+    });
+    expect(diff?.kept).toEqual([
+      { text: "One", status: "done" },
+      { text: "Three", status: "pending" },
+    ]);
+    expect(diff?.added).toEqual(["Two, first half", "Two, second half"]);
+    expect(diff?.dropped).toEqual([{ text: "Two", status: "failed" }]);
+  });
+
+  test("a to-do the old plan had word for word is kept even under a new id", () => {
+    const diff = replanDiff(awaiting(), {
+      items: [
+        { id: "9", text: "Two", status: "pending" },
+        { id: "10", text: "Brand new", status: "pending" },
+      ],
+      updatedAt: T0.toISOString(),
+    });
+    expect(diff?.kept).toEqual([{ text: "Two", status: "failed" }]);
+    expect(diff?.added).toEqual(["Brand new"]);
+    expect(diff?.dropped.map((d) => d.text)).toEqual(["One", "Three"]);
+  });
+});
+
+describe("a held question keeps the choices the agent offered", () => {
+  const held = (options: unknown) => {
+    const r = holdQuestion(
+      loopWith({}),
+      {
+        itemId: "1",
+        question: "Where does the fix land?",
+        kind: "blocking",
+        options,
+      },
+      T0,
+    );
+    if (!r.ok) throw new Error(r.error);
+    return r.question;
+  };
+
+  test("two to four distinct choices are kept, in order", () => {
+    expect(held(["Workspace copy", "Upstream", "Both"]).options).toEqual([
+      "Workspace copy",
+      "Upstream",
+      "Both",
+    ]);
+  });
+
+  test("duplicates, blanks and non-strings are dropped, and more than four are cut", () => {
+    expect(held(["A", " A ", "", 7, "B", "C", "D", "E"]).options).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+    ]);
+  });
+
+  test("fewer than two usable choices is a free-text question", () => {
+    expect(held(["Only one"]).options).toBeUndefined();
+    expect(held("not a list").options).toBeUndefined();
+    expect(held(undefined).options).toBeUndefined();
   });
 });

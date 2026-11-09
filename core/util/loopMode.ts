@@ -1082,6 +1082,63 @@ export function replanDecision(
   }
 }
 
+export interface ReplanDiffItem {
+  text: string;
+  /** Where the item stood in the loop before the re-plan, when it had a place */
+  status?: LoopItemStatus;
+}
+
+/** What a re-plan changed against the plan the loop was running. */
+export interface ReplanDiff {
+  /** To-dos the loop already had, as they stand */
+  kept: ReplanDiffItem[];
+  /** To-dos the loop has not seen */
+  added: string[];
+  /** To-dos of the old plan that the new one does not have */
+  dropped: ReplanDiffItem[];
+}
+
+/**
+ * The new plan set against the plan the loop was running, for the card that
+ * asks the person to accept it: the whole document is not the answer to "what
+ * changed". A to-do is kept when the loop already has its id or the old plan
+ * had its text word for word; a reworded to-do therefore shows as one dropped
+ * and one added, which is what the loop does with it. Undefined when no
+ * re-plan is waiting.
+ */
+export function replanDiff(
+  loop: LoopState,
+  plan: TaskPlan,
+): ReplanDiff | undefined {
+  const previous = loop.replanned?.planTexts;
+  if (!previous) return undefined;
+  // The loop's items are in the old plan's order; a person who edited the
+  // list since leaves no alignment to rely on
+  const aligned = loop.items.length === previous.length;
+  const statusOfText = (text: string) =>
+    aligned ? loop.items[previous.indexOf(text)]?.status : undefined;
+
+  const kept: ReplanDiffItem[] = [];
+  const added: string[] = [];
+  for (const task of plan.items) {
+    const known = itemState(loop, task.id);
+    if (known) kept.push({ text: task.text, status: known.status });
+    else if (previous.includes(task.text)) {
+      kept.push({ text: task.text, status: statusOfText(task.text) });
+    } else added.push(task.text);
+  }
+  const keptTexts = new Set(kept.map((k) => k.text));
+  const newIds = new Set(plan.items.map((t) => t.id));
+  const dropped: ReplanDiffItem[] = [];
+  previous.forEach((text, i) => {
+    if (keptTexts.has(text)) return;
+    const item = aligned ? loop.items[i] : undefined;
+    if (item && newIds.has(item.id)) return;
+    dropped.push({ text, status: item?.status });
+  });
+  return { kept, added, dropped };
+}
+
 function todos(n: number): string {
   return `${n} to-do${n === 1 ? "" : "s"}`;
 }
@@ -1764,6 +1821,26 @@ function decideAlone(
   };
 }
 
+/** Most characters of one choice the panel will show. */
+export const LOOP_OPTION_LENGTH = 160;
+
+/**
+ * The choices a held question offers: two to four distinct, trimmed, non-empty
+ * strings. Anything else is dropped, so a model that sends junk still gets
+ * its question held, as a free-text one.
+ */
+export function questionOptions(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const text = item.trim().slice(0, LOOP_OPTION_LENGTH);
+    if (text) seen.add(text);
+  }
+  const options = [...seen].slice(0, 4);
+  return options.length >= 2 ? options : undefined;
+}
+
 export function holdQuestion(
   loop: LoopState,
   input: {
@@ -1773,6 +1850,8 @@ export function holdQuestion(
     assumption?: unknown;
     /** What a wrong answer would cost, as the agent labelled it (QUESTION_TYPES) */
     type?: unknown;
+    /** Two to four short choices, the agent's default first (see questionOptions) */
+    options?: unknown;
     approval?: LoopQuestion["approval"];
     /** For the error texts; default the IDE's names */
     toolNames?: LoopToolNames;
@@ -1841,6 +1920,9 @@ export function holdQuestion(
     kind,
     ...(type ? { type } : {}),
     ...(assumption ? { assumption } : {}),
+    ...(questionOptions(input.options)
+      ? { options: questionOptions(input.options) }
+      : {}),
     ...(input.approval ? { approval: input.approval } : {}),
     askedAt: iso(now),
   };

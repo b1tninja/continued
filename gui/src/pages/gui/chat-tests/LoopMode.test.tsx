@@ -60,10 +60,16 @@ const ask = (
   question: string,
   kind: "blocking" | "assumption",
   assumption?: string,
+  options?: string[],
 ) =>
   calls({
     name: BuiltInToolNames.HoldQuestion,
-    args: { question, kind, ...(assumption ? { assumption } : {}) },
+    args: {
+      question,
+      kind,
+      ...(assumption ? { assumption } : {}),
+      ...(options ? { options } : {}),
+    },
   });
 
 const text = (m: ChatMessage | undefined) => (m ? renderChatMessage(m) : "");
@@ -190,6 +196,155 @@ beforeEach(() => {
 });
 
 describe("Loop mode", () => {
+  test("a held question with choices shows them in the Questions panel, and a choice answers it", async () => {
+    const h = await setup(["Pick the grammar"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking", undefined, [
+        "ABNF",
+        "PEG",
+        "Both",
+      ]),
+      finish("waiting", "needs the grammar choice"),
+      finish("done", "grammar picked"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+
+    // The model's choices were kept, and they appear in their own panel
+    expect(h.loop().questions[0].options).toEqual(["ABNF", "PEG", "Both"]);
+    const panel = document.querySelector("[data-testid=question-panel]")!;
+    expect(panel.textContent).toContain("1 question for you");
+    expect(
+      [...panel.querySelectorAll("[data-testid=loop-choice-option]")].map(
+        (b) => b.textContent,
+      ),
+    ).toEqual(["ABNF", "PEG", "Both"]);
+    // The inbox points at the panel instead of listing the question again
+    expect(
+      document.querySelector("[data-testid=loop-questions-pointer]"),
+    ).not.toBeNull();
+
+    await act(async () =>
+      fireEvent.click(
+        panel.querySelectorAll("[data-testid=loop-choice-option]")[1],
+      ),
+    );
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.prompt(2)).toContain(": PEG");
+    expect(document.querySelector("[data-testid=question-panel]")).toBeNull();
+  });
+
+  test("Other opens a field for an answer of your own", async () => {
+    const h = await setup(["Pick the grammar"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking", undefined, [
+        "ABNF",
+        "PEG",
+      ]),
+      finish("waiting", "needs the grammar choice"),
+      finish("done", "grammar picked"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+
+    expect(
+      document.querySelector("[data-testid=loop-choice-other-input]"),
+    ).toBeNull();
+    await act(async () =>
+      fireEvent.click(
+        document.querySelector("[data-testid=loop-choice-other]")!,
+      ),
+    );
+    const input = document.querySelector<HTMLInputElement>(
+      "[data-testid=loop-choice-other-input]",
+    )!;
+    await act(async () =>
+      fireEvent.change(input, {
+        target: { value: "Neither: use a hand parser" },
+      }),
+    );
+    await act(async () =>
+      fireEvent.click(
+        document.querySelector("[data-testid=loop-choice-other-send]")!,
+      ),
+    );
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.prompt(2)).toContain("Neither: use a hand parser");
+  });
+
+  test("a plan's decisions are answered in the Questions panel, and the answer lands in the plan file", async () => {
+    const h = await setup([]);
+    h.turns.push(
+      calls({
+        name: BuiltInToolNames.PresentPlan,
+        args: {
+          title: "Build the parser",
+          plan: "Parse the grammar.",
+          todos: ["Write the lexer", "Add tests"],
+          decisions: [
+            {
+              question: "Where does the fix land?",
+              options: ["Workspace copy", "Upstream", "Both"],
+              pick: "Workspace copy",
+              type: "scope",
+              todos: [1],
+            },
+          ],
+        },
+      }),
+    );
+    await pickMode(h, "mode-option-loop");
+    await send("Plan the parser");
+
+    // Plan edits Cautious: the first plan waits, and its decision is a question
+    const panel = await waitFor(() => {
+      const el = document.querySelector("[data-testid=question-panel]");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(panel.textContent).toContain("1 question for you");
+    expect(panel.textContent).toContain("Where does the fix land?");
+    expect(panel.textContent).toContain("Workspace copy (recommended)");
+    // The card points at the panel instead of repeating the question
+    expect(
+      document.querySelector("[data-testid=plan-card-decisions-pointer]"),
+    ).not.toBeNull();
+    expect(
+      document.querySelector("[data-testid=plan-card-decisions]"),
+    ).toBeNull();
+
+    await act(async () =>
+      fireEvent.click(
+        panel.querySelectorAll("[data-testid=plan-decision-option]")[1],
+      ),
+    );
+    await waitFor(() =>
+      expect(document.querySelector("[data-testid=question-panel]")).toBeNull(),
+    );
+    // The harness seeds one plan file; the presented plan is the new one
+    const file = Object.entries(h.files).find(([k]) =>
+      k.endsWith("build-the-parser-2.md"),
+    )![1];
+    expect(file).toContain("Where does the fix land?");
+    expect(file).toContain("Upstream");
+  });
+
+  test("a question without choices keeps the free-text field", async () => {
+    const h = await setup(["Pick the grammar"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
+      finish("waiting", "needs the grammar choice"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+    expect(
+      document.querySelector("[data-testid=loop-answer-input]"),
+    ).not.toBeNull();
+    expect(
+      document.querySelector("[data-testid=loop-choice-option]"),
+    ).toBeNull();
+  });
+
   test("seeds the items, parks a blocking question while the others run, and requeues it when answered", async () => {
     const h = await setup(["Pick the grammar", "Write the lexer", "Add tests"]);
     h.turns.push(
@@ -304,6 +459,28 @@ describe("Loop mode", () => {
     await h.start();
 
     await waitFor(() => expect(h.loop().status).toBe("awaiting_plan"));
+    // The card says why it asks and what changed, not just the whole document
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-testid=plan-card-diff]"),
+      ).not.toBeNull(),
+    );
+    expect(
+      document.querySelector("[data-testid=plan-card-diff]")!.textContent,
+    ).toContain("2 kept, 1 added, 0 dropped");
+    expect(
+      document.querySelector("[data-testid=plan-card-diff]")!.textContent,
+    ).toContain("Install vitest");
+    expect(
+      document.querySelector("[data-testid=plan-card-replan-reason]")!
+        .textContent,
+    ).toContain("Why you are asked");
+    const marks = [
+      ...document.querySelectorAll("[data-testid=plan-card-todos] li"),
+    ].map((li) => li.textContent);
+    expect(marks[0]).toContain("[x] Write the lexer");
+    expect(marks[1]).toContain("[ ] Install vitest");
+    expect(marks[2]).toContain("[!] Add tests");
     expect(h.store.getState().session.mode).toBe("plan");
     expect(h.prompt(2)).toContain("Re-evaluate the plan");
     expect(h.prompt(2)).toContain("(failed: no test runner installed)");

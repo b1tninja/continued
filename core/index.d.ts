@@ -487,6 +487,8 @@ export interface LoopQuestion {
   type?: QuestionType;
   /** The default the item continued with (kind assumption) */
   assumption?: string;
+  /** Two to four choices the agent offered, its default first */
+  options?: string[];
   /** The held tool call (kind approval) */
   approval?: { toolName: string; summary: string; grantKey: string };
   askedAt: string;
