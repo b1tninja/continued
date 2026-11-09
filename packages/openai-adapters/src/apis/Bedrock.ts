@@ -610,14 +610,22 @@ export class BedrockApi implements BaseLlmApi {
    * `reasoning_effort` from the OpenAI body as the reasoning switch: unset
    * sends nothing, `none` turns reasoning off where a model takes an explicit
    * off, and the others turn it on (`minimal` as low, `xhigh` and `max` as
-   * high, the most any Bedrock family accepts). The config has no reasoning
-   * field of its own, so the body is the only source.
+   * high, the most any Bedrock family accepts). The body wins; else the
+   * config's `requestOptions.extraBodyProperties.reasoning_effort` (a catalog
+   * variant, or a CLI use's `modeModels` effort) stands in, since the config
+   * has no reasoning field of its own.
    */
   private reasoningFromBody(oaiBody: ChatCompletionCreateParams): {
     reasoning: boolean | undefined;
     budgetTokens: number;
   } {
-    const effort = oaiBody.reasoning_effort;
+    const fromConfig =
+      this.config.requestOptions?.extraBodyProperties?.reasoning_effort;
+    const effort =
+      oaiBody.reasoning_effort ??
+      (typeof fromConfig === "string"
+        ? (fromConfig as ChatCompletionCreateParams["reasoning_effort"])
+        : undefined);
     if (!effort) return { reasoning: undefined, budgetTokens: 0 };
     if (effort === "none") return { reasoning: false, budgetTokens: 0 };
     const level =
