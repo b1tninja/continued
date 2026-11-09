@@ -59,7 +59,7 @@ export const HOLD_QUESTION_PARAMETERS = {
 };
 
 export const FINISH_ITEM_TOOL_DESCRIPTION =
-  'Report the item you were given and end your turn. This is the only way to end a turn: a turn that ends without it is not counted. outcome "done" when it is finished; "waiting" when it needs an answer to a blocking question; "stuck" when you cannot finish it (say why in summary); "later" when another item may settle it: the item comes back after the others, once, and needs `reminder`. A second "later" counts as stuck.';
+  'Report the item you were given and end your turn. This is the only way to end a turn: a turn that ends without it is not counted. outcome "done" when it is finished and its check, if it has one, exited 0 when you ran it; "waiting" when it needs an answer to a blocking question; "stuck" when you cannot finish it (say why in summary); "later" when another item may settle it: the item comes back after the others, once, and needs `reminder`. A second "later" counts as stuck.';
 
 export const FINISH_ITEM_PARAMETERS = {
   type: "object" as const,
@@ -94,14 +94,17 @@ export const REMIND_ME_TOOL_DESCRIPTION = `Save a note for a later run. Each ite
 
 - when "item": for the run of the item numbered in \`item\`
 - when "next_items": for the next item that runs
-- when "retry": for a later run of this item
+- when "retry": for a later run of this item (the default when \`when\` is left out)
 - when "replan": for the next re-plan
 
 Each reminder is delivered once. List in \`files\` the files it depends on: if they change before it is delivered, it arrives marked to check first.`;
 
 export const REMIND_ME_PARAMETERS = {
   type: "object" as const,
-  required: ["note", "when"],
+  // `when` is asked for in the description but not required by the schema:
+  // the CLI rejects a call missing a required parameter, and Haiku 5.5 left
+  // it out in nine of nine calls, every one a note for its own later run.
+  required: ["note"],
   properties: {
     note: {
       type: "string",
@@ -110,7 +113,7 @@ export const REMIND_ME_PARAMETERS = {
     when: {
       type: "string",
       enum: [...LOOP_REMINDER_WHEN],
-      description: "Which run it is for",
+      description: 'Which run it is for. Left out, it is "retry".',
     },
     item: {
       type: "string",

@@ -4,14 +4,17 @@ import {
   answeredDecisions,
   choosePlanFileName,
   describeDecisions,
+  isExistenceOnlyCheck,
   parsePlanFile,
   planBuildMessage,
   planKeepPlanningResult,
+  planProposedResult,
   serializePlanFile,
   slugifyPlanTitle,
   taskPlanForProposal,
   taskPlanFromPlanFile,
   validatePlanArgs,
+  weakCheckNotes,
 } from "./planFile";
 import { parseMarkdownChecklist } from "./taskPlan";
 
@@ -347,6 +350,54 @@ describe("task list from a plan", () => {
     const md = "# T\n\n## To-dos\n\n- [>] a\n- [>] b\n";
     const r = taskPlanFromPlanFile(md, undefined, now);
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("check lint", () => {
+  it("knows a check that only tests that a file or a string exists", () => {
+    for (const weak of [
+      "test -f src/strings.js",
+      'test -f src/strings.js && grep -q "export function slugify" src/strings.js',
+      "grep -q '## Usage' README.md && grep -q slugify README.md",
+      "echo 'Waiting for user decision'",
+      "ls src/a.js",
+      "Test-Path src/a.js",
+      "[ -f src/a.js ]",
+      "cat README.md | grep Usage",
+    ]) {
+      expect(isExistenceOnlyCheck(weak), weak).toBe(true);
+    }
+    for (const real of [
+      "npm test",
+      "node --test test/slugify.test.js",
+      "node --check src/a.js",
+      `node -e "import('./src/strings.js').then(m=>{if(m.slugify('A b')!=='a-b')process.exit(1)})"`,
+      "grep -q Usage README.md && npm test",
+      "pytest tests/test_dates.py",
+    ]) {
+      expect(isExistenceOnlyCheck(real), real).toBe(false);
+    }
+  });
+
+  it("names the to-dos whose check proves nothing, and nothing otherwise", () => {
+    const notes = weakCheckNotes([
+      { check: "test -f src/strings.js" },
+      { check: "npm test" },
+      {},
+      { check: "grep -q Usage README.md" },
+    ]);
+    expect(notes).toContain("The check for to-do 1, `test -f src/strings.js`");
+    expect(notes).toContain("The check for to-do 4, `grep -q Usage README.md`");
+    expect(notes).not.toContain("to-do 2");
+    expect(weakCheckNotes([{ check: "npm test" }, {}])).toBe("");
+    expect(
+      planProposedResult("plans/p.md", {
+        items: [
+          { id: "1", text: "A", status: "pending", check: "test -f a.js" },
+        ],
+        updatedAt: "2026-11-08T00:00:00Z",
+      } as never),
+    ).toContain("only tests that a file or a string exists");
   });
 });
 
