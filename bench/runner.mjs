@@ -46,7 +46,7 @@ Required
                            guidance, compliance, safety)
 
 Settings
-  --profile full|short     prompt profile for the run (CONTINUE_PROMPT_PROFILE); default: the model's own
+  --profile full|short|tailored  prompt profile for the run (CONTINUE_PROMPT_PROFILE); default: the model's own
   --level <area=level,..>  policy levels, recorded on every record; applied where the CLI has the
                            knob today (tool-use=yolo adds --auto, tool-use=manual removes it;
                            plan-edits and questions pick the loop autonomy); the rest is recorded only
@@ -144,7 +144,7 @@ function parseArgs(argv) {
         throw new Error(`Unknown option ${a}\n\n${HELP}`);
     }
   }
-  if (opts.profile && !["full", "short"].includes(opts.profile))
+  if (opts.profile && !["full", "short", "tailored"].includes(opts.profile))
     throw new Error("--profile must be full or short");
   if (!(opts.runs >= 1)) throw new Error("--runs must be at least 1");
   return opts;
