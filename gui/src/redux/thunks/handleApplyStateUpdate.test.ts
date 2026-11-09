@@ -172,11 +172,7 @@ describe("handleApplyStateUpdate", () => {
       numDiffs: 1,
     };
 
-    async function finish(
-      editsLevel: string,
-      setting: string,
-      loop?: object,
-    ) {
+    async function finish(editsLevel: string, setting: string, loop?: object) {
       vi.mocked(findToolCallById).mockReturnValue({
         ...UNUSED_TOOL_CALL_PARAMS,
         toolCallId: "call",
@@ -184,7 +180,10 @@ describe("handleApplyStateUpdate", () => {
       } as ToolCallState);
       mockGetState.mockReturnValue({
         session: { history: [], loop },
-        ui: { policyLevels: { edits: editsLevel }, toolSettings: { unused: setting } },
+        ui: {
+          policyLevels: { edits: editsLevel },
+          toolSettings: { unused: setting },
+        },
       });
       await handleApplyStateUpdate(done)(mockDispatch, mockGetState, mockExtra);
       return mockExtra.ideMessenger.post.mock.calls.filter(

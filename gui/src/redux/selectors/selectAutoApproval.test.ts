@@ -112,7 +112,9 @@ describe("the loop's policy and the YOLO banner", () => {
   it("names every area at YOLO", () => {
     expect(
       selectYoloAreas(
-        state({ levels: { tools: "yolo", questions: "yolo", edits: "permissive" } }),
+        state({
+          levels: { tools: "yolo", questions: "yolo", edits: "permissive" },
+        }),
       ),
     ).toEqual(["tools", "questions"]);
     expect(selectYoloAreas(state({}))).toEqual([]);

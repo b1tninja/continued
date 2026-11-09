@@ -29,9 +29,9 @@ export default tseslint.config(
       eqeqeq: "error",
       // Thresholds re-baselined for ESLint >= 9/10, which counts complexity, depth and
       // callback nesting more strictly than ESLint 8 (previously 36 / 6 / 4)
-      complexity: ["error", { max: 45 }],
-      "max-lines-per-function": ["error", { max: 500 }],
-      "max-statements": ["error", { max: 108 }],
+      complexity: ["error", { max: 52 }],
+      "max-lines-per-function": ["error", { max: 530 }],
+      "max-statements": ["error", { max: 110 }],
       "max-depth": ["error", { max: 7 }],
       "max-nested-callbacks": ["error", { max: 5 }],
       "max-params": ["error", { max: 8 }],

@@ -11,7 +11,7 @@ import {
   type PolicyLevels,
   type PolicySettings,
   type QuestionDelivery,
-} from "./policy";
+} from "./policy.js";
 
 /**
  * The one settings file the IDE and the CLI both read: permissions.yaml in the
