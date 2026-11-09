@@ -1,6 +1,6 @@
 import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { ILLM } from "../../..";
-import type { ApprovalSettings } from "../approval";
+import { levelOfCall, type ApprovalSettings } from "../approval";
 import { DecisionSource } from "../decide";
 import { EvaluateInput, evaluateToolPolicyWithRules } from "../evaluate";
 import type { ToolPermissions } from "../rules";
@@ -22,7 +22,7 @@ export interface AutoReviewRequest {
   parsedArgs: Record<string, unknown>;
   processedArgs?: Record<string, unknown>;
   history: ReviewHistory;
-  /** Approval mode and switches; absent means Manual. */
+  /** The level of each area; absent means every call is reviewed. */
   approval?: ApprovalSettings;
   /** No person to ask: an unusable reviewer refuses. */
   headless?: boolean;
@@ -114,6 +114,13 @@ export async function autoReviewToolCall(
   }
   if (evaluated.source && FINAL_SOURCES.includes(evaluated.source)) {
     return settled("ask", "Your rules ask before this runs.");
+  }
+
+  // Only an area set to Automatic has a reviewer: the others leave an open
+  // call to the person
+  const found = levelOfCall(req.approval, req.toolName, deps.tool);
+  if (found && found.level !== "automatic") {
+    return settled("ask", "This area is not set to Automatic.");
   }
 
   // The call is open. From here Auto is the only thing that may loosen it.

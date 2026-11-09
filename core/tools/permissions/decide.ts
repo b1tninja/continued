@@ -23,9 +23,9 @@ export type DecisionSource =
   | "allow-rule"
   | "protected-path"
   | "safety-floor"
-  | "category"
-  | "review"
+  | "permissive"
   | "yolo"
+  | "manual"
   | "tool-setting"
   | "default";
 
@@ -52,8 +52,10 @@ export interface DecideInput {
   rules: ParsedRule[];
   /** A protected path the call touches (see protected.ts); makes the call ask. */
   protectedHit?: ProtectedHit;
-  /** What the approval mode or a category switch would allow (see approval.ts). */
+  /** What the level for the call's area would allow (see approval.ts). */
   loosening?: Loosening;
+  /** The area is Manual: an allow rule is not consulted and the call asks. */
+  manual?: boolean;
 }
 
 export function findRuleMatch(input: DecideInput): RuleMatch | undefined {
@@ -127,7 +129,7 @@ function matchMcp(rules: ParsedRule[], name: string): RuleMatch | undefined {
  * Apply the user's rules on top of the tool's own policy, in this order:
  * deny rules; anything already `disabled` (a tool switched off or a command
  * the safety floor refuses); a protected path (always asks); ask rules; allow
- * rules; the approval mode or category switches; otherwise the evaluated policy. Nothing after the first two steps can
+ * rules; the level of the call's area; otherwise the evaluated policy. Nothing after the first two steps can
  * loosen them, and no allow rule can loosen a protected path.
  */
 export function decideToolCall(input: DecideInput): ToolDecision {
@@ -174,7 +176,7 @@ export function decideToolCall(input: DecideInput): ToolDecision {
       reason: `Your rule ${match.rule.raw} asks before running this.`,
     };
   }
-  if (match?.decision === "allow") {
+  if (match?.decision === "allow" && !input.manual) {
     return {
       policy: "allowedWithoutPermission",
       source: "allow-rule",
@@ -182,12 +184,19 @@ export function decideToolCall(input: DecideInput): ToolDecision {
       reason: `Allowed by your rule ${match.rule.raw}.`,
     };
   }
-  // An approval mode or switch only acts on a call nothing above has settled.
+  // A level only acts on a call nothing above has settled.
   if (input.loosening && evaluated === "allowedWithPermission") {
     return {
       policy: "allowedWithoutPermission",
       source: input.loosening.source,
       reason: input.loosening.reason,
+    };
+  }
+  if (input.manual) {
+    return {
+      policy: "allowedWithPermission",
+      source: "manual",
+      reason: "This area is set to Manual, so every call asks.",
     };
   }
   return {

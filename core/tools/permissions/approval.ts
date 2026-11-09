@@ -1,70 +1,29 @@
 import type { Tool } from "../..";
-import { BuiltInToolNames } from "../builtIn";
-import { canonicalRuleName } from "./names";
+import { areaOfTool, PolicyArea, PolicyLevel, PolicyLevels } from "./policy";
 
 /**
- * How much the user lets tools run without asking (plan section 4).
+ * What the person has chosen for each area (plans/policy-areas.md). Core never
+ * guesses a level: a caller that sends nothing gets Cautious everywhere, which
+ * is the behaviour from before levels existed (rules and the tool's own setting).
  *
- * - manual: today's behaviour; only the user's rules loosen anything.
- * - autoApprove: the category switches below also loosen calls.
- * - auto: autoApprove, and a reviewer model decides what is left.
- * - review: every call that is not refused, protected, or asked about by a rule
- *   is allowed.
- * - yolo: every call is allowed, whatever a rule, a protected path or the
- *   safety floor says. Only a tool switched off stays off.
- *
- * Apart from yolo, none of these can loosen a deny rule, a tool that is switched off, a command
- * the safety floor refuses, a protected path, or an ask rule. They only act on
- * a call that would otherwise be left to the user's tool setting.
+ * Per area, for tool calls:
+ * - manual: asks every time. Allow rules and the tool's own setting are not
+ *   consulted; deny and ask rules and every protection still apply.
+ * - cautious: the rules and the tool's own setting decide.
+ * - automatic: as cautious here. What the rules leave open goes to the reviewer
+ *   model, which the caller asks (core's `tools/autoReview`).
+ * - permissive: a call the rules left open runs. A deny rule, an ask rule, a
+ *   protected path and the safety floor still win.
+ * - yolo: every call runs, whatever a rule, a protected path or the safety
+ *   floor says. Only a tool switched off stays off.
  */
-export type ApprovalModeName =
-  "manual" | "autoApprove" | "auto" | "review" | "yolo";
-
-export const APPROVAL_MODES: readonly ApprovalModeName[] = [
-  "manual",
-  "autoApprove",
-  "auto",
-  "review",
-  "yolo",
-];
-
-/** The switches of the Auto-approve card. Anything absent is off. */
-export interface ApprovalCategories {
-  /** Read, list and search inside the workspace. */
-  readFiles?: boolean;
-  /** Edit tools. */
-  editFiles?: boolean;
-  /** Commands the safety floor marks as safe. */
-  runSafeCommands?: boolean;
-  /** Every command the floor does not refuse. Includes the safe ones. */
-  runAllCommands?: boolean;
-  /** Web search and URL fetch. */
-  browser?: boolean;
-  /** MCP tools of every server without a switch of its own. */
-  mcp?: boolean;
-}
-
-export type ApprovalCategoryName = keyof ApprovalCategories;
-
 export interface ApprovalSettings {
-  mode: ApprovalModeName;
-  categories?: ApprovalCategories;
-  /** Per-server switch, keyed by the server's display name. Wins over `categories.mcp`. */
-  mcpServers?: Record<string, boolean>;
+  levels: PolicyLevels;
 }
 
-export const CATEGORY_LABELS: Record<ApprovalCategoryName, string> = {
-  readFiles: "Read files",
-  editFiles: "Edit files",
-  runSafeCommands: "Run safe commands",
-  runAllCommands: "Run all commands",
-  browser: "Browser",
-  mcp: "MCP servers",
-};
-
-/** What a mode or switch decided, for the decision chip. */
+/** What a level decided, for the decision chip. */
 export interface Loosening {
-  source: "category" | "review" | "yolo";
+  source: "permissive" | "yolo";
   reason: string;
   /** Allows the call whatever else applies (YOLO). */
   absolute?: boolean;
@@ -72,39 +31,40 @@ export interface Loosening {
 
 type ToolLike = Pick<
   Tool,
-  "group" | "originalFunctionName" | "uri" | "evaluateToolCallPolicy"
+  | "group"
+  | "originalFunctionName"
+  | "uri"
+  | "evaluateToolCallPolicy"
+  | "readonly"
 >;
 
-const READ_NAMES = new Set<string>([
-  "readFile",
-  "listDirectory",
-  "grepSearch",
-  "globSearch",
-  BuiltInToolNames.ViewDiff,
-  BuiltInToolNames.CodebaseTool,
-  BuiltInToolNames.ViewRepoMap,
-  BuiltInToolNames.ReadSkill,
-]);
-const BROWSER_NAMES = new Set(["fetchUrl", "searchWeb"]);
+export interface LevelOfCall {
+  area: "context" | "tools" | "edits";
+  level: PolicyLevel;
+}
 
-/** Which switch governs a tool, or undefined when none does (it then keeps asking). */
-export function categoryOfTool(
+/**
+ * The area a call belongs to and the level set for it. Undefined when the
+ * caller sent no levels or the tool only touches the session (the task list,
+ * Loop's tools), which no level governs.
+ */
+export function levelOfCall(
+  approval: ApprovalSettings | undefined,
   toolName: string,
-  tool: Pick<Tool, "uri"> | undefined,
-): ApprovalCategoryName | undefined {
-  if (tool?.uri?.startsWith("mcp:")) return "mcp";
-  const name = canonicalRuleName(toolName);
-  if (name === "runTerminalCommand") return "runSafeCommands";
-  if (name === "writeFile") return "editFiles";
-  if (READ_NAMES.has(name)) return "readFiles";
-  if (BROWSER_NAMES.has(name)) return "browser";
-  return undefined;
+  tool: Pick<Tool, "readonly"> | undefined,
+): LevelOfCall | undefined {
+  if (!approval) return undefined;
+  const area = areaOfTool(toolName, tool);
+  if (!area) return undefined;
+  const level = approval.levels[area as PolicyArea];
+  return level ? { area, level } : undefined;
 }
 
 /**
  * Would the tool's own check pass if the user had set it to run without
  * asking? That is false for a file outside the workspace and for a command the
- * safety floor does not call safe, so a switch never reaches past them.
+ * safety floor does not call safe, so Permissive never reaches past them for
+ * reads.
  */
 function passesOwnCheck(
   tool: ToolLike | undefined,
@@ -130,70 +90,51 @@ export interface LooseningInput {
 }
 
 /**
- * Whether the approval mode and switches allow this call without asking. The
- * caller applies the result only to a call that is still open (no rule matched,
- * not protected, not refused), which is what keeps the order of plan section 5.
+ * Whether the level for this call's area allows it without asking. The caller
+ * applies the result only to a call that is still open (no rule matched, not
+ * protected, not refused), except for YOLO, which is absolute.
  */
 export function approvalLoosening(
   input: LooseningInput,
 ): Loosening | undefined {
   const { approval, tool, toolName, parsedArgs, processedArgs } = input;
-  if (!approval || !APPROVAL_MODES.includes(approval.mode)) return undefined;
-  if (approval.mode === "manual") return undefined;
+  const found = levelOfCall(approval, toolName, tool);
+  if (!found) return undefined;
 
-  if (approval.mode === "yolo") {
-    return { source: "yolo", reason: "Allowed by YOLO mode.", absolute: true };
-  }
-
-  if (approval.mode === "review") {
+  if (found.level === "yolo") {
     return {
-      source: "review",
-      reason:
-        "Allowed by Review mode (no deny rule or protected path applies).",
+      source: "yolo",
+      reason: `Allowed: ${found.area === "context" ? "Context use" : found.area === "edits" ? "File edits" : "Tool use"} is set to YOLO.`,
+      absolute: true,
     };
   }
-
-  const category = categoryOfTool(toolName, tool);
-  if (!category) return undefined;
-  const on = approval.categories ?? {};
-
-  if (category === "mcp") {
-    const server = tool?.group;
-    const own =
-      server !== undefined ? approval.mcpServers?.[server] : undefined;
-    const allowed = own ?? on.mcp === true;
-    return allowed
-      ? {
-          source: "category",
-          reason:
-            own !== undefined
-              ? `Allowed by your switch for the ${server} MCP server.`
-              : `Allowed by the "${CATEGORY_LABELS.mcp}" switch.`,
-        }
-      : undefined;
-  }
-
-  if (category === "runSafeCommands") {
-    if (on.runAllCommands) {
-      return {
-        source: "category",
-        reason: `Allowed by the "${CATEGORY_LABELS.runAllCommands}" switch.`,
-      };
+  if (found.level === "permissive") {
+    // A read outside the workspace still asks: Permissive is "no rule stops
+    // it", and the tool's own workspace check is a protection, not a rule.
+    if (
+      found.area === "context" &&
+      !passesOwnCheck(tool, parsedArgs, processedArgs)
+    ) {
+      return undefined;
     }
-    if (on.runSafeCommands && passesOwnCheck(tool, parsedArgs, processedArgs)) {
-      return {
-        source: "category",
-        reason: `Allowed by the "${CATEGORY_LABELS.runSafeCommands}" switch (the safety check calls it safe).`,
-      };
-    }
-    return undefined;
-  }
-
-  if (on[category] && passesOwnCheck(tool, parsedArgs, processedArgs)) {
     return {
-      source: "category",
-      reason: `Allowed by the "${CATEGORY_LABELS[category]}" switch.`,
+      source: "permissive",
+      reason: `Allowed: ${found.area === "context" ? "Context use" : found.area === "edits" ? "File edits" : "Tool use"} is Permissive and no rule stops it.`,
     };
   }
   return undefined;
+}
+
+/**
+ * Manual: ask every time, whatever the tool's own setting or an allow rule
+ * says. File edits are excluded because their check is the diff the person
+ * accepts or rejects, which is the same at every level below Permissive.
+ */
+export function isManualCall(
+  approval: ApprovalSettings | undefined,
+  toolName: string,
+  tool: Pick<Tool, "readonly"> | undefined,
+): boolean {
+  const found = levelOfCall(approval, toolName, tool);
+  return found?.level === "manual" && found.area !== "edits";
 }

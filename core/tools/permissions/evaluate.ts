@@ -1,7 +1,12 @@
 import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { Tool } from "../..";
 import type { ResolvedPath } from "../../util/pathResolver";
-import { approvalLoosening, ApprovalSettings } from "./approval";
+import {
+  approvalLoosening,
+  ApprovalSettings,
+  isManualCall,
+  levelOfCall,
+} from "./approval";
 import { DecisionSource, decideToolCall } from "./decide";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
@@ -22,7 +27,11 @@ export interface EvaluateInput {
   tool:
     | Pick<
         Tool,
-        "group" | "originalFunctionName" | "uri" | "evaluateToolCallPolicy"
+        | "group"
+        | "originalFunctionName"
+        | "uri"
+        | "evaluateToolCallPolicy"
+        | "readonly"
       >
     | undefined;
   toolName: string;
@@ -30,7 +39,7 @@ export interface EvaluateInput {
   parsedArgs: Record<string, unknown>;
   processedArgs?: Record<string, unknown>;
   permissions: ToolPermissions | undefined;
-  /** The user's approval mode and switches; absent means Manual. */
+  /** The level chosen for each area; absent means Cautious everywhere. */
   approval?: ApprovalSettings;
 }
 
@@ -69,12 +78,11 @@ export function evaluateToolPolicyWithRules(
   const protectedHit = findProtected({ toolName, parsedArgs, resolvedPath });
 
   const rules = parsePermissions(input.permissions);
-  // YOLO also overrides a refusal, a rule and a protected path
-  const yoloOverrides =
-    input.approval?.mode === "yolo" &&
-    (evaluated === "disabled" || !!protectedHit || rules.length > 0);
+  const found = levelOfCall(input.approval, toolName, tool);
+  // YOLO reaches past a refusal, a rule and a protected path; Permissive acts
+  // only on a call that would otherwise ask
   const loosening =
-    evaluated === "allowedWithPermission" || yoloOverrides
+    found?.level === "yolo" || evaluated === "allowedWithPermission"
       ? approvalLoosening({
           approval: input.approval,
           tool,
@@ -83,7 +91,11 @@ export function evaluateToolPolicyWithRules(
           processedArgs,
         })
       : undefined;
-  if (rules.length === 0 && !protectedHit && !loosening) {
+  const manual =
+    isManualCall(input.approval, toolName, tool) &&
+    basePolicy !== "disabled" &&
+    !loosening;
+  if (rules.length === 0 && !protectedHit && !loosening && !manual) {
     return { policy: evaluated, displayValue };
   }
 
@@ -101,6 +113,7 @@ export function evaluateToolPolicyWithRules(
     rules,
     protectedHit,
     loosening,
+    manual,
   });
 
   return {
