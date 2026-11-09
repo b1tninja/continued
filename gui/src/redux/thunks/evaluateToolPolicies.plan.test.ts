@@ -158,3 +158,49 @@ describe("Plan mode holds tools that may make changes", () => {
     expect(result.policy).toBe(ALLOW);
   });
 });
+
+describe("a command the parser vouched as only reading, in Plan mode", () => {
+  it("runs: that is how a re-plan looks at the repository", async () => {
+    const terminal = {
+      ...mcpTool,
+      function: { ...mcpTool.function, name: "run_terminal_command" },
+    } as any;
+    const ide = new MockIdeMessenger();
+    ide.responseHandlers["tools/evaluatePolicy"] = async () =>
+      ({
+        policy: ALLOW,
+        source: "permissive",
+        readOnly: "only reads: ls",
+      }) as any;
+    const result = await evaluateToolPolicy(
+      ide,
+      [terminal],
+      call("run_terminal_command"),
+      { run_terminal_command: ALLOW },
+      undefined,
+      "plan",
+    );
+    expect(result.policy).toBe(ALLOW);
+    expect(result.readOnly).toBe("only reads: ls");
+  });
+
+  it("a command that may write still waits", async () => {
+    const terminal = {
+      ...mcpTool,
+      function: { ...mcpTool.function, name: "run_terminal_command" },
+    } as any;
+    const ide = new MockIdeMessenger();
+    ide.responseHandlers["tools/evaluatePolicy"] = async () =>
+      ({ policy: ALLOW, source: "permissive" }) as any;
+    const result = await evaluateToolPolicy(
+      ide,
+      [terminal],
+      call("run_terminal_command"),
+      { run_terminal_command: ALLOW },
+      undefined,
+      "plan",
+    );
+    expect(result.policy).toBe(ASK);
+    expect(result.source).toBe("plan-mode");
+  });
+});

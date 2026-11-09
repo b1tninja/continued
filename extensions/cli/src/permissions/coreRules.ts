@@ -247,6 +247,7 @@ export async function evaluateWithCoreRules(
     parsedArgs: call.parsedArgs,
     permissions,
     approval: input.approval,
+    cwd: input.cwd ?? process.cwd(),
   });
   return {
     decision:

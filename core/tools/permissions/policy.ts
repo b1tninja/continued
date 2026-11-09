@@ -1,6 +1,7 @@
 import type { Tool } from "../..";
 import { BuiltInToolNames } from "../builtIn";
 import { canonicalRuleName } from "./names";
+import { classifyReadOnly, type ReadOnlyClaim } from "./readOnlyCommand";
 
 /**
  * Five areas, each with its own level (plans/policy-areas.md). This replaces
@@ -412,13 +413,30 @@ const CONTEXT_RULE_NAMES = new Set<string>([
 export function areaOfTool(
   toolName: string,
   tool?: Pick<Tool, "readonly"> | undefined,
+  /** The call's arguments: a command that only reads is Context use */
+  call?: { parsedArgs?: Record<string, unknown>; cwd?: string },
 ): "context" | "tools" | "edits" | undefined {
   if (SESSION_TOOLS.has(toolName)) return undefined;
   const name = canonicalRuleName(toolName);
+  if (name === "runTerminalCommand" && readOnlyClaim(call)?.vouched) {
+    return "context";
+  }
   if (EDIT_RULE_NAMES.has(name)) return "edits";
   if (WEB_RULE_NAMES.has(name)) return "tools";
   if (CONTEXT_RULE_NAMES.has(name)) return "context";
   return tool?.readonly ? "context" : "tools";
+}
+
+/**
+ * What the parser says about a terminal command: vouched read-only, or why
+ * not. Undefined when the call has no command.
+ */
+export function readOnlyClaim(
+  call: { parsedArgs?: Record<string, unknown>; cwd?: string } | undefined,
+): ReadOnlyClaim | undefined {
+  const command = call?.parsedArgs?.command;
+  if (typeof command !== "string") return undefined;
+  return classifyReadOnly(command, { cwd: call?.cwd });
 }
 
 export type QuestionDecider = "person" | "agent" | "reviewer";

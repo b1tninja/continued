@@ -176,14 +176,14 @@ async function coreRulesVerdict(
     );
     const assistant = modelState?.assistant;
     const permissions = assistant?.toolPermissions;
-    // The levels reach core's engine only when they change what the CLI
-    // does on its own: Manual, Permissive, YOLO or Automatic on a tool area
+    // The levels reach core's engine. At the defaults nothing else changes
+    // what the CLI does, so the engine may only loosen there (Context
+    // Permissive lets a command that only reads run without asking) and
+    // never tighten: a protected path or a refusal keeps the CLI's own answer.
     const levels = effectiveLevels(currentPermissionMode());
-    const approval = policyIsDefault(levels)
-      ? undefined
-      : { levels, ...approvalExtras() };
-    if (!permissions && !autoReview && !approval) return undefined;
-    return await evaluateWithCoreRules({
+    const approval = { levels, ...approvalExtras() };
+    const defaultsOnly = policyIsDefault(levels);
+    const verdict = await evaluateWithCoreRules({
       cliToolName: toolCall.name,
       args: toolCall.arguments,
       cliPermission,
@@ -198,6 +198,11 @@ async function coreRulesVerdict(
       isHeadless: !!isHeadless,
       history: autoReview ? services.chatHistory.getHistory() : undefined,
     });
+    return defaultsOnly && !permissions && !autoReview
+      ? verdict?.decision === "allow"
+        ? verdict
+        : undefined
+      : verdict;
   } catch (e) {
     logger.warn("Could not apply toolPermissions rules", { error: e });
     // Fail toward asking, and toward refusing when nobody can be asked.
@@ -255,10 +260,12 @@ export async function checkToolPermissionApproval(
   // but not one a hook asked for: the hook wants the user to confirm.
   if (permission !== "exclude") {
     const verdict = await coreRulesVerdict(toolCall, permission, isHeadless);
-    if (verdict) {
-      if (verdict.decision === "allow" && hookDecision !== "ask") {
-        return { approved: true };
-      }
+    if (verdict?.decision === "allow" && hookDecision !== "ask") {
+      return { approved: true };
+    }
+    // An allow over a hook's ask is the hook's to settle: it falls through to
+    // the CLI's own ask below, with no reason of the engine's to quote
+    if (verdict && verdict.decision !== "allow") {
       if (verdict.decision === "deny") {
         return {
           approved: false,

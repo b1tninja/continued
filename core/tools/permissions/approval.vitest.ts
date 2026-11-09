@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { evaluateTerminalCommandSecurity } from "@continuedev/terminal-security";
 import { describe, expect, it } from "vitest";
 import type { ApprovalSettings } from "./approval";
@@ -278,6 +281,78 @@ describe("the floor", () => {
   it("binds at every other level too", () => {
     for (const tools of ["manual", "cautious", "permissive"] as const) {
       expect(cmd("terraform destroy", floor({ tools })).policy).toBe(OFF);
+    }
+  });
+});
+
+describe("a command that only reads is Context use", () => {
+  it("runs under Context Permissive while Tool use is Cautious, and says why", () => {
+    const r = cmd("ls -la src", levels({}));
+    expect(r.policy).toBe(ALLOW);
+    expect(r.source).toBe("permissive");
+    expect(r.readOnly).toBe("only reads: ls");
+    expect(r.reason).toContain("Context use");
+    expect(r.reason).toContain("only reads: ls");
+    // A command that does not only read is still Tool use
+    expect(cmd("npm test", levels({})).policy).toBe(ASK);
+  });
+
+  it("a pipeline of readers is one read", () => {
+    expect(cmd("cat a.txt | sort | uniq", levels({})).policy).toBe(ALLOW);
+    expect(cmd("cat a.txt | tee b.txt", levels({})).policy).toBe(ASK);
+  });
+
+  it("is decided by Context use, not Tool use", () => {
+    const manualContext = levels({ context: "manual", tools: "permissive" });
+    expect(cmd("ls", manualContext).policy).toBe(ASK);
+    expect(cmd("ls", manualContext).source).toBe("manual");
+    expect(cmd("npm test", manualContext).policy).toBe(ALLOW);
+    expect(cmd("ls", levels({ context: "yolo", tools: "manual" })).policy).toBe(
+      ALLOW,
+    );
+  });
+
+  it("a redirect or substitution makes it Tool use again", () => {
+    const toolsManual = levels({ tools: "manual" });
+    expect(cmd("ls > out.txt", toolsManual).policy).toBe(ASK);
+    expect(cmd("ls $(pwd)", toolsManual).policy).toBe(ASK);
+    expect(cmd("ls", toolsManual).policy).toBe(ALLOW);
+  });
+
+  it("protected paths, deny rules and the safety check still apply to it", () => {
+    expect(cmd("cat ~/.aws/credentials", levels({})).source).toBe(
+      "protected-path",
+    );
+    const deny = cmd("cat notes.txt", levels({}), {
+      permissions: { deny: ["runTerminalCommand(cat *)"] },
+    });
+    expect(deny.policy).toBe(OFF);
+    expect(deny.source).toBe("deny-rule");
+  });
+
+  it("git is vouched only with a folder whose git config runs nothing", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ro-git-"));
+    try {
+      fs.mkdirSync(path.join(dir, ".git"));
+      fs.writeFileSync(
+        path.join(dir, ".git", "config"),
+        "[core]\n\tfsmonitor = /tmp/x\n",
+      );
+      const withCwd = (cwd?: string) =>
+        evaluateToolPolicyWithRules({
+          tool: terminalTool,
+          toolName: "run_terminal_command",
+          basePolicy: ASK,
+          parsedArgs: { command: "git status" },
+          permissions: undefined,
+          approval: levels({}),
+          cwd,
+        });
+      // No folder, or a config that can run a program: Tool use, so it asks
+      expect(withCwd(undefined).policy).toBe(ASK);
+      expect(withCwd(dir).policy).toBe(ASK);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 });

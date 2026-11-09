@@ -15,6 +15,7 @@ import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
+import { uriToPath } from "./tools/permissions/names";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import {
@@ -1705,6 +1706,8 @@ export class Core {
         }
 
         const tool = config.tools.find((t) => t.function.name === toolName);
+        // The folder lets git be vouched as read-only after its config is checked
+        const dirs = await this.ide.getWorkspaceDirs();
         return evaluateToolPolicyWithRules({
           tool,
           toolName,
@@ -1713,6 +1716,7 @@ export class Core {
           processedArgs,
           permissions: config.toolPermissions,
           approval,
+          ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
         });
       },
     );

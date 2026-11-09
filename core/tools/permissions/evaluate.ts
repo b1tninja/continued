@@ -21,6 +21,8 @@ export interface ToolPolicyResult {
   source?: DecisionSource;
   /** A sentence a person can read, for the prompt or the refusal. */
   reason?: string;
+  /** A command the parser vouched as only reading: why it is Context use */
+  readOnly?: string;
   /** The rule that decided, as written in config.yaml. */
   rule?: string;
 }
@@ -41,6 +43,8 @@ export interface EvaluateInput {
   parsedArgs: Record<string, unknown>;
   processedArgs?: Record<string, unknown>;
   permissions: ToolPermissions | undefined;
+  /** The folder a command runs in; lets git be vouched read-only */
+  cwd?: string;
   /** The level chosen for each area; absent means Cautious everywhere. */
   approval?: ApprovalSettings;
 }
@@ -121,7 +125,8 @@ export function evaluateToolPolicyWithRules(
   }
 
   const rules = parsePermissions(input.permissions);
-  const found = levelOfCall(input.approval, toolName, tool);
+  const call = { parsedArgs, cwd: input.cwd };
+  const found = levelOfCall(input.approval, toolName, tool, call);
   // YOLO reaches past a refusal, a rule and a protected path; Permissive acts
   // only on a call that would otherwise ask
   const loosening =
@@ -132,14 +137,19 @@ export function evaluateToolPolicyWithRules(
           toolName,
           parsedArgs,
           processedArgs,
+          cwd: input.cwd,
         })
       : undefined;
   const manual =
-    isManualCall(input.approval, toolName, tool) &&
+    isManualCall(input.approval, toolName, tool, call) &&
     basePolicy !== "disabled" &&
     !loosening;
   if (rules.length === 0 && !protectedHit && !loosening && !manual) {
-    return { policy: evaluated, displayValue };
+    return {
+      policy: evaluated,
+      displayValue,
+      ...(found?.readOnly ? { readOnly: found.readOnly } : {}),
+    };
   }
 
   const isMcp = !!tool.uri?.startsWith("mcp:") && !!tool.originalFunctionName;
@@ -165,5 +175,6 @@ export function evaluateToolPolicyWithRules(
     source: decision.source,
     ...(decision.reason ? { reason: decision.reason } : {}),
     ...(decision.rule ? { rule: decision.rule } : {}),
+    ...(found?.readOnly ? { readOnly: found.readOnly } : {}),
   };
 }

@@ -581,6 +581,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       source?: ToolDecisionSource;
       /** A sentence saying why, for the prompt or the refusal. */
       reason?: string;
+      /** A command the parser vouched as only reading */
+      readOnly?: string;
       /** The rule that decided, as written in config.yaml. */
       rule?: string;
     },

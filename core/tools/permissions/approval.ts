@@ -2,6 +2,7 @@ import type { Tool } from "../..";
 import {
   areaOfTool,
   builtinRuleOn,
+  readOnlyClaim,
   type BuiltinRuleId,
   type PolicyArea,
   type PolicyLevel,
@@ -64,6 +65,14 @@ type ToolLike = Pick<
 export interface LevelOfCall {
   area: "context" | "tools" | "edits";
   level: PolicyLevel;
+  /** A command that only reads, as the parser vouched for it */
+  readOnly?: string;
+}
+
+/** The call a level is looked up for: its arguments and the folder it runs in. */
+export interface CallContext {
+  parsedArgs?: Record<string, unknown>;
+  cwd?: string;
 }
 
 /**
@@ -75,12 +84,19 @@ export function levelOfCall(
   approval: ApprovalSettings | undefined,
   toolName: string,
   tool: Pick<Tool, "readonly"> | undefined,
+  call?: CallContext,
 ): LevelOfCall | undefined {
   if (!approval) return undefined;
-  const area = areaOfTool(toolName, tool);
+  const area = areaOfTool(toolName, tool, call);
   if (!area) return undefined;
   const level = approval.levels[area as PolicyArea];
-  return level ? { area, level } : undefined;
+  if (!level) return undefined;
+  const claim = area === "context" ? readOnlyClaim(call) : undefined;
+  return {
+    area,
+    level,
+    ...(claim?.vouched ? { readOnly: claim.claim } : {}),
+  };
 }
 
 /**
@@ -110,6 +126,8 @@ export interface LooseningInput {
   toolName: string;
   parsedArgs: Record<string, unknown>;
   processedArgs?: Record<string, unknown>;
+  /** The folder the command runs in, to check git's config for a read-only claim */
+  cwd?: string;
 }
 
 /**
@@ -121,28 +139,36 @@ export function approvalLoosening(
   input: LooseningInput,
 ): Loosening | undefined {
   const { approval, tool, toolName, parsedArgs, processedArgs } = input;
-  const found = levelOfCall(approval, toolName, tool);
+  const found = levelOfCall(approval, toolName, tool, {
+    parsedArgs,
+    cwd: input.cwd,
+  });
   if (!found) return undefined;
+  const what = found.readOnly ? ` (the command ${found.readOnly})` : "";
 
   if (found.level === "yolo") {
     return {
       source: "yolo",
-      reason: `Allowed: ${found.area === "context" ? "Context use" : found.area === "edits" ? "File edits" : "Tool use"} is set to YOLO.`,
+      reason: `Allowed: ${found.area === "context" ? "Context use" : found.area === "edits" ? "File edits" : "Tool use"} is set to YOLO${what}.`,
       absolute: true,
     };
   }
   if (found.level === "permissive") {
     // A read outside the workspace still asks: Permissive is "no rule stops
     // it", and the tool's own workspace check is a protection, not a rule.
+    // A command the parser vouched as only reading needs no help from the
+    // tool's own check, which does not know pipelines; a refusal or a
+    // protected path is settled before this
     if (
       found.area === "context" &&
+      !found.readOnly &&
       !passesOwnCheck(tool, parsedArgs, processedArgs)
     ) {
       return undefined;
     }
     return {
       source: "permissive",
-      reason: `Allowed: ${found.area === "context" ? "Context use" : found.area === "edits" ? "File edits" : "Tool use"} is Permissive and no rule stops it.`,
+      reason: `Allowed: ${found.area === "context" ? "Context use" : found.area === "edits" ? "File edits" : "Tool use"} is Permissive and no rule stops it${what}.`,
     };
   }
   return undefined;
@@ -157,7 +183,8 @@ export function isManualCall(
   approval: ApprovalSettings | undefined,
   toolName: string,
   tool: Pick<Tool, "readonly"> | undefined,
+  call?: CallContext,
 ): boolean {
-  const found = levelOfCall(approval, toolName, tool);
+  const found = levelOfCall(approval, toolName, tool, call);
   return found?.level === "manual" && found.area !== "edits";
 }

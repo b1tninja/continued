@@ -40,6 +40,8 @@ export interface EvaluatedPolicy {
   /** The reviewer's named reason (Auto mode). */
   category?: string;
   reason?: string;
+  /** A command the parser vouched as only reading (core) */
+  readOnly?: string;
   rule?: string;
   toolCallState: ToolCallState;
 }
@@ -63,6 +65,9 @@ export function holdInPlanMode(
   const name = result.toolCallState.toolCall.function.name;
   const tool = activeTools.find((t) => t.function.name === name);
   if (tool?.readonly) return result;
+  // A command the parser vouched as only reading may run in a plan turn:
+  // that is how a re-plan looks at `git log` or `ls`
+  if (result.readOnly) return result;
   // An area set to YOLO runs everything, in Plan mode too: that is what the
   // level says. Permissive and below still wait for the person here.
   if (levelOfCall(approval, name, tool)?.level === "yolo") return result;

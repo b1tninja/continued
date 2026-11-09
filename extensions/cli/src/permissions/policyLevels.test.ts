@@ -129,6 +129,22 @@ describe("the levels reach core's engine", () => {
     expect((await run({ tools: "manual" }, "git push"))?.decision).toBe("ask");
   });
 
+  it("at the default levels a command that only reads runs, and others still ask", async () => {
+    expect(await run({}, "ls -la")).toMatchObject({
+      decision: "allow",
+      by: "rules",
+    });
+    expect(await run({}, "cat a.txt | sort | uniq")).toMatchObject({
+      decision: "allow",
+    });
+    expect((await run({}, "npm test"))?.decision).toBe("ask");
+    expect((await run({}, "ls > out.txt"))?.decision).toBe("ask");
+  });
+
+  it("a read-only command that names a credentials file still asks", async () => {
+    expect((await run({}, "cat ~/.aws/credentials"))?.decision).toBe("ask");
+  });
+
   it("without levels or rules the CLI keeps its own result", async () => {
     expect(
       await evaluateWithCoreRules({
