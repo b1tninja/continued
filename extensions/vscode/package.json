@@ -768,7 +768,7 @@
     "rimraf": "^5.0.5",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.72.1",
-    "vite": "^8.3.5",
+    "vite": "^8.3.6",
     "vscode-extension-tester": "^8.14.1"
   },
   "dependencies": {
