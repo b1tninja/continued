@@ -633,9 +633,10 @@ export async function streamChatResponse(
 
     // Get system message once per iteration (can change based on tool
     // permissions mode, and a Loop turn has a use of its own), and the use's
-    // tail for the newest user message. A caller with a use of its own (a
-    // subagent's run) keeps it. A compaction's request gets no tail; test
-    // doubles of the service may not have the method.
+    // tail, the line that goes on every user message of the request. A
+    // caller with a use of its own (a subagent's run, the review worker)
+    // keeps it. A compaction's request gets no tail; test doubles of the
+    // service may not have the method.
     const use = fixedUse ?? currentModelUse();
     const systemMessage = await services.systemMessage.getSystemMessage(
       services.toolPermissions.getState().currentMode,
