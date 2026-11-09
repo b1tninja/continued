@@ -189,6 +189,25 @@ Problem: people arrive with providers, a model per task and MCP servers already 
 | G3  | Providers and models: Claude Code (Bedrock, Vertex, pins, overrides), OpenCode (providers, `model`, `small_model`), saved through `saveProviderModels`; keys from OpenCode's `auth.json` behind a checkbox | G0, G2, A4 | Not started |
 | G4  | Documentation for the wizard                                                                                                                                                                               | G3         | Not started |
 
+### Track H: which model does what
+
+Plan: the design is in `policy-areas.md` ("The reviewer model") and `docs/reference.mdx`; the handover for the seven `modeModels` entries (`chat`, `plan`, `agent`, `loop`, `replan`, `subagent`, `reviewer`) is in the session notes.
+
+Problem: the entries exist, but a use's `reasoningEffort` only reaches OpenAI-compatible servers and Bedrock from the CLI (#363). Claude on the direct Anthropic API ignores it, nothing lets a plan send one hard item to a stronger model, and no measurement says which split (cheap model on items, stronger on re-plans) pays.
+
+| PR  | Scope                                                                                                                                                                                                                 | Depends on | State       |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
+| H0  | The CLI applies a use's `reasoningEffort` as `reasoning_effort` (OpenAI-compatible, Bedrock)                                                                                                                          | none       | Open #363   |
+| H1  | Direct Anthropic adapter: send a thinking block for an effort and carry thinking blocks and signatures between turns (tool use after thinking is refused without them), then map efforts to budgets like the IDE does | H0         | Not started |
+| H2  | Per-item model: `TaskItem.model` so a plan routes one hard to-do to a stronger model, falling back to `loop`; shown on the item in the CLI strip and the IDE list                                                     | F1         | Not started |
+| H3  | Escalation: when stuck detection fires (repeated identical tool calls, failed items), run the next attempt on the `replan` model once, then drop back                                                                 | H2         | Not started |
+| H4  | Measure the split: re-run the Bedrock Nova suite with `loop` cheap and `replan` strong; record cost and completion per split and set the documented defaults from it                                                  | H0         | Not started |
+| H5  | Prompt profiles beyond Qwen: only Qwen has the short turn texts (`promptProfile`); measure Mistral, Nova and Llama the same way before adding a profile                                                               | none       | Not started |
+| H6  | Reviewer effort: pass the reviewer's `reasoningEffort` through the adapter instead of the IDE-only budget, and measure it in B4                                                                                       | H0, B4     | Not started |
+| H7  | Visibility: show the model and effort a turn actually used (CLI header, IDE turn footer) and cost by use in the usage ledger, so a bad fallback is visible                                                            | none       | Not started |
+| H8  | A config check: warn when `reasoningEffort` is set on a provider that ignores it, and when a `modeModels` name is not a chat model (the CLI skips these silently now)                                                 | H0         | Not started |
+| H9  | CLI subagent definitions as files with an optional `model:` (and effort), filling in `modeModels.subagent` when absent; today CLI subagents are role models that always name their own                                | none       | Not started |
+
 ## Later
 
 Carried over from `fork-plan.md` section 4.7, item 4. The four items it listed (checkpoints #185, a global rules toggle per mode #187, context-window and cost display #182, the Cline MCP import #193) have shipped; see the Shipped table. What is left:
