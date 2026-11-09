@@ -1,0 +1,69 @@
+# Reviewer isolation and a cached review prefix
+
+Status: plan, 2026-11-09. Nothing built. Roadmap row: Track U. Related: the reviewer role and Auto mode (Track B, `core/tools/permissions/auto/`), prompt caching (Track C), `continuous review` and subagents (Track M, `subagent` use).
+
+## The idea
+
+From the owner: when the agent-review features are used, run each review as a separate conversation, so the reviewer is isolated from the main agent's context (prompt injection, context bleeding), and use provider conversation ids, checkpoints or "rewind" to keep the reviewer's system and instruction prompt cached.
+
+## What we already have
+
+Read from `core/tools/permissions/auto/prompt.ts` and `review.ts` on 2026-11-09:
+
+- **A review is already a separate, stateless request.** `buildReviewMessages` returns two messages: a static `REVIEWER_SYSTEM_PROMPT` and one user message. No conversation id is involved, and nothing from earlier reviews is carried over (the only memory is `state.cached`, an exact-repeat lookup of a past verdict).
+- **It sees a digest, not the conversation.** The user message holds the person's recent messages, the names and clipped arguments of earlier tool calls, the environment, the person's guidance and the call under review, each fenced with a nonce (`<<<LABEL nonce ... END nonce>>>`) and declared untrusted data. Tool _output_ is never included; a call that followed instruction-like output is only marked (`outputFlagged`).
+- **The system prompt is static**, so it can be cached. What the person's guidance and environment add comes after text that changes every call.
+
+So the isolation half of the idea is largely in place by construction, and cheaper than a provider thread: nothing has to be created, kept alive or deleted. The open questions are the cache, and whether the other review-like features isolate as well.
+
+## What providers offer
+
+| Provider                                      | Conversation state                                                                                                                                                                                                                                                  | Read                                                                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Bedrock Converse                              | No conversation or session id; the client sends the history each time. (A negative: searches found no such parameter, and the AWS page on Converse was not fetched, so treat it as likely, not confirmed)                                                           | The user's recollection of an id on Bedrock does not match Converse. Mantle and the Responses API are different, next row                 |
+| Bedrock Responses (Mantle, `bedrock-runtime`) | Server-side state with `previous_response_id`; stored by default and per Project; on `bedrock-runtime`, `store: false` means the id cannot be used to continue; AWS says behaviour differs between the two endpoints and to test both                               | [AWS Responses API page](https://docs.aws.amazon.com/bedrock/latest/userguide/inference-responses-api.html), read through search snippets |
+| OpenAI Responses                              | `previous_response_id`; a third-party guide says several requests may point at one parent, which is a branch. OpenAI's own page on branching and isolation was not found                                                                                            | Verify in OpenAI's conversation-state guide before building                                                                               |
+| Anthropic message threads                     | Beta header `message-threads-2026-08-12`: first request creates a thread, later ones send only new messages and the previous response id. Expires 5 minutes after last use; not on Bedrock; not zero-data-retention eligible; no token counting or compaction (C45) | Already researched in the roadmap row C45                                                                                                 |
+| Anthropic and Bedrock cache                   | Prompt caching: a marked prefix is read at a fraction of the price while it lives (5 minutes, or 1 hour at a higher write price); minimum 512 to 4,096 tokens by model (C20)                                                                                        | The mechanism that already gives a "forked from a saved point" effect on a stateless API                                                  |
+
+## Findings
+
+1. **A fork from a saved point is a cached prefix.** On a stateless API, "rewind to the checkpoint and branch" is resending the same prefix: if its bytes are identical, the provider reads it from cache and charges the read price. Server-side threads give the same shape with less to send but with a lifetime, a retention and a provider-support problem. The cache works on Bedrock, where threads do not.
+2. **Per-review cost is the per-call tail.** Everything before the call should be a stable prefix: system prompt, then what is constant for the session (environment, guidance), then the slowly growing part (recent user messages, earlier calls), then the call. Today the order puts the growing parts before the constant ones and the nonce, which is chosen per call, sits in every fence label from the first user line on, so no user-message prefix is stable and only the system prompt can be a cache hit.
+3. **Whether the system prompt is cached at all is unmeasured.** The reviewer runs on its own model entry (`modeModels.reviewer`); whether the adapters put a cache point on it, and whether the prompt clears the model's cache minimum, was not checked (U0).
+4. **Reviews are sporadic.** A review fires when a call needs judging, with gaps of seconds in a busy run and many minutes otherwise. A 5-minute lifetime often expires between reviews, which is the case the 1-hour option and a keep-warm policy are for (C3, C11).
+5. **A provider thread would reduce isolation, not add it.** A thread keeps the reviewer's earlier turns, so one review's text (including attacker-written arguments) sits in the next review's context. The present design deliberately starts clean every time. Server-side state also adds retention on the provider's side for text the person did not expect to be stored.
+6. **The same question applies to the other reviewer-like uses.** `continuous review` (the code review command), subagents and the "ask on the side" idea are also better run in a fresh context: a reviewer that sees the author's reasoning tends to agree with it. Whether each one starts from its own stable prefix is the same cache question.
+
+## Design
+
+1. **Order the review prompt for a stable prefix** (U1): system prompt (static), a session block (environment and guidance, which change only when settings do), a history block (recent user messages and earlier calls, append-mostly), and the call, last. Put the cache point after the session block and, where the model allows several, after the history block.
+2. **One nonce per session, not per call, if the threat model allows** (decision D1). A per-call nonce is the stronger fence against text that guesses it, but it makes the fence labels differ in every request. A per-session nonce keeps the prefix stable; text in a tool result cannot read a prompt it never sees, and the reviewer's prompt is not shown to the agent. Decide with the owner; the alternative keeps the nonce per call and puts it only in the call fence at the end.
+3. **Choose the lifetime for the reviewer** (U2): the 1-hour lifetime when the session has several reviews in an hour (the Auto rule for the main agent: C11), otherwise 5 minutes, and a minimum-size check so a prompt under the model's minimum is not marked.
+4. **Provider threads only as an experiment** (U3), per provider, behind a flag: a base thread holding system prompt, environment and guidance, and each review sent as a branch from it where the API allows (OpenAI Responses, Anthropic threads off Bedrock). Compare cost and latency with the plain cached prefix. Expect the cache to win on Bedrock, where threads are not offered, and on simplicity everywhere.
+5. **Keep the reviewer's context free of tool output, and test that** (U4): a test that no tool-result text reaches `buildReviewMessages`, an injection set aimed at the reviewer's own prompt in the reviewer evaluation (B4's 207 cases), and a check that a verdict is never taken from the agent's text.
+6. **Give the other review uses the same shape** (U5): `continuous review`, subagents and any side call get their own system prompt, their own prefix and a clean context, and share the one rule for ordering and cache points.
+
+## Build order
+
+| #   | Scope                                                                                                                                                                                                       | Done when                                                                                                          | State       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------- |
+| U0  | Measure today: does a reviewer request carry a cache point on Anthropic and Bedrock, how large is its static prefix against the model minimum, and what share of reviewer input is read from cache in a run | A figure per model for the reviewer's cache read share, from the ledger or a live run                              | Not started |
+| U1  | Reorder the review prompt (static, session, history, call) and settle the nonce question; the reply format and fences stay                                                                                  | The reviewer evaluation (B4) gives the same verdicts on the same cases; cache read share rises in U0's measurement | Not started |
+| U2  | Cache lifetime and the minimum-size check for the reviewer; a keep-warm decision                                                                                                                            | A bench run with sporadic reviews shows the 1-hour setting reading cache where 5 minutes missed                    | Not started |
+| U3  | Experiment: provider threads for reviews where offered (OpenAI Responses, Anthropic threads off Bedrock, Bedrock Responses with `store`), behind a flag                                                     | A table of cost, latency and isolation against the cached prefix; the plan says keep or drop                       | Not started |
+| U4  | Isolation tests: no tool output in a review request; an injection set aimed at the reviewer's prompt                                                                                                        | The tests pass and the injection set is in the B4 evaluation                                                       | Not started |
+| U5  | Same prefix rule for `continuous review`, subagents and side calls; each starts in a clean context with its own cached system prompt                                                                        | Each use's request has a stable prefix by test, and its cache read share is in the ledger                          | Not started |
+
+## Decisions for the owner
+
+| #   | Decision                                | Options and a recommendation                                                                                                                                                                                      |
+| --- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Nonce per call or per session           | Keep it per call but only in the final call fence, with the session and history blocks fenced by a per-session nonce (recommended: stable prefix and a fresh fence around the one text an attacker controls most) |
+| D2  | Provider threads for reviews            | Try them in U3 behind a flag; do not ship by default. The cache works on every provider we use, a thread does not                                                                                                 |
+| D3  | Should the reviewer see its own history | No (recommended). Each review starts clean. A summary of past verdicts for a session is a different feature and a bleed risk                                                                                      |
+
+## Out of scope
+
+- Changing what the reviewer decides (Track B, the B4 evaluation).
+- Server-side storage of the main conversation (C45).
