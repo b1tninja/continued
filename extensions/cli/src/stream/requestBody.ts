@@ -1,6 +1,7 @@
 import type { ModelConfig } from "@continuedev/config-yaml";
 import { CACHE_PIN_FIELD } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
+import { withTurnTail } from "core/llm/prompts/usePrompts.js";
 import {
   convertFromUnifiedHistory,
   convertFromUnifiedHistoryWithSystemMessage,
@@ -28,7 +29,10 @@ import { getDefaultCompletionOptions } from "./streamChatResponse.types.js";
  * to the list changes only the tail of the request and the Bedrock adapter can
  * put its cache point before it. The date and git status go on the first user
  * message (`withEnvironmentBlock`), after the system checkpoint, so the system
- * text is the same across sessions.
+ * text is the same across sessions. The use's tail goes last on every user
+ * message (`withTurnTail`), the same line each time, so a message's bytes
+ * never change between requests and the cache markers on the last two user
+ * messages keep matching (core/llm/prompts/usePrompts.ts).
  */
 /**
  * Providers whose adapters build their own request body and read
@@ -46,13 +50,18 @@ export function buildChatRequestBody(args: {
   taskListBlock?: string;
   /** A compaction summary is never continued, so it is a one-shot request. */
   isCompacting?: boolean;
+  /** The use's tail (`modeModels.<use>.tail`), appended to every user message. */
+  turnTail?: string;
 }): ChatCompletionCreateParamsStreaming {
   const { model, chatHistory, systemMessage, tools, taskListBlock } = args;
-  const messages = withEnvironmentBlock(
-    convertFromUnifiedHistoryWithSystemMessage(
-      chatHistory,
-      systemMessage,
-    ) as ChatCompletionMessageParam[],
+  const messages = withTurnTail(
+    withEnvironmentBlock(
+      convertFromUnifiedHistoryWithSystemMessage(
+        chatHistory,
+        systemMessage,
+      ) as ChatCompletionMessageParam[],
+    ),
+    args.turnTail,
   );
   if (taskListBlock) {
     messages.push({ role: "user", content: taskListBlock });

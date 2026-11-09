@@ -2,16 +2,10 @@ import type { ModeModels } from "@continuedev/config-yaml";
 import type { ConfigValidationError } from "@continuedev/config-yaml";
 import type { ILLM, ModeModelsConfig, ModelUse } from "../..";
 import { isPromptProfile } from "../../llm/prompts/usePrompts";
-import { MODEL_USES, PICKER_USES } from "../../util/modelUse";
+import { MODEL_USES, PICKER_USES, PROMPT_USES } from "../../util/modelUse";
 
 /** The uses whose system prompt and tail can be chosen (`prompt`, `tail`). */
-const PROMPT_USES: readonly ModelUse[] = [
-  "chat",
-  "plan",
-  "agent",
-  "loop",
-  "replan",
-];
+const promptUses: readonly ModelUse[] = PROMPT_USES;
 
 /**
  * Resolve `modeModels:` (which names models) against the loaded models.
@@ -85,7 +79,7 @@ export function resolveModeModels(
 
     // The prompt: a built-in profile, or a prompt block's name and text
     let prompt: { prompt: string; promptText?: string } | undefined;
-    const wanted = PROMPT_USES.includes(use)
+    const wanted = promptUses.includes(use)
       ? (entry as { prompt?: string }).prompt
       : undefined;
     if (wanted) {
@@ -105,7 +99,7 @@ export function resolveModeModels(
     }
 
     // The tail: on, off or a text, for the same uses as the prompt
-    const rawTail = PROMPT_USES.includes(use)
+    const rawTail = promptUses.includes(use)
       ? (entry as { tail?: string | boolean }).tail
       : undefined;
     const tail =

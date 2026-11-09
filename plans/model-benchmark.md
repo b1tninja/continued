@@ -172,3 +172,38 @@ What the numbers say, at n=3 per cell (suggestive, not settled; the scorecard fl
 - Not measured: Qwen3 Coder (row I6 names it), the `short` profile, and any arm beyond n=3.
 
 Runs and scorecards (outside the repository): the session's scratchpad `bench/tail-on`, `bench/tail-off`, `bench/tail-text`, each with `scorecards/records.jsonl`; the per-arm table is `arms-final.md` beside them, and a copy of the records is in the side-session notes folder (`tail-measurement.md`).
+
+### 10.2 The tail reminder on Qwen3 Coder 30B (2026-11-09, roadmap row I6)
+
+The same question on the second model row I6 names: `qwen3-coder-30b` (`qwen.qwen3-coder-30b-a3b-v1:0` on Bedrock, $0.15 in / $0.60 out per MTok), `loop-basic` and `agent-acts`, `--tail on` against `--tail off`, three runs per cell, on the `full` profile and again on the `short` profile, where the tail is on by default, so that pair is the one the CLI ships for a small model. Twenty-four runs, $1.24 at list price, bundle built from commit c5a824d45 (the core of 10.1). Columns as in 10.1, plus "leaks": assistant replies that wrote a tool call as text (`<function=Write>...</function>`, Qwen's own form) instead of making it, which the `no-text-leaks` check counts and the record now carries as `textLeaks`.
+
+`loop-basic` (supervised loop, approvals answered by the harness; budget 90 requests or 900k tokens):
+
+| Profile, arm    | Outcomes                  | Nudges act / finish / plan | Attempts | Without FinishItem | Requests per attempt | Cache read | Churn  | Leaks (runs) | Cost  |
+| --------------- | ------------------------- | -------------------------- | -------- | ------------------ | -------------------- | ---------- | ------ | ------------ | ----- |
+| full, tail on   | done 2, killed 1          | 0 / 0 / 1                  | 11       | 0                  | 16.5                 | 0%         | 11/207 | 1 (1)        | $0.29 |
+| full, tail off  | done 1, stuck 1, killed 1 | 0 / 0 / 2                  | 6        | 0                  | 23.2                 | 0%         | 6/163  | 3 (1)        | $0.24 |
+| short, tail on  | done 1, stuck 1, killed 1 | 0 / 0 / 2                  | 7        | 0                  | 17.6                 | 0%         | 7/164  | 0            | $0.25 |
+| short, tail off | killed 3                  | 0 / 2 / 0                  | 13       | 2                  | 19.5                 | 0%         | 13/277 | 2 (2)        | $0.38 |
+
+`agent-acts` (`--auto`, one turn, "create the module, the test, run it, report"):
+
+| Profile, arm    | Outcomes | Checks of 8 | Nudges act / finish / plan | Turns (median) | Cache read | Churn | Leaks (runs) | Cost   |
+| --------------- | -------- | ----------- | -------------------------- | -------------- | ---------- | ----- | ------------ | ------ |
+| full, tail on   | done 3   | 7, 6, 6     | 0 / 0 / 0                  | 1              | 0%         | 0/13  | 2 (2)        | $0.009 |
+| full, tail off  | done 3   | 8, 6, 6     | 0 / 0 / 0                  | 1              | 0%         | 0/9   | 2 (2)        | $0.006 |
+| short, tail on  | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 16             | 0%         | 0/42  | 0            | $0.042 |
+| short, tail off | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 12             | 0%         | 0/34  | 0            | $0.031 |
+
+What the numbers say, at n=3 per cell:
+
+- There were no announced-step stops to remove. Qwen3 Coder ended no turn in any of the 24 runs on an announcement; the act nudge never fired. The claim behind #362, fewer announce-and-stop turns with the line, has nothing to measure on this model. The one way it ends a turn without a tool call, apart from the report, is a tool call written as text: 10 such replies in 8 of 24 runs, and the line did not change that (with the full profile, two of three agent runs in each arm ended after one such turn with nothing done). The nudge does not catch it either: `announcesNextStep` in `core/util/turnEnd.ts` reads the last paragraph, and that paragraph is the function block. In a Loop item the finish nudge catches it (the two "without FinishItem" attempts of the short/off arm are each a leaked call followed by "You ended without reporting"); in an agent turn nothing does, and the run ends `done` with the request untouched. Counting a leaked call as an announcement, or parsing Qwen's form in the Bedrock adapter, is its own PR and not a tail text change.
+- It reports by itself. Zero item attempts without FinishItem in three of four arms (Nova: 6 of 18 with the line), so the FinishItem text considered in 10.1 has no case on this model.
+- Loops finished more often with the line, in the same direction as Nova: full profile 2 of 3 done against 1 of 3, requests per attempt 16.5 against 23.2; short profile 1 against 0 done, 17.6 against 19.5. Suggestive at n=3, and the loop failures have nothing to do with the tail: the two stuck runs never presented a plan (one leaked PresentPlan as text three times; the other sent `todos` as a bulleted string seven times, "todos must be a non-empty array of strings"), and the killed runs spent their requests on items whose check kept failing on the truncate function, and on shell commands written for a POSIX shell (`test -f`, `&&`, `ls -la`) that the Bash tool on this Windows host runs through PowerShell, as its description says: 11 to 21 failed Bash calls per arm. Nova ran on the same host.
+- Cache: Bedrock returned zero cache read tokens on every request of the 909 in these arms, so the cache column cannot be measured for this row. The request dumps show zero prefix churn inside any attempt or agent turn in all 24 runs; every break the column counts is an attempt start (the churn count equals the attempt count in each loop arm).
+- The short profile reads the same way as the full one for tail on against off. The larger difference here is short against full on `agent-acts`: the one-turn leaks happened in 4 of 6 full-profile runs and in none of the 6 short-profile runs, which all passed 8 of 8 checks in 9 to 16 turns. The next slice on this model should run with `--profile short`.
+- Cost: $0.29, $0.24, $0.25 and $0.38 for the four loop cells (the three killed short/off loops each ran to 90 requests); the agent cells are under five cents each.
+- A scorer fix found here: `seedCheck` matched a `file-exists` expectation to the first seed check of that name whenever neither had a command, so a second file check took the first's verdict. The one-turn runs above scored 7 of 8 before the fix and 6 of 8 after. Rescoring the Nova arms of 10.1 moves three agent runs from 8 to 7 of 8 (the test file written under another name); the sentence there, 7 or 8 of 8 in every arm, stands.
+- Decision for row I6: the built-in texts in `core/llm/prompts/turns.ts` stay. Nothing in these 24 runs argues for changing either line; what they argue for is the leak handling above.
+
+Runs and scorecards (outside the repository): the session's scratchpad `bench/qwen-tail-on`, `bench/qwen-tail-off`, `bench/qwen-short-tail-on`, `bench/qwen-short-tail-off`, each with `scorecards/records.jsonl`; the per-arm table is `arms-qwen.md` beside them, and a copy of the records and scorecards is in the side-session notes folder (`qwen-tail-measurement/`).
