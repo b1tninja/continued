@@ -622,7 +622,7 @@ Proposed on 2026-11-08 at the owner's request, from three read-only passes over 
 | P2   | Core: `core/util/worktree.ts` with an injected git runner, tested against a temporary repository (create from HEAD plus dirty changes, patch, apply, refuse a conflict, remove).                                                                                                                                              | none       |
 | P3   | **Built 2026-11-08** (`extensions/cli/src/loop/loopWorker.ts`, `loopWave.ts`, `loopItemRun.ts`; `loopWave.test.ts`; the worktree helper is `cn review`'s until P2 lands). CLI: the loop worker entry, the IPC contract, the wave in `loopDriver.ts` and `serve.messages.ts`, the inbox rows and the `/state` snapshot, the `cn serve` option. Flow tests with a scripted worker.                                                                                                                         | P1, P2     |
 | P4   | IDE: the working-directory override in `tools/call`, core implementations of the two exact edit tools, `runLoopItemSubagent`, the wave in `advanceLoop`, the inbox rows and the switch. Integration tests in `LoopMode.test.tsx`.                                                                                             | P1, P2     |
-| P5   | Docs **written 2026-11-08** (`docs/reference.mdx` under `modeModels`); the sandbox run is not done. Docs under `modeModels` and in this file; a sandbox run with two independent items on a local model, measured like the runs above.                                                                                                                                                                                             | P3 or P4   |
+| P5   | Docs **written 2026-11-08** (`docs/reference.mdx` under `modeModels`); the sandbox run is done (see "Parallel waves (run 7, 2026-11-09)"). Docs under `modeModels` and in this file; a sandbox run with two independent items on a local model, measured like the runs above.                                                                                                                                                                                             | P3 or P4   |
 
 P1 and P2 are independent and can be built side by side. P3 and P4 share nothing but core, so they can too.
 
@@ -818,6 +818,16 @@ Run on 2026-11-07 against Strata, a single-slot OpenAI-compatible server on this
 - **Fix, built:** the block goes after the item prompt and is fixed for the run (see "Plan slots"). It helps any provider whose cache matches a prefix, not only Strata.
 - **Measured, run 5:** 89% of all prompt tokens came from the cache, against 33 to 41% before, and 91% in the later requests of a run. Each request reused everything the one before it sent. Each later item's first request reused the 2,792 tokens of system message and tools.
 - **Still to do:** Requests that must end with something that changes, such as the Done-first reminder, need a checkpoint pinned before it: Strata's `strata_prefix` as a `requestBodyHints.conversation` field, or Anthropic's `cache_control`.
+
+### Parallel waves (run 7, 2026-11-09)
+
+Run on Strata with the same model, from this branch's built CLI, as two `cn serve` phases on one session. Phase 1 runs `--readonly` (plan mode) and the model presents the plan. Phase 2 runs `--auto` (unattended, so waves may run) and starts the loop with `loopParallel: true`. The plan had three to-dos: two modules with declared `files:` and a `node --test` check each, and a README to-do that waits for both and declares no files.
+
+- **Result:** 3 of 3 done, every check passed, the repository's 18 tests pass, about 4 minutes.
+- **The wave:** items 1 and 2 ran as workers at the same time. Item 1 finished first, item 2 about a minute later, and item 3 ran inline after both. No patch was refused, and each worktree was removed.
+- **Questions:** three assumptions, left open in the inbox as an unattended loop records them.
+- **Cache:** 90% of the prompt tokens of phase 2 came from Strata's cache, over 55 requests. The counter covers the whole server: another client shared the single slot during the run, so this is not a clean figure for this workload.
+- **Not measured:** wall time against the same plan with waves off. This run does not claim a speed-up.
 
 ### Runs on Amazon Nova
 
