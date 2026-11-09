@@ -748,12 +748,20 @@ async function runOnce({
     const requests = history.filter(
       (i) => i.message?.role === "assistant",
     ).length;
+    // Tokens processed: prompt plus completion. The CLI's promptTokens
+    // already holds the cache reads and writes for every family but Claude,
+    // whose usage reports them apart (priceRun, common.mjs); adding them
+    // again doubled the count on Nova and killed every loop run at half
+    // its budget (2026-11-09, the first tail measurement).
     const u = s.session?.usage ?? {};
+    const excludesCache = /claude/i.test(row.model ?? "");
     const tokens =
       (u.promptTokens ?? 0) +
       (u.completionTokens ?? 0) +
-      (u.promptTokensDetails?.cachedTokens ?? 0) +
-      (u.promptTokensDetails?.cacheWriteTokens ?? 0);
+      (excludesCache
+        ? (u.promptTokensDetails?.cachedTokens ?? 0) +
+          (u.promptTokensDetails?.cacheWriteTokens ?? 0)
+        : 0);
     return { requests, tokens };
   };
   class BudgetExceeded extends Error {}
