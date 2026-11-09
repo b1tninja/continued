@@ -399,6 +399,25 @@ export interface Session {
 export type LoopItemStatus =
   "pending" | "running" | "checking" | "done" | "waiting" | "redo" | "failed";
 
+/**
+ * One item of a parallel wave (L4): a run with a fresh context in its own
+ * worktree, beside the other items of the wave and apart from `current`.
+ */
+export interface LoopParallelRun {
+  itemId: string;
+  /** The worktree the run works in, once the harness has made it */
+  worktree?: string;
+  startedAt: string;
+}
+
+/** The model a run of an item that names one (TaskItem.model) went to. */
+export interface LoopItemModel {
+  /** The title of the chat model the run went to */
+  title: string;
+  /** Set when the item's model is not configured and the loop model ran instead */
+  fallbackReason?: string;
+}
+
 /** The last time an item's check (TaskItem.check) ran, or why it did not. */
 export interface LoopCheckResult {
   /**
@@ -450,6 +469,18 @@ export interface LoopItemState {
   again?: boolean;
   /** The last run of the item's check (TaskItem.check) */
   check?: LoopCheckResult;
+  /**
+   * The model the item's last run went to, when the item names one
+   * (TaskItem.model): its title, and why the item's own model was not used.
+   */
+  model?: LoopItemModel;
+  /**
+   * Its last parallel run's changes could not be merged: it runs inline on
+   * the merged tree next, never in another wave. Cleared when that run ends.
+   */
+  runInline?: boolean;
+  /** Why that merge failed, for its next prompt */
+  mergeFailed?: string;
   /**
    * Fix forward: re-plans scoped to this item after it failed (at most
    * LOOP_MAX_REPAIRS_PER_ITEM). To-dos a repair splits it into inherit it.
@@ -689,6 +720,12 @@ export interface LoopState {
     };
     /** A re-plan: the to-dos it started from, to tell whether it adds scope */
     planTexts?: string[];
+    /**
+     * A re-plan: the check of each to-do it started from, by item id, so a
+     * re-plan that changes the check of an item that ended stuck (its check
+     * never ran) is held like one that changes a failed check
+     */
+    planChecks?: Record<string, string>;
     /** A check-in re-plan (check-in strategy): why it was due */
     checkIn?: string;
     /** A repair re-plan (fix forward): the failed item's text */
@@ -717,6 +754,26 @@ export interface LoopState {
   checkInDue?: string;
   /** Fix forward: the failed item waiting for its scoped re-plan */
   repairItemId?: string;
+  /**
+   * The chat model an item's own model (TaskItem.model) switched away from
+   * when `modeModels` names none for the loop: the next turn without an own
+   * model, and the loop's end, come back to it, so the other items run on
+   * the model the person had selected.
+   */
+  modelBefore?: string;
+  /**
+   * The items of the wave that runs now, each in its own worktree (L4),
+   * beside `current`, which stays the inline run, the re-plan or the check.
+   * Nothing else starts while a wave runs; its items finish one at a time
+   * (finishParallelRun). Absent or empty when no wave runs.
+   */
+  parallel?: LoopParallelRun[];
+  /**
+   * The person turned parallel waves on: items with disjoint `files` run at
+   * the same time at the levels that do not ask (auto and above). Off by
+   * default.
+   */
+  parallelOn?: boolean;
   questions: LoopQuestion[];
   answers: LoopAnswer[];
   /** Items finished in this round, for the no-progress check */
@@ -782,6 +839,22 @@ export interface TaskItem {
    * command. The plan file writes it as `check: <command>` under the to-do.
    */
   check?: string;
+  /**
+   * The `name` of the chat model this item's Loop run goes to instead of
+   * `modeModels.loop`; the prompt and reasoning effort still come from the
+   * loop entry. The plan file writes it as `model: <name>` under the to-do.
+   * A name that is not configured falls back to the loop model, with the
+   * reason on the item's run (LoopItemState.model).
+   */
+  model?: string;
+  /**
+   * The files the item changes, as paths or globs relative to the workspace.
+   * The plan file writes them as `files: src/a.ts, src/b/**` under the to-do.
+   * Loop mode runs items whose files do not overlap at the same time when
+   * parallel waves are on (LoopState.parallelOn); an item without them runs
+   * inline, one at a time, as before.
+   */
+  files?: string[];
 }
 
 export interface TaskPlan {
@@ -1168,6 +1241,14 @@ export interface ChatHistoryItem {
   reasoning?: Reasoning;
   appliedRules?: RuleMetadata[];
   conversationSummary?: string;
+  /**
+   * Request-time only, never saved: a prompt cache point goes right after this
+   * item (a fork point, such as a Loop item's first message), so a retry, a
+   * branch or a subagent that starts from the same context reads the cached
+   * prefix instead of writing it again. Set by the CLI's loopRequestHistory
+   * and read by buildChatRequestBody.
+   */
+  cachePin?: boolean;
 }
 
 export interface LLMFullCompletionOptions extends BaseCompletionOptions {
@@ -1784,6 +1865,12 @@ export interface ToolExtras {
   }) => void;
   config: ContinueConfig;
   codeBaseIndexer?: CodebaseIndexer;
+  /**
+   * Set when the call runs in another checkout (`tools/call` with
+   * `workspaceDirs`: a Loop worker's worktree). `ide` already answers these
+   * folders; the exact edit tools run only with this set.
+   */
+  workspaceDirs?: string[];
 }
 
 export interface McpToolMeta {
@@ -2517,19 +2604,40 @@ export type ModeReasoningEffort = "off" | "low" | "medium" | "high";
 
 /** Chat model (by title) and reasoning effort to use in a mode. */
 export interface ModeModelSetting {
-  /** The default model: selected when switching into the mode. */
-  title: string;
+  /**
+   * The default model: selected when switching into the mode. Absent for an
+   * entry that only chooses a prompt (`loop: { prompt: short }`).
+   */
+  title?: string;
   /**
    * Every model offered in the mode, default first. Absent when the config sets
    * only `model`, in which case all models are offered as before.
    */
   titles?: string[];
   reasoningEffort?: ModeReasoningEffort;
+  /**
+   * Which system prompt the use gets: `full`, `short`, or the name of a
+   * prompt block (core/llm/prompts/usePrompts.ts). Absent: the model's
+   * prompt profile decides.
+   */
+  prompt?: string;
+  /** The prompt block's text, when `prompt` names one. */
+  promptText?: string;
+  /**
+   * The reminder appended to every user message of the use's requests
+   * (`modeModels.<use>.tail`): `"on"` for the built-in line of the turn kind,
+   * `"off"`, or a short text. Absent: on for Loop items and for the `short`
+   * prompt profile, off elsewhere (core/llm/prompts/usePrompts.ts).
+   */
+  tail?: string;
 }
 
-/** Whether rules are sent in each mode. A mode left out is enabled. */
+/**
+ * Whether rules are sent in each mode. A mode left out is enabled; `loop`
+ * follows `agent` and `replan` follows `plan` when left out.
+ */
 export type RulesByModeConfig = Partial<
-  Record<"chat" | "agent" | "plan", boolean>
+  Record<"chat" | "agent" | "plan" | "loop" | "replan", boolean>
 >;
 
 /**

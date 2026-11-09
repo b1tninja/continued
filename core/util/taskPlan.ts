@@ -29,6 +29,11 @@ export const TASK_PLAN_LIMITS = {
   maxIdLength: 40,
   /** A to-do's check command (TaskItem.check) */
   maxCheckLength: 500,
+  /** A to-do's model name (TaskItem.model) */
+  maxModelLength: 100,
+  /** A to-do's declared files (TaskItem.files): how many, and each path */
+  maxFiles: 20,
+  maxFileLength: 200,
   /** Completed items shown in the request block; older ones are a count */
   shownCompleted: 3,
 } as const;
@@ -76,6 +81,10 @@ export interface TaskItemInput {
   after?: unknown;
   /** A command that confirms the item is done (TaskItem.check) */
   check?: unknown;
+  /** The name of the chat model the item's Loop run goes to (TaskItem.model) */
+  model?: unknown;
+  /** The files the item changes (TaskItem.files): a list, or one comma-separated line */
+  files?: unknown;
 }
 
 export type TaskPlanResult =
@@ -378,12 +387,17 @@ function mergeIntoPrevious(
   return [...merged, ...items.filter((item) => !known.has(item.id))];
 }
 
-/** An item's check command and `after` positions, or why they are invalid. */
+/** An item's check command, model, files and `after` positions, or why they are invalid. */
 function itemExtras(
   raw: TaskItemInput,
   position: number,
   count: number,
-): { fields: { check?: string }; after: number[] } | { error: string } {
+):
+  | {
+      fields: { check?: string; model?: string; files?: string[] };
+      after: number[];
+    }
+  | { error: string } {
   const check = optionalText(
     raw.check,
     "check",
@@ -391,12 +405,65 @@ function itemExtras(
     position,
   );
   if (check.error) return { error: check.error };
+  const model = optionalText(
+    raw.model,
+    "model",
+    TASK_PLAN_LIMITS.maxModelLength,
+    position,
+  );
+  if (model.error) return { error: model.error };
+  const files = fileList(raw.files, position);
+  if (typeof files === "string") return { error: files };
   const after = afterList(raw.after, position, count);
   if (typeof after === "string") return { error: after };
   return {
-    fields: check.value ? { check: check.value.replace(/\s*\n\s*/g, " ") } : {},
+    fields: {
+      ...(check.value && { check: check.value.replace(/\s*\n\s*/g, " ") }),
+      ...(model.value && { model: model.value.replace(/\s+/g, " ") }),
+      ...(files.length && { files }),
+    },
     after,
   };
+}
+
+const BACKSLASH = String.fromCharCode(92);
+
+/** A declared path as the plan compares it: forward slashes, no leading `./`. */
+export function normalizeDeclaredPath(path: string): string {
+  let p = path.trim().split(BACKSLASH).join("/");
+  while (p.startsWith("./")) p = p.slice(2);
+  while (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+  return p;
+}
+
+/**
+ * An item's declared files: a list of strings, or one line of comma-separated
+ * paths (as the plan file writes them). Returns the error text when they are
+ * not strings or too many or too long; an empty list means none declared.
+ */
+function fileList(value: unknown, position: number): string[] | string {
+  if (value === undefined || value === null || value === "") return [];
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : undefined;
+  if (!raw || raw.some((f) => typeof f !== "string")) {
+    return `Item ${position}: files must be a list of paths`;
+  }
+  const files: string[] = [];
+  for (const entry of raw as string[]) {
+    const path = normalizeDeclaredPath(entry);
+    if (!path) continue;
+    if (path.length > TASK_PLAN_LIMITS.maxFileLength) {
+      return `Item ${position}: a path in files is longer than ${TASK_PLAN_LIMITS.maxFileLength} characters`;
+    }
+    if (!files.includes(path)) files.push(path);
+  }
+  if (files.length > TASK_PLAN_LIMITS.maxFiles) {
+    return `Item ${position}: files lists more than ${TASK_PLAN_LIMITS.maxFiles} paths`;
+  }
+  return files;
 }
 
 /**
@@ -617,6 +684,8 @@ export function taskPlanConfirmation(plan: TaskPlan): string {
  * request block's own markers `[>]`, `[-]`, `[!]`. Other lines are ignored.
  * A trailing `<!-- id: 3 -->` comment (as plan files write it) gives the
  * item's id, so ids survive a round trip through a file the person edits.
+ * Indented `after:`, `check:`, `model:` and `files:` lines under an item
+ * belong to it.
  */
 export function parseMarkdownChecklist(markdown: string): TaskItemInput[] {
   const statusByMark: Record<string, TaskStatus> = {
@@ -629,11 +698,13 @@ export function parseMarkdownChecklist(markdown: string): TaskItemInput[] {
   };
   const items: TaskItemInput[] = [];
   for (const line of markdown.split(/\r?\n/)) {
-    // `  after: 1, 2` and `  check: <command>` under a to-do belong to it
+    // `  after: 1, 2`, `  check: <command>`, `  model: <name>` and
+    // `  files: a, b` under a to-do belong to it
     const attribute = line.match(ITEM_ATTRIBUTE);
     if (attribute && items.length > 0) {
       const last = items[items.length - 1];
-      const key = attribute[1].toLowerCase() as "after" | "check";
+      const key = attribute[1].toLowerCase() as
+        "after" | "check" | "model" | "files";
       last[key] = attribute[2].trim();
       continue;
     }
@@ -659,10 +730,10 @@ export function parseMarkdownChecklist(markdown: string): TaskItemInput[] {
   return items;
 }
 
-/** An indented `after: 1, 2` or `check: <command>` line under a to-do. */
-const ITEM_ATTRIBUTE = /^(?:\t|\s{2,})(after|check)\s*:\s*(.*)$/i;
+/** An indented `after:`, `check:`, `model:` or `files:` line under a to-do. */
+const ITEM_ATTRIBUTE = /^(?:\t|\s{2,})(after|check|model|files)\s*:\s*(.*)$/i;
 
-/** The lines a plan file writes under a to-do for its `after` and `check`. */
+/** The lines a plan file writes under a to-do for its `after`, `check`, `model` and `files`. */
 export function taskItemAttributeLines(
   item: TaskItem,
   items: TaskItem[],
@@ -673,6 +744,8 @@ export function taskItemAttributeLines(
     .filter((p) => p > 0);
   if (positions.length) lines.push(`  after: ${positions.join(", ")}`);
   if (item.check) lines.push(`  check: ${item.check}`);
+  if (item.model) lines.push(`  model: ${item.model}`);
+  if (item.files?.length) lines.push(`  files: ${item.files.join(", ")}`);
   return lines;
 }
 

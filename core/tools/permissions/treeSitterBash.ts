@@ -10,7 +10,7 @@ import type {
 
 /**
  * The bash grammar as a second reader of a POSIX command (plans/command-analysis.md,
- * I2, decision D1). It builds the same graph as the strict scanner from the
+ * P2, decision D1). It builds the same graph as the strict scanner from the
  * syntax tree, through our own gate: only commands, pipelines, lists and
  * redirects to nowhere, with words, quoted strings and plain concatenations
  * for arguments. Anything else (an expansion, a substitution, a group, an

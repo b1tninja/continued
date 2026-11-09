@@ -1,7 +1,7 @@
 import { isPosixShell, type ShellKind } from "../../util/shell";
 
 /**
- * The command graph (plans/command-analysis.md, I2): what a command is once the
+ * The command graph (plans/command-analysis.md, P2): what a command is once the
  * shell's syntax is out of the way. A list of commands, each a program and its
  * words with quotes removed, and the operator that joins each to the next.
  * Redirects that throw output away are dropped; any other redirect, any

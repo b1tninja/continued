@@ -1,0 +1,15 @@
+{
+  "model": "fixture",
+  "messages": [
+    {
+      "role": "system",
+      "content": "PLAN"
+    },
+    {
+      "role": "user",
+      "content": "Plan the thing"
+    }
+  ],
+  "stream": true,
+  "max_tokens": 100
+}

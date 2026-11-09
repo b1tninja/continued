@@ -1,5 +1,5 @@
 import type { ConfigYaml } from "@continuedev/config-yaml";
-import { MODEL_USES } from "../../util/modelUse";
+import { MODEL_USES, PROMPT_USES } from "../../util/modelUse";
 import { editConfigFile } from "../../util/paths";
 
 /** Every use the Models tab can write; the list uses are chat, plan and agent. */
@@ -7,17 +7,29 @@ const MODES = MODEL_USES;
 
 /**
  * One use's change from the Models tab. Fields left out are kept as they are
- * in config.yaml. `null` for `reasoningEffort` removes it.
+ * in config.yaml. `null` for `model`, `reasoningEffort`, `prompt` or `tail`
+ * removes that field.
  */
 export interface ModeModelChange {
-  /** Default model when switching into the mode (by name). */
-  model?: string;
+  /** Default model when switching into the mode (by name). `null` removes it. */
+  model?: string | null;
   /** Models offered in the mode (by name). `[]` removes the list. Chat, plan and agent only. */
   models?: string[];
   reasoningEffort?: "off" | "low" | "medium" | "high" | null;
+  /**
+   * Which system prompt the use gets: `full`, `short` or a prompt block's
+   * name. Chat, plan, agent, loop and replan only.
+   */
+  prompt?: string | null;
+  /**
+   * The reminder on the use's user messages: `on`, `off` or a short text.
+   * Chat, plan, agent, loop and replan only.
+   */
+  tail?: string | null;
 }
 
 const LIST_USES: readonly string[] = ["chat", "plan", "agent"];
+const TURN_USES: readonly string[] = PROMPT_USES;
 
 /** A mode set to `null` has its entry removed; modes not present are untouched. */
 export type ModeModelsInput = Partial<
@@ -29,11 +41,14 @@ export type ModeModelsUpdate = ModeModelsInput;
 /**
  * Apply the Models-tab selection to a config.yaml object.
  *
- * Each mode in `update` either carries a default `model`, a `models` list and
- * an optional `reasoningEffort`, or is `null` to remove the mode's entry.
- * Modes not mentioned are left exactly as they are. Within a mode, fields the
- * update does not mention (for example a hand-written `reasoningEffort`) are
- * kept; `models: []` removes the list.
+ * Each mode in `update` either carries a default `model`, a `models` list, an
+ * optional `reasoningEffort`, `prompt` and `tail`, or is `null` to remove the
+ * mode's entry. Modes not mentioned are left exactly as they are. Within a
+ * mode, fields the update does not mention (for example a hand-written
+ * `reasoningEffort`) are kept; `models: []` removes the list, and `null`
+ * removes a single field. `prompt` and `tail` are written for the turn uses
+ * (chat, plan, agent, loop, replan) only; a mode keeps its entry on either of
+ * them alone.
  *
  * Names are written as given. Whether they exist is checked when the config is
  * loaded (`resolveModeModels`), which reports unknown names without failing.
@@ -55,7 +70,8 @@ export function applyModeModelsUpdate(
     const entry: Record<string, any> = { ...(next[mode] ?? {}) };
     const models = dedupe(change.models);
 
-    if (change.model !== undefined) entry.model = change.model;
+    if (change.model === null) delete entry.model;
+    else if (change.model !== undefined) entry.model = change.model;
     if (!LIST_USES.includes(mode)) {
       // A single-model use: a list means nothing there, so none is written
       // and `models` does not keep an entry alive.
@@ -68,10 +84,22 @@ export function applyModeModelsUpdate(
       if (change.reasoningEffort === null) delete entry.reasoningEffort;
       else entry.reasoningEffort = change.reasoningEffort;
     }
+    if (TURN_USES.includes(mode)) {
+      if (change.prompt === null) delete entry.prompt;
+      else if (change.prompt !== undefined) entry.prompt = change.prompt;
+      if (change.tail === null) delete entry.tail;
+      else if (change.tail !== undefined) entry.tail = change.tail;
+    }
 
-    // The schema needs `model` or a non-empty `models`; an entry with neither
-    // would make the whole config invalid, so drop it instead.
-    if (entry.model === undefined && !(entry.models?.length > 0)) {
+    // The schema needs `model`, a non-empty `models`, a `prompt` or a `tail`;
+    // an entry with none would make the whole config invalid, so drop it
+    // instead.
+    if (
+      entry.model === undefined &&
+      !(entry.models?.length > 0) &&
+      entry.prompt === undefined &&
+      entry.tail === undefined
+    ) {
       delete next[mode];
     } else {
       next[mode] = entry;

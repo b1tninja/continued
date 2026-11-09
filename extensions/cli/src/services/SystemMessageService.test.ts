@@ -87,7 +87,7 @@ describe("SystemMessageService", () => {
         ["rule1"],
         "json",
         true,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
       expect(message).toBe("Test system message");
     });
@@ -112,7 +112,7 @@ describe("SystemMessageService", () => {
         ["rule1"],
         "json",
         false,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
     });
 
@@ -134,7 +134,7 @@ describe("SystemMessageService", () => {
         ["rule2", "rule3"],
         "json",
         undefined,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
     });
   });
@@ -192,7 +192,7 @@ describe("SystemMessageService", () => {
         undefined,
         undefined,
         true,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
     });
 
@@ -227,5 +227,117 @@ describe("SystemMessageService", () => {
         "Failed to construct",
       );
     });
+  });
+});
+
+describe("SystemMessageService: the tail per use", () => {
+  let service: SystemMessageService;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    service = new SystemMessageService();
+    await service.initialize({});
+  });
+
+  afterEach(async () => {
+    await service.cleanup();
+  });
+
+  const configure = async (modeModels: unknown) => {
+    const { serviceContainer } = await import("./ServiceContainer.js");
+    serviceContainer.set("config", { config: { modeModels } } as any);
+  };
+
+  it("is the act line for a Loop item by default, named for the CLI's tools for a plan turn", async () => {
+    await configure(undefined);
+    expect(service.turnTail("loop")).toBe(
+      "Act until the request is done. A reply with no tool call ends the turn.",
+    );
+    expect(service.turnTail("agent")).toBeUndefined();
+    await configure({ replan: { tail: "on" } });
+    expect(service.turnTail("replan")).toBe(
+      "Plan only. End by calling PresentPlan or asking a question.",
+    );
+  });
+
+  it("follows the config: off, a text, and the agent entry for loop", async () => {
+    await configure({ loop: { tail: false } });
+    expect(service.turnTail("loop")).toBeUndefined();
+    await configure({ agent: { tail: "Report when done." } });
+    expect(service.turnTail("loop")).toBe("Report when done.");
+    expect(service.turnTail("agent")).toBe("Report when done.");
+  });
+
+  it("is never given to a subagent, whatever the agent and loop entries say", async () => {
+    await configure({ agent: { tail: "on" }, loop: { tail: "on" } });
+    expect(service.turnTail("subagent")).toBeUndefined();
+  });
+});
+
+describe("SystemMessageService: the prompt per use", () => {
+  let service: SystemMessageService;
+  let constructSystemMessageMock: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { constructSystemMessage } = await import("../systemMessage.js");
+    constructSystemMessageMock = constructSystemMessage as any;
+    constructSystemMessageMock.mockResolvedValue("msg");
+    service = new SystemMessageService();
+    await service.initialize({});
+    const { serviceContainer } = await import("./ServiceContainer.js");
+    serviceContainer.set("config", {
+      config: {
+        modeModels: { loop: { prompt: "short" }, plan: { prompt: "house" } },
+        prompts: [{ name: "house", prompt: "Plan briefly." }],
+      },
+    } as any);
+  });
+
+  afterEach(async () => {
+    await service.cleanup();
+  });
+
+  it("passes the use's profile, and caches per use", async () => {
+    await service.getSystemMessage("normal", "loop");
+    expect(constructSystemMessageMock).toHaveBeenLastCalledWith(
+      "normal",
+      undefined,
+      undefined,
+      undefined,
+      { model: undefined, promptChoice: { profile: "short" } },
+    );
+    await service.getSystemMessage("normal", "agent");
+    expect(constructSystemMessageMock).toHaveBeenLastCalledWith(
+      "normal",
+      undefined,
+      undefined,
+      undefined,
+      { model: undefined, promptChoice: undefined },
+    );
+    await service.getSystemMessage("normal", "loop");
+    expect(constructSystemMessageMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives a subagent no prompt choice: the turn text as the model id decides", async () => {
+    await service.getSystemMessage("normal", "subagent");
+    expect(constructSystemMessageMock).toHaveBeenLastCalledWith(
+      "normal",
+      undefined,
+      undefined,
+      undefined,
+      { model: undefined, promptChoice: undefined },
+    );
+  });
+
+  it("looks a block name up in the config's prompts", async () => {
+    await service.getSystemMessage("plan");
+    expect(constructSystemMessageMock).toHaveBeenLastCalledWith(
+      "plan",
+      undefined,
+      undefined,
+      undefined,
+      { model: undefined, promptChoice: { text: "Plan briefly." } },
+    );
   });
 });

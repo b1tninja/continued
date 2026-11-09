@@ -191,3 +191,122 @@ describe("applyModeModelsUpdate: single-model uses", () => {
     });
   });
 });
+
+describe("applyModeModelsUpdate: entries that only choose a prompt", () => {
+  it("keeps a prompt-only entry when its model is removed", () => {
+    const start = `name: Local
+version: 1.0.0
+modeModels:
+  loop:
+    model: Sonnet
+    prompt: short
+`;
+    // A list means nothing on a single-model use, so nothing changes
+    const same = applyModeModelsUpdate(YAML.parse(start), {
+      loop: { models: [] },
+    });
+    expect(same.modeModels).toEqual({
+      loop: { model: "Sonnet", prompt: "short" },
+    });
+    const promptOnly = applyModeModelsUpdate(
+      {
+        name: "Local",
+        version: "1.0.0",
+        modeModels: { loop: { prompt: "short" } },
+      } as any,
+      { loop: { reasoningEffort: "low" } },
+    );
+    expect(promptOnly.modeModels).toEqual({
+      loop: { prompt: "short", reasoningEffort: "low" },
+    });
+    const { text: cleared } = apply(start, { loop: null });
+    expect(YAML.parse(cleared!).modeModels).toBeUndefined();
+  });
+});
+
+describe("applyModeModelsUpdate: prompt and tail", () => {
+  it("writes prompt and tail beside the model and keeps comments", () => {
+    const src = `${BASE}
+modeModels:
+  loop:
+    model: Sonnet # fast
+`;
+    const { text } = apply(src, {
+      loop: { prompt: "short", tail: "on" },
+      plan: { model: "Opus", tail: "Decide what you can from the code." },
+    });
+    expect(text).toContain("# fast");
+    expect(YAML.parse(text!).modeModels).toEqual({
+      loop: { model: "Sonnet", prompt: "short", tail: "on" },
+      plan: { model: "Opus", tail: "Decide what you can from the code." },
+    });
+  });
+
+  it("removes prompt and tail with null and keeps the rest", () => {
+    const src = `${BASE}
+modeModels:
+  agent:
+    model: Sonnet
+    prompt: terse
+    tail: off
+    reasoningEffort: low
+`;
+    const { text } = apply(src, { agent: { prompt: null, tail: null } });
+    expect(YAML.parse(text!).modeModels.agent).toEqual({
+      model: "Sonnet",
+      reasoningEffort: "low",
+    });
+  });
+
+  it("keeps an entry alive on a prompt or a tail alone", () => {
+    const { text } = apply(BASE, {
+      chat: { tail: "Answer briefly." },
+      replan: { prompt: "short" },
+    });
+    expect(YAML.parse(text!).modeModels).toEqual({
+      chat: { tail: "Answer briefly." },
+      replan: { prompt: "short" },
+    });
+  });
+
+  it("drops the entry when the last of prompt and tail is removed", () => {
+    const src = `${BASE}
+modeModels:
+  loop:
+    prompt: short
+  plan:
+    model: Opus
+`;
+    const { text } = apply(src, { loop: { prompt: null } });
+    expect(YAML.parse(text!).modeModels).toEqual({ plan: { model: "Opus" } });
+  });
+
+  it("model: null removes the model and leaves the prompt and tail", () => {
+    const src = `${BASE}
+modeModels:
+  plan:
+    model: Opus
+    models: [Opus, Sonnet]
+    prompt: full
+    tail: off
+`;
+    const { text } = apply(src, { plan: { model: null, models: [] } });
+    expect(YAML.parse(text!).modeModels.plan).toEqual({
+      prompt: "full",
+      tail: "off",
+    });
+  });
+
+  it("ignores prompt and tail on subagent and reviewer", () => {
+    const { text } = apply(BASE, {
+      subagent: { model: "Sonnet", prompt: "short", tail: "on" },
+      reviewer: { model: "Opus", tail: "off" },
+    });
+    expect(YAML.parse(text!).modeModels).toEqual({
+      subagent: { model: "Sonnet" },
+      reviewer: { model: "Opus" },
+    });
+    // Without a model there is nothing to keep, so no entry is written
+    expect(apply(BASE, { subagent: { prompt: "short" } }).text).toBeUndefined();
+  });
+});

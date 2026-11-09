@@ -1,4 +1,8 @@
 import { Usage } from "../..";
+import {
+  normalizeClaudeModelId,
+  normalizeNovaModelId,
+} from "@continuedev/llm-info";
 
 export interface CostBreakdown {
   cost: number;
@@ -57,7 +61,7 @@ function anthropicPricing(
 export const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
   // Claude 5 and 5.5, list prices checked 2026-11-03 at
   // platform.claude.com/docs/en/about-claude/pricing. These are list prices;
-  // `findAnthropicPricing` adds the Bedrock `us.` profile premium.
+  // `findModelPricing` adds the Bedrock `us.` profile premium.
   "claude-opus-5-5": anthropicPricing(4, 20, 0.05),
   "claude-opus-5": anthropicPricing(5, 25),
   // Fable and Mythos: $10 / $50, 5m write 1.25x, 1h write 2x. Reads are 0.025x
@@ -97,20 +101,9 @@ export const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
   },
 };
 
-/**
- * Reduce the model ID formats of Anthropic, Bedrock (`us.anthropic.claude-...-v1:0`),
- * Vertex (`claude-...@20250929`) and dotted names (`claude-sonnet-4.5`) to the
- * dash form used by `ANTHROPIC_PRICING`. Returns undefined for non-Claude IDs.
- */
-export function normalizeClaudeModelId(model: string): string | undefined {
-  let id = model.toLowerCase();
-  const claudeAt = id.indexOf("claude");
-  if (claudeAt === -1) return undefined;
-  id = id.slice(claudeAt);
-  id = id.replace(/@.*$/, "").replace(/-v\d+(:\d+)?$/, "");
-  id = id.replace(/(\d)\.(\d)/g, "$1-$2");
-  return id;
-}
+// The model ID normalizers live beside the prompt cache table in
+// @continuedev/llm-info; re-exported here for the many importers.
+export { normalizeClaudeModelId, normalizeNovaModelId };
 
 /**
  * Bare names without a date that mean one specific release (the original
@@ -148,10 +141,14 @@ function continuesWithMinorVersion(rest: string): boolean {
  *
  * Only `us.` was seen in billing data; the other prefixes follow the vendor's
  * statement and are not measured.
+ *
+ * Amazon Nova gets no factor: `NOVA_PRICING` carries the AWS Price List's
+ * in-region rate, which is also what a `us.` profile bills at, and a row of
+ * its own for Nova 2 Lite's cheaper `global.` profile.
  */
 const BEDROCK_GEO_PROFILE_FACTOR = 1.1;
 const BEDROCK_GEO_PREFIX = /^(us|eu|apac|jp|au|ca)\.anthropic\./i;
-/** Normalized IDs of the models the premium applies to: 4.5 and later. */
+/** Normalized IDs of the Claude models the premium applies to: 4.5 and later. */
 const REGIONAL_PREMIUM_MODELS =
   /^claude-(?:(?:opus|sonnet|haiku)-(?:4-[5-9]|[5-9])|fable|mythos)/;
 
@@ -188,11 +185,16 @@ function scalePricing(pricing: ModelPricing, factor: number): ModelPricing {
 }
 
 /**
+ * The prices of a Claude model (Anthropic's list with the Bedrock regional
+ * premium applied) or of one of the four Amazon Nova models that cache on
+ * Bedrock (`NOVA_PRICING`); null for a model neither table lists. The chat
+ * window prices its cache notices and model switches through this.
+ *
  * @param inputTokens The request's whole prompt. When the model has a
  * long-context tier and the prompt is over its limit, the tier's prices are
  * returned.
  */
-export function findAnthropicPricing(
+export function findModelPricing(
   model: string,
   inputTokens?: number,
 ): ModelPricing | null {
@@ -205,7 +207,7 @@ function findListPricing(
   inputTokens?: number,
 ): ModelPricing | null {
   let id = normalizeClaudeModelId(model);
-  if (!id) return null;
+  if (!id) return findNovaPricing(model);
   id = EXACT_ALIASES[id] ?? id;
   const sortedKeys = Object.keys(ANTHROPIC_PRICING).sort(
     (a, b) => b.length - a.length,
@@ -226,17 +228,22 @@ function findListPricing(
   return null;
 }
 
-function calculateAnthropicCost(
+/**
+ * Claude on any provider, and Amazon Nova on Bedrock, which report usage the
+ * same way: `promptTokens` leaves out cache reads and writes, and writes may
+ * be split by lifetime.
+ */
+function calculateCachedModelCost(
   model: string,
   usage: Usage,
 ): CostBreakdown | null {
-  // The whole prompt decides the price tier. For Claude, `promptTokens` leaves
-  // out the cache reads and writes, so add them back.
+  // The whole prompt decides the price tier. `promptTokens` leaves out the
+  // cache reads and writes, so add them back.
   const wholePrompt =
     usage.promptTokens +
     (usage.promptTokensDetails?.cachedTokens ?? 0) +
     (usage.promptTokensDetails?.cacheWriteTokens ?? 0);
-  const modelPricing = findAnthropicPricing(model, wholePrompt);
+  const modelPricing = findModelPricing(model, wholePrompt);
   if (!modelPricing) {
     return null; // Unknown model
   }
@@ -350,9 +357,15 @@ function priceCachedUsage(
  * 2026-11-06): the `USE1-Nova*-input-tokens`, `-output-tokens`,
  * `-cache-read-input-token-count` and `-cache-write-input-token-count` rows.
  * On every Nova row a cache read is 0.25x the input price and a cache write
- * is $0.00. The same models reached through a cross-region profile (`us.`,
- * `eu.`, `apac.`, `global.`) are priced at these list rates; the Price List
- * shows no regional premium for Nova.
+ * is $0.00: the tokens a request writes are billed once, as input, with no
+ * surcharge. A geographic cross-region profile (`us.`, `eu.`, `apac.`) is
+ * priced at these same rates: the Price List shows no regional premium for
+ * Nova, and the pricing page (aws.amazon.com/bedrock/pricing, read the same
+ * day) lists one price for geo cross-region and in-region. The page lists
+ * Nova 2 Lite's global cross-region profile 10% lower, so `global.` has its
+ * own row. Only the four models that take cache points
+ * (`bedrockCachePointFields`) are here; `normalizeNovaModelId` in
+ * @continuedev/llm-info names the same four.
  */
 function novaPricing(input: number, output: number): ModelPricing {
   return {
@@ -365,6 +378,10 @@ function novaPricing(input: number, output: number): ModelPricing {
 }
 
 const NOVA_PRICING: { match: RegExp; pricing: ModelPricing }[] = [
+  {
+    match: /^global\.amazon\.nova-2-lite-v\d/i,
+    pricing: novaPricing(0.3, 2.5),
+  },
   { match: /(^|\.)amazon\.nova-2-lite-v\d/i, pricing: novaPricing(0.33, 2.75) },
   { match: /(^|\.)amazon\.nova-pro-v\d/i, pricing: novaPricing(0.8, 3.2) },
   { match: /(^|\.)amazon\.nova-lite-v\d/i, pricing: novaPricing(0.06, 0.24) },
@@ -463,7 +480,7 @@ function calculateBedrockCost(
       "Prices: AWS Price List, us-east-1 on-demand",
     );
   }
-  return calculateAnthropicCost(model, usage);
+  return calculateCachedModelCost(model, usage);
 }
 
 interface OpenAIPrice {
@@ -608,7 +625,7 @@ export function calculateRequestCost(
     // estimate. Regional pricing, data residency and reseller margins can differ.
     case "vertexai":
     case "openrouter":
-      return calculateAnthropicCost(model, usage);
+      return calculateCachedModelCost(model, usage);
     case "openai":
       return calculateOpenAICost(model, usage);
     default:

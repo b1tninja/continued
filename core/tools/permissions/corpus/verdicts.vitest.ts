@@ -7,10 +7,10 @@ const SHELLS: ShellKind[] = ["bash", "zsh", "sh", "powershell", "cmd"];
 
 /**
  * Where a scanner disagrees with what is true of a command (plans/command-analysis.md,
- * I0). The first list must stay empty: a scanner that vouches for a command that
+ * P0). The first list must stay empty: a scanner that vouches for a command that
  * is not read-only is a bug. The others are known gaps, kept exact so that a fix
  * flips a test and a regression shows as a new entry. Each is a target of a
- * later step of the plan: I2 (a POSIX parser), I3 (PowerShell), I4 (cmd), I7
+ * later step of the plan: P2 (a POSIX parser), P3 (PowerShell), P4 (cmd), P7
  * (wrappers).
  */
 const KNOWN_PROTECT_GAPS: string[] = [];

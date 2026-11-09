@@ -126,3 +126,47 @@ describe("modeModels: the uses beyond the modes", () => {
     expect(cfg.modeModels?.replan?.model).toBe("Opus");
   });
 });
+
+describe("modeModels: prompt per use", () => {
+  it("accepts a profile or a block name on the turn uses", () => {
+    const parsed = modeModelsSchema.parse({
+      agent: { model: "Sonnet", prompt: "short" },
+      loop: { prompt: "house" },
+      replan: { model: "Opus", prompt: "full" },
+    });
+    expect(parsed.loop).toEqual({ prompt: "house" });
+    expect(parsed.agent?.prompt).toBe("short");
+  });
+
+  it("a mode entry with only a prompt is enough", () => {
+    expect(modeModelsSchema.parse({ plan: { prompt: "short" } }).plan).toEqual({
+      prompt: "short",
+    });
+    expect(() => modeModelsSchema.parse({ loop: {} })).toThrow();
+    expect(() => modeModelsSchema.parse({ loop: { prompt: "" } })).toThrow();
+  });
+});
+
+describe("modeModels: tail per use", () => {
+  it("accepts on, off, a text, or a boolean (YAML 1.1 reads on/off as one)", () => {
+    const parsed = modeModelsSchema.parse({
+      agent: { model: "Sonnet", tail: "on" },
+      plan: { model: "Opus", tail: "off" },
+      loop: { tail: "Finish the item, then call finish_item." },
+      replan: { model: "Opus", tail: false },
+    });
+    expect(parsed.agent?.tail).toBe("on");
+    expect(parsed.plan?.tail).toBe("off");
+    expect(parsed.loop).toEqual({
+      tail: "Finish the item, then call finish_item.",
+    });
+    expect(parsed.replan?.tail).toBe(false);
+  });
+
+  it("an entry with only a tail is enough; an empty text is not", () => {
+    expect(modeModelsSchema.parse({ agent: { tail: "off" } }).agent).toEqual({
+      tail: "off",
+    });
+    expect(() => modeModelsSchema.parse({ loop: { tail: "" } })).toThrow();
+  });
+});

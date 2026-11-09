@@ -1,6 +1,6 @@
 /**
  * What PowerShell makes of a command word and its parameters
- * (plans/command-analysis.md, I3). A text rule on `Remove-Item` has to see
+ * (plans/command-analysis.md, P3). A text rule on `Remove-Item` has to see
  * `rm`, `del` and `ri`; a flag list has to see `-Rec` and `-Recurse:$true`
  * as the same parameter; and a command is only known to read if every
  * parameter it passes is one the cmdlet is known to have.

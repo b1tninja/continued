@@ -21,6 +21,7 @@ import type {
 } from "../config/providers/types";
 import type { ModeModelsInput } from "../config/yaml/saveModeModels";
 import type { SubagentLoadResult } from "../subagents/loadSubagents";
+import type { ApplyPatchResult, WorktreeInfo } from "../util/worktree";
 import type { DetectedLocalServer } from "../llm/localServers";
 import type { RulesByModeInput } from "../config/yaml/saveRulesByMode";
 import type {
@@ -545,7 +546,15 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   /** Subagent definitions, read fresh from the agent folders on each call. */
   "subagents/list": [undefined, SubagentLoadResult];
   "tools/call": [
-    { toolCall: ToolCall },
+    {
+      toolCall: ToolCall;
+      /**
+       * Run the call as if these folders (URIs) were the workspace: relative
+       * paths resolve against them and a command runs in the first. For a
+       * Loop worker's worktree; absolute paths stay as they are.
+       */
+      workspaceDirs?: string[];
+    },
     {
       contextItems: ContextItem[];
       errorMessage?: string;
@@ -593,7 +602,12 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    */
   "tools/autoReview": [AutoReviewRequest, AutoReviewReply];
   "tools/preprocessArgs": [
-    { toolName: string; args: Record<string, unknown> },
+    {
+      toolName: string;
+      args: Record<string, unknown>;
+      /** As for tools/call: resolve paths against these folders */
+      workspaceDirs?: string[];
+    },
     {
       preprocessedArgs?: Record<string, unknown>;
       errorReason?: ContinueErrorReason;
@@ -638,4 +652,21 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   ];
   /** Requests the server of this chat model serves at once, when it says. */
   "models/serverConcurrency": [{ title: string }, number | undefined];
+  /**
+   * Loop mode's parallel waves (core/util/worktree.ts): a worktree for one
+   * item from the checkout at `repo` (a local path), its patch, the patch
+   * applied to the checkout or refused, the worktree removed, and the files
+   * uncommitted in the checkout (for `touchedSince`).
+   */
+  "loop/worktreeCreate": [
+    { repo: string; slug: string; itemId: string },
+    WorktreeInfo,
+  ];
+  "loop/worktreePatch": [{ path: string; baseline: string }, string];
+  "loop/worktreeApply": [
+    { repo: string; patch: string; touchedSince?: string[] },
+    ApplyPatchResult,
+  ];
+  "loop/worktreeRemove": [{ repo: string; path: string; branch: string }, void];
+  "loop/dirtyFiles": [{ repo: string }, string[]];
 };

@@ -1,5 +1,6 @@
 import {
   Base64ImageSource,
+  ContentBlockParam,
   ErrorResponse,
   MessageParam,
   Tool,
@@ -9,6 +10,8 @@ import {
   ChatCompletionTool,
   ChatCompletionToolChoiceOption,
 } from "openai/resources";
+import { isTaskListBlockText } from "../util/taskListBlock.js";
+import { CACHE_PIN_FIELD } from "./cacheTtl.js";
 
 export function getAnthropicErrorMessage(response: ErrorResponse): string {
   switch (response.error.type) {
@@ -97,40 +100,88 @@ export function getAnthropicHeaders(
 }
 
 export function addCacheControlToLastTwoUserMessages(messages: MessageParam[]) {
-  let userMessages = 0;
-  for (let i = messages.length - 1; i >= 0; i--) {
+  // A block the client pinned (CACHE_PIN_FIELD on the OpenAI message, carried
+  // onto its last block by the conversion) is a fork point: it takes a marker
+  // first and counts as one of the two conversation markers.
+  stripCachePins(messages, (part) => {
+    (part as { cache_control?: object }).cache_control = { type: "ephemeral" };
+  });
+  // Messages already marked (a pinned block, or an earlier pass over the same
+  // body) count toward the two before anything new is marked, so a second
+  // pass adds nothing and a pinned run never carries a fifth breakpoint.
+  const marked = (msg: MessageParam) =>
+    typeof msg.content !== "string" &&
+    msg.content.some(
+      (part) => !!(part as { cache_control?: object }).cache_control,
+    );
+  let userMessages = messages.filter(
+    (msg) => msg.role === "user" && marked(msg),
+  ).length;
+  for (let i = messages.length - 1; i >= 0 && userMessages < 2; i--) {
     const msg = messages[i];
     if (msg.role === "user") {
+      if (marked(msg)) continue;
       userMessages++;
       if (typeof msg.content !== "string") {
         // In an agent loop the user-role messages after the first are tool
         // results, so the breakpoint cannot be limited to text blocks. Empty
         // text and empty results cannot carry one; thinking blocks never can.
-        for (let j = msg.content.length - 1; j >= 0; j--) {
-          const part = msg.content[j];
-          if (part.type === "text" && part.text) {
-            part.cache_control = { type: "ephemeral" };
-            break;
-          }
-          if (
-            part.type === "tool_result" &&
-            part.content &&
-            part.content.length > 0
-          ) {
-            part.cache_control = { type: "ephemeral" };
-            break;
-          }
+        // The task list block is the last text of the last user message and
+        // changes between requests, so the marker goes on the block before it
+        // when there is one: the next request then starts with exactly the
+        // bytes this one cached. Only when it is the sole block does it take
+        // the marker, which caches nothing useful but costs no slot elsewhere.
+        const carries = (part: (typeof msg.content)[number]) =>
+          (part.type === "text" && !!part.text) ||
+          (part.type === "tool_result" &&
+            !!part.content &&
+            part.content.length > 0);
+        const candidates = msg.content
+          .map((part, j) => ({ part, j }))
+          .filter(({ part }) => carries(part));
+        const marked =
+          candidates
+            .filter(
+              ({ part }) =>
+                !(part.type === "text" && isTaskListBlockText(part.text)),
+            )
+            .at(-1) ?? candidates.at(-1);
+        if (marked) {
+          (marked.part as { cache_control?: object }).cache_control = {
+            type: "ephemeral",
+          };
         }
       }
-      // Checked for string content too: a string message counts as one of the
-      // two even though it cannot carry a marker. Skipping this check let a
-      // third message be marked, which is a fifth breakpoint with the system
-      // prompt and the tools, and Anthropic allows four.
-      if (userMessages >= 2) {
-        break;
+      // A string message counts as one of the two even though it cannot
+      // carry a marker (the loop condition stops at two). Letting it through
+      // once marked a third message, a fifth breakpoint with the system prompt
+      // and the tools, and Anthropic allows four.
+    }
+  }
+}
+
+/**
+ * Remove the CACHE_PIN_FIELD marks from every content block, calling `onPin`
+ * for each one found, and return how many there were. The mark is ours, not
+ * Anthropic's, so it must never reach the wire.
+ */
+export function stripCachePins(
+  messages: MessageParam[],
+  onPin?: (part: ContentBlockParam) => void,
+): number {
+  let found = 0;
+  for (const msg of messages) {
+    if (typeof msg.content === "string") continue;
+    for (const part of msg.content) {
+      const record = part as unknown as Record<string, unknown>;
+      if (record[CACHE_PIN_FIELD] === true) {
+        delete record[CACHE_PIN_FIELD];
+        onPin?.(part);
+        found++;
       }
     }
   }
+  return found;
 }
 
 export function openAiToolChoiceToAnthropicToolChoice(

@@ -1,8 +1,8 @@
-import type { LoopAutonomy, LoopQuestion, LoopStrategy } from "core";
+import type { LoopStrategy } from "core";
 import {
   formatLoopStatus,
-  LOOP_AUTONOMY,
   LOOP_LIMITS,
+  LOOP_MAX_PARALLEL,
   LOOP_STRATEGIES,
   LOOP_STRATEGY_ORDER,
   loopStrategy,
@@ -19,6 +19,7 @@ import {
   endLoopThunk,
   LoopAnswerInput,
   resumeLoopThunk,
+  setLoopParallelThunk,
   setLoopStrategyThunk,
   stopLoopThunk,
 } from "../../redux/thunks/loop";
@@ -45,6 +46,9 @@ export function LoopInbox() {
     return result.ok ? undefined : result.error;
   };
   const stopped = loop.status === "stopped";
+  // Parallel waves need a level that does not ask before each edit
+  const supervised = (loop.autonomy ?? "auto") === "supervised";
+  const waveRunning = !!loop.parallel?.length;
 
   return (
     <div data-testid="loops-panel" className="mx-1 mb-1 min-w-0">
@@ -92,6 +96,25 @@ export function LoopInbox() {
               </option>
             ))}
           </select>
+          <label
+            className="flex shrink-0 items-center gap-0.5 text-description"
+            title={
+              supervised
+                ? "Parallel waves run only at a level that does not ask before each edit"
+                : `Run items with disjoint files: lines at the same time, up to ${LOOP_MAX_PARALLEL}, each in its own worktree; the change applies at the next step`
+            }
+          >
+            <input
+              type="checkbox"
+              data-testid="loop-parallel"
+              checked={!!loop.parallelOn}
+              disabled={supervised}
+              onChange={(e) =>
+                void dispatch(setLoopParallelThunk(e.target.checked))
+              }
+            />
+            Parallel
+          </label>
           {stopped ? (
             <>
               {loop.stopReason !== "done" && (
@@ -119,11 +142,15 @@ export function LoopInbox() {
                 <button
                   type="button"
                   data-testid="loop-stop"
-                  title="Stop once the running item or re-plan ends"
+                  title={
+                    waveRunning
+                      ? "Stop the wave's workers now; their items go back to pending"
+                      : "Stop once the running item or re-plan ends"
+                  }
                   className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
                   onClick={() => void dispatch(stopLoopThunk())}
                 >
-                  Stop after this item
+                  {waveRunning ? "Stop the wave" : "Stop after this item"}
                 </button>
               )}
               {loop.current && (

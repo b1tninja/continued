@@ -84,6 +84,42 @@ describe("bedrockReasoningFields exists in core and in the adapter", () => {
     ).toEqual({});
   });
 
+  it("turns Nova 2 reasoning on at low when the config says nothing, and off only on an explicit false", () => {
+    const nova = "us.amazon.nova-2-lite-v1:0";
+    for (const helpers of [core, adapter]) {
+      expect(
+        helpers.bedrockReasoningFields(nova, undefined, 16384)
+          .additionalModelRequestFields,
+      ).toEqual({
+        reasoningConfig: { type: "enabled", maxReasoningEffort: "low" },
+      });
+      expect(
+        helpers.bedrockReasoningFields(nova, undefined, 16384).omitMaxTokens,
+      ).toBe(false);
+      expect(
+        helpers.bedrockReasoningFields(nova, false, 1024)
+          .additionalModelRequestFields,
+      ).toEqual({});
+      expect(
+        helpers.bedrockReasoningFields(nova, true, 4096)
+          .additionalModelRequestFields,
+      ).toEqual({
+        reasoningConfig: { type: "enabled", maxReasoningEffort: "medium" },
+      });
+    }
+    // The other families keep their silence when nothing is said.
+    for (const id of [
+      "anthropic.claude-haiku-4-5-20251001-v1:0",
+      "qwen.qwen3-32b-v1:0",
+      "us.amazon.nova-pro-v1:0",
+    ]) {
+      expect(
+        core.bedrockReasoningFields(id, undefined, 1024)
+          .additionalModelRequestFields,
+      ).toEqual({});
+    }
+  });
+
   it("omits maxTokens only for Nova 2 at high effort", () => {
     const nova = "us.amazon.nova-2-lite-v1:0";
     expect(core.bedrockReasoningFields(nova, true, 16384).omitMaxTokens).toBe(

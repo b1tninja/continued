@@ -8,7 +8,7 @@ import { casesFor } from "./verdicts";
 
 /**
  * PowerShell's own parser as the oracle for our PowerShell scanner
- * (plans/command-analysis.md, I3, decision D2): the scanner is a strict subset
+ * (plans/command-analysis.md, P3, decision D2): the scanner is a strict subset
  * we run on every command, and this checks, on a machine that has PowerShell,
  * that for every command the scanner understands PowerShell's parser sees the
  * same commands and words. Skipped elsewhere; Windows CI is the home of it.

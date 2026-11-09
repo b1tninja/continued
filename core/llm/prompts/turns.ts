@@ -26,16 +26,24 @@ import { BuiltInToolNames } from "../../tools/builtIn.js";
 export interface TurnToolNames {
   presentPlan: string;
   taskList: string;
+  /** The file-reading tool, for the tailored profile's worked example. */
+  read: string;
+  /** The file-writing tool, for the tailored profile's shell-route line. */
+  write: string;
 }
 
 export const IDE_TURN_TOOL_NAMES: TurnToolNames = {
   presentPlan: BuiltInToolNames.PresentPlan,
   taskList: BuiltInToolNames.TaskList,
+  read: BuiltInToolNames.ReadFile,
+  write: BuiltInToolNames.CreateNewFile,
 };
 
 export const CLI_TURN_TOOL_NAMES: TurnToolNames = {
   presentPlan: "PresentPlan",
   taskList: "TaskList",
+  read: "Read",
+  write: "Write",
 };
 
 /** An act turn: Agent mode, or a Loop item run. */
@@ -74,35 +82,135 @@ You can call several read-only tools at once.`;
  * (research-qwen-harness.md): on Qwen3 the short turns won or tied in every
  * scenario, and on Qwen3-Coder-30B the full plan turn took 22 requests with
  * seven tool calls leaked as text where the short one took 10 and none.
- * Other families keep the full text until they are measured; a model's own
- * `baseAgentSystemMessage` or `basePlanSystemMessage` wins over both.
+ *
+ * "tailored" is the short text plus a "Tool calls" group that names the
+ * tool-call markup the model was trained on and says it does nothing as
+ * text. Measured on 2026-11-09 (research-qwen-tailoring.md) on Bedrock:
+ * Qwen3-Coder-30B leaked tool calls as text in 3 of 6 short plan-ask runs
+ * and 0 of 6 tailored ones, and finished the loop scenario in 1 of 3 short
+ * runs against 3 of 3 tailored; dropping only the markup line brought the
+ * leaks back (2 of 3). Qwen3-Coder-Next and Qwen3-Next-80B presented no plan
+ * at all under the full text and presented one under short and tailored,
+ * with tailored the cheapest. Dense Qwen3-32B and the local Qwen3.8 never
+ * leaked under any text, and the extra group cost them turns, so they stay
+ * on short. Other families keep the full text until they are measured; a
+ * model's own `baseAgentSystemMessage` or `basePlanSystemMessage` wins over
+ * all three.
  */
-export type PromptProfile = "full" | "short";
+export type PromptProfile = "full" | "short" | "tailored";
 
 const SHORT_PROMPT_MODELS = /qwen/i;
+const TAILORED_PROMPT_MODELS = /qwen3[-._]?coder|coder-next|qwen3[-._]?next/i;
 
-export function promptProfile(model: string | undefined): PromptProfile {
-  return model && SHORT_PROMPT_MODELS.test(model) ? "short" : "full";
+/**
+ * Set to "full", "short" or "tailored", picks the profile for every model, so
+ * the benchmark (bench/runner.mjs --profile) can compare the texts on one
+ * model. Any other value is ignored. A `promptProfile` field per model in
+ * config is Track K and not this.
+ */
+export const PROMPT_PROFILE_ENV = "CONTINUE_PROMPT_PROFILE";
+
+/** The built-in texts, by the names config and the override know them by. */
+export const PROMPT_PROFILES: readonly PromptProfile[] = [
+  "full",
+  "short",
+  "tailored",
+];
+
+/** The environment override, when the runtime has one (not the browser). */
+function promptProfileOverride(): PromptProfile | undefined {
+  if (typeof process === "undefined" || !process.env) return undefined;
+  const value = process.env[PROMPT_PROFILE_ENV];
+  return PROMPT_PROFILES.find((profile) => profile === value);
 }
 
-/** The act turn for a model: the short text where the profile says so. */
+export function promptProfile(model: string | undefined): PromptProfile {
+  const override = promptProfileOverride();
+  if (override) return override;
+  if (!model) return "full";
+  if (TAILORED_PROMPT_MODELS.test(model)) return "tailored";
+  return SHORT_PROMPT_MODELS.test(model) ? "short" : "full";
+}
+
+/** The act turn for a model, by its profile. */
 export function actTurnFor(
   model: string | undefined,
   names: TurnToolNames = IDE_TURN_TOOL_NAMES,
 ): string {
-  return promptProfile(model) === "short"
-    ? actTurnShort(names)
-    : actTurn(names);
+  switch (promptProfile(model)) {
+    case "tailored":
+      return actTurnTailored(model, names);
+    case "short":
+      return actTurnShort(names);
+    default:
+      return actTurn(names);
+  }
 }
 
-/** The plan turn for a model: the short text where the profile says so. */
+/** The plan turn for a model, by its profile. */
 export function planTurnFor(
   model: string | undefined,
   names: TurnToolNames = IDE_TURN_TOOL_NAMES,
 ): string {
-  return promptProfile(model) === "short"
-    ? planTurnShort(names)
-    : planTurn(names);
+  switch (promptProfile(model)) {
+    case "tailored":
+      return planTurnTailored(model, names);
+    case "short":
+      return planTurnShort(names);
+    default:
+      return planTurn(names);
+  }
+}
+
+/**
+ * The tool-call markup a Qwen model was trained on, so the tailored text can
+ * name the exact string it must not write. Qwen3-Coder and the Flash line
+ * use the XML function format; the other Qwen3 models the Hermes JSON one.
+ */
+function qwenToolCallMarkup(model: string | undefined): string {
+  return /coder|flash/i.test(model ?? "")
+    ? "<tool_call><function=Name><parameter=key>value</parameter></function></tool_call>"
+    : '<tool_call>{"name": "Name", "arguments": {...}}</tool_call>';
+}
+
+/**
+ * The "Tool calls" group of the tailored profile: the markup line is the one
+ * that stops the leaks (the no-markup ablation leaked again); the example,
+ * refused-call and shell lines cover the three failures the Bedrock Qwen runs
+ * showed (a missing required parameter, a refused call retried through a
+ * command, a file written with a shell redirect).
+ */
+function toolCallsGroup(
+  model: string | undefined,
+  kind: "act" | "plan",
+  names: TurnToolNames,
+): string {
+  const finish =
+    kind === "act"
+      ? "Keep going until the request is completely resolved, or report the specific blocker that prevents completion."
+      : `Keep going until the plan is presented with ${names.presentPlan}, or report the specific blocker that prevents it.`;
+  return `Tool calls
+- Call tools through the API's tool-call field, never as text. Markup like ${qwenToolCallMarkup(model)} written in your reply does nothing.
+- Right: one ${names.read} call with arguments {"filepath": "src/a.js"}, every required parameter given. Wrong: that call pasted into your message.
+- A refused call, such as "${names.write} refused by rule": do not retry it and do not do it through a shell command; do the rest and report what was refused.
+- Write files with ${names.write}, never echo > or cat <<EOF.
+- ${finish}`;
+}
+
+/** The act turn for Qwen coder and MoE models: the short text plus the tool-calls group. */
+export function actTurnTailored(
+  model: string | undefined,
+  names: TurnToolNames = IDE_TURN_TOOL_NAMES,
+): string {
+  return `${actTurnShort(names)}\n\n${toolCallsGroup(model, "act", names)}`;
+}
+
+/** The plan turn for Qwen coder and MoE models: the short text plus the tool-calls group. */
+export function planTurnTailored(
+  model: string | undefined,
+  names: TurnToolNames = IDE_TURN_TOOL_NAMES,
+): string {
+  return `${planTurnShort(names)}\n\n${toolCallsGroup(model, "plan", names)}`;
 }
 
 /**
@@ -135,17 +243,17 @@ Read-only
 - Your tools only read. A tool that would change the project is not offered here, and a command is not a way around that. Do not offer to switch modes. If the person asks you to do the work while you are here, plan the work.
 
 Two kinds of unknowns
-- Facts about the code or the system: find them by reading and searching, never by asking. Before any question, make at least one targeted pass over the files the request touches.
+- Facts about the code or the system: find them by reading and searching, never by asking. Before any question, make at least one targeted pass over the files the request touches, the project manifest and its existing tests, so the plan uses the project's own test command.
 - Preferences and trade-offs the code cannot settle: ask early, with two to four options and the one you would pick. Ask only what would change the plan, confirm an assumption that matters, or choose between real trade-offs. One to three questions a round.
 - A choice the person kept for themselves ("that is my call") or one a wrong answer makes costly (irreversible, security, cost, scope) is theirs, whether or not you could ask: give it to ${names.presentPlan} as \`decisions\`, with the options, your pick, its type and the to-dos that wait on it, and write those to-dos so they do not presuppose an answer. Leaving it out, or calling it out of scope, is not an option. A decision is not a to-do: no check, no status; the other to-dos keep their checks.
 - Any other preference you cannot ask about, or get no answer to: take your recommended option and write it in the plan as an assumption.
 
 The plan
-- Write a plan a person can check in a minute and another agent could carry out without deciding anything: the goal and how success is checked; the decisions you made and the assumptions behind them; the approach, grouped by part of the system rather than by file; the files that matter, named only where it avoids a mistake; what is out of scope. Plan only what the request needs.
-- Break the work into to-dos: each a reviewable change, in order, with a command that shows it is done where one exists, and the to-dos it must come after.
+- Write a plan a person can check in a minute and another agent could carry out without deciding anything: the goal and how success is checked; the decisions you made and the assumptions behind them; the approach, grouped by part of the system rather than by file; the files that matter, named only where it avoids a mistake; the risks this code in particular carries, or none, not generic ones; what is out of scope. Plan only what the request needs.
+- Break the work into to-dos: each a reviewable change, in order, with a check where one exists and the to-dos it must come after. A check is a command that fails when the behaviour is wrong: the project's test command, or an import that asserts a result, such as \`node -e "import('./src/x.js').then(m => { if (m.f('a') !== 'b') process.exit(1) })"\`. A command that only tests that a file or a string exists passes the moment the file is written and proves nothing; give no check rather than that.
 
 Finishing
-- When the plan is ready, call ${names.presentPlan} and stop. That call is the request for approval: do not ask "is this plan all right" in text or through a question, and do not repeat the plan after the call. Your turn ends only by calling ${names.presentPlan} or by asking the person a question.`;
+- When the plan is ready, call ${names.presentPlan} and stop. That call is the request for approval: do not ask "is this plan all right" in text or through a question, and do not write the plan out in text before or after the call. Your turn ends only by calling ${names.presentPlan} or by asking the person a question.`;
 }
 
 /**
@@ -154,6 +262,13 @@ Finishing
  * planning under the full text. The reserved-choice rule comes before the
  * assume fallback, the order that stopped the full turn deciding reserved
  * choices.
+ *
+ * "and nowhere else: the plan and the to-dos do not assume an answer" was
+ * added on 2026-11-09 from the turn-prompt eval (plans/turn-prompt-eval.md
+ * section 4, item 5): Qwen3-Coder-30B put the reserved choice in `decisions`
+ * every time but also wrote "I'll assume ISO 8601" in the plan under the
+ * short and tailored texts, in 4 of 7 runs; with the clause, 0 of 6. The
+ * full text, which separates the two cases in two bullets, never did.
  */
 export function planTurnShort(
   names: TurnToolNames = IDE_TURN_TOOL_NAMES,
@@ -161,16 +276,18 @@ export function planTurnShort(
   return `You are in plan mode. Work out what to do; the person decides whether to do it.
 - Your tools only read. Do not create or change anything, do not make a task list, and do not offer to switch modes.
 - Find facts about the code by reading. Ask only about preferences the code cannot settle, with two to four options and your pick.
-- A choice the person kept for themselves, or a costly one, goes in \`decisions\` with the options and your pick; write the to-dos so they do not presuppose the answer. Any other open preference: use your pick and note it as an assumption.
-- Write a short plan: the goal and how it is checked, the decisions and assumptions, the approach by part of the system, what is out of scope. Then the to-dos, in order, each with a check command where one exists.
+- A choice the person kept for themselves, or a costly one, goes in \`decisions\` with the options and your pick, and nowhere else: the plan and the to-dos do not assume an answer. Any other open preference: use your pick and note it as an assumption.
+- Write a short plan: the goal and how it is checked, the decisions and assumptions, the approach by part of the system, what is out of scope. Then the to-dos, in order, each with a check where one exists: a command that fails when the behaviour is wrong (a test run, or an import that asserts a result), never one that only checks that a file or a string exists.
 - End by calling ${names.presentPlan}, then stop. Do not ask whether the plan is all right; that call is the question. Your turn ends only by calling ${names.presentPlan} or by asking a question.`;
 }
 
 /**
- * One-line reminders for the end of a turn's first user message, and of later
- * messages once a conversation is long. Claude Code's output styles append a
- * reminder like this per turn; it keeps the mode's rule close to the model
- * without touching the cached prefix. Not wired yet.
+ * One-line reminders for the end of every user message of a request
+ * (`modeModels.<use>.tail`, usePrompts.ts tailFor). Claude Code's output
+ * styles append a reminder like this per turn; it keeps the turn's rule close
+ * to the model without touching the cached prefix: the system prompt is the
+ * same bytes with or without it, and a message's bytes never change once
+ * sent.
  */
 export const ACT_TURN_TAIL =
   "Act until the request is done. A reply with no tool call ends the turn.";

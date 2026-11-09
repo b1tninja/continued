@@ -4,14 +4,17 @@ import {
   answeredDecisions,
   choosePlanFileName,
   describeDecisions,
+  isExistenceOnlyCheck,
   parsePlanFile,
   planBuildMessage,
   planKeepPlanningResult,
+  planProposedResult,
   serializePlanFile,
   slugifyPlanTitle,
   taskPlanForProposal,
   taskPlanFromPlanFile,
   validatePlanArgs,
+  weakCheckNotes,
 } from "./planFile";
 import { parseMarkdownChecklist } from "./taskPlan";
 
@@ -99,6 +102,136 @@ describe("parseMarkdownChecklist id comments", () => {
   });
 });
 
+describe("a to-do's model: line", () => {
+  const file = [
+    "# Parser",
+    "",
+    "## To-dos",
+    "",
+    "- [ ] Design the grammar <!-- id: 1 -->",
+    "  model: Claude Opus",
+    "- [ ] Write the lexer <!-- id: 2 -->",
+    "  after: 1",
+    "  check: npm test -- lexer",
+    "  Model: fast",
+    "- [ ] Document it <!-- id: 3 -->",
+    "",
+  ].join("\n");
+
+  it("is read under its to-do, in any case, next to after: and check:", () => {
+    const read = taskPlanFromPlanFile(file, undefined, now);
+    if (!read.ok) throw new Error(read.error);
+    expect(read.plan.items).toEqual([
+      {
+        id: "1",
+        text: "Design the grammar",
+        status: "pending",
+        model: "Claude Opus",
+      },
+      {
+        id: "2",
+        text: "Write the lexer",
+        status: "pending",
+        after: ["1"],
+        check: "npm test -- lexer",
+        model: "fast",
+      },
+      { id: "3", text: "Document it", status: "pending" },
+    ]);
+  });
+
+  it("is written back under the to-do, after its after: and check: lines", () => {
+    const read = taskPlanFromPlanFile(file, undefined, now);
+    if (!read.ok) throw new Error(read.error);
+    const doc = parsePlanFile(file);
+    expect(
+      serializePlanFile({
+        title: doc.title,
+        body: doc.body,
+        items: read.plan.items,
+      }),
+    ).toBe(file.replace("  Model: fast", "  model: fast"));
+  });
+
+  it("comes from the plan tool as a to-do object or in todo_details", () => {
+    const args = validatePlanArgs({
+      title: "Parser",
+      todos: [
+        { text: "Design the grammar", model: "Claude Opus" },
+        "Write the lexer",
+      ],
+      todo_details: [{ todo: 2, model: "fast" }],
+    });
+    expect(args.ok && args.items).toEqual([
+      { text: "Design the grammar", status: "pending", model: "Claude Opus" },
+      { text: "Write the lexer", status: "pending", model: "fast" },
+    ]);
+    const built = args.ok && taskPlanForProposal(args.items, undefined, now);
+    expect(built && built.ok && built.plan.items.map((i) => i.model)).toEqual([
+      "Claude Opus",
+      "fast",
+    ]);
+  });
+
+  it("is refused when it is not a string or is too long", () => {
+    expect(
+      taskPlanForProposal([{ text: "A", model: 3 }], undefined, now),
+    ).toEqual({ ok: false, error: "Item 1: model must be a string" });
+    expect(
+      taskPlanForProposal(
+        [{ text: "A", model: "x".repeat(101) }],
+        undefined,
+        now,
+      ),
+    ).toEqual({
+      ok: false,
+      error: "Item 1: model is longer than 100 characters",
+    });
+    // A blank line is no model
+    const blank = taskPlanForProposal(
+      [{ text: "A", model: "  " }],
+      undefined,
+      now,
+    );
+    expect(blank.ok && blank.plan.items[0].model).toBeUndefined();
+  });
+});
+describe("a to-do's files: line", () => {
+  it("comes from the plan tool as a list or in todo_details, and is normalised", () => {
+    const args = validatePlanArgs({
+      title: "Retry",
+      todos: [
+        {
+          text: "Add a retry helper",
+          files: ["./src/retry.ts", "src\\retry.test.ts"],
+        },
+        "Document it",
+      ],
+      todo_details: [{ todo: 2, files: "docs/**, README.md" }],
+    });
+    const built = args.ok && taskPlanForProposal(args.items, undefined, now);
+    expect(built && built.ok && built.plan.items.map((i) => i.files)).toEqual([
+      ["src/retry.ts", "src/retry.test.ts"],
+      ["docs/**", "README.md"],
+    ]);
+  });
+
+  it("is refused when it is not a list of paths or lists too many", () => {
+    expect(
+      taskPlanForProposal([{ text: "A", files: 3 }], undefined, now),
+    ).toEqual({ ok: false, error: "Item 1: files must be a list of paths" });
+    const many = Array.from({ length: 21 }, (_, i) => `f${i}`);
+    expect(
+      taskPlanForProposal([{ text: "A", files: many }], undefined, now),
+    ).toEqual({ ok: false, error: "Item 1: files lists more than 20 paths" });
+    const none = taskPlanForProposal(
+      [{ text: "A", files: " , " }],
+      undefined,
+      now,
+    );
+    expect(none.ok && none.plan.items[0].files).toBeUndefined();
+  });
+});
 describe("file names", () => {
   it("slugifies titles", () => {
     expect(slugifyPlanTitle("Add retry to the Uploader!")).toBe(
@@ -347,6 +480,54 @@ describe("task list from a plan", () => {
     const md = "# T\n\n## To-dos\n\n- [>] a\n- [>] b\n";
     const r = taskPlanFromPlanFile(md, undefined, now);
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("check lint", () => {
+  it("knows a check that only tests that a file or a string exists", () => {
+    for (const weak of [
+      "test -f src/strings.js",
+      'test -f src/strings.js && grep -q "export function slugify" src/strings.js',
+      "grep -q '## Usage' README.md && grep -q slugify README.md",
+      "echo 'Waiting for user decision'",
+      "ls src/a.js",
+      "Test-Path src/a.js",
+      "[ -f src/a.js ]",
+      "cat README.md | grep Usage",
+    ]) {
+      expect(isExistenceOnlyCheck(weak), weak).toBe(true);
+    }
+    for (const real of [
+      "npm test",
+      "node --test test/slugify.test.js",
+      "node --check src/a.js",
+      `node -e "import('./src/strings.js').then(m=>{if(m.slugify('A b')!=='a-b')process.exit(1)})"`,
+      "grep -q Usage README.md && npm test",
+      "pytest tests/test_dates.py",
+    ]) {
+      expect(isExistenceOnlyCheck(real), real).toBe(false);
+    }
+  });
+
+  it("names the to-dos whose check proves nothing, and nothing otherwise", () => {
+    const notes = weakCheckNotes([
+      { check: "test -f src/strings.js" },
+      { check: "npm test" },
+      {},
+      { check: "grep -q Usage README.md" },
+    ]);
+    expect(notes).toContain("The check for to-do 1, `test -f src/strings.js`");
+    expect(notes).toContain("The check for to-do 4, `grep -q Usage README.md`");
+    expect(notes).not.toContain("to-do 2");
+    expect(weakCheckNotes([{ check: "npm test" }, {}])).toBe("");
+    expect(
+      planProposedResult("plans/p.md", {
+        items: [
+          { id: "1", text: "A", status: "pending", check: "test -f a.js" },
+        ],
+        updatedAt: "2026-11-08T00:00:00Z",
+      } as never),
+    ).toContain("only tests that a file or a string exists");
   });
 });
 

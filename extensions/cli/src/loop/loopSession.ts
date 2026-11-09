@@ -8,6 +8,7 @@ import type {
   LoopQuestion,
   LoopState,
   LoopStrategy,
+  ModelUse,
   TaskPlan,
 } from "core/index.js";
 import {
@@ -44,7 +45,8 @@ import {
 } from "../permissions/policyLevels.js";
 import type { PermissionMode } from "../permissions/types.js";
 import {
-  applyModelForUse,
+  applyModelForLoopTurn,
+  applyModelNamed,
   serviceContainer,
   services,
 } from "../services/index.js";
@@ -81,7 +83,11 @@ export function commitLoop(loop: LoopState | undefined): void {
     const synced = taskPlanWithLoop(plan, loop);
     if (synced !== plan) updateSessionTaskPlan(synced);
   }
-  if (wasActive && !isActiveLoop(loop)) afterLoopEnded();
+  if (wasActive && !isActiveLoop(loop)) {
+    afterLoopEnded();
+    // An item's own model was selected when the loop ended: come back
+    if (loop?.modelBefore) void applyModelNamed(loop.modelBefore);
+  }
 }
 
 function isActiveLoop(loop: LoopState | undefined): boolean {
@@ -264,10 +270,30 @@ export function enterReplanMode(): void {
 /**
  * Before a Loop turn is sent: switch to the model `modeModels` gives it
  * (`loop` for an item, `replan` otherwise, falling back to the agent and plan
- * entries). Awaited, so the turn goes to that model and not the one before.
+ * entries), or to the item's own model when its to-do names one
+ * (TaskItem.model; a name that is not configured falls back to the loop
+ * model). Without an entry for the use, the other turns come back to the
+ * model an own model switched away from (LoopState.modelBefore). Awaited, so
+ * the turn goes to that model and not the one before.
  */
-export async function prepareLoopTurn(kind: "item" | "replan"): Promise<void> {
-  await applyModelForUse(useForLoopTurn(kind));
+export async function prepareLoopTurn(turn: {
+  kind: "item" | "replan";
+  /** The item that runs, whose to-do may name its model */
+  itemId?: string;
+}): Promise<void> {
+  const itemModel =
+    turn.kind === "item" && turn.itemId
+      ? getSessionTaskPlan()?.items.find((i) => i.id === turn.itemId)?.model
+      : undefined;
+  const modelBefore = await applyModelForLoopTurn(
+    useForLoopTurn(turn.kind),
+    itemModel,
+    getSessionLoop()?.modelBefore,
+  );
+  const loop = getSessionLoop();
+  if (loop && loop.modelBefore !== modelBefore) {
+    updateSessionLoop({ ...loop, modelBefore });
+  }
 }
 
 // --- Starting, accepting a re-plan, stopping, resuming ---
@@ -552,26 +578,48 @@ export function loopRequestHistory(
   if (!loop?.current || !isMainHistory(isCompacting)) return history;
   const start = Math.min(loop.current.historyIndex, history.length);
   const block = loopPlanBlockForRequest(isCompacting);
-  const withPlan =
-    block && history[start]
-      ? [
-          ...history.slice(0, start),
-          {
-            ...history[start],
-            message: {
-              ...history[start].message,
-              content: withLoopPlanBlock(history[start].message.content, block),
-            } as ChatHistoryItem["message"],
-          },
-          ...history.slice(start + 1),
-        ]
-      : history;
+  const item = history[start];
+  // The item's first message is the run's fork point: a prompt cache point
+  // goes right after it (ChatHistoryItem.cachePin), so every request of the
+  // run keeps that prefix warm and a retry, a branch or a subagent that
+  // starts from the same context reads it instead of writing it again.
+  const withPlan = item
+    ? [
+        ...history.slice(0, start),
+        {
+          ...item,
+          cachePin: true,
+          ...(block
+            ? {
+                message: {
+                  ...item.message,
+                  content: withLoopPlanBlock(item.message.content, block),
+                } as ChatHistoryItem["message"],
+              }
+            : {}),
+        },
+        ...history.slice(start + 1),
+      ]
+    : history;
   return loop.freshContext === false ? withPlan : withPlan.slice(start);
 }
 
 /** Whether the loop is running an item or a re-plan in the main session. */
 export function loopRunGoing(): boolean {
   return !!getSessionLoop()?.current;
+}
+
+/**
+ * What the next request is for, as `modeModels` keys it: a Loop item or
+ * re-plan while one runs, else the permission mode's use (Plan plans, the
+ * others act).
+ */
+export function currentModelUse(): ModelUse {
+  const current = getSessionLoop()?.current;
+  if (current) return useForLoopTurn(current.kind);
+  // Read as the stream does (getState), which test doubles provide
+  const mode = services.toolPermissions.getState?.()?.currentMode;
+  return mode === "plan" ? "plan" : "agent";
 }
 
 /** Whether the loop is running an item in the main session. */

@@ -18,6 +18,9 @@ export function useLoopDriver() {
   const store = useStore<RootState>();
   const loopStatus = useAppSelector((s) => s.session.loop?.status);
   const loopCurrent = useAppSelector((s) => s.session.loop?.current);
+  // A wave's workers finish by themselves; the step after the last one
+  // starts what is next
+  const loopParallel = useAppSelector((s) => s.session.loop?.parallel);
   const isStreaming = useAppSelector((s) => s.session.isStreaming);
   const toolBusy = useAppSelector((s) =>
     selectCurrentToolCalls(s).some(
@@ -54,7 +57,7 @@ export function useLoopDriver() {
       // nothing to do cannot spin
       if (store.getState().session.loop !== before) setTick((t) => t + 1);
     });
-  }, [ready, loopCurrent, tick, dispatch, store]);
+  }, [ready, loopCurrent, loopParallel, tick, dispatch, store]);
 
   useEffect(() => {
     if (loopStatus !== "waiting" || !waitingSince) return;

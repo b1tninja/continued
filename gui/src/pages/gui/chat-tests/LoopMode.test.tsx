@@ -10,14 +10,24 @@ import {
   presentPlanTool,
   readFileTool,
   runTerminalCommandTool,
+  singleFindAndReplaceTool,
   taskListTool,
 } from "core/tools/definitions";
 import { renderChatMessage } from "core/util/messageContent";
 import { serializePlanFile } from "core/util/planFile";
 import { selectActiveTools } from "../../../redux/selectors/selectActiveTools";
+import {
+  INITIAL_PROFILES_STATE,
+  setProfiles,
+  setSelectedProfile,
+} from "../../../redux/slices/profilesSlice";
 import { setLoop, setPlanFile } from "../../../redux/slices/sessionSlice";
 import { setPolicyLevel } from "../../../redux/slices/uiSlice";
 import { startLoopFromPlan } from "../../../redux/thunks/loop";
+import {
+  LoopWorktreeOps,
+  setLoopWorktreeOps,
+} from "../../../util/loopWorktrees";
 import { triggerConfigUpdate } from "../../../util/test/config";
 import { renderWithProviders } from "../../../util/test/render";
 import { getElementByTestId, getMainEditor } from "../../../util/test/utils";
@@ -74,10 +84,25 @@ const ask = (
 
 const text = (m: ChatMessage | undefined) => (m ? renderChatMessage(m) : "");
 
-async function setup(todos: string[]) {
+/** A second chat model, for a to-do that names its own (TaskItem.model). */
+const OPUS = {
+  model: "opus-mock",
+  provider: "mock",
+  title: "Opus",
+  underlyingProviderName: "mock",
+};
+
+async function setup(
+  todos: (
+    string | { text: string; model?: string; files?: string[]; check?: string }
+  )[],
+) {
   const rendered = await renderWithProviders(<Chat />);
   const { store, ideMessenger } = rendered;
   await act(async () => {
+    // A selected profile, as in the IDE: switching the model needs one
+    store.dispatch(setProfiles(INITIAL_PROFILES_STATE.profiles));
+    store.dispatch(setSelectedProfile("local"));
     triggerConfigUpdate({
       store,
       ideMessenger,
@@ -88,12 +113,13 @@ async function setup(todos: string[]) {
           title: "Mock LLM",
           underlyingProviderName: "mock",
         };
-        current.modelsByRole.chat.push(llm);
+        current.modelsByRole.chat.push(llm, OPUS);
         current.selectedModelByRole.chat = llm;
         current.tools = [
           readFileTool,
           runTerminalCommandTool,
           createNewFileTool,
+          singleFindAndReplaceTool,
           taskListTool,
           presentPlanTool,
           holdQuestionTool,
@@ -112,8 +138,8 @@ async function setup(todos: string[]) {
       body: "Parse the grammar.",
       items: todos.map((t, i) => ({
         id: String(i + 1),
-        text: t,
         status: "pending" as const,
+        ...(typeof t === "string" ? { text: t } : t),
       })),
     }),
   };
@@ -136,12 +162,18 @@ async function setup(todos: string[]) {
 
   // The model: scripted turns in order; every request is recorded
   const turns: Turn[] = [];
-  const requests: { messages: ChatMessage[]; tools: string[] }[] = [];
+  const requests: {
+    messages: ChatMessage[];
+    tools: string[];
+    /** The title of the model the request went to */
+    title?: string;
+  }[] = [];
   ideMessenger.llmStreamChat = async function* (msg: any, signal) {
     requests.push({
       messages: msg.messages,
       // What the gui offered with this request
       tools: selectActiveTools(store.getState()).map((t) => t.function.name),
+      title: msg.title,
     });
     const turn = turns.shift();
     if (!turn) throw new Error("no turn scripted");
@@ -149,10 +181,17 @@ async function setup(todos: string[]) {
     return undefined as PromptLog | undefined;
   };
 
-  const start = async () => {
+  const start = async (options: { parallel?: boolean } = {}) => {
     await act(async () => {
+      // Waves need a level that does not ask before each edit: Plan edits
+      // Permissive is Unattended, and the switch is on from the start
+      if (options.parallel) {
+        store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+      }
       store.dispatch(setPlanFile(PLAN_FILE));
-      await store.dispatch(startLoopFromPlan({ planFile: PLAN_FILE }));
+      await store.dispatch(
+        startLoopFromPlan({ planFile: PLAN_FILE, parallel: options.parallel }),
+      );
     });
   };
   /** The prompt the loop sent with request n (the last user message, without an item's plan block). */
@@ -1244,6 +1283,82 @@ describe("Loop in the mode picker", () => {
   });
 });
 
+describe("a to-do's own model", () => {
+  const el = (id: string) =>
+    document.querySelector<HTMLElement>(`[data-testid=${id}]`);
+  const selectedTitle = (h: Awaited<ReturnType<typeof setup>>) =>
+    h.store.getState().config.config.selectedModelByRole.chat?.title;
+
+  test("runs on the model its plan file line names; the other items run on the loop model", async () => {
+    const h = await setup([
+      "Write the lexer",
+      { text: "Design the grammar", model: "opus" },
+      "Add tests",
+    ]);
+    let release = () => {};
+    const held: Turn = async function* (signal) {
+      yield [{ role: "assistant", content: "Thinking" }];
+      await new Promise<void>((r) => (release = r));
+      yield* finish("done", "designed")(signal);
+    };
+    h.turns.push(
+      finish("done", "lexer written"),
+      held,
+      finish("done", "tested"),
+    );
+    await h.start();
+
+    await waitFor(() => expect(h.requests).toHaveLength(2));
+    // Item 2's request went to Opus (a family alias, resolved like a subagent's)
+    expect(h.requests.map((r) => r.title)).toEqual(["Mock LLM", "Opus"]);
+    expect(h.loop().items[1].model).toEqual({ title: "Opus" });
+    expect(h.loop().modelBefore).toBe("Mock LLM");
+    expect(el("loop-model-2")!.textContent).toBe("model: opus");
+    expect(el("loop-model-1")).toBeNull();
+
+    await act(async () => release());
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    // Item 3 came back to the model the loop started on, and so did the chat
+    expect(h.requests.map((r) => r.title)).toEqual([
+      "Mock LLM",
+      "Opus",
+      "Mock LLM",
+    ]);
+    expect(selectedTitle(h)).toBe("Mock LLM");
+  });
+
+  test("a model that is not configured falls back to the loop model, and the item says so", async () => {
+    const h = await setup([{ text: "Design the grammar", model: "GPT-9" }]);
+    let release = () => {};
+    const held: Turn = async function* (signal) {
+      yield [{ role: "assistant", content: "Thinking" }];
+      await new Promise<void>((r) => (release = r));
+      yield* finish("done", "designed")(signal);
+    };
+    h.turns.push(held);
+    await h.start();
+
+    await waitFor(() => expect(h.requests).toHaveLength(1));
+    expect(h.requests[0].title).toBe("Mock LLM");
+    expect(h.loop().items[0].model).toEqual({
+      title: "Mock LLM",
+      fallbackReason: 'model "GPT-9" is not configured; using Mock LLM',
+    });
+    expect(h.loop().modelBefore).toBeUndefined();
+    expect(el("loop-model-fallback-1")!.textContent).toContain(
+      "not configured, ran on Mock LLM",
+    );
+    // The task list carries the reason as the running item's note
+    expect(h.store.getState().session.taskPlan!.items[0].note).toContain(
+      "not configured",
+    );
+
+    await act(async () => release());
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+  });
+});
+
 describe("Loop mode's checks and dependencies", () => {
   type Setup = Awaited<ReturnType<typeof setup>>;
   const CHECK = "npm test -- retry";
@@ -1514,5 +1629,288 @@ describe("Loop mode's checks and dependencies", () => {
     expect(h.prompt(2)).toContain("Tried a table; the tests fix the grammar");
     expect(h.loop().items[0].deferrals).toBe(1);
     expect(h.loop().consecutiveFailures ?? 0).toBe(0);
+  });
+});
+
+describe("Loop mode's parallel waves", () => {
+  type Setup = Awaited<ReturnType<typeof setup>>;
+  const el = (id: string) =>
+    document.querySelector<HTMLElement>(`[data-testid=${id}]`);
+
+  /**
+   * Fake worktrees (the seam for core/util/worktree.ts): every call is
+   * recorded; `refuse` says which patches do not apply, and why.
+   */
+  function fakeWorktrees(
+    refuse: (patch: string) => string | undefined = () => undefined,
+  ) {
+    const calls: string[] = [];
+    const ops: LoopWorktreeOps = {
+      async create(_messenger, repo, slug, itemId) {
+        calls.push(`create ${slug}-${itemId} in ${repo}`);
+        const path = `/tmp/loop/item-${itemId}-x`;
+        return {
+          path,
+          branch: `continued/loop-${slug}-${itemId}`,
+          baseline: "b",
+        };
+      },
+      async patch(_messenger, worktree) {
+        calls.push(`patch ${worktree.path}`);
+        return `patch of ${worktree.path}`;
+      },
+      async apply(_messenger, _repo, patch, touchedSince) {
+        calls.push(
+          `apply ${patch}${touchedSince.length ? ` (touched: ${touchedSince.join(", ")})` : ""}`,
+        );
+        const reason = refuse(patch);
+        return reason ? { ok: false, reason } : { ok: true };
+      },
+      async remove(_messenger, _repo, worktree) {
+        calls.push(`remove ${worktree.path}`);
+      },
+      async dirty() {
+        return [];
+      },
+    };
+    setLoopWorktreeOps(ops);
+    return calls;
+  }
+  afterEach(() => setLoopWorktreeOps());
+
+  /** A worker's turn that waits for release() before it reports done. */
+  function heldFinish(summary: string) {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const turn: Turn = async function* (signal) {
+      yield [{ role: "assistant", content: "Working" }];
+      await held;
+      yield* finish("done", summary)(signal);
+    };
+    return { turn, release: () => release() };
+  }
+
+  /** A turn that writes a line, then waits until its run is stopped. */
+  const untilStopped: Turn = async function* (signal) {
+    yield [{ role: "assistant", content: "Working" }];
+    await new Promise<void>((r) =>
+      signal.aborted
+        ? r()
+        : signal.addEventListener("abort", () => r(), { once: true }),
+    );
+  };
+
+  /** The plan block of request n (a worker's goes in its first message). */
+  const block = (h: Setup, n: number) =>
+    text(h.requests[n].messages.find((m) => m.role === "user")).split(
+      "<task_list>",
+    )[1] ?? "";
+
+  test("two items with disjoint files run as two workers at once, merge in finish order, and the third runs inline after", async () => {
+    const h = await setup([
+      { text: "Add the retry helper", files: ["src/retry.ts"] },
+      {
+        text: "Document the config",
+        files: ["docs/config.md"],
+        check: "npm run docs:check",
+      },
+      "Wire it up",
+    ]);
+    const calls = fakeWorktrees();
+    // The check may run: the person's rules allow the terminal
+    h.ideMessenger.responseHandlers["tools/evaluatePolicy"] = async (
+      data: any,
+    ) =>
+      data.toolName === BuiltInToolNames.RunTerminalCommand
+        ? ({ policy: "allowedWithoutPermission", source: "allow-rule" } as any)
+        : { policy: data.basePolicy };
+    const checks: { command: string; cwd?: string }[] = [];
+    h.ideMessenger.responseHandlers["subprocess"] = async (data: any) => {
+      checks.push(data);
+      return ["docs ok", ""];
+    };
+    const first = heldFinish("retry added");
+    const second = heldFinish("documented");
+    h.turns.push(first.turn, second.turn, finish("done", "wired"));
+    await h.start({ parallel: true });
+
+    // Two requests in flight, one per worker, each in its own worktree
+    await waitFor(() => expect(h.requests).toHaveLength(2));
+    expect(h.loop().parallel?.map((r) => r.itemId)).toEqual(["1", "2"]);
+    expect(h.loop().current).toBeUndefined();
+    expect(h.itemStatus("1")).toBe("running");
+    expect(h.itemStatus("2")).toBe("running");
+    expect(h.itemStatus("3")).toBe("pending");
+    expect(calls).toEqual([
+      "create build-the-parser-1 in /Users/user/workspace1",
+      "create build-the-parser-2 in /Users/user/workspace1",
+    ]);
+    // Each worker's prompt is for its item, in its worktree, with its files
+    expect(h.prompt(0)).toContain("only this item: Add the retry helper");
+    expect(h.prompt(0)).toContain("/tmp/loop/item-1-");
+    expect(h.prompt(0)).toContain("src/retry.ts");
+    expect(h.prompt(1)).toContain("only this item: Document the config");
+    expect(h.prompt(1)).toContain("/tmp/loop/item-2-");
+    // ... and its plan block marks its own item, with the other running
+    expect(block(h, 0)).toMatch(/1\. Add the retry helper  <- this item/);
+    expect(block(h, 0)).toMatch(
+      /2\. Document the config \(running now, in its own copy/,
+    );
+    expect(block(h, 1)).toMatch(/2\. Document the config  <- this item/);
+    expect(block(h, 1)).toMatch(/1\. Add the retry helper \(running now/);
+    // The worker's own system message, with its tools: the loop's three and
+    // the exact edit, which runs in its worktree without a diff review
+    const system = text(h.requests[0].messages[0]);
+    expect(system).toContain("You are a worker of a Loop plan");
+    // The same for every worker, so the wave shares one cached prefix; the
+    // worktree and the files are in each item's prompt instead
+    expect(text(h.requests[1].messages[0])).toBe(system);
+    expect(system).not.toContain("/tmp/loop/");
+    for (const name of [
+      BuiltInToolNames.FinishItem,
+      BuiltInToolNames.HoldQuestion,
+      BuiltInToolNames.RemindMe,
+      BuiltInToolNames.SingleFindAndReplace,
+      BuiltInToolNames.CreateNewFile,
+    ]) {
+      expect(system).toContain(name);
+    }
+    expect(system).not.toContain(BuiltInToolNames.TaskList);
+    // The inbox shows the workers, their worktrees and model, and the files
+    expect(el("loop-item-1")!.textContent).toContain("running in parallel");
+    expect(el("loop-worker-1")!.textContent).toContain("/tmp/loop/item-1-");
+    expect(el("loop-worker-1")!.textContent).toContain("Mock LLM");
+    expect(el("loop-files-1")!.textContent).toContain("src/retry.ts");
+    expect(el("loop-files-3")).toBeNull();
+    expect(
+      h.store.getState().session.taskPlan!.items.map((i) => i.note),
+    ).toEqual([
+      "Running in its own worktree, beside other items",
+      "Running in its own worktree, beside other items",
+      undefined,
+    ]);
+
+    // Item 2 finishes first: its patch is merged first and its check runs in
+    // the checkout while item 1 still runs; no item starts meanwhile
+    await act(async () => second.release());
+    await waitFor(() => expect(h.itemStatus("2")).toBe("done"));
+    expect(checks).toEqual([
+      { command: "npm run docs:check", cwd: "/Users/user/workspace1" },
+    ]);
+    expect(h.loop().items[1].check).toMatchObject({
+      status: "passed",
+      output: "docs ok",
+    });
+    expect(h.itemStatus("1")).toBe("running");
+    expect(h.loop().parallel?.map((r) => r.itemId)).toEqual(["1"]);
+    expect(h.requests).toHaveLength(2);
+    expect(el("loop-worker-2")).toBeNull();
+
+    await act(async () => first.release());
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    // The third item, with no files, ran inline after the wave
+    expect(h.requests).toHaveLength(3);
+    expect(h.prompt(2)).toContain("only this item: Wire it up");
+    expect(h.prompt(2)).not.toContain("This item runs in its own copy");
+    expect(h.loop().items.map((i) => i.summary)).toEqual([
+      "retry added",
+      "documented",
+      "wired",
+    ]);
+    // Merged in finish order, each worktree removed once its patch is in
+    expect(calls.slice(2)).toEqual([
+      expect.stringMatching(/^patch \/tmp\/loop\/item-2-/),
+      expect.stringMatching(/^apply patch of \/tmp\/loop\/item-2-/),
+      expect.stringMatching(/^remove \/tmp\/loop\/item-2-/),
+      expect.stringMatching(/^patch \/tmp\/loop\/item-1-/),
+      expect.stringMatching(/^apply patch of \/tmp\/loop\/item-1-/),
+      expect.stringMatching(/^remove \/tmp\/loop\/item-1-/),
+    ]);
+  });
+
+  test("a refused patch sends the item back inline, with the reason in its prompt", async () => {
+    const h = await setup([
+      { text: "Add the retry helper", files: ["src/retry.ts"] },
+      { text: "Document the config", files: ["docs/config.md"] },
+    ]);
+    const calls = fakeWorktrees((patch) =>
+      patch.includes("item-1-")
+        ? "error: patch failed: src/retry.ts:3\nerror: src/retry.ts: patch does not apply"
+        : undefined,
+    );
+    h.turns.push(
+      finish("done", "retry added"),
+      finish("done", "documented"),
+      finish("done", "retry added inline"),
+    );
+    await h.start({ parallel: true });
+
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    // Item 1's report did not count: it ran again, inline, on the merged tree
+    expect(h.requests).toHaveLength(3);
+    expect(h.prompt(2)).toContain("only this item: Add the retry helper");
+    expect(h.prompt(2)).toContain("could not be merged");
+    expect(h.prompt(2)).toContain("src/retry.ts:3");
+    expect(h.prompt(2)).not.toContain("This item runs in its own copy");
+    expect(h.loop().items[0]).toMatchObject({
+      status: "done",
+      attempts: 2,
+      summary: "retry added inline",
+    });
+    expect(h.loop().items[1]).toMatchObject({ status: "done", attempts: 1 });
+    // Both worktrees went, the refused one too
+    expect(calls.filter((c) => c.startsWith("remove"))).toHaveLength(2);
+  });
+
+  test("a session switch ends the workers; their worktrees go and the loop they belonged to is not touched", async () => {
+    const h = await setup([
+      { text: "Add the retry helper", files: ["src/retry.ts"] },
+      { text: "Document the config", files: ["docs/config.md"] },
+    ]);
+    const calls = fakeWorktrees();
+    h.turns.push(untilStopped, untilStopped);
+    await h.start({ parallel: true });
+    await waitFor(() => expect(h.requests).toHaveLength(2));
+
+    const { newSession } = await import("../../../redux/slices/sessionSlice");
+    await act(async () => {
+      h.store.dispatch(newSession());
+    });
+    await waitFor(() =>
+      expect(calls.filter((c) => c.startsWith("remove"))).toHaveLength(2),
+    );
+    expect(calls.some((c) => c.startsWith("apply"))).toBe(false);
+    expect(h.store.getState().session.loop).toBeUndefined();
+    expect(h.requests).toHaveLength(2);
+  });
+
+  test("Stop ends the wave's workers at once: their items go back to pending and the worktrees go", async () => {
+    const h = await setup([
+      { text: "Add the retry helper", files: ["src/retry.ts"] },
+      { text: "Document the config", files: ["docs/config.md"] },
+    ]);
+    const calls = fakeWorktrees();
+    h.turns.push(untilStopped, untilStopped);
+    await h.start({ parallel: true });
+    await waitFor(() => expect(h.requests).toHaveLength(2));
+
+    expect(el("loop-stop")!.textContent).toBe("Stop the wave");
+    expect(el("loop-stop-now")).toBeNull();
+    await act(async () => {
+      fireEvent.click(el("loop-stop")!);
+    });
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("stopped");
+    expect(h.loop().parallel).toBeUndefined();
+    expect(h.itemStatus("1")).toBe("pending");
+    expect(h.itemStatus("2")).toBe("pending");
+    // A stopped worker's changes are dropped with its worktree
+    await waitFor(() =>
+      expect(calls.filter((c) => c.startsWith("remove"))).toHaveLength(2),
+    );
+    expect(calls.some((c) => c.startsWith("apply"))).toBe(false);
+    expect(h.requests).toHaveLength(2);
   });
 });

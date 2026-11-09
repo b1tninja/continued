@@ -1,0 +1,61 @@
+{
+  "model": "fixture",
+  "messages": [
+    {
+      "role": "system",
+      "content": "S"
+    },
+    {
+      "role": "user",
+      "content": "Do the thing\n\nAct until the request is done. A reply with no tool call ends the turn."
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "c1",
+          "type": "function",
+          "function": {
+            "name": "List",
+            "arguments": "{\"dirpath\":\".\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c1",
+      "content": "a.js"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "c2",
+          "type": "function",
+          "function": {
+            "name": "Read",
+            "arguments": "{\"filepath\":\"a.js\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c2",
+      "content": "x"
+    },
+    {
+      "role": "assistant",
+      "content": "Done."
+    },
+    {
+      "role": "user",
+      "content": "Next, do the other thing\n\nAct until the request is done. A reply with no tool call ends the turn."
+    }
+  ],
+  "stream": true,
+  "max_tokens": 100
+}

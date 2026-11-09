@@ -12,7 +12,8 @@ export const taskListTool: Tool = {
   wouldLikeTo: "update the task list",
   isCurrently: "updating the task list",
   hasAlready: "updated the task list",
-  // It changes no files, so plan mode keeps it.
+  // It changes no files. Plan mode still does not offer it: present_plan's
+  // to-dos become the list (selectActiveTools, the CLI's tool list).
   readonly: true,
   isInstant: true,
   group: BUILT_IN_GROUP_NAME,

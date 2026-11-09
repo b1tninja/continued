@@ -2,7 +2,7 @@ import type { ShellKind } from "../../../util/shell";
 
 /**
  * What a command does, for the command-analysis plan (plans/command-analysis.md,
- * I0). Each case says what is TRUE of the command in the shell named, not what
+ * P0). Each case says what is TRUE of the command in the shell named, not what
  * a scanner makes of it: a scanner that cannot tell is allowed to say "unsure",
  * and a scanner that says "reads" for anything that is not is a bug.
  *

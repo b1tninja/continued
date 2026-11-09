@@ -54,6 +54,16 @@ import Ollama from "./llm/llms/Ollama";
 import { EditAggregator } from "./nextEdit/context/aggregateEdits";
 import { createNewPromptFileV2 } from "./promptFiles/createNewPromptFile";
 import { callTool } from "./tools/callTool";
+import { ideInWorkspace } from "./util/workspaceOverride";
+import {
+  applyPatch,
+  createItemWorktree,
+  dirtyFiles,
+  execFileGit,
+  removeStaleItemWorktree,
+  removeWorktree,
+  worktreePatch,
+} from "./util/worktree";
 import { ChatDescriber } from "./util/chatDescriber";
 import { compactConversation } from "./util/conversationCompaction";
 import { GlobalContext } from "./util/GlobalContext";
@@ -577,6 +587,43 @@ export class Core {
   }
 
   /* eslint-disable max-lines-per-function */
+  /**
+   * Loop mode's parallel waves: the worktrees live in core (git runs here, in
+   * the extension host); the gui asks for each step (core/util/worktree.ts).
+   */
+  private registerLoopWorktreeHandlers() {
+    const on = this.messenger.on.bind(this.messenger);
+    const worktreeDeps = { git: execFileGit };
+    on("loop/worktreeCreate", async ({ data }) => {
+      // What a wave interrupted by a reload left on this item's branch goes
+      // first; the new worktree takes the branch
+      await removeStaleItemWorktree(
+        data.repo,
+        data.slug,
+        data.itemId,
+        worktreeDeps,
+      );
+      return createItemWorktree(data, worktreeDeps);
+    });
+    on("loop/worktreePatch", async ({ data }) =>
+      worktreePatch(data, worktreeDeps),
+    );
+    on("loop/worktreeApply", async ({ data: { repo, patch, touchedSince } }) =>
+      applyPatch(repo, patch, { touchedSince }, worktreeDeps),
+    );
+    on("loop/worktreeRemove", async ({ data: { repo, path, branch } }) =>
+      removeWorktree(
+        repo,
+        { path, branch },
+        { deleteBranch: true },
+        worktreeDeps,
+      ),
+    );
+    on("loop/dirtyFiles", async ({ data: { repo } }) =>
+      dirtyFiles(repo, worktreeDeps),
+    );
+  }
+
   private registerMessageHandlers(ideSettingsPromise: Promise<IdeSettings>) {
     const on = this.messenger.on.bind(this.messenger);
 
@@ -1692,8 +1739,8 @@ export class Core {
       return { url: "" };
     });
 
-    on("tools/call", async ({ data: { toolCall } }) =>
-      this.handleToolCall(toolCall),
+    on("tools/call", async ({ data: { toolCall, workspaceDirs } }) =>
+      this.handleToolCall(toolCall, workspaceDirs),
     );
 
     on("policy/load", async () => readPolicyFile(policyFilePath()));
@@ -1758,42 +1805,49 @@ export class Core {
       );
     });
 
-    on("tools/preprocessArgs", async ({ data: { toolName, args } }) => {
-      const { config } = await this.configHandler.loadConfig();
-      if (!config) {
-        throw new Error("Config not loaded");
-      }
+    on(
+      "tools/preprocessArgs",
+      async ({ data: { toolName, args, workspaceDirs } }) => {
+        const { config } = await this.configHandler.loadConfig();
+        if (!config) {
+          throw new Error("Config not loaded");
+        }
 
-      const tool = config?.tools.find((t) => t.function.name === toolName);
-      if (!tool) {
-        throw new Error(`Tool ${toolName} not found`);
-      }
+        const tool = config?.tools.find((t) => t.function.name === toolName);
+        if (!tool) {
+          throw new Error(`Tool ${toolName} not found`);
+        }
 
-      try {
-        const preprocessedArgs = await tool.preprocessArgs?.(args, {
-          ide: this.ide,
-        });
-        return {
-          preprocessedArgs,
-        };
-      } catch (e) {
-        let errorReason =
-          e instanceof ContinueError ? e.reason : ContinueErrorReason.Unknown;
-        let errorMessage =
-          e instanceof Error
-            ? e.message
-            : `Error preprocessing tool call args for ${toolName}\n${JSON.stringify(args)}`;
-        return {
-          preprocessedArgs: undefined,
-          errorReason,
-          errorMessage,
-        };
-      }
-    });
+        try {
+          const preprocessedArgs = await tool.preprocessArgs?.(args, {
+            ide: workspaceDirs?.length
+              ? ideInWorkspace(this.ide, workspaceDirs)
+              : this.ide,
+          });
+          return {
+            preprocessedArgs,
+          };
+        } catch (e) {
+          let errorReason =
+            e instanceof ContinueError ? e.reason : ContinueErrorReason.Unknown;
+          let errorMessage =
+            e instanceof Error
+              ? e.message
+              : `Error preprocessing tool call args for ${toolName}\n${JSON.stringify(args)}`;
+          return {
+            preprocessedArgs: undefined,
+            errorReason,
+            errorMessage,
+          };
+        }
+      },
+    );
 
     on("isItemTooBig", async ({ data: { item } }) => {
       return this.isItemTooBig(item);
     });
+
+    this.registerLoopWorktreeHandlers();
 
     // Process state handlers
     on("process/markAsBackgrounded", async ({ data: { toolCallId } }) => {
@@ -1813,7 +1867,12 @@ export class Core {
     });
   }
 
-  private async handleToolCall(toolCall: ToolCall) {
+  /**
+   * `workspaceDirs`: run the call in another checkout (a Loop worker's
+   * worktree): the tool sees those folders as the workspace, and the exact
+   * edit tools, otherwise applied through the client's diff review, run here.
+   */
+  private async handleToolCall(toolCall: ToolCall, workspaceDirs?: string[]) {
     const { config } = await this.configHandler.loadConfig();
     if (!config) {
       throw new Error("Config not loaded");
@@ -1839,9 +1898,11 @@ export class Core {
       this.messenger.send("toolCallPartialOutput", params);
     };
 
+    const inWorkspace = workspaceDirs?.length ? workspaceDirs : undefined;
     const result = await callTool(tool, toolCall, {
       config,
-      ide: this.ide,
+      ide: inWorkspace ? ideInWorkspace(this.ide, inWorkspace) : this.ide,
+      workspaceDirs: inWorkspace,
       llm: config.selectedModelByRole.chat,
       fetch: (url, init) =>
         fetchwithRequestOptions(url, init, config.requestOptions),
