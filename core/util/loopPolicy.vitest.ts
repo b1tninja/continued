@@ -5,7 +5,11 @@ import type { LoopPolicy, LoopState, TaskPlan } from "../index.js";
 import {
   autonomyForPolicy,
   createLoop,
+  finishItemReport,
+  finishItemRun,
   holdQuestion,
+  loopItemRepairPrompt,
+  loopReplanPrompt,
   loopAutonomy,
   loopDecidesAlone,
   loopQuestionDecider,
@@ -296,5 +300,129 @@ describe("a held question keeps the choices the agent offered", () => {
     expect(held(["Only one"]).options).toBeUndefined();
     expect(held("not a list").options).toBeUndefined();
     expect(held(undefined).options).toBeUndefined();
+  });
+});
+
+describe("a stuck run says what is in the way", () => {
+  const stuck = (extra: Record<string, unknown>) =>
+    finishItemReport({ outcome: "stuck", summary: "no runner", ...extra });
+
+  test("a blocker and what it needs come through; needs only for a dependency", () => {
+    const r = stuck({ blocker: "dependency", needs: ["Install vitest", " ", 3] });
+    expect(r.ok && r.report).toMatchObject({
+      blocker: "dependency",
+      needs: ["Install vitest"],
+    });
+    const env = stuck({ blocker: "environment", needs: ["ignored"] });
+    expect(env.ok && env.report.needs).toBeUndefined();
+  });
+
+  test("at most three needs, each cut to a short length", () => {
+    const r = stuck({
+      blocker: "dependency",
+      needs: ["a", "b", "c", "d", "x".repeat(500)],
+    });
+    expect(r.ok && r.report.needs).toEqual(["a", "b", "c"]);
+    const long = stuck({ blocker: "dependency", needs: ["x".repeat(500)] });
+    expect(long.ok && long.report.needs?.[0]).toHaveLength(200);
+  });
+
+  test("an unknown blocker is refused, naming the choices", () => {
+    expect(stuck({ blocker: "mood" })).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("dependency"),
+    });
+  });
+
+  test("only a stuck report has a blocker, and a stuck one need not", () => {
+    const done = finishItemReport({ outcome: "done", blocker: "plan" });
+    expect(done.ok && done.report.blocker).toBeUndefined();
+    const bare = stuck({});
+    expect(bare.ok && bare.report.blocker).toBeUndefined();
+  });
+
+  const failedWith = (report: Record<string, unknown>): LoopState => {
+    const loop = loopWith({});
+    return finishItemRun(
+      { ...loop, current: { ...loop.current!, report: report as never } },
+      report as never,
+    );
+  };
+
+  test("the failed item keeps the blocker and what it needs", () => {
+    const after = failedWith({
+      outcome: "stuck",
+      summary: "no runner",
+      blocker: "dependency",
+      needs: ["Install vitest"],
+    });
+    expect(after.items[0]).toMatchObject({
+      status: "failed",
+      blocker: "dependency",
+      needs: ["Install vitest"],
+    });
+  });
+
+  test("the repair prompt starts from the cause and asks for a split", () => {
+    const after = failedWith({
+      outcome: "stuck",
+      summary: "no runner",
+      blocker: "dependency",
+      needs: ["Install vitest"],
+    });
+    const prompt = loopItemRepairPrompt({
+      loop: after,
+      plan: plan("A", "B"),
+      itemId: "1",
+    });
+    expect(prompt).toContain("What it says is in the way: dependency");
+    expect(prompt).toContain("It says these have to be done first:");
+    expect(prompt).toContain("- Install vitest");
+    expect(prompt).toContain("so split it");
+  });
+
+  test("a blocker without needs gets no split instruction", () => {
+    const after = failedWith({
+      outcome: "stuck",
+      summary: "no creds",
+      blocker: "environment",
+    });
+    const prompt = loopItemRepairPrompt({
+      loop: after,
+      plan: plan("A", "B"),
+      itemId: "1",
+    });
+    expect(prompt).toContain("What it says is in the way: environment");
+    expect(prompt).not.toContain("so split it");
+  });
+
+  test("the whole-plan re-plan lists the blocker beside the failure", () => {
+    const after = failedWith({
+      outcome: "stuck",
+      summary: "no runner",
+      blocker: "dependency",
+      needs: ["Install vitest"],
+    });
+    const prompt = loopReplanPrompt({ loop: after, plan: plan("A", "B") });
+    expect(prompt).toContain("blocked: dependency, needs");
+  });
+
+  test("a run that later finishes drops the old blocker", () => {
+    const failed = failedWith({
+      outcome: "stuck",
+      summary: "no runner",
+      blocker: "plan",
+    });
+    const again = startItemRun(
+      { ...failed, items: failed.items.map((i) => ({ ...i, status: "pending" as const })) },
+      "1",
+      0,
+      T0,
+    );
+    const done = finishItemRun(
+      { ...again, current: { ...again.current!, report: { outcome: "done" } } },
+      { outcome: "done", summary: "fixed" },
+    );
+    expect(done.items[0].blocker).toBeUndefined();
   });
 });

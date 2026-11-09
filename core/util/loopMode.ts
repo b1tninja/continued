@@ -2,6 +2,7 @@ import type {
   LoopAnswer,
   LoopAnswerRoute,
   LoopAutonomy,
+  LoopBlocker,
   LoopBudget,
   LoopCheckResult,
   LoopItemState,
@@ -1452,7 +1453,14 @@ function statusAfterRun(
 export function finishItemRun(
   loop: LoopState,
   report:
-    { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
+    | {
+        outcome: FinishOutcome;
+        summary?: string;
+        notes?: string;
+        blocker?: LoopBlocker;
+        needs?: string[];
+      }
+    | undefined,
   /** The item's check (TaskItem.check): done then waits for it to pass */
   options: { check?: string } = {},
 ): LoopState {
@@ -1477,6 +1485,9 @@ export function finishItemRun(
         )
       : (summary ??
         (report ? state?.summary : "The turn ended without finish_item.")),
+    // Why a stuck run could not finish: the re-plan starts from it
+    blocker: status === "failed" ? report?.blocker : undefined,
+    needs: status === "failed" ? report?.needs : undefined,
     // Coming back later is not another try at it
     ...(deferred
       ? {
@@ -2512,7 +2523,7 @@ export function loopItemPrompt(input: {
     "",
     "Before you report it done, run the checks the project has for what you changed (tests, type check, lint) and fix what fails; name them in your summary, or say there was nothing to run.",
     "",
-    `When the item is done, call ${names.finishItem} with outcome "done" and a one-line summary. If you cannot finish it, call ${names.finishItem} with outcome "stuck" and say why. Put anything a later item should know (a command that works, a trap you hit) in \`notes\`: one or two lines, not progress. End this turn only by calling ${names.finishItem}: a reply with no tool call does not end the item, and the item is not ended until ${names.finishItem} is called.`,
+    `When the item is done, call ${names.finishItem} with outcome "done" and a one-line summary. If you cannot finish it, call ${names.finishItem} with outcome "stuck", say why, and name what is in the way in \`blocker\` (answer, observe, plan, environment or dependency). If you find that other work has to be done first, use blocker "dependency" and list it in \`needs\`: the re-plan puts it ahead of this item. If you can do other items meanwhile, use outcome "later" instead. Put anything a later item should know (a command that works, a trap you hit) in \`notes\`: one or two lines, not progress. End this turn only by calling ${names.finishItem}: a reply with no tool call does not end the item, and the item is not ended until ${names.finishItem} is called.`,
     "",
     `If you learn something a later item or a retry will need, save it with ${names.remindMe} now.`,
     "",
@@ -2694,7 +2705,10 @@ function itemLines(loop: LoopState, plan: TaskPlan): string[] {
         : state?.summary
           ? quote(state.summary)
           : "";
-    return `- ${STATUS_MARK[status]} ${quote(task.text)} (${status}${detail ? `: ${detail}` : ""})`;
+    const blocked = state?.blocker
+      ? `; blocked: ${state.blocker}${state.needs?.length ? `, needs ${state.needs.map(quote).join("; ")} first` : ""}`
+      : "";
+    return `- ${STATUS_MARK[status]} ${quote(task.text)} (${status}${detail ? `: ${detail}` : ""}${blocked})`;
   });
 }
 
@@ -2721,6 +2735,17 @@ export function loopItemRepairPrompt(input: {
   const lines = [
     `This item of the plan${input.planFile ? ` in ${input.planFile}` : ""} failed: ${quote(task?.text ?? input.itemId)}`,
     `What its run reported: ${quote(state?.summary ?? "nothing")}`,
+    ...(state?.blocker
+      ? [
+          `What it says is in the way: ${state.blocker}, because ${LOOP_BLOCKER_TEXT[state.blocker]}.`,
+        ]
+      : []),
+    ...(state?.needs?.length
+      ? [
+          "It says these have to be done first:",
+          ...state.needs.map((n) => `- ${quote(n)}`),
+        ]
+      : []),
     "",
     "Re-plan this item only, so the plan can go on. The plan:",
     ...itemLines(loop, plan),
@@ -2743,6 +2768,12 @@ export function loopItemRepairPrompt(input: {
   lines.push(...reminderLines(input.reminders));
   lines.push(
     "",
+    ...(state?.needs?.length
+      ? [
+          `It named work that has to come first, so split it: the work it needs as its own to-dos, in order, then this item reworded to follow them (at most ${LOOP_REPAIR_MAX_TODOS} to-dos in all). Check that the work it names is real before you write it down.`,
+          "",
+        ]
+      : []),
     `Find out why it failed: read the code and what the run left. Then do one of these: reword the item so a run can finish it; split it into at most ${LOOP_REPAIR_MAX_TODOS} smaller to-dos that replace it, in its place; or drop it if the plan's goal does not need it, or it is already done.`,
     "",
     `Then call ${names.presentPlan}${input.planTitle ? ` with the title "${quote(input.planTitle)}"` : ""} with the whole list: every other to-do word for word and in its place, with this one reworded, split or left out. Do not change, add or drop any other to-do.`,
@@ -2972,11 +3003,37 @@ export function approvalHeldResult(
 
 const FINISH_OUTCOMES: FinishOutcome[] = ["done", "waiting", "stuck", "later"];
 
+export const LOOP_BLOCKERS: readonly LoopBlocker[] = [
+  "answer",
+  "observe",
+  "plan",
+  "environment",
+  "dependency",
+];
+
+/** What each blocker means, for the re-plan prompts. */
+export const LOOP_BLOCKER_TEXT: Record<LoopBlocker, string> = {
+  answer: "it needs something only the person can say or supply",
+  observe: "it cannot see what it needs (a result, a log, a running system)",
+  plan: "the item itself is wrong: too big, too vague or not what the goal needs",
+  environment: "a tool, credential, network or the machine is in the way",
+  dependency: "other work has to be done first",
+};
+
+/** Most to-dos one report may name as needed first, and their length. */
+export const LOOP_NEEDS_LIMITS = { count: 3, length: 200 };
+
 /** The report a finish_item call makes, from its arguments. */
 export function finishItemReport(args: unknown):
   | {
       ok: true;
-      report: { outcome: FinishOutcome; summary?: string; notes?: string };
+      report: {
+        outcome: FinishOutcome;
+        summary?: string;
+        notes?: string;
+        blocker?: LoopBlocker;
+        needs?: string[];
+      };
       /** Outcome "later": the note for the item's return, and its files */
       later?: { note: string; files: string[] };
     }
@@ -2998,6 +3055,25 @@ export function finishItemReport(args: unknown):
       ? a.notes.trim().slice(0, LOOP_LIMITS.maxNoteLength)
       : undefined;
   const reminder = typeof a.reminder === "string" ? a.reminder.trim() : "";
+  if (
+    a.blocker !== undefined &&
+    !LOOP_BLOCKERS.includes(a.blocker as LoopBlocker)
+  ) {
+    return {
+      ok: false,
+      error: `blocker must be one of ${LOOP_BLOCKERS.join(", ")}`,
+    };
+  }
+  // Only a stuck report has a blocker: it is why the run could not finish
+  const blocker =
+    outcome === "stuck" ? (a.blocker as LoopBlocker | undefined) : undefined;
+  const needs =
+    blocker === "dependency" && Array.isArray(a.needs)
+      ? a.needs
+          .filter((n): n is string => typeof n === "string" && !!n.trim())
+          .map((n) => n.trim().slice(0, LOOP_NEEDS_LIMITS.length))
+          .slice(0, LOOP_NEEDS_LIMITS.count)
+      : [];
   if (outcome === "later") {
     if (!reminder) {
       return {
@@ -3019,6 +3095,8 @@ export function finishItemReport(args: unknown):
       outcome,
       ...(summary ? { summary } : {}),
       ...(notes ? { notes } : {}),
+      ...(blocker ? { blocker } : {}),
+      ...(needs.length ? { needs } : {}),
     },
     ...(outcome === "later"
       ? { later: { note: reminder, files: reminderFilePaths(a.files) } }

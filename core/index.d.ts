@@ -426,6 +426,10 @@ export interface LoopItemState {
   setAside?: boolean;
   /** What the run said it did (finish_item), or why it stopped */
   summary?: string;
+  /** Why a stuck run could not finish it, as the run reported (finish_item) */
+  blocker?: LoopBlocker;
+  /** Blocker dependency: what must be done before this item */
+  needs?: string[];
   /**
    * Unattended: questions that got no answer in time, so the item went on
    * with its best default. The questions stay open in the inbox.
@@ -576,6 +580,18 @@ export interface LoopBudget {
 export type LoopAutonomy = "supervised" | "auto" | "unattended" | "idgaf";
 
 /**
+ * Why an item is stuck, as the run reports it (finish_item `blocker`), so the
+ * re-plan starts from the cause and not from a sentence:
+ * - answer: it needs something only the person can say or supply;
+ * - observe: it cannot see what it needs (a result, a log, a running system);
+ * - plan: the item is wrong: too big, too vague, or not what the goal needs;
+ * - environment: a tool, credential, network or the machine is in the way;
+ * - dependency: other work must be done first (`needs` names it).
+ */
+export type LoopBlocker =
+  "answer" | "observe" | "plan" | "environment" | "dependency";
+
+/**
  * The two policy areas a loop reads while it runs (plans/policy-areas.md):
  * what happens to a plan or re-plan (Plan edits) and who answers a question
  * (Questions). A loop started from the IDE or the CLI carries the levels the
@@ -662,6 +678,10 @@ export interface LoopState {
     report?: {
       outcome: "done" | "stuck" | "waiting" | "later";
       summary?: string;
+      /** Outcome stuck: what is in the way (finish_item blocker) */
+      blocker?: LoopBlocker;
+      /** Blocker dependency: the work that must come first */
+      needs?: string[];
       /** What a later item should know (finish_item notes) */
       notes?: string;
     };
