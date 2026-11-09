@@ -483,6 +483,21 @@ Problem: a loop stops on a budget, and today the budgets are rounds, tokens and 
 | T3  | The CLI and `cn serve`: `--max-cost`, `--max-turns`, `--max-tokens`, `--max-minutes`, the `/state` fields, the report naming the budget that stopped | T0         | Not started |
 | T4  | Budgets shared across parallel workers (Track N), a settings page for defaults, docs                                                                 | T2, N0     | Not started |
 
+### Track U: reviewer isolation and a cached review prefix
+
+Plan: [`reviewer-isolation.md`](./reviewer-isolation.md). Builds on the reviewer role (Track B), prompt caching (Track C) and the review uses in Track M. Target: 2.7.
+
+Problem: a review should not share context with the agent it judges (prompt injection, a reviewer persuaded by the author's reasoning) and should cost little per call. Reviews are already separate stateless requests over a fenced digest, so isolation is largely in place; what is open is whether the reviewer's system prompt and session block are cached, how the prompt is ordered for a stable prefix, and whether provider conversation threads (Bedrock Converse has none; Bedrock Responses, OpenAI and Anthropic's beta do) beat a cached prefix.
+
+| PR  | Scope                                                                                                                                        | Depends on | State       |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
+| U0  | Measure today: cache point on the reviewer's request, static prefix size against the model minimum, reviewer cache read share per model      | none       | Not started |
+| U1  | Reorder the review prompt (static, session, history, call) and settle the nonce; same verdicts on the B4 evaluation, higher cache read share | U0         | Not started |
+| U2  | Cache lifetime for sporadic reviews (1 hour against 5 minutes) and a minimum-size check                                                      | U0         | Not started |
+| U3  | Experiment: provider threads for reviews where offered, behind a flag, against the cached prefix                                             | U1         | Not started |
+| U4  | Isolation tests: no tool output in a review request; an injection set aimed at the reviewer's own prompt added to the B4 evaluation          | none       | Not started |
+| U5  | The same prefix rule and a clean context for `continuous review`, subagents and side calls                                                   | U1         | Not started |
+
 ## Later
 
 Carried over from `fork-plan.md` section 4.7, item 4. The four items it listed (checkpoints #185, a global rules toggle per mode #187, context-window and cost display #182, the Cline MCP import #193) have shipped; see the Shipped table. What is left:
