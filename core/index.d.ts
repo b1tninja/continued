@@ -399,6 +399,17 @@ export interface Session {
 export type LoopItemStatus =
   "pending" | "running" | "checking" | "done" | "waiting" | "redo" | "failed";
 
+/**
+ * One item of a parallel wave (L4): a run with a fresh context in its own
+ * worktree, beside the other items of the wave and apart from `current`.
+ */
+export interface LoopParallelRun {
+  itemId: string;
+  /** The worktree the run works in, once the harness has made it */
+  worktree?: string;
+  startedAt: string;
+}
+
 /** The model a run of an item that names one (TaskItem.model) went to. */
 export interface LoopItemModel {
   /** The title of the chat model the run went to */
@@ -459,6 +470,13 @@ export interface LoopItemState {
    * (TaskItem.model): its title, and why the item's own model was not used.
    */
   model?: LoopItemModel;
+  /**
+   * Its last parallel run's changes could not be merged: it runs inline on
+   * the merged tree next, never in another wave. Cleared when that run ends.
+   */
+  runInline?: boolean;
+  /** Why that merge failed, for its next prompt */
+  mergeFailed?: string;
   /**
    * Fix forward: re-plans scoped to this item after it failed (at most
    * LOOP_MAX_REPAIRS_PER_ITEM). To-dos a repair splits it into inherit it.
@@ -699,6 +717,19 @@ export interface LoopState {
    * the model the person had selected.
    */
   modelBefore?: string;
+  /**
+   * The items of the wave that runs now, each in its own worktree (L4),
+   * beside `current`, which stays the inline run, the re-plan or the check.
+   * Nothing else starts while a wave runs; its items finish one at a time
+   * (finishParallelRun). Absent or empty when no wave runs.
+   */
+  parallel?: LoopParallelRun[];
+  /**
+   * The person turned parallel waves on: items with disjoint `files` run at
+   * the same time at the levels that do not ask (auto and above). Off by
+   * default.
+   */
+  parallelOn?: boolean;
   questions: LoopQuestion[];
   answers: LoopAnswer[];
   /** Items finished in this round, for the no-progress check */
@@ -772,6 +803,14 @@ export interface TaskItem {
    * reason on the item's run (LoopItemState.model).
    */
   model?: string;
+  /**
+   * The files the item changes, as paths or globs relative to the workspace.
+   * The plan file writes them as `files: src/a.ts, src/b/**` under the to-do.
+   * Loop mode runs items whose files do not overlap at the same time when
+   * parallel waves are on (LoopState.parallelOn); an item without them runs
+   * inline, one at a time, as before.
+   */
+  files?: string[];
 }
 
 export interface TaskPlan {
@@ -1774,6 +1813,12 @@ export interface ToolExtras {
   }) => void;
   config: ContinueConfig;
   codeBaseIndexer?: CodebaseIndexer;
+  /**
+   * Set when the call runs in another checkout (`tools/call` with
+   * `workspaceDirs`: a Loop worker's worktree). `ide` already answers these
+   * folders; the exact edit tools run only with this set.
+   */
+  workspaceDirs?: string[];
 }
 
 export interface McpToolMeta {
