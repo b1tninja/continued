@@ -238,6 +238,7 @@ modeModels:
     reasoningEffort: low
   loop:
     model: Nova Lite # each to-do of a loop
+    prompt: short # the short turn text, for a small model
   replan:
     model: Claude Opus # the plan between rounds
   reviewer:
@@ -263,12 +264,60 @@ The entries, and what each falls back to when it is not set:
   - `model`: the `name` of one of your chat models, selected when you switch into the mode.
   - `models` (optional): a list of model `name`s to offer in the mode. Give `model`, `models`, or both. With only `models`, the default is the first entry that exists. The default is always part of the list and is listed first, and duplicates are removed. The model picker shows these first, and the model shortcut cycles only through them.
   - `reasoningEffort` (optional): `off`, `low`, `medium` or `high`. This maps to a thinking budget of about 1K, 4K or 16K tokens for models that support extended thinking.
-- `loop`, `replan`, `reviewer` and `subagent` take `model` and `reasoningEffort` only: nothing offers a picker there, so there is no list. `loop`, `replan` and `subagent` name chat models. `reviewer` may name any model, whatever its `roles`; it is added to the reviewer role and selected, and a reviewer picked in Settings then holds until the window reloads.
+  - `prompt` (optional): which system prompt the mode gets; see below.
+- `loop` and `replan` take `model`, `reasoningEffort` and `prompt`; `reviewer` and `subagent` take `model` and `reasoningEffort`. Nothing offers a picker there, so there is no list. `loop`, `replan` and `subagent` name chat models. `reviewer` may name any model, whatever its `roles`; it is added to the reviewer role and selected, and a reviewer picked in Settings then holds until the window reloads. An entry may set only `prompt` (`loop: { prompt: short }`) and leave the model to its fallback.
+
+#### `prompt`: which system prompt a use gets
+
+The model and the prompt are one decision: a small model running Loop items wants the short turn text, a strong one planning wants the full text, and a team may want a text of its own for a use. `prompt` takes one of:
+
+- `full`, `short` or `tailored`: the built-in turn texts. `tailored` is the short text plus a group on tool calls that quotes the tool-call markup the model was trained on, for models that write tool calls as text. Without `prompt`, the model's id decides: the tailored text for the Qwen coder and MoE models, the short text for other Qwen models, the full text otherwise.
+- The `name` of a block under `prompts:`. Its text replaces the turn text (the IDE's code-block rules and the no-tools notice still follow it; in Chat it replaces the whole default). The block is written for the use it serves: an act text should say how a turn ends, a plan text that the turn ends by presenting the plan.
+
+```yaml title="config.yaml"
+prompts:
+  - name: terse-items
+    prompt: |
+      You are in agent mode on one to-do of a plan. Do it with your tools, run the
+      check it names, then report it with finish_item. A reply with no tool call
+      ends your turn without the item being counted.
+
+modeModels:
+  agent:
+    model: Claude Sonnet # full text, as the model id decides
+  loop:
+    model: Nova Lite
+    prompt: terse-items # the block above
+  replan:
+    prompt: short # the built-in short plan text, on the plan model
+```
+
+The prompt falls back on its own: a `loop` entry that only names a model takes the `agent` entry's prompt, and `replan` takes `plan`'s. A model's own `chatOptions.baseAgentSystemMessage` or `basePlanSystemMessage` still wins over everything. An unknown name is reported in the config errors and the entry keeps its model. The `reviewer` and `subagent` entries take no `prompt`: the reviewer's text is fixed (its `guidance` settings are the way to steer it) and a subagent has the prompt of its definition.
+
+A change of prompt changes the cached prefix of the conversation for that model, as a change of mode does. Uses that run on different models have separate caches anyway, so there is nothing to lose there.
 - Switching mode switches the selected chat model, and the mode menu shows which model and effort each mode uses. A Loop switches the model for each turn it sends: the `loop` model for an item, the `replan` model for a re-plan.
+- One to-do of a plan can name its own model: a `model: <name>` line indented under it in the plan file (the model's `name` under `models`), or `model` in the plan tool's `todo_details`. A Loop runs that item on the named model instead of the `loop` model; the prompt and `reasoningEffort` still come from the `loop` entry. A name that is not configured falls back to the `loop` model, and the item's row in the inbox says so.
 - If you pick a model by hand in the model selector, that choice is used for the current mode until you reload the window. The reasoning toggle in the chat input overrides `reasoningEffort`.
 - A name that doesn't match one of your models is ignored, with a warning in the config errors. If nothing in an entry matches, the entry is ignored.
 - You can also set all of this from **Settings > Models > Which model does what**: tick the models each mode offers, star the default, star one model for Loop, Re-plan and Subagent, pick a reasoning effort and press Save. Saving edits `config.yaml` in place and keeps your comments. It needs a `config.yaml` (not a `config.json`), and is not shown in the JetBrains plugin yet. The reviewer is picked under **Additional model roles**.
-- **In the CLI** (`cn`, `cn serve`), `modeModels` picks the model the same way: switching to Plan mode takes the `plan` model, leaving it the `agent` model, and a Loop takes `loop` and `replan` per turn; `reviewer` names the model `--auto-review` asks. The CLI does not apply `reasoningEffort`: set the effort in the model's own options, or pick a [catalog variant](/customize/model-catalog#variants) such as `Claude Opus#high`. Subagents in the CLI are models with the `subagent` role, so `modeModels.subagent` does not apply there.
+- **In the CLI** (`cn`, `cn serve`), `modeModels` picks the model and the prompt the same way: switching to Plan mode takes the `plan` model, leaving it the `agent` model, and a Loop takes `loop` and `replan` per turn, each with its `prompt`; `reviewer` names the model `--auto-review` asks. The CLI does not apply `reasoningEffort`: set the effort in the model's own options, or pick a [catalog variant](/customize/model-catalog#variants) such as `Claude Opus#high`. Subagents in the CLI are models with the `subagent` role, so `modeModels.subagent` does not apply there.
+
+---
+
+### `rulesByMode`
+
+Whether your rules are sent, per mode and per Loop use. A key left out is on. Loop items follow `agent` and Loop re-plans follow `plan` until given a key of their own, so turning rules off for Agent also keeps them out of a Loop's items, while `loop: true` sends them to the items anyway.
+
+```yaml title="config.yaml"
+rulesByMode:
+  chat: false # no rules in Chat
+  agent: false # none in Agent mode ...
+  loop: true # ... but Loop items still get them
+```
+
+- `chat`, `agent`, `plan`, `loop`, `replan`: `true` or `false`.
+- The same switches are in **Settings > Rules**, saved to `config.yaml`.
+- The CLI sends its rules on every turn and does not read `rulesByMode`.
 
 #### Evaluation
 

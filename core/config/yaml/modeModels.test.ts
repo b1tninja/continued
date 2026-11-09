@@ -195,3 +195,58 @@ describe("uses beyond the modes", () => {
     expect(modeModels).toEqual({ agent: { title: "Sonnet" } });
   });
 });
+
+describe("prompt per use", () => {
+  const prompts = [{ name: "house", prompt: "Be brief." }];
+
+  it("keeps a profile name and copies a block's text in", () => {
+    const { modeModels, errors } = resolveModeModels(
+      {
+        agent: { model: "Sonnet", prompt: "short" },
+        plan: { model: "Opus", prompt: "house" },
+      },
+      chat,
+      chat,
+      prompts,
+    );
+    expect(errors).toEqual([]);
+    expect(modeModels).toEqual({
+      agent: { title: "Sonnet", prompt: "short" },
+      plan: { title: "Opus", prompt: "house", promptText: "Be brief." },
+    });
+  });
+
+  it("an entry may choose only a prompt", () => {
+    const { modeModels } = resolveModeModels(
+      { loop: { prompt: "short" } },
+      chat,
+      chat,
+      prompts,
+    );
+    expect(modeModels).toEqual({ loop: { prompt: "short" } });
+  });
+
+  it("drops an unknown prompt name with an error that lists the blocks, and keeps the model", () => {
+    const { modeModels, errors } = resolveModeModels(
+      { agent: { model: "Sonnet", prompt: "nope" } },
+      chat,
+      chat,
+      prompts,
+    );
+    expect(modeModels).toEqual({ agent: { title: "Sonnet" } });
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain('modeModels.agent.prompt: "nope"');
+    expect(errors[0].message).toContain("house");
+  });
+
+  it("ignores a prompt on the reviewer and subagent entries", () => {
+    const { modeModels, errors } = resolveModeModels(
+      { reviewer: { model: "Opus", prompt: "short" } as any },
+      chat,
+      chat,
+      prompts,
+    );
+    expect(errors).toEqual([]);
+    expect(modeModels).toEqual({ reviewer: { title: "Opus" } });
+  });
+});

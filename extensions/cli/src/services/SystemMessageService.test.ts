@@ -87,7 +87,7 @@ describe("SystemMessageService", () => {
         ["rule1"],
         "json",
         true,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
       expect(message).toBe("Test system message");
     });
@@ -112,7 +112,7 @@ describe("SystemMessageService", () => {
         ["rule1"],
         "json",
         false,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
     });
 
@@ -134,7 +134,7 @@ describe("SystemMessageService", () => {
         ["rule2", "rule3"],
         "json",
         undefined,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
     });
   });
@@ -192,7 +192,7 @@ describe("SystemMessageService", () => {
         undefined,
         undefined,
         true,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
     });
 
@@ -227,5 +227,62 @@ describe("SystemMessageService", () => {
         "Failed to construct",
       );
     });
+  });
+});
+
+describe("SystemMessageService: the prompt per use", () => {
+  let service: SystemMessageService;
+  let constructSystemMessageMock: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { constructSystemMessage } = await import("../systemMessage.js");
+    constructSystemMessageMock = constructSystemMessage as any;
+    constructSystemMessageMock.mockResolvedValue("msg");
+    service = new SystemMessageService();
+    await service.initialize({});
+    const { serviceContainer } = await import("./ServiceContainer.js");
+    serviceContainer.set("config", {
+      config: {
+        modeModels: { loop: { prompt: "short" }, plan: { prompt: "house" } },
+        prompts: [{ name: "house", prompt: "Plan briefly." }],
+      },
+    } as any);
+  });
+
+  afterEach(async () => {
+    await service.cleanup();
+  });
+
+  it("passes the use's profile, and caches per use", async () => {
+    await service.getSystemMessage("normal", "loop");
+    expect(constructSystemMessageMock).toHaveBeenLastCalledWith(
+      "normal",
+      undefined,
+      undefined,
+      undefined,
+      { model: undefined, promptChoice: { profile: "short" } },
+    );
+    await service.getSystemMessage("normal", "agent");
+    expect(constructSystemMessageMock).toHaveBeenLastCalledWith(
+      "normal",
+      undefined,
+      undefined,
+      undefined,
+      { model: undefined, promptChoice: undefined },
+    );
+    await service.getSystemMessage("normal", "loop");
+    expect(constructSystemMessageMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("looks a block name up in the config's prompts", async () => {
+    await service.getSystemMessage("plan");
+    expect(constructSystemMessageMock).toHaveBeenLastCalledWith(
+      "plan",
+      undefined,
+      undefined,
+      undefined,
+      { model: undefined, promptChoice: { text: "Plan briefly." } },
+    );
   });
 });
