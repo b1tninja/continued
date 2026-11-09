@@ -230,6 +230,45 @@ describe("SystemMessageService", () => {
   });
 });
 
+describe("SystemMessageService: the tail per use", () => {
+  let service: SystemMessageService;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    service = new SystemMessageService();
+    await service.initialize({});
+  });
+
+  afterEach(async () => {
+    await service.cleanup();
+  });
+
+  const configure = async (modeModels: unknown) => {
+    const { serviceContainer } = await import("./ServiceContainer.js");
+    serviceContainer.set("config", { config: { modeModels } } as any);
+  };
+
+  it("is the act line for a Loop item by default, named for the CLI's tools for a plan turn", async () => {
+    await configure(undefined);
+    expect(service.turnTail("loop")).toBe(
+      "Act until the request is done. A reply with no tool call ends the turn.",
+    );
+    expect(service.turnTail("agent")).toBeUndefined();
+    await configure({ replan: { tail: "on" } });
+    expect(service.turnTail("replan")).toBe(
+      "Plan only. End by calling PresentPlan or asking a question.",
+    );
+  });
+
+  it("follows the config: off, a text, and the agent entry for loop", async () => {
+    await configure({ loop: { tail: false } });
+    expect(service.turnTail("loop")).toBeUndefined();
+    await configure({ agent: { tail: "Report when done." } });
+    expect(service.turnTail("loop")).toBe("Report when done.");
+    expect(service.turnTail("agent")).toBe("Report when done.");
+  });
+});
+
 describe("SystemMessageService: the prompt per use", () => {
   let service: SystemMessageService;
   let constructSystemMessageMock: any;
