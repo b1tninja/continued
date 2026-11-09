@@ -20,6 +20,7 @@
     "@anthropic-ai/sdk": "^1.6.0",
     "@aws-sdk/client-bedrock-runtime": "^3.931.0",
     "@aws-sdk/credential-providers": "^3.974.0",
+    "@aws-sdk/token-providers": "^3.1161.0",
     "@continuedev/config-types": "file:../config-types",
     "@continuedev/config-yaml": "file:../config-yaml",
     "@continuedev/fetch": "file:../fetch",
