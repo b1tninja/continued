@@ -77,7 +77,7 @@ const systemAndToolsStrategy: CachingStrategy = (body) => {
     content: Array.isArray(msg.content)
       ? msg.content.map((block) => ({ ...block }))
       : msg.content,
-  }));
+  })) as MessageCreateParams["messages"];
   addCacheControlToLastTwoUserMessages(result.messages);
 
   return result;
@@ -159,7 +159,7 @@ const optimizedStrategy: CachingStrategy = (body) => {
         return {
           ...message,
           content: updatedContent,
-        };
+        } as typeof message;
       }
       return message;
     });

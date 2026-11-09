@@ -214,6 +214,7 @@ describe("AnthropicApi", () => {
   });
 
   describe("sampling fields", () => {
+    type SamplingFields = { temperature?: number; top_p?: number };
     const api = new AnthropicApi({ provider: "anthropic", apiKey: "test-key" });
     const messages = [{ role: "user" as const, content: "Hi" }];
 
@@ -223,7 +224,7 @@ describe("AnthropicApi", () => {
         messages,
         temperature: 0.5,
         top_p: 0.9,
-      });
+      }) as SamplingFields;
       expect(both.temperature).toBe(0.5);
       expect(both.top_p).toBeUndefined();
 
@@ -231,7 +232,7 @@ describe("AnthropicApi", () => {
         model: "claude-sonnet-4-5",
         messages,
         top_p: 0.9,
-      });
+      }) as SamplingFields;
       expect(topOnly.temperature).toBeUndefined();
       expect(topOnly.top_p).toBe(0.9);
     });

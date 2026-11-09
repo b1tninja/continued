@@ -8,7 +8,7 @@ import {
   RawMessageStartEvent,
   RawMessageStreamEvent,
   Tool,
-  ToolUseBlock,
+  ToolUseBlockParam,
 } from "@anthropic-ai/sdk/resources";
 import { streamSse } from "@continuedev/fetch";
 import { OpenAI } from "openai/index";
@@ -214,7 +214,7 @@ export class AnthropicApi implements BaseLlmApi {
 
   private convertToolCallsToBlocks(
     toolCall: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall,
-  ): ToolUseBlock | undefined {
+  ): ToolUseBlockParam | undefined {
     const toolCallId = toolCall.id;
     const toolName = toolCall.function?.name;
     if (toolCallId && toolName) {
