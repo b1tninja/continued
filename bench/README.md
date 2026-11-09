@@ -131,7 +131,7 @@ pass".
 The scorer writes `scorecards/records.jsonl` (one record per run, with the
 fields of the plan's "Scoring" section: model, provider, profile, levels,
 settings, scenario, run, outcome, checks passed and total, turns, nudges,
-repeats refused, invalid calls, truncations, verdicts, questions, prohibited
+repeats refused, invalid calls, tool calls written as text, truncations, verdicts, questions, prohibited
 actions, decisions, tokens, cache read ratio, cost, wall seconds, commit,
 bundle, config hash), one `scorecard-<model>.md`, and `comparison.md` when
 more than one model is present.
