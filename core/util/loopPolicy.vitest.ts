@@ -8,6 +8,8 @@ import {
   finishItemReport,
   finishItemRun,
   holdQuestion,
+  itemTurnLimitReport,
+  repeatedCallReport,
   loopItemRepairPrompt,
   loopReplanPrompt,
   loopAutonomy,
@@ -308,7 +310,10 @@ describe("a stuck run says what is in the way", () => {
     finishItemReport({ outcome: "stuck", summary: "no runner", ...extra });
 
   test("a blocker and what it needs come through; needs only for a dependency", () => {
-    const r = stuck({ blocker: "dependency", needs: ["Install vitest", " ", 3] });
+    const r = stuck({
+      blocker: "dependency",
+      needs: ["Install vitest", " ", 3],
+    });
     expect(r.ok && r.report).toMatchObject({
       blocker: "dependency",
       needs: ["Install vitest"],
@@ -414,7 +419,10 @@ describe("a stuck run says what is in the way", () => {
       blocker: "plan",
     });
     const again = startItemRun(
-      { ...failed, items: failed.items.map((i) => ({ ...i, status: "pending" as const })) },
+      {
+        ...failed,
+        items: failed.items.map((i) => ({ ...i, status: "pending" as const })),
+      },
       "1",
       0,
       T0,
@@ -424,5 +432,38 @@ describe("a stuck run says what is in the way", () => {
       { outcome: "done", summary: "fixed" },
     );
     expect(done.items[0].blocker).toBeUndefined();
+  });
+});
+
+describe("a run that never reports", () => {
+  test("a run ended at its request limit is stuck on the plan, and a repeating run cannot observe", () => {
+    expect(itemTurnLimitReport(70)).toMatchObject({
+      outcome: "stuck",
+      blocker: "plan",
+    });
+    expect(repeatedCallReport("run_terminal_command")).toMatchObject({
+      outcome: "stuck",
+      blocker: "observe",
+    });
+  });
+
+  test("the repair prompt then asks for an item a run can finish", () => {
+    const loop = loopWith({});
+    const after = finishItemRun(
+      {
+        ...loop,
+        current: { ...loop.current!, report: itemTurnLimitReport(70) },
+      },
+      itemTurnLimitReport(70),
+    );
+    expect(after.items[0]).toMatchObject({ status: "failed", blocker: "plan" });
+    const prompt = loopItemRepairPrompt({
+      loop: after,
+      plan: plan("A", "B"),
+      itemId: "1",
+    });
+    expect(prompt).toContain("What it says is in the way: plan");
+    expect(prompt).toContain("no end to reach");
+    expect(prompt).toContain("only passes once the work is done");
   });
 });

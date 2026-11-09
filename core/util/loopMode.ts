@@ -486,9 +486,13 @@ export function repeatedCallResult(
 export function repeatedCallReport(toolName: string): {
   outcome: FinishOutcome;
   summary: string;
+  blocker: LoopBlocker;
 } {
   return {
     outcome: "stuck",
+    // Asking the same question again is what a run does when it cannot see
+    // the answer another way
+    blocker: "observe",
     summary: `Kept repeating ${toolName} with no file change after it was refused.`,
   };
 }
@@ -520,9 +524,13 @@ export function itemTurnLimitResult(turns: number): string {
 export function itemTurnLimitReport(turns: number): {
   outcome: FinishOutcome;
   summary: string;
+  blocker: LoopBlocker;
 } {
   return {
     outcome: "stuck",
+    // A run that never reaches an end usually has an item with no end to
+    // reach: an open question to report on, a check it cannot meet
+    blocker: "plan",
     summary: `Ended after ${turns} requests without reporting.`,
   };
 }
@@ -2741,6 +2749,11 @@ export function loopItemRepairPrompt(input: {
     ...(state?.blocker
       ? [
           `What it says is in the way: ${state.blocker}, because ${LOOP_BLOCKER_TEXT[state.blocker]}.`,
+        ]
+      : []),
+    ...(state?.blocker === "plan"
+      ? [
+          "A run that never reaches an end usually has an item with no end to reach. Say in the item what a run produces to finish (a file it writes, a command whose output closes it) so that it can call finish_item, and make its check something that only passes once the work is done.",
         ]
       : []),
     ...(state?.needs?.length
