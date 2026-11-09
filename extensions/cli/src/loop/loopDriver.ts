@@ -18,6 +18,7 @@ import {
   standingInstructions,
   startCheck,
   startItemRun,
+  loopDecidesAlone,
   startReplan,
   stopLoop,
 } from "core/util/loopMode.js";
@@ -270,7 +271,7 @@ export function nextLoopTurn(
           lastCheck: itemState?.check,
           reminders: taken.reminders,
           returning: itemState?.setAside,
-          decideAlone: loop.autonomy === "idgaf",
+          decideAlone: loopDecidesAlone(loop),
         });
         loop = markDelivered(
           loop,

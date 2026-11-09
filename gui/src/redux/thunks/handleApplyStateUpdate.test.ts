@@ -173,7 +173,7 @@ describe("handleApplyStateUpdate", () => {
     };
 
     async function finish(
-      approvalMode: string,
+      editsLevel: string,
       setting: string,
       loop?: object,
     ) {
@@ -184,7 +184,7 @@ describe("handleApplyStateUpdate", () => {
       } as ToolCallState);
       mockGetState.mockReturnValue({
         session: { history: [], loop },
-        ui: { approvalMode, toolSettings: { unused: setting } },
+        ui: { policyLevels: { edits: editsLevel }, toolSettings: { unused: setting } },
       });
       await handleApplyStateUpdate(done)(mockDispatch, mockGetState, mockExtra);
       return mockExtra.ideMessenger.post.mock.calls.filter(
@@ -204,8 +204,13 @@ describe("handleApplyStateUpdate", () => {
       ).toBe(1);
     });
 
-    it("Review mode leaves the diff for review", async () => {
-      expect(await finish("review", "allowedWithPermission")).toBe(0);
+    it("Permissive accepts it too", async () => {
+      expect(await finish("permissive", "allowedWithPermission")).toBe(1);
+    });
+
+    it("Cautious and Manual leave the diff for review", async () => {
+      expect(await finish("cautious", "allowedWithPermission")).toBe(0);
+      expect(await finish("manual", "allowedWithPermission")).toBe(0);
     });
 
     it("a tool set to run without asking still accepts it", async () => {

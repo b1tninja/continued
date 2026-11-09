@@ -23,13 +23,14 @@ import {
   loopReplanTurnPrompt,
   markDelivered,
   enterWait,
-  loopAutonomyFor,
+  loopDecidesAlone,
+  loopPolicyOf,
   loopTokensFromUsage,
   proceedUnanswered,
   reconcileLoop,
   releaseEmptyWait,
   replanDecision,
-  setLoopAutonomy,
+  setLoopPolicy,
   setLoopStrategy,
   requestStop,
   resumeLoop,
@@ -50,7 +51,7 @@ import {
 } from "core/util/loopReminders";
 import { parsePlanFile, taskPlanFromPlanFile } from "core/util/planFile";
 import { findUriInDirs } from "core/util/uri";
-import { selectEffectiveApprovalMode } from "../selectors/selectAutoApproval";
+import { selectLoopPolicy } from "../selectors/selectAutoApproval";
 import {
   enqueueMessage,
   removeQueuedMessage,
@@ -157,8 +158,8 @@ export const startLoopFromPlan = createAsyncThunk<
   const loop = createLoop(plan, {
     now: new Date(),
     sessionTokens: sessionTokens(getState()),
-    // How much it does alone follows the approval mode in force
-    autonomy: loopAutonomyFor(selectEffectiveApprovalMode(getState())),
+    // Plans and questions follow the levels chosen for them
+    policy: selectLoopPolicy(getState()),
   });
   dispatch(setMode("agent"));
   commitLoop(dispatch, getState, loop);
@@ -268,17 +269,21 @@ export const resumeLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
   },
 );
 
-/** Ends the loop and forgets it (the task list stays). */
-/** The inbox's level picker: change how much the running loop does alone. */
-export const setLoopAutonomyThunk = createAsyncThunk<
-  void,
-  LoopAutonomy,
-  ThunkApiType
->("loop/setAutonomy", async (autonomy, { dispatch, getState }) => {
-  const { loop } = getState().session;
-  if (!loop) return;
-  commitLoop(dispatch, getState, setLoopAutonomy(loop, autonomy));
-});
+/**
+ * Brings the running loop's Plan edits and Questions levels up to date with
+ * the levels the person has set, so changing them in the toolbar takes effect
+ * on the loop at once.
+ */
+export const syncLoopPolicy = createAsyncThunk<void, undefined, ThunkApiType>(
+  "loop/syncPolicy",
+  async (_, { dispatch, getState }) => {
+    const { loop } = getState().session;
+    if (!loop) return;
+    const policy = selectLoopPolicy(getState());
+    if (JSON.stringify(loop.policy) === JSON.stringify(policy)) return;
+    commitLoop(dispatch, getState, setLoopPolicy(loop, policy));
+  },
+);
 
 type LoopControlOutcome = { ok: boolean; error?: string };
 
@@ -559,7 +564,7 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           planBlock: true,
           reminders: taken.reminders,
           returning: itemState?.setAside,
-          decideAlone: loop.autonomy === "idgaf",
+          decideAlone: loopDecidesAlone(loop),
           unanswered: loop.questions.filter((q) =>
             itemState?.unanswered?.includes(q.id),
           ),

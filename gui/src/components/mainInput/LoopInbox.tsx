@@ -3,13 +3,13 @@ import type { LoopAutonomy, LoopQuestion, LoopStrategy } from "core";
 import {
   formatLoopStatus,
   LOOP_AUTONOMY,
-  LOOP_AUTONOMY_LEVELS,
   LOOP_LIMITS,
   LOOP_STRATEGIES,
   LOOP_STRATEGY_ORDER,
   loopStrategy,
   standingInstructions,
 } from "core/util/loopMode";
+import { policyLevelLabel } from "core/tools/permissions/policy";
 import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { cancelStream } from "../../redux/thunks/cancelStream";
@@ -19,7 +19,6 @@ import {
   endLoopThunk,
   LoopAnswerInput,
   resumeLoopThunk,
-  setLoopAutonomyThunk,
   setLoopStrategyThunk,
   stopLoopThunk,
 } from "../../redux/thunks/loop";
@@ -170,21 +169,15 @@ export function LoopInbox() {
         >
           Loop · {formatLoopStatus(loop, { level: false })}
         </span>
-        <select
-          data-testid="loop-autonomy"
-          value={loop.autonomy ?? "auto"}
-          title={LOOP_AUTONOMY[loop.autonomy ?? "auto"].description}
-          onChange={(e) =>
-            void dispatch(setLoopAutonomyThunk(e.target.value as LoopAutonomy))
-          }
-          className="shrink-0 cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+        <span
+          data-testid="loop-policy"
+          title="Plan edits and Questions: change them in the toolbar or in Settings > Tools"
+          className="shrink-0 text-description"
         >
-          {LOOP_AUTONOMY_LEVELS.map((level) => (
-            <option key={level} value={level}>
-              {LOOP_AUTONOMY[level].label}
-            </option>
-          ))}
-        </select>
+          Plan {policyLevelLabel("plan", loop.policy?.plan ?? "cautious")} ·
+          Questions{" "}
+          {policyLevelLabel("questions", loop.policy?.questions ?? "cautious")}
+        </span>
         <select
           data-testid="loop-strategy"
           value={loopStrategy(loop)}

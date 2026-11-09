@@ -574,6 +574,24 @@ export interface LoopBudget {
 export type LoopAutonomy = "supervised" | "auto" | "unattended" | "idgaf";
 
 /**
+ * The two policy areas a loop reads while it runs (plans/policy-areas.md):
+ * what happens to a plan or re-plan (Plan edits) and who answers a question
+ * (Questions). A loop started from the IDE or the CLI carries the levels the
+ * person chose and follows them when they change. A loop saved before
+ * policy areas has none and keeps using its autonomy level.
+ */
+export interface LoopPolicy {
+  plan: import("./tools/permissions/policy").PolicyLevel;
+  questions: import("./tools/permissions/policy").PolicyLevel;
+  /** Permissive on Plan edits: new to-dos a re-plan may add by itself */
+  maxNewPlanItems?: number;
+  /** Question types the person always decides */
+  youDecide?: import("./tools/permissions/policy").QuestionType[];
+  /** Question types the agent may decide */
+  agentDecides?: import("./tools/permissions/policy").QuestionType[];
+}
+
+/**
  * How the loop moves through the plan, next to the autonomy level (how much
  * it does without the person). See LOOP_STRATEGIES in core/util/loopMode.ts.
  * - finish: plan order; re-plan only when nothing can run;
@@ -617,6 +635,8 @@ export interface LoopState {
   budget: LoopBudget;
   /** Missing on loops saved before autonomy levels: treated as "auto" */
   autonomy?: LoopAutonomy;
+  /** The Plan edits and Questions levels in force; see LoopPolicy */
+  policy?: LoopPolicy;
   /** Missing on loops saved before strategies: treated as "finish" */
   strategy?: LoopStrategy;
   /**

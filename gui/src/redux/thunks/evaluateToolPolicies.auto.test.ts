@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import {
   buildReviewHistory,
@@ -9,6 +10,9 @@ import {
 const ASK = "allowedWithPermission" as const;
 const ALLOW = "allowedWithoutPermission" as const;
 const OFF = "disabled" as const;
+const TOOLS_PERMISSIVE = {
+  levels: { ...DEFAULT_POLICY_LEVELS, tools: "permissive" as const },
+};
 
 function call(name: string, parsedArgs: Record<string, unknown> = {}) {
   return {
@@ -263,21 +267,18 @@ describe("approval modes in evaluateToolPolicies", () => {
       [call("run_terminal_command", { command: "ls" })],
       basePolicy ? { run_terminal_command: basePolicy } : {},
       undefined,
-      { mode: "autoApprove", categories: { runSafeCommands: true } },
+      TOOLS_PERMISSIVE,
     );
     return { result, seen };
   }
 
   it("sends the approval settings to core", async () => {
-    const { seen } = await runApproval({ policy: ALLOW, source: "category" });
-    expect(seen[0].approval).toEqual({
-      mode: "autoApprove",
-      categories: { runSafeCommands: true },
-    });
+    const { seen } = await runApproval({ policy: ALLOW, source: "permissive" });
+    expect(seen[0].approval).toEqual(TOOLS_PERMISSIVE);
   });
 
-  it("accepts the loosening core made for a switch or YOLO", async () => {
-    for (const source of ["category", "yolo"]) {
+  it("accepts the loosening core made for Permissive or YOLO", async () => {
+    for (const source of ["permissive", "yolo"]) {
       const { result } = await runApproval({ policy: ALLOW, source });
       expect(result.policy).toBe(ALLOW);
     }

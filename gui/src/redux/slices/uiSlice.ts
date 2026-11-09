@@ -4,11 +4,12 @@ import { ToolPolicy } from "@continuedev/terminal-security";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { MessageModes, RuleWithSource, Tool } from "core";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
-import type {
-  ApprovalCategories,
-  ApprovalCategoryName,
-  ApprovalModeName,
-} from "core/tools/permissions/approval";
+import {
+  DEFAULT_POLICY_LEVELS,
+  type PolicyArea,
+  type PolicyLevel,
+  type PolicyLevels,
+} from "core/tools/permissions/policy";
 import {
   defaultOnboardingCardState,
   OnboardingCardState,
@@ -44,23 +45,11 @@ type UIState = {
   /** Model the user picked by hand per mode; wins over `modeModels` until reload. */
   modeModelOverrides: Partial<Record<MessageModes, string>>;
   ttsActive: boolean;
-  /** "auto" needs the experimental flag and a reviewer model; see selectAutoApproval. */
-  approvalMode: ApprovalMode;
-  /** The Auto-approve switches; used by Auto-approve and Auto modes. */
-  approvalCategories: ApprovalCategories;
-  /** Per-MCP-server switch, by server name; wins over the global MCP switch. */
-  approvalMcpServers: { [serverName: string]: boolean };
-};
-
-/**
- * manual: ask as today. autoApprove: the switches allow. auto: the switches,
- * then a reviewer model (experimental). review: allow everything that no deny
- * rule, protected path or ask rule stops. yolo: allow absolutely everything.
- */
-export type ApprovalMode = ApprovalModeName;
-
-export const DEFAULT_APPROVAL_CATEGORIES: ApprovalCategories = {
-  readFiles: true,
+  /**
+   * The level chosen for each policy area (plans/policy-areas.md). "automatic"
+   * needs the experimental flag and a reviewer model; see selectPolicySettings.
+   */
+  policyLevels: PolicyLevels;
 };
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";
@@ -75,9 +64,7 @@ export const DEFAULT_UI_SLICE: UIState = {
     getLocalStorage(LocalStorageKey.HasDismissedExploreDialog) ?? false,
   shouldAddFileForEditing: false,
   ttsActive: false,
-  approvalMode: "manual",
-  approvalCategories: DEFAULT_APPROVAL_CATEGORIES,
-  approvalMcpServers: {},
+  policyLevels: DEFAULT_POLICY_LEVELS,
   toolSettings: {},
   toolGroupSettings: {
     [BUILT_IN_GROUP_NAME]: "include",
@@ -177,28 +164,17 @@ export const uiSlice = createSlice({
           break;
       }
     },
-    setApprovalMode: (state, { payload }: PayloadAction<ApprovalMode>) => {
-      state.approvalMode = payload;
-    },
-    setApprovalCategory: (
+    setPolicyLevel: (
       state,
-      {
-        payload,
-      }: PayloadAction<{ category: ApprovalCategoryName; enabled: boolean }>,
+      { payload }: PayloadAction<{ area: PolicyArea; level: PolicyLevel }>,
     ) => {
-      state.approvalCategories = {
-        ...state.approvalCategories,
-        [payload.category]: payload.enabled,
+      state.policyLevels = {
+        ...state.policyLevels,
+        [payload.area]: payload.level,
       };
     },
-    setApprovalMcpServer: (
-      state,
-      { payload }: PayloadAction<{ server: string; enabled: boolean }>,
-    ) => {
-      state.approvalMcpServers = {
-        ...state.approvalMcpServers,
-        [payload.server]: payload.enabled,
-      };
+    setPolicyLevels: (state, { payload }: PayloadAction<PolicyLevels>) => {
+      state.policyLevels = { ...payload };
     },
     setTTSActive: (state, { payload }: PayloadAction<boolean>) => {
       state.ttsActive = payload;
@@ -261,9 +237,8 @@ export const {
   addTool,
   addRule,
   toggleRuleSetting,
-  setApprovalMode,
-  setApprovalCategory,
-  setApprovalMcpServer,
+  setPolicyLevel,
+  setPolicyLevels,
   setTTSActive,
   setReasoningSetting,
   setPromptCacheSetting,

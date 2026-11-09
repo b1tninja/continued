@@ -6,6 +6,7 @@ import type {
   LoopCheckResult,
   LoopItemState,
   LoopItemStatus,
+  LoopPolicy,
   LoopQuestion,
   LoopQuestionKind,
   LoopState,
@@ -17,6 +18,13 @@ import type {
   TaskPlan,
 } from "../index.js";
 import { stableStringify } from "../tools/permissions/auto/state.js";
+import {
+  DEFAULT_POLICY_LEVELS,
+  planHandoff,
+  questionDecider,
+  type PolicyLevel,
+  type PolicySettings,
+} from "../tools/permissions/policy.js";
 import {
   hasReplanReminder,
   LOOP_REMINDER_LIMITS,
@@ -142,7 +150,7 @@ export interface LoopAutonomyPreset {
    * - no-new-scope: one whose to-dos were all in the previous list;
    * - bounded: one that adds at most maxNewItemsPerReplan to-dos.
    */
-  replan: "ask" | "no-new-scope" | "bounded";
+  replan: "ask" | "no-new-scope" | "bounded" | "policy";
   maxNewItemsPerReplan: number;
   /**
    * When every open item waits on the person this long with no answer, the
@@ -239,8 +247,97 @@ export function loopAutonomyFor(
   }
 }
 
+/** The loop's policy as the settings object the policy functions take. */
+function policySettings(policy: LoopPolicy): PolicySettings {
+  return {
+    levels: {
+      ...DEFAULT_POLICY_LEVELS,
+      plan: policy.plan,
+      questions: policy.questions,
+    },
+    ...(policy.maxNewPlanItems !== undefined
+      ? { maxNewPlanItems: policy.maxNewPlanItems }
+      : {}),
+    questions: {
+      ...(policy.youDecide ? { youDecide: policy.youDecide } : {}),
+      ...(policy.agentDecides ? { agentDecides: policy.agentDecides } : {}),
+    },
+  };
+}
+
+/** The loop's two policy areas from the settings the person chose. */
+export function loopPolicyOf(settings: PolicySettings): LoopPolicy {
+  return {
+    plan: settings.levels.plan,
+    questions: settings.levels.questions,
+    ...(settings.maxNewPlanItems !== undefined
+      ? { maxNewPlanItems: settings.maxNewPlanItems }
+      : {}),
+    ...(settings.questions?.youDecide
+      ? { youDecide: settings.questions.youDecide }
+      : {}),
+    ...(settings.questions?.agentDecides
+      ? { agentDecides: settings.questions.agentDecides }
+      : {}),
+  };
+}
+
+const EXPANSIVE: readonly PolicyLevel[] = ["permissive", "yolo"];
+
+/**
+ * The preset that supplies a policy loop's budgets and default strategy. The
+ * decisions themselves (re-plans, questions) never read it: they read the
+ * policy.
+ */
+export function autonomyForPolicy(policy: LoopPolicy): LoopAutonomy {
+  if (policy.questions === "yolo") return "idgaf";
+  if (EXPANSIVE.includes(policy.plan)) return "unattended";
+  return policy.plan === "manual" ? "supervised" : "auto";
+}
+
 export function loopAutonomy(loop: LoopState): LoopAutonomyPreset {
-  return LOOP_AUTONOMY[loop.autonomy ?? "auto"];
+  const preset = LOOP_AUTONOMY[loop.autonomy ?? "auto"];
+  const policy = loop.policy;
+  if (!policy) return preset;
+  // A question waits until it is answered or the agent decides it: no timer
+  return {
+    ...preset,
+    replan: "policy",
+    waitTimeoutMs: policy.questions === "yolo" ? 1000 : 0,
+  };
+}
+
+/**
+ * True when nobody will answer the loop's questions: Questions is IDGAF. On a
+ * loop saved before policy areas, its IDGAF autonomy level.
+ */
+export function loopDecidesAlone(loop: LoopState): boolean {
+  return loop.policy
+    ? loop.policy.questions === "yolo"
+    : loop.autonomy === "idgaf";
+}
+
+/**
+ * Who answers a question of this type: the agent (it records its own pick
+ * and goes on) or the person. A reviewer model for questions is not built, so
+ * Automatic leaves the question to the person.
+ */
+export function loopQuestionDecider(
+  loop: LoopState,
+  type: unknown,
+): "agent" | "person" {
+  if (!loop.policy) return loopDecidesAlone(loop) ? "agent" : "person";
+  return questionDecider(policySettings(loop.policy), type) === "agent"
+    ? "agent"
+    : "person";
+}
+
+/**
+ * Changes the policy of a running loop. Budgets and the strategy stay as they
+ * are: the levels the person moves are about who decides, not about limits.
+ */
+export function setLoopPolicy(loop: LoopState, policy: LoopPolicy): LoopState {
+  return { ...loop, policy, autonomy: autonomyForPolicy(policy) };
 }
 
 /**
@@ -579,8 +676,10 @@ export function createLoop(
     now: Date;
     sessionTokens: number;
     budget?: Partial<LoopBudget>;
-    /** Default auto; see loopAutonomyFor */
+    /** Default auto. Superseded by `policy`. */
     autonomy?: LoopAutonomy;
+    /** The Plan edits and Questions levels; the loop follows them */
+    policy?: LoopPolicy;
     /** false: items share the session's conversation (default: a fresh context) */
     freshContext?: boolean;
     /**
@@ -590,10 +689,13 @@ export function createLoop(
     strategy?: LoopStrategy;
   },
 ): LoopState {
+  const autonomy = options.policy
+    ? autonomyForPolicy(options.policy)
+    : options.autonomy;
   const strategy =
-    options.strategy ??
-    (options.autonomy ? defaultLoopStrategy(options.autonomy) : undefined);
+    options.strategy ?? (autonomy ? defaultLoopStrategy(autonomy) : undefined);
   return {
+    ...(options.policy ? { policy: options.policy } : {}),
     ...(strategy ? { strategy } : {}),
     ...(options.strategy ? { strategyPicked: true } : {}),
     ...(strategy === "check-in" ? { doneSinceReplan: 0 } : {}),
@@ -602,10 +704,10 @@ export function createLoop(
     startedAt: iso(options.now),
     tokensAtStart: options.sessionTokens,
     budget: {
-      ...LOOP_AUTONOMY[options.autonomy ?? "auto"].budget,
+      ...LOOP_AUTONOMY[autonomy ?? "auto"].budget,
       ...options.budget,
     },
-    autonomy: options.autonomy ?? "auto",
+    autonomy: autonomy ?? "auto",
     items: plan.items.map(fromTask),
     questions: [],
     answers: [],
@@ -935,7 +1037,18 @@ export function replanDecision(
   const preset = loopAutonomy(loop);
   const known = new Set(previousTexts);
   const added = plan.items.filter((i) => !known.has(i.text)).length;
+  if (loop.policy) {
+    const handoff = planHandoff({
+      policy: policySettings(loop.policy),
+      first: false,
+      added,
+    });
+    // A reviewer for plans is not built: Automatic waits for the person
+    return { accept: handoff.decision === "go", reason: handoff.reason };
+  }
   switch (preset.replan) {
+    case "policy":
+      return { accept: false, reason: "No policy is set on this loop." };
     case "ask":
       return {
         accept: false,
@@ -1008,7 +1121,12 @@ export function repairDecision(
   itemText: string,
   plan: TaskPlan,
 ): { accept: boolean; reason: string } {
-  if (loopAutonomy(loop).replan === "ask") {
+  if (
+    loopAutonomy(loop).replan === "ask" ||
+    (loop.policy &&
+      loop.policy.plan !== "yolo" &&
+      loop.policy.plan !== "permissive")
+  ) {
     return replanDecision(loop, previousTexts, plan);
   }
   const texts = new Set(plan.items.map((i) => i.text));
@@ -1256,7 +1374,7 @@ function statusAfterRun(
     return outOfAttempts ? "failed" : "pending";
   }
   // IDGAF: there is nobody to wait for
-  if (outcome === "waiting" && !blocked && loop.autonomy === "idgaf") {
+  if (outcome === "waiting" && !blocked && loopDecidesAlone(loop)) {
     return outOfAttempts ? "failed" : "pending";
   }
   if (blocked || outcome === "waiting") return "waiting";
@@ -1673,7 +1791,7 @@ export function holdQuestion(
   if (kind !== "blocking" && kind !== "assumption" && kind !== "approval") {
     return { ok: false, error: 'kind must be "blocking" or "assumption"' };
   }
-  if (loop.autonomy === "idgaf" && kind !== "approval") {
+  if (kind !== "approval" && loopQuestionDecider(loop, type) === "agent") {
     return decideAlone(loop, input.itemId, question, input.assumption, now);
   }
   const assumption =

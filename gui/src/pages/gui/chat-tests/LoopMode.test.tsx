@@ -16,7 +16,7 @@ import { renderChatMessage } from "core/util/messageContent";
 import { serializePlanFile } from "core/util/planFile";
 import { selectActiveTools } from "../../../redux/selectors/selectActiveTools";
 import { setLoop, setPlanFile } from "../../../redux/slices/sessionSlice";
-import { setApprovalMode } from "../../../redux/slices/uiSlice";
+import { setPolicyLevel } from "../../../redux/slices/uiSlice";
 import { startLoopFromPlan } from "../../../redux/thunks/loop";
 import { triggerConfigUpdate } from "../../../util/test/config";
 import { renderWithProviders } from "../../../util/test/render";
@@ -282,6 +282,10 @@ describe("Loop mode", () => {
 
   test("a round that runs dry is re-planned in Plan mode, and accepting the card starts the next round", async () => {
     const h = await setup(["Write the lexer", "Add tests"]);
+    // Every re-plan waits for the person: what this test is about
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "manual" }));
+    });
     h.turns.push(
       finish("done", "lexer written"),
       finish("stuck", "no test runner installed"),
@@ -440,10 +444,10 @@ describe("Loop mode", () => {
     expect(shown).toContain("only this item: Write the lexer");
   });
 
-  test("in YOLO the loop starts unattended, fixing forward: a failed item's repair starts the next round without the card", async () => {
+  test("with Plan edits Permissive the loop fixes forward: a failed item's repair starts the next round without the card", async () => {
     const h = await setup(["Write the lexer", "Add tests"]);
     await act(async () => {
-      h.store.dispatch(setApprovalMode("yolo"));
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
     });
     h.turns.push(
       finish("done", "lexer written"),
@@ -477,35 +481,20 @@ describe("Loop mode", () => {
     expect(h.prompt(3)).toContain("only this item: Install vitest");
   });
 
-  test("unattended: when the wait for an answer runs out, the item goes on with its default and the question stays open", async () => {
+  test("Permissive on Plan edits does not start a timer: a question waits until you answer", async () => {
     const h = await setup(["Pick the database"]);
     await act(async () => {
-      h.store.dispatch(setApprovalMode("yolo"));
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
     });
     h.turns.push(
       ask("Item 'Pick the database': Postgres or SQLite?", "blocking"),
       finish("waiting", "needs the database choice"),
-      finish("done", "picked SQLite as the default"),
     );
     await h.start();
     await waitFor(() => expect(h.loop().status).toBe("waiting"));
     expect(
       document.querySelector("[data-testid=loop-status]")!.textContent,
-    ).toContain("goes on without answers at");
-
-    // As if 16 minutes had passed: the driver's timer fires at once
-    await act(async () => {
-      h.store.dispatch(
-        setLoop({
-          ...h.loop(),
-          waitingSince: new Date(Date.now() - 16 * 60_000).toISOString(),
-        }),
-      );
-    });
-    await waitFor(() => expect(h.loop().status).toBe("stopped"));
-    expect(h.loop().stopReason).toBe("done");
-    expect(h.prompt(2)).toContain("Nobody answered these questions in time");
-    expect(h.prompt(2)).toContain("Postgres or SQLite?");
+    ).toContain("paused until you answer");
     // Not confirmed on the person's behalf: still in the inbox
     expect(h.loop().questions[0].answerId).toBeUndefined();
     expect(
@@ -513,36 +502,36 @@ describe("Loop mode", () => {
     ).not.toBeNull();
   });
 
-  test("the level picker changes how much the running loop does alone", async () => {
+  test("moving Plan edits or Questions changes the running loop", async () => {
     const h = await setup(["Pick the grammar"]);
     h.turns.push(
       ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
       finish("waiting", "needs the grammar"),
     );
     await h.start();
-    // Manual approval mode: supervised
-    expect(h.loop().autonomy).toBe("supervised");
+    // The defaults: Plan edits and Questions are Cautious
+    expect(h.loop().policy).toMatchObject({
+      plan: "cautious",
+      questions: "cautious",
+    });
     await waitFor(() => expect(h.loop().status).toBe("waiting"));
     expect(
-      document.querySelector("[data-testid=loop-status]")!.textContent,
-    ).toContain("paused until you answer");
+      document.querySelector("[data-testid=loop-policy]")!.textContent,
+    ).toContain("Plan Cautious");
 
     await act(async () => {
-      fireEvent.change(document.querySelector("[data-testid=loop-autonomy]")!, {
-        target: { value: "unattended" },
-      });
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
     });
+    await waitFor(() => expect(h.loop().policy?.plan).toBe("permissive"));
     expect(h.loop().autonomy).toBe("unattended");
-    expect(h.loop().budget.maxRounds).toBe(10);
     expect(
-      document.querySelector("[data-testid=loop-status]")!.textContent,
-    ).toContain("goes on without answers at");
+      document.querySelector("[data-testid=loop-policy]")!.textContent,
+    ).toContain("Plan Permissive");
 
-    // The strategy picker sits next to the level picker
+    // The strategy picker is independent of the levels
     const strategy = document.querySelector<HTMLSelectElement>(
       "[data-testid=loop-strategy]",
     )!;
-    expect(strategy.value).toBe("fix-forward");
     await act(async () => {
       fireEvent.change(strategy, { target: { value: "check-in" } });
     });
@@ -745,7 +734,7 @@ describe("Loop mode", () => {
         args: { filepath: `new${n}.ts`, contents: "x" },
       });
     await act(async () => {
-      h.store.dispatch(setApprovalMode("yolo"));
+      h.store.dispatch(setPolicyLevel({ area: "tools", level: "yolo" }));
     });
     h.ideMessenger.responseHandlers["tools/evaluatePolicy"] = async () => ({
       policy: "allowedWithoutPermission",
@@ -828,6 +817,10 @@ describe("Loop mode", () => {
 
   test("the controls edit the limits, skip a waiting item and run a done one again", async () => {
     const h = await setup(["Pick the grammar", "Write the lexer"]);
+    // Every re-plan waits for the person: what this test is about
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "manual" }));
+    });
     h.turns.push(
       ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
       finish("waiting", "needs the grammar"),
