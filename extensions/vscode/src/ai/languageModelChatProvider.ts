@@ -17,7 +17,7 @@ export const LM_VENDOR = "continuous";
 const DEFAULT_CONTEXT_LENGTH = 32_768;
 const DEFAULT_MAX_TOKENS = 4_096;
 
-interface ContinuousModelInfo extends vscode.LanguageModelChatInformation {
+interface ContinuedModelInfo extends vscode.LanguageModelChatInformation {
   /** The title of the Continuous model this entry stands for. */
   readonly llmTitle: string;
 }
@@ -29,7 +29,7 @@ interface ContinuousModelInfo extends vscode.LanguageModelChatInformation {
  * keys and settings from the config and providers.yaml; keys never pass to
  * VS Code.
  */
-export class ContinuousLanguageModelChatProvider implements vscode.LanguageModelChatProvider<ContinuousModelInfo> {
+export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelChatProvider<ContinuedModelInfo> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeLanguageModelChatInformation = this.changed.event;
 
@@ -69,7 +69,7 @@ export class ContinuousLanguageModelChatProvider implements vscode.LanguageModel
 
   async provideLanguageModelChatInformation(
     options?: vscode.PrepareLanguageModelChatModelOptions,
-  ): Promise<ContinuousModelInfo[]> {
+  ): Promise<ContinuedModelInfo[]> {
     if (!this.enabled) return [];
     let models = this.models;
     // A group from the Language Models editor (proposed; see package.json)
@@ -96,7 +96,7 @@ export class ContinuousLanguageModelChatProvider implements vscode.LanguageModel
   }
 
   async provideLanguageModelChatResponse(
-    model: ContinuousModelInfo,
+    model: ContinuedModelInfo,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
@@ -107,7 +107,7 @@ export class ContinuousLanguageModelChatProvider implements vscode.LanguageModel
     const sub = token.onCancellationRequested(() => abort.abort());
     try {
       const tools = options.tools?.length
-        ? options.tools.map(toContinuousTool)
+        ? options.tools.map(toContinuedTool)
         : undefined;
       const toolCalls = new ToolCallCollector();
       for await (const chunk of llm.streamChat(
@@ -147,7 +147,7 @@ export class ContinuousLanguageModelChatProvider implements vscode.LanguageModel
   }
 
   async provideTokenCount(
-    model: ContinuousModelInfo,
+    model: ContinuedModelInfo,
     text: string | vscode.LanguageModelChatRequestMessage,
   ): Promise<number> {
     const llm = this.models.find(
@@ -162,7 +162,7 @@ export class ContinuousLanguageModelChatProvider implements vscode.LanguageModel
     return countTokens(content, llm?.model ?? model.version);
   }
 
-  private findModel(model: ContinuousModelInfo): ILLM {
+  private findModel(model: ContinuedModelInfo): ILLM {
     const llm = this.models.find(
       (m) => (m.title ?? m.model) === model.llmTitle,
     );
@@ -179,7 +179,7 @@ export class ContinuousLanguageModelChatProvider implements vscode.LanguageModel
   }
 }
 
-export function modelInfo(llm: ILLM, title: string): ContinuousModelInfo {
+export function modelInfo(llm: ILLM, title: string): ContinuedModelInfo {
   const maxOutputTokens =
     llm.completionOptions?.maxTokens ?? DEFAULT_MAX_TOKENS;
   const contextLength = llm.contextLength ?? DEFAULT_CONTEXT_LENGTH;
@@ -266,7 +266,7 @@ export function toChatMessages(
   return out;
 }
 
-export function toContinuousTool(tool: vscode.LanguageModelChatTool): Tool {
+export function toContinuedTool(tool: vscode.LanguageModelChatTool): Tool {
   return {
     type: "function",
     function: {

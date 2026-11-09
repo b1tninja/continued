@@ -6,12 +6,12 @@ import { registerAgentSessions } from "./agentSessions";
 import { setExternalAccount } from "core/config/providers/externalAccounts";
 
 import {
-  ContinuousLanguageModelChatProvider,
+  ContinuedLanguageModelChatProvider,
   groupToAccount,
   LM_VENDOR,
 } from "./languageModelChatProvider";
 import {
-  ContinuousMcpServerDefinitionProvider,
+  ContinuedMcpServerDefinitionProvider,
   MCP_PROVIDER_ID,
 } from "./mcpServerDefinitionProvider";
 
@@ -28,8 +28,8 @@ export function registerVsCodeAi(
   context: vscode.ExtensionContext,
   configHandler: ConfigHandler,
 ) {
-  const models = new ContinuousLanguageModelChatProvider();
-  const mcp = new ContinuousMcpServerDefinitionProvider();
+  const models = new ContinuedLanguageModelChatProvider();
+  const mcp = new ContinuedMcpServerDefinitionProvider();
   context.subscriptions.push(models, mcp);
 
   const lm = vscode.lm as Partial<typeof vscode.lm> | undefined;
