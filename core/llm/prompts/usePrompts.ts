@@ -117,14 +117,19 @@ export function planTurnTextFor(
 }
 
 /*
- * The tail: a one-line reminder on the newest user message of a request
- * (`modeModels.<use>.tail`). A per-use addition on the same model goes here
- * and not in the system prompt: a prompt cache matches on the longest shared
- * prefix and the system prompt comes first, so swapping it per use throws
- * away the whole conversation's cache, while a line on the newest message
- * leaves the system prompt and the history before it byte-identical. Small
- * models (Nova 2 Lite, Qwen3 Coder) were seen to stop after announcing a
- * step; the tail keeps the turn's rule close without touching the prefix.
+ * The tail: a one-line reminder at the end of every user message of a
+ * request (`modeModels.<use>.tail`). A per-use addition on the same model
+ * goes here and not in the system prompt: a prompt cache matches on the
+ * longest shared prefix and the system prompt comes first, so swapping it per
+ * use throws away the whole conversation's cache. The line goes on every
+ * user message, not only the newest, so that a message's bytes never change
+ * between requests: the cache markers sit on the last two user messages
+ * (plans/prompt-caching.md 6.2), and a line that moved to the newest message
+ * would leave the previous turn's marker on a message that was never cached
+ * and rewrite that turn every time. Claude Code keeps its per-turn reminders
+ * in the transcript for the same reason. Small models (Nova 2 Lite, Qwen3
+ * Coder) were seen to stop after announcing a step; the tail keeps the turn's
+ * rule close to them without touching the prefix.
  */
 
 /** `modeModels.<use>.tail` as written: on, off or a text (a boolean too, from a YAML 1.1 parser). */
@@ -159,7 +164,7 @@ export function builtInTailFor(
 }
 
 /**
- * The text to append to the newest user message of a request for a use, or
+ * The text to append to the user messages of a request for a use, or
  * undefined for none. The setting is the use's own `tail`, else its
  * fallback's. Without one: on for Loop items (a small model on an item is the
  * case the line was written for) and wherever the turn text is the `short`
@@ -236,38 +241,31 @@ function tailText(
 }
 
 /**
- * The messages with the tail appended to the newest user message, and to
- * that one only: every message before it, the system message first of all,
- * is returned as it is, so the request's prefix is the same with or without
- * the tail. A string content gets the line after a blank line; a list of
- * parts gets one more text part. Without a tail, or without a user message,
- * the same array comes back.
+ * The messages with the tail appended to every user message. The system
+ * message and the assistant and tool messages are returned as the same
+ * objects, and a user message with the tail is the same bytes in every
+ * request that carries it, so each request of a conversation is an extension
+ * of the one before and the whole prefix keeps its cache entries. A string
+ * content gets the line after a blank line; a list of parts gets one more
+ * text part. Without a tail, the same array comes back.
  */
 export function withTurnTail<M extends { role: string; content?: unknown }>(
   messages: readonly M[],
   tail: string | undefined,
 ): M[] {
   if (!tail) return messages as M[];
-  let index = -1;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === "user") {
-      index = i;
-      break;
+  return messages.map((message) => {
+    if (message.role !== "user") return message;
+    const { content } = message;
+    if (typeof content === "string") {
+      return { ...message, content: content ? `${content}\n\n${tail}` : tail };
     }
-  }
-  if (index === -1) return messages as M[];
-  const newest = messages[index];
-  const { content } = newest;
-  let appended: M;
-  if (typeof content === "string") {
-    appended = { ...newest, content: content ? `${content}\n\n${tail}` : tail };
-  } else if (Array.isArray(content)) {
-    appended = {
-      ...newest,
-      content: [...content, { type: "text", text: tail }],
-    };
-  } else {
-    return messages as M[];
-  }
-  return [...messages.slice(0, index), appended, ...messages.slice(index + 1)];
+    if (Array.isArray(content)) {
+      return {
+        ...message,
+        content: [...content, { type: "text", text: tail }],
+      };
+    }
+    return message;
+  });
 }

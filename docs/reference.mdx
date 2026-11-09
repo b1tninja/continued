@@ -265,7 +265,7 @@ The entries, and what each falls back to when it is not set:
   - `models` (optional): a list of model `name`s to offer in the mode. Give `model`, `models`, or both. With only `models`, the default is the first entry that exists. The default is always part of the list and is listed first, and duplicates are removed. The model picker shows these first, and the model shortcut cycles only through them.
   - `reasoningEffort` (optional): `off`, `low`, `medium` or `high`. This maps to a thinking budget of about 1K, 4K or 16K tokens for models that support extended thinking.
   - `prompt` (optional): which system prompt the mode gets; see below.
-  - `tail` (optional): the one-line reminder at the end of the newest message; see below.
+  - `tail` (optional): the one-line reminder at the end of your messages; see below.
 - `loop` and `replan` take `model`, `reasoningEffort`, `prompt` and `tail`; `reviewer` and `subagent` take `model` and `reasoningEffort`. Nothing offers a picker there, so there is no list. `loop`, `replan` and `subagent` name chat models. `reviewer` may name any model, whatever its `roles`; it is added to the reviewer role and selected, and a reviewer picked in Settings then holds until the window reloads. An entry may set only `prompt` or `tail` (`loop: { prompt: short }`, `agent: { tail: off }`) and leave the model to its fallback.
 
 #### `prompt`: which system prompt a use gets
@@ -297,15 +297,15 @@ The prompt falls back on its own: a `loop` entry that only names a model takes t
 
 A change of prompt changes the cached prefix of the conversation for that model, as a change of mode does. Uses that run on different models have separate caches anyway, so there is nothing to lose there.
 
-#### `tail`: a reminder on the newest message
+#### `tail`: a reminder at the end of your messages
 
-A per-use addition on the *same* model does not belong in the system prompt: a prompt cache matches on the longest shared prefix and the system prompt comes first, so a line that differs between uses throws away the whole conversation's cache on every switch. `tail` adds the line to the end of the newest user message of each request instead, so the system prompt and every earlier message are the same bytes with or without it and keep their cache entries; only the message the previous turn's line sat on is re-read when the next turn moves it. It takes one of:
+A per-use addition on the *same* model does not belong in the system prompt: a prompt cache matches on the longest shared prefix and the system prompt comes first, so a line that differs between uses throws away the whole conversation's cache on every switch. `tail` adds the line to the end of every user message of the request instead, the same line each time, so the system prompt is the same bytes with or without it and a message never changes once sent: each request extends the one before, and the cache markers on the last two user messages keep matching. (A line on the newest message only would move with every turn and re-write the previous turn each time.) The line is added when the request is built, not to the conversation you see or to saved sessions. It takes one of:
 
 - `on`: the built-in line for the use's turn kind. Agent mode and Loop items get "Act until the request is done. A reply with no tool call ends the turn."; Plan mode and re-plans get "Plan only. End by calling present_plan or asking a question." (named for the surface's tools). Chat has no built-in line, so `on` adds nothing there.
 - `off`: no line.
 - A short text of your own, used as given for any use, Chat included.
 
-Without `tail`, the line is on for Loop items and wherever the turn text is the `short` profile (by `prompt`, or by the model's id), and off elsewhere: small models were seen to end an item by announcing the next step with no tool call, and the line keeps the turn's rule close to them without touching the cached prefix. Like `prompt`, it falls back on its own: `loop` takes `agent`'s setting and `replan` takes `plan`'s unless given one. In a Loop item's request the line comes after the plan block.
+Without `tail`, the line is on for Loop items and wherever the turn text is the `short` profile (by `prompt`, or by the model's id), and off elsewhere: small models were seen to end an item by announcing the next step with no tool call, and the line keeps the turn's rule close to them without touching the cached prefix. Like `prompt`, it falls back on its own: `loop` takes `agent`'s setting and `replan` takes `plan`'s unless given one. In a Loop item's request the line comes after the plan block. Turning `tail` on or off in the middle of a conversation changes every user message once, as a change of `prompt` does.
 
 ```yaml title="config.yaml"
 modeModels:

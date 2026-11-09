@@ -77,7 +77,7 @@ it("turnKindForUse: chat is chat, plans plan, everything else acts", () => {
   expect(turnKindForUse("loop")).toBe("act");
 });
 
-describe("tailFor: the reminder on the newest user message", () => {
+describe("tailFor: the reminder on the user messages", () => {
   it("is on for a Loop item by default, and off for Agent on a full-profile model", () => {
     expect(tailFor({ agent: { title: "Sonnet" } }, "loop", "claude")).toBe(
       ACT_TURN_TAIL,
@@ -181,14 +181,21 @@ describe("withTurnTail", () => {
     { role: "tool", content: "result" },
   ];
 
-  it("appends to the newest user message only; everything before is the same object", () => {
+  it("appends to every user message; the other messages are the same objects", () => {
     const out = withTurnTail(messages, "Act.");
+    expect(out[1]).toEqual({ role: "user", content: "first\n\nAct." });
     expect(out[3]).toEqual({ role: "user", content: "second\n\nAct." });
     expect(out[0]).toBe(messages[0]);
-    expect(out[1]).toBe(messages[1]);
     expect(out[2]).toBe(messages[2]);
     expect(out[4]).toBe(messages[4]);
+    expect(messages[1].content).toBe("first");
     expect(messages[3].content).toBe("second");
+  });
+
+  it("makes a later request an extension of the earlier one", () => {
+    const earlier = withTurnTail(messages.slice(0, 3), "Act.");
+    const later = withTurnTail(messages, "Act.");
+    expect(JSON.stringify(later.slice(0, 3))).toBe(JSON.stringify(earlier));
   });
 
   it("adds a text part to a list of parts", () => {
@@ -199,10 +206,8 @@ describe("withTurnTail", () => {
     ]);
   });
 
-  it("returns the same array without a tail or without a user message", () => {
+  it("returns the same array without a tail", () => {
     expect(withTurnTail(messages, undefined)).toBe(messages);
-    const none = [{ role: "system", content: "sys" }];
-    expect(withTurnTail(none, "Act.")).toBe(none);
   });
 });
 

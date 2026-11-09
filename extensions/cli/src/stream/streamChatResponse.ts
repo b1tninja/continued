@@ -183,9 +183,9 @@ interface ProcessStreamingResponseOptions {
   systemMessage: string;
   isCompacting?: boolean; // also: compaction gets no Loop mode plan block
   /**
-   * The use's tail (`modeModels.<use>.tail`), appended to the newest user
-   * message of this request and to no other, so the system message and the
-   * history before it keep their cached prefix.
+   * The use's tail (`modeModels.<use>.tail`), appended to every user message
+   * of this request, the same line each time, so the system message is
+   * unchanged and each request extends the one before it.
    */
   turnTail?: string;
 }
@@ -380,9 +380,11 @@ export async function processStreamingResponse(
   // Create OpenAI format history with validated system message. The date and
   // git status go on the first user message, after the system checkpoint of
   // the prompt cache, so the system text is the same across sessions. The
-  // use's tail goes on the newest user message (the item prompt with its
-  // plan block, or a message the person steered with), and on that one
-  // only, so everything before it is the same bytes with or without it.
+  // use's tail goes last on every user message (the item prompt with its
+  // plan block and the environment block, a message the person steered
+  // with, a nudge), the same line each time, so a message's bytes never
+  // change between requests and the cache markers on the last two user
+  // messages keep matching (core/llm/prompts/usePrompts.ts).
   const openaiChatHistory = withTurnTail(
     withEnvironmentBlock(
       convertFromUnifiedHistoryWithSystemMessage(

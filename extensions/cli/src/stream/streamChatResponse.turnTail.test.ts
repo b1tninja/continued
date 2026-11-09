@@ -2,6 +2,7 @@ import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
 import { ACT_TURN_TAIL } from "core/llm/prompts/turns.js";
+import { createLoop, startItemRun } from "core/util/loopMode.js";
 import type { ChatCompletionTool } from "openai/resources.mjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,11 +14,16 @@ import {
 } from "./streamChatResponse.js";
 
 /*
- * The use's tail (`modeModels.<use>.tail`) goes on the newest user message of
- * the request and nowhere else: the system message and every message before
- * it are the same bytes with or without it, so their cached prefix holds.
+ * The use's tail (`modeModels.<use>.tail`) goes at the end of every user
+ * message of the request and nowhere else: the system message and the
+ * assistant messages are the same bytes with or without it, and a message's
+ * bytes never change between requests, so the cached prefix holds and each
+ * request extends the one before.
  */
 
+const session = vi.hoisted(() => ({
+  loop: undefined as unknown,
+}));
 vi.mock("../session.js", async () => {
   const actual = await vi.importActual<object>("../session.js");
   return {
@@ -26,7 +32,7 @@ vi.mock("../session.js", async () => {
       items: [{ id: "1", text: "Fix", status: "in_progress" }],
       updatedAt: "2026-11-08T12:00:00.000Z",
     }),
-    getSessionLoop: () => undefined,
+    getSessionLoop: () => session.loop,
     trackSessionUsage: vi.fn(),
   };
 });
@@ -51,7 +57,10 @@ vi.mock("../services/index.js", () => ({
       getState: vi.fn(() => ({ currentMode: "enabled" })),
       isHeadless: vi.fn(() => false),
     },
-    chatHistory: { isReady: vi.fn(() => false) },
+    chatHistory: {
+      isReady: vi.fn(() => false),
+      getHistory: vi.fn(() => []),
+    },
   },
 }));
 
@@ -112,7 +121,7 @@ describe("the tail in the CLI request", () => {
     vi.clearAllMocks();
   });
 
-  it("goes on the newest user message; the system message and the earlier messages are byte-identical without it", async () => {
+  it("goes last on every user message; the system and assistant messages are byte-identical without it", async () => {
     const without = await requestWith(undefined);
     const withTail = await requestWith(ACT_TURN_TAIL);
     expect(withTail.map((m) => m.role)).toEqual([
@@ -121,16 +130,70 @@ describe("the tail in the CLI request", () => {
       "assistant",
       "user",
     ]);
-    expect(JSON.stringify(withTail.slice(0, -1))).toBe(
-      JSON.stringify(without.slice(0, -1)),
-    );
+    expect(JSON.stringify(withTail[0])).toBe(JSON.stringify(without[0]));
+    expect(JSON.stringify(withTail[2])).toBe(JSON.stringify(without[2]));
     expect(without.at(-1)?.content).toBe("second");
     expect(withTail.at(-1)?.content).toBe(`second\n\n${ACT_TURN_TAIL}`);
-    // The environment block stays on the first user message, before it
-    expect(String(withTail[1].content)).toContain(
-      '<context name="environment">',
+    // The environment block stays on the first user message, the tail after it
+    const first = String(withTail[1].content);
+    expect(first.startsWith('first\n\n<context name="environment">')).toBe(
+      true,
     );
-    expect(String(withTail[1].content)).not.toContain(ACT_TURN_TAIL);
+    expect(first.endsWith(`</context>\n\n${ACT_TURN_TAIL}`)).toBe(true);
+  });
+
+  it("keeps a later request an extension of the earlier one", async () => {
+    const { llmApi, sent } = llmApiRecording();
+    await processStreamingResponse({
+      chatHistory: history.slice(0, 1),
+      model,
+      llmApi,
+      abortController: new AbortController(),
+      systemMessage: "sys",
+      tools: [],
+      turnTail: "Act.",
+    });
+    const earlier = sent();
+    const later = await requestWith("Act.");
+    expect(earlier).toHaveLength(2);
+    expect(JSON.stringify(later.slice(0, 2))).toBe(JSON.stringify(earlier));
+  });
+
+  it("on a Loop item comes after the plan block, and the system message is the same as the mode's", async () => {
+    const T0 = new Date("2026-11-08T12:00:00Z");
+    const plan = {
+      items: [{ id: "1", text: "Fix", status: "in_progress" as const }],
+      updatedAt: T0.toISOString(),
+    };
+    session.loop = startItemRun(
+      createLoop(plan, { now: T0, sessionTokens: 0 }),
+      "1",
+      2,
+      T0,
+    );
+    // The plan block is placed by the stream for the main history, which the
+    // history service holds
+    vi.mocked(services.chatHistory.isReady).mockReturnValue(true);
+    vi.mocked(services.chatHistory.getHistory).mockReturnValue(history);
+    vi.mocked(services.systemMessage.turnTail).mockReturnValue(ACT_TURN_TAIL);
+    try {
+      const { llmApi, sent } = llmApiRecording();
+      await streamChatResponse(history, model, llmApi, new AbortController());
+      const messages = sent();
+      // Fresh context: the run's request starts at the item prompt
+      expect(messages.map((m) => m.role)).toEqual(["system", "user"]);
+      expect(messages[0].content).toBe("sys");
+      const prompt = String(messages[1].content);
+      expect(prompt.startsWith("second\n\n<task_list>")).toBe(true);
+      expect(prompt).toContain('<context name="environment">');
+      expect(prompt.endsWith(`\n\n${ACT_TURN_TAIL}`)).toBe(true);
+      expect(prompt.indexOf("</task_list>")).toBeLessThan(
+        prompt.indexOf(ACT_TURN_TAIL),
+      );
+    } finally {
+      session.loop = undefined;
+      vi.mocked(services.chatHistory.isReady).mockReturnValue(false);
+    }
   });
 
   it("stays before the task list block, which is sent last", async () => {

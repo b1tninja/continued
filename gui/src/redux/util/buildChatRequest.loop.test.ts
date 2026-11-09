@@ -77,7 +77,7 @@ describe("a loop item's request", () => {
 
   it("carries the whole conversation when fresh context is off", () => {
     expect(texts(stateWith(false))).toEqual([
-      "item one prompt",
+      `item one prompt${TAIL}`,
       "item one done",
       `item two prompt${TAIL}`,
     ]);
@@ -193,7 +193,7 @@ describe("a turn's tail (modeModels.<use>.tail)", () => {
   });
   const request = (state: RootState) => buildChatRequest(state).messages;
 
-  it("goes on the newest user message only: the system message and every earlier message are byte-identical with and without it", () => {
+  it("goes on the user messages only: the system message and the assistant messages are byte-identical with and without it", () => {
     const base = stateWith(false);
     const on = request(
       withConfig(base, { modeModels: { loop: { tail: "on" } } }),
@@ -203,9 +203,8 @@ describe("a turn's tail (modeModels.<use>.tail)", () => {
     );
     expect(on).toHaveLength(off.length);
     expect(on[0].role).toBe("system");
-    expect(JSON.stringify(on.slice(0, -1))).toBe(
-      JSON.stringify(off.slice(0, -1)),
-    );
+    expect(JSON.stringify(on[0])).toBe(JSON.stringify(off[0]));
+    expect(JSON.stringify(on[2])).toBe(JSON.stringify(off[2]));
     expect(renderChatMessage(off.at(-1)!)).toBe("item two prompt");
     expect(renderChatMessage(on.at(-1)!)).toBe(`item two prompt${TAIL}`);
     // Nothing is written back to the history
@@ -214,17 +213,36 @@ describe("a turn's tail (modeModels.<use>.tail)", () => {
     );
   });
 
+  it("keeps every request an extension of the one before: a message's bytes never change once sent", () => {
+    const state = withConfig(stateWith(false), {
+      modeModels: { loop: { tail: "on" } },
+    });
+    const { history } = state.session;
+    const earlier = buildChatRequest(state, history.slice(0, 1)).messages;
+    const later = buildChatRequest(state, history).messages;
+    expect(earlier).toHaveLength(2);
+    expect(JSON.stringify(later.slice(0, 2))).toBe(JSON.stringify(earlier));
+  });
+
   it("is off by default for Agent mode on a full-profile model, and follows modeModels.agent for a loop item", () => {
     const state = stateWith();
     const agent = {
       ...state,
       session: { ...state.session, loop: undefined },
     };
-    const whole = ["item one prompt", "item one done"];
-    expect(texts(agent)).toEqual([...whole, "item two prompt"]);
+    expect(texts(agent)).toEqual([
+      "item one prompt",
+      "item one done",
+      "item two prompt",
+    ]);
+    // On: every user message carries it, the assistant message does not
     expect(
       texts(withConfig(agent, { modeModels: { agent: { tail: "on" } } })),
-    ).toEqual([...whole, `item two prompt${TAIL}`]);
+    ).toEqual([
+      `item one prompt${TAIL}`,
+      "item one done",
+      `item two prompt${TAIL}`,
+    ]);
     expect(
       texts(withConfig(state, { modeModels: { agent: { tail: "off" } } })),
     ).toEqual(["item two prompt"]);

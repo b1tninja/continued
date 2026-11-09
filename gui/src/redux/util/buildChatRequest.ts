@@ -224,12 +224,13 @@ export function buildChatRequest(
     systemToolsFramework,
   );
 
-  // The use's tail (`modeModels.<use>.tail`): a one-line reminder on the
-  // newest user message of the request, after the Loop plan block when there
-  // is one. On that message only, so the system message and every earlier
-  // message are the same bytes with or without it and keep their cache
-  // entries; a per-use line in the system message would break the whole
-  // conversation's cache instead.
+  // The use's tail (`modeModels.<use>.tail`): a one-line reminder at the end
+  // of every user message of the request, after the Loop plan block on the
+  // item prompt. On every user message, not the newest only, so that each
+  // request is an extension of the one before: the system message is the
+  // same bytes with or without it, and a message's bytes never change once
+  // sent (core/llm/prompts/usePrompts.ts). A per-use line in the system
+  // message would break the whole conversation's cache instead.
   const messages = withTurnTail(
     constructed,
     use ? tailFor(state.config.config.modeModels, use, model.model) : undefined,
