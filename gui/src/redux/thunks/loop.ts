@@ -154,12 +154,16 @@ export const startLoopFromPlan = createAsyncThunk<
   { planFile: string },
   ThunkApiType
 >("loop/start", async ({ planFile }, { dispatch, getState, extra }) => {
-  await readPlanIntoTaskList(planFile, dispatch, getState, (uri) =>
-    extra.ideMessenger.ide.readFile(uri),
+  const { title } = await readPlanIntoTaskList(
+    planFile,
+    dispatch,
+    getState,
+    (uri) => extra.ideMessenger.ide.readFile(uri),
   );
   const plan = getState().session.taskPlan;
   if (!plan) return;
   const loop = createLoop(plan, {
+    ...(title ? { title } : {}),
     now: new Date(),
     sessionTokens: sessionTokens(getState()),
     // Plans and questions follow the levels chosen for them

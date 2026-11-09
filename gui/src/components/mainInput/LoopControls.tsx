@@ -141,9 +141,9 @@ export function LoopControls({
   const replan = loopReplanSetting(loop);
 
   return (
-    <details data-testid="loop-controls" className="mt-1 text-description">
+    <details data-testid="loop-controls" open className="mt-1 text-description">
       <summary className="cursor-pointer">
-        Items and limits · {describeLoopReplan(loop)}
+        Plan and limits · {describeLoopReplan(loop)}
       </summary>
       {taskPlan && (
         <ul className="m-0 mt-1 max-h-48 list-none overflow-y-auto p-0">

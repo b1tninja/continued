@@ -689,6 +689,8 @@ export function createLoop(
     autonomy?: LoopAutonomy;
     /** The Plan edits and Questions levels; the loop follows them */
     policy?: LoopPolicy;
+    /** The plan's title */
+    title?: string;
     /** false: items share the session's conversation (default: a fresh context) */
     freshContext?: boolean;
     /**
@@ -705,6 +707,7 @@ export function createLoop(
     options.strategy ?? (autonomy ? defaultLoopStrategy(autonomy) : undefined);
   return {
     ...(options.policy ? { policy: options.policy } : {}),
+    ...(options.title ? { title: options.title } : {}),
     ...(strategy ? { strategy } : {}),
     ...(options.strategy ? { strategyPicked: true } : {}),
     ...(strategy === "check-in" ? { doneSinceReplan: 0 } : {}),

@@ -127,6 +127,7 @@ function fallbackRender({ error, resetErrorBoundary }: any) {
 export function Chat() {
   // Loop mode: take the next step whenever nothing is running
   useLoopDriver();
+  const hasLoop = useAppSelector((state) => !!state.session.loop);
   useApplyModeModel();
   const dispatch = useAppDispatch();
   const ideMessenger = useContext(IdeMessengerContext);
@@ -549,7 +550,8 @@ export function Chat() {
         <ColdCacheNotice />
         <CachingOffNotice />
         <LargeMessageNotice />
-        <TaskListPanel />
+        {/* A loop shows its own plan in its panel */}
+        {!hasLoop && <TaskListPanel />}
         <LoopInbox />
         <QuestionPanel />
         <QueuedMessages

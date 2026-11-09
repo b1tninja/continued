@@ -196,6 +196,32 @@ beforeEach(() => {
 });
 
 describe("Loop mode", () => {
+  test("a loop is one card in the Loops panel, named by its plan, with the plan inside it", async () => {
+    const h = await setup(["Pick the grammar", "Write the lexer"]);
+    h.turns.push(
+      ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
+      finish("waiting", "needs the grammar choice"),
+      finish("done", "lexer written"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+
+    const panel = document.querySelector("[data-testid=loops-panel]")!;
+    expect(panel.textContent).toContain("Loops");
+    // Named by its plan, not just "Loop"
+    expect(
+      panel.querySelector("[data-testid=loop-status]")!.textContent,
+    ).toContain("Build the parser");
+    // The plan is in the loop's card, shown open
+    const controls = panel.querySelector<HTMLDetailsElement>(
+      "[data-testid=loop-controls]",
+    )!;
+    expect(controls.open).toBe(true);
+    expect(controls.textContent).toContain("Pick the grammar");
+    // And not a second time in a separate task list
+    expect(document.querySelector("[data-testid=task-list-panel]")).toBeNull();
+  });
+
   test("a held question with choices shows them in the Questions panel, and a choice answers it", async () => {
     const h = await setup(["Pick the grammar"]);
     h.turns.push(

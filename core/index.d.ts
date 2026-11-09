@@ -655,6 +655,8 @@ export interface LoopState {
   autonomy?: LoopAutonomy;
   /** The Plan edits and Questions levels in force; see LoopPolicy */
   policy?: LoopPolicy;
+  /** The plan's title, to name the loop in its panel */
+  title?: string;
   /** Missing on loops saved before strategies: treated as "finish" */
   strategy?: LoopStrategy;
   /**
