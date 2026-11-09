@@ -110,13 +110,18 @@ const TAILORED_PROMPT_MODELS = /qwen3[-._]?coder|coder-next|qwen3[-._]?next/i;
  */
 export const PROMPT_PROFILE_ENV = "CONTINUE_PROMPT_PROFILE";
 
-const PROFILES: readonly PromptProfile[] = ["full", "short", "tailored"];
+/** The built-in texts, by the names config and the override know them by. */
+export const PROMPT_PROFILES: readonly PromptProfile[] = [
+  "full",
+  "short",
+  "tailored",
+];
 
 /** The environment override, when the runtime has one (not the browser). */
 function promptProfileOverride(): PromptProfile | undefined {
   if (typeof process === "undefined" || !process.env) return undefined;
   const value = process.env[PROMPT_PROFILE_ENV];
-  return PROFILES.find((profile) => profile === value);
+  return PROMPT_PROFILES.find((profile) => profile === value);
 }
 
 export function promptProfile(model: string | undefined): PromptProfile {

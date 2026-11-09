@@ -4,10 +4,13 @@ import {
   actTurn,
   actTurnFor,
   actTurnShort,
+  actTurnTailored,
   IDE_TURN_TOOL_NAMES,
   planTurn,
   planTurnFor,
   planTurnShort,
+  planTurnTailored,
+  PROMPT_PROFILES,
   PromptProfile,
   TurnToolNames,
 } from "./turns";
@@ -15,12 +18,13 @@ import {
 /**
  * Which system prompt a use gets (`modeModels.<use>.prompt`). The model and
  * the prompt are one decision: a small model on Loop items wants the short
- * turn text, a strong one planning wants the full text, and a team may want
- * its own text for a use. Design: plans/policy-areas.md, docs/reference.mdx.
+ * turn text, a strong one planning wants the full text, a Qwen coder wants
+ * the tailored one, and a team may want its own text for a use. Design:
+ * plans/policy-areas.md, docs/reference.mdx.
  */
 
-/** The two built-in texts a use can ask for by name. */
-export const PROMPT_PROFILES: readonly PromptProfile[] = ["full", "short"];
+/** The built-in texts a use can ask for by name: full, short, tailored. */
+export { PROMPT_PROFILES };
 
 /**
  * A use's prompt, resolved: one of the built-in profiles, or the text of a
@@ -98,6 +102,7 @@ export function actTurnTextFor(
   if (choice?.text !== undefined) return choice.text;
   if (choice?.profile === "short") return actTurnShort(names);
   if (choice?.profile === "full") return actTurn(names);
+  if (choice?.profile === "tailored") return actTurnTailored(model, names);
   return actTurnFor(model, names);
 }
 
@@ -110,5 +115,6 @@ export function planTurnTextFor(
   if (choice?.text !== undefined) return choice.text;
   if (choice?.profile === "short") return planTurnShort(names);
   if (choice?.profile === "full") return planTurn(names);
+  if (choice?.profile === "tailored") return planTurnTailored(model, names);
   return planTurnFor(model, names);
 }

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { actTurn, actTurnShort, planTurn, planTurnShort } from "./turns";
+import {
+  actTurn,
+  actTurnShort,
+  actTurnTailored,
+  planTurn,
+  planTurnShort,
+  planTurnTailored,
+} from "./turns";
 import {
   actTurnTextFor,
   planTurnTextFor,
@@ -83,6 +90,15 @@ describe("the turn text for a choice", () => {
 
   it("with no choice the model id decides", () => {
     expect(actTurnTextFor("claude-sonnet", undefined)).toBe(actTurn());
-    expect(planTurnTextFor("qwen3-coder", undefined)).toBe(planTurnShort());
+    expect(planTurnTextFor("qwen3-coder", undefined)).toBe(
+      planTurnTailored("qwen3-coder"),
+    );
+    expect(planTurnTextFor("qwen3-32b", undefined)).toBe(planTurnShort());
+  });
+
+  it("a named tailored profile applies to any model", () => {
+    expect(actTurnTextFor("claude-sonnet", { profile: "tailored" })).toBe(
+      actTurnTailored("claude-sonnet"),
+    );
   });
 });
