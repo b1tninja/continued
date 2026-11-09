@@ -55,14 +55,14 @@ function stateWith(
 }
 
 describe("the task list in the request", () => {
-  it("is made in Plan mode only: Agent mode gets it only for a plan's list", () => {
+  it("is offered only to keep a plan's list in Agent mode: Plan mode makes it with present_plan", () => {
     const names = (mode: RootState["session"]["mode"]) =>
       selectActiveTools(stateWith(mode)).map((t) => t.function.name);
     expect(names("agent")).not.toContain("task_list");
     expect(
       selectActiveTools(stateWith("agent", plan)).map((t) => t.function.name),
     ).toContain("task_list");
-    expect(names("plan")).toContain("task_list");
+    expect(names("plan")).not.toContain("task_list");
     expect(names("chat")).not.toContain("task_list");
     expect(names("background")).not.toContain("task_list");
   });

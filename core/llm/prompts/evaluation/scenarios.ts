@@ -91,13 +91,17 @@ const ACT_TOOLS: Tool[] = [
   taskListTool,
 ];
 
-/** Plan mode keeps the read-only built-ins, present_plan and task_list. */
+/**
+ * Plan mode offers the read-only built-ins and present_plan, and not the task
+ * list: present_plan's to-dos become it (gui selectActiveTools, the CLI's
+ * tool list). Offered the list as well, Nova 2 Lite and Qwen3-Coder-30B sent
+ * it in place of the plan in the first runs of this eval (2026-11-08).
+ */
 const PLAN_TOOLS: Tool[] = [
   readFileTool,
   lsTool,
   grepSearchTool,
   presentPlanTool,
-  taskListTool,
 ];
 
 const STRINGS_JS = `export function slugify(text) {
@@ -367,7 +371,7 @@ const PLAN_RESERVED_CHOICE: TurnScenario = {
 const PLAN_NO_TASK_LIST: TurnScenario = {
   id: "plan-no-task-list",
   kind: "plan",
-  what: "task_list is offered but the turn is a plan: the reply calls present_plan and never task_list.",
+  what: "A change to an existing file, planned with the tools Plan mode offers (no task_list): the reply calls present_plan, and would fail if a task list were made or the to-dos sent any other way.",
   messages: [
     user(
       "Plan adding a `pad(text, width)` export to src/strings.js that right-pads with spaces, with a test in test/pad.test.js. Present the plan when it is ready.",

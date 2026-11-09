@@ -26,6 +26,15 @@ async function postJson(
   return res.json();
 }
 
+/**
+ * The provider's stop reason on a `usage` field, the way core's Bedrock class
+ * reports it (`usage.response.stopReason`), so the runner reads one shape.
+ */
+function usageWithStop(usage: any, stopReason: unknown) {
+  if (typeof stopReason !== "string" || !stopReason) return {};
+  return { usage: { ...(usage ?? {}), response: { stopReason } } };
+}
+
 function textOf(content: ChatMessage["content"]): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
@@ -72,7 +81,7 @@ export function openAiCompatible(opts: {
           return { role: m.role, content: textOf(m.content) };
         }),
         temperature: options?.temperature ?? 0,
-        max_tokens: options?.maxTokens ?? 1500,
+        max_tokens: options?.maxTokens ?? 4000,
       };
       if (options?.tools?.length) {
         body.tools = options.tools.map((t: Tool) => ({
@@ -90,7 +99,8 @@ export function openAiCompatible(opts: {
         body,
         signal,
       );
-      const message = data.choices?.[0]?.message ?? {};
+      const choice = data.choices?.[0] ?? {};
+      const message = choice.message ?? {};
       const toolCalls: ToolCallDelta[] = (message.tool_calls ?? []).map(
         (c: any) => ({
           id: c.id,
@@ -105,6 +115,7 @@ export function openAiCompatible(opts: {
         role: "assistant",
         content: message.content ?? "",
         ...(toolCalls.length ? { toolCalls } : {}),
+        ...usageWithStop(data.usage, choice.finish_reason),
       };
     },
   };
@@ -169,7 +180,7 @@ export function anthropicMessages(opts: {
         system,
         messages: converted,
         temperature: options?.temperature ?? 0,
-        max_tokens: options?.maxTokens ?? 1500,
+        max_tokens: options?.maxTokens ?? 4000,
       };
       if (options?.tools?.length) {
         body.tools = options.tools.map((t: Tool) => ({
@@ -199,6 +210,7 @@ export function anthropicMessages(opts: {
           .map((p) => p.text)
           .join(""),
         ...(toolCalls.length ? { toolCalls } : {}),
+        ...usageWithStop(data.usage, data.stop_reason),
       };
     },
   };
@@ -231,13 +243,16 @@ export function bedrockConverse(opts: {
     chat: async (messages: ChatMessage[], signal, options) => {
       const llm = await load();
       let content = "";
+      let usage: any;
       const toolCalls: ToolCallDelta[] = [];
       for await (const chunk of llm.streamChat(messages, signal, {
         tools: options?.tools,
         temperature: options?.temperature ?? 0,
-        maxTokens: options?.maxTokens ?? 1500,
+        maxTokens: options?.maxTokens ?? 4000,
       })) {
         if (chunk.role !== "assistant") continue;
+        // The Bedrock class puts the stop reason on the usage chunk.
+        if (chunk.usage) usage = chunk.usage;
         content += textOf(chunk.content);
         for (const delta of chunk.toolCalls ?? []) {
           // A block start carries the id and name; later fragments of the
@@ -268,6 +283,7 @@ export function bedrockConverse(opts: {
         role: "assistant",
         content,
         ...(toolCalls.length ? { toolCalls } : {}),
+        ...(usage ? { usage } : {}),
       };
     },
   };

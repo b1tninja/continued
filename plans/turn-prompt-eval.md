@@ -22,7 +22,9 @@ A plan conversation already contains the research: every seed file read, every d
 
 The bar, fixed before the first run (`qualityBar.ts`), applies to each profile: no reserved choice decided or dropped, `present_plan` in at least 90% of plan scenarios, a tool call in at least 90% of act scenarios, no refused call retried or routed around, median latency per reply at most 10 s. `--stub oracle` meets it; `--stub text-only` fails it; both are vitest cases, so the harness is checked in CI without a model.
 
-Not part of the bar, shown as a note: a `present_plan` call with more than 400 characters of text beside it (the plan written twice, against the turn text's "do not repeat the plan after the call").
+Not part of the bar, shown as a note: a `present_plan` call with more than 400 characters of text beside it (the plan written twice, against the turn text's "do not repeat the plan after the call"). Also counted and shown, not in the bar: replies cut off at the output budget (4,000 tokens, the benchmark's default for a small model); a cut-off reply's text is not scored as an answer.
+
+Plan scenarios offer what Plan mode offers: the read-only tools and `present_plan`, no `task_list`. The first runs offered `task_list` too, and that is where the Nova and Qwen task-list failures below came from (section 4).
 
 ## 3. Nova 2 Lite, 2026-11-08
 
@@ -46,9 +48,19 @@ What the runs show:
 4. **Every presenting reply writes the plan in text as well.** Ten of ten `present_plan` calls came with 950 to 3,100 characters of the same plan in the text content. The IDE shows both. This is output cost and a duplicate on screen, not a correctness failure, so it is a note today.
 5. **Variance at n=1 is real.** The short profile's plan-presents and plan-no-task-list flipped between runs at temperature 0. One run says little; the bar should be read over three.
 
-## 4. Follow-ups, in order
+## 4. K8, same day: what moved the numbers and what did not
 
-1. **Reorder the full plan turn** so the reserved-choice rule comes before the assume fallback, as the short text already does, then re-run `eval:turns` on Nova 2 Lite and on one Claude and one Qwen row to check nothing else moved. The eval is the check that this edit (and every later prompt edit) is measured, not argued.
+Three changes were tried against the section 3 result, each measured with the eval (reports under `k8/` in the session notes folder: `before`, `after`, `notasklist`, `final`).
+
+1. **Wording in the plan turns: no effect, reverted.** The full text already has the reserved-choice rule before the assume fallback, so the "reorder" premise was wrong. Naming the cues ("that is my call", "I have not decided"), saying that writing the pick down as an assumption is not an option, saying the to-dos go in the `present_plan` call and never in `task_list`, and restating the rule at the finish changed nothing: Nova still wrote "return a readable" as an assumption under both texts, Qwen3-Coder-30B still called `task_list` in four of six plan replies, Haiku 4.5 still met the bar. The edit was reverted; the text that ships is the text that was measured.
+2. **Withholding `task_list` in Plan mode: fixed Qwen.** The CLI already did this (`extensions/cli/src/tools/index.tsx`, from `research-bedrock-families.md` item 3); the GUI still offered it. With the GUI matching the CLI (`gui/src/redux/selectors/selectActiveTools.ts`) and the eval offering Plan mode's real tool set, Qwen3-Coder-30B went from `present_plan` in two of six plan replies to six of six under the full text in two runs, with the reserved choice in `decisions` both times; under the short text it met the bar in one run and decided the reserved choice as an assumption in the other. Qwen takes three rounds of reads before it presents.
+3. **A larger output budget and stop reasons: uncovered Nova's real failure.** With `task_list` gone, Nova 2 Lite's plan replies after two rounds of reads became deliberation in plain text ("Okay, let's see. The user wants..."): 6,500 characters at a 1,500-token budget, 17,000 at 4,000, cut off at `max_tokens` or ended with no call. Core sends Nova 2 no `reasoningConfig` unless reasoning is switched on (`bedrockReasoningFields`), so the model reasons in its content. This is not a prompt-text failure and the eval now reports it as a cut-off reply rather than "text only". It belongs to K2: probe `reasoningConfig: { type: "disabled" }` for Nova 2, and the redacted-reasoning path, before any more prompt work on Nova.
+
+Haiku 4.5 met the bar under both texts in every run, so the bar is attainable and the scenarios are not impossible. After K8 the results stand at: Haiku 4.5 meets the bar (both texts); Qwen3-Coder-30B meets it under the full text (two of two runs) and under the short text in one of two; Nova 2 Lite does not, for the reason in item 3.
+
+## 5. Follow-ups, in order
+
+1. **Nova 2 reasoning in content (K2).** Probe `reasoningConfig: { type: "disabled" }` and `enabled` with a budget on Nova 2 Lite with the eval's plan conversations; if disabled stops the plain-text deliberation, core sends it by default for Nova 2 when reasoning is off. Then re-run `eval:turns` on Nova.
 2. **`--runs N` and pass counts per cell.** Report "2/3" per scenario and profile; the bar lines become rates over runs. Three runs of ten requests on Nova is still under a cent.
 3. **Mid-task act fixtures.** A conversation that is several tool rounds in, where the next step is decided and the failure is to summarise and stop ("Plan, then build is not a stopping point"); an act turn with a task list shown that must call `task_list`; a plan turn asked to "do the work" that must plan, not edit; a Loop item turn that must end with `finish_item`.
 4. **Go through core's provider classes for every provider**, as the Bedrock adapter does, so the request is built the way the IDE builds it (tool conversion, caching fields, family quirks) and the eval measures the real request. The hand-written OpenAI-compatible and Anthropic adapters are then only for servers core has no class for.

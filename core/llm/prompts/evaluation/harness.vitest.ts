@@ -35,13 +35,17 @@ describe("turn scenarios", () => {
     for (const s of TURN_SCENARIOS) expect(requestOf(s)).not.toBe("");
   });
 
-  it("offer present_plan and task_list only where the turn would", () => {
+  it("offer present_plan in plan turns only, the task list in act turns only", () => {
     for (const s of TURN_SCENARIOS) {
       const names = s.tools.map((t) => t.function.name);
       expect(names.includes(BuiltInToolNames.PresentPlan), s.id).toBe(
         s.kind === "plan",
       );
-      expect(names, s.id).toContain(BuiltInToolNames.TaskList);
+      // Plan mode does not offer the task list (gui selectActiveTools, the
+      // CLI's tool list): present_plan's to-dos become it.
+      expect(names.includes(BuiltInToolNames.TaskList), s.id).toBe(
+        s.kind === "act",
+      );
       if (s.kind === "plan") {
         for (const t of s.tools)
           expect(t.readonly, `${s.id} ${t.function.name}`).toBe(true);
@@ -262,6 +266,29 @@ describe("scoring one reply", () => {
       ms: 1,
     });
     expect(short.warnings).toEqual([]);
+  });
+
+  it("a reply cut off at the output budget says so and its text is not scored as an answer", () => {
+    const r = scoreReply(reserved, "full", {
+      text: "Okay, let's see. The user wants a formatDate helper. I will use ISO because",
+      calls: [],
+      ms: 1,
+      stopReason: "max_tokens",
+    });
+    expect(r.truncated).toBe(true);
+    expect(r.failures[0]).toMatch(/cut off at the output budget/);
+    expect(r.failures.join()).not.toMatch(
+      /decides the reserved choice in text/,
+    );
+    expect(r.failures.join()).toMatch(/never reached decisions/);
+    expect(r.calledPresentPlan).toBe(false);
+    const fine = scoreReply(reserved, "full", {
+      text: "",
+      calls: [],
+      ms: 1,
+      stopReason: "end_turn",
+    });
+    expect(fine.truncated).toBe(false);
   });
 
   it("a task list while planning fails", () => {

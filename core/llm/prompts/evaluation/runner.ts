@@ -41,6 +41,10 @@ export interface ReplyResult {
   error?: string;
   /** Rounds of read-only calls answered from the seed before this reply (plan scenarios). */
   readRounds: number;
+  /** The provider's stop reason, when the adapter reports one. */
+  stopReason?: string;
+  /** The reply hit the output budget before it finished (stop reason max_tokens or length). */
+  truncated: boolean;
   text: string;
   calls: ScoredCall[];
   /** The reply calls at least one tool (any tool, present_plan included). */
@@ -107,12 +111,19 @@ export function scoreReply(
     ms: number;
     error?: string;
     readRounds?: number;
+    stopReason?: string;
   },
 ): ReplyResult {
   const { text, calls } = reply;
   const failures: string[] = [];
   const warnings: string[] = [];
   if (reply.error) failures.push(`model call failed: ${reply.error}`);
+  const truncated = isTruncated(reply.stopReason);
+  if (truncated) {
+    failures.push(
+      `reply cut off at the output budget (stop reason ${reply.stopReason}, ${text.length} chars of text)`,
+    );
+  }
 
   const calledTool = calls.length > 0;
   const presentPlanCalls = calls.filter(
@@ -157,7 +168,8 @@ export function scoreReply(
     }
   }
 
-  for (const forbidden of scenario.expect.forbidText ?? []) {
+  // A cut-off reply's text is not an answer, so its wording is not scored.
+  for (const forbidden of truncated ? [] : (scenario.expect.forbidText ?? [])) {
     const m = forbidden.pattern.exec(text);
     if (m) failures.push(`${forbidden.label}: "${m[0]}"`);
   }
@@ -192,7 +204,7 @@ export function scoreReply(
       // Decided in text, or nothing presented: either way the choice did not
       // reach the person as a decision.
       reservedDecided = true;
-      const decided = reserved.decided.exec(text);
+      const decided = truncated ? null : reserved.decided.exec(text);
       failures.push(
         decided
           ? `the reply decides the reserved choice in text: "${decided[0]}"`
@@ -207,6 +219,8 @@ export function scoreReply(
     ms: reply.ms,
     error: reply.error,
     readRounds: reply.readRounds ?? 0,
+    stopReason: reply.stopReason,
+    truncated,
     text,
     calls,
     calledTool,
@@ -280,6 +294,14 @@ export function answerRead(
   return hits.length ? hits.join("\n") : `No matches for ${query}.`;
 }
 
+/** The output budget was hit: Bedrock and Anthropic say max_tokens, OpenAI says length. */
+export function isTruncated(stopReason: string | undefined): boolean {
+  return !!stopReason && /max_tokens|length/i.test(stopReason);
+}
+
+/** The reply's output budget: the benchmark's default for a small model (bench/matrix.yaml). */
+export const REPLY_MAX_TOKENS = 4000;
+
 function onlyReads(calls: ScoredCall[]): boolean {
   return calls.length > 0 && calls.every((c) => READ_TOOLS.has(c.name));
 }
@@ -322,6 +344,7 @@ export async function runTurnsEval(
     raw: ToolCallDelta[];
     ms: number;
     error?: string;
+    stopReason?: string;
   }> {
     const controller = new AbortController();
     const timer = setTimeout(
@@ -333,14 +356,19 @@ export async function runTurnsEval(
       const message = await model.chat(messages, controller.signal, {
         tools: scenario.tools,
         temperature: 0,
-        maxTokens: 1500,
+        maxTokens: REPLY_MAX_TOKENS,
       });
       const raw = message.role === "assistant" ? (message.toolCalls ?? []) : [];
+      const stopReason =
+        message.role === "assistant"
+          ? (message.usage as any)?.response?.stopReason
+          : undefined;
       return {
         text: textOf(message.content),
         calls: parseCalls(raw),
         raw,
         ms: Date.now() - t0,
+        ...(typeof stopReason === "string" ? { stopReason } : {}),
       };
     } catch (e: any) {
       return {
@@ -395,6 +423,7 @@ export async function runTurnsEval(
         text: reply.text,
         calls: reply.calls,
         error: reply.error,
+        stopReason: reply.stopReason,
         // The scored reply's own time: the bar is per reply, not per scenario.
         ms: reply.ms,
         readRounds,
@@ -420,6 +449,8 @@ export interface ProfileSummary {
   reservedDecided: string[];
   refusedRetried: string[];
   errors: string[];
+  /** Replies cut off at the output budget. */
+  truncated: string[];
   medianLatencyMs: number | undefined;
   failures: string[];
   passed: boolean;
@@ -462,6 +493,7 @@ export function summarizeProfile(
     .filter((r) => r.retriedRefused)
     .map((r) => r.scenario.id);
   const errors = rs.filter((r) => r.error).map((r) => r.scenario.id);
+  const truncated = rs.filter((r) => r.truncated).map((r) => r.scenario.id);
   const medianLatencyMs = median(rs.map((r) => r.ms));
 
   const failures: string[] = [];
@@ -507,6 +539,7 @@ export function summarizeProfile(
     reservedDecided,
     refusedRetried,
     errors,
+    truncated,
     medianLatencyMs,
     failures,
     passed: failures.length === 0,
@@ -563,6 +596,7 @@ export function formatReport(
       `| Refused calls retried or routed around | ${p.refusedRetried.length} | max ${bar.refusedRetriedMax} |`,
       `| Median latency per reply | ${p.medianLatencyMs === undefined ? "n/a" : `${Math.round(p.medianLatencyMs)} ms`} | max ${bar.medianLatencyMsMax} ms |`,
       `| Model calls that failed | ${p.errors.length} | not part of the bar |`,
+      `| Replies cut off at the output budget (${REPLY_MAX_TOKENS} tokens) | ${p.truncated.length} | not part of the bar |`,
       "",
       "| Scenario | Kind | Reads | Called | Result |",
       "| --- | --- | --- | --- | --- |",

@@ -47,12 +47,15 @@ export const selectActiveTools = createSelector(
       return [];
     } else {
       const enabledTools = tools.filter((tool) => {
-        // Only Plan mode makes a list. Agent mode acts: it gets the tool only
-        // to keep a list a plan left. While the loop runs an item, the loop
-        // keeps the list.
+        // Plan mode does not offer the task list: present_plan's to-dos
+        // become the list, and a model offered both sent the list instead of
+        // the plan (Nova 2 Lite and Qwen3-Coder-30B in the turn-prompt eval,
+        // plans/turn-prompt-eval.md; the CLI has withheld it since
+        // research-bedrock-families.md item 3). Agent mode acts: it gets the
+        // tool only to keep a list a plan left. While the loop runs an item,
+        // the loop keeps the list.
         if (
           tool.function.name === BuiltInToolNames.TaskList &&
-          mode !== "plan" &&
           !(mode === "agent" && hasTaskList && !loopItemRunning)
         ) {
           return false;
