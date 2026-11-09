@@ -66,7 +66,6 @@ Work that is open, unmeasured or not finished. A row leaves this table when its 
 ## Next
 
 Tracks A to O. They share little code, so different people can build them in parallel; where one needs another, the Depends on column says so. Each track is a series of small PRs, one concern per PR.
-Tracks A to N. They share little code, so different people can build them in parallel; where one needs another, the Depends on column says so. Each track is a series of small PRs, one concern per PR.
 
 ### Track A: model and provider setup
 
