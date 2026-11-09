@@ -1,4 +1,3 @@
-import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import type { LoopAutonomy, LoopQuestion, LoopStrategy } from "core";
 import {
   formatLoopStatus,
@@ -13,6 +12,7 @@ import { policyLevelLabel } from "core/tools/permissions/policy";
 import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { cancelStream } from "../../redux/thunks/cancelStream";
+import { LoopPhaseMark } from "../LoopPhaseMark";
 import { LoopControls } from "./LoopControls";
 import {
   answerLoopQuestion,
@@ -52,7 +52,7 @@ export function LoopInbox() {
       className="mx-1 mb-1 min-w-0 rounded border border-solid border-border px-2 py-1 text-xs"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <ArrowPathIcon className="h-3 w-3 shrink-0 text-description" />
+        <LoopPhaseMark className="h-3.5 w-3.5 shrink-0" label />
         <span
           data-testid="loop-status"
           className="min-w-0 flex-1 basis-40 break-words text-description"
