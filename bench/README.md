@@ -48,14 +48,14 @@ node bench/score.mjs /tmp/bench/haiku
 prints the serve command without starting anything; `--list` prints the
 scenarios and rows. `node bench/runner.mjs --help` has every option.
 
-Settings: `--profile full|short` sets `CONTINUE_PROMPT_PROFILE` for the serve
-process so either turn text can be measured on any model; `--tail on|off|<text>`
+Settings: `--profile full|short|tailored` sets `CONTINUE_PROMPT_PROFILE` for the serve
+process so any of the three turn texts can be measured on any model; `--tail on|off|<text>`
 writes `modeModels.loop.tail` and `modeModels.agent.tail` into the run's
 `config.yaml` (the one-line reminder appended to every user message of a
 request, `core/llm/prompts/usePrompts.ts`: `on` for the built-in line of the
 turn kind, `off` for none, a text of your own as given), so the line can be
 measured with and without on the same model; unset, the CLI's own default
-applies (on for Loop items and the short profile, off elsewhere), and the
+applies (on for Loop items and the short and tailored profiles, off elsewhere), and the
 result records `cli-default`. The tail is part of the config hash, so two arms
 never compare as the same configuration. `--effort` is
 written into config the way the row's `effort` field says (Bedrock
