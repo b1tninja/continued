@@ -11,9 +11,12 @@ import path from "path";
 
 import {
   argsOf,
+  loopStatsOf,
   money,
   nameOf,
+  nudgeKindsOf,
   outputOf,
+  prefixChurnOf,
   readJson,
   slug,
   toolCalls,
@@ -23,8 +26,9 @@ import {
 
 const HELP = `Usage: node bench/score.mjs <results-dir> [--out <dir>] [--quiet]
 
-Reads every <results-dir>/<model>/<scenario>/run<N>/result.json (and its state.json),
-evaluates the scenario's expectations, and writes to --out (default <results-dir>/scorecards):
+Reads every <results-dir>/<model>/<scenario>/run<N>/result.json (with its state.json and
+the request dumps under requests/), evaluates the scenario's expectations, and writes to
+--out (default <results-dir>/scorecards):
 
   records.jsonl          one record per run (the fields of the plan's "Scoring" section)
   scorecard-<model>.md   per model: aggregate columns, one row per scenario, what broke
@@ -707,7 +711,7 @@ function evaluate(result, history) {
   return checks;
 }
 
-function recordOf(result, checks) {
+function recordOf(result, checks, history = [], prefixChurn = null) {
   const counted = checks.filter((c) => !c.known);
   const verdicts = checks
     .filter((c) => c.extra?.verdict)
@@ -736,6 +740,7 @@ function recordOf(result, checks) {
     modelRow: result.modelRow,
     provider: result.provider,
     profile: result.profile,
+    tail: result.tail ?? "cli-default",
     levels: result.levels ?? {},
     settings: result.settings,
     scenario: result.scenario,
@@ -751,6 +756,8 @@ function recordOf(result, checks) {
     nudges:
       (result.nudges?.harness ?? 0) +
       Object.values(result.nudges?.cli ?? {}).reduce((a, b) => a + b, 0),
+    nudgeKinds: nudgeKindsOf(result),
+    loop: loopStatsOf(result, history),
     repeatsRefused: result.repeatsRefused ?? 0,
     invalidCalls: result.invalidCalls ?? 0,
     truncations: result.truncations ?? 0,
@@ -770,6 +777,7 @@ function recordOf(result, checks) {
     decisions,
     tokens: result.tokens ?? { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 },
     cacheReadRatio: result.cacheReadRatio ?? 0,
+    prefixChurn,
     cost: result.cost ?? { list: null, cli: null, estimated: true },
     wallSeconds: result.wallSeconds ?? 0,
     commit: result.commit,
@@ -789,6 +797,42 @@ function recordOf(result, checks) {
 
 // ---------------------------------------------------------------------------
 // Aggregates and markdown
+
+/** The nudges of several runs added up by kind. */
+function sumNudgeKinds(records) {
+  const out = { harness: 0, act: 0, finishItem: 0, presentPlan: 0 };
+  for (const r of records)
+    for (const k of Object.keys(out)) out[k] += r.nudgeKinds?.[k] ?? 0;
+  return out;
+}
+
+/** The prefix churn of several runs: requests and churned requests added up, and the earliest break. */
+function sumPrefixChurn(records) {
+  const withDumps = records.filter((r) => r.prefixChurn);
+  const first = withDumps
+    .map((r) => r.prefixChurn.first)
+    .filter(Boolean)
+    .sort((a, b) => a.request - b.request)[0];
+  return {
+    runs: withDumps.length,
+    runsWithChurn: withDumps.filter((r) => r.prefixChurn.churned).length,
+    requests: withDumps.reduce((n, r) => n + r.prefixChurn.requests, 0),
+    churned: withDumps.reduce((n, r) => n + r.prefixChurn.churned, 0),
+    first: first ? { request: first.request, message: first.message } : null,
+  };
+}
+
+/** `3/57 @8:0`: churned over requests, and where the first break was (request:message). */
+function churnCell(c) {
+  if (!c || !c.runs) return "no dumps";
+  return `${c.churned}/${c.requests}${c.first ? ` @${c.first.request}:${c.first.message}` : ""}`;
+}
+
+/** `1.0 (0/3/0)`: the median total, then act, finish and plan nudges added up. */
+function nudgesCell(records) {
+  const k = sumNudgeKinds(records);
+  return `${fmt(median(records.map((r) => r.nudges)), 1)} (${k.act}/${k.finishItem}/${k.presentPlan})`;
+}
 
 function aggregate(records) {
   const by = (group) => records.filter((r) => r.group === group);
@@ -819,6 +863,7 @@ function aggregate(records) {
       runs: g.length,
       completion: pct(done(g).length, g.length),
       medianNudges: median(g.map((r) => r.nudges)),
+      nudgeKinds: sumNudgeKinds(g),
       medianTurns: median(g.map((r) => r.turns)),
       planStructure: pct(
         planDeps.reduce((n, r) => n + r.checksPassed, 0),
@@ -867,6 +912,7 @@ function aggregate(records) {
       listTotal: records.reduce((n, r) => n + (r.cost?.list ?? 0), 0),
     },
     cache: {
+      prefixChurn: sumPrefixChurn(records),
       meanReadRatio: records.length
         ? records.reduce((n, r) => n + (r.cacheReadRatio ?? 0), 0) /
           records.length
@@ -893,7 +939,7 @@ function scorecardMarkdown(modelRow, records, agg) {
   lines.push(`# Scorecard: ${modelRow} (${first.model})`);
   lines.push("");
   lines.push(
-    `Provider ${first.provider}; profile ${[...new Set(records.map((r) => r.profile))].join(", ")}; levels ${JSON.stringify(first.levels)}; settings ${JSON.stringify({ maxTokens: first.settings?.maxTokens, contextLength: first.settings?.contextLength, effort: first.settings?.effort })}.`,
+    `Provider ${first.provider}; profile ${[...new Set(records.map((r) => r.profile))].join(", ")}; tail ${[...new Set(records.map((r) => r.tail ?? "cli-default"))].map((t) => JSON.stringify(t)).join(", ")}; levels ${JSON.stringify(first.levels)}; settings ${JSON.stringify({ maxTokens: first.settings?.maxTokens, contextLength: first.settings?.contextLength, effort: first.settings?.effort })}.`,
   );
   lines.push(
     `Commit ${first.commit ?? "unknown"}; bundle ${first.bundle ?? "unknown"}; ${records.length} runs over ${agg.scenarios} scenarios.`,
@@ -920,6 +966,9 @@ function scorecardMarkdown(modelRow, records, agg) {
   );
   lines.push(
     `| Guidance: median nudges per run | ${fmt(agg.guidance.medianNudges, 1)} |`,
+  );
+  lines.push(
+    `| Guidance: nudges by kind, act / finish / plan (harness) | ${agg.guidance.nudgeKinds.act} / ${agg.guidance.nudgeKinds.finishItem} / ${agg.guidance.nudgeKinds.presentPlan} (${agg.guidance.nudgeKinds.harness}) |`,
   );
   lines.push(
     `| Guidance: median turns | ${fmt(agg.guidance.medianTurns, 1)} |`,
@@ -961,15 +1010,18 @@ function scorecardMarkdown(modelRow, records, agg) {
     `| Cache: mean within-session read ratio | ${pct(Math.round(agg.cache.meanReadRatio * 1000), 1000)}${agg.cache.strataReused !== null ? ` (Strata reused ${pct(Math.round(agg.cache.strataReused * 1000), 1000)})` : ""} |`,
   );
   lines.push(
+    `| Cache: prefix churn, requests not extending the one before / requests (first break request:message) | ${churnCell(agg.cache.prefixChurn)}${agg.cache.prefixChurn.runs ? `, in ${agg.cache.prefixChurn.runsWithChurn} of ${agg.cache.prefixChurn.runs} runs` : ""} |`,
+  );
+  lines.push(
     `| Accounting: CLI total vs list total | ${money(agg.efficiency.cliTotal)} vs ${money(agg.efficiency.listTotal)}${agg.efficiency.listTotal ? ` (CLI at ${pct(Math.round((agg.efficiency.cliTotal / agg.efficiency.listTotal) * 100), 100)} of list)` : ""} |`,
   );
   lines.push("");
   lines.push("## Scenarios");
   lines.push("");
   lines.push(
-    "| Scenario | Group | n | Outcomes | Checks (median passed/total) | Known | Nudges | Turns | Tokens in/out | Cost | Wall s |",
+    "| Scenario | Group | n | Outcomes | Checks (median passed/total) | Known | Nudges (act/finish/plan) | Turns | Tokens in/out | Cost | Wall s | Prefix churn |",
   );
-  lines.push("|---|---|---|---|---|---|---|---|---|---|---|");
+  lines.push("|---|---|---|---|---|---|---|---|---|---|---|---|");
   const byScenario = groupBy(records, (r) => r.scenario);
   for (const [scenario, rs] of Object.entries(byScenario).sort()) {
     const outcomes = Object.entries(groupBy(rs, (r) => r.outcome))
@@ -983,7 +1035,7 @@ function scorecardMarkdown(modelRow, records, agg) {
     const flag = rs.length < 3 ? " n<3" : "";
     const est = rs.some((r) => r.cost?.list === null) ? " ~" : "";
     lines.push(
-      `| ${scenario} | ${rs[0].group}${rs[0].area ? ` (${rs[0].area})` : ""} | ${rs.length}${flag} | ${outcomes} | ${fmt(passed, 1)}/${total} | ${known ? `${known} fail` : ""}${knownPass ? `${known ? ", " : ""}${knownPass} now pass` : ""} | ${fmt(median(rs.map((r) => r.nudges)), 1)} | ${fmt(median(rs.map((r) => r.turns)), 1)} | ${fmt(median(rs.map((r) => r.tokens.in)))}/${fmt(median(rs.map((r) => r.tokens.out)))} | ${money(cost)}${est} | ${fmt(median(rs.map((r) => r.wallSeconds)))} |`,
+      `| ${scenario} | ${rs[0].group}${rs[0].area ? ` (${rs[0].area})` : ""} | ${rs.length}${flag} | ${outcomes} | ${fmt(passed, 1)}/${total} | ${known ? `${known} fail` : ""}${knownPass ? `${known ? ", " : ""}${knownPass} now pass` : ""} | ${nudgesCell(rs)} | ${fmt(median(rs.map((r) => r.turns)), 1)} | ${fmt(median(rs.map((r) => r.tokens.in)))}/${fmt(median(rs.map((r) => r.tokens.out)))} | ${money(cost)}${est} | ${fmt(median(rs.map((r) => r.wallSeconds)))} | ${churnCell(sumPrefixChurn(rs))} |`,
     );
   }
   lines.push("");
@@ -1047,9 +1099,9 @@ function comparisonMarkdown(perModel) {
   );
   lines.push("");
   lines.push(
-    "| Model | Runs | Guidance completion | Median nudges | Compliance verdicts | Reaction | Safety prohibited | Median $ per completed | Median tokens in | Cache read ratio |",
+    "| Model | Runs | Guidance completion | Median nudges (act/finish/plan) | Compliance verdicts | Reaction | Safety prohibited | Median $ per completed | Median tokens in | Cache read ratio | Prefix churn |",
   );
-  lines.push("|---|---|---|---|---|---|---|---|---|---|");
+  lines.push("|---|---|---|---|---|---|---|---|---|---|---|");
   for (const [row, { records, agg }] of Object.entries(perModel).sort()) {
     const minRuns = Math.min(
       ...Object.values(groupBy(records, (r) => r.scenario)).map(
@@ -1058,7 +1110,7 @@ function comparisonMarkdown(perModel) {
     );
     const flag = minRuns < 3 ? " n<3" : "";
     lines.push(
-      `| ${row}${flag} | ${records.length} | ${agg.guidance.completion} | ${fmt(agg.guidance.medianNudges, 1)} | ${agg.compliance.verdictAgreement} | ${agg.compliance.reaction} | ${agg.safety.prohibitedActions} | ${money(agg.efficiency.medianCostPerCompleted)}${agg.efficiency.estimated ? " ~" : ""} | ${fmt(agg.efficiency.medianTokensInPerCompleted)} | ${pct(Math.round(agg.cache.meanReadRatio * 1000), 1000)} |`,
+      `| ${row}${flag} | ${records.length} | ${agg.guidance.completion} | ${fmt(agg.guidance.medianNudges, 1)} (${agg.guidance.nudgeKinds.act}/${agg.guidance.nudgeKinds.finishItem}/${agg.guidance.nudgeKinds.presentPlan}) | ${agg.compliance.verdictAgreement} | ${agg.compliance.reaction} | ${agg.safety.prohibitedActions} | ${money(agg.efficiency.medianCostPerCompleted)}${agg.efficiency.estimated ? " ~" : ""} | ${fmt(agg.efficiency.medianTokensInPerCompleted)} | ${pct(Math.round(agg.cache.meanReadRatio * 1000), 1000)} | ${churnCell(agg.cache.prefixChurn)} |`,
     );
   }
   lines.push("");
@@ -1134,7 +1186,8 @@ function main() {
     if (result.turnError && result.outcome === "done")
       result.outcome = "failed";
     const checks = evaluate(result, history);
-    records.push(recordOf(result, checks));
+    const churn = prefixChurnOf(path.join(path.dirname(file), "requests"));
+    records.push(recordOf(result, checks, history, churn));
   }
   if (!records.length)
     throw new Error(`Only dry runs under ${dir}; nothing to score`);

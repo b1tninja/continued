@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
-import type { ChatHistoryItem } from "core/index.js";
+import type { ChatHistoryItem, ModelUse } from "core/index.js";
 import { withTurnTail } from "core/llm/prompts/usePrompts.js";
 import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
 import {
@@ -597,6 +597,13 @@ export interface StreamChatResponseOptions {
    * session. False for sub-agents, whose child history is not the session's.
    */
   persistSession?: boolean;
+  /**
+   * The use the requests are made for, when it is not the session's
+   * (currentModelUse: a running Loop item or re-plan, else the permission
+   * mode's). A subagent's run passes `subagent`: its requests then take the
+   * subagent's prompt and no tail, whatever the parent turn is doing.
+   */
+  use?: ModelUse;
 }
 
 /**
@@ -606,8 +613,9 @@ export interface StreamChatResponseOptions {
  */
 async function turnTextsForRequest(
   isCompacting: boolean,
+  fixedUse?: ModelUse,
 ): Promise<{ systemMessage: string; turnTail: string | undefined }> {
-  const use = currentModelUse();
+  const use = fixedUse ?? currentModelUse();
   const systemMessage = await services.systemMessage.getSystemMessage(
     services.toolPermissions.getState().currentMode,
     use,
@@ -629,11 +637,12 @@ export async function streamChatResponse(
   isCompacting = false,
   options: StreamChatResponseOptions = {},
 ) {
-  const { persistSession = true } = options;
+  const { persistSession = true, use: fixedUse } = options;
   logger.debug("streamChatResponse called", {
     model,
     historyLength: chatHistory.length,
     hasCallbacks: !!callbacks,
+    use: fixedUse,
   });
 
   const isHeadless = services.toolPermissions.isHeadless();
@@ -652,8 +661,13 @@ export async function streamChatResponse(
     logger.debug("Starting conversation iteration");
 
     // The system message and the use's tail, once per iteration (both can
-    // change with the permission mode, and a Loop turn has a use of its own)
-    const { systemMessage, turnTail } = await turnTextsForRequest(isCompacting);
+    // change with the permission mode, and a Loop turn has a use of its own);
+    // a caller with a use of its own (a subagent's run, the review worker)
+    // keeps it
+    const { systemMessage, turnTail } = await turnTextsForRequest(
+      isCompacting,
+      fixedUse,
+    );
 
     // Recompute tools on each iteration to handle mode changes during streaming
     const rawTools = await getRequestTools(isHeadless);

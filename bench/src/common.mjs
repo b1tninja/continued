@@ -426,3 +426,135 @@ export function turnErrorOf(history) {
   const text = finalText(history);
   return /^Error:/.test(text) ? text.slice(0, 400) : null;
 }
+
+// ---------------------------------------------------------------------------
+// The tail's columns (plans/ROADMAP.md row I6): nudges by kind, requests per
+// item attempt, and prefix churn from the request dumps.
+
+/** The nudges of a run by kind: the harness's own, and the CLI's three (core/util/turnEnd.ts). */
+export function nudgeKindsOf(result) {
+  const cli = result?.nudges?.cli ?? {};
+  return {
+    harness: result?.nudges?.harness ?? 0,
+    act: cli.act ?? 0,
+    finishItem: cli.finishItem ?? 0,
+    presentPlan: cli.presentPlan ?? 0,
+  };
+}
+
+/** The Loop's item prompt opens an attempt (core/util/loopMode.ts). */
+const ITEM_START = /^Work on this item of the plan/;
+/** A user message that continues the attempt instead of starting a turn of its own: an answer or a nudge. */
+const ITEM_CONTINUATION =
+  /^The person answered|^You ended without|^You named the next step|^Call the PresentPlan tool now/;
+
+/**
+ * Requests per item attempt, from the history: an attempt starts at the
+ * item prompt and takes every request up to the next user message that is
+ * neither an answer nor a nudge; the rest are plan and re-plan requests.
+ * `withoutFinishItem` counts the attempts the CLI nudged for FinishItem (one
+ * nudge per turn, so one per such attempt). Null when the run is not a loop.
+ */
+export function loopStatsOf(result, history) {
+  if (!result?.loop && result?.kind !== "loop") return null;
+  const perAttempt = [];
+  let planRequests = 0;
+  let inItem = false;
+  for (const item of history ?? []) {
+    const role = item.message?.role;
+    if (role === "user") {
+      const t = textOf(item.message);
+      if (ITEM_START.test(t)) {
+        inItem = true;
+        perAttempt.push(0);
+      } else if (!ITEM_CONTINUATION.test(t)) inItem = false;
+    } else if (role === "assistant") {
+      if (inItem) perAttempt[perAttempt.length - 1] += 1;
+      else planRequests += 1;
+    }
+  }
+  const itemRequests = perAttempt.reduce((a, b) => a + b, 0);
+  const items = result?.loop?.items ?? [];
+  const itemsByStatus = {};
+  for (const i of items)
+    itemsByStatus[i.status] = (itemsByStatus[i.status] ?? 0) + 1;
+  return {
+    items: items.length,
+    itemsByStatus,
+    attempts: perAttempt.length,
+    withoutFinishItem: result?.nudges?.cli?.finishItem ?? 0,
+    planRequests,
+    itemRequests,
+    requestsPerAttempt: perAttempt.length
+      ? itemRequests / perAttempt.length
+      : null,
+    perAttempt,
+  };
+}
+
+/**
+ * The messages of one dumped request body (CONTINUE_DUMP_REQUESTS), with a
+ * `system` field of its own put first so that a provider that takes the
+ * system text apart from the messages compares the same way.
+ */
+export function messagesOfRequest(body) {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  return body?.system !== undefined
+    ? [{ role: "system", content: body.system }, ...messages]
+    : messages;
+}
+
+/**
+ * Prefix churn: the requests of a run that did not extend the one before
+ * them. A request extends its predecessor when it has at least as many
+ * messages and each earlier message is the same JSON; otherwise the request
+ * is counted, with the index of the first message that differs (the
+ * predecessor's length when the request is only shorter). A prompt cache
+ * matches on the longest shared prefix, so every churned request re-reads
+ * the prefix from that message on. `names` labels the entries (file names).
+ */
+export function prefixChurn(requests, names = []) {
+  const churned = [];
+  for (let i = 1; i < requests.length; i++) {
+    const prev = requests[i - 1];
+    const cur = requests[i];
+    let message = null;
+    for (let j = 0; j < prev.length; j++) {
+      if (
+        j >= cur.length ||
+        JSON.stringify(cur[j]) !== JSON.stringify(prev[j])
+      ) {
+        message = j;
+        break;
+      }
+    }
+    if (message !== null)
+      churned.push({
+        request: i + 1,
+        message,
+        previousLength: prev.length,
+        length: cur.length,
+        ...(names[i] ? { file: names[i] } : {}),
+      });
+  }
+  return {
+    requests: requests.length,
+    churned: churned.length,
+    first: churned[0] ?? null,
+    all: churned,
+  };
+}
+
+/** `prefixChurn` over a run's `requests/` folder, in file order; null without dumps. */
+export function prefixChurnOf(dumpsDir) {
+  if (!dumpsDir || !fs.existsSync(dumpsDir)) return null;
+  const files = fs
+    .readdirSync(dumpsDir)
+    .filter((f) => f.endsWith(".json"))
+    .sort();
+  if (!files.length) return null;
+  const requests = files.map((f) =>
+    messagesOfRequest(readJson(path.join(dumpsDir, f))),
+  );
+  return prefixChurn(requests, files);
+}
