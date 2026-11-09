@@ -9,7 +9,7 @@ import * as workos from "../auth/workos.js";
 import { AuthConfig } from "../auth/workos.js";
 import * as config from "../config.js";
 
-import { ModelService } from "./ModelService.js";
+import { ModelService, withReasoningEffort } from "./ModelService.js";
 
 describe("ModelService", () => {
   let service: ModelService;
@@ -414,6 +414,42 @@ describe("ModelService: the model for a use (modeModels)", () => {
     expect(await service.switchToModelForUse("agent")).toBe(false);
     expect(await service.switchToModelForUse("subagent")).toBe(false);
     expect(service.modelIndexForUse("chat")).toBe(-1);
+  });
+
+  test("puts a use's reasoningEffort on the model's request body, and switches when only the effort differs", async () => {
+    const service = await start({
+      agent: { model: "GPT-4" },
+      loop: { model: "GPT-4", reasoningEffort: "low" },
+      replan: { model: "GPT-4", reasoningEffort: "high" },
+    });
+    expect(await service.switchToModelForUse("loop")).toBe(true);
+    expect(
+      (service.getState().model as any).requestOptions.extraBodyProperties,
+    ).toEqual({ reasoning_effort: "low" });
+    expect(await service.switchToModelForUse("loop")).toBe(false);
+    expect(await service.switchToModelForUse("replan")).toBe(true);
+    expect(
+      (service.getState().model as any).requestOptions.extraBodyProperties,
+    ).toEqual({ reasoning_effort: "high" });
+  });
+
+  test("withReasoningEffort wins over a variant's value and leaves off alone", () => {
+    const m = {
+      provider: "openai",
+      model: "x",
+      name: "X",
+      requestOptions: {
+        extraBodyProperties: { reasoning_effort: "xhigh", k: 1 },
+      },
+    } as any;
+    expect(
+      withReasoningEffort(m, "low").requestOptions?.extraBodyProperties,
+    ).toEqual({
+      reasoning_effort: "low",
+      k: 1,
+    });
+    expect(withReasoningEffort(m, "off")).toBe(m);
+    expect(withReasoningEffort(m, undefined)).toBe(m);
   });
 
   test("a Loop item's own model wins over the loop entry, by name, id or alias", async () => {
