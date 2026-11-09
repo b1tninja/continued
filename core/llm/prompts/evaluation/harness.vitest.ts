@@ -6,6 +6,7 @@ import {
   answerRead,
   formatReport,
   PROFILES,
+  reasoningOptions,
   runTurnsEval,
   scoreReply,
   summarize,
@@ -380,6 +381,40 @@ describe("harness with stub models (no real model)", () => {
     const s = summarize(results, undefined, ["full"]);
     expect(s.profiles[0].errors).toHaveLength(TURN_SCENARIOS.length);
     expect(s.passed).toBe(false);
+  });
+});
+
+describe("reasoning effort", () => {
+  it("maps to core's reasoning fields, and off sends nothing", async () => {
+    expect(reasoningOptions(undefined)).toEqual({});
+    expect(reasoningOptions("off")).toEqual({});
+    expect(reasoningOptions("low")).toEqual({
+      reasoning: true,
+      reasoningBudgetTokens: 1024,
+    });
+    expect(reasoningOptions("high")).toEqual({
+      reasoning: true,
+      reasoningBudgetTokens: 16000,
+    });
+    const seen: any[] = [];
+    const model = {
+      chat: async (_m: any, _s: any, options: any) => {
+        seen.push(options);
+        return { role: "assistant", content: "" } as any;
+      },
+    };
+    await runTurnsEval(model, {
+      scenarios: [byId("act-calls-tool")],
+      profiles: ["full"],
+      reasoning: "medium",
+    });
+    expect(seen[0].reasoning).toBe(true);
+    expect(seen[0].reasoningBudgetTokens).toBe(4096);
+    await runTurnsEval(model, {
+      scenarios: [byId("act-calls-tool")],
+      profiles: ["full"],
+    });
+    expect(seen[1].reasoning).toBeUndefined();
   });
 });
 

@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { PromptProfile } from "../turns";
+import type { ReasoningEffort } from "./runner";
 import {
   anthropicMessages,
   bedrockConverse,
@@ -28,6 +29,7 @@ import { oracleModel, textOnlyModel } from "./stubs";
  *   TURNS_EVAL_AWS_PROFILE=<bedrock: a profile in ~/.aws/config, else the default chain>
  *   TURNS_EVAL_DUMP=<optional path; every reply (text, calls, failures) as JSON>
  *   TURNS_EVAL_PROFILES=full,short         (default both)
+ *   TURNS_EVAL_REASONING=off|low|medium|high   (default off: no reasoning fields sent)
  *   TURNS_EVAL_OUT=<optional path for the markdown report>
  *   TURNS_EVAL_RESULT=<optional path; gets {"passed": boolean} as JSON>
  *   TURNS_EVAL_STUB=oracle|text-only       (stand-in instead of a model)
@@ -73,6 +75,11 @@ function pickModel() {
   };
 }
 
+function pickReasoning(): ReasoningEffort | undefined {
+  const raw = process.env.TURNS_EVAL_REASONING;
+  return raw === "low" || raw === "medium" || raw === "high" ? raw : undefined;
+}
+
 function pickProfiles(): readonly PromptProfile[] {
   const raw = process.env.TURNS_EVAL_PROFILES;
   if (!raw) return PROFILES;
@@ -89,13 +96,19 @@ describe.skipIf(!model && !stub)("turn prompt evaluation (live model)", () => {
     async () => {
       const { label, model: chat } = pickModel();
       const profiles = pickProfiles();
+      const reasoning = pickReasoning();
       const results = await runTurnsEval(chat, {
         profiles,
         concurrency: 2,
         timeoutMs: 120_000,
+        reasoning,
       });
       const summary = summarize(results, undefined, profiles);
-      const report = formatReport(label, results, summary);
+      const report = formatReport(
+        reasoning ? `${label} (reasoning ${reasoning})` : label,
+        results,
+        summary,
+      );
       // Written to stdout directly so the report is not swallowed by a reporter.
       process.stdout.write(`\n${report}\n`);
       if (process.env.TURNS_EVAL_OUT) {

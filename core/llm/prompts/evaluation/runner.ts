@@ -302,6 +302,24 @@ export function isTruncated(stopReason: string | undefined): boolean {
 /** The reply's output budget: the benchmark's default for a small model (bench/matrix.yaml). */
 export const REPLY_MAX_TOKENS = 4000;
 
+/** Reasoning effort for the run, as modeModels.reasoningEffort spells it; off sends no reasoning fields. */
+export type ReasoningEffort = "off" | "low" | "medium" | "high";
+
+/** The thinking budget each effort maps to (core/util/modelUse.ts REASONING_EFFORT_BUDGET_TOKENS). */
+export const REASONING_BUDGET_TOKENS: Record<
+  Exclude<ReasoningEffort, "off">,
+  number
+> = { low: 1024, medium: 4096, high: 16000 };
+
+/** The completion options that switch reasoning on at an effort, in core's own fields. */
+export function reasoningOptions(effort: ReasoningEffort | undefined) {
+  if (!effort || effort === "off") return {};
+  return {
+    reasoning: true,
+    reasoningBudgetTokens: REASONING_BUDGET_TOKENS[effort],
+  };
+}
+
 function onlyReads(calls: ScoredCall[]): boolean {
   return calls.length > 0 && calls.every((c) => READ_TOOLS.has(c.name));
 }
@@ -322,6 +340,8 @@ export async function runTurnsEval(
     concurrency?: number;
     timeoutMs?: number;
     maxReadRounds?: number;
+    /** Switch the model's reasoning on at this effort for every request. */
+    reasoning?: ReasoningEffort;
     onProgress?: (done: number, total: number) => void;
   } = {},
 ): Promise<ReplyResult[]> {
@@ -357,6 +377,7 @@ export async function runTurnsEval(
         tools: scenario.tools,
         temperature: 0,
         maxTokens: REPLY_MAX_TOKENS,
+        ...reasoningOptions(opts.reasoning),
       });
       const raw = message.role === "assistant" ? (message.toolCalls ?? []) : [];
       const stopReason =

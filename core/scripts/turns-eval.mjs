@@ -33,6 +33,9 @@ Model (pick one way):
 
 Options:
   --profile full|short|both   Which prompt texts to send (default both)
+  --reasoning off|low|medium|high   Switch the model's reasoning on at this effort (default off):
+                         Bedrock gets the family's own switch through core, OpenAI-compatible
+                         servers reasoning_effort, Anthropic a thinking budget
   --api-key-env <NAME>   Environment variable that holds the key
                          (default OPENAI_API_KEY, or ANTHROPIC_API_KEY for anthropic)
   --yes                  Confirm you mean to call a hosted API. Required unless the
@@ -48,7 +51,7 @@ Options:
 
 Environment (alternative to flags): TURNS_EVAL_PROVIDER, TURNS_EVAL_MODEL,
 TURNS_EVAL_BASE_URL, TURNS_EVAL_API_KEY, TURNS_EVAL_REGION, TURNS_EVAL_AWS_PROFILE,
-TURNS_EVAL_PROFILES, TURNS_EVAL_OUT, TURNS_EVAL_DUMP.
+TURNS_EVAL_PROFILES, TURNS_EVAL_REASONING, TURNS_EVAL_OUT, TURNS_EVAL_DUMP.
 
 Examples:
   npm run eval:turns -- --stub oracle --strict
@@ -102,6 +105,9 @@ function parse(argv) {
       case "--profile":
         o.profile = next();
         break;
+      case "--reasoning":
+        o.reasoning = next();
+        break;
       case "--yes":
         o.yes = true;
         break;
@@ -152,6 +158,14 @@ if (opts.profile) {
   }
   env.TURNS_EVAL_PROFILES =
     opts.profile === "both" ? "full,short" : opts.profile;
+}
+
+if (opts.reasoning) {
+  if (!["off", "low", "medium", "high"].includes(opts.reasoning)) {
+    fail("--reasoning must be off, low, medium or high");
+  }
+  if (opts.reasoning === "off") delete env.TURNS_EVAL_REASONING;
+  else env.TURNS_EVAL_REASONING = opts.reasoning;
 }
 
 if (opts.stub) {

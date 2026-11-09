@@ -35,6 +35,12 @@ function usageWithStop(usage: any, stopReason: unknown) {
   return { usage: { ...(usage ?? {}), response: { stopReason } } };
 }
 
+/** core's budget thresholds (budgetTokensToEffort): at most 1024 low, at most 4096 medium, else high. */
+function effortWord(budget: number | undefined): "low" | "medium" | "high" {
+  if (budget === undefined || budget <= 1024) return "low";
+  return budget <= 4096 ? "medium" : "high";
+}
+
 function textOf(content: ChatMessage["content"]): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
@@ -83,6 +89,10 @@ export function openAiCompatible(opts: {
         temperature: options?.temperature ?? 0,
         max_tokens: options?.maxTokens ?? 4000,
       };
+      // Reasoning on: the OpenAI-style effort word (gpt-5, local servers).
+      if (options?.reasoning) {
+        body.reasoning_effort = effortWord(options.reasoningBudgetTokens);
+      }
       if (options?.tools?.length) {
         body.tools = options.tools.map((t: Tool) => ({
           type: "function",
@@ -182,6 +192,14 @@ export function anthropicMessages(opts: {
         temperature: options?.temperature ?? 0,
         max_tokens: options?.maxTokens ?? 4000,
       };
+      // Reasoning on: extended thinking with the budget; temperature must be
+      // left alone and the budget must fit under max_tokens.
+      if (options?.reasoning) {
+        const budget = options.reasoningBudgetTokens ?? 1024;
+        body.thinking = { type: "enabled", budget_tokens: budget };
+        body.max_tokens = Math.max(body.max_tokens, budget + 1000);
+        delete body.temperature;
+      }
       if (options?.tools?.length) {
         body.tools = options.tools.map((t: Tool) => ({
           name: t.function.name,
@@ -249,6 +267,13 @@ export function bedrockConverse(opts: {
         tools: options?.tools,
         temperature: options?.temperature ?? 0,
         maxTokens: options?.maxTokens ?? 4000,
+        // Core turns these into the family's own switch (bedrockReasoningFields).
+        ...(options?.reasoning
+          ? {
+              reasoning: true,
+              reasoningBudgetTokens: options.reasoningBudgetTokens,
+            }
+          : {}),
       })) {
         if (chunk.role !== "assistant") continue;
         // The Bedrock class puts the stop reason on the usage chunk.
