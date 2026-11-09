@@ -326,6 +326,16 @@ describe("Bedrock", () => {
         expect(input.inferenceConfig.maxTokens).toBe(900);
       });
 
+      it("turns Nova 2 reasoning on at low when the config says nothing, and off on reasoning: false", () => {
+        const silent = request(nova2, { maxTokens: 900 });
+        expect(silent.additionalModelRequestFields).toEqual({
+          reasoningConfig: { type: "enabled", maxReasoningEffort: "low" },
+        });
+        expect(silent.inferenceConfig.maxTokens).toBe(900);
+        const off = request(nova2, { reasoning: false, maxTokens: 900 });
+        expect(off.additionalModelRequestFields ?? {}).toEqual({});
+      });
+
       it("omits maxTokens for Nova 2 at high effort, which refuses it", () => {
         const input = request(nova2, {
           reasoning: true,

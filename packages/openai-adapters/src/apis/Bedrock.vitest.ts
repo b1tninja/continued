@@ -709,6 +709,15 @@ describe("BedrockApi request shape per model family (probed live 2026-11-08)", (
     );
   });
 
+  it("turns Nova 2 reasoning on at low when the body says nothing, off for reasoning_effort none", () => {
+    expect(convert(nova2).additionalModelRequestFields).toEqual({
+      reasoningConfig: { type: "enabled", maxReasoningEffort: "low" },
+    });
+    expect(convert(nova2, { reasoning_effort: "none" })).not.toHaveProperty(
+      "additionalModelRequestFields",
+    );
+  });
+
   it("turns Nova 2 reasoning on with reasoningConfig, and omits maxTokens at high", () => {
     const medium = convert(nova2, {
       reasoning_effort: "medium",

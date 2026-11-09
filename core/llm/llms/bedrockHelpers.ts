@@ -729,6 +729,8 @@ export interface BedrockReasoningRequest {
 }
 
 const NOVA_2_MODEL = /nova-2-/i;
+/** Nova 2's effort when the config says nothing about reasoning. */
+const NOVA_2_DEFAULT_EFFORT = "low";
 /** Qwen3 and DeepSeek V3.2 share a backend that takes `reasoning_effort`. */
 const REASONING_EFFORT_MODEL = /(^|\.)(qwen\.|deepseek\.v3)/i;
 
@@ -739,7 +741,9 @@ const REASONING_EFFORT_MODEL = /(^|\.)(qwen\.|deepseek\.v3)/i;
  * - Claude: Anthropic's `thinking` (adaptive with `output_config.effort` on
  *   the models that take it, else `budget_tokens`).
  * - Nova 2 (`nova-2-`): `reasoningConfig: { type: "enabled",
- *   maxReasoningEffort }`, and no `maxTokens` at `high`. Nova Pro, Lite,
+ *   maxReasoningEffort }`, and no `maxTokens` at `high`. On at `low` when
+ *   the config says nothing: without it Nova 2 Lite reasons in plain text
+ *   and makes no tool call. `reasoning: false` sends nothing. Nova Pro, Lite,
  *   Micro and Premier refuse any `reasoningConfig`.
  * - Qwen3 and DeepSeek V3.2: `reasoning_effort` low, medium or high turns
  *   reasoning on; `"none"` turns it off, and is sent only when the config
@@ -778,8 +782,14 @@ export function bedrockReasoningFields(
     };
   }
   if (NOVA_2_MODEL.test(modelId)) {
-    if (!reasoning) return none;
-    const effort = budgetTokensToEffort(budgetTokens);
+    if (reasoning === false) return none;
+    // On at low by default: with no reasoningConfig Nova 2 Lite writes its
+    // deliberation as plain text to the output budget and makes no tool call
+    // (plans/turn-prompt-eval.md section 4, item 4, measured 2026-11-08).
+    const effort =
+      reasoning === undefined
+        ? NOVA_2_DEFAULT_EFFORT
+        : budgetTokensToEffort(budgetTokens);
     return {
       additionalModelRequestFields: {
         reasoningConfig: { type: "enabled", maxReasoningEffort: effort },
