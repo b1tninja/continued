@@ -1,7 +1,11 @@
 import type { ModeModels } from "@continuedev/config-yaml";
 import type { ConfigValidationError } from "@continuedev/config-yaml";
 import type { ILLM, ModeModelsConfig, ModelUse } from "../..";
-import { MODEL_USES, PICKER_USES } from "../../util/modelUse";
+import { isPromptProfile } from "../../llm/prompts/usePrompts";
+import { MODEL_USES, PICKER_USES, PROMPT_USES } from "../../util/modelUse";
+
+/** The uses whose system prompt and tail can be chosen (`prompt`, `tail`). */
+const promptUses: readonly ModelUse[] = PROMPT_USES;
 
 /**
  * Resolve `modeModels:` (which names models) against the loaded models.
@@ -16,11 +20,17 @@ import { MODEL_USES, PICKER_USES } from "../../util/modelUse";
  *   removed.
  * - `reviewer` may name any model, whatever its roles; every other use names
  *   a chat model.
+ * - `prompt` (chat, plan, agent, loop, replan): `full`, `short`, or the name
+ *   of one of `prompts`, whose text is copied in as `promptText`. An unknown
+ *   name is dropped with an error; the entry keeps its model.
+ * - `tail` (the same uses): `on`, `off` or a text, kept as written; a boolean
+ *   (YAML 1.1 reads a bare on/off as one) becomes `on` or `off`.
  */
 export function resolveModeModels(
   modeModels: ModeModels | undefined,
   chatModels: Pick<ILLM, "title">[],
   allModels: Pick<ILLM, "title">[] = chatModels,
+  prompts: readonly { name: string; prompt: string }[] = [],
 ): {
   modeModels: ModeModelsConfig | undefined;
   errors: ConfigValidationError[];
@@ -67,19 +77,49 @@ export function resolveModeModels(
       }
     }
 
+    // The prompt: a built-in profile, or a prompt block's name and text
+    let prompt: { prompt: string; promptText?: string } | undefined;
+    const wanted = promptUses.includes(use)
+      ? (entry as { prompt?: string }).prompt
+      : undefined;
+    if (wanted) {
+      if (isPromptProfile(wanted)) {
+        prompt = { prompt: wanted };
+      } else {
+        const block = prompts.find((p) => p.name === wanted);
+        if (block) prompt = { prompt: wanted, promptText: block.prompt };
+        else {
+          const names = prompts.map((p) => p.name);
+          errors.push({
+            fatal: false,
+            message: `modeModels.${use}.prompt: "${wanted}" is not "full", "short", "tailored" or the name of a prompt block.${names.length ? ` Prompt blocks: ${names.join(", ")}.` : ""}`,
+          });
+        }
+      }
+    }
+
+    // The tail: on, off or a text, for the same uses as the prompt
+    const rawTail = promptUses.includes(use)
+      ? (entry as { tail?: string | boolean }).tail
+      : undefined;
+    const tail =
+      typeof rawTail === "boolean" ? (rawTail ? "on" : "off") : rawTail;
+
     const title = preferred ?? listed[0];
-    if (title === undefined) continue; // nothing usable: drop the entry
+    if (title === undefined && !prompt && !tail) continue; // nothing usable: drop the entry
 
     const offered = list
-      ? [title, ...listed.filter((name) => name !== title)]
+      ? [title!, ...listed.filter((name) => name !== title)]
       : undefined;
     resolved[use] = {
-      title,
+      ...(title !== undefined ? { title } : {}),
       ...(offered ? { titles: offered } : {}),
       ...(entry.reasoningEffort
         ? { reasoningEffort: entry.reasoningEffort }
         : {}),
-    };
+      ...prompt,
+      ...(tail ? { tail } : {}),
+    } as ModeModelsConfig[ModelUse];
   }
 
   return {

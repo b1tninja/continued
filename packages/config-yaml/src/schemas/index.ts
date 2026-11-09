@@ -104,8 +104,26 @@ export const reasoningEffortSchema = z.enum(["off", "low", "medium", "high"]);
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 
 /**
+ * Which system prompt a use gets: `full` or `short` (the two built-in turn
+ * texts; by default the model's id decides, short for small models), or the
+ * name of a prompt block in `prompts:`, whose text replaces the turn text.
+ */
+export const promptChoiceSchema = z.string().min(1);
+
+/**
+ * The one-line reminder appended to every user message of a request
+ * (`modeModels.<use>.tail`): `on` for the built-in line of the use's turn
+ * kind, `off`, or a short text of your own. It rides on the user messages,
+ * the same line each time, so that the system prompt stays cached and each
+ * request extends the one before. Booleans are the same setting as written
+ * by a YAML 1.1 parser.
+ */
+export const turnTailSchema = z.union([z.boolean(), z.string().min(1)]);
+export type TurnTail = z.infer<typeof turnTailSchema>;
+
+/**
  * Model (by its `name` in `models:`) to use in a chat mode, plus an optional
- * reasoning effort for that mode.
+ * reasoning effort and system prompt for that mode.
  */
 export const modeModelSchema = z
   .object({
@@ -117,10 +135,19 @@ export const modeModelSchema = z
      */
     models: z.array(z.string()).optional(),
     reasoningEffort: reasoningEffortSchema.optional(),
+    prompt: promptChoiceSchema.optional(),
+    tail: turnTailSchema.optional(),
   })
-  .refine((m) => m.model !== undefined || (m.models?.length ?? 0) > 0, {
-    message: "Set `model`, or a non-empty `models` list",
-  });
+  .refine(
+    (m) =>
+      m.model !== undefined ||
+      (m.models?.length ?? 0) > 0 ||
+      m.prompt !== undefined ||
+      m.tail !== undefined,
+    {
+      message: "Set `model`, a non-empty `models` list, `prompt` or `tail`",
+    },
+  );
 export type ModeModel = z.infer<typeof modeModelSchema>;
 
 /**
@@ -134,6 +161,27 @@ export const useModelSchema = z.object({
 export type UseModel = z.infer<typeof useModelSchema>;
 
 /**
+ * A turn use (Loop items, re-plans): a model and, or, a system prompt and a
+ * tail. The model may be left out when only the prompt or the tail differs
+ * from the fallback.
+ */
+export const turnUseModelSchema = z
+  .object({
+    model: z.string().min(1).optional(),
+    reasoningEffort: reasoningEffortSchema.optional(),
+    prompt: promptChoiceSchema.optional(),
+    tail: turnTailSchema.optional(),
+  })
+  .refine(
+    (m) =>
+      m.model !== undefined || m.prompt !== undefined || m.tail !== undefined,
+    {
+      message: "Set `model`, `prompt`, `tail`, or several of them",
+    },
+  );
+export type TurnUseModel = z.infer<typeof turnUseModelSchema>;
+
+/**
  * Which model does what. Modes without an entry keep the current model;
  * `loop` falls back to `agent`, `replan` to `plan`, `subagent` to the chat
  * model of the turn that started it, and `reviewer` to the model selected
@@ -144,9 +192,9 @@ export const modeModelsSchema = z.object({
   agent: modeModelSchema.optional(),
   plan: modeModelSchema.optional(),
   /** Loop item turns. */
-  loop: useModelSchema.optional(),
+  loop: turnUseModelSchema.optional(),
   /** Loop re-plans, check-ins and repairs. */
-  replan: useModelSchema.optional(),
+  replan: turnUseModelSchema.optional(),
   /** The Auto reviewer. Any model, whatever its roles. */
   reviewer: useModelSchema.optional(),
   /** Subagents whose definition does not name a model. */
@@ -162,6 +210,10 @@ export const rulesByModeSchema = z.object({
   chat: z.boolean().optional(),
   agent: z.boolean().optional(),
   plan: z.boolean().optional(),
+  /** Loop item turns; left out, they follow `agent`. */
+  loop: z.boolean().optional(),
+  /** Loop re-plans; left out, they follow `plan`. */
+  replan: z.boolean().optional(),
 });
 export type RulesByMode = z.infer<typeof rulesByModeSchema>;
 

@@ -1,3 +1,11 @@
+import type { ModelUse } from "core/index.js";
+import { CLI_TURN_TOOL_NAMES } from "core/llm/prompts/turns.js";
+import {
+  type PromptChoice,
+  promptChoiceFromRaw,
+  tailFromRaw,
+} from "core/llm/prompts/usePrompts.js";
+
 import { instructionFilesFingerprint } from "../instructionFiles.js";
 import { PermissionMode } from "../permissions/types.js";
 import { constructSystemMessage } from "../systemMessage.js";
@@ -5,7 +13,11 @@ import { logger } from "../util/logger.js";
 
 import { BaseService } from "./BaseService.js";
 import { serviceContainer } from "./ServiceContainer.js";
-import { type ModelServiceState, SERVICE_NAMES } from "./types.js";
+import {
+  type ConfigServiceState,
+  type ModelServiceState,
+  SERVICE_NAMES,
+} from "./types.js";
 
 export interface SystemMessageServiceState {
   additionalRules?: string[];
@@ -82,7 +94,59 @@ export class SystemMessageService extends BaseService<SystemMessageServiceState>
     return model?.model;
   }
 
-  private cacheKey(mode: PermissionMode, modelId: string | undefined): string {
+  /**
+   * The prompt choice `modeModels.<use>.prompt` makes for this turn, read
+   * from the loaded config as written (a block name is looked up in its
+   * `prompts`). Undefined when the config says nothing for the use.
+   */
+  private promptChoice(use: ModelUse | undefined): PromptChoice | undefined {
+    if (!use) return undefined;
+    const config = serviceContainer.getSync<ConfigServiceState>(
+      SERVICE_NAMES.CONFIG,
+    ).value?.config as
+      | {
+          modeModels?: unknown;
+          prompts?: ({ name: string; prompt: string } | null)[];
+        }
+      | undefined;
+    if (!config) return undefined;
+    return promptChoiceFromRaw(
+      config.modeModels,
+      config.prompts?.filter((p): p is NonNullable<typeof p> => !!p),
+      use,
+    );
+  }
+
+  /**
+   * The tail for this turn's use (`modeModels.<use>.tail`): the line the
+   * request appends to each of its user messages, or undefined for none. Read
+   * from the config as written, like the prompt choice; by default on for
+   * Loop items and for the short prompt profile (core's tailFor). It is not
+   * part of the system message, and so not of its cache key.
+   */
+  public turnTail(use: ModelUse): string | undefined {
+    const config = serviceContainer.getSync<ConfigServiceState>(
+      SERVICE_NAMES.CONFIG,
+    ).value?.config as
+      | {
+          modeModels?: unknown;
+          prompts?: ({ name: string; prompt: string } | null)[];
+        }
+      | undefined;
+    return tailFromRaw(
+      config?.modeModels,
+      config?.prompts?.filter((p): p is NonNullable<typeof p> => !!p),
+      use,
+      this.currentModelId(),
+      CLI_TURN_TOOL_NAMES,
+    );
+  }
+
+  private cacheKey(
+    mode: PermissionMode,
+    modelId: string | undefined,
+    promptChoice: PromptChoice | undefined,
+  ): string {
     const { additionalRules, format, headless } = this.currentState;
     return JSON.stringify([
       mode,
@@ -90,16 +154,24 @@ export class SystemMessageService extends BaseService<SystemMessageServiceState>
       format ?? null,
       headless ?? false,
       modelId ?? null,
+      promptChoice ?? null,
     ]);
   }
 
   /**
    * The system message for this mode: the cached one when nothing it depends
-   * on has changed, otherwise built now and cached.
+   * on has changed, otherwise built now and cached. `use` (a Loop item or
+   * re-plan, else the mode's use) picks the prompt `modeModels` gives it.
    */
-  public async getSystemMessage(currentMode: PermissionMode): Promise<string> {
+  public async getSystemMessage(
+    currentMode: PermissionMode,
+    use?: ModelUse,
+  ): Promise<string> {
     const modelId = this.currentModelId();
-    const key = this.cacheKey(currentMode, modelId);
+    const promptChoice = this.promptChoice(
+      use ?? (currentMode === "plan" ? "plan" : "agent"),
+    );
+    const key = this.cacheKey(currentMode, modelId, promptChoice);
     const fingerprint = instructionFilesFingerprint();
     const cached = this.cache.get(key);
     if (cached && cached.fingerprint === fingerprint) {
@@ -112,12 +184,13 @@ export class SystemMessageService extends BaseService<SystemMessageServiceState>
       additionalRules,
       format,
       headless,
-      modelId,
+      { model: modelId, promptChoice },
     );
     this.cache.set(key, { message: systemMessage, fingerprint });
 
     logger.debug("Built system message", {
       mode: currentMode,
+      use,
       messageLength: systemMessage.length,
       reason: cached ? "instruction files changed" : "not cached for this mode",
     });

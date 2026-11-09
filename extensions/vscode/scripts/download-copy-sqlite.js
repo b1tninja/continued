@@ -7,7 +7,10 @@ const { rimrafSync } = require("rimraf");
 
 const { execCmdSync } = require("../../../scripts/util");
 
-const FETCH_ATTEMPTS = 4;
+// GitHub's 504 bursts have outlasted four attempts (2s + 4s + 8s); six give about a minute.
+const FETCH_ATTEMPTS = 6;
+
+const SQLITE_VERSION = "v5.1.7";
 
 /** fetch, trying again after a server error or a dropped connection. */
 async function fetchWithRetry(url, options) {
@@ -69,19 +72,29 @@ async function downloadSqlite(target, targetDir) {
     // node-sqlite3 doesn't have a pre-built binary for win32-arm64
     target === "win32-arm64"
       ? "https://continue-server-binaries.s3.us-west-1.amazonaws.com/win32-arm64/node_sqlite3.tar.gz"
-      : `https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-${
+      : `https://github.com/TryGhost/node-sqlite3/releases/download/${SQLITE_VERSION}/sqlite3-${SQLITE_VERSION}-napi-v6-${
           target
         }.tar.gz`;
   await downloadFile(downloadUrl, targetDir);
 }
 
 async function installAndCopySqlite(target) {
+  // A build restored from the CI cache already holds this target's pre-built binary;
+  // the marker says which release and target it is.
+  const buildDir = "../../core/node_modules/sqlite3/build";
+  const marker = path.join(buildDir, `.prebuilt-${SQLITE_VERSION}-${target}`);
+  if (fs.existsSync(marker)) {
+    console.log("[info] Using cached pre-built sqlite3 binary");
+    return;
+  }
+
   // Replace the installed with pre-built
   console.log("[info] Downloading pre-built sqlite3 binary");
-  rimrafSync("../../core/node_modules/sqlite3/build");
+  rimrafSync(buildDir);
   await downloadSqlite(target, "../../core/node_modules/sqlite3/build.tar.gz");
   execCmdSync("cd ../../core/node_modules/sqlite3 && tar -xvzf build.tar.gz");
   fs.unlinkSync("../../core/node_modules/sqlite3/build.tar.gz");
+  fs.writeFileSync(marker, "");
 }
 
 async function installAndCopyEsbuild(target) {

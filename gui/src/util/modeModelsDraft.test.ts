@@ -6,10 +6,111 @@ import {
   hasChanges,
   setDefault,
   setEffort,
+  setPrompt,
+  setTail,
   toggleOffered,
 } from "./modeModelsDraft";
 
 const cfg = (modeModels: any) => ({ modeModels });
+
+describe("prompt and tail", () => {
+  it("reads prompt and tail for the turn modes, undefined when not set", () => {
+    const d = draftFromConfig(
+      cfg({
+        loop: { title: "A", prompt: "short", tail: "on" },
+        plan: { prompt: "terse", promptText: "Plan only.", tail: "Ask first." },
+        agent: { title: "B" },
+      }),
+    );
+    expect(d.loop).toMatchObject({ prompt: "short", tail: "on" });
+    expect(d.plan).toMatchObject({
+      offered: [],
+      prompt: "terse",
+      tail: "Ask first.",
+    });
+    expect(d.agent.prompt).toBeUndefined();
+    expect(d.agent.tail).toBeUndefined();
+    expect(d.chat.prompt).toBeUndefined();
+  });
+
+  it("ignores prompt and tail on the subagent column", () => {
+    const d = draftFromConfig(
+      cfg({ subagent: { title: "A", prompt: "short", tail: "on" } as any }),
+    );
+    expect(d.subagent.prompt).toBeUndefined();
+    expect(d.subagent.tail).toBeUndefined();
+  });
+
+  it("sends prompt and tail only when they changed, null to clear them", () => {
+    const before = draftFromConfig(
+      cfg({ agent: { title: "A", prompt: "full", tail: "off" } }),
+    );
+    expect(
+      buildUpdate(before, {
+        ...before,
+        agent: setPrompt(before.agent, "short"),
+      }),
+    ).toEqual({ agent: { model: "A", prompt: "short" } });
+    expect(
+      buildUpdate(before, { ...before, agent: setTail(before.agent, "on") }),
+    ).toEqual({ agent: { model: "A", tail: "on" } });
+    expect(
+      buildUpdate(before, {
+        ...before,
+        agent: setTail(setPrompt(before.agent, undefined), undefined),
+      }),
+    ).toEqual({ agent: { model: "A", prompt: null, tail: null } });
+  });
+
+  it("a prompt or reminder with no model ticked writes an entry without one", () => {
+    const before = draftFromConfig({});
+    expect(
+      buildUpdate(before, { ...before, loop: setPrompt(before.loop, "short") }),
+    ).toEqual({ loop: { prompt: "short" } });
+    expect(
+      buildUpdate(before, {
+        ...before,
+        chat: setTail(before.chat, "Answer briefly."),
+      }),
+    ).toEqual({ chat: { tail: "Answer briefly." } });
+  });
+
+  it("unticking every model keeps the entry for its prompt, dropping the model", () => {
+    const before = draftFromConfig(
+      cfg({ plan: { title: "A", titles: ["A", "B"], prompt: "short" } }),
+    );
+    let plan = toggleOffered(before.plan, "A", false);
+    plan = toggleOffered(plan, "B", false);
+    expect(buildUpdate(before, { ...before, plan })).toEqual({
+      plan: { model: null, models: [] },
+    });
+    const lone = draftFromConfig(cfg({ loop: { title: "A", tail: "on" } }));
+    expect(
+      buildUpdate(lone, { ...lone, loop: clearDefault(lone.loop) }),
+    ).toEqual({ loop: { model: null } });
+  });
+
+  it("clearing the prompt of a prompt-only entry removes the entry", () => {
+    const before = draftFromConfig(cfg({ replan: { prompt: "short" } }));
+    expect(
+      buildUpdate(before, {
+        ...before,
+        replan: setPrompt(before.replan, undefined),
+      }),
+    ).toEqual({ replan: null });
+  });
+
+  it("a blank reminder text counts as not set", () => {
+    const before = draftFromConfig(cfg({ agent: { title: "A" } }));
+    expect(
+      buildUpdate(before, { ...before, agent: setTail(before.agent, "  ") }),
+    ).toEqual({});
+    const cleared = draftFromConfig(cfg({ agent: { title: "A", tail: "x" } }));
+    expect(
+      buildUpdate(cleared, { ...cleared, agent: setTail(cleared.agent, "") }),
+    ).toEqual({ agent: { model: "A", tail: null } });
+  });
+});
 
 describe("draftFromConfig", () => {
   it("is empty for every mode with no modeModels", () => {

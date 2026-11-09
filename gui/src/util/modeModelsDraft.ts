@@ -3,6 +3,7 @@ import type {
   ModeReasoningEffort,
 } from "core";
 import type { ModeModelsInput } from "core/config/yaml/saveModeModels";
+import { PROMPT_USES } from "core/util/modelUse";
 
 /**
  * The table's columns: the three modes, which offer a list of models, then
@@ -26,6 +27,13 @@ export function isListMode(mode: TableMode): boolean {
   return LIST_MODES.includes(mode);
 }
 
+/** The columns whose system prompt and reminder can be chosen (`prompt`, `tail`). */
+export const TURN_MODES: readonly TableMode[] = PROMPT_USES;
+
+export function isTurnMode(mode: TableMode): boolean {
+  return TURN_MODES.includes(mode);
+}
+
 /** What the Models tab shows and edits for one mode. */
 export interface ModeDraft {
   /** Models offered in the mode, in order. */
@@ -34,6 +42,17 @@ export interface ModeDraft {
   defaultTitle: string | undefined;
   /** Undefined means no `reasoningEffort` is set. */
   effort: ModeReasoningEffort | undefined;
+  /**
+   * `modeModels.<use>.prompt`: `full`, `short` or a prompt block's name.
+   * Undefined means not set (the model's prompt profile decides). Only the
+   * turn modes (chat, plan, agent, loop, re-plan) have one.
+   */
+  prompt: string | undefined;
+  /**
+   * `modeModels.<use>.tail`: `on`, `off` or the reminder's text. Undefined
+   * means not set. Turn modes only.
+   */
+  tail: string | undefined;
   /**
    * True when config.yaml gives this mode only a default `model`, which the
    * picker treats as "every model is offered". The table then shows just the
@@ -51,22 +70,29 @@ export function draftFromConfig(
   const drafts = {} as ModeDrafts;
   for (const mode of TABLE_MODES) {
     const entry = config.modeModels?.[mode];
+    // An entry may choose only a prompt (`loop: { prompt: short }`): no
+    // model, so nothing is ticked and the table leaves the prompt alone
     const offered = entry?.titles?.length
       ? [...entry.titles]
-      : entry
+      : entry?.title
         ? [entry.title]
         : [];
     drafts[mode] = {
       offered,
       defaultTitle: entry?.title,
       effort: entry?.reasoningEffort,
-      implicitAll: !!entry && !entry.titles?.length,
+      prompt: isTurnMode(mode) ? entry?.prompt : undefined,
+      tail: isTurnMode(mode) ? entry?.tail : undefined,
+      implicitAll: !!entry?.title && !entry.titles?.length,
     };
   }
   return drafts;
 }
 
-/** Keep the default valid and first: it is always one of the offered models. */
+/**
+ * Keep the default valid and first: it is always one of the offered models.
+ * A blank prompt or reminder text counts as not set.
+ */
 function normalize(draft: ModeDraft): ModeDraft {
   const offered = draft.offered.filter(
     (t, i) => draft.offered.indexOf(t) === i,
@@ -81,7 +107,13 @@ function normalize(draft: ModeDraft): ModeDraft {
       ? [defaultTitle, ...offered.filter((t) => t !== defaultTitle)]
       : offered,
     defaultTitle,
+    prompt: blankToUndefined(draft.prompt),
+    tail: blankToUndefined(draft.tail),
   };
+}
+
+function blankToUndefined(text: string | undefined): string | undefined {
+  return text === undefined || text.trim() === "" ? undefined : text;
 }
 
 /** Tick or untick a model for a mode. The first ticked model becomes the default. */
@@ -130,10 +162,30 @@ export function setEffort(
   return { ...draft, effort };
 }
 
+/** `full`, `short`, a prompt block's name, or undefined for the default. */
+export function setPrompt(
+  draft: ModeDraft,
+  prompt: string | undefined,
+): ModeDraft {
+  return { ...draft, prompt };
+}
+
+/** `on`, `off`, the reminder's text, or undefined for the default. */
+export function setTail(draft: ModeDraft, tail: string | undefined): ModeDraft {
+  return { ...draft, tail };
+}
+
+/** True when the draft would write an entry even with no model ticked. */
+function hasPromptOrTail(draft: ModeDraft): boolean {
+  return draft.prompt !== undefined || draft.tail !== undefined;
+}
+
 function same(a: ModeDraft, b: ModeDraft): boolean {
   return (
     a.defaultTitle === b.defaultTitle &&
     a.effort === b.effort &&
+    a.prompt === b.prompt &&
+    a.tail === b.tail &&
     a.offered.length === b.offered.length &&
     a.offered.every((t, i) => t === b.offered[i])
   );
@@ -150,29 +202,39 @@ export function buildUpdate(
 ): ModeModelsInput {
   const update: ModeModelsInput = {};
   for (const mode of TABLE_MODES) {
-    const before = original[mode];
+    const before = normalize(original[mode]);
     const after = normalize(current[mode]);
     if (same(before, after)) continue;
 
-    if (after.offered.length === 0) {
-      // Nothing ticked: remove the mode's entry (the model stays as selected).
+    if (after.offered.length === 0 && !hasPromptOrTail(after)) {
+      // Nothing ticked and no prompt or reminder: remove the mode's entry
+      // (the model stays as selected).
       update[mode] = null;
       continue;
     }
 
-    const change: NonNullable<ModeModelsInput[TableMode]> = {
-      model: after.defaultTitle,
-    };
-    // One ticked model on a mode that had no list stays a plain `model:`
-    // (every model is still offered, as before). More than one, or a mode that
-    // already had an explicit list, is written as a list.
-    // A single-model use never has a list.
+    const change: NonNullable<ModeModelsInput[TableMode]> = {};
     const hadExplicitList = before.offered.length > 0 && !before.implicitAll;
-    if (isListMode(mode) && (after.offered.length > 1 || hadExplicitList)) {
-      change.models = after.offered;
+    if (after.offered.length === 0) {
+      // A prompt or reminder with no model: the entry stays, the model goes.
+      if (before.offered.length > 0) change.model = null;
+      if (hadExplicitList) change.models = [];
+    } else {
+      change.model = after.defaultTitle;
+      // One ticked model on a mode that had no list stays a plain `model:`
+      // (every model is still offered, as before). More than one, or a mode
+      // that already had an explicit list, is written as a list.
+      // A single-model use never has a list.
+      if (isListMode(mode) && (after.offered.length > 1 || hadExplicitList)) {
+        change.models = after.offered;
+      }
     }
     if (after.effort !== before.effort) {
       change.reasoningEffort = after.effort ?? null;
+    }
+    if (isTurnMode(mode)) {
+      if (after.prompt !== before.prompt) change.prompt = after.prompt ?? null;
+      if (after.tail !== before.tail) change.tail = after.tail ?? null;
     }
     update[mode] = change;
   }

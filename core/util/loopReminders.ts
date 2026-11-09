@@ -140,7 +140,13 @@ export function saveReminder(
       error: `Not saved: the note is ${note.length} characters, over the limit of ${maxLength}. Shorten it and save it again.`,
     };
   }
-  const when = LOOP_REMINDER_WHEN.find((w) => w === input.when);
+  // Left out, a reminder is for this item's own later run (see the tool's
+  // schema for why `when` is not required).
+  const requested =
+    input.when === undefined || input.when === null || input.when === ""
+      ? "retry"
+      : input.when;
+  const when = LOOP_REMINDER_WHEN.find((w) => w === requested);
   if (!when) {
     return {
       ok: false,
