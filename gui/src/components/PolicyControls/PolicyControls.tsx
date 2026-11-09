@@ -27,7 +27,10 @@ import {
   selectEffectiveLevels,
   selectYoloAreas,
 } from "../../redux/selectors/selectAutoApproval";
-import { setPolicyLevel, setPolicyLevels } from "../../redux/slices/uiSlice";
+import {
+  applyPolicyPreset,
+  changePolicyLevel,
+} from "../../redux/thunks/policySettings";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
 
 const AREA_ICONS: Record<PolicyArea, typeof EyeIcon> = {
@@ -83,7 +86,7 @@ export function AreaLevelSelect({ area, variant }: AreaLevelSelectProps) {
     <Listbox
       value={shown}
       onChange={(level: PolicyLevel) =>
-        dispatch(setPolicyLevel({ area, level }))
+        void dispatch(changePolicyLevel({ area, level }))
       }
     >
       <div
@@ -161,8 +164,10 @@ export function PresetSelect() {
       value={preset ?? "custom"}
       onChange={(name: string) => {
         if (name in POLICY_PRESETS) {
-          dispatch(
-            setPolicyLevels(POLICY_PRESETS[name as keyof typeof POLICY_PRESETS].levels),
+          void dispatch(
+            applyPolicyPreset(
+              POLICY_PRESETS[name as keyof typeof POLICY_PRESETS].levels,
+            ),
           );
         }
       }}
@@ -212,7 +217,10 @@ export function PresetSelect() {
  */
 export function PolicyControls() {
   return (
-    <div className="flex flex-row items-center gap-1" data-testid="policy-controls">
+    <div
+      className="flex flex-row items-center gap-1"
+      data-testid="policy-controls"
+    >
       <PresetSelect />
       <div className="hidden flex-row items-center gap-0.5 xs:flex">
         {POLICY_AREAS.map((area) => (
@@ -249,7 +257,7 @@ export function YoloBanner() {
         type="button"
         className="cursor-pointer border-none bg-transparent text-2xs text-error underline"
         onClick={() =>
-          dispatch(setPolicyLevels(POLICY_PRESETS.careful.levels))
+          void dispatch(applyPolicyPreset(POLICY_PRESETS.careful.levels))
         }
       >
         Back to Careful

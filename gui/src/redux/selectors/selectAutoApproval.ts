@@ -74,12 +74,23 @@ export function selectEffectiveLevels(state: RootState): PolicyLevels {
 }
 
 export function selectPolicySettings(state: RootState): PolicySettings {
-  return { levels: selectEffectiveLevels(state) };
+  const { maxNewPlanItems, questions, builtin } = state.ui.policyExtras ?? {};
+  return {
+    levels: selectEffectiveLevels(state),
+    ...(maxNewPlanItems !== undefined ? { maxNewPlanItems } : {}),
+    ...(questions ? { questions } : {}),
+    ...(builtin ? { builtin } : {}),
+  };
 }
 
 /** What is sent to core with every policy check. */
 export function selectApprovalSettings(state: RootState): ApprovalSettings {
-  return { levels: selectEffectiveLevels(state) };
+  const { builtin, floor } = state.ui.policyExtras ?? {};
+  return {
+    levels: selectEffectiveLevels(state),
+    ...(builtin && Object.keys(builtin).length ? { builtin } : {}),
+    ...(floor?.length ? { floor } : {}),
+  };
 }
 
 /** The Plan edits and Questions levels a loop follows. */

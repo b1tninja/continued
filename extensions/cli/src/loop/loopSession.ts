@@ -37,6 +37,7 @@ import { useForLoopTurn } from "core/util/modelUse.js";
 
 import {
   effectiveLevels,
+  getPolicyExtras,
   getPolicyLevels,
   levelsForAutonomy,
   setPolicyLevels,
@@ -195,7 +196,14 @@ export function sessionTokens(): number {
  * with the CLI's `auto` mode (`--auto`) raising Plan edits as it always did.
  */
 export function cliLoopPolicy(mode: PermissionMode): LoopPolicy {
-  return loopPolicyOf({ levels: effectiveLevels(mode) });
+  const extras = getPolicyExtras();
+  return loopPolicyOf({
+    levels: effectiveLevels(mode),
+    ...(extras.maxNewPlanItems !== undefined
+      ? { maxNewPlanItems: extras.maxNewPlanItems }
+      : {}),
+    ...(extras.questions ? { questions: extras.questions } : {}),
+  });
 }
 
 /** The plan file as a path for the model and the person, when there is one. */

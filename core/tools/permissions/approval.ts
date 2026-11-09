@@ -1,5 +1,13 @@
 import type { Tool } from "../..";
-import { areaOfTool, PolicyArea, PolicyLevel, PolicyLevels } from "./policy";
+import {
+  areaOfTool,
+  builtinRuleOn,
+  type BuiltinRuleId,
+  type PolicyArea,
+  type PolicyLevel,
+  type PolicyLevels,
+} from "./policy";
+import type { ProtectedKind } from "./protected";
 
 /**
  * What the person has chosen for each area (plans/policy-areas.md). Core never
@@ -19,6 +27,21 @@ import { areaOfTool, PolicyArea, PolicyLevel, PolicyLevels } from "./policy";
  */
 export interface ApprovalSettings {
   levels: PolicyLevels;
+  /** Built-in rules by id; absent means on (see BUILTIN_RULES) */
+  builtin?: Partial<Record<BuiltinRuleId, boolean>>;
+  /** Deny rules that bind at every level, YOLO included */
+  floor?: string[];
+}
+
+/** Protected-path kinds whose built-in rule the person switched off. */
+export function skippedProtections(
+  approval: ApprovalSettings | undefined,
+): ProtectedKind[] {
+  const skip: ProtectedKind[] = [];
+  if (!builtinRuleOn(approval, "protect-secrets")) skip.push("secret");
+  if (!builtinRuleOn(approval, "protect-config")) skip.push("config");
+  if (!builtinRuleOn(approval, "protect-network-paths")) skip.push("network");
+  return skip;
 }
 
 /** What a level decided, for the decision chip. */

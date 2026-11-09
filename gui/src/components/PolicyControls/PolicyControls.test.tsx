@@ -4,6 +4,7 @@ import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import { EMPTY_CONFIG, updateConfig } from "../../redux/slices/configSlice";
 import { setPolicyLevel } from "../../redux/slices/uiSlice";
 import { setupStore } from "../../redux/store";
+import { loadPolicySettings } from "../../redux/thunks/policySettings";
 import { renderWithProviders } from "../../util/test/render";
 import { PolicyCard } from "./PolicyCard";
 import { PolicyControls, YoloBanner } from "./PolicyControls";
@@ -122,5 +123,102 @@ describe("PolicyControls", () => {
     for (const area of ["context", "tools", "edits", "plan", "questions"]) {
       expect(screen.getByTestId(`policy-row-${area}`)).toBeDefined();
     }
+  });
+});
+
+describe("the settings beside the levels", () => {
+  it("a built-in rule is on until it is switched off, and the change is saved", async () => {
+    const ideMessenger = new MockIdeMessenger();
+    const saved: any[] = [];
+    ideMessenger.responseHandlers["policy/save"] = (async (data: any) => {
+      saved.push(data);
+    }) as any;
+    const store = setupStore({ ideMessenger });
+    const { user } = await renderWithProviders(<PolicyCard />, {
+      store,
+      mockIdeMessenger: ideMessenger,
+    });
+    expect(store.getState().ui.policyExtras.builtin?.["protect-secrets"]).toBe(
+      undefined,
+    );
+    await user.click(
+      screen
+        .getByTestId("builtin-protect-secrets")
+        .querySelector(".rounded-full")!,
+    );
+    expect(store.getState().ui.policyExtras.builtin).toEqual({
+      "protect-secrets": false,
+    });
+    expect(saved.at(-1).builtin).toEqual({ "protect-secrets": false });
+  });
+
+  it("who decides a question type moves it between the two lists", async () => {
+    const ideMessenger = new MockIdeMessenger();
+    const store = setupStore({ ideMessenger });
+    const { user } = await renderWithProviders(<PolicyCard />, {
+      store,
+      mockIdeMessenger: ideMessenger,
+    });
+    const row = screen.getByTestId("question-type-design");
+    await user.selectOptions(row.querySelector("select")!, "agent");
+    expect(store.getState().ui.policyExtras.questions?.agentDecides).toContain(
+      "design",
+    );
+    expect(store.getState().ui.policyExtras.questions?.youDecide).not.toContain(
+      "design",
+    );
+  });
+
+  it("loads the shared file at startup: levels, switches and the floor", async () => {
+    const ideMessenger = new MockIdeMessenger();
+    ideMessenger.responseHandlers["policy/load"] = (async () => ({
+      settings: {
+        levels: {
+          context: "permissive",
+          tools: "permissive",
+          edits: "manual",
+          plan: "cautious",
+          questions: "cautious",
+        },
+        builtin: { "protect-network-paths": false },
+        floor: ["runTerminalCommand(terraform destroy*)"],
+      },
+      notices: [],
+    })) as any;
+    const store = setupStore({ ideMessenger });
+    await renderWithProviders(<PolicyCard />, {
+      store,
+      mockIdeMessenger: ideMessenger,
+    });
+    await act(async () => {
+      await store.dispatch(loadPolicySettings());
+    });
+    expect(store.getState().ui.policyLevels.tools).toBe("permissive");
+    expect(store.getState().ui.policyExtras.floor).toHaveLength(1);
+    expect(screen.getByTestId("policy-floor").textContent).toContain(
+      "1 floor rule",
+    );
+  });
+
+  it("a YOLO left from an earlier session is dropped by the load", async () => {
+    const ideMessenger = new MockIdeMessenger();
+    ideMessenger.responseHandlers["policy/load"] = (async () => ({
+      settings: {
+        levels: {
+          context: "permissive",
+          tools: "cautious",
+          edits: "manual",
+          plan: "cautious",
+          questions: "cautious",
+        },
+      },
+      notices: [],
+    })) as any;
+    const store = setupStore({ ideMessenger });
+    await act(async () => {
+      store.dispatch(setPolicyLevel({ area: "tools", level: "yolo" }));
+      await store.dispatch(loadPolicySettings());
+    });
+    expect(store.getState().ui.policyLevels.tools).toBe("cautious");
   });
 });

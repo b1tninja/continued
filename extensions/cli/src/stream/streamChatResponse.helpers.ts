@@ -21,7 +21,8 @@ import { checkToolPermission } from "../permissions/permissionChecker.js";
 import {
   effectiveLevels,
   getPolicyLevels,
-  toolLevelsAreDefault,
+  policyIsDefault,
+  approvalExtras,
 } from "../permissions/policyLevels.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import { withReadOnlyMcp } from "../permissions/readOnlyMcp.js";
@@ -178,7 +179,9 @@ async function coreRulesVerdict(
     // The levels reach core's engine only when they change what the CLI
     // does on its own: Manual, Permissive, YOLO or Automatic on a tool area
     const levels = effectiveLevels(currentPermissionMode());
-    const approval = toolLevelsAreDefault(levels) ? undefined : { levels };
+    const approval = policyIsDefault(levels)
+      ? undefined
+      : { levels, ...approvalExtras() };
     if (!permissions && !autoReview && !approval) return undefined;
     return await evaluateWithCoreRules({
       cliToolName: toolCall.name,
@@ -200,7 +203,7 @@ async function coreRulesVerdict(
     // Fail toward asking, and toward refusing when nobody can be asked.
     return autoReview ||
       assistantHasRules() ||
-      !toolLevelsAreDefault(getPolicyLevels())
+      !policyIsDefault(getPolicyLevels())
       ? { decision: "ask", by: "system", reason: "Could not check your rules." }
       : undefined;
   }

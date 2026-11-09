@@ -22,6 +22,7 @@ export type DecisionSource =
   | "ask-rule"
   | "allow-rule"
   | "protected-path"
+  | "floor"
   | "safety-floor"
   | "permissive"
   | "yolo"

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { fetchwithRequestOptions } from "@continuedev/fetch";
 import * as URI from "uri-js";
 import { v4 as uuidv4 } from "uuid";
@@ -16,6 +17,10 @@ import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
+import {
+  readPolicyFile,
+  writePolicyFile,
+} from "./tools/permissions/settingsFile";
 import { AutoReviewSessions } from "./tools/permissions/auto/state";
 import {
   suggestAllowRule,
@@ -1683,6 +1688,12 @@ export class Core {
       this.handleToolCall(toolCall),
     );
 
+    on("policy/load", async () => readPolicyFile(policyFilePath()));
+
+    on("policy/save", async ({ data }) => {
+      writePolicyFile(policyFilePath(), data);
+    });
+
     on(
       "tools/evaluatePolicy",
       async ({
@@ -2169,4 +2180,9 @@ export class Core {
       return [];
     }
   };
+}
+
+/** The settings file the IDE and the CLI share. */
+function policyFilePath(): string {
+  return path.join(getContinueGlobalPath(), "permissions.yaml");
 }

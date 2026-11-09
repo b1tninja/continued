@@ -553,6 +553,18 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       mcpUiState?: McpUiState;
     },
   ];
+  /** The settings file shared with the CLI (plans/policy-areas.md, Settings). */
+  "policy/load": [
+    undefined,
+    {
+      settings: import("../tools/permissions/settingsFile").PolicyFileSettings;
+      notices: string[];
+    },
+  ];
+  "policy/save": [
+    import("../tools/permissions/settingsFile").PolicyFileUpdate,
+    void,
+  ];
   "tools/evaluatePolicy": [
     {
       toolName: string;

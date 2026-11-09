@@ -6,9 +6,11 @@ import { MessageModes, RuleWithSource, Tool } from "core";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
 import {
   DEFAULT_POLICY_LEVELS,
+  type BuiltinRuleId,
   type PolicyArea,
   type PolicyLevel,
   type PolicyLevels,
+  type QuestionType,
 } from "core/tools/permissions/policy";
 import {
   defaultOnboardingCardState,
@@ -50,7 +52,20 @@ type UIState = {
    * needs the experimental flag and a reviewer model; see selectPolicySettings.
    */
   policyLevels: PolicyLevels;
+  /** The rest of the shared settings file; see PolicyExtras */
+  policyExtras: PolicyExtras;
 };
+
+/** The settings beside the levels (plans/policy-areas.md, "Settings"). */
+export interface PolicyExtras {
+  /** Permissive on Plan edits: new to-dos a re-plan may add by itself */
+  maxNewPlanItems?: number;
+  questions?: { youDecide?: QuestionType[]; agentDecides?: QuestionType[] };
+  /** Built-in rules by id; absent means on */
+  builtin?: Partial<Record<BuiltinRuleId, boolean>>;
+  /** Deny rules that bind at every level; read from the file, never written here */
+  floor?: string[];
+}
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";
 export const DEFAULT_RULE_SETTING: RulePolicy = "on";
@@ -65,6 +80,7 @@ export const DEFAULT_UI_SLICE: UIState = {
   shouldAddFileForEditing: false,
   ttsActive: false,
   policyLevels: DEFAULT_POLICY_LEVELS,
+  policyExtras: {},
   toolSettings: {},
   toolGroupSettings: {
     [BUILT_IN_GROUP_NAME]: "include",
@@ -176,6 +192,12 @@ export const uiSlice = createSlice({
     setPolicyLevels: (state, { payload }: PayloadAction<PolicyLevels>) => {
       state.policyLevels = { ...payload };
     },
+    setPolicyExtras: (
+      state,
+      { payload }: PayloadAction<Partial<PolicyExtras>>,
+    ) => {
+      state.policyExtras = { ...state.policyExtras, ...payload };
+    },
     setTTSActive: (state, { payload }: PayloadAction<boolean>) => {
       state.ttsActive = payload;
     },
@@ -239,6 +261,7 @@ export const {
   toggleRuleSetting,
   setPolicyLevel,
   setPolicyLevels,
+  setPolicyExtras,
   setTTSActive,
   setReasoningSetting,
   setPromptCacheSetting,

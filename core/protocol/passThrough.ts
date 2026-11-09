@@ -107,6 +107,8 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "tools/call",
     "subagents/list",
     "tools/evaluatePolicy",
+    "policy/load",
+    "policy/save",
     "tools/autoReview",
     "tools/preprocessArgs",
     "isItemTooBig",

@@ -1,4 +1,11 @@
 import type { LoopAutonomy } from "core/index.js";
+import type { ApprovalSettings } from "core/tools/permissions/approval.js";
+import {
+  readPolicyFile,
+  writePolicyFile,
+  type PolicyFileSettings,
+  type PolicyFileUpdate,
+} from "core/tools/permissions/settingsFile.js";
 import {
   DEFAULT_POLICY_LEVELS,
   POLICY_AREA_LABELS,
@@ -14,6 +21,7 @@ import {
   type PolicyLevels,
 } from "core/tools/permissions/policy.js";
 import { isAutoReviewEnabled } from "./coreRules.js";
+import { PERMISSIONS_YAML_PATH } from "./permissionsYamlLoader.js";
 import type { PermissionMode } from "./types.js";
 
 /**
@@ -22,6 +30,34 @@ import type { PermissionMode } from "./types.js";
  * sets them with `--policy` and `/policy`.
  */
 let levels: PolicyLevels = { ...DEFAULT_POLICY_LEVELS };
+
+/** The rest of the settings file: switches, floor, plan limit, question lists. */
+let extras: Omit<PolicyFileSettings, "levels"> = {};
+
+export function getPolicyExtras(): Omit<PolicyFileSettings, "levels"> {
+  return extras;
+}
+
+/**
+ * Reads ~/.continue/permissions.yaml (shared with the IDE) into this process.
+ * Returns what could not be used, for a warning. Levels set on the command
+ * line afterwards win.
+ */
+export function loadPolicyFile(file: string = PERMISSIONS_YAML_PATH): string[] {
+  const { settings, notices } = readPolicyFile(file);
+  const { levels: fileLevels, ...rest } = settings;
+  levels = { ...fileLevels };
+  extras = rest;
+  return notices;
+}
+
+/** Writes the levels (never YOLO) and the other settings back to the file. */
+export function savePolicyFile(
+  file: string = PERMISSIONS_YAML_PATH,
+  update: PolicyFileUpdate = { levels },
+): void {
+  writePolicyFile(file, update);
+}
 
 export function getPolicyLevels(): PolicyLevels {
   return { ...levels };
@@ -33,6 +69,28 @@ export function setPolicyLevels(next: PolicyLevels): void {
 
 export function resetPolicyLevels(): void {
   levels = { ...DEFAULT_POLICY_LEVELS };
+  extras = {};
+}
+
+/** What core's engine is given besides the levels. */
+export function approvalExtras(): Pick<ApprovalSettings, "builtin" | "floor"> {
+  return {
+    ...(extras.builtin ? { builtin: extras.builtin } : {}),
+    ...(extras.floor?.length ? { floor: extras.floor } : {}),
+  };
+}
+
+/**
+ * True when nothing here changes what the CLI does on its own, so core's
+ * engine need not run for a call that has no rules.
+ */
+export function policyIsDefault(l: PolicyLevels): boolean {
+  const extra = approvalExtras();
+  return (
+    toolLevelsAreDefault(l) &&
+    !extra.floor &&
+    !Object.values(extra.builtin ?? {}).includes(false)
+  );
 }
 
 const TOOL_AREAS: readonly PolicyArea[] = ["context", "tools", "edits"];

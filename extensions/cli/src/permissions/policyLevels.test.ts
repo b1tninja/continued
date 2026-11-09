@@ -1,3 +1,7 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
+
 import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy.js";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -5,13 +9,18 @@ import { handleSlashCommands } from "../slashCommands.js";
 
 import { setAutoReviewEnabled } from "./coreRules.js";
 import { evaluateWithCoreRules } from "./coreRules.js";
+import { loadPermissionsYaml } from "./permissionsYamlLoader.js";
 import {
+  approvalExtras,
   describePolicy,
   effectiveLevels,
   getPolicyLevels,
   levelsForAutonomy,
+  loadPolicyFile,
   parsePolicySpec,
+  policyIsDefault,
   resetPolicyLevels,
+  savePolicyFile,
   setPolicyLevels,
   toolLevelsAreDefault,
 } from "./policyLevels.js";
@@ -153,5 +162,74 @@ describe("/policy", () => {
     expect(
       describePolicy({ ...DEFAULT_POLICY_LEVELS, tools: "yolo" }).join("\n"),
     ).toContain("Custom");
+  });
+});
+
+describe("the shared settings file", () => {
+  const withFile = (text: string) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cn-policy-"));
+    const file = path.join(dir, "permissions.yaml");
+    fs.writeFileSync(file, text);
+    return { dir, file };
+  };
+
+  it("loads levels, switches and the floor, and reports what it cannot use", () => {
+    const { dir, file } = withFile(
+      "allow:\n  - Bash(ls)\nlevels:\n  tools: permissive\n  plan: yolo\nbuiltin:\n  protect-network-paths: off\nfloor:\n  - Bash(rm -rf *)\n",
+    );
+    try {
+      const notices = loadPolicyFile(file);
+      expect(getPolicyLevels().tools).toBe("permissive");
+      // yolo is for one session only
+      expect(getPolicyLevels().plan).toBe(DEFAULT_POLICY_LEVELS.plan);
+      expect(notices.join("\n")).toContain("levels.plan: yolo");
+      expect(approvalExtras()).toEqual({
+        builtin: { "protect-network-paths": false },
+        floor: ["Bash(rm -rf *)"],
+      });
+      expect(policyIsDefault(effectiveLevels("normal"))).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a floor or a switched-off built-in is enough to run core's engine", () => {
+    const { dir, file } = withFile("floor:\n  - Bash(rm -rf *)\n");
+    try {
+      loadPolicyFile(file);
+      expect(toolLevelsAreDefault(effectiveLevels("normal"))).toBe(true);
+      expect(policyIsDefault(effectiveLevels("normal"))).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("saving keeps the CLI's own lists and never writes YOLO", () => {
+    const { dir, file } = withFile("allow:\n  - Bash(ls)\n");
+    try {
+      setPolicyLevels({
+        ...DEFAULT_POLICY_LEVELS,
+        tools: "yolo",
+        edits: "permissive",
+      });
+      savePolicyFile(file);
+      const text = fs.readFileSync(file, "utf-8");
+      expect(text).toContain("Bash(ls)");
+      expect(text).not.toContain("yolo");
+      expect(text).toContain("edits: permissive");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("the CLI's own loader still reads a file that has policy keys", () => {
+    const { dir, file } = withFile(
+      "allow:\n  - Bash(ls)\nlevels:\n  tools: manual\nquestions:\n  delivery: wait\n",
+    );
+    try {
+      expect(loadPermissionsYaml(file)).toMatchObject({ allow: ["Bash(ls)"] });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

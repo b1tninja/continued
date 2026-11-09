@@ -212,3 +212,72 @@ describe("YOLO", () => {
     expect(cmd("npm test", yolo, { basePolicy: OFF }).policy).toBe(OFF);
   });
 });
+
+describe("built-in rules by id", () => {
+  const off = (
+    id: string,
+    over: Partial<PolicyLevels> = {},
+  ): ApprovalSettings => ({
+    ...levels(over),
+    builtin: { [id]: false },
+  });
+
+  it("protect-secrets off: a credentials file no longer asks, a config path still does", () => {
+    const a = off("protect-secrets", { tools: "permissive" });
+    expect(cmd("cat ~/.aws/credentials", a).policy).toBe(ALLOW);
+    expect(
+      approve(
+        "edit_existing_file",
+        plain,
+        { filepath: ".git/hooks/pre-commit" },
+        off("protect-secrets", { edits: "permissive" }),
+      ).source,
+    ).toBe("protected-path");
+  });
+
+  it("protect-config off: a hook path no longer asks", () => {
+    const e = approve(
+      "edit_existing_file",
+      plain,
+      { filepath: ".git/hooks/pre-commit" },
+      off("protect-config", { edits: "permissive" }),
+      { basePolicy: ALLOW },
+    );
+    expect(e.source).not.toBe("protected-path");
+  });
+
+  it("refuse-dangerous-commands off: the safety check's refusal becomes an ask", () => {
+    expect(cmd("rm -rf /", levels({})).policy).toBe(OFF);
+    expect(cmd("rm -rf /", off("refuse-dangerous-commands")).policy).toBe(ASK);
+  });
+
+  it("on by default: an absent id is on", () => {
+    expect(
+      cmd("rm -rf /", { levels: DEFAULT_POLICY_LEVELS, builtin: {} }).policy,
+    ).toBe(OFF);
+  });
+});
+
+describe("the floor", () => {
+  const floor = (over: Partial<PolicyLevels>): ApprovalSettings => ({
+    ...levels(over),
+    floor: ["runTerminalCommand(terraform destroy*)"],
+  });
+
+  it("binds at YOLO, where every other rule is ignored", () => {
+    const r = cmd("terraform destroy -auto-approve", floor({ tools: "yolo" }));
+    expect(r.policy).toBe(OFF);
+    expect(r.source).toBe("floor");
+    expect(r.rule).toContain("terraform destroy");
+  });
+
+  it("leaves other commands to the level", () => {
+    expect(cmd("terraform plan", floor({ tools: "yolo" })).policy).toBe(ALLOW);
+  });
+
+  it("binds at every other level too", () => {
+    for (const tools of ["manual", "cautious", "permissive"] as const) {
+      expect(cmd("terraform destroy", floor({ tools })).policy).toBe(OFF);
+    }
+  });
+});

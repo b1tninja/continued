@@ -6,8 +6,10 @@ import {
   ApprovalSettings,
   isManualCall,
   levelOfCall,
+  skippedProtections,
 } from "./approval";
-import { DecisionSource, decideToolCall } from "./decide";
+import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
+import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
 import type { ToolPermissions } from "./rules";
@@ -64,9 +66,18 @@ export function evaluateToolPolicyWithRules(
     displayValue = parsedArgs.command as string;
   }
 
-  const evaluated = tool.evaluateToolCallPolicy
+  let evaluated = tool.evaluateToolCallPolicy
     ? tool.evaluateToolCallPolicy(basePolicy, parsedArgs, processedArgs)
     : basePolicy;
+  // The person switched off the safety check's refusals: such a command asks
+  if (
+    evaluated === "disabled" &&
+    basePolicy !== "disabled" &&
+    toolName === "run_terminal_command" &&
+    !builtinRuleOn(input.approval, "refuse-dangerous-commands")
+  ) {
+    evaluated = "allowedWithPermission";
+  }
 
   const resolved = processedArgs?.resolvedPath as
     ResolvedPath | null | undefined;
@@ -75,7 +86,39 @@ export function evaluateToolPolicyWithRules(
   // Credentials and files that change what runs later always ask, with or
   // without rules, so this runs for every user and not only those with rules.
   // It only ever tightens: a call that is already refused stays refused.
-  const protectedHit = findProtected({ toolName, parsedArgs, resolvedPath });
+  const protectedHit = findProtected({
+    toolName,
+    parsedArgs,
+    resolvedPath,
+    skip: skippedProtections(input.approval),
+  });
+
+  // The floor: deny rules the person wrote to bind even at YOLO
+  const floorRules = parsePermissions({ deny: input.approval?.floor });
+  if (floorRules.length) {
+    const isMcpCall =
+      !!tool.uri?.startsWith("mcp:") && !!tool.originalFunctionName;
+    const floorMatch = findRuleMatch({
+      toolName,
+      mcp: isMcpCall
+        ? { serverName: tool.group, toolName: tool.originalFunctionName! }
+        : undefined,
+      parsedArgs,
+      resolvedPath,
+      base: basePolicy,
+      evaluated,
+      rules: floorRules,
+    });
+    if (floorMatch?.decision === "deny") {
+      return {
+        policy: "disabled",
+        displayValue,
+        source: "floor",
+        rule: floorMatch.rule.raw,
+        reason: `Blocked by your floor rule ${floorMatch.rule.raw}, which binds at every level.`,
+      };
+    }
+  }
 
   const rules = parsePermissions(input.permissions);
   const found = levelOfCall(input.approval, toolName, tool);
