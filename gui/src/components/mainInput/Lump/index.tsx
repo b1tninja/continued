@@ -1,5 +1,6 @@
 import { RecentlyBlocked } from "../../RecentlyBlocked";
 import { YoloBanner } from "../../ApprovalSelect";
+import { Toolbox } from "../Toolbox/Toolbox";
 import { LumpToolbar } from "./LumpToolbar/LumpToolbar";
 
 /**
@@ -13,6 +14,7 @@ export function Lump() {
       <div className="px-1 py-0.5 xs:px-2">
         <LumpToolbar />
       </div>
+      <Toolbox />
     </div>
   );
 }
