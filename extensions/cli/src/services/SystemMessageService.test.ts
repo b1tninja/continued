@@ -267,6 +267,11 @@ describe("SystemMessageService: the tail per use", () => {
     expect(service.turnTail("loop")).toBe("Report when done.");
     expect(service.turnTail("agent")).toBe("Report when done.");
   });
+
+  it("is never given to a subagent, whatever the agent and loop entries say", async () => {
+    await configure({ agent: { tail: "on" }, loop: { tail: "on" } });
+    expect(service.turnTail("subagent")).toBeUndefined();
+  });
 });
 
 describe("SystemMessageService: the prompt per use", () => {
@@ -312,6 +317,17 @@ describe("SystemMessageService: the prompt per use", () => {
     );
     await service.getSystemMessage("normal", "loop");
     expect(constructSystemMessageMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives a subagent no prompt choice: the turn text as the model id decides", async () => {
+    await service.getSystemMessage("normal", "subagent");
+    expect(constructSystemMessageMock).toHaveBeenLastCalledWith(
+      "normal",
+      undefined,
+      undefined,
+      undefined,
+      { model: undefined, promptChoice: undefined },
+    );
   });
 
   it("looks a block name up in the config's prompts", async () => {

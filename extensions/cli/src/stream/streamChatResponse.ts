@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
-import type { ChatHistoryItem } from "core/index.js";
+import type { ChatHistoryItem, ModelUse } from "core/index.js";
 import { withTurnTail } from "core/llm/prompts/usePrompts.js";
 import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
 import {
@@ -588,6 +588,13 @@ export interface StreamChatResponseOptions {
    * session. False for sub-agents, whose child history is not the session's.
    */
   persistSession?: boolean;
+  /**
+   * The use the requests are made for, when it is not the session's
+   * (currentModelUse: a running Loop item or re-plan, else the permission
+   * mode's). A subagent's run passes `subagent`: its requests then take the
+   * subagent's prompt and no tail, whatever the parent turn is doing.
+   */
+  use?: ModelUse;
 }
 
 // Main function that handles the conversation loop
@@ -601,11 +608,12 @@ export async function streamChatResponse(
   isCompacting = false,
   options: StreamChatResponseOptions = {},
 ) {
-  const { persistSession = true } = options;
+  const { persistSession = true, use: fixedUse } = options;
   logger.debug("streamChatResponse called", {
     model,
     historyLength: chatHistory.length,
     hasCallbacks: !!callbacks,
+    use: fixedUse,
   });
 
   const isHeadless = services.toolPermissions.isHeadless();
@@ -625,9 +633,10 @@ export async function streamChatResponse(
 
     // Get system message once per iteration (can change based on tool
     // permissions mode, and a Loop turn has a use of its own), and the use's
-    // tail for the newest user message. A compaction's request gets no tail;
-    // test doubles of the service may not have the method.
-    const use = currentModelUse();
+    // tail for the newest user message. A caller with a use of its own (a
+    // subagent's run) keeps it. A compaction's request gets no tail; test
+    // doubles of the service may not have the method.
+    const use = fixedUse ?? currentModelUse();
     const systemMessage = await services.systemMessage.getSystemMessage(
       services.toolPermissions.getState().currentMode,
       use,
