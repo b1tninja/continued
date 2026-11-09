@@ -69,9 +69,13 @@ export function applyModeModelsUpdate(
       else entry.reasoningEffort = change.reasoningEffort;
     }
 
-    // The schema needs `model` or a non-empty `models`; an entry with neither
-    // would make the whole config invalid, so drop it instead.
-    if (entry.model === undefined && !(entry.models?.length > 0)) {
+    // The schema needs `model`, a non-empty `models` or a `prompt`; an entry
+    // with none would make the whole config invalid, so drop it instead.
+    if (
+      entry.model === undefined &&
+      !(entry.models?.length > 0) &&
+      entry.prompt === undefined
+    ) {
       delete next[mode];
     } else {
       next[mode] = entry;

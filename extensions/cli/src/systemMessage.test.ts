@@ -295,3 +295,44 @@ Rule 3: Third rule`;
     expect(result).toContain("the person decides whether to do it");
   });
 });
+
+describe("constructSystemMessage: the prompt a use chose", () => {
+  const claude = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+
+  it("a named profile wins over the model's own", async () => {
+    const short = await constructSystemMessage(
+      "normal",
+      undefined,
+      undefined,
+      false,
+      { model: claude, promptChoice: { profile: "short" } },
+    );
+    expect(short).toContain("Keep going until the request is done");
+    expect(short).not.toContain("Stopping");
+    const full = await constructSystemMessage(
+      "plan",
+      undefined,
+      undefined,
+      false,
+      { model: "qwen3-coder-30b", promptChoice: { profile: "full" } },
+    );
+    expect(full).toContain("Two kinds of unknowns");
+  });
+
+  it("a prompt block's text replaces the turn text", async () => {
+    const result = await constructSystemMessage(
+      "plan",
+      undefined,
+      undefined,
+      false,
+      {
+        model: claude,
+        promptChoice: { text: "Plan briefly, then call PresentPlan." },
+      },
+    );
+    expect(result).toContain(
+      '<context name="planMode">\nPlan briefly, then call PresentPlan.\n</context>',
+    );
+    expect(result).not.toContain("Two kinds of unknowns");
+  });
+});
