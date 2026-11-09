@@ -658,6 +658,12 @@ export interface LoopState {
     };
     /** A re-plan: the to-dos it started from, to tell whether it adds scope */
     planTexts?: string[];
+    /**
+     * A re-plan: the check of each to-do it started from, by item id, so a
+     * re-plan that changes the check of an item that ended stuck (its check
+     * never ran) is held like one that changes a failed check
+     */
+    planChecks?: Record<string, string>;
     /** A check-in re-plan (check-in strategy): why it was due */
     checkIn?: string;
     /** A repair re-plan (fix forward): the failed item's text */

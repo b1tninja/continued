@@ -92,6 +92,13 @@ describe("saving a reminder", () => {
     );
   });
 
+  test('left out, when is "retry"', () => {
+    expect(save(start(), { when: undefined }).reminders?.[0]?.when).toBe(
+      "retry",
+    );
+    expect(save(start(), { when: "" }).reminders?.[0]?.when).toBe("retry");
+  });
+
   test("refuses a bad note or when, saying why", () => {
     expect(refused(start(), { note: "   " })).toContain("empty");
     expect(refused(start(), { note: 3 })).toContain("empty");
