@@ -60,6 +60,8 @@ export interface ModelServiceState {
   model: ModelConfig | null;
   assistant: AssistantUnrolled | null;
   authConfig: AuthConfig | null;
+  /** Set when a use's `modeModels` entry chose the current model (H7). */
+  usedFor?: { use: string; label: string };
 }
 
 export type MCPServerStatus = "idle" | "connecting" | "connected" | "error";

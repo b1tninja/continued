@@ -9,6 +9,12 @@ import { logger } from "../util/logger.js";
 import { BaseService, ServiceWithDependencies } from "./BaseService.js";
 import { AgentFileServiceState, ModelServiceState } from "./types.js";
 
+/** `<model> (<effort>)`, or just the model when the use sets no effort. */
+export function formatModelWithEffort(name: string, effort?: string): string {
+  const short = name.split("/").pop() || name;
+  return effort ? `${short} (${effort})` : short;
+}
+
 /**
  * Service for managing LLM and model state
  * Depends on auth config and assistant config
@@ -253,6 +259,7 @@ export class ModelService
         model: selectedModel,
         assistant,
         authConfig,
+        usedFor: undefined, // a manual switch clears the use's label
       });
 
       logger.debug("Model switched successfully", {
@@ -322,7 +329,9 @@ export class ModelService
       return false;
     }
     await this.switchModel(index, entry.effort);
-    logger.debug("Model switched for use", {
+    const label = formatModelWithEffort(entry.name, entry.effort);
+    this.setState({ usedFor: { use, label } });
+    logger.debug(`Model for ${use}: ${label}`, {
       use,
       index,
       effort: entry.effort,

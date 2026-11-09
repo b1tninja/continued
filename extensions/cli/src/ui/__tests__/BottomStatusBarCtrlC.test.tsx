@@ -63,6 +63,23 @@ describe("BottomStatusBar Ctrl+C message", () => {
     expect(lastFrame()).not.toContain("github.com/user/repo");
   });
 
+  it("shows the model and effort a use switched to", () => {
+    const { lastFrame } = render(
+      <BottomStatusBar
+        {...defaultProps}
+        services={{
+          model: { model: null, usedFor: { use: "plan", label: "o3 (high)" } },
+        }}
+      />,
+    );
+    expect(lastFrame()).toContain("o3 (high)");
+  });
+
+  it("shows no model suffix when no use switched the model", () => {
+    const { lastFrame } = render(<BottomStatusBar {...defaultProps} />);
+    expect(lastFrame()).not.toContain("(high)");
+  });
+
   it("registers exit message callback on mount", async () => {
     const indexModule = (await vi.importMock("../../index.js")) as any;
 

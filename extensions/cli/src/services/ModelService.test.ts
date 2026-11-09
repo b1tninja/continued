@@ -9,7 +9,11 @@ import * as workos from "../auth/workos.js";
 import { AuthConfig } from "../auth/workos.js";
 import * as config from "../config.js";
 
-import { ModelService, withReasoningEffort } from "./ModelService.js";
+import {
+  formatModelWithEffort,
+  ModelService,
+  withReasoningEffort,
+} from "./ModelService.js";
 
 describe("ModelService", () => {
   let service: ModelService;
@@ -431,6 +435,29 @@ describe("ModelService: the model for a use (modeModels)", () => {
     expect(
       (service.getState().model as any).requestOptions.extraBodyProperties,
     ).toEqual({ reasoning_effort: "high" });
+  });
+
+  test("records `<model> (<effort>)` for a use's switch, and a manual switch clears it", async () => {
+    const service = await start({
+      plan: { model: "Claude 3", reasoningEffort: "high" },
+      loop: { model: "GPT-4" },
+    });
+    await service.switchToModelForUse("plan");
+    expect(service.getState().usedFor).toEqual({
+      use: "plan",
+      label: "Claude 3 (high)",
+    });
+    await service.switchToModelForUse("loop");
+    expect(service.getState().usedFor?.label).toBe("GPT-4");
+    await service.switchModel(1);
+    expect(service.getState().usedFor).toBeUndefined();
+  });
+
+  test("formatModelWithEffort shortens a path-like name and omits no effort", () => {
+    expect(formatModelWithEffort("anthropic/claude-x", "low")).toBe(
+      "claude-x (low)",
+    );
+    expect(formatModelWithEffort("claude-x")).toBe("claude-x");
   });
 
   test("withReasoningEffort wins over a variant's value and leaves off alone", () => {

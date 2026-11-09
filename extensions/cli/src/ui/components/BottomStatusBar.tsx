@@ -28,7 +28,7 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
   currentMode,
   remoteUrl,
   isRemoteMode,
-  services: _services,
+  services,
   navState: _navState,
   navigateTo: _navigateTo,
   closeCurrentScreen: _closeCurrentScreen,
@@ -45,6 +45,8 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
     });
   }, []);
 
+  const usedFor = services?.model?.usedFor as
+    { use: string; label: string } | undefined;
   const showingExitMessage = shouldShowExitMessage();
 
   return (
@@ -67,6 +69,17 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
           </React.Fragment>
         )}
         <ModeIndicator />
+        {usedFor && (
+          <React.Fragment>
+            <Text key="model-use-separator" color="dim">
+              {" "}
+              �{" "}
+            </Text>
+            <Text key="model-use" color="dim">
+              {usedFor.label}
+            </Text>
+          </React.Fragment>
+        )}
         {contextPercentage !== undefined && contextPercentage > 0 && (
           <React.Fragment>
             <Text key="context-separator" color="dim">
