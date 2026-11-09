@@ -1,7 +1,9 @@
 import type { ModelUse } from "core/index.js";
+import { CLI_TURN_TOOL_NAMES } from "core/llm/prompts/turns.js";
 import {
   type PromptChoice,
   promptChoiceFromRaw,
+  tailFromRaw,
 } from "core/llm/prompts/usePrompts.js";
 
 import { instructionFilesFingerprint } from "../instructionFiles.js";
@@ -112,6 +114,31 @@ export class SystemMessageService extends BaseService<SystemMessageServiceState>
       config.modeModels,
       config.prompts?.filter((p): p is NonNullable<typeof p> => !!p),
       use,
+    );
+  }
+
+  /**
+   * The tail for this turn's use (`modeModels.<use>.tail`): the line the
+   * request appends to each of its user messages, or undefined for none. Read
+   * from the config as written, like the prompt choice; by default on for
+   * Loop items and for the short prompt profile (core's tailFor). It is not
+   * part of the system message, and so not of its cache key.
+   */
+  public turnTail(use: ModelUse): string | undefined {
+    const config = serviceContainer.getSync<ConfigServiceState>(
+      SERVICE_NAMES.CONFIG,
+    ).value?.config as
+      | {
+          modeModels?: unknown;
+          prompts?: ({ name: string; prompt: string } | null)[];
+        }
+      | undefined;
+    return tailFromRaw(
+      config?.modeModels,
+      config?.prompts?.filter((p): p is NonNullable<typeof p> => !!p),
+      use,
+      this.currentModelId(),
+      CLI_TURN_TOOL_NAMES,
     );
   }
 

@@ -1,0 +1,15 @@
+{
+  "model": "fixture",
+  "messages": [
+    {
+      "role": "system",
+      "content": "ACT"
+    },
+    {
+      "role": "user",
+      "content": "Plan the thing\n\nAct until the request is done. A reply with no tool call ends the turn."
+    }
+  ],
+  "stream": true,
+  "max_tokens": 100
+}

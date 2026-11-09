@@ -2,6 +2,7 @@
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
+import { withTurnTail } from "core/llm/prompts/usePrompts.js";
 import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
 import {
   ACT_TURN_NUDGE,
@@ -181,6 +182,12 @@ interface ProcessStreamingResponseOptions {
   tools?: ChatCompletionTool[];
   systemMessage: string;
   isCompacting?: boolean; // also: compaction gets no Loop mode plan block
+  /**
+   * The use's tail (`modeModels.<use>.tail`), appended to every user message
+   * of this request, the same line each time, so the system message is
+   * unchanged and each request extends the one before it.
+   */
+  turnTail?: string;
 }
 
 /** Bedrock's request ID or the provider's response ID, from the first chunk that has one. */
@@ -317,6 +324,7 @@ export async function processStreamingResponse(
     tools,
     systemMessage,
     isCompacting = false,
+    turnTail,
   } = options;
 
   // The request carries one system message, the current `systemMessage`.
@@ -335,10 +343,19 @@ export async function processStreamingResponse(
 
   // Validate context length INCLUDING system message and tools
   // The task list block is counted with the system message: it is sent with
-  // every request and is never pruned.
-  const fixedText = taskListBlock
-    ? `${systemMessage}\n${taskListBlock}`
-    : systemMessage;
+  // every request and is never pruned. The tail goes on every user message,
+  // so it is counted once per user message of the unpruned history (a
+  // pruned history has fewer, so the count errs on the long side).
+  const userMessages = chatHistory.filter(
+    (item) => item.message.role === "user",
+  ).length;
+  const fixedText = [
+    systemMessage,
+    ...(turnTail ? Array<string>(userMessages).fill(turnTail) : []),
+    taskListBlock,
+  ]
+    .filter(Boolean)
+    .join("\n");
   let validation = validateContextLength({
     chatHistory,
     model,
@@ -371,12 +388,20 @@ export async function processStreamingResponse(
 
   // Create OpenAI format history with validated system message. The date and
   // git status go on the first user message, after the system checkpoint of
-  // the prompt cache, so the system text is the same across sessions.
-  const openaiChatHistory = withEnvironmentBlock(
-    convertFromUnifiedHistoryWithSystemMessage(
-      chatHistory,
-      systemMessage,
-    ) as ChatCompletionMessageParam[],
+  // the prompt cache, so the system text is the same across sessions. The
+  // use's tail goes last on every user message (the item prompt with its
+  // plan block and the environment block, a message the person steered
+  // with, a nudge), the same line each time, so a message's bytes never
+  // change between requests and the cache markers on the last two user
+  // messages keep matching (core/llm/prompts/usePrompts.ts).
+  const openaiChatHistory = withTurnTail(
+    withEnvironmentBlock(
+      convertFromUnifiedHistoryWithSystemMessage(
+        chatHistory,
+        systemMessage,
+      ) as ChatCompletionMessageParam[],
+    ),
+    turnTail,
   );
   // Last, after the history: a change to the list then changes only the tail
   // of the request, and Bedrock puts its cache point before it.
@@ -574,6 +599,25 @@ export interface StreamChatResponseOptions {
   persistSession?: boolean;
 }
 
+/**
+ * The system message for this request and the use's tail for its newest user
+ * message. A compaction's request gets no tail; test doubles of the service
+ * may not have the method.
+ */
+async function turnTextsForRequest(
+  isCompacting: boolean,
+): Promise<{ systemMessage: string; turnTail: string | undefined }> {
+  const use = currentModelUse();
+  const systemMessage = await services.systemMessage.getSystemMessage(
+    services.toolPermissions.getState().currentMode,
+    use,
+  );
+  const turnTail = isCompacting
+    ? undefined
+    : services.systemMessage.turnTail?.(use);
+  return { systemMessage, turnTail };
+}
+
 // Main function that handles the conversation loop
 // eslint-disable-next-line max-params
 export async function streamChatResponse(
@@ -607,12 +651,9 @@ export async function streamChatResponse(
     chatHistory = refreshChatHistoryFromService(chatHistory, isCompacting);
     logger.debug("Starting conversation iteration");
 
-    // Get system message once per iteration (can change based on tool
-    // permissions mode, and a Loop turn has a use of its own)
-    const systemMessage = await services.systemMessage.getSystemMessage(
-      services.toolPermissions.getState().currentMode,
-      currentModelUse(),
-    );
+    // The system message and the use's tail, once per iteration (both can
+    // change with the permission mode, and a Loop turn has a use of its own)
+    const { systemMessage, turnTail } = await turnTextsForRequest(isCompacting);
 
     // Recompute tools on each iteration to handle mode changes during streaming
     const rawTools = await getRequestTools(isHeadless);
@@ -654,6 +695,7 @@ export async function streamChatResponse(
         tools,
         systemMessage,
         isCompacting,
+        turnTail,
       }).finally(() => callbacks?.onModelStreaming?.(false));
 
     if (abortController?.signal.aborted) {
