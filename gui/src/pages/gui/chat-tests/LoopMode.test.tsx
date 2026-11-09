@@ -1519,7 +1519,10 @@ describe("Loop mode's parallel waves", () => {
     // the exact edit, which runs in its worktree without a diff review
     const system = text(h.requests[0].messages[0]);
     expect(system).toContain("You are a worker of a Loop plan");
-    expect(system).toContain("/tmp/loop/item-1-");
+    // The same for every worker, so the wave shares one cached prefix; the
+    // worktree and the files are in each item's prompt instead
+    expect(text(h.requests[1].messages[0])).toBe(system);
+    expect(system).not.toContain("/tmp/loop/");
     for (const name of [
       BuiltInToolNames.FinishItem,
       BuiltInToolNames.HoldQuestion,

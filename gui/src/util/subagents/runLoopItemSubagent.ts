@@ -85,10 +85,13 @@ export interface LoopWorkerResult {
   text: string;
 }
 
-/** The worker's system prompt: what it is, how it reports, where it works. */
+/**
+ * The worker's system prompt: what it is and how it reports. The same text
+ * for every worker of a wave, so their requests share one cached prefix
+ * (the prefix gate keys on it): the worktree and the item's files are in
+ * the item prompt (loopItemPrompt's worker lines), not here.
+ */
 export function buildLoopWorkerSystemMessage(input: {
-  worktree: string;
-  files?: string[];
   toolNames: string[];
 }): string {
   const has = (name: string) => input.toolNames.includes(name);
@@ -99,10 +102,7 @@ export function buildLoopWorkerSystemMessage(input: {
   ].filter(has);
   return [
     "You are a worker of a Loop plan: you run one item of the plan in your own copy of the repository while other items run in theirs. The harness reads your report and merges your changes; the person sees neither your tool calls nor their output.",
-    `Work in this folder, and only here: ${input.worktree}. Relative paths and commands are resolved there.`,
-    input.files?.length
-      ? `Change only the files this item declares (${input.files.join(", ")}; new files under those paths are fine). Anything else would collide with another item.`
-      : undefined,
+    "Your copy's folder is named in the task. Work there and only there: relative paths and commands resolve in it, and you may change only the files the task declares.",
     edits.length
       ? `To edit, use ${edits.join(" or ")}: exact text replacements, applied at once.`
       : undefined,
@@ -266,8 +266,6 @@ export async function runLoopItemSubagent(
       input.model,
       tools,
       buildLoopWorkerSystemMessage({
-        worktree: input.worktree,
-        files: input.files,
         toolNames: tools.map((t) => t.function.name),
       }),
     );
