@@ -1,0 +1,19 @@
+---
+title: "Task List"
+---
+
+When the agent keeps a to-do list, it appears above the chat input as a one-line summary such as `3/8 Running migrations`. Select it to expand the list. The list belongs to the session and is saved with it.
+
+## Edit the list
+
+Each row has:
+
+- **A checkbox.** Checked means completed; unchecking reopens the item. A dash in the box means the item is in progress.
+- **A grab handle** (`⋮⋮`). Drag a row to move it. With the handle focused, the up and down arrow keys move it one place.
+- **Start**, on pending items, which marks the item in progress. Only one item is in progress at a time, so starting one returns the previous one to pending.
+- **Edit**, which changes the item's text. Press Enter to save or Escape to cancel. Completed and cancelled items cannot be edited.
+- **Delete**, which asks for a second click ("Sure?") before it removes the item. The question times out after four seconds.
+
+**Clear** in the header removes the whole list and asks for confirmation the same way. A text box at the bottom adds an item.
+
+An edit you make wins over the agent's: the next request tells the model that the list was changed by you. When a loop runs the plan, an item's `model:` line shows after its text.
