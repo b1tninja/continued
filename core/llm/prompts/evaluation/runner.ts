@@ -147,6 +147,26 @@ function parseCalls(toolCalls: ToolCallDelta[] | undefined): ScoredCall[] {
     });
 }
 
+/**
+ * A match of the "decided" pattern inside a sentence that still names the
+ * alternatives ("return ISO 8601 or a readable form", "whether to use ISO")
+ * is the choice being described, not decided. Returns the match only when
+ * its sentence commits to one answer.
+ */
+export function decidedMatch(
+  pattern: RegExp,
+  text: string,
+): string | undefined {
+  const re = new RegExp(pattern.source, pattern.flags.replace("g", "") + "g");
+  for (const m of text.matchAll(re)) {
+    const start = text.lastIndexOf(".", m.index ?? 0) + 1;
+    const end = text.indexOf(".", (m.index ?? 0) + m[0].length);
+    const sentence = text.slice(start, end === -1 ? undefined : end);
+    if (!/\b(either|whether|or)\b/i.test(sentence)) return m[0];
+  }
+  return undefined;
+}
+
 function planTextOf(call: ScoredCall): string {
   const a = call.args;
   const todos = Array.isArray(a.todos) ? a.todos.map(String) : [];
@@ -256,19 +276,21 @@ export function scoreReply(
           failures.push("the decision has fewer than two options");
         }
       }
-      const decided = reserved.decided.exec(planTextOf(plan));
+      const decided = decidedMatch(reserved.decided, planTextOf(plan));
       if (decided) {
         reservedDecided = true;
-        failures.push(`the plan decides the reserved choice: "${decided[0]}"`);
+        failures.push(`the plan decides the reserved choice: "${decided}"`);
       }
     } else {
       // Decided in text, or nothing presented: either way the choice did not
       // reach the person as a decision.
       reservedDecided = true;
-      const decided = truncated ? null : reserved.decided.exec(text);
+      const decided = truncated
+        ? undefined
+        : decidedMatch(reserved.decided, text);
       failures.push(
         decided
-          ? `the reply decides the reserved choice in text: "${decided[0]}"`
+          ? `the reply decides the reserved choice in text: "${decided}"`
           : "reserved choice never reached decisions (no present_plan call)",
       );
     }

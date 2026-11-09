@@ -351,6 +351,51 @@ describe("scoring one reply", () => {
     ).toBeUndefined();
   });
 
+  it("naming both options in one sentence is not deciding; committing to one is", () => {
+    const decisions = [
+      {
+        question: "ISO 8601 or readable?",
+        options: ["ISO 8601", "Readable"],
+        pick: "ISO 8601",
+        type: "design",
+        todos: [1],
+      },
+    ];
+    const naming = scoreReply(reserved, "short", {
+      text: "",
+      calls: [
+        {
+          name: "present_plan",
+          args: {
+            title: "t",
+            plan: "The function will return ISO 8601 or a readable form, whichever you pick. Whether to return ISO or readable is your decision.",
+            todos: ["Add formatDate(date) in the chosen shape"],
+            decisions,
+          },
+        },
+      ],
+      ms: 1,
+    });
+    expect(naming.ok, naming.failures.join("; ")).toBe(true);
+    const committing = scoreReply(reserved, "short", {
+      text: "",
+      calls: [
+        {
+          name: "present_plan",
+          args: {
+            title: "t",
+            plan: "The function will return ISO 8601 or a readable form. I'll assume ISO 8601 for simplicity.",
+            todos: ["Add formatDate(date)"],
+            decisions,
+          },
+        },
+      ],
+      ms: 1,
+    });
+    expect(committing.reservedDecided).toBe(true);
+    expect(committing.failures[0]).toMatch(/assume ISO/);
+  });
+
   it("a task list while planning fails", () => {
     const r = scoreReply(noList, "full", {
       text: "",

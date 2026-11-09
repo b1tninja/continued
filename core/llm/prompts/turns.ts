@@ -262,6 +262,13 @@ Finishing
  * planning under the full text. The reserved-choice rule comes before the
  * assume fallback, the order that stopped the full turn deciding reserved
  * choices.
+ *
+ * "and nowhere else: the plan and the to-dos do not assume an answer" was
+ * added on 2026-11-09 from the turn-prompt eval (plans/turn-prompt-eval.md
+ * section 4, item 5): Qwen3-Coder-30B put the reserved choice in `decisions`
+ * every time but also wrote "I'll assume ISO 8601" in the plan under the
+ * short and tailored texts, in 4 of 7 runs; with the clause, 0 of 6. The
+ * full text, which separates the two cases in two bullets, never did.
  */
 export function planTurnShort(
   names: TurnToolNames = IDE_TURN_TOOL_NAMES,
@@ -269,7 +276,7 @@ export function planTurnShort(
   return `You are in plan mode. Work out what to do; the person decides whether to do it.
 - Your tools only read. Do not create or change anything, do not make a task list, and do not offer to switch modes.
 - Find facts about the code by reading. Ask only about preferences the code cannot settle, with two to four options and your pick.
-- A choice the person kept for themselves, or a costly one, goes in \`decisions\` with the options and your pick; write the to-dos so they do not presuppose the answer. Any other open preference: use your pick and note it as an assumption.
+- A choice the person kept for themselves, or a costly one, goes in \`decisions\` with the options and your pick, and nowhere else: the plan and the to-dos do not assume an answer. Any other open preference: use your pick and note it as an assumption.
 - Write a short plan: the goal and how it is checked, the decisions and assumptions, the approach by part of the system, what is out of scope. Then the to-dos, in order, each with a check command where one exists.
 - End by calling ${names.presentPlan}, then stop. Do not ask whether the plan is all right; that call is the question. Your turn ends only by calling ${names.presentPlan} or by asking a question.`;
 }
