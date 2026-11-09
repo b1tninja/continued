@@ -324,12 +324,6 @@ Problem: the entries exist, but a use's `reasoningEffort` only reaches OpenAI-co
 | M8  | A config check: warn when `reasoningEffort` is set on a provider that ignores it, and when a `modeModels` name is not a chat model (the CLI skips these silently now)                                                 | M0         | Not started                            |
 | M9  | CLI subagent definitions as files with an optional `model:` (and effort), filling in `modeModels.subagent` when absent; today CLI subagents are role models that always name their own                                | none       | Not started                            |
 
-### Track O: parallel agents and agent interop (2.6)
-
-Plans: [`parallel-agents.md`](./parallel-agents.md), [`agent-interop.md`](./agent-interop.md). Target: 2.6, on `next/2.6`. Version 2.4 keeps to Tracks A and C (models, providers, the catalog, Strata and the cache).
-
-Problem: one window runs one agent at a time; agents that edit the same repository share a checkout; and one agent cannot hand work to another, message it, or wait for it except through a synchronous subagent with no mode.
-
 ### Track N: Loop parallel waves
 
 Plan: [`loop-mode.md`](./loop-mode.md), section "Next: parallel items as subagents (L4)". P1 (core state), P2 (`core/util/worktree.ts`, #371) and P4 (the IDE workers, #373) are built; this track is what they left open and what the first runs should decide.
@@ -358,6 +352,12 @@ Problem: a loop runs one item per turn, so three independent items take three ti
 | N8  | JetBrains: the `PASS_THROUGH_TO_CORE` list in `MessageTypes.kt` is behind `core/protocol/passThrough.ts` (`subagents/list`, `models/serverConcurrency`, `models/detectLocal`, `models/catalog`, `config/setModelRoles` are missing, so subagents and the local-server slots do not work there); one list generated from the other, or a test that diffs them | none             | Not started |
 | N9  | Wave size from the server: a local server with fewer slots than `LOOP_MAX_PARALLEL` queues workers today; let the wave size follow `models/serverConcurrency` so a one-slot server never starts a wave, and show the reason in the inbox                                                                                                                     | N1               | Not started |
 | N10 | Shared context for a wave: a short "what the other workers are doing" line in each worker's prompt is there (the plan block); measure whether a shared notes channel between workers of one wave (Claude Code's agent teams pattern) helps or, as Cognition argues, hurts; default stays none                                                                | N1               | Research    |
+
+### Track O: parallel agents and agent interop (2.6)
+
+Plans: [`parallel-agents.md`](./parallel-agents.md), [`agent-interop.md`](./agent-interop.md). Target: 2.6, on `next/2.6`. Version 2.4 keeps to Tracks A and C (models, providers, the catalog, Strata and the cache).
+
+Problem: one window runs one agent at a time; agents that edit the same repository share a checkout; and one agent cannot hand work to another, message it, or wait for it except through a synchronous subagent with no mode.
 
 ## Later
 
