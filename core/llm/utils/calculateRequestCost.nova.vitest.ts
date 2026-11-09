@@ -17,7 +17,8 @@ import {
  * $0.80 / $3.20, Nova Lite $0.06 / $0.24 and Nova Micro $0.035 / $0.14 per
  * MTok. A cache read is a quarter of the input price and a cache write $0.00
  * (the written tokens are billed as input). The Price List has no regional
- * premium for Nova, so a `us.` profile and a bare ID price the same.
+ * premium for Nova, so a `us.` profile and a bare ID price the same; the
+ * pricing page lists Nova 2 Lite's `global.` profile at $0.30 / $2.50.
  */
 const MTOK = 1_000_000;
 
@@ -84,13 +85,27 @@ describe("Nova list prices", () => {
       findNovaPricing("amazon.nova-2-lite-v1:0"),
     );
     expect(findModelPricing("global.amazon.nova-2-lite-v1:0")).toEqual(
-      findNovaPricing("amazon.nova-2-lite-v1:0"),
+      findNovaPricing("global.amazon.nova-2-lite-v1:0"),
     );
     expect(findModelPricing("amazon.nova-premier-v1:0")).toBeNull();
   });
 });
 
-describe("Nova has no regional premium", () => {
+describe("Nova 2 Lite's global profile is the one cheaper row", () => {
+  it("prices global.amazon.nova-2-lite at the page's global rate", () => {
+    const p = findNovaPricing("global.amazon.nova-2-lite-v1:0")!;
+    expect(p.input).toBe(0.3);
+    expect(p.output).toBe(2.5);
+    expect(p.cacheRead).toBe(0.075);
+    expect(p.cacheWrite).toBe(0);
+  });
+
+  it("gives the other Nova models one price, global or not", () => {
+    expect(findNovaPricing("global.amazon.nova-pro-v1:0")).toEqual(
+      findNovaPricing("us.amazon.nova-pro-v1:0"),
+    );
+  });
+
   it.each([
     "us.amazon.nova-2-lite-v1:0",
     "eu.amazon.nova-2-lite-v1:0",

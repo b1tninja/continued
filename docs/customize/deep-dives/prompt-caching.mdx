@@ -82,16 +82,16 @@ Prices are multiples of the model's input price. These are the figures Continuou
 
 Dollars per million tokens. Claude 4 Opus and 4.1 are $15 input; Claude 3 Haiku has its own cache prices. The table in `core/llm/utils/calculateRequestCost.ts` has every model.
 
-Amazon Nova on Bedrock is priced from the AWS Bedrock pricing page as of 2026-11-08. A cache read costs a quarter of the input price. AWS lists no separate price for a cache write, so Continuous estimates a write at the input price, and Nova has no 1-hour lifetime.
+Amazon Nova on Bedrock is priced from the AWS Price List (US East, on-demand) and the AWS Bedrock pricing page as of 2026-11-08. A cache read costs a quarter of the input price. The Price List prices a cache write at $0: the tokens a request writes are billed once, as input, with no surcharge. Nova has no 1-hour lifetime.
 
-| Model       | Input  | Output | Write  | Read     |
-| ----------- | ------ | ------ | ------ | -------- |
-| Nova 2 Lite | $0.30  | $2.50  | $0.30  | $0.075   |
-| Nova Pro    | $0.80  | $3.20  | $0.80  | $0.20    |
-| Nova Lite   | $0.06  | $0.24  | $0.06  | $0.015   |
-| Nova Micro  | $0.035 | $0.14  | $0.035 | $0.00875 |
+| Model       | Input  | Output | Write | Read     |
+| ----------- | ------ | ------ | ----- | -------- |
+| Nova 2 Lite | $0.33  | $2.75  | $0    | $0.0825  |
+| Nova Pro    | $0.80  | $3.20  | $0    | $0.20    |
+| Nova Lite   | $0.06  | $0.24  | $0    | $0.015   |
+| Nova Micro  | $0.035 | $0.14  | $0    | $0.00875 |
 
-Nova 2 Lite's $0.30 is its global cross-region price; AWS lists its geographic cross-region and in-region price at $0.33, so an ID with a `us.` or other geographic prefix gets the same 10 percent premium as Claude. The other three Nova models are listed at one price.
+Nova 2 Lite's $0.33 is its geographic cross-region and in-region price; AWS lists its global cross-region price at $0.30 / $2.50, so a `global.` ID is priced 10 percent lower and the chat window's regional-endpoint tip applies to it as to Claude. The other three Nova models are listed at one price.
 
 On Bedrock, Anthropic says regional and multi-region endpoints cost 10 percent more than global ones, for Claude Sonnet 4.5, Haiku 4.5, Opus 4.5 and every later model. Continuous applies that to model IDs that start with `us.`, `eu.`, `apac.`, `jp.`, `au.` or `ca.`, and prices `global.` IDs and earlier models at list. Only `us.` was checked against real billing data. Set the full ID (for example `us.anthropic.claude-sonnet-4-6`) in your config for the estimate to include the premium. A bare ID with `crossRegionInference` set is prefixed only when the request is sent, so its estimate stays at list price.
 

@@ -1,6 +1,7 @@
 import type { ModelDescription } from "core";
 import {
   bedrockRegionalPriceFactor,
+  findModelPricing,
   normalizeClaudeModelId,
 } from "core/llm/utils/calculateRequestCost";
 import {
@@ -57,6 +58,23 @@ export function globalModelId(modelId: string): string {
   return modelId.replace(/^(us|eu|apac|jp|au|ca)\./i, "global.");
 }
 
+/**
+ * How much more this regional model ID costs than its global one: the ratio
+ * of the two input prices when both are priced (Claude's regional premium,
+ * Nova 2 Lite's cheaper global row), otherwise the Claude regional factor by
+ * itself, so a new Claude model that is not priced yet is still warned about.
+ */
+function regionalPremiumFactor(modelId: string): number {
+  const globalId = globalModelId(modelId);
+  if (globalId === modelId) return 1;
+  const regional = findModelPricing(modelId);
+  const global = findModelPricing(globalId);
+  if (regional && global && global.input > 0) {
+    return Math.round((regional.input / global.input) * 1000) / 1000;
+  }
+  return bedrockRegionalPriceFactor(modelId);
+}
+
 /** Throttled requests in a conversation before the throttling tip appears. */
 export const THROTTLE_TIP_MIN = 2;
 
@@ -95,10 +113,11 @@ export function cacheTips(
 
   // Anthropic's pricing page: "Regional and multi-region endpoints include a
   // 10 percent premium over global endpoints" (Sonnet 4.5, Haiku 4.5, Opus 4.5
-  // and later). AWS's own page lists Amazon Nova 2 Lite with the same gap. On
-  // Bedrock the endpoint type is the model ID's prefix.
+  // and later). AWS's own page lists Amazon Nova 2 Lite with the same gap
+  // (its `global.` row in NOVA_PRICING). On Bedrock the endpoint type is the
+  // model ID's prefix.
   if (model.provider?.toLowerCase() === "bedrock") {
-    const factor = bedrockRegionalPriceFactor(model.model);
+    const factor = regionalPremiumFactor(model.model);
     if (factor > 1) {
       const percent = Math.round((factor - 1) * 100);
       const noGlobal = globalProfile === "absent";

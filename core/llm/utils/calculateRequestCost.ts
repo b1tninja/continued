@@ -143,7 +143,8 @@ function continuesWithMinorVersion(rest: string): boolean {
  * statement and are not measured.
  *
  * Amazon Nova gets no factor: `NOVA_PRICING` carries the AWS Price List's
- * in-region rate, which is also what a `us.` profile bills at.
+ * in-region rate, which is also what a `us.` profile bills at, and a row of
+ * its own for Nova 2 Lite's cheaper `global.` profile.
  */
 const BEDROCK_GEO_PROFILE_FACTOR = 1.1;
 const BEDROCK_GEO_PREFIX = /^(us|eu|apac|jp|au|ca)\.anthropic\./i;
@@ -357,10 +358,13 @@ function priceCachedUsage(
  * `-cache-read-input-token-count` and `-cache-write-input-token-count` rows.
  * On every Nova row a cache read is 0.25x the input price and a cache write
  * is $0.00: the tokens a request writes are billed once, as input, with no
- * surcharge. The same models reached through a cross-region profile (`us.`,
- * `eu.`, `apac.`, `global.`) are priced at these list rates; the Price List
- * shows no regional premium for Nova. Only the four models that take cache
- * points (`bedrockCachePointFields`) are here; `normalizeNovaModelId` in
+ * surcharge. A geographic cross-region profile (`us.`, `eu.`, `apac.`) is
+ * priced at these same rates: the Price List shows no regional premium for
+ * Nova, and the pricing page (aws.amazon.com/bedrock/pricing, read the same
+ * day) lists one price for geo cross-region and in-region. The page lists
+ * Nova 2 Lite's global cross-region profile 10% lower, so `global.` has its
+ * own row. Only the four models that take cache points
+ * (`bedrockCachePointFields`) are here; `normalizeNovaModelId` in
  * @continuedev/llm-info names the same four.
  */
 function novaPricing(input: number, output: number): ModelPricing {
@@ -374,6 +378,10 @@ function novaPricing(input: number, output: number): ModelPricing {
 }
 
 const NOVA_PRICING: { match: RegExp; pricing: ModelPricing }[] = [
+  {
+    match: /^global\.amazon\.nova-2-lite-v\d/i,
+    pricing: novaPricing(0.3, 2.5),
+  },
   { match: /(^|\.)amazon\.nova-2-lite-v\d/i, pricing: novaPricing(0.33, 2.75) },
   { match: /(^|\.)amazon\.nova-pro-v\d/i, pricing: novaPricing(0.8, 3.2) },
   { match: /(^|\.)amazon\.nova-lite-v\d/i, pricing: novaPricing(0.06, 0.24) },
