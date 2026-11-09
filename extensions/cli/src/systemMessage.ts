@@ -138,16 +138,25 @@ export function loadMarkdownRulesWithMetadata(): RuleObject[] {
  * @param mode - Current permission mode
  * @returns The comprehensive system message with base message and rules section
  */
+/**
+ * Which turn text to build: the model id the message is for (its prompt
+ * profile picks the text) and, or, the prompt `modeModels.<use>.prompt`
+ * chose for the turn. A bare string is the model id alone.
+ */
+export interface TurnPromptInput {
+  model?: string;
+  promptChoice?: PromptChoice;
+}
+
 export async function constructSystemMessage(
   mode: PermissionMode,
   additionalRules?: string[],
   format?: "json",
   headless?: boolean,
-  /** The model id the message is for; picks the turn text's prompt profile. */
-  model?: string,
-  /** `modeModels.<use>.prompt` for the turn: a profile or a block's text. */
-  promptChoice?: PromptChoice,
+  turn?: string | TurnPromptInput,
 ): Promise<string> {
+  const { model, promptChoice }: TurnPromptInput =
+    typeof turn === "string" ? { model: turn } : (turn ?? {});
   let agentContent = "";
 
   try {

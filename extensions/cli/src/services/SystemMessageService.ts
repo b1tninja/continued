@@ -157,8 +157,7 @@ export class SystemMessageService extends BaseService<SystemMessageServiceState>
       additionalRules,
       format,
       headless,
-      modelId,
-      promptChoice,
+      { model: modelId, promptChoice },
     );
     this.cache.set(key, { message: systemMessage, fingerprint });
 

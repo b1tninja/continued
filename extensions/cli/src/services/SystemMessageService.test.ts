@@ -87,8 +87,7 @@ describe("SystemMessageService", () => {
         ["rule1"],
         "json",
         true,
-        undefined,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
       expect(message).toBe("Test system message");
     });
@@ -113,8 +112,7 @@ describe("SystemMessageService", () => {
         ["rule1"],
         "json",
         false,
-        undefined,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
     });
 
@@ -136,8 +134,7 @@ describe("SystemMessageService", () => {
         ["rule2", "rule3"],
         "json",
         undefined,
-        undefined,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
     });
   });
@@ -195,8 +192,7 @@ describe("SystemMessageService", () => {
         undefined,
         undefined,
         true,
-        undefined,
-        undefined,
+        { model: undefined, promptChoice: undefined },
       );
     });
 
@@ -265,8 +261,7 @@ describe("SystemMessageService: the prompt per use", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      { profile: "short" },
+      { model: undefined, promptChoice: { profile: "short" } },
     );
     await service.getSystemMessage("normal", "agent");
     expect(constructSystemMessageMock).toHaveBeenLastCalledWith(
@@ -274,8 +269,7 @@ describe("SystemMessageService: the prompt per use", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      undefined,
+      { model: undefined, promptChoice: undefined },
     );
     await service.getSystemMessage("normal", "loop");
     expect(constructSystemMessageMock).toHaveBeenCalledTimes(2);
@@ -288,8 +282,7 @@ describe("SystemMessageService: the prompt per use", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      { text: "Plan briefly." },
+      { model: undefined, promptChoice: { text: "Plan briefly." } },
     );
   });
 });

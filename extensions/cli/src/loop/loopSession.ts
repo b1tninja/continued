@@ -546,9 +546,9 @@ export function loopRunGoing(): boolean {
 export function currentModelUse(): ModelUse {
   const current = getSessionLoop()?.current;
   if (current) return useForLoopTurn(current.kind);
-  return services.toolPermissions.getCurrentMode() === "plan"
-    ? "plan"
-    : "agent";
+  // Read as the stream does (getState), which test doubles provide
+  const mode = services.toolPermissions.getState?.()?.currentMode;
+  return mode === "plan" ? "plan" : "agent";
 }
 
 /** Whether the loop is running an item in the main session. */

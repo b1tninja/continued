@@ -305,8 +305,7 @@ describe("constructSystemMessage: the prompt a use chose", () => {
       undefined,
       undefined,
       false,
-      claude,
-      { profile: "short" },
+      { model: claude, promptChoice: { profile: "short" } },
     );
     expect(short).toContain("Keep going until the request is done");
     expect(short).not.toContain("Stopping");
@@ -315,8 +314,7 @@ describe("constructSystemMessage: the prompt a use chose", () => {
       undefined,
       undefined,
       false,
-      "qwen3-coder-30b",
-      { profile: "full" },
+      { model: "qwen3-coder-30b", promptChoice: { profile: "full" } },
     );
     expect(full).toContain("Two kinds of unknowns");
   });
@@ -327,8 +325,10 @@ describe("constructSystemMessage: the prompt a use chose", () => {
       undefined,
       undefined,
       false,
-      claude,
-      { text: "Plan briefly, then call PresentPlan." },
+      {
+        model: claude,
+        promptChoice: { text: "Plan briefly, then call PresentPlan." },
+      },
     );
     expect(result).toContain(
       '<context name="planMode">\nPlan briefly, then call PresentPlan.\n</context>',
