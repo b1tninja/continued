@@ -126,6 +126,22 @@ describe("executeSubAgent", () => {
     expect(sets[0]).not.toBe(parentPermissions);
   });
 
+  it("runs as the subagent use: the mode's system message for it, and the stream told the use", async () => {
+    const { services } = await import("../services/index.js");
+    mockStream(async (_h, callbacks) => callbacks.onContent?.("done"));
+
+    await run("q");
+
+    expect(services.systemMessage.getSystemMessage).toHaveBeenCalledWith(
+      "normal",
+      "subagent",
+    );
+    const [, , , , , isCompacting, options] =
+      vi.mocked(streamChatResponse).mock.calls[0];
+    expect(isCompacting).toBe(false);
+    expect(options).toEqual({ persistSession: false, use: "subagent" });
+  });
+
   it("a failing run does not block the next one, and keeps what it wrote", async () => {
     vi.mocked(streamChatResponse)
       .mockImplementationOnce(async (_h, _m, _l, _a, callbacks) => {
@@ -555,6 +571,6 @@ describe("executeSubAgent: context budget", () => {
     // The parent's model is not changed
     expect(budgeted.model.defaultCompletionOptions.contextLength).toBe(524_288);
     expect(isCompacting).toBe(false);
-    expect(options).toEqual({ persistSession: false });
+    expect(options).toEqual({ persistSession: false, use: "subagent" });
   });
 });
