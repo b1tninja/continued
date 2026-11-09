@@ -50,6 +50,7 @@ import {
 import { evaluateToolPolicy } from "../../redux/thunks/evaluateToolPolicies";
 import { findToolCallById } from "../../redux/util";
 import { constructMessages } from "../../redux/util/constructMessages";
+import type { IIdeMessenger } from "../../context/IdeMessenger";
 import type {
   ClientToolExtras,
   ClientToolOutput,
@@ -70,8 +71,6 @@ import {
   subagentSlots,
   waitForSubagentApproval,
 } from "./registry";
-
-type LocalSession = ReturnType<typeof sessionSlice.reducer>;
 
 const CANCELLED_BY_PARENT = "The parent conversation was stopped";
 
@@ -199,6 +198,440 @@ function parseArgs(args: any): RunArgs {
   };
 }
 
+/** A tool call the runner answers itself, instead of sending it to core. */
+export interface HandledCall {
+  output: ContextItem[];
+  /** The run ends after this turn's calls (a Loop worker's finish_item) */
+  endRun?: boolean;
+}
+
+/** The conversation a run drives: a fresh session with the prompt as its first message. */
+export type LocalSession = ReturnType<typeof sessionSlice.reducer>;
+
+export function newLocalSession(prompt: string): LocalSession {
+  return {
+    ...INITIAL_SESSION_STATE,
+    history: [
+      {
+        message: { role: "user", content: prompt, id: "subagent-prompt" },
+        contextItems: [],
+      },
+    ],
+  };
+}
+
+export interface SubagentDriveInput {
+  ideMessenger: IIdeMessenger;
+  dispatch: ClientToolExtras["dispatch"];
+  getState: ClientToolExtras["getState"];
+  /** Aborting it cancels the run; the system tool framework also uses it */
+  controller: AbortController;
+  /** The run's conversation so far (newLocalSession for a fresh one) */
+  local: LocalSession;
+  systemMessage: string;
+  model: ModelDescription;
+  tools: Tool[];
+  framework?: SystemMessageToolCodeblocksFramework;
+  completionOptions: LLMFullCompletionOptions;
+  /** Prompt caching is on: the first request waits its turn at the prefix gate */
+  cachingOn: boolean;
+  maxTurns: number;
+  /** The run's live state: the parent's card, or a Loop worker's inbox row */
+  onUpdate: (patch: Partial<SubagentRunState>) => void;
+  /** Ids of this run's approvals start with it (the parent's tool call id) */
+  approvalScope: string;
+  /**
+   * A call the parent's policies would ask about: wait for the person on the
+   * card (default), or refuse it, for a run nobody answers (a Loop worker)
+   */
+  approvals?: "card" | "refuse";
+  /**
+   * Calls the runner answers itself, before the parent's policies: a Loop
+   * worker's finish_item, hold_question and remind_me. Undefined sends the
+   * call to core as usual.
+   */
+  handleCall?: (call: ToolCallState) => Promise<HandledCall | undefined>;
+  /** Folders (URIs) the tool calls run in: a worker's worktree */
+  workspaceDirs?: string[];
+}
+
+export interface SubagentDriveResult {
+  status: SubagentRunStatus;
+  error?: string;
+  /** The conversation as it ended */
+  local: LocalSession;
+  toolCalls: SubagentToolCallSummary[];
+  usage?: SubagentRunState["usage"];
+}
+
+/**
+ * Wait for a subagent slot, and for one of the model server's own slots when
+ * the server says how many it has: a one-slot local server runs one
+ * subagent at a time. Resolves with a release for both.
+ */
+export async function acquireSubagentSlots(
+  ideMessenger: IIdeMessenger,
+  model: ModelDescription,
+  signal: AbortSignal,
+): Promise<() => void> {
+  // A cancelled run gives up its place in the queue
+  const release = await subagentSlots.acquire(signal);
+  let releaseServer: (() => void) | undefined;
+  try {
+    const serverLimit = model.apiBase
+      ? await ideMessenger
+          .request("models/serverConcurrency", { title: model.title })
+          .then((res) => (res.status === "success" ? res.content : undefined))
+          .catch(() => undefined)
+      : undefined;
+    if (model.apiBase && serverLimit) {
+      releaseServer = await subagentServerSlots(
+        model.apiBase,
+        serverLimit,
+      ).acquire(signal);
+    }
+  } catch (e) {
+    release();
+    throw e;
+  }
+  return () => {
+    releaseServer?.();
+    release();
+  };
+}
+
+/**
+ * The request loop of a subagent run: model calls until the reply has no
+ * tool calls, the turn limit, or the signal; every call checked with the
+ * parent's policies and run through core (or answered by `handleCall`). The
+ * tool output never leaves the run's own conversation. Shared by the
+ * parent's `subagent` tool and Loop mode's workers.
+ */
+export async function driveSubagent(
+  input: SubagentDriveInput,
+): Promise<SubagentDriveResult> {
+  const {
+    ideMessenger,
+    dispatch,
+    getState,
+    controller,
+    systemMessage,
+    model,
+    tools,
+    framework,
+    completionOptions,
+    cachingOn,
+    maxTurns,
+    onUpdate,
+  } = input;
+  const signal = controller.signal;
+  let local = input.local;
+  const reduce = (action: Parameters<typeof sessionSlice.reducer>[1]) => {
+    local = sessionSlice.reducer(local, action);
+  };
+  let toolCalls: SubagentToolCallSummary[] = [];
+  let usage: SubagentRunState["usage"];
+  const update = (patch: Partial<SubagentRunState>) => {
+    if (patch.toolCalls) toolCalls = patch.toolCalls;
+    if (patch.usage) usage = patch.usage;
+    onUpdate(patch);
+  };
+  const result = (
+    status: SubagentRunStatus,
+    error?: string,
+  ): SubagentDriveResult => ({ status, error, local, toolCalls, usage });
+
+  for (let turn = 1; ; turn++) {
+    if (signal.aborted) return result("cancelled", reasonOf(signal));
+    if (turn > maxTurns) {
+      return result("partial", `Stopped after ${maxTurns} model calls`);
+    }
+
+    const messages = constructMessages(
+      local.history.map(({ message: { id, ...message }, ...rest }) => ({
+        ...rest,
+        message,
+      })) as ChatHistoryItem[],
+      systemMessage,
+      [],
+      {},
+      framework,
+    ).messages;
+
+    // Siblings with the same model, system prompt and tools share a cached
+    // prefix: the first one's request goes alone so the rest can read it.
+    const gate =
+      turn === 1 && cachingOn
+        ? await subagentPrefixGate.enter(
+            prefixKey(model, systemMessage, tools),
+            signal,
+          )
+        : undefined;
+    try {
+      // Stopped while waiting for the gate: send nothing
+      if (signal.aborted) return result("cancelled", reasonOf(signal));
+      let gen = ideMessenger.llmStreamChat(
+        { completionOptions, title: model.title, messages },
+        signal,
+      );
+      if (framework) {
+        gen = interceptSystemToolCalls(gen, controller, framework);
+      }
+      let next = await gen.next();
+      while (!next.done) {
+        gate?.opened();
+        if (signal.aborted) break;
+        // A server's prompt-reading updates are not part of the reply
+        const { reply } = splitPromptProgress(next.value);
+        if (reply.length > 0) reduce(streamUpdate(reply));
+        for (const message of next.value) {
+          if (message.role === "assistant" && message.usage) {
+            update({ usage: addUsage(usage, message.usage) });
+            dispatch(
+              addRequestUsageToSession({
+                provider: model.provider,
+                model: model.model,
+                usage: message.usage,
+              }),
+            );
+          }
+        }
+        update({ text: assistantTexts(local.history).join("\n\n") });
+        next = await gen.next();
+      }
+    } finally {
+      gate?.opened();
+    }
+    if (signal.aborted) return result("cancelled", reasonOf(signal));
+
+    const calls = lastToolCalls(local);
+    if (calls.length === 0) return result("completed");
+    for (const call of calls) {
+      reduce(setToolGenerated({ toolCallId: call.toolCallId, tools }));
+    }
+    let ended = false;
+    for (const call of lastToolCalls(local)) {
+      if (signal.aborted) {
+        reduce(cancelToolCall({ toolCallId: call.toolCallId }));
+        continue;
+      }
+      if (await runChildToolCall(call)) ended = true;
+    }
+    // A tool message after the calls, as the parent's history has, so the
+    // next answer starts a new assistant message. Its content is rebuilt
+    // from the call's output when the request is assembled.
+    for (const call of lastToolCalls(local)) {
+      reduce(
+        streamUpdate([
+          { role: "tool", content: "", toolCallId: call.toolCallId },
+        ]),
+      );
+    }
+    if (ended) return result("completed");
+  }
+
+  /** Runs one call; true when it ends the run (HandledCall.endRun). */
+  async function runChildToolCall(call: ToolCallState): Promise<boolean> {
+    const name = call.toolCall.function.name;
+    const summary: SubagentToolCallSummary = {
+      name,
+      summary: summarizeToolArgs(call.parsedArgs),
+      status: "calling",
+    };
+    const index = toolCalls.length;
+    const setCallStatus = (status: SubagentToolCallSummary["status"]) => {
+      const next = [...toolCalls];
+      next[index] = { ...summary, status };
+      update({ toolCalls: next });
+    };
+    update({ toolCalls: [...toolCalls, summary] });
+
+    const fail = (message: string) => {
+      reduce(
+        errorToolCall({
+          toolCallId: call.toolCallId,
+          output: errorItem(message),
+        }),
+      );
+      setCallStatus("errored");
+    };
+    const succeed = (items: ContextItem[]) => {
+      reduce(
+        updateToolCallOutput({
+          toolCallId: call.toolCallId,
+          contextItems: items,
+        }),
+      );
+      reduce(acceptToolCall({ toolCallId: call.toolCallId }));
+      setCallStatus("done");
+    };
+
+    if (!tools.some((t) => t.function.name === name)) {
+      fail(`${name} is not available to this subagent.`);
+      return false;
+    }
+
+    try {
+      const handled = await input.handleCall?.(call);
+      if (handled) {
+        succeed(handled.output);
+        return !!handled.endRun;
+      }
+
+      let current = findLocalCall(call.toolCallId) ?? call;
+      const pre = await ideMessenger.request("tools/preprocessArgs", {
+        toolName: name,
+        args: current.parsedArgs ?? {},
+        ...(input.workspaceDirs ? { workspaceDirs: input.workspaceDirs } : {}),
+      });
+      if (pre.status === "success") {
+        if (pre.content.errorMessage) {
+          fail(pre.content.errorMessage);
+          return false;
+        }
+        if (pre.content.preprocessedArgs) {
+          reduce(
+            setProcessedToolCallArgs({
+              toolCallId: call.toolCallId,
+              newArgs: pre.content.preprocessedArgs,
+            }),
+          );
+        }
+      }
+      current = findLocalCall(call.toolCallId) ?? current;
+
+      const policy = await evaluateToolPolicy(
+        ideMessenger,
+        tools,
+        current,
+        getState().ui.toolSettings,
+        selectApprovalSettings(getState()),
+        getState().session.mode,
+      );
+      if (policy.policy === "disabled") {
+        fail(
+          `${name} was refused by the person's tool policies${
+            policy.reason ? `: ${policy.reason}` : ""
+          }.`,
+        );
+        return false;
+      }
+      if (policy.policy === "allowedWithPermission") {
+        if (input.approvals === "refuse") {
+          fail(
+            `${name} needs the person's approval, and nobody can give it during this run. Do what you can without it; if the item cannot be done without it, report it as waiting and say what needs approval.`,
+          );
+          return false;
+        }
+        const approvalId = `${input.approvalScope}:${call.toolCallId}`;
+        update({
+          pendingApproval: {
+            id: approvalId,
+            toolName: name,
+            summary: policy.displayValue ?? summary.summary,
+            ...(policy.reason && { note: policy.reason }),
+          },
+        });
+        const allowed = await waitForSubagentApproval(approvalId, signal);
+        update({ pendingApproval: undefined });
+        if (!allowed) {
+          reduce(cancelToolCall({ toolCallId: call.toolCallId }));
+          setCallStatus("canceled");
+          return false;
+        }
+      }
+
+      // Stop does not wait for the call: core cannot cancel a tool call, so
+      // its result is dropped, and a terminal command is killed as the
+      // parent's own Stop does.
+      const result = await unlessAborted(
+        ideMessenger.request("tools/call", {
+          toolCall: current.toolCall,
+          ...(input.workspaceDirs
+            ? { workspaceDirs: input.workspaceDirs }
+            : {}),
+        }),
+        signal,
+      );
+      if (result === ABORTED) {
+        if (name === BuiltInToolNames.RunTerminalCommand) {
+          void ideMessenger
+            .request("process/killTerminalProcess", {
+              toolCallId: call.toolCallId,
+            })
+            .catch(() => {});
+        }
+        reduce(cancelToolCall({ toolCallId: call.toolCallId }));
+        setCallStatus("canceled");
+        return false;
+      }
+      if (result.status === "error") {
+        fail(result.error);
+        return false;
+      }
+      if (result.content.errorMessage) {
+        fail(`${name} failed with the message: ${result.content.errorMessage}`);
+        return false;
+      }
+      const { items } = flagToolOutput(result.content.contextItems ?? []);
+      succeed(items);
+    } catch (e) {
+      fail(e instanceof Error ? e.message : String(e));
+    }
+    return false;
+  }
+
+  function findLocalCall(id: string): ToolCallState | undefined {
+    return lastToolCalls(local).find((c) => c.toolCallId === id);
+  }
+}
+
+/**
+ * How a run's requests go to this model: native tools or the system message
+ * framework, and prompt caching as the parent has it for this model. A fresh
+ * cache state, so "auto" starts at 5 minutes: a run's requests come seconds
+ * apart, and nothing here learns from them.
+ */
+export function prepareSubagentRequests(
+  state: ReturnType<ClientToolExtras["getState"]>,
+  model: ModelDescription,
+  tools: Tool[],
+  baseSystem: string,
+): Pick<
+  SubagentDriveInput,
+  "systemMessage" | "framework" | "completionOptions" | "cachingOn"
+> {
+  const useNativeTools = state.config.config.experimental
+    ?.onlyUseSystemMessageTools
+    ? false
+    : modelSupportsNativeTools(model);
+  const framework =
+    !useNativeTools && tools.length > 0
+      ? new SystemMessageToolCodeblocksFramework()
+      : undefined;
+  const systemMessage = framework
+    ? addSystemMessageToolsToSystemMessage(framework, baseSystem, tools)
+    : baseSystem;
+  const parentModel = selectSelectedChatModel(state);
+  const cacheSetting =
+    model.title === parentModel?.title ? selectCacheSetting(state) : undefined;
+  const cacheOptions = resolvePromptCache(
+    model,
+    cacheSetting,
+    INITIAL_PROMPT_CACHE_STATE,
+    Date.now(),
+    state.session.mode,
+  ).options;
+  const cachingOn =
+    modelSupportsPromptCacheControl(model) &&
+    promptCacheStatus(model, cacheSetting, INITIAL_PROMPT_CACHE_STATE, 0).on;
+  const completionOptions: LLMFullCompletionOptions = {
+    ...(useNativeTools && tools.length > 0 ? { tools } : {}),
+    ...cacheOptions,
+  };
+  return { systemMessage, framework, completionOptions, cachingOn };
+}
+
 /**
  * Run a subagent for the parent's `subagent` tool call: a fresh conversation
  * with the agent's system prompt and the parent's tools narrowed by the
@@ -240,20 +673,7 @@ export async function runSubagentTool(
   update(run);
 
   let release: (() => void) | undefined;
-  let releaseServer: (() => void) | undefined;
-  let childTools: Tool[] = [];
-  let local: LocalSession = {
-    ...INITIAL_SESSION_STATE,
-    history: [
-      {
-        message: { role: "user", content: args.prompt, id: "subagent-prompt" },
-        contextItems: [],
-      },
-    ],
-  };
-  const reduce = (action: Parameters<typeof sessionSlice.reducer>[1]) => {
-    local = sessionSlice.reducer(local, action);
-  };
+  let local: LocalSession = newLocalSession(args.prompt);
 
   const finish = (status: SubagentRunStatus, error?: string) => {
     const texts = assistantTexts(local.history);
@@ -316,7 +736,6 @@ export async function runSubagentTool(
     }
     const resolved = resolveSubagentTools(definition, parentTools);
     const tools = resolved.tools;
-    childTools = tools;
     const notices = [
       ...(fallbackReason ? [fallbackReason] : []),
       // Built-in agents list tools that only some setups have; only a
@@ -327,166 +746,39 @@ export async function runSubagentTool(
     ];
     update({ model: model.title, ...(notices.length && { notices }) });
 
-    const useNativeTools = state.config.config.experimental
-      ?.onlyUseSystemMessageTools
-      ? false
-      : modelSupportsNativeTools(model);
-    const framework =
-      !useNativeTools && tools.length > 0
-        ? new SystemMessageToolCodeblocksFramework()
-        : undefined;
     const workspaceDirs = await ideMessenger.ide
       .getWorkspaceDirs()
       .catch(() => [] as string[]);
-    const baseSystem = buildSubagentSystemMessage(definition, workspaceDirs);
-    const systemMessage = framework
-      ? addSystemMessageToolsToSystemMessage(framework, baseSystem, tools)
-      : baseSystem;
-
-    // Prompt caching as the parent has it for this model. A fresh cache
-    // state, so "auto" starts at 5 minutes: a run's requests come seconds
-    // apart, and nothing here learns from them.
-    const cacheSetting =
-      model.title === parentModel.title ? selectCacheSetting(state) : undefined;
-    const cacheOptions = resolvePromptCache(
+    const prepared = prepareSubagentRequests(
+      state,
       model,
-      cacheSetting,
-      INITIAL_PROMPT_CACHE_STATE,
-      Date.now(),
-      state.session.mode,
-    ).options;
-    const cachingOn =
-      modelSupportsPromptCacheControl(model) &&
-      promptCacheStatus(model, cacheSetting, INITIAL_PROMPT_CACHE_STATE, 0).on;
-    const completionOptions: LLMFullCompletionOptions = {
-      ...(useNativeTools && tools.length > 0 ? { tools } : {}),
-      ...cacheOptions,
-    };
+      tools,
+      buildSubagentSystemMessage(definition, workspaceDirs),
+    );
 
-    // Wait for a slot; a cancelled run gives up its place in the queue.
-    release = await subagentSlots.acquire(signal);
-    // And one of the model server's own slots, when the server says how many
-    // it has: a one-slot local server runs one subagent at a time.
-    const serverLimit = model.apiBase
-      ? await ideMessenger
-          .request("models/serverConcurrency", { title: model.title })
-          .then((res) => (res.status === "success" ? res.content : undefined))
-          .catch(() => undefined)
-      : undefined;
-    if (model.apiBase && serverLimit) {
-      releaseServer = await subagentServerSlots(
-        model.apiBase,
-        serverLimit,
-      ).acquire(signal);
-    }
+    release = await acquireSubagentSlots(ideMessenger, model, signal);
     update({ status: "running", startedAt: Date.now() });
 
-    const maxTurns = definition.maxTurns ?? DEFAULT_SUBAGENT_MAX_TURNS;
-    for (let turn = 1; ; turn++) {
-      if (signal.aborted) {
-        finish("cancelled", reasonOf(signal));
-        break;
-      }
-      if (turn > maxTurns) {
-        finish("partial", `Stopped after ${maxTurns} model calls`);
-        break;
-      }
-
-      const messages = constructMessages(
-        local.history.map(({ message: { id, ...message }, ...rest }) => ({
-          ...rest,
-          message,
-        })) as ChatHistoryItem[],
-        systemMessage,
-        [],
-        {},
-        framework,
-      ).messages;
-
-      // Siblings with the same model, system prompt and tools share a cached
-      // prefix: the first one's request goes alone so the rest can read it.
-      const gate =
-        turn === 1 && cachingOn
-          ? await subagentPrefixGate.enter(
-              prefixKey(model, systemMessage, tools),
-              signal,
-            )
-          : undefined;
-      try {
-        // Stopped while waiting for the gate: send nothing
-        if (signal.aborted) {
-          finish("cancelled", reasonOf(signal));
-          break;
-        }
-        let gen = ideMessenger.llmStreamChat(
-          { completionOptions, title: model.title, messages },
-          signal,
-        );
-        if (framework) {
-          gen = interceptSystemToolCalls(gen, controller, framework);
-        }
-        let next = await gen.next();
-        while (!next.done) {
-          gate?.opened();
-          if (signal.aborted) break;
-          // A server's prompt-reading updates are not part of the reply
-          const { reply } = splitPromptProgress(next.value);
-          if (reply.length > 0) reduce(streamUpdate(reply));
-          for (const message of next.value) {
-            if (message.role === "assistant" && message.usage) {
-              update({ usage: addUsage(run.usage, message.usage) });
-              dispatch(
-                addRequestUsageToSession({
-                  provider: model.provider,
-                  model: model.model,
-                  usage: message.usage,
-                }),
-              );
-            }
-          }
-          update({ text: assistantTexts(local.history).join("\n\n") });
-          next = await gen.next();
-        }
-      } finally {
-        gate?.opened();
-      }
-      if (signal.aborted) {
-        finish("cancelled", reasonOf(signal));
-        break;
-      }
-
-      const calls = lastToolCalls(local);
-      if (calls.length === 0) {
-        finish("completed");
-        break;
-      }
-      for (const call of calls) {
-        reduce(setToolGenerated({ toolCallId: call.toolCallId, tools }));
-      }
-      for (const call of lastToolCalls(local)) {
-        if (signal.aborted) {
-          reduce(cancelToolCall({ toolCallId: call.toolCallId }));
-          continue;
-        }
-        await runChildToolCall(call);
-      }
-      // A tool message after the calls, as the parent's history has, so the
-      // next answer starts a new assistant message. Its content is rebuilt
-      // from the call's output when the request is assembled.
-      for (const call of lastToolCalls(local)) {
-        reduce(
-          streamUpdate([
-            { role: "tool", content: "", toolCallId: call.toolCallId },
-          ]),
-        );
-      }
-    }
+    const outcome = await driveSubagent({
+      ideMessenger,
+      dispatch,
+      getState,
+      controller,
+      local,
+      model,
+      tools,
+      ...prepared,
+      maxTurns: definition.maxTurns ?? DEFAULT_SUBAGENT_MAX_TURNS,
+      onUpdate: update,
+      approvalScope: toolCallId,
+    });
+    local = outcome.local;
+    finish(outcome.status, outcome.error);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (signal.aborted) finish("cancelled", reasonOf(signal));
     else finish("failed", message);
   } finally {
-    releaseServer?.();
     release?.();
     unregister();
     parentSignal.removeEventListener("abort", onParentAbort);
@@ -507,137 +799,4 @@ export async function runSubagentTool(
     return { output, respondImmediately: false };
   }
   return { output, respondImmediately: true };
-
-  async function runChildToolCall(call: ToolCallState): Promise<void> {
-    const name = call.toolCall.function.name;
-    const summary: SubagentToolCallSummary = {
-      name,
-      summary: summarizeToolArgs(call.parsedArgs),
-      status: "calling",
-    };
-    const index = run.toolCalls.length;
-    const setCallStatus = (status: SubagentToolCallSummary["status"]) => {
-      const toolCalls = [...run.toolCalls];
-      toolCalls[index] = { ...summary, status };
-      update({ toolCalls });
-    };
-    update({ toolCalls: [...run.toolCalls, summary] });
-
-    const fail = (message: string) => {
-      reduce(
-        errorToolCall({
-          toolCallId: call.toolCallId,
-          output: errorItem(message),
-        }),
-      );
-      setCallStatus("errored");
-    };
-
-    const tools = childTools;
-    if (!tools.some((t) => t.function.name === name)) {
-      fail(`${name} is not available to this subagent.`);
-      return;
-    }
-
-    try {
-      let current = findLocalCall(call.toolCallId) ?? call;
-      const pre = await ideMessenger.request("tools/preprocessArgs", {
-        toolName: name,
-        args: current.parsedArgs ?? {},
-      });
-      if (pre.status === "success") {
-        if (pre.content.errorMessage) {
-          fail(pre.content.errorMessage);
-          return;
-        }
-        if (pre.content.preprocessedArgs) {
-          reduce(
-            setProcessedToolCallArgs({
-              toolCallId: call.toolCallId,
-              newArgs: pre.content.preprocessedArgs,
-            }),
-          );
-        }
-      }
-      current = findLocalCall(call.toolCallId) ?? current;
-
-      const policy = await evaluateToolPolicy(
-        ideMessenger,
-        tools,
-        current,
-        getState().ui.toolSettings,
-        selectApprovalSettings(getState()),
-        getState().session.mode,
-      );
-      if (policy.policy === "disabled") {
-        fail(
-          `${name} was refused by the person's tool policies${
-            policy.reason ? `: ${policy.reason}` : ""
-          }.`,
-        );
-        return;
-      }
-      if (policy.policy === "allowedWithPermission") {
-        const approvalId = `${toolCallId}:${call.toolCallId}`;
-        update({
-          pendingApproval: {
-            id: approvalId,
-            toolName: name,
-            summary: policy.displayValue ?? summary.summary,
-            ...(policy.reason && { note: policy.reason }),
-          },
-        });
-        const allowed = await waitForSubagentApproval(approvalId, signal);
-        update({ pendingApproval: undefined });
-        if (!allowed) {
-          reduce(cancelToolCall({ toolCallId: call.toolCallId }));
-          setCallStatus("canceled");
-          return;
-        }
-      }
-
-      // Stop does not wait for the call: core cannot cancel a tool call, so
-      // its result is dropped, and a terminal command is killed as the
-      // parent's own Stop does.
-      const result = await unlessAborted(
-        ideMessenger.request("tools/call", { toolCall: current.toolCall }),
-        signal,
-      );
-      if (result === ABORTED) {
-        if (name === BuiltInToolNames.RunTerminalCommand) {
-          void ideMessenger
-            .request("process/killTerminalProcess", {
-              toolCallId: call.toolCallId,
-            })
-            .catch(() => {});
-        }
-        reduce(cancelToolCall({ toolCallId: call.toolCallId }));
-        setCallStatus("canceled");
-        return;
-      }
-      if (result.status === "error") {
-        fail(result.error);
-        return;
-      }
-      if (result.content.errorMessage) {
-        fail(`${name} failed with the message: ${result.content.errorMessage}`);
-        return;
-      }
-      const { items } = flagToolOutput(result.content.contextItems ?? []);
-      reduce(
-        updateToolCallOutput({
-          toolCallId: call.toolCallId,
-          contextItems: items,
-        }),
-      );
-      reduce(acceptToolCall({ toolCallId: call.toolCallId }));
-      setCallStatus("done");
-    } catch (e) {
-      fail(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  function findLocalCall(id: string): ToolCallState | undefined {
-    return lastToolCalls(local).find((c) => c.toolCallId === id);
-  }
 }

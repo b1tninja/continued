@@ -6,6 +6,7 @@ import { telemetryService } from "../telemetry/telemetryService.js";
 
 import { formatCacheTally, splitInputTokens } from "./cacheTally.js";
 import { hadUnhandledError } from "./errorState.js";
+import { fieldFallbackLines } from "./fieldFallbackLines.js";
 import { getGitDiffSnapshot } from "./git.js";
 import { logger } from "./logger.js";
 import {
@@ -185,6 +186,12 @@ function displaySessionUsage(): void {
     if (cacheLine || cutOff) logger.info("");
     if (cacheLine) logger.info(cacheLine);
     if (cutOff) logger.info(cutOff);
+    // Request fields a model refused and the run went on without.
+    const fallbackLines = fieldFallbackLines();
+    if (fallbackLines.length > 0) {
+      logger.info("");
+      for (const line of fallbackLines) logger.info(line);
+    }
     logger.info("=".repeat(60) + "\n");
   } catch (err) {
     logger.debug("Failed to display session usage (non-critical)", err as any);

@@ -8,6 +8,10 @@ import { BuiltInToolNames } from "./builtIn";
 import { codebaseToolImpl } from "./implementations/codebaseTool";
 import { createNewFileImpl } from "./implementations/createNewFile";
 import { createRuleBlockImpl } from "./implementations/createRuleBlock";
+import {
+  multiEditImpl,
+  singleFindAndReplaceImpl,
+} from "./implementations/exactEdits";
 import { fetchUrlContentImpl } from "./implementations/fetchUrlContent";
 import { fileGlobSearchImpl } from "./implementations/globSearch";
 import { grepSearchImpl } from "./implementations/grepSearch";
@@ -227,6 +231,12 @@ export async function callBuiltInTool(
       return await viewRepoMapImpl(args, extras);
     case BuiltInToolNames.ViewSubdirectory:
       return await viewSubdirectoryImpl(args, extras);
+    // Client tools in the person's checkout (diff review); core applies them
+    // only for a call with a working directory of its own (a Loop worker)
+    case BuiltInToolNames.SingleFindAndReplace:
+      return await singleFindAndReplaceImpl(args, extras);
+    case BuiltInToolNames.MultiEdit:
+      return await multiEditImpl(args, extras);
     default:
       throw new Error(`Tool "${functionName}" not found`);
   }

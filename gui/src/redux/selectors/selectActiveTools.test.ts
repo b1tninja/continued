@@ -34,12 +34,17 @@ function names(mode: MessageModes): string[] {
 }
 
 describe("selectActiveTools: present_plan", () => {
-  it("is offered in Plan mode, with the read-only tools", () => {
+  it("is offered in Plan mode, with the read-only tools and without the task list", () => {
     expect(names("plan")).toEqual([
       BuiltInToolNames.ReadFile,
-      BuiltInToolNames.TaskList,
       BuiltInToolNames.PresentPlan,
     ]);
+  });
+
+  it("the task list is not offered in Plan mode: the plan's to-dos become it", () => {
+    // Matches the CLI (extensions/cli/src/tools/index.tsx): a small model
+    // offered both sent the list instead of the plan.
+    expect(names("plan")).not.toContain(BuiltInToolNames.TaskList);
   });
 
   it("keeps every file-editing tool out of Plan mode", () => {

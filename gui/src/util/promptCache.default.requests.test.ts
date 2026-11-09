@@ -33,7 +33,7 @@ describe("effectiveCacheSetting: where it must not apply", () => {
   it("does not apply to models the cache button does not cover", () => {
     for (const other of [
       m({ provider: "openai", model: "gpt-4o" }),
-      m({ provider: "bedrock", model: "us.amazon.nova-pro-v1:0" }),
+      m({ provider: "bedrock", model: "us.amazon.nova-premier-v1:0" }),
       m({ provider: "ollama", model: "llama3" }),
     ]) {
       expect(effectiveCacheSetting(other, undefined, "agent")).toBeUndefined();

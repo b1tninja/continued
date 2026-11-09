@@ -17,6 +17,24 @@ export function optsOutOfPromptCache(body: unknown): boolean {
 }
 
 /**
+ * A per-message mark the client puts on the OpenAI-format message at a fork
+ * point: the Anthropic and Bedrock adapters put a cache point right after that
+ * message's content, so every request of a run keeps that prefix warm and a
+ * retry, a branch or a subagent that starts from the same context reads it
+ * instead of writing it again. It counts as one of the two conversation cache
+ * points. Like NO_PROMPT_CACHE_FIELD, only those two adapters read it and
+ * neither forwards it; set it only for them, because other adapters pass
+ * messages on to the provider, which rejects an unknown field.
+ */
+export const CACHE_PIN_FIELD = "x_continue_cache_pin";
+
+export function isCachePinned(message: unknown): boolean {
+  return (
+    (message as Record<string, unknown> | undefined)?.[CACHE_PIN_FIELD] === true
+  );
+}
+
+/**
  * Prompt cache lifetimes for the adapters that send them (Anthropic, Bedrock).
  * Anthropic and Bedrock accept `5m` (the default) and `1h`.
  */

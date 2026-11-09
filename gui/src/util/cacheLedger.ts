@@ -1,6 +1,6 @@
 import type { Usage } from "core";
 import {
-  findAnthropicPricing,
+  findModelPricing,
   type ModelPricing,
 } from "core/llm/utils/calculateRequestCost";
 import { minCacheableTokens } from "core/llm/utils/cacheMinimums";
@@ -116,7 +116,7 @@ function writePrice(p: ModelPricing, ttl: "5m" | "1h"): number {
 }
 
 function pricingFor(e: CacheLedgerEntry): ModelPricing | null {
-  return findAnthropicPricing(e.model, entryInputTokens(e));
+  return findModelPricing(e.model, entryInputTokens(e));
 }
 
 /** What the input side of these requests cost, from the tokens recorded. */
