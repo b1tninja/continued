@@ -29,7 +29,10 @@ describe("modelSupportsPromptCacheControl", () => {
   it.each([
     [sonnet, true],
     [bedrockSonnet, true],
-    [model("bedrock", "amazon.nova-pro-v1:0"), false],
+    [model("bedrock", "amazon.nova-pro-v1:0"), true],
+    [model("bedrock", "us.amazon.nova-2-lite-v1:0"), true],
+    [model("bedrock", "amazon.nova-premier-v1:0"), false],
+    [model("openrouter", "amazon/nova-pro-v1"), false],
     [model("openai", "gpt-4o"), false],
     [model("vertexai", "claude-sonnet-4-5@20250929"), true],
     [model("vertexai", "gemini-2.5-pro"), false],

@@ -1197,6 +1197,14 @@ export interface ChatHistoryItem {
   reasoning?: Reasoning;
   appliedRules?: RuleMetadata[];
   conversationSummary?: string;
+  /**
+   * Request-time only, never saved: a prompt cache point goes right after this
+   * item (a fork point, such as a Loop item's first message), so a retry, a
+   * branch or a subagent that starts from the same context reads the cached
+   * prefix instead of writing it again. Set by the CLI's loopRequestHistory
+   * and read by buildChatRequestBody.
+   */
+  cachePin?: boolean;
 }
 
 export interface LLMFullCompletionOptions extends BaseCompletionOptions {

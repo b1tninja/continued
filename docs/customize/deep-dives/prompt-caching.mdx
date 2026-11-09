@@ -5,7 +5,7 @@ keywords: [prompt caching, cache, ttl, cost, anthropic, bedrock, claude]
 
 Prompt caching lets a provider keep the start of your prompt (tool definitions, system prompt and conversation so far) and charge a fraction of the input price when the next request begins with the same text. Continuous supports it for Claude models on Anthropic, Amazon Bedrock, Vertex AI and OpenRouter, and for Amazon Nova 2 Lite, Nova Pro, Nova Lite and Nova Micro on Bedrock (see Bedrock below).
 
-Caching is on by default for Claude models on Anthropic and Bedrock in Agent, Plan and Background modes and in the `cn` command line, with the Auto lifetime below, unless `config.yaml` says something about caching. The `cn` command line also turns it on by default for the Nova models named above. In Chat it is off until you turn it on. To turn it off, set `promptCaching: false` on the model, or choose Off in the prompt cache button. To turn it on in Chat as well, set it per model in `config.yaml`:
+Caching is on by default for Claude models on Anthropic and Bedrock, and for the Nova models named above, in Agent, Plan and Background modes and in the `cn` command line, unless `config.yaml` says something about caching: Claude gets the Auto lifetime below, Nova its one lifetime of 5 minutes. In Chat it is off until you turn it on. To turn it off, set `promptCaching: false` on the model, or choose Off in the prompt cache button. To turn it on in Chat as well, set it per model in `config.yaml`:
 
 ```yaml title="config.yaml"
 models:
@@ -54,7 +54,7 @@ models:
 ```
 
 `ttl` accepts `5m`, `1h` or `auto` (the Auto row above). It only chooses the lifetime and does not turn caching on; `promptCaching: true` (or the toolbar) does that. A choice in the toolbar other than "Config default" overrides it for that session. If the model cannot take a 1-hour lifetime (see Bedrock below), `1h` is sent as the 5-minute default. In JSON configuration the same field is `cacheBehavior.ttl`.
-The `cn` command line reaches Claude through shared adapters and reads the same `cacheBehavior.ttl` and `promptCaching`, on both Anthropic and Bedrock. `1h` puts a 1-hour lifetime on every cache point (on Bedrock only for the models listed under Bedrock below; others get 5 minutes). `auto` is applied by the CLI itself, which has no toolbar: it counts the session's requests that carry cache points, and moves to 1 hour at the fifth, or after a pause of more than 5 and up to 55 minutes, the same two rules as above. It has no chat mode, so every CLI session counts as an Agent session. On Anthropic the CLI's cache points are on unless the adapter's `cachingStrategy` is `none`, and in an agent loop they now go on the last tool results, which is where the new content is. On Bedrock they are now on when the config says nothing about caching for Claude models, with the Auto lifetime, and for the Nova models listed below, with Nova's 5-minute default; off for any other model. `promptCaching: false` turns them off.
+The `cn` command line reaches Claude through shared adapters and reads the same `cacheBehavior.ttl` and `promptCaching`, on both Anthropic and Bedrock. `1h` puts a 1-hour lifetime on every cache point (on Bedrock only for the models listed under Bedrock below; others get 5 minutes). `auto` is applied by the CLI itself, which has no toolbar: it counts the session's requests that carry cache points, and moves to 1 hour at the fifth, or after a pause of more than 5 and up to 55 minutes, the same two rules as above. It has no chat mode, so every CLI session counts as an Agent session. On Anthropic the CLI's cache points are on unless the adapter's `cachingStrategy` is `none`, and in an agent loop they now go on the last tool results, which is where the new content is. On Bedrock they are now on when the config says nothing about caching for Claude models, with the Auto lifetime, and for the Nova models listed below, with Nova's 5-minute default; off for any other model. `promptCaching: false` turns them off. In Loop mode the CLI also pins a cache point at each item's first message, so a retry or a subagent that starts from the item's context reads the same cached prefix instead of writing it again; the pin takes one of the two conversation cache points.
 
 
 
@@ -82,6 +82,17 @@ Prices are multiples of the model's input price. These are the figures Continuou
 
 Dollars per million tokens. Claude 4 Opus and 4.1 are $15 input; Claude 3 Haiku has its own cache prices. The table in `core/llm/utils/calculateRequestCost.ts` has every model.
 
+Amazon Nova on Bedrock is priced from the AWS Price List (US East, on-demand) and the AWS Bedrock pricing page as of 2026-11-08. A cache read costs a quarter of the input price. The Price List prices a cache write at $0: the tokens a request writes are billed once, as input, with no surcharge. Nova has no 1-hour lifetime.
+
+| Model       | Input  | Output | Write | Read     |
+| ----------- | ------ | ------ | ----- | -------- |
+| Nova 2 Lite | $0.33  | $2.75  | $0    | $0.0825  |
+| Nova Pro    | $0.80  | $3.20  | $0    | $0.20    |
+| Nova Lite   | $0.06  | $0.24  | $0    | $0.015   |
+| Nova Micro  | $0.035 | $0.14  | $0    | $0.00875 |
+
+Nova 2 Lite's $0.33 is its geographic cross-region and in-region price; AWS lists its global cross-region price at $0.30 / $2.50, so a `global.` ID is priced 10 percent lower and the chat window's regional-endpoint tip applies to it as to Claude. The other three Nova models are listed at one price.
+
 On Bedrock, Anthropic says regional and multi-region endpoints cost 10 percent more than global ones, for Claude Sonnet 4.5, Haiku 4.5, Opus 4.5 and every later model. Continuous applies that to model IDs that start with `us.`, `eu.`, `apac.`, `jp.`, `au.` or `ca.`, and prices `global.` IDs and earlier models at list. Only `us.` was checked against real billing data. Set the full ID (for example `us.anthropic.claude-sonnet-4-6`) in your config for the estimate to include the premium. A bare ID with `crossRegionInference` set is prefixed only when the request is sent, so its estimate stays at list price.
 
 Compacting a conversation (the Compact button) sends the same system prompt, tools and cache settings as the conversation, so while the cache is warm the summary request reads it instead of paying full price for the history. When the cache has expired, or caching is off, or only part of the conversation is being compacted, it sends the saved history on its own as before, because writing a new cache entry just before replacing the conversation would cost more. The prompt asks the model to answer in text; if the reply has none, the plain request is sent.
@@ -90,11 +101,11 @@ A cached session costs more than an uncached one on its first request and less o
 
 While the cache is warm and you open the model picker, Continuous shows how many tokens switching model would re-read and an estimated extra cost. It does not warn about changes to reasoning or mode.
 
-The usage panel shows cost estimates for Claude models on Anthropic, Bedrock, Vertex AI and OpenRouter, split into 5-minute writes, 1-hour writes and reads when the provider reports the split. Its cache hit rate is cache-read tokens divided by the input tokens the API reports.
+The usage panel shows cost estimates for Claude models on Anthropic, Bedrock, Vertex AI and OpenRouter, and for the four Nova models on Bedrock, split into 5-minute writes, 1-hour writes and reads when the provider reports the split. Its cache hit rate is cache-read tokens divided by the input tokens the API reports.
 
 ## Toolbar button
 
-The button is shown only for Claude models on the `anthropic`, `bedrock`, `vertexai` and `openrouter` providers. A filled icon means requests carry cache markers; a brighter one means an entry should still be alive. The tooltip says whether the cache is warm, which lifetime applies, and about how long is left. Warm is Continuous's estimate from the time of your last request; the provider does not report it.
+The button is shown for Claude models on the `anthropic`, `bedrock`, `vertexai` and `openrouter` providers, and for Amazon Nova 2 Lite, Nova Pro, Nova Lite and Nova Micro on `bedrock`. For Nova the menu offers 5 minutes, Off and the config default only: Nova has one lifetime, so there is no Auto or 1 hour entry, and the default in Agent, Plan and Background is 5 minutes. A filled icon means requests carry cache markers; a brighter one means an entry should still be alive. The tooltip says whether the cache is warm, which lifetime applies, and about how long is left. Warm is Continuous's estimate from the time of your last request; the provider does not report it.
 
 The setting is stored per model and survives restarts.
 
@@ -139,7 +150,7 @@ Continuous also adds a per-process ID to the first user message so that two peop
 
 ### Amazon Nova
 
-The AWS prompt caching guide lists four Nova models with explicit cache checkpoints: Nova 2 Lite (`amazon.nova-2-lite-v1:0`), Nova Pro, Nova Lite and Nova Micro. For them Continuous puts cache points on the system prompt and the last two user messages, never on the tool list (Nova refuses a request with a cache point there) and never with a `ttl` (Nova takes only the 5-minute lifetime). The minimum is 1K tokens before a checkpoint, and AWS caps what Nova caches at 20K tokens, so a long agent conversation caches only its first 20K tokens. A cache read on Nova costs a quarter of the input price. Nova also reuses prefixes on its own (implicit caching), but AWS says that reuse is neither reported in the usage fields nor billed as cache reads, so a Nova session that shows zero cached tokens has sent no cache points. Nova Premier and the other Nova 2 models are not in the table and get no cache points. The chat window's prompt cache button is for Claude models only, so on Nova the setting is `promptCaching` in `config.yaml`.
+The AWS prompt caching guide lists four Nova models with explicit cache checkpoints: Nova 2 Lite (`amazon.nova-2-lite-v1:0`), Nova Pro, Nova Lite and Nova Micro. For them Continuous puts cache points on the system prompt and the last two user messages, never on the tool list (Nova refuses a request with a cache point there) and never with a `ttl` (Nova takes only the 5-minute lifetime). The minimum is 1K tokens before a checkpoint, and AWS caps what Nova caches at 20K tokens, so a long agent conversation caches only its first 20K tokens. A cache read on Nova costs a quarter of the input price. Nova also reuses prefixes on its own (implicit caching), but AWS says that reuse is neither reported in the usage fields nor billed as cache reads, so a Nova session that shows zero cached tokens has sent no cache points. Nova Premier and the other Nova 2 models are not in the table and get no cache points. The chat window shows the prompt cache button for these four models, with 5 minutes as the only lifetime and caching on by default in Agent, Plan and Background, and the usage panel prices their cache reads (see Cost above).
 
 ## Not supported
 

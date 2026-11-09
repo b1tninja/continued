@@ -30,6 +30,12 @@ const gpt = {
   model: "gpt-4o",
   underlyingProviderName: "openai",
 };
+const nova = {
+  title: "Nova 2 Lite",
+  provider: "bedrock",
+  model: "us.amazon.nova-2-lite-v1:0",
+  underlyingProviderName: "bedrock",
+};
 
 async function setup(model: typeof claude | typeof gpt | typeof bedrockOld) {
   const ideMessenger = new MockIdeMessenger();
@@ -73,6 +79,21 @@ describe("PromptCacheButton", () => {
         screen.getByTestId(`prompt-cache-option-${id}`),
       ).toBeInTheDocument();
     }
+  });
+
+  it("offers 5 minutes, Off and the config default only for Nova on Bedrock", async () => {
+    const { user } = await setup(nova);
+    await user.click(screen.getByTestId("prompt-cache-button"));
+    for (const id of ["5m", "off", "config"]) {
+      expect(
+        screen.getByTestId(`prompt-cache-option-${id}`),
+      ).toBeInTheDocument();
+    }
+    expect(screen.queryByTestId("prompt-cache-option-auto")).toBeNull();
+    expect(screen.queryByTestId("prompt-cache-option-1h")).toBeNull();
+    expect(screen.getByTestId("prompt-cache-option-config")).toHaveTextContent(
+      "5 minutes in Agent, Plan and Background",
+    );
   });
 
   it("hides 1 hour for a Bedrock model that cannot take it", async () => {

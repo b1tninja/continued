@@ -1,9 +1,13 @@
 import type { ModelDescription } from "core";
 import {
   anthropicStyleSupportsOneHourCache,
+  bedrockCachePointFields,
   bedrockSupportsOneHourCache,
 } from "core/llm/llms/bedrockHelpers";
-import { normalizeClaudeModelId } from "core/llm/utils/calculateRequestCost";
+import {
+  normalizeClaudeModelId,
+  type ModelPricing,
+} from "core/llm/utils/calculateRequestCost";
 import { minCacheableTokens } from "core/llm/utils/cacheMinimums";
 import { formatClockTime } from "./promptCacheCountdown";
 import type { CacheLedgerEntry } from "./cacheLedger";
@@ -133,19 +137,41 @@ export const PROMPT_CACHE_TTL_MS = TTL_MS;
 
 /**
  * Whether the toolbar control does anything for this model: the providers whose
- * request builders read `promptCaching` and `promptCacheTtl` per request.
+ * request builders read `promptCaching` and `promptCacheTtl` per request. On
+ * Bedrock that is every model the provider puts cache points on, Claude and
+ * the four Amazon Nova models (`bedrockCachePointFields`); elsewhere, Claude.
  */
 export function modelSupportsPromptCacheControl(
   model: ModelDescription | null | undefined,
 ): boolean {
   if (!model) return false;
   const provider = model.provider?.toLowerCase();
+  if (provider === "bedrock") {
+    return bedrockCachePointFields(model.model) !== undefined;
+  }
   return (
     (provider === "anthropic" ||
-      provider === "bedrock" ||
       provider === "openrouter" ||
       provider === "vertexai") &&
     normalizeClaudeModelId(model.model) !== undefined
+  );
+}
+
+/**
+ * Whether this model's cache has one lifetime and nothing to choose: Amazon
+ * Nova on Bedrock takes the 5-minute default only, and no `ttl` is sent to it
+ * (`bedrockCacheTtl`). The menu then offers no Auto or 1-hour entry, the
+ * default is 5 minutes rather than Auto, the status ring runs for 5 minutes
+ * whatever a stale setting says, and the tips about 1 hour do not apply.
+ */
+export function modelHasFixedCacheLifetime(
+  model: ModelDescription | null | undefined,
+): boolean {
+  return (
+    !!model &&
+    model.provider?.toLowerCase() === "bedrock" &&
+    modelSupportsPromptCacheControl(model) &&
+    normalizeClaudeModelId(model.model) === undefined
   );
 }
 
@@ -259,7 +285,8 @@ export function configSilentOnCaching(model: ModelDescription): boolean {
  * when there is one. With none, config.yaml decides if it says anything; when
  * it says nothing, Agent, Plan and Background sessions on a Claude model that
  * takes cache control run Auto (or the fixed lifetime `cacheBehavior.ttl`
- * names), and Chat keeps caching off.
+ * names), a Nova model on Bedrock runs its one lifetime of 5 minutes, and
+ * Chat keeps caching off.
  *
  * Why only those modes: a week of real agent traffic (plans/cache-real-world-data.md)
  * read 12 to 28 times per token written, which saved 85% of input cost, and
@@ -281,6 +308,7 @@ export function effectiveCacheSetting(
   const provider = model.provider?.toLowerCase();
   if (provider !== "anthropic" && provider !== "bedrock") return setting;
   if (!configSilentOnCaching(model) || !isAgentStyleMode(mode)) return setting;
+  if (modelHasFixedCacheLifetime(model)) return "5m";
   return configTtlPolicy(model) ?? "auto";
 }
 
@@ -418,9 +446,10 @@ export function resolvePromptCache(
  * What changing something that invalidates the cache would cost right now, or
  * undefined when nothing is at stake (cache off, cold or no size known yet).
  *
- * Prices are per million input tokens. Re-reading the conversation at the
- * 5-minute write price (1.25x) instead of the read price (0.1x) costs about
- * 1.15x the input price per token, and the 1-hour write is 1.9x.
+ * The extra is the write price of the entry's lifetime minus the read price,
+ * per token, from the model's own price row: on Claude about 1.15x the input
+ * price (1.25x minus 0.1x) for a 5-minute entry and 1.9x for 1 hour; on Nova
+ * 0.75x (a write at the input price, a read at a quarter of it).
  */
 export interface SwitchCost {
   tokens: number;
@@ -431,15 +460,19 @@ export interface SwitchCost {
 export function switchCost(
   status: PromptCacheStatus,
   state: PromptCacheSessionState,
-  pricePerMTokInput: number | undefined,
+  pricing: ModelPricing | null | undefined,
 ): SwitchCost | undefined {
   if (!status.on || !status.warm || !state.lastInputTokens) return undefined;
   const tokens = state.lastInputTokens;
-  const writeMultiplier = status.ttl === "1h" ? 2 : 1.25;
-  const extraUsd =
-    pricePerMTokInput === undefined
-      ? undefined
-      : (tokens / 1_000_000) * pricePerMTokInput * (writeMultiplier - 0.1);
+  let extraUsd: number | undefined;
+  if (pricing) {
+    const writeRate =
+      status.ttl === "1h" ? pricing.cacheWrite1h : pricing.cacheWrite;
+    // A model with no cache write rate (Amazon Nova) bills the tokens it
+    // writes as plain input, so that is what the re-send costs.
+    const write = writeRate > 0 ? writeRate : pricing.input;
+    extraUsd = (tokens / 1_000_000) * (write - pricing.cacheRead);
+  }
   return { tokens, extraUsd };
 }
 
@@ -487,8 +520,11 @@ export function promptCacheStatus(
       ? configEnablesPromptCaching(model)
       : setting !== "off";
   const policy = setting ?? configTtlPolicy(model);
+  const fixed = modelHasFixedCacheLifetime(model);
   const ttl: PromptCacheTtl =
-    policy === "1h" || (policy === "auto" && state.escalated) ? "1h" : "5m";
+    !fixed && (policy === "1h" || (policy === "auto" && state.escalated))
+      ? "1h"
+      : "5m";
 
   // A prompt under the model's minimum is not cached, so there is no entry to
   // be warm or to expire.
@@ -506,7 +542,7 @@ export function promptCacheStatus(
   let expiresAt: number | undefined;
   let lifetimeMs: number | undefined;
   if (on && !belowMinimum && state.lastRequestAt !== undefined) {
-    lifetimeMs = TTL_MS[state.lastTtl ?? "5m"];
+    lifetimeMs = TTL_MS[fixed ? "5m" : (state.lastTtl ?? "5m")];
     const end = state.lastRequestAt + lifetimeMs;
     if (end > now) {
       warm = true;
@@ -586,3 +622,18 @@ export const PROMPT_CACHE_SETTING_LABELS: Record<
   },
   off: { label: "Off", detail: "Send the whole prompt at full price" },
 };
+
+/**
+ * The description under a menu entry. For a model with one lifetime the
+ * config default is 5 minutes where Claude's is Auto, and the rest reads the
+ * same.
+ */
+export function promptCacheSettingDetail(
+  choice: PromptCacheSetting | "config",
+  model: ModelDescription | null | undefined,
+): string {
+  if (choice === "config" && modelHasFixedCacheLifetime(model)) {
+    return "Follow config.yaml. If it says nothing: 5 minutes in Agent, Plan and Background, off in Chat";
+  }
+  return PROMPT_CACHE_SETTING_LABELS[choice].detail;
+}
