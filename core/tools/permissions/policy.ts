@@ -1,5 +1,6 @@
 import type { Tool } from "../..";
 import { BuiltInToolNames } from "../builtIn";
+import type { ShellKind } from "../../util/shell";
 import { canonicalRuleName } from "./names";
 import { classifyReadOnly, type ReadOnlyClaim } from "./readOnlyCommand";
 
@@ -414,7 +415,11 @@ export function areaOfTool(
   toolName: string,
   tool?: Pick<Tool, "readonly"> | undefined,
   /** The call's arguments: a command that only reads is Context use */
-  call?: { parsedArgs?: Record<string, unknown>; cwd?: string },
+  call?: {
+    parsedArgs?: Record<string, unknown>;
+    cwd?: string;
+    shell?: ShellKind;
+  },
 ): "context" | "tools" | "edits" | undefined {
   if (SESSION_TOOLS.has(toolName)) return undefined;
   const name = canonicalRuleName(toolName);
@@ -432,11 +437,17 @@ export function areaOfTool(
  * not. Undefined when the call has no command.
  */
 export function readOnlyClaim(
-  call: { parsedArgs?: Record<string, unknown>; cwd?: string } | undefined,
+  call:
+    | {
+        parsedArgs?: Record<string, unknown>;
+        cwd?: string;
+        shell?: ShellKind;
+      }
+    | undefined,
 ): ReadOnlyClaim | undefined {
   const command = call?.parsedArgs?.command;
   if (typeof command !== "string") return undefined;
-  return classifyReadOnly(command, { cwd: call?.cwd });
+  return classifyReadOnly(command, { cwd: call?.cwd, shell: call?.shell });
 }
 
 export type QuestionDecider = "person" | "agent" | "reviewer";

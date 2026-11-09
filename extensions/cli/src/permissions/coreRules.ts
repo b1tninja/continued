@@ -15,6 +15,8 @@ import {
 } from "core/tools/permissions/evaluate.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
 
+import { resolveShell } from "core/util/shell.js";
+
 import { createLlmApi } from "../config.js";
 import { logger } from "../util/logger.js";
 
@@ -214,6 +216,7 @@ export async function evaluateWithCoreRules(
         tool,
         permissions,
         enabled: true,
+        shell: resolveShell().kind,
         reviewer: input.reviewer ?? null,
         environment: {
           workspaceDirs: [input.cwd ?? process.cwd()],
@@ -248,6 +251,8 @@ export async function evaluateWithCoreRules(
     permissions,
     approval: input.approval,
     cwd: input.cwd ?? process.cwd(),
+    // The shell the CLI runs commands in: its login shell, PowerShell on Windows
+    shell: resolveShell().kind,
   });
   return {
     decision:

@@ -64,20 +64,13 @@ function getDecodedOutput(data: Buffer): string {
   }
 } // Simple helper function to use login shell on Unix/macOS and PowerShell on Windows
 function getShellCommand(command: string): { shell: string; args: string[] } {
-  if (process.platform === "win32") {
-    // Windows: Use PowerShell
-    return {
-      shell: "powershell.exe",
-      args: ["-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", command],
-    };
-  } else {
-    // Unix/macOS: Use login shell to source .bashrc/.zshrc etc.
-    const userShell = process.env.SHELL || "/bin/bash";
-    return { shell: userShell, args: ["-l", "-c", command] };
-  }
+  // Windows PowerShell on Windows, the login shell elsewhere (resolveShell)
+  const shell = resolveShell();
+  return { shell: shell.executable, args: shell.args(command) };
 }
 
 import { fileURLToPath } from "node:url";
+import { resolveShell } from "../../util/shell";
 import { ToolImpl } from ".";
 import {
   isProcessBackgrounded,

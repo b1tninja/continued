@@ -53,6 +53,7 @@ const approve = (
     parsedArgs,
     permissions: extra.permissions,
     approval,
+    shell: "bash",
   });
 
 const cmd = (
@@ -347,6 +348,7 @@ describe("a command that only reads is Context use", () => {
           permissions: undefined,
           approval: levels({}),
           cwd,
+          shell: "bash",
         });
       // No folder, or a config that can run a program: Tool use, so it asks
       expect(withCwd(undefined).policy).toBe(ASK);
@@ -354,5 +356,34 @@ describe("a command that only reads is Context use", () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("a command is read in the shell that runs it", () => {
+  const run = (command: string, shell?: "bash" | "powershell" | "cmd") =>
+    evaluateToolPolicyWithRules({
+      tool: terminalTool as any,
+      toolName: "run_terminal_command",
+      basePolicy: ASK,
+      parsedArgs: { command },
+      permissions: undefined,
+      approval: levels({}),
+      shell,
+    });
+
+  it("with no shell known a read-only command is Tool use again", () => {
+    expect(run("ls", "bash").policy).toBe(ALLOW);
+    expect(run("ls", undefined).policy).toBe(ASK);
+  });
+
+  it("cmd is not parsed, so nothing is vouched there", () => {
+    expect(run("dir", "cmd").policy).toBe(ASK);
+  });
+
+  it("the same text is two things: date reads in bash and is not vouched in PowerShell", () => {
+    expect(run("date", "bash").policy).toBe(ALLOW);
+    expect(run("date", "powershell").policy).toBe(ASK);
+    expect(run("Get-ChildItem src", "powershell").policy).toBe(ALLOW);
+    expect(run("Get-ChildItem src", "bash").policy).toBe(ASK);
   });
 });

@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { isPosixShell, type ShellKind } from "../../util/shell";
 
 /**
  * Is this command certain to only read? (plans/policy-areas.md, "Which area a
@@ -120,26 +121,66 @@ const READ_ONLY: Record<string, Check> = {
     args.length ? "hostname with arguments can set it" : undefined,
   // moving around changes nothing on disk
   cd: (args) => (args.length > 1 ? "cd with several arguments" : undefined),
-  // PowerShell
+};
+
+/**
+ * The same, for PowerShell: its cmdlets and the aliases that stand for them
+ * (`ls`, `cat`, `type`, `sort`, `diff`, `echo` are not the GNU programs
+ * there), and a few programs that exist the same way on every shell. Names
+ * that are other programs on Windows (`find`, `date`, `sort` in cmd) are not
+ * here: not being on this list is not being vouched.
+ */
+const POWERSHELL_READ_ONLY: Record<string, Check> = {
   "get-childitem": anyArgs,
   gci: anyArgs,
+  ls: anyArgs,
+  dir: anyArgs,
   "get-content": anyArgs,
   gc: anyArgs,
+  cat: anyArgs,
+  type: anyArgs,
   "select-string": anyArgs,
   sls: anyArgs,
   "get-location": anyArgs,
+  gl: anyArgs,
+  pwd: anyArgs,
   "get-item": anyArgs,
+  gi: anyArgs,
   "test-path": anyArgs,
   "resolve-path": anyArgs,
   "split-path": anyArgs,
   "get-filehash": anyArgs,
   "get-date": anyArgs,
   "select-object": anyArgs,
+  select: anyArgs,
   "measure-object": anyArgs,
+  measure: anyArgs,
   "sort-object": anyArgs,
+  sort: anyArgs,
   "format-table": anyArgs,
+  ft: anyArgs,
   "format-list": anyArgs,
+  fl: anyArgs,
+  "write-output": anyArgs,
+  echo: anyArgs,
+  "compare-object": anyArgs,
+  diff: anyArgs,
+  // moving around changes nothing on disk
+  "set-location": (args) =>
+    args.length > 2 ? "set-location with several arguments" : undefined,
+  sl: (args) => (args.length > 2 ? "sl with several arguments" : undefined),
+  cd: (args) => (args.length > 2 ? "cd with several arguments" : undefined),
+  // programs that are the same everywhere
+  rg: READ_ONLY.rg,
+  jq: READ_ONLY.jq,
+  grep: READ_ONLY.grep,
+  whoami: anyArgs,
+  hostname: READ_ONLY.hostname,
+  tree: READ_ONLY.tree,
 };
+
+/** Names that move the working directory, after which git's config was not checked. */
+const CHANGES_DIRECTORY = new Set(["cd", "set-location", "sl"]);
 
 /** git subcommands that read, with the extra arguments each may take. */
 const GIT_READ: Record<string, Check> = {
@@ -203,6 +244,11 @@ const GIT_RUNS_THINGS =
   /^\s*(fsmonitor|hookspath|sshcommand|textconv|external|askpass|editor|gpg\.program|program)\s*=|^\s*\[\s*(include|includeif|hook|filter)\b/im;
 
 export interface ReadOnlyOptions {
+  /**
+   * The shell that will run the command (resolveShell). A command means what
+   * its shell makes of it, so without a shell we understand, nothing is vouched.
+   */
+  shell?: ShellKind;
   /** The folder the command runs in, to read the repository's git config */
   cwd?: string;
   /** For tests: the text of a git config file, or undefined when absent */
@@ -280,7 +326,10 @@ interface Segment {
 const DISCARD_REDIRECT = /^(2?>\s*\/dev\/null|2>&1)(?=$|[\s|;&])/;
 
 /** Words and operators, or why the command is not understood. */
-function tokenize(command: string): { segments: Segment[] } | { why: string } {
+function tokenize(
+  command: string,
+  shell: ShellKind,
+): { segments: Segment[] } | { why: string } {
   const segments: Segment[] = [];
   let words: string[] = [];
   let word = "";
@@ -308,6 +357,21 @@ function tokenize(command: string): { segments: Segment[] } | { why: string } {
         i += redirect[0].length;
         continue;
       }
+    }
+    // In a POSIX shell a backslash escapes what follows (`\'` is a quote
+    // that does not start one), so a scanner that reads it as a letter and one
+    // that reads it as an escape see different commands. In PowerShell it is a
+    // path separator.
+    if (c === "\\" && isPosixShell(shell)) {
+      return { why: "a backslash escape is not understood" };
+    }
+    // zsh expands =cmd to the path of cmd
+    if (c === "=" && shell === "zsh" && !inWord) {
+      return { why: "=word expansion (zsh) is not understood" };
+    }
+    // PowerShell's splat and array operator
+    if (c === "@" && shell === "powershell") {
+      return { why: '"@" is not understood' };
     }
     if (c === "'") {
       const end = command.indexOf("'", i + 1);
@@ -380,11 +444,15 @@ export function classifyReadOnly(
   if (command.length > MAX_READ_ONLY_COMMAND_LENGTH) {
     return no(`the command is over ${MAX_READ_ONLY_COMMAND_LENGTH} characters`);
   }
+  const shell = opts.shell;
+  if (!shell) return no("the shell that runs it is not known");
+  if (shell === "cmd") return no("cmd is not parsed");
+  if (shell === "unknown") return no("this shell is not parsed");
   // UNC paths reach another computer
   if (/(^|[\s'"])(\\\\|\/\/)[^\s\\/]+[\\/]/.test(command)) {
     return no("a network path (UNC) is named");
   }
-  const parsed = tokenize(command);
+  const parsed = tokenize(command, shell);
   if ("why" in parsed) return no(parsed.why);
 
   const names: string[] = [];
@@ -400,7 +468,7 @@ export function classifyReadOnly(
     if (!/^[a-z][a-z0-9_-]*$/.test(name)) {
       return no(`"${first}" is not a plain command name`);
     }
-    if (name === "cd") movedDirectory = true;
+    if (CHANGES_DIRECTORY.has(name)) movedDirectory = true;
     if (name === "git") {
       if (movedDirectory) {
         return no(
@@ -430,8 +498,13 @@ export function classifyReadOnly(
       names.push(`git ${sub}`);
       continue;
     }
-    const check = READ_ONLY[name];
-    if (!check) return no(`${name} is not on the read-only list`);
+    const list = shell === "powershell" ? POWERSHELL_READ_ONLY : READ_ONLY;
+    const check = list[name];
+    if (!check) {
+      return no(
+        `${name} is not on the ${shell === "powershell" ? "PowerShell " : ""}read-only list`,
+      );
+    }
     const problem = check(rest);
     if (problem) return no(`${name}: ${problem}`);
     names.push(name);

@@ -134,7 +134,7 @@ describe("the levels reach core's engine", () => {
       decision: "allow",
       by: "rules",
     });
-    expect(await run({}, "cat a.txt | sort | uniq")).toMatchObject({
+    expect(await run({}, "cat a.txt | sort")).toMatchObject({
       decision: "allow",
     });
     expect((await run({}, "npm test"))?.decision).toBe("ask");

@@ -8,6 +8,7 @@ import {
   type PolicyLevel,
   type PolicyLevels,
 } from "./policy";
+import type { ShellKind } from "../../util/shell";
 import type { ProtectedKind } from "./protected";
 
 /**
@@ -73,6 +74,8 @@ export interface LevelOfCall {
 export interface CallContext {
   parsedArgs?: Record<string, unknown>;
   cwd?: string;
+  /** The shell that will run a terminal command (resolveShell) */
+  shell?: ShellKind;
 }
 
 /**
@@ -128,6 +131,8 @@ export interface LooseningInput {
   processedArgs?: Record<string, unknown>;
   /** The folder the command runs in, to check git's config for a read-only claim */
   cwd?: string;
+  /** The shell that will run it: a command means what its shell makes of it */
+  shell?: ShellKind;
 }
 
 /**
@@ -142,6 +147,7 @@ export function approvalLoosening(
   const found = levelOfCall(approval, toolName, tool, {
     parsedArgs,
     cwd: input.cwd,
+    shell: input.shell,
   });
   if (!found) return undefined;
   const what = found.readOnly ? ` (the command ${found.readOnly})` : "";

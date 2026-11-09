@@ -1,6 +1,7 @@
 import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { ILLM } from "../../..";
 import { levelOfCall, type ApprovalSettings } from "../approval";
+import type { ShellKind } from "../../../util/shell";
 import { DecisionSource } from "../decide";
 import { uriToPath } from "../names";
 import { EvaluateInput, evaluateToolPolicyWithRules } from "../evaluate";
@@ -56,6 +57,8 @@ export interface AutoReviewDeps {
   enabled: boolean;
   /** The model chosen for the reviewer role; never a chat model. */
   reviewer: Pick<ILLM, "chat"> | null | undefined;
+  /** The shell commands run in (resolveShell) */
+  shell?: ShellKind;
   /** `modeModels.reviewer.reasoningEffort`, as completion options. */
   reviewerReasoning?: ReviewerReasoning;
   environment: ReviewEnvironment;
@@ -101,6 +104,7 @@ export async function autoReviewToolCall(
     permissions: deps.permissions,
     approval: req.approval,
     cwd: folderPath(deps.environment.workspaceDirs?.[0]),
+    shell: deps.shell,
   });
   const base = { displayValue: evaluated.displayValue };
   const settled = (
@@ -129,6 +133,7 @@ export async function autoReviewToolCall(
   const found = levelOfCall(req.approval, req.toolName, deps.tool, {
     parsedArgs: req.parsedArgs,
     cwd: folderPath(deps.environment.workspaceDirs?.[0]),
+    shell: deps.shell,
   });
   if (found && found.level !== "automatic") {
     return settled("ask", "This area is not set to Automatic.");

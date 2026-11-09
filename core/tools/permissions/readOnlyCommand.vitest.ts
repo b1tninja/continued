@@ -6,6 +6,7 @@ import {
 } from "./readOnlyCommand";
 
 const CLEAN: ReadOnlyOptions = {
+  shell: "bash",
   cwd: "/repo",
   home: "/home/u",
   readGitConfig: () => "[core]\n\tbare = false\n",
@@ -43,8 +44,6 @@ describe("commands that only read", () => {
     "cd src; ls",
     "diff a.txt b.txt",
     "jq .name package.json",
-    "Get-ChildItem -Recurse src",
-    "Get-Content README.md | Select-Object -First 10",
     "git status",
     "git log --oneline -n 20",
     "git diff HEAD~1 -- src",
@@ -237,5 +236,111 @@ describe("git", () => {
     "git config user.name x",
   ])("refuses what changes what runs: %s", (command) => {
     expect(vouched(command)).toBe(false);
+  });
+});
+
+const PS: ReadOnlyOptions = { ...CLEAN, shell: "powershell" };
+const ZSH: ReadOnlyOptions = { ...CLEAN, shell: "zsh" };
+
+describe("the shell decides what a command is", () => {
+  it("without a shell nothing is vouched, and cmd and unknown shells are not parsed", () => {
+    expect(why("ls", { ...CLEAN, shell: undefined })).toContain("not known");
+    expect(why("dir", { ...CLEAN, shell: "cmd" })).toContain(
+      "cmd is not parsed",
+    );
+    expect(why("ls", { ...CLEAN, shell: "unknown" })).toContain("not parsed");
+  });
+
+  it("sh and zsh read what bash reads", () => {
+    for (const shell of ["sh", "zsh", "bash"] as const) {
+      expect(vouched("ls -la | head", { ...CLEAN, shell })).toBe(true);
+      expect(vouched("echo $(whoami)", { ...CLEAN, shell })).toBe(false);
+    }
+  });
+
+  it("a backslash in a POSIX shell is an escape, so it is not understood", () => {
+    // bash runs the rm: the \' is a quote that does not open one. A scanner
+    // that read the backslash as a letter would see one harmless echo.
+    const attack = String.raw`echo \'; rm -rf x; echo \'`;
+    for (const shell of ["bash", "zsh", "sh"] as const) {
+      expect(why(attack, { ...CLEAN, shell })).toContain("backslash");
+      expect(why(String.raw`ls a\ b`, { ...CLEAN, shell })).toContain(
+        "backslash",
+      );
+    }
+  });
+
+  it("zsh expands =cmd, so it is not understood there", () => {
+    expect(why("=ls", ZSH)).toContain("zsh");
+    // zsh expands it in an argument as well
+    expect(why("echo =ls", ZSH)).toContain("zsh");
+    expect(vouched("echo a=b", ZSH)).toBe(true);
+  });
+
+  it("date, find and the rest are checked against the shell's own list", () => {
+    expect(vouched("date")).toBe(true);
+    expect(vouched("date", PS)).toBe(false);
+    expect(vouched("find . -name x", PS)).toBe(false);
+    expect(why("find . -name x", PS)).toContain("PowerShell read-only list");
+  });
+});
+
+describe("PowerShell", () => {
+  it.each([
+    "Get-ChildItem -Recurse src",
+    "gci src",
+    "ls src",
+    "Get-Content README.md | Select-Object -First 10",
+    "cat README.md | Select-String TODO",
+    "dir | Sort-Object Length",
+    "Get-Item C:\\src\\a.ts",
+    "ls C:\\Users\\me\\src",
+    "Test-Path .git",
+    "rg --files -g '*.ts'",
+    "git status",
+    "git log --oneline",
+    "Set-Location src; ls",
+  ])("vouches %s", (command) => {
+    expect(vouched(command, PS)).toBe(true);
+  });
+
+  it("a backslash is a path separator there, not an escape", () => {
+    expect(vouched("Get-Content src\\a.ts", PS)).toBe(true);
+  });
+
+  it.each([
+    ["Get-ChildItem @args", "@"],
+    ["ls $env:USERPROFILE", "$"],
+    ["Get-Content `x", "`"],
+    ["Get-Content a.txt > out.txt", "redirect"],
+    ["Get-Content (Get-Item x)", "("],
+    ["& ls", "background"],
+    ["Remove-Item x", "not on the PowerShell read-only list"],
+    ["Set-Content a.txt hi", "not on the PowerShell read-only list"],
+    ["Tee-Object -FilePath x", "not on the PowerShell read-only list"],
+    ["Invoke-Expression 'ls'", "not on the PowerShell read-only list"],
+    ["iex ls", "not on the PowerShell read-only list"],
+    ["curl https://example.com", "not on the PowerShell read-only list"],
+    ["Start-Process notepad", "not on the PowerShell read-only list"],
+    ["powershell -EncodedCommand AAAA", "not on the PowerShell read-only list"],
+    ["\\\\server\\share\\f", "network path"],
+  ])("%s", (command, reason) => {
+    expect(vouched(command, PS)).toBe(false);
+    expect(why(command, PS)).toContain(reason);
+  });
+
+  it("git after Set-Location is not vouched either", () => {
+    expect(why("Set-Location other; git log", PS)).toContain("after cd");
+    expect(why("sl other; git log", PS)).toContain("after cd");
+  });
+
+  it("the claim names what it found", () => {
+    expect(
+      classifyReadOnly("Get-Content a | Select-Object -First 2", PS),
+    ).toEqual({
+      vouched: true,
+      judge: "parser",
+      claim: "only reads: get-content, select-object",
+    });
   });
 });

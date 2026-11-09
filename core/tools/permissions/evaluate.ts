@@ -9,6 +9,7 @@ import {
   skippedProtections,
 } from "./approval";
 import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
+import type { ShellKind } from "../../util/shell";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
@@ -45,6 +46,8 @@ export interface EvaluateInput {
   permissions: ToolPermissions | undefined;
   /** The folder a command runs in; lets git be vouched read-only */
   cwd?: string;
+  /** The shell that runs it (resolveShell); without one no command is vouched read-only */
+  shell?: ShellKind;
   /** The level chosen for each area; absent means Cautious everywhere. */
   approval?: ApprovalSettings;
 }
@@ -125,7 +128,7 @@ export function evaluateToolPolicyWithRules(
   }
 
   const rules = parsePermissions(input.permissions);
-  const call = { parsedArgs, cwd: input.cwd };
+  const call = { parsedArgs, cwd: input.cwd, shell: input.shell };
   const found = levelOfCall(input.approval, toolName, tool, call);
   // YOLO reaches past a refusal, a rule and a protected path; Permissive acts
   // only on a call that would otherwise ask
@@ -138,6 +141,7 @@ export function evaluateToolPolicyWithRules(
           parsedArgs,
           processedArgs,
           cwd: input.cwd,
+          shell: input.shell,
         })
       : undefined;
   const manual =

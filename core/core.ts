@@ -16,6 +16,7 @@ import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { uriToPath } from "./tools/permissions/names";
+import { resolveShell } from "./util/shell";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import {
@@ -1717,6 +1718,8 @@ export class Core {
           permissions: config.toolPermissions,
           approval,
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
+          // The shell terminal commands run in
+          shell: resolveShell().kind,
         });
       },
     );
@@ -1734,6 +1737,7 @@ export class Core {
           permissions: config.toolPermissions,
           enabled: config.experimental?.enableAutoApproval === true,
           reviewer: config.selectedModelByRole.reviewer,
+          shell: resolveShell().kind,
           reviewerReasoning: reasoningOptionsForEffort(
             config.modeModels?.reviewer?.reasoningEffort,
           ),
