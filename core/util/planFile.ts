@@ -704,7 +704,7 @@ It saves the plan as a markdown file in the workspace (${PLANS_DIR}/<title>.md),
 - title: a short name for the work.
 - plan: the plan in markdown, for a person to read: the goal, the approach, the files involved, risks or open questions. Keep it short; do not repeat the to-dos.
 - todos: the implementation steps in order, one short line each. They become the task list you update while you build.
-- todo_details (optional): for a to-do that must wait for others, its \`after\` (the numbers of the to-dos it comes after); for one that a command can verify, its \`check\` (a command that exits 0 when the to-do is done, such as a focused test run); for one that needs a stronger or cheaper model than the rest, its \`model\` (the name of one of the user's chat models; a loop runs that to-do on it). Size each to-do as one reviewable change that one check can verify.
+- todo_details (optional): for a to-do that must wait for others, its \`after\` (the numbers of the to-dos it comes after); for one that a command can verify, its \`check\` (a command that exits 0 when the to-do is done and fails when the behaviour is wrong, such as a focused test run; not one that only checks that a file or a string exists); for one that needs a stronger or cheaper model than the rest, its \`model\` (the name of one of the user's chat models; a loop runs that to-do on it). Size each to-do as one reviewable change that one check can verify.
 - decisions (optional): the choices left to the person: one they kept for themselves, or one a wrong answer makes costly (irreversible, security, cost, scope). Each has a self-contained question, two to four options, your pick, its type and the numbers of the to-dos that wait on it. A decision is not a to-do: it has no check and no status. Small choices are yours: decide them and write them in the plan as assumptions.
 
 Calling it again with the same title replaces that plan file, so revise a plan by presenting it again.`;
@@ -758,7 +758,8 @@ export const PRESENT_PLAN_TODO_DETAILS_PARAMETER = {
       },
       check: {
         type: "string",
-        description: "A command that exits 0 when this to-do is done",
+        description:
+          "A command that exits 0 when this to-do is done and fails when the behaviour is wrong: a test run or an import that asserts a result, not a file-exists or grep check",
       },
       model: {
         type: "string",
@@ -768,6 +769,73 @@ export const PRESENT_PLAN_TODO_DETAILS_PARAMETER = {
     },
   },
 };
+
+/**
+ * Commands that only test whether a file or a string exists. The first word
+ * of each shell segment (split on &&, ||, ; and |) is looked up here; a check
+ * made only of these passes the moment the file is written, so it proves
+ * nothing about behaviour. Nine of ten code to-dos in the Bedrock plan runs
+ * had one (`test -f src/strings.js && grep -q "export function slugify"`).
+ */
+const EXISTENCE_ONLY_COMMANDS = new Set([
+  "test",
+  "[",
+  "[[",
+  "ls",
+  "stat",
+  "cat",
+  "echo",
+  "printf",
+  "true",
+  "exit",
+  "grep",
+  "egrep",
+  "fgrep",
+  "rg",
+  "find",
+  "wc",
+  "head",
+  "tail",
+  "dir",
+  "type",
+  "test-path",
+  "get-content",
+  "get-childitem",
+  "get-item",
+  "select-string",
+]);
+
+/** True for a check command that only tests that a file or a string exists. */
+export function isExistenceOnlyCheck(command: string): boolean {
+  const segments = command
+    .split(/\s*(?:&&|\|\||;|\|)\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (segments.length === 0) return false;
+  return segments.every((segment) => {
+    const words = segment.replace(/^[!(\s]+/, "").split(/\s+/);
+    // Skip leading VAR=value assignments
+    const first = words.find((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) ?? "";
+    const name = first.replace(/^.*[\\/]/, "").toLowerCase();
+    return EXISTENCE_ONLY_COMMANDS.has(name);
+  });
+}
+
+/**
+ * What to tell the model about checks that prove nothing, for the plan tool's
+ * result. Empty when every check runs code. The to-dos are numbered from 1,
+ * as the model numbered them in todo_details.
+ */
+export function weakCheckNotes(items: readonly { check?: unknown }[]): string {
+  const notes = items.flatMap((item, index) => {
+    const check = typeof item.check === "string" ? item.check.trim() : "";
+    if (!check || !isExistenceOnlyCheck(check)) return [];
+    return [
+      `The check for to-do ${index + 1}, \`${check}\`, only tests that a file or a string exists, so it passes the moment the file is written. Replace it with a command that fails when the behaviour is wrong (the project's test command, or an import that asserts a result), or leave it out.`,
+    ];
+  });
+  return notes.join(" ");
+}
 
 /** What the model gets back once the plan is saved and shown (IDE). */
 export function planProposedResult(
@@ -779,7 +847,8 @@ export function planProposedResult(
     decisions.length > 0
       ? ` Its ${decisions.length === 1 ? "decision waits" : `${decisions.length} decisions wait`} for the user; do not settle ${decisions.length === 1 ? "it" : "them"} yourself.`
       : "";
-  return `Plan saved to ${relativePath} and shown to the user, with its ${plan.items.length} to-dos as the task list.${open} Stop here and wait: the user will edit the plan, choose Build, or ask for changes.`;
+  const weak = weakCheckNotes(plan.items);
+  return `Plan saved to ${relativePath} and shown to the user, with its ${plan.items.length} to-dos as the task list.${open} Stop here and wait: the user will edit the plan, choose Build, or ask for changes.${weak ? ` ${weak}` : ""}`;
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   serializePlanFile,
   taskPlanForProposal,
   validatePlanArgs,
+  weakCheckNotes,
 } from "core/util/planFile.js";
 import { TASK_PLAN_LIMITS, taskPlanToMarkdown } from "core/util/taskPlan.js";
 
@@ -215,9 +216,10 @@ export const presentPlanTool: Tool = {
     // Loop mode's re-plan: the loop decides whether the new plan starts the
     // next round by itself (its autonomy level) or waits for the person in
     // the inbox, so nobody is asked here and the turn ends.
+    const weak = weakCheckNotes(plan.items);
     if (getSessionLoop()?.current?.kind === "replan") {
       requestLoopTurnEnd();
-      return `Plan saved to ${relativePath} with ${plan.items.length} to-dos. End your turn now.`;
+      return `Plan saved to ${relativePath} with ${plan.items.length} to-dos.${weak ? ` ${weak}` : ""} End your turn now.`;
     }
 
     if (services.toolPermissions.isHeadless()) {
@@ -227,7 +229,7 @@ export const presentPlanTool: Tool = {
       const open = decisions.length
         ? ` Its ${decisions.length === 1 ? "decision waits" : `${decisions.length} decisions wait`} for the person in the file; do not settle ${decisions.length === 1 ? "it" : "them"}.`
         : "";
-      return `Plan saved to ${relativePath} with ${plan.items.length} to-dos.${open} This is a headless run, so nobody can approve it now: do not implement anything. Stop, and end your reply with the line "Plan: ${relativePath}".`;
+      return `Plan saved to ${relativePath} with ${plan.items.length} to-dos.${open}${weak ? ` ${weak}` : ""} This is a headless run, so nobody can approve it now: do not implement anything. Stop, and end your reply with the line "Plan: ${relativePath}".`;
     }
 
     // The decisions first, each with its options and the model's pick as the
