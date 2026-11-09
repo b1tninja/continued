@@ -51,16 +51,18 @@ export function draftFromConfig(
   const drafts = {} as ModeDrafts;
   for (const mode of TABLE_MODES) {
     const entry = config.modeModels?.[mode];
+    // An entry may choose only a prompt (`loop: { prompt: short }`): no
+    // model, so nothing is ticked and the table leaves the prompt alone
     const offered = entry?.titles?.length
       ? [...entry.titles]
-      : entry
+      : entry?.title
         ? [entry.title]
         : [];
     drafts[mode] = {
       offered,
       defaultTitle: entry?.title,
       effort: entry?.reasoningEffort,
-      implicitAll: !!entry && !entry.titles?.length,
+      implicitAll: !!entry?.title && !entry.titles?.length,
     };
   }
   return drafts;
