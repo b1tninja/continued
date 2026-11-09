@@ -65,7 +65,7 @@ Work that is open, unmeasured or not finished. A row leaves this table when its 
 
 ## Next
 
-Tracks A to N. They share little code, so different people can build them in parallel; where one needs another, the Depends on column says so. Each track is a series of small PRs, one concern per PR.
+Tracks A to P. They share little code, so different people can build them in parallel; where one needs another, the Depends on column says so. Each track is a series of small PRs, one concern per PR.
 
 ### Track A: model and provider setup
 
@@ -380,6 +380,23 @@ Problem: a loop runs one item per turn, so three independent items take three ti
 | N8  | JetBrains: the `PASS_THROUGH_TO_CORE` list in `MessageTypes.kt` is behind `core/protocol/passThrough.ts` (`subagents/list`, `models/serverConcurrency`, `models/detectLocal`, `models/catalog`, `config/setModelRoles` are missing, so subagents and the local-server slots do not work there); one list generated from the other, or a test that diffs them | none       | Not started |
 | N9  | Wave size from the server: a local server with fewer slots than `LOOP_MAX_PARALLEL` queues workers today; let the wave size follow `models/serverConcurrency` so a one-slot server never starts a wave, and show the reason in the inbox                                                                                                                     | N1         | Not started |
 | N10 | Shared context for a wave: a short "what the other workers are doing" line in each worker's prompt is there (the plan block); measure whether a shared notes channel between workers of one wave (Claude Code's agent teams pattern) helps or, as Cognition argues, hurts; default stays none                                                                | N1         | Research    |
+
+### Track P: tool-call styles per model family
+
+Plan: [`tool-call-styles.md`](./tool-call-styles.md), the handoff: what is verified against primary sources, what is not, our code today, and the spikes. Started 2026-11-09 from the research on how each family's wire format, tool names and edit format are documented or measured.
+
+Problem: a tool call fails either as text that never parses or as arguments that are wrong for the edit, and both show in our bench runs. Our names and edit format are one set for every family. Vendor documents confirm the wire format and the harnesses Qwen3-Coder was built for, but not the names a model was trained on, so names and edit format are measured before any per-family change.
+
+| PR  | Scope                                                                                                                                                                                                                                                                                                                                      | Depends on | State       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ----------- |
+| P1  | Spike: which chat template and parser each served model uses (Qwen3.8 Flash and Qwen3-Next-80B templates, Strata's template and parser settings, vLLM and SGLang for the Coder models); a table of family, markup, parser and whether `qwenFormat` in `turns.ts` matches; a mismatch is a server or markup bug to fix before anything else | none       | Spike       |
+| P2  | Spike: names on Qwen3-Coder. Bench arms with our names, Qwen Code's names (`edit` with `old_string` and `new_string`, `write_file`, `run_shell_command`) and Cline-style names; invalid calls, leaked calls and completion at n=5 per arm                                                                                                  | P1         | Spike       |
+| P3  | Spike: edit format per family. Bench arms with exact-string edits (today), SEARCH/REPLACE blocks and whole-file writes on a seeded repository; edit failures, retries and completion. Diff-XYZ's Qwen2.5-Coder result is the prior, not the answer for Qwen3-Coder                                                                         | P1         | Spike       |
+| P4  | Spike: Claude's native text editor (`str_replace_based_edit_tool`, type `text_editor_20250728`) on Bedrock. Needs a Messages-format route, since current AWS docs put Anthropic-defined tools there rather than in Converse; one scenario, cost and completion against our function-tool Edit                                              | P1         | Spike       |
+| P5  | Recover the Qwen `<function=` form when a model writes it as text, in the adapter, so the turn does not end with nothing done (H13); ship only if leaks fall without new false calls                                                                                                                                                       | P1         | Not started |
+| P6  | A tool profile per family, selected the way `promptProfile` is (names, edit format, markup), default off; a family gets a profile only where P2 or P3 measured a win                                                                                                                                                                       | P2, P3     | Not started |
+| P7  | Robustness of our tools to tool-name typos, a renamed tool with the same description, and a duplicate name, in `bench/` (the RobustBench-TC perturbation groups as the template)                                                                                                                                                           | P2         | Not started |
+| P8  | Only if an OpenAI family is served: the `apply_patch` V4A path (`create_file`, `update_file`, `delete_file`), decided from P3 first                                                                                                                                                                                                        | P3         | Not started |
 
 ## Later
 
