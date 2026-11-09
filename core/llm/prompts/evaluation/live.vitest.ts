@@ -1,7 +1,11 @@
 import { writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { PromptProfile } from "../turns";
-import { anthropicMessages, openAiCompatible } from "./adapters";
+import {
+  anthropicMessages,
+  bedrockConverse,
+  openAiCompatible,
+} from "./adapters";
 import { formatReport, PROFILES, runTurnsEval, summarize } from "./runner";
 import { TURN_SCENARIOS } from "./scenarios";
 import { oracleModel, textOnlyModel } from "./stubs";
@@ -16,10 +20,13 @@ import { oracleModel, textOnlyModel } from "./stubs";
  *   cd core && npm run eval:turns -- --ollama --model qwen2.5-coder:7b
  *
  * Or directly, with:
- *   TURNS_EVAL_PROVIDER=openai|anthropic   (default openai; use openai for Ollama/LM Studio)
+ *   TURNS_EVAL_PROVIDER=openai|anthropic|bedrock   (default openai; use openai for Ollama/LM Studio)
  *   TURNS_EVAL_MODEL=<model id>
  *   TURNS_EVAL_BASE_URL=<for openai-compatible, e.g. http://localhost:11434/v1>
  *   TURNS_EVAL_API_KEY=<key, if the provider needs one>
+ *   TURNS_EVAL_REGION=<bedrock region, default us-east-1>
+ *   TURNS_EVAL_AWS_PROFILE=<bedrock: a profile in ~/.aws/config, else the default chain>
+ *   TURNS_EVAL_DUMP=<optional path; every reply (text, calls, failures) as JSON>
  *   TURNS_EVAL_PROFILES=full,short         (default both)
  *   TURNS_EVAL_OUT=<optional path for the markdown report>
  *   TURNS_EVAL_RESULT=<optional path; gets {"passed": boolean} as JSON>
@@ -45,18 +52,24 @@ function pickModel() {
   return {
     label: `${provider}:${model}`,
     model:
-      provider === "anthropic"
-        ? anthropicMessages({
+      provider === "bedrock"
+        ? bedrockConverse({
             model: model!,
-            apiKey,
-            baseUrl: process.env.TURNS_EVAL_BASE_URL,
+            region: process.env.TURNS_EVAL_REGION ?? "us-east-1",
+            profile: process.env.TURNS_EVAL_AWS_PROFILE,
           })
-        : openAiCompatible({
-            model: model!,
-            apiKey: apiKey || undefined,
-            baseUrl:
-              process.env.TURNS_EVAL_BASE_URL ?? "https://api.openai.com/v1",
-          }),
+        : provider === "anthropic"
+          ? anthropicMessages({
+              model: model!,
+              apiKey,
+              baseUrl: process.env.TURNS_EVAL_BASE_URL,
+            })
+          : openAiCompatible({
+              model: model!,
+              apiKey: apiKey || undefined,
+              baseUrl:
+                process.env.TURNS_EVAL_BASE_URL ?? "https://api.openai.com/v1",
+            }),
   };
 }
 
@@ -87,6 +100,24 @@ describe.skipIf(!model && !stub)("turn prompt evaluation (live model)", () => {
       process.stdout.write(`\n${report}\n`);
       if (process.env.TURNS_EVAL_OUT) {
         writeFileSync(process.env.TURNS_EVAL_OUT, report + "\n");
+      }
+      if (process.env.TURNS_EVAL_DUMP) {
+        writeFileSync(
+          process.env.TURNS_EVAL_DUMP,
+          JSON.stringify(
+            results.map((r) => ({
+              scenario: r.scenario.id,
+              profile: r.profile,
+              ms: r.ms,
+              error: r.error,
+              text: r.text,
+              calls: r.calls,
+              failures: r.failures,
+            })),
+            null,
+            2,
+          ) + "\n",
+        );
       }
       if (process.env.TURNS_EVAL_RESULT) {
         writeFileSync(

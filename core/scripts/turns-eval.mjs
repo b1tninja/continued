@@ -27,6 +27,8 @@ quality-bar report per profile.
 Model (pick one way):
   --provider openai --model <id> [--base-url <url>]   OpenAI or any OpenAI-compatible server with tool calling
   --provider anthropic --model <id>                   Anthropic Messages API
+  --provider bedrock --model <id> [--region us-east-1] [--aws-profile <name>]
+                                                      Amazon Bedrock through core's provider (AWS credential chain)
   --ollama --model <name> [--host http://localhost:11434]   local Ollama (no key, no cost)
 
 Options:
@@ -38,18 +40,22 @@ Options:
                          billed by the provider.
   --strict               Exit 1 if the report does not meet the bar
   --out <file>           Also write the markdown report to a file
+  --dump <file>          Also write every reply (text, calls, failures) as JSON, for reading
+                         what a model said before tuning a scenario
   --stub ${STUBS.join("|")}   Run with a stand-in instead of a model (no network;
                          checks that the harness and the bar work)
   -h, --help
 
 Environment (alternative to flags): TURNS_EVAL_PROVIDER, TURNS_EVAL_MODEL,
-TURNS_EVAL_BASE_URL, TURNS_EVAL_API_KEY, TURNS_EVAL_PROFILES, TURNS_EVAL_OUT.
+TURNS_EVAL_BASE_URL, TURNS_EVAL_API_KEY, TURNS_EVAL_REGION, TURNS_EVAL_AWS_PROFILE,
+TURNS_EVAL_PROFILES, TURNS_EVAL_OUT, TURNS_EVAL_DUMP.
 
 Examples:
   npm run eval:turns -- --stub oracle --strict
   npm run eval:turns -- --ollama --model qwen3:8b --out qwen3.md
   OPENAI_API_KEY=... npm run eval:turns -- --provider openai --model gpt-4.1-mini --yes --strict
   ANTHROPIC_API_KEY=... npm run eval:turns -- --provider anthropic --model claude-haiku-4-5 --yes
+  npm run eval:turns -- --provider bedrock --model us.amazon.nova-2-lite-v1:0 --aws-profile torgate --yes --dump nova.json
 `;
 
 function parse(argv) {
@@ -77,6 +83,15 @@ function parse(argv) {
         break;
       case "--host":
         o.host = next();
+        break;
+      case "--region":
+        o.region = next();
+        break;
+      case "--aws-profile":
+        o.awsProfile = next();
+        break;
+      case "--dump":
+        o.dump = next();
         break;
       case "--ollama":
         o.ollama = true;
@@ -150,48 +165,67 @@ if (opts.stub) {
     opts.provider ?? env.TURNS_EVAL_PROVIDER ?? (opts.ollama ? "openai" : "");
   const model = opts.model ?? env.TURNS_EVAL_MODEL;
   if (!model) fail("Give a model with --model (or use --stub). See --help.");
-  if (!provider) fail("Give --provider openai|anthropic, or --ollama.");
-  if (!["openai", "anthropic"].includes(provider)) {
-    fail("--provider must be openai or anthropic");
+  if (!provider) fail("Give --provider openai|anthropic|bedrock, or --ollama.");
+  if (!["openai", "anthropic", "bedrock"].includes(provider)) {
+    fail("--provider must be openai, anthropic or bedrock");
   }
 
-  let baseUrl = opts.baseUrl ?? env.TURNS_EVAL_BASE_URL;
-  if (opts.ollama) {
-    baseUrl = `${(opts.host ?? "http://localhost:11434").replace(/\/$/, "")}/v1`;
-  }
-  const effectiveUrl =
-    baseUrl ??
-    (provider === "anthropic"
-      ? "https://api.anthropic.com"
-      : "https://api.openai.com/v1");
-
-  const local = isLocal(effectiveUrl);
-  const keyName =
-    opts.keyEnv ??
-    (provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY");
-  const key = env.TURNS_EVAL_API_KEY ?? env[keyName] ?? "";
-
-  if (!local) {
-    if (!key) fail(`No API key: set ${keyName} (or TURNS_EVAL_API_KEY).`);
+  if (provider === "bedrock") {
+    // Credentials come from the AWS chain (a profile, the environment, SSO),
+    // not from a key variable; the run is hosted and billed all the same.
+    const region = opts.region ?? env.TURNS_EVAL_REGION ?? "us-east-1";
     if (!opts.yes) {
       fail(
-        `This sends 10 requests to ${new URL(effectiveUrl).host}, which the provider bills.\n` +
-          "Re-run with --yes to go ahead, or use --ollama / a localhost --base-url.",
+        `This sends 10 requests to Bedrock in ${region}, which AWS bills.\n` +
+          "Re-run with --yes to go ahead.",
       );
     }
-  }
+    env.TURNS_EVAL_PROVIDER = provider;
+    env.TURNS_EVAL_MODEL = model;
+    env.TURNS_EVAL_REGION = region;
+    const awsProfile = opts.awsProfile ?? env.TURNS_EVAL_AWS_PROFILE;
+    if (awsProfile) env.TURNS_EVAL_AWS_PROFILE = awsProfile;
+    target = `bedrock:${model} (${region}${awsProfile ? `, profile ${awsProfile}` : ""})`;
+  } else {
+    let baseUrl = opts.baseUrl ?? env.TURNS_EVAL_BASE_URL;
+    if (opts.ollama) {
+      baseUrl = `${(opts.host ?? "http://localhost:11434").replace(/\/$/, "")}/v1`;
+    }
+    const effectiveUrl =
+      baseUrl ??
+      (provider === "anthropic"
+        ? "https://api.anthropic.com"
+        : "https://api.openai.com/v1");
 
-  env.TURNS_EVAL_PROVIDER = provider;
-  env.TURNS_EVAL_MODEL = model;
-  if (baseUrl) env.TURNS_EVAL_BASE_URL = baseUrl;
-  if (key) env.TURNS_EVAL_API_KEY = key;
-  target = `${provider}:${model}${local ? " (local)" : ""}`;
+    const local = isLocal(effectiveUrl);
+    const keyName =
+      opts.keyEnv ??
+      (provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY");
+    const key = env.TURNS_EVAL_API_KEY ?? env[keyName] ?? "";
+
+    if (!local) {
+      if (!key) fail(`No API key: set ${keyName} (or TURNS_EVAL_API_KEY).`);
+      if (!opts.yes) {
+        fail(
+          `This sends 10 requests to ${new URL(effectiveUrl).host}, which the provider bills.\n` +
+            "Re-run with --yes to go ahead, or use --ollama / a localhost --base-url.",
+        );
+      }
+    }
+
+    env.TURNS_EVAL_PROVIDER = provider;
+    env.TURNS_EVAL_MODEL = model;
+    if (baseUrl) env.TURNS_EVAL_BASE_URL = baseUrl;
+    if (key) env.TURNS_EVAL_API_KEY = key;
+    target = `${provider}:${model}${local ? " (local)" : ""}`;
+  }
 }
 
 const dir = mkdtempSync(join(tmpdir(), "turns-eval-"));
 const resultFile = join(dir, "result.json");
 env.TURNS_EVAL_RESULT = resultFile;
 if (opts.out) env.TURNS_EVAL_OUT = resolve(opts.out);
+if (opts.dump) env.TURNS_EVAL_DUMP = resolve(opts.dump);
 
 const coreDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 console.error(`Running the turn-prompt evaluation against ${target} ...`);

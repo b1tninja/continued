@@ -203,3 +203,72 @@ export function anthropicMessages(opts: {
     },
   };
 }
+
+/**
+ * Amazon Bedrock through core's own provider class, so the request is built
+ * the way the IDE builds it (Converse tool config, Nova and Claude field
+ * differences, cross-region inference). Credentials come from the AWS chain,
+ * with `profile` naming an entry in ~/.aws/config. The streaming path is used
+ * because `BaseLLM.chat` renders tool calls to text.
+ */
+export function bedrockConverse(opts: {
+  model: string;
+  region: string;
+  profile?: string;
+}): Chat {
+  let client: Promise<any> | undefined;
+  const load = () =>
+    (client ??= import("../../llms/Bedrock").then(
+      (m) =>
+        new m.default({
+          model: opts.model,
+          region: opts.region,
+          ...(opts.profile ? { profile: opts.profile } : {}),
+          crossRegionInference: "auto",
+        } as any),
+    ));
+  return {
+    chat: async (messages: ChatMessage[], signal, options) => {
+      const llm = await load();
+      let content = "";
+      const toolCalls: ToolCallDelta[] = [];
+      for await (const chunk of llm.streamChat(messages, signal, {
+        tools: options?.tools,
+        temperature: options?.temperature ?? 0,
+        maxTokens: options?.maxTokens ?? 1500,
+      })) {
+        if (chunk.role !== "assistant") continue;
+        content += textOf(chunk.content);
+        for (const delta of chunk.toolCalls ?? []) {
+          // A block start carries the id and name; later fragments of the
+          // same call carry only more of the arguments.
+          const existing = delta.id
+            ? toolCalls.find((c) => c.id === delta.id)
+            : toolCalls[toolCalls.length - 1];
+          if (existing) {
+            existing.function!.arguments =
+              (existing.function!.arguments ?? "") +
+              (delta.function?.arguments ?? "");
+            if (delta.function?.name && !existing.function!.name) {
+              existing.function!.name = delta.function.name;
+            }
+          } else {
+            toolCalls.push({
+              id: delta.id,
+              type: "function",
+              function: {
+                name: delta.function?.name,
+                arguments: delta.function?.arguments ?? "",
+              },
+            });
+          }
+        }
+      }
+      return {
+        role: "assistant",
+        content,
+        ...(toolCalls.length ? { toolCalls } : {}),
+      };
+    },
+  };
+}

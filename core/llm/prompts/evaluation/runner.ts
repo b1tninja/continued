@@ -39,6 +39,8 @@ export interface ReplyResult {
   ms: number;
   /** Set when the model call failed; the reply then counts as text with no call. */
   error?: string;
+  /** Rounds of read-only calls answered from the seed before this reply (plan scenarios). */
+  readRounds: number;
   text: string;
   calls: ScoredCall[];
   /** The reply calls at least one tool (any tool, present_plan included). */
@@ -49,8 +51,13 @@ export interface ReplyResult {
   /** A plan scenario with a reserved choice: the plan decided it or left it out of `decisions`. */
   reservedDecided: boolean;
   failures: string[];
+  /** Things worth reading that are not part of the bar. */
+  warnings: string[];
   ok: boolean;
 }
+
+/** A present_plan call with this much text beside it repeats the plan in text. */
+const PLAN_REPEATED_IN_TEXT_CHARS = 400;
 
 function textOf(content: ChatMessage["content"]): string {
   if (typeof content === "string") return content;
@@ -94,10 +101,17 @@ function decisionsOf(call: ScoredCall): Array<Record<string, unknown>> {
 export function scoreReply(
   scenario: TurnScenario,
   profile: PromptProfile,
-  reply: { text: string; calls: ScoredCall[]; ms: number; error?: string },
+  reply: {
+    text: string;
+    calls: ScoredCall[];
+    ms: number;
+    error?: string;
+    readRounds?: number;
+  },
 ): ReplyResult {
   const { text, calls } = reply;
   const failures: string[] = [];
+  const warnings: string[] = [];
   if (reply.error) failures.push(`model call failed: ${reply.error}`);
 
   const calledTool = calls.length > 0;
@@ -112,8 +126,18 @@ export function scoreReply(
   if (scenario.expect.call === "present_plan" && !calledPresentPlan) {
     failures.push(
       calledTool
-        ? `present_plan not called (called ${calls.map((c) => c.name).join(", ")})`
+        ? `present_plan not called (called ${calls.map((c) => c.name).join(", ")}${
+            reply.readRounds
+              ? ` after ${reply.readRounds} round(s) of reads`
+              : ""
+          })`
         : "present_plan not called: the reply is text only",
+    );
+  }
+
+  if (calledPresentPlan && text.length > PLAN_REPEATED_IN_TEXT_CHARS) {
+    warnings.push(
+      `the plan is also written in text (${text.length} chars) beside the present_plan call`,
     );
   }
 
@@ -182,6 +206,7 @@ export function scoreReply(
     profile,
     ms: reply.ms,
     error: reply.error,
+    readRounds: reply.readRounds ?? 0,
     text,
     calls,
     calledTool,
@@ -189,14 +214,83 @@ export function scoreReply(
     retriedRefused,
     reservedDecided,
     failures,
+    warnings,
     ok: failures.length === 0,
   };
 }
 
+const READ_TOOLS = new Set<string>([
+  BuiltInToolNames.ReadFile,
+  BuiltInToolNames.LSTool,
+  BuiltInToolNames.GrepSearch,
+]);
+
+/** How many rounds of reads a plan scenario answers before the reply is scored as it is. */
+export const DEFAULT_MAX_READ_ROUNDS = 3;
+
 /**
- * Send every scenario once per profile and score the first reply. The model
- * sees the turn text as its system message, the scenario's conversation and
- * its tools; nothing it calls is run.
+ * The result of a read-only call against a scenario's seed. Nothing runs:
+ * this is a lookup in a fixed map of files.
+ */
+export function answerRead(
+  seed: Record<string, string>,
+  call: ScoredCall,
+): string {
+  const norm = (p: unknown) =>
+    String(p ?? "")
+      .replace(/\\/g, "/")
+      .replace(/^\.\//, "")
+      .replace(/\/$/, "");
+  if (call.name === BuiltInToolNames.ReadFile) {
+    const path = norm(call.args.filepath);
+    return path in seed
+      ? seed[path]
+      : `File not found: ${path}. The project has: ${Object.keys(seed).join(", ")}.`;
+  }
+  if (call.name === BuiltInToolNames.LSTool) {
+    const dir = norm(call.args.dirPath);
+    const prefix = dir === "" || dir === "." ? "" : `${dir}/`;
+    const entries = new Set<string>();
+    for (const path of Object.keys(seed)) {
+      if (!path.startsWith(prefix)) continue;
+      const rest = path.slice(prefix.length);
+      const slash = rest.indexOf("/");
+      entries.add(slash === -1 ? rest : `${rest.slice(0, slash)}/`);
+    }
+    return entries.size
+      ? [...entries].sort().join("\n")
+      : `No such directory: ${dir}.`;
+  }
+  // grep_search: lines that contain the query, as "path:line: text".
+  const query = String(call.args.query ?? "");
+  let re: RegExp | undefined;
+  try {
+    re = new RegExp(query, "i");
+  } catch {
+    re = undefined;
+  }
+  const hits: string[] = [];
+  for (const [path, content] of Object.entries(seed)) {
+    content.split("\n").forEach((line, i) => {
+      if (re ? re.test(line) : line.includes(query)) {
+        hits.push(`${path}:${i + 1}: ${line}`);
+      }
+    });
+  }
+  return hits.length ? hits.join("\n") : `No matches for ${query}.`;
+}
+
+function onlyReads(calls: ScoredCall[]): boolean {
+  return calls.length > 0 && calls.every((c) => READ_TOOLS.has(c.name));
+}
+
+/**
+ * Send every scenario once per profile and score the reply. The model sees
+ * the turn text as its system message, the scenario's conversation and its
+ * tools; nothing it calls is run. A plan scenario whose reply is only reads
+ * gets them answered from the scenario's seed, up to `maxReadRounds` times,
+ * and the first reply that is not a read is the one scored; the rounds are
+ * counted on the result.
  */
 export async function runTurnsEval(
   model: Chat,
@@ -205,17 +299,61 @@ export async function runTurnsEval(
     profiles?: readonly PromptProfile[];
     concurrency?: number;
     timeoutMs?: number;
+    maxReadRounds?: number;
     onProgress?: (done: number, total: number) => void;
   } = {},
 ): Promise<ReplyResult[]> {
   const scenarios = opts.scenarios ?? TURN_SCENARIOS;
   const profiles = opts.profiles ?? PROFILES;
+  const maxReadRounds = opts.maxReadRounds ?? DEFAULT_MAX_READ_ROUNDS;
   const jobs = profiles.flatMap((profile) =>
     scenarios.map((scenario) => ({ profile, scenario })),
   );
   const results: ReplyResult[] = new Array(jobs.length);
   let next = 0;
   let done = 0;
+
+  async function ask(
+    messages: ChatMessage[],
+    scenario: TurnScenario,
+  ): Promise<{
+    text: string;
+    calls: ScoredCall[];
+    raw: ToolCallDelta[];
+    ms: number;
+    error?: string;
+  }> {
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(),
+      opts.timeoutMs ?? 60_000,
+    );
+    const t0 = Date.now();
+    try {
+      const message = await model.chat(messages, controller.signal, {
+        tools: scenario.tools,
+        temperature: 0,
+        maxTokens: 1500,
+      });
+      const raw = message.role === "assistant" ? (message.toolCalls ?? []) : [];
+      return {
+        text: textOf(message.content),
+        calls: parseCalls(raw),
+        raw,
+        ms: Date.now() - t0,
+      };
+    } catch (e: any) {
+      return {
+        text: "",
+        calls: [],
+        raw: [],
+        ms: Date.now() - t0,
+        error: String(e?.message ?? e),
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   async function worker() {
     for (;;) {
@@ -226,33 +364,40 @@ export async function runTurnsEval(
         { role: "system", content: systemMessageFor(scenario.kind, profile) },
         ...scenario.messages,
       ];
-      const controller = new AbortController();
-      const timer = setTimeout(
-        () => controller.abort(),
-        opts.timeoutMs ?? 60_000,
-      );
-      const t0 = Date.now();
-      let reply: { text: string; calls: ScoredCall[]; error?: string };
-      try {
-        const message = await model.chat(messages, controller.signal, {
-          tools: scenario.tools,
-          temperature: 0,
-          maxTokens: 1500,
+      let readRounds = 0;
+      let reply = await ask(messages, scenario);
+      while (
+        scenario.seed &&
+        scenario.expect.call === "present_plan" &&
+        readRounds < maxReadRounds &&
+        !reply.error &&
+        onlyReads(reply.calls)
+      ) {
+        readRounds++;
+        messages.push({
+          role: "assistant",
+          content: reply.text,
+          toolCalls: reply.raw.map((c, n) => ({
+            ...c,
+            id: c.id ?? `read-${readRounds}-${n}`,
+          })),
         });
-        reply = {
-          text: textOf(message.content),
-          calls: parseCalls(
-            message.role === "assistant" ? message.toolCalls : undefined,
-          ),
-        };
-      } catch (e: any) {
-        reply = { text: "", calls: [], error: String(e?.message ?? e) };
-      } finally {
-        clearTimeout(timer);
+        reply.calls.forEach((call, n) => {
+          messages.push({
+            role: "tool",
+            toolCallId: reply.raw[n]?.id ?? `read-${readRounds}-${n}`,
+            content: answerRead(scenario.seed!, call),
+          });
+        });
+        reply = await ask(messages, scenario);
       }
       results[i] = scoreReply(scenario, profile, {
-        ...reply,
-        ms: Date.now() - t0,
+        text: reply.text,
+        calls: reply.calls,
+        error: reply.error,
+        // The scored reply's own time: the bar is per reply, not per scenario.
+        ms: reply.ms,
+        readRounds,
       });
       opts.onProgress?.(++done, jobs.length);
     }
@@ -419,11 +564,11 @@ export function formatReport(
       `| Median latency per reply | ${p.medianLatencyMs === undefined ? "n/a" : `${Math.round(p.medianLatencyMs)} ms`} | max ${bar.medianLatencyMsMax} ms |`,
       `| Model calls that failed | ${p.errors.length} | not part of the bar |`,
       "",
-      "| Scenario | Kind | Called | Result |",
-      "| --- | --- | --- | --- |",
+      "| Scenario | Kind | Reads | Called | Result |",
+      "| --- | --- | --- | --- | --- |",
       ...rs.map(
         (r) =>
-          `| ${r.scenario.id} | ${r.scenario.kind} | ${cell(r.calls.map((c) => c.name).join(", ") || "(text only)")} | ${r.ok ? "ok" : cell(r.failures.join("; "))} |`,
+          `| ${r.scenario.id} | ${r.scenario.kind} | ${r.readRounds} | ${cell(r.calls.map((c) => c.name).join(", ") || "(text only)")} | ${cell([r.ok ? "ok" : r.failures.join("; "), ...r.warnings.map((w) => `note: ${w}`)].join("; "))} |`,
       ),
       "",
       p.passed

@@ -272,7 +272,7 @@ The entries, and what each falls back to when it is not set:
 
 #### Evaluation
 
-The act and plan turns each come in two texts, `full` and `short`, picked per model (Qwen gets `short`, everything else `full` until it is measured). `core/llm/prompts/evaluation/` holds five fixed conversations and a runner that sends each to a model under both texts and scores the first reply by what it calls and says, without running anything it calls:
+The act and plan turns each come in two texts, `full` and `short`, picked per model (Qwen gets `short`, everything else `full` until it is measured). `core/llm/prompts/evaluation/` holds five fixed conversations and a runner that sends each to a model under both texts and scores the reply by what it calls and says, without running anything it calls. A plan conversation already contains the research (every file read, every directory listed); if the model still answers with reads, they are answered from a fixed copy of those files for up to three rounds, and the first reply that is not a read is scored, with the rounds shown in the report:
 
 | Scenario | A good first reply |
 | --- | --- |
@@ -299,7 +299,7 @@ cd core
 npm run eval:turns -- --help
 ```
 
-It prints the report (the bar, then per text the measures and one row per scenario) and exits 0, or 1 with `--strict` when a text misses the bar. A full run is 10 requests. `--profile full|short` runs one text; `--out <file>` also writes the report to a file.
+It prints the report (the bar, then per text the measures and one row per scenario) and exits 0, or 1 with `--strict` when a text misses the bar. A full run is 10 requests plus any read rounds. `--profile full|short` runs one text; `--out <file>` also writes the report to a file; `--dump <file>` writes every reply (text, calls, failures) as JSON, which is how to read what a model said before changing a scenario or a prompt.
 
 **With a hosted API key.** The script refuses to call a hosted API unless you pass `--yes`, because the provider bills the requests.
 
@@ -309,6 +309,12 @@ ANTHROPIC_API_KEY=... npm run eval:turns -- --provider anthropic --model claude-
 ```
 
 Use `--api-key-env NAME` if your key is in another variable, and `--base-url` for another OpenAI-compatible endpoint; the model must support tool calling.
+
+**On Amazon Bedrock.** `--provider bedrock` sends the request through Continue's own Bedrock provider, so it is built as the IDE builds it. Credentials come from the AWS credential chain; `--aws-profile <name>` picks a profile from `~/.aws/config` and `--region` the region (default `us-east-1`). It is a hosted run, so it needs `--yes`.
+
+```bash
+npm run eval:turns -- --provider bedrock --model us.amazon.nova-2-lite-v1:0 --aws-profile torgate --yes --dump nova.json
+```
 
 **With Ollama (local, no key, no cost).** `npm run eval:turns -- --ollama --model qwen3:8b`; `--host` points at a server that is not on `http://localhost:11434`. A `localhost` URL needs neither `--yes` nor a key.
 

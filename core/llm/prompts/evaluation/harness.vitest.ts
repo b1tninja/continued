@@ -3,6 +3,7 @@ import { BuiltInToolNames } from "../../../tools/builtIn";
 import { actTurn, actTurnShort, planTurn, planTurnShort } from "../turns";
 import { TURNS_QUALITY_BAR } from "./qualityBar";
 import {
+  answerRead,
   formatReport,
   PROFILES,
   runTurnsEval,
@@ -240,6 +241,29 @@ describe("scoring one reply", () => {
     expect(r.ok, r.failures.join("; ")).toBe(true);
   });
 
+  it("a plan written in text beside the present_plan call is a note, not a failure", () => {
+    const r = scoreReply(presents, "full", {
+      text:
+        "Here is the plan.\n\n" +
+        "The approach is to add the helper and a test. ".repeat(12),
+      calls: [
+        { name: "present_plan", args: { title: "t", plan: "p", todos: ["a"] } },
+      ],
+      ms: 1,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toMatch(/also written in text/);
+    const short = scoreReply(presents, "full", {
+      text: "Presenting the plan.",
+      calls: [
+        { name: "present_plan", args: { title: "t", plan: "p", todos: ["a"] } },
+      ],
+      ms: 1,
+    });
+    expect(short.warnings).toEqual([]);
+  });
+
   it("a task list while planning fails", () => {
     const r = scoreReply(noList, "full", {
       text: "",
@@ -329,5 +353,141 @@ describe("harness with stub models (no real model)", () => {
     const s = summarize(results, undefined, ["full"]);
     expect(s.profiles[0].errors).toHaveLength(TURN_SCENARIOS.length);
     expect(s.passed).toBe(false);
+  });
+});
+
+describe("read rounds on plan scenarios", () => {
+  const reserved = byId("plan-reserved-choice");
+  const seed = reserved.seed!;
+
+  it("answers reads from the seed and says what is missing", () => {
+    expect(
+      answerRead(seed, {
+        name: "read_file",
+        args: { filepath: "package.json" },
+      }),
+    ).toContain('"test": "node --test test/"');
+    expect(
+      answerRead(seed, {
+        name: "read_file",
+        args: { filepath: "./src/strings.js" },
+      }),
+    ).toContain("export function slugify");
+    expect(
+      answerRead(seed, {
+        name: "read_file",
+        args: { filepath: "src/dates.js" },
+      }),
+    ).toMatch(/^File not found: src\/dates\.js\./);
+    expect(answerRead(seed, { name: "ls", args: { dirPath: "." } })).toBe(
+      "README.md\npackage.json\nsrc/\ntest/",
+    );
+    expect(answerRead(seed, { name: "ls", args: { dirPath: "test" } })).toBe(
+      "slugify.test.js\ntruncate.test.js",
+    );
+    expect(answerRead(seed, { name: "ls", args: { dirPath: "lib" } })).toMatch(
+      /No such directory/,
+    );
+    expect(
+      answerRead(seed, { name: "grep_search", args: { query: "truncate\(" } }),
+    ).toContain("src/strings.js:9:");
+    expect(
+      answerRead(seed, { name: "grep_search", args: { query: "formatDate" } }),
+    ).toMatch(/No matches/);
+  });
+
+  it("a model that reads once more and then presents is scored on the presenting reply", async () => {
+    let asked = 0;
+    const model = {
+      chat: async (messages: any[]) => {
+        asked++;
+        const last = messages[messages.length - 1];
+        if (
+          last.role !== "tool" ||
+          !String(last.content).startsWith("File not found")
+        ) {
+          return {
+            role: "assistant",
+            content: "",
+            toolCalls: [
+              {
+                id: "x1",
+                type: "function",
+                function: {
+                  name: "read_file",
+                  arguments: JSON.stringify({ filepath: "src/dates.js" }),
+                },
+              },
+            ],
+          } as any;
+        }
+        return reserved.oracle;
+      },
+    };
+    const results = await runTurnsEval(model, {
+      scenarios: [reserved],
+      profiles: ["full"],
+    });
+    expect(asked).toBe(2);
+    expect(results[0].readRounds).toBe(1);
+    expect(results[0].calledPresentPlan).toBe(true);
+    expect(results[0].ok).toBe(true);
+  });
+
+  it("a model that only ever reads is scored after the last allowed round, with the rounds named", async () => {
+    const model = {
+      chat: async () =>
+        ({
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "r",
+              type: "function",
+              function: {
+                name: "ls",
+                arguments: JSON.stringify({ dirPath: "." }),
+              },
+            },
+          ],
+        }) as any,
+    };
+    const results = await runTurnsEval(model, {
+      scenarios: [reserved],
+      profiles: ["short"],
+      maxReadRounds: 2,
+    });
+    expect(results[0].readRounds).toBe(2);
+    expect(results[0].calledPresentPlan).toBe(false);
+    expect(results[0].failures[0]).toBe(
+      "present_plan not called (called ls after 2 round(s) of reads)",
+    );
+  });
+
+  it("an act scenario gets no read rounds: its first reply is the one scored", async () => {
+    let asked = 0;
+    const model = {
+      chat: async () => {
+        asked++;
+        return {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: "a",
+              type: "function",
+              function: { name: "read_file", arguments: "{}" },
+            },
+          ],
+        } as any;
+      },
+    };
+    const results = await runTurnsEval(model, {
+      scenarios: [byId("act-calls-tool")],
+      profiles: ["full"],
+    });
+    expect(asked).toBe(1);
+    expect(results[0].readRounds).toBe(0);
+    expect(results[0].ok).toBe(true);
   });
 });

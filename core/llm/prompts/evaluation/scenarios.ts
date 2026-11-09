@@ -64,6 +64,13 @@ export interface TurnScenario {
     /** A plan scenario with a choice the person kept for themselves. */
     reserved?: ReservedChoice;
   };
+  /**
+   * The project's files, for a plan scenario: when the reply is only reads
+   * (read_file, ls, grep_search), the runner answers them from this map for a
+   * bounded number of rounds and scores the first reply that is not a read.
+   * Nothing runs; a path not in the map is "not found".
+   */
+  seed?: Record<string, string>;
   /** What a model that follows the prompt replies; the oracle stub's answer. */
   oracle: AssistantChatMessage;
 }
@@ -115,6 +122,39 @@ test("slugify lowercases and joins with dashes", () => {
   assert.equal(slugify("Hello World"), "hello-world");
 });
 `;
+
+const TRUNCATE_TEST = `import assert from "node:assert/strict";
+import { test } from "node:test";
+import { truncate } from "../src/strings.js";
+
+test("truncate leaves short text alone", () => {
+  assert.equal(truncate("abc", 5), "abc");
+});
+
+test("truncate ends long text with an ellipsis", () => {
+  assert.equal(truncate("abcdef", 4), "abc\\u2026");
+});
+`;
+
+const PACKAGE_JSON = `{
+  "name": "loopsbx",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/"
+  }
+}
+`;
+
+/** The benchmark seed package (bench/seed/loopsbx), as the plan scenarios see it. */
+const SEED: Record<string, string> = {
+  "package.json": PACKAGE_JSON,
+  "README.md":
+    "# loopsbx\n\nString helpers. `npm test` runs the node:test files under test/.\n",
+  "src/strings.js": STRINGS_JS,
+  "test/slugify.test.js": SLUGIFY_TEST,
+  "test/truncate.test.js": TRUNCATE_TEST,
+};
 
 function user(content: string): ChatMessage {
   return { role: "user", content };
@@ -212,17 +252,33 @@ const ACT_AFTER_REFUSAL: TurnScenario = {
   }),
 };
 
+/**
+ * The research a plan turn does before it has anything to present: every
+ * file of the seed read, both directories listed. On Nova 2 Lite (2026-11-08)
+ * a shorter version left the model one more read to make (the other test
+ * file, or whether src/dates.js exists) and no reply ever presented.
+ */
 const PLAN_RESEARCH: ChatMessage[] = [
-  assistantCall("r1", BuiltInToolNames.ReadFile, {
+  assistantCall("r1", BuiltInToolNames.LSTool, { dirPath: "." }),
+  toolResult("r1", "README.md\npackage.json\nsrc/\ntest/"),
+  assistantCall("r2", BuiltInToolNames.ReadFile, { filepath: "package.json" }),
+  toolResult("r2", PACKAGE_JSON),
+  assistantCall("r3", BuiltInToolNames.LSTool, { dirPath: "src" }),
+  toolResult("r3", "strings.js"),
+  assistantCall("r4", BuiltInToolNames.ReadFile, {
     filepath: "src/strings.js",
   }),
-  toolResult("r1", STRINGS_JS),
-  assistantCall("r2", BuiltInToolNames.LSTool, { dirPath: "test" }),
-  toolResult("r2", "slugify.test.js\ntruncate.test.js"),
-  assistantCall("r3", BuiltInToolNames.ReadFile, {
+  toolResult("r4", STRINGS_JS),
+  assistantCall("r5", BuiltInToolNames.LSTool, { dirPath: "test" }),
+  toolResult("r5", "slugify.test.js\ntruncate.test.js"),
+  assistantCall("r6", BuiltInToolNames.ReadFile, {
     filepath: "test/slugify.test.js",
   }),
-  toolResult("r3", SLUGIFY_TEST),
+  toolResult("r6", SLUGIFY_TEST),
+  assistantCall("r7", BuiltInToolNames.ReadFile, {
+    filepath: "test/truncate.test.js",
+  }),
+  toolResult("r7", TRUNCATE_TEST),
 ];
 
 const PLAN_TODOS = [
@@ -246,6 +302,7 @@ const PLAN_PRESENTS: TurnScenario = {
     ...PLAN_RESEARCH,
   ],
   tools: PLAN_TOOLS,
+  seed: SEED,
   expect: {
     call: "present_plan",
     forbidText: [ASKS_FOR_APPROVAL],
@@ -273,6 +330,7 @@ const PLAN_RESERVED_CHOICE: TurnScenario = {
     ...PLAN_RESEARCH,
   ],
   tools: PLAN_TOOLS,
+  seed: SEED,
   expect: {
     call: "present_plan",
     forbidText: [ASKS_FOR_APPROVAL],
@@ -317,6 +375,7 @@ const PLAN_NO_TASK_LIST: TurnScenario = {
     ...PLAN_RESEARCH,
   ],
   tools: PLAN_TOOLS,
+  seed: SEED,
   expect: {
     call: "present_plan",
     forbidCalls: [
