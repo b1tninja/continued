@@ -1,8 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { isPosixShell, type ShellKind } from "../../util/shell";
+import type { ShellKind } from "../../util/shell";
 import { canonicalCmdlet, checkReadCmdlet } from "./powershell";
+import { scanCommand } from "./shellScan";
 
 /**
  * Is this command certain to only read? (plans/policy-areas.md, "Which area a
@@ -278,122 +279,37 @@ function gitIsSafe(opts: ReadOnlyOptions): string | undefined {
   return undefined;
 }
 
-interface Segment {
-  words: string[];
-}
-
-/** Redirects that throw output away; every other redirect is not understood. */
-const DISCARD_REDIRECT = /^(2?>\s*\/dev\/null|2>&1)(?=$|[\s|;&])/;
-
-/** Words and operators, or why the command is not understood. */
-function tokenize(
-  command: string,
-  shell: ShellKind,
-): { segments: Segment[] } | { why: string } {
-  const segments: Segment[] = [];
-  let words: string[] = [];
-  let word = "";
-  let inWord = false;
-  let trailingOperator = false;
-  let i = 0;
-  const endWord = () => {
-    if (inWord) words.push(word);
-    word = "";
-    inWord = false;
-  };
-  const endSegment = (op: string) => {
-    endWord();
-    if (words.length === 0) return `an empty command before ${op}`;
-    segments.push({ words });
-    words = [];
-    trailingOperator = true;
-    return undefined;
-  };
-  while (i < command.length) {
-    const c = command[i];
-    if (!inWord) {
-      const redirect = DISCARD_REDIRECT.exec(command.slice(i));
-      if (redirect) {
-        i += redirect[0].length;
-        continue;
-      }
-    }
-    // In a POSIX shell a backslash escapes what follows (`\'` is a quote
-    // that does not start one), so a scanner that reads it as a letter and one
-    // that reads it as an escape see different commands. In PowerShell it is a
-    // path separator.
-    if (c === "\\" && isPosixShell(shell)) {
-      return { why: "a backslash escape is not understood" };
-    }
-    // zsh expands =cmd to the path of cmd
-    if (c === "=" && shell === "zsh" && !inWord) {
-      return { why: "=word expansion (zsh) is not understood" };
-    }
-    // PowerShell's splat and array operator
-    if (c === "@" && shell === "powershell") {
-      return { why: '"@" is not understood' };
-    }
-    if (c === "'") {
-      const end = command.indexOf("'", i + 1);
-      if (end < 0) return { why: "an unterminated quote" };
-      word += command.slice(i + 1, end);
-      inWord = true;
-      trailingOperator = false;
-      i = end + 1;
-      continue;
-    }
-    if (c === '"') {
-      let j = i + 1;
-      let body = "";
-      while (j < command.length && command[j] !== '"') {
-        if (command[j] === "$" || command[j] === "`" || command[j] === "\\") {
-          return {
-            why: "a variable, substitution or escape inside double quotes",
-          };
-        }
-        body += command[j++];
-      }
-      if (j >= command.length) return { why: "an unterminated quote" };
-      word += body;
-      inWord = true;
-      trailingOperator = false;
-      i = j + 1;
-      continue;
-    }
-    if (c === " " || c === "\t") {
-      endWord();
-      i++;
-      continue;
-    }
-    if (c === "|" || c === ";" || c === "&") {
-      const two = command.slice(i, i + 2);
-      // A lone & starts a background job
-      if (c === "&" && two !== "&&") return { why: "a background job (&)" };
-      const op = two === "||" || two === "&&" ? two : c;
-      const err = endSegment(op);
-      if (err) return { why: err };
-      i += op.length;
-      continue;
-    }
-    if (c === ">" || c === "<") {
-      return { why: "a redirect that is not to /dev/null" };
-    }
-    if (c === "\n" || c === "\r") return { why: "a newline is not understood" };
-    if ("$`(){}!#".includes(c)) return { why: `"${c}" is not understood` };
-    word += c;
-    inWord = true;
-    trailingOperator = false;
-    i++;
-  }
-  endWord();
-  // A command that ends on an operator is not finished
-  if (trailingOperator && words.length === 0) {
-    return { why: "the command ends on an operator" };
-  }
-  if (words.length) segments.push({ words });
-  if (segments.length === 0) return { why: "an empty command" };
-  return { segments };
-}
+/**
+ * cmd's own commands: cmd runs these itself, before it looks for a file of
+ * that name, so they are the same everywhere. Every other name in cmd is a
+ * program, and cmd searches the current directory for programs first, so any
+ * of them can be a file in the repository: not vouched.
+ */
+const CMD_DIR_SWITCH = /^\/(-?[abcdlnopqrstwx4?]|[aot]:[a-z-]+)$/i;
+const CMD_INTERNAL: Record<string, Check> = {
+  dir: (args) =>
+    args.every((a) => !a.startsWith("/") || CMD_DIR_SWITCH.test(a))
+      ? undefined
+      : "dir with a switch that is not recognised",
+  type: (args) =>
+    args.some((a) => a.startsWith("/")) ? "type takes no switches" : undefined,
+  cd: (args) =>
+    args.length === 0 ||
+    args.length === 1 ||
+    (args.length === 2 && args[0].toLowerCase() === "/d")
+      ? undefined
+      : "cd with several arguments",
+  echo: anyArgs,
+  ver: (args) => (args.length ? "ver takes no arguments" : undefined),
+  vol: (args) => (args.length > 1 ? "vol with several arguments" : undefined),
+  path: (args) => (args.length ? "path with an argument sets it" : undefined),
+  // Listing the variables only: one name prints those that start with it
+  set: (args) =>
+    args.length > 1 || args.some((a) => a.startsWith("/"))
+      ? "set with a switch or several arguments"
+      : undefined,
+};
+CMD_INTERNAL.chdir = CMD_INTERNAL.cd;
 
 /** Does this command only read? See the file comment for what that takes. */
 export function classifyReadOnly(
@@ -406,19 +322,18 @@ export function classifyReadOnly(
   }
   const shell = opts.shell;
   if (!shell) return no("the shell that runs it is not known");
-  if (shell === "cmd") return no("cmd is not parsed");
   if (shell === "unknown") return no("this shell is not parsed");
   // UNC paths reach another computer
   if (/(^|[\s'"])(\\\\|\/\/)[^\s\\/]+[\\/]/.test(command)) {
     return no("a network path (UNC) is named");
   }
-  const parsed = tokenize(command, shell);
-  if ("why" in parsed) return no(parsed.why);
+  const scanned = scanCommand(command, shell);
+  if (!scanned.ok) return no(scanned.why);
 
   const names: string[] = [];
   // After a cd the command runs somewhere whose git config was not checked
   let movedDirectory = false;
-  for (const { words } of parsed.segments) {
+  for (const { words } of scanned.graph.commands) {
     const [first, ...rest] = words;
     // An environment prefix (FOO=bar cmd) can change what a command does
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(first)) {
@@ -427,6 +342,18 @@ export function classifyReadOnly(
     const name = first.toLowerCase();
     if (!/^[a-z][a-z0-9_-]*$/.test(name)) {
       return no(`"${first}" is not a plain command name`);
+    }
+    if (shell === "cmd") {
+      const check = CMD_INTERNAL[name];
+      if (!check) {
+        return no(
+          `${name} is not one of cmd's own commands, so it may be a file`,
+        );
+      }
+      const problem = check(rest);
+      if (problem) return no(`${name}: ${problem}`);
+      names.push(name);
+      continue;
     }
     if (CHANGES_DIRECTORY.has(name)) movedDirectory = true;
     if (name === "git") {

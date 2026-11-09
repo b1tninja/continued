@@ -12,7 +12,7 @@ Each case says what is true of a command in a shell: it **reads**, it **writes**
 | zsh | 117 | 53 | 45 | 19 | 44 | 83% | 0 |
 | sh | 111 | 49 | 43 | 19 | 42 | 86% | 0 |
 | powershell | 111 | 46 | 46 | 19 | 44 | 96% | 0 |
-| cmd | 52 | 15 | 29 | 8 | 0 | 0% | 0 |
+| cmd | 52 | 15 | 29 | 8 | 9 | 60% | 0 |
 
 ## Reads the classifier does not vouch for
 
@@ -23,7 +23,7 @@ The work list for the parsers: each is truly read-only, and the reason is what t
 - `ls a\ b`: a backslash escape is not understood
 - `ls {a,b}`: "{" is not understood
 - `echo $((1+2))`: "$" is not understood
-- `cat <(ls)`: a redirect that is not to /dev/null
+- `cat <(ls)`: a redirect that is not to nowhere
 - `ls $HOME`: "$" is not understood
 - `echo $AWS_SECRET_ACCESS_KEY`: "$" is not understood
 - `printenv`: printenv is not on the read-only list
@@ -33,7 +33,7 @@ The work list for the parsers: each is truly read-only, and the reason is what t
 - `ls a\ b`: a backslash escape is not understood
 - `ls {a,b}`: "{" is not understood
 - `echo $((1+2))`: "$" is not understood
-- `cat <(ls)`: a redirect that is not to /dev/null
+- `cat <(ls)`: a redirect that is not to nowhere
 - `ls $HOME`: "$" is not understood
 - `echo $AWS_SECRET_ACCESS_KEY`: "$" is not understood
 - `printenv`: printenv is not on the read-only list
@@ -45,7 +45,7 @@ The work list for the parsers: each is truly read-only, and the reason is what t
 - `ls a\ b`: a backslash escape is not understood
 - `ls {a,b}`: "{" is not understood
 - `echo $((1+2))`: "$" is not understood
-- `cat <(ls)`: a redirect that is not to /dev/null
+- `cat <(ls)`: a redirect that is not to nowhere
 - `ls $HOME`: "$" is not understood
 - `echo $AWS_SECRET_ACCESS_KEY`: "$" is not understood
 - `printenv`: printenv is not on the read-only list
@@ -57,21 +57,12 @@ The work list for the parsers: each is truly read-only, and the reason is what t
 
 ### cmd
 
-- `dir`: cmd is not parsed
-- `dir /s`: cmd is not parsed
-- `type a.txt`: cmd is not parsed
-- `cd`: cmd is not parsed
-- `cd src`: cmd is not parsed
-- `echo hi`: cmd is not parsed
-- `where git`: cmd is not parsed
-- `ver`: cmd is not parsed
-- `findstr x f.txt`: cmd is not parsed
-- `tree`: cmd is not parsed
-- `set`: cmd is not parsed
-- `dir %USERPROFILE%`: cmd is not parsed
-- `echo %PATH%`: cmd is not parsed
-- `type %USERPROFILE%\.ssh\id_rsa`: cmd is not parsed
-- `dir src`: cmd is not parsed
+- `where git`: where is not one of cmd's own commands, so it may be a file
+- `findstr x f.txt`: findstr is not one of cmd's own commands, so it may be a file
+- `tree`: tree is not one of cmd's own commands, so it may be a file
+- `dir %USERPROFILE%`: an expansion (cmd expands it before it parses)
+- `echo %PATH%`: an expansion (cmd expands it before it parses)
+- `type %USERPROFILE%\.ssh\id_rsa`: an expansion (cmd expands it before it parses)
 
 ## The protected-path scan
 

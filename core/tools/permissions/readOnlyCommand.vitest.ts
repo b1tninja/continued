@@ -245,9 +245,7 @@ const ZSH: ReadOnlyOptions = { ...CLEAN, shell: "zsh" };
 describe("the shell decides what a command is", () => {
   it("without a shell nothing is vouched, and cmd and unknown shells are not parsed", () => {
     expect(why("ls", { ...CLEAN, shell: undefined })).toContain("not known");
-    expect(why("dir", { ...CLEAN, shell: "cmd" })).toContain(
-      "cmd is not parsed",
-    );
+    expect(vouched("dir", { ...CLEAN, shell: "cmd" })).toBe(true);
     expect(why("ls", { ...CLEAN, shell: "unknown" })).toContain("not parsed");
   });
 
@@ -314,7 +312,7 @@ describe("PowerShell", () => {
     ["Get-Content `x", "`"],
     ["Get-Content a.txt > out.txt", "redirect"],
     ["Get-Content (Get-Item x)", "("],
-    ["& ls", "background"],
+    ["& ls", "call operator"],
     ["Remove-Item x", "not a known read cmdlet"],
     ["Set-Content a.txt hi", "not a known read cmdlet"],
     ["Tee-Object -FilePath x", "not a known read cmdlet"],
@@ -396,5 +394,66 @@ describe("PowerShell parameters", () => {
       judge: "parser",
       claim: "only reads: get-childitem, sort-object",
     });
+  });
+});
+
+const CMD: ReadOnlyOptions = { ...CLEAN, shell: "cmd" };
+
+describe("cmd", () => {
+  it.each([
+    "dir",
+    "dir /s",
+    "dir /a:h /b",
+    "dir src",
+    "dir C:\\src\\a",
+    "type a.txt",
+    "type a.txt & dir",
+    "cd",
+    "cd src",
+    "cd /d C:\\src",
+    "echo hi",
+    "ver",
+    "set",
+    "set PATH",
+    "dir & type a.txt",
+    "dir && cd src",
+    "dir 2>nul",
+    "dir > nul 2>&1",
+    'type "a b.txt"',
+  ])("vouches %s: cmd runs its own commands itself", (command) => {
+    expect(vouched(command, CMD)).toBe(true);
+  });
+
+  it.each([
+    ["findstr x f.txt", "may be a file"],
+    ["where git", "may be a file"],
+    ["git status", "may be a file"],
+    ["tree", "may be a file"],
+    ["del a.txt", "may be a file"],
+    ["dir %USERPROFILE%", "expansion"],
+    ["echo %PATH%", "expansion"],
+    ["echo !x!", "expansion"],
+    ['echo "%x%"', "expansion inside quotes"],
+    ["echo a ^& b", "^"],
+    ["dir > out.txt", "not understood"],
+    ["type a.txt > b.txt", "not understood"],
+    ["if exist a (dir)", "("],
+    ["dir /x:y", "switch"],
+    ["type /b a.txt", "no switches"],
+    ["cd a b c", "several arguments"],
+    ["set X=1", "not understood"],
+    ["set /p x=", "not understood"],
+    ["path C:\\x", "sets it"],
+    ["ver /?", "no arguments"],
+    ["call build.bat", "may be a file"],
+    ["dir ;", "not understood"],
+  ])("%s", (command, reason) => {
+    expect(vouched(command, CMD)).toBe(false);
+    expect(why(command, CMD)).toContain(reason);
+  });
+
+  it("a name with a dot is a file, never one of cmd's own commands", () => {
+    expect(vouched("dir.bat", CMD)).toBe(false);
+    expect(vouched("type.exe a", CMD)).toBe(false);
   });
 });

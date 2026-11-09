@@ -63,12 +63,23 @@ describe("the read-only classifier", () => {
     }
   });
 
-  it("does not parse cmd, so it vouches for nothing there", () => {
-    expect(
-      casesFor("cmd")
-        .filter((k) => scan(k, "cmd").vouched)
-        .map((k) => k.command),
-    ).toEqual([]);
+  it("in cmd vouches only for cmd's own commands", () => {
+    const own = new Set([
+      "dir",
+      "type",
+      "cd",
+      "chdir",
+      "echo",
+      "ver",
+      "vol",
+      "path",
+      "set",
+    ]);
+    const vouchedNames = casesFor("cmd")
+      .filter((k) => scan(k, "cmd").vouched)
+      .map((k) => k.command.split(" ")[0].toLowerCase());
+    expect(vouchedNames.length).toBeGreaterThan(5);
+    for (const name of vouchedNames) expect(own.has(name), name).toBe(true);
   });
 });
 

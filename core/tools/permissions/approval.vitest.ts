@@ -376,8 +376,10 @@ describe("a command is read in the shell that runs it", () => {
     expect(run("ls", undefined).policy).toBe(ASK);
   });
 
-  it("cmd is not parsed, so nothing is vouched there", () => {
-    expect(run("dir", "cmd").policy).toBe(ASK);
+  it("cmd vouches only its own commands: any other name may be a file in the folder", () => {
+    expect(run("dir", "cmd").policy).toBe(ALLOW);
+    expect(run("findstr x f.txt", "cmd").policy).toBe(ASK);
+    expect(run("git status", "cmd").policy).toBe(ASK);
   });
 
   it("the same text is two things: date reads in bash and is not vouched in PowerShell", () => {
