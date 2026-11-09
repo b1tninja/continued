@@ -10,6 +10,7 @@ import {
   presentPlanTool,
   readFileTool,
   runTerminalCommandTool,
+  singleFindAndReplaceTool,
   taskListTool,
 } from "core/tools/definitions";
 import { renderChatMessage } from "core/util/messageContent";
@@ -23,6 +24,10 @@ import {
 import { setLoop, setPlanFile } from "../../../redux/slices/sessionSlice";
 import { setApprovalMode } from "../../../redux/slices/uiSlice";
 import { startLoopFromPlan } from "../../../redux/thunks/loop";
+import {
+  LoopWorktreeOps,
+  setLoopWorktreeOps,
+} from "../../../util/loopWorktrees";
 import { triggerConfigUpdate } from "../../../util/test/config";
 import { renderWithProviders } from "../../../util/test/render";
 import { getElementByTestId, getMainEditor } from "../../../util/test/utils";
@@ -81,7 +86,9 @@ const OPUS = {
   underlyingProviderName: "mock",
 };
 
-async function setup(todos: (string | { text: string; model?: string })[]) {
+async function setup(
+  todos: (string | { text: string; model?: string; files?: string[] })[],
+) {
   const rendered = await renderWithProviders(<Chat />);
   const { store, ideMessenger } = rendered;
   await act(async () => {
@@ -104,6 +111,7 @@ async function setup(todos: (string | { text: string; model?: string })[]) {
           readFileTool,
           runTerminalCommandTool,
           createNewFileTool,
+          singleFindAndReplaceTool,
           taskListTool,
           presentPlanTool,
           holdQuestionTool,
@@ -165,10 +173,15 @@ async function setup(todos: (string | { text: string; model?: string })[]) {
     return undefined as PromptLog | undefined;
   };
 
-  const start = async () => {
+  const start = async (options: { parallel?: boolean } = {}) => {
     await act(async () => {
+      // Waves need a level that does not ask before each edit; YOLO is
+      // Unattended, and the switch is on from the start
+      if (options.parallel) store.dispatch(setApprovalMode("yolo"));
       store.dispatch(setPlanFile(PLAN_FILE));
-      await store.dispatch(startLoopFromPlan({ planFile: PLAN_FILE }));
+      await store.dispatch(
+        startLoopFromPlan({ planFile: PLAN_FILE, parallel: options.parallel }),
+      );
     });
   };
   /** The prompt the loop sent with request n (the last user message, without an item's plan block). */
@@ -1371,5 +1384,240 @@ describe("Loop mode's checks and dependencies", () => {
     expect(h.prompt(2)).toContain("Tried a table; the tests fix the grammar");
     expect(h.loop().items[0].deferrals).toBe(1);
     expect(h.loop().consecutiveFailures ?? 0).toBe(0);
+  });
+});
+
+describe("Loop mode's parallel waves", () => {
+  type Setup = Awaited<ReturnType<typeof setup>>;
+  const el = (id: string) =>
+    document.querySelector<HTMLElement>(`[data-testid=${id}]`);
+
+  /**
+   * Fake worktrees (the seam for core/util/worktree.ts): every call is
+   * recorded; `refuse` says which patches do not apply, and why.
+   */
+  function fakeWorktrees(
+    refuse: (patch: string) => string | undefined = () => undefined,
+  ) {
+    const calls: string[] = [];
+    const ops: LoopWorktreeOps = {
+      async create(_messenger, repo, slug, itemId) {
+        calls.push(`create ${slug}-${itemId} in ${repo}`);
+        const path = `/tmp/loop/item-${itemId}-x`;
+        return {
+          path,
+          branch: `continued/loop-${slug}-${itemId}`,
+          baseline: "b",
+        };
+      },
+      async patch(_messenger, worktree) {
+        calls.push(`patch ${worktree.path}`);
+        return `patch of ${worktree.path}`;
+      },
+      async apply(_messenger, _repo, patch, touchedSince) {
+        calls.push(
+          `apply ${patch}${touchedSince.length ? ` (touched: ${touchedSince.join(", ")})` : ""}`,
+        );
+        const reason = refuse(patch);
+        return reason ? { ok: false, reason } : { ok: true };
+      },
+      async remove(_messenger, _repo, worktree) {
+        calls.push(`remove ${worktree.path}`);
+      },
+      async dirty() {
+        return [];
+      },
+    };
+    setLoopWorktreeOps(ops);
+    return calls;
+  }
+  afterEach(() => setLoopWorktreeOps());
+
+  /** A worker's turn that waits for release() before it reports done. */
+  function heldFinish(summary: string) {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const turn: Turn = async function* (signal) {
+      yield [{ role: "assistant", content: "Working" }];
+      await held;
+      yield* finish("done", summary)(signal);
+    };
+    return { turn, release: () => release() };
+  }
+
+  /** A turn that writes a line, then waits until its run is stopped. */
+  const untilStopped: Turn = async function* (signal) {
+    yield [{ role: "assistant", content: "Working" }];
+    await new Promise<void>((r) =>
+      signal.aborted
+        ? r()
+        : signal.addEventListener("abort", () => r(), { once: true }),
+    );
+  };
+
+  /** The plan block of request n (a worker's goes in its first message). */
+  const block = (h: Setup, n: number) =>
+    text(h.requests[n].messages.find((m) => m.role === "user")).split(
+      "<task_list>",
+    )[1] ?? "";
+
+  test("two items with disjoint files run as two workers at once, merge in finish order, and the third runs inline after", async () => {
+    const h = await setup([
+      { text: "Add the retry helper", files: ["src/retry.ts"] },
+      { text: "Document the config", files: ["docs/config.md"] },
+      "Wire it up",
+    ]);
+    const calls = fakeWorktrees();
+    const first = heldFinish("retry added");
+    const second = heldFinish("documented");
+    h.turns.push(first.turn, second.turn, finish("done", "wired"));
+    await h.start({ parallel: true });
+
+    // Two requests in flight, one per worker, each in its own worktree
+    await waitFor(() => expect(h.requests).toHaveLength(2));
+    expect(h.loop().parallel?.map((r) => r.itemId)).toEqual(["1", "2"]);
+    expect(h.loop().current).toBeUndefined();
+    expect(h.itemStatus("1")).toBe("running");
+    expect(h.itemStatus("2")).toBe("running");
+    expect(h.itemStatus("3")).toBe("pending");
+    expect(calls).toEqual([
+      "create build-the-parser-1 in /Users/user/workspace1",
+      "create build-the-parser-2 in /Users/user/workspace1",
+    ]);
+    // Each worker's prompt is for its item, in its worktree, with its files
+    expect(h.prompt(0)).toContain("only this item: Add the retry helper");
+    expect(h.prompt(0)).toContain("/tmp/loop/item-1-");
+    expect(h.prompt(0)).toContain("src/retry.ts");
+    expect(h.prompt(1)).toContain("only this item: Document the config");
+    expect(h.prompt(1)).toContain("/tmp/loop/item-2-");
+    // ... and its plan block marks its own item, with the other running
+    expect(block(h, 0)).toMatch(/1\. Add the retry helper  <- this item/);
+    expect(block(h, 0)).toMatch(
+      /2\. Document the config \(running now, in its own copy/,
+    );
+    expect(block(h, 1)).toMatch(/2\. Document the config  <- this item/);
+    expect(block(h, 1)).toMatch(/1\. Add the retry helper \(running now/);
+    // The worker's own system message, with its tools: the loop's three and
+    // the exact edit, which runs in its worktree without a diff review
+    const system = text(h.requests[0].messages[0]);
+    expect(system).toContain("You are a worker of a Loop plan");
+    expect(system).toContain("/tmp/loop/item-1-");
+    for (const name of [
+      BuiltInToolNames.FinishItem,
+      BuiltInToolNames.HoldQuestion,
+      BuiltInToolNames.RemindMe,
+      BuiltInToolNames.SingleFindAndReplace,
+      BuiltInToolNames.CreateNewFile,
+    ]) {
+      expect(system).toContain(name);
+    }
+    expect(system).not.toContain(BuiltInToolNames.TaskList);
+    // The inbox shows the workers, their worktrees and model, and the files
+    expect(el("loop-item-1")!.textContent).toContain("running in parallel");
+    expect(el("loop-worker-1")!.textContent).toContain("/tmp/loop/item-1-");
+    expect(el("loop-worker-1")!.textContent).toContain("Mock LLM");
+    expect(el("loop-files-1")!.textContent).toContain("src/retry.ts");
+    expect(el("loop-files-3")).toBeNull();
+    expect(
+      h.store.getState().session.taskPlan!.items.map((i) => i.note),
+    ).toEqual([
+      "Running in its own worktree, beside other items",
+      "Running in its own worktree, beside other items",
+      undefined,
+    ]);
+
+    // Item 2 finishes first: its patch is merged first; item 1 still runs,
+    // and nothing else starts while the wave is out
+    await act(async () => second.release());
+    await waitFor(() => expect(h.itemStatus("2")).toBe("done"));
+    expect(h.itemStatus("1")).toBe("running");
+    expect(h.loop().parallel?.map((r) => r.itemId)).toEqual(["1"]);
+    expect(h.requests).toHaveLength(2);
+    expect(el("loop-worker-2")).toBeNull();
+
+    await act(async () => first.release());
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    // The third item, with no files, ran inline after the wave
+    expect(h.requests).toHaveLength(3);
+    expect(h.prompt(2)).toContain("only this item: Wire it up");
+    expect(h.prompt(2)).not.toContain("This item runs in its own copy");
+    expect(h.loop().items.map((i) => i.summary)).toEqual([
+      "retry added",
+      "documented",
+      "wired",
+    ]);
+    // Merged in finish order, each worktree removed once its patch is in
+    expect(calls.slice(2)).toEqual([
+      expect.stringMatching(/^patch \/tmp\/loop\/item-2-/),
+      expect.stringMatching(/^apply patch of \/tmp\/loop\/item-2-/),
+      expect.stringMatching(/^remove \/tmp\/loop\/item-2-/),
+      expect.stringMatching(/^patch \/tmp\/loop\/item-1-/),
+      expect.stringMatching(/^apply patch of \/tmp\/loop\/item-1-/),
+      expect.stringMatching(/^remove \/tmp\/loop\/item-1-/),
+    ]);
+  });
+
+  test("a refused patch sends the item back inline, with the reason in its prompt", async () => {
+    const h = await setup([
+      { text: "Add the retry helper", files: ["src/retry.ts"] },
+      { text: "Document the config", files: ["docs/config.md"] },
+    ]);
+    const calls = fakeWorktrees((patch) =>
+      patch.includes("item-1-")
+        ? "error: patch failed: src/retry.ts:3\nerror: src/retry.ts: patch does not apply"
+        : undefined,
+    );
+    h.turns.push(
+      finish("done", "retry added"),
+      finish("done", "documented"),
+      finish("done", "retry added inline"),
+    );
+    await h.start({ parallel: true });
+
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    // Item 1's report did not count: it ran again, inline, on the merged tree
+    expect(h.requests).toHaveLength(3);
+    expect(h.prompt(2)).toContain("only this item: Add the retry helper");
+    expect(h.prompt(2)).toContain("could not be merged");
+    expect(h.prompt(2)).toContain("src/retry.ts:3");
+    expect(h.prompt(2)).not.toContain("This item runs in its own copy");
+    expect(h.loop().items[0]).toMatchObject({
+      status: "done",
+      attempts: 2,
+      summary: "retry added inline",
+    });
+    expect(h.loop().items[1]).toMatchObject({ status: "done", attempts: 1 });
+    // Both worktrees went, the refused one too
+    expect(calls.filter((c) => c.startsWith("remove"))).toHaveLength(2);
+  });
+
+  test("Stop ends the wave's workers at once: their items go back to pending and the worktrees go", async () => {
+    const h = await setup([
+      { text: "Add the retry helper", files: ["src/retry.ts"] },
+      { text: "Document the config", files: ["docs/config.md"] },
+    ]);
+    const calls = fakeWorktrees();
+    h.turns.push(untilStopped, untilStopped);
+    await h.start({ parallel: true });
+    await waitFor(() => expect(h.requests).toHaveLength(2));
+
+    expect(el("loop-stop")!.textContent).toBe("Stop the wave");
+    expect(el("loop-stop-now")).toBeNull();
+    await act(async () => {
+      fireEvent.click(el("loop-stop")!);
+    });
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("stopped");
+    expect(h.loop().parallel).toBeUndefined();
+    expect(h.itemStatus("1")).toBe("pending");
+    expect(h.itemStatus("2")).toBe("pending");
+    // A stopped worker's changes are dropped with its worktree
+    await waitFor(() =>
+      expect(calls.filter((c) => c.startsWith("remove"))).toHaveLength(2),
+    );
+    expect(calls.some((c) => c.startsWith("apply"))).toBe(false);
+    expect(h.requests).toHaveLength(2);
   });
 });

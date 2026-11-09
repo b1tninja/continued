@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import * as nodeFs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -65,6 +65,23 @@ export const defaultShellRunner: ShellRunner = (command, cwd, env) =>
           reject(new Error(stderr?.trim() || error.message));
         } else {
           resolve(stdout);
+        }
+      },
+    );
+  });
+
+/** The git runner for a Node host (the IDE's core): `git` on the PATH. */
+export const execFileGit: GitRunner = (args, cwd) =>
+  new Promise((resolve, reject) => {
+    execFile(
+      "git",
+      args,
+      { cwd, maxBuffer: MAX_BUFFER },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr?.toString().trim() || error.message));
+        } else {
+          resolve(stdout.toString());
         }
       },
     );

@@ -1807,6 +1807,12 @@ export interface ToolExtras {
   }) => void;
   config: ContinueConfig;
   codeBaseIndexer?: CodebaseIndexer;
+  /**
+   * Set when the call runs in another checkout (`tools/call` with
+   * `workspaceDirs`: a Loop worker's worktree). `ide` already answers these
+   * folders; the exact edit tools run only with this set.
+   */
+  workspaceDirs?: string[];
 }
 
 export interface McpToolMeta {
