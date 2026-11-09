@@ -272,7 +272,7 @@ The entries, and what each falls back to when it is not set:
 
 The model and the prompt are one decision: a small model running Loop items wants the short turn text, a strong one planning wants the full text, and a team may want a text of its own for a use. `prompt` takes one of:
 
-- `full` or `short`: the two built-in turn texts. Without `prompt`, the model's id decides (the short text for small models such as Qwen, the full text otherwise).
+- `full`, `short` or `tailored`: the built-in turn texts. `tailored` is the short text plus a group on tool calls that quotes the tool-call markup the model was trained on, for models that write tool calls as text. Without `prompt`, the model's id decides: the tailored text for the Qwen coder and MoE models, the short text for other Qwen models, the full text otherwise.
 - The `name` of a block under `prompts:`. Its text replaces the turn text (the IDE's code-block rules and the no-tools notice still follow it; in Chat it replaces the whole default). The block is written for the use it serves: an act text should say how a turn ends, a plan text that the turn ends by presenting the plan.
 
 ```yaml title="config.yaml"
@@ -320,6 +320,7 @@ modeModels:
     tail: Decide what you can from the code; ask only what it cannot settle.
 ```
 - Switching mode switches the selected chat model, and the mode menu shows which model and effort each mode uses. A Loop switches the model for each turn it sends: the `loop` model for an item, the `replan` model for a re-plan.
+- One to-do of a plan can name its own model: a `model: <name>` line indented under it in the plan file (the model's `name` under `models`), or `model` in the plan tool's `todo_details`. A Loop runs that item on the named model instead of the `loop` model; the prompt and `reasoningEffort` still come from the `loop` entry. A name that is not configured falls back to the `loop` model, and the item's row in the inbox says so.
 - If you pick a model by hand in the model selector, that choice is used for the current mode until you reload the window. The reasoning toggle in the chat input overrides `reasoningEffort`.
 - A name that doesn't match one of your models is ignored, with a warning in the config errors. If nothing in an entry matches, the entry is ignored.
 - You can also set all of this from **Settings > Models > Which model does what**: tick the models each mode offers, star the default, star one model for Loop, Re-plan and Subagent, pick a reasoning effort and press Save. Saving edits `config.yaml` in place and keeps your comments. It needs a `config.yaml` (not a `config.json`), and is not shown in the JetBrains plugin yet. The reviewer is picked under **Additional model roles**.

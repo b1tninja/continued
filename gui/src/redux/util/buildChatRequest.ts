@@ -207,12 +207,33 @@ export function buildChatRequest(
     return { ...item, message: messageWithoutId };
   });
 
+  // The use's tail (`modeModels.<use>.tail`): a one-line reminder at the end
+  // of every user message of the request, after the Loop plan block on the
+  // item prompt. On every user message, not the newest only, so that each
+  // request is an extension of the one before: the system message is the
+  // same bytes with or without it, and a message's bytes never change once
+  // sent (core/llm/prompts/usePrompts.ts). A per-use line in the system
+  // message would break the whole conversation's cache instead. It goes on
+  // the history's user messages before constructMessages, so the user-role
+  // messages that carry tool output for a model without native tools get
+  // none: the line is for the person's messages.
+  const tail = use
+    ? tailFor(state.config.config.modeModels, use, model.model)
+    : undefined;
+  const withTail = tail
+    ? withoutMessageIds.map((item) =>
+        item.message.role === "user"
+          ? { ...item, message: withTurnTail([item.message], tail)[0] }
+          : item,
+      )
+    : withoutMessageIds;
+
   const {
-    messages: constructed,
+    messages,
     appliedRules,
     appliedRuleIndex: runRuleIndex,
   } = constructMessages(
-    withoutMessageIds as any,
+    withTail as any,
     systemMessage,
     // The per-use global rules switch (rulesByMode): off for this use means
     // no rules are matched at all. A Loop item follows Agent, a re-plan Plan,
@@ -222,18 +243,6 @@ export function buildChatRequest(
       : [],
     state.ui.ruleSettings,
     systemToolsFramework,
-  );
-
-  // The use's tail (`modeModels.<use>.tail`): a one-line reminder at the end
-  // of every user message of the request, after the Loop plan block on the
-  // item prompt. On every user message, not the newest only, so that each
-  // request is an extension of the one before: the system message is the
-  // same bytes with or without it, and a message's bytes never change once
-  // sent (core/llm/prompts/usePrompts.ts). A per-use line in the system
-  // message would break the whole conversation's cache instead.
-  const messages = withTurnTail(
-    constructed,
-    use ? tailFor(state.config.config.modeModels, use, model.model) : undefined,
   );
 
   const appliedRuleIndex =
