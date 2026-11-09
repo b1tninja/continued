@@ -55,3 +55,36 @@ describe("RulesByModeToggles", () => {
     });
   });
 });
+
+describe("RulesByModeToggles: Loop items and re-plans", () => {
+  it("are shown beside the modes", async () => {
+    await setup({ agent: false });
+    expect(screen.getByTestId("rules-mode-loop")).toBeInTheDocument();
+    expect(screen.getByText("Loop items")).toBeInTheDocument();
+    expect(screen.getByText("Loop re-plans")).toBeInTheDocument();
+  });
+
+  it("turning Loop items on while Agent is off writes true, not null", async () => {
+    const { request } = await setup({ agent: false });
+    await clickToggle("loop");
+    expect(request).toHaveBeenCalledWith("config/setRulesByMode", {
+      loop: true,
+    });
+  });
+
+  it("turning Loop items back on removes the entry when Agent is on", async () => {
+    const { request } = await setup({ loop: false });
+    await clickToggle("loop");
+    expect(request).toHaveBeenCalledWith("config/setRulesByMode", {
+      loop: null,
+    });
+  });
+
+  it("turning re-plans off writes false", async () => {
+    const { request } = await setup();
+    await clickToggle("replan");
+    expect(request).toHaveBeenCalledWith("config/setRulesByMode", {
+      replan: false,
+    });
+  });
+});
