@@ -170,7 +170,8 @@ export function builtInTailFor(
  * case the line was written for) and wherever the turn text is the `short`
  * profile, by the use's prompt choice or, failing that, the model id; off
  * elsewhere. `on` is the built-in line of the turn kind; a text is used as
- * given. The reviewer and subagents never get one.
+ * given. The `reviewer` and `subagent` uses get none; a surface has to ask
+ * with that use for its reviewer and subagent requests (the CLI does).
  */
 export function tailFor(
   modeModels: ModeModelsConfig | undefined,
