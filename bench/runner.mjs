@@ -47,6 +47,10 @@ Required
 
 Settings
   --profile full|short|tailored  prompt profile for the run (CONTINUE_PROMPT_PROFILE); default: the model's own
+  --tail on|off|<text>     the one-line reminder on every user message (modeModels.loop.tail and
+                           modeModels.agent.tail in the run's config): on for the built-in line, off
+                           for none, or a text of your own; default: the CLI's own (on for Loop items
+                           and the short and tailored profiles, off elsewhere)
   --level <area=level,..>  policy levels, recorded on every record; applied where the CLI has the
                            knob today (tool-use=yolo adds --auto, tool-use=manual removes it;
                            plan-edits and questions pick the loop autonomy); the rest is recorded only
@@ -100,6 +104,9 @@ function parseArgs(argv) {
       case "--profile":
         opts.profile = next();
         break;
+      case "--tail":
+        opts.tail = next();
+        break;
       case "--level":
         opts.levels = parseLevels(next());
         break;
@@ -146,6 +153,8 @@ function parseArgs(argv) {
   }
   if (opts.profile && !["full", "short", "tailored"].includes(opts.profile))
     throw new Error("--profile must be full or short");
+  if (opts.tail !== undefined && !opts.tail.trim())
+    throw new Error("--tail must be on, off or a text");
   if (!(opts.runs >= 1)) throw new Error("--runs must be at least 1");
   return opts;
 }
@@ -198,6 +207,7 @@ function resolveSettings(row, opts) {
     effort: effort ?? null,
     effortField: row.effort ?? "none",
     profile: opts.profile ?? null,
+    tail: opts.tail?.trim() ?? null,
     levels: opts.levels ?? {},
     apiBase: p.apiBase ?? row.apiBase,
     apiKey: p.apiKey ?? row.apiKey,
@@ -263,6 +273,13 @@ function buildConfig(settings, scenario) {
     schema: "v1",
     models: [model],
   };
+  // The tail reminder (modeModels.<use>.tail, core/llm/prompts/usePrompts.ts)
+  // on both uses an act scenario runs under, so a Loop item and an agent turn
+  // measure the same line. Unset, the CLI's own default applies: on for Loop
+  // items and the short profile, off elsewhere.
+  const tail = scenario.config.tail ?? settings.tail;
+  if (tail !== undefined && tail !== null)
+    config.modeModels = { loop: { tail }, agent: { tail } };
   const perms = scenario.policy.toolPermissions;
   if (perms && Object.keys(perms).length) config.toolPermissions = perms;
   return { config, effortNotes };
@@ -599,6 +616,7 @@ async function runOnce({
     permissionsFile ? fs.readFileSync(permissionsFile, "utf-8") : "",
     levels.serve,
     settings.profile ?? "",
+    settings.tail ?? "",
     settings.levels,
   );
 
@@ -609,6 +627,7 @@ async function runOnce({
     modelRow: row.id,
     provider: settings.provider,
     profile: settings.profile ?? "model-default",
+    tail: settings.tail ?? "cli-default",
     levels: settings.levels,
     levelsApplied: levels.applied,
     levelsRecordedOnly: levels.recordedOnly,
@@ -729,12 +748,20 @@ async function runOnce({
     const requests = history.filter(
       (i) => i.message?.role === "assistant",
     ).length;
+    // Tokens processed: prompt plus completion. The CLI's promptTokens
+    // already holds the cache reads and writes for every family but Claude,
+    // whose usage reports them apart (priceRun, common.mjs); adding them
+    // again doubled the count on Nova and killed every loop run at half
+    // its budget (2026-11-09, the first tail measurement).
     const u = s.session?.usage ?? {};
+    const excludesCache = /claude/i.test(row.model ?? "");
     const tokens =
       (u.promptTokens ?? 0) +
       (u.completionTokens ?? 0) +
-      (u.promptTokensDetails?.cachedTokens ?? 0) +
-      (u.promptTokensDetails?.cacheWriteTokens ?? 0);
+      (excludesCache
+        ? (u.promptTokensDetails?.cachedTokens ?? 0) +
+          (u.promptTokensDetails?.cacheWriteTokens ?? 0)
+        : 0);
     return { requests, tokens };
   };
   class BudgetExceeded extends Error {}

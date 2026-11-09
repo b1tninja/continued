@@ -1,0 +1,210 @@
+[
+  {
+    "message": {
+      "role": "user",
+      "content": "Plan this work for the package in this folder"
+    },
+    "toolCallStates": []
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": ""
+    },
+    "toolCallStates": [
+      {
+        "toolCall": {
+          "function": {
+            "name": "List"
+          }
+        },
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": ""
+    },
+    "toolCallStates": [
+      {
+        "toolCall": {
+          "function": {
+            "name": "PresentPlan"
+          }
+        },
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "message": {
+      "role": "user",
+      "content": "Work on this item of the plan, and only this item: Create src/a.js"
+    },
+    "toolCallStates": []
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": ""
+    },
+    "toolCallStates": [
+      {
+        "toolCall": {
+          "function": {
+            "name": "Write"
+          }
+        },
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "message": {
+      "role": "user",
+      "content": "The person answered your question q1 (\"Allow this call? Write: src/a.js\"): Allowed."
+    },
+    "toolCallStates": []
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": ""
+    },
+    "toolCallStates": [
+      {
+        "toolCall": {
+          "function": {
+            "name": "Write"
+          }
+        },
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": ""
+    },
+    "toolCallStates": [
+      {
+        "toolCall": {
+          "function": {
+            "name": "FinishItem"
+          }
+        },
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "message": {
+      "role": "user",
+      "content": "Work on this item of the plan, and only this item: Create test/a.test.js"
+    },
+    "toolCallStates": []
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": ""
+    },
+    "toolCallStates": [
+      {
+        "toolCall": {
+          "function": {
+            "name": "Write"
+          }
+        },
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": "I will now run the tests."
+    },
+    "toolCallStates": []
+  },
+  {
+    "message": {
+      "role": "user",
+      "content": "You ended without reporting. Call FinishItem now with the outcome and a one-line summary."
+    },
+    "toolCallStates": []
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": ""
+    },
+    "toolCallStates": [
+      {
+        "toolCall": {
+          "function": {
+            "name": "FinishItem"
+          }
+        },
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "message": {
+      "role": "user",
+      "content": "Work on this item of the plan, and only this item: Run the tests"
+    },
+    "toolCallStates": []
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": ""
+    },
+    "toolCallStates": [
+      {
+        "toolCall": {
+          "function": {
+            "name": "Bash"
+          }
+        },
+        "status": "done"
+      },
+      {
+        "toolCall": {
+          "function": {
+            "name": "FinishItem"
+          }
+        },
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "message": {
+      "role": "user",
+      "content": "Every item is done. Review the plan and present it again, or stop."
+    },
+    "toolCallStates": []
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": ""
+    },
+    "toolCallStates": [
+      {
+        "toolCall": {
+          "function": {
+            "name": "PresentPlan"
+          }
+        },
+        "status": "done"
+      }
+    ]
+  }
+]
