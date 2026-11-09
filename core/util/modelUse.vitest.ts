@@ -30,6 +30,33 @@ describe("modeModelFor", () => {
     );
   });
 
+  it("an entry that names no model takes the fallback's model and effort, keeping its own fields", () => {
+    const withPromptOnly = {
+      agent: { title: "Sonnet", reasoningEffort: "high" as const },
+      loop: { tail: "off", prompt: "short" },
+    };
+    expect(modeModelFor(withPromptOnly, "loop")).toEqual({
+      title: "Sonnet",
+      reasoningEffort: "high",
+      tail: "off",
+      prompt: "short",
+    });
+    // Its own effort wins; a model of its own means no merge at all
+    expect(
+      modeModelFor(
+        { ...withPromptOnly, loop: { tail: "on", reasoningEffort: "off" } },
+        "loop",
+      ),
+    ).toEqual({ title: "Sonnet", reasoningEffort: "off", tail: "on" });
+    expect(
+      modeModelFor({ ...withPromptOnly, loop: { title: "Haiku" } }, "loop"),
+    ).toEqual({ title: "Haiku" });
+    // Without a fallback entry the own entry is returned as it is
+    expect(modeModelFor({ loop: { tail: "on" } }, "loop")).toEqual({
+      tail: "on",
+    });
+  });
+
   it("has no fallback for chat, the reviewer or subagents", () => {
     expect(modeModelFor(modeModels, "chat")).toBeUndefined();
     expect(modeModelFor(modeModels, "reviewer")).toBeUndefined();

@@ -67,8 +67,9 @@ const texts = (state: RootState) =>
     .messages.filter((m) => m.role !== "system")
     .map(renderChatMessage);
 
-// A Loop item's newest message carries the act reminder by default
-const TAIL = `\n${ACT_TURN_TAIL}`;
+// A Loop item's user messages carry the act reminder by default, after a
+// blank line
+const TAIL = `\n\n${ACT_TURN_TAIL}`;
 
 describe("a loop item's request", () => {
   it("carries only the turns since the item started", () => {
@@ -248,12 +249,67 @@ describe("a turn's tail (modeModels.<use>.tail)", () => {
     ).toEqual(["item two prompt"]);
   });
 
+  it("stays off the tool-output messages a model without native tools gets as user messages", () => {
+    const state = withConfig(stateWith(false), {
+      modeModels: { loop: { tail: "on" } },
+      experimental: { onlyUseSystemMessageTools: true },
+    });
+    const history = [
+      ...state.session.history.slice(0, 1),
+      {
+        message: {
+          id: "a1",
+          role: "assistant" as const,
+          content: "",
+          toolCalls: [
+            {
+              id: "call-1",
+              type: "function" as const,
+              function: { name: "read_file", arguments: "{}" },
+            },
+          ],
+        },
+        contextItems: [],
+        toolCallStates: [
+          {
+            toolCallId: "call-1",
+            toolCall: {
+              id: "call-1",
+              type: "function" as const,
+              function: { name: "read_file", arguments: "{}" },
+            },
+            status: "done" as const,
+            parsedArgs: {},
+            output: [
+              { name: "out", description: "out", content: "file text here" },
+            ],
+          },
+        ],
+      } as unknown as ChatHistoryItem,
+      ...state.session.history.slice(2),
+    ];
+    const messages = buildChatRequest({
+      ...state,
+      session: { ...state.session, history },
+    }).messages;
+    const users = messages
+      .filter((m) => m.role === "user")
+      .map(renderChatMessage);
+    // The person's two messages carry the line; the tool output, a user
+    // message on this path, does not
+    expect(users).toHaveLength(3);
+    expect(users[0]).toBe(`item one prompt${TAIL}`);
+    expect(users[1]).toContain("file text here");
+    expect(users[1]).not.toContain(ACT_TURN_TAIL);
+    expect(users[2]).toBe(`item two prompt${TAIL}`);
+  });
+
   it("takes a text as given", () => {
     const state = withConfig(stateWith(), {
       modeModels: { loop: { tail: "Finish the item, then report it." } },
     });
     expect(texts(state)).toEqual([
-      "item two prompt\nFinish the item, then report it.",
+      "item two prompt\n\nFinish the item, then report it.",
     ]);
   });
 });

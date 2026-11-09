@@ -342,9 +342,18 @@ export async function processStreamingResponse(
   const SAFETY_BUFFER = 100;
 
   // Validate context length INCLUDING system message and tools
-  // The task list block and the tail are counted with the system message:
-  // they are sent with every request and are never pruned.
-  const fixedText = [systemMessage, turnTail, taskListBlock]
+  // The task list block is counted with the system message: it is sent with
+  // every request and is never pruned. The tail goes on every user message,
+  // so it is counted once per user message of the unpruned history (a
+  // pruned history has fewer, so the count errs on the long side).
+  const userMessages = chatHistory.filter(
+    (item) => item.message.role === "user",
+  ).length;
+  const fixedText = [
+    systemMessage,
+    ...(turnTail ? Array<string>(userMessages).fill(turnTail) : []),
+    taskListBlock,
+  ]
     .filter(Boolean)
     .join("\n");
   let validation = validateContextLength({
