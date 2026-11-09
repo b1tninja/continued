@@ -2,8 +2,6 @@
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem, ModelUse } from "core/index.js";
-import { withTurnTail } from "core/llm/prompts/usePrompts.js";
-import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
 import {
   ACT_TURN_NUDGE,
   announcesNextStep,
@@ -11,14 +9,9 @@ import {
   TURN_NUDGE_TOTAL,
 } from "core/util/turnEnd.js";
 import * as dotenv from "dotenv";
-import type {
-  ChatCompletionMessageParam,
-  ChatCompletionTool,
-} from "openai/resources.mjs";
+import type { ChatCompletionTool } from "openai/resources.mjs";
 
 import { pruneLastMessage } from "../compaction.js";
-import { getRequestBodyHints } from "../contextManagement.js";
-import { withEnvironmentBlock } from "../environmentContext.js";
 import {
   consumeLoopTurnEnd,
   loopRequestHistory,
@@ -45,6 +38,7 @@ import { validateContextLength } from "../util/tokenizer.js";
 import { getRequestTools, handleToolCalls } from "./handleToolCalls.js";
 import { resetRefusalCount } from "./refusalCap.js";
 import { resetRepeatGuard } from "./repeatGuard.js";
+import { buildChatRequestBody } from "./requestBody.js";
 import { injectSteeringMessage } from "./steering.js";
 import {
   handleAutoContinuation,
@@ -59,10 +53,7 @@ import {
   recordStreamTelemetry,
   trackFirstTokenTime,
 } from "./streamChatResponse.helpers.js";
-import {
-  getDefaultCompletionOptions,
-  StreamCallbacks,
-} from "./streamChatResponse.types.js";
+import { StreamCallbacks } from "./streamChatResponse.types.js";
 import { taskListBlockForRequest } from "./taskListBlock.js";
 
 dotenv.config();
@@ -386,28 +377,18 @@ export async function processStreamingResponse(
     throw new Error(`Context length validation failed: ${validation.error}`);
   }
 
-  // Create OpenAI format history with validated system message. The date and
-  // git status go on the first user message, after the system checkpoint of
-  // the prompt cache, so the system text is the same across sessions. The
-  // use's tail goes last on every user message (the item prompt with its
-  // plan block and the environment block, a message the person steered
-  // with, a nudge), the same line each time, so a message's bytes never
-  // change between requests and the cache markers on the last two user
-  // messages keep matching (core/llm/prompts/usePrompts.ts).
-  const openaiChatHistory = withTurnTail(
-    withEnvironmentBlock(
-      convertFromUnifiedHistoryWithSystemMessage(
-        chatHistory,
-        systemMessage,
-      ) as ChatCompletionMessageParam[],
-    ),
+  // The request: system message, validated history with the environment
+  // block and the use's tail on the user messages, task list block last (see
+  // buildChatRequestBody for why the order matters to the prompt cache).
+  const requestBody = buildChatRequestBody({
+    model,
+    chatHistory,
+    systemMessage,
+    tools,
+    taskListBlock,
+    isCompacting,
     turnTail,
-  );
-  // Last, after the history: a change to the list then changes only the tail
-  // of the request, and Bedrock puts its cache point before it.
-  if (taskListBlock) {
-    openaiChatHistory.push({ role: "user", content: taskListBlock });
-  }
+  });
   const requestStartTime = Date.now();
 
   const streamFactory = async (retryAbortSignal: AbortSignal) => {
@@ -416,20 +397,11 @@ export async function processStreamingResponse(
       messageCount: chatHistory.length,
       toolCount: tools?.length || 0,
     });
-    const body = {
-      model: model.model,
-      messages: openaiChatHistory,
-      stream: true as const,
-      tools,
-      ...getDefaultCompletionOptions(model.defaultCompletionOptions),
-      // A compaction summary is never continued, so it is a one-shot request
-      ...getRequestBodyHints(model, isCompacting ? "oneShot" : "conversation"),
-    };
     // CONTINUE_DUMP_REQUESTS: the body as handed to the adapter, for diffing
-    dumpRequest(body);
+    dumpRequest(requestBody);
     return await chatCompletionStreamWithBackoff(
       llmApi,
-      body,
+      requestBody,
       retryAbortSignal,
     );
   };

@@ -7,7 +7,7 @@ import {
   bedrockRegionalPriceFactor,
   calculateRequestCost,
   CostBreakdown,
-  findAnthropicPricing,
+  findModelPricing,
   normalizeClaudeModelId,
   findBedrockPricing,
   findNovaPricing,
@@ -368,6 +368,13 @@ describe("calculateRequestCost cache lifetimes and providers", () => {
         },
       ),
     ).toBeNull();
+    // Nova Premier is retired and in neither table
+    expect(
+      calculateRequestCost("bedrock", "amazon.nova-premier-v1:0", {
+        promptTokens: 1000,
+        completionTokens: 1000,
+      }),
+    ).toBeNull();
     expect(
       calculateRequestCost("openrouter", "openai/gpt-4o", {
         promptTokens: 1000,
@@ -430,17 +437,17 @@ describe("Claude 5 and 5.5 prices", () => {
   });
 
   it("does not price a later minor version at an earlier one's price", () => {
-    expect(findAnthropicPricing("claude-sonnet-5-6")).toBeNull();
-    expect(findAnthropicPricing("claude-opus-5-6")).toBeNull();
-    expect(findAnthropicPricing("claude-sonnet-5-5")).not.toBeNull();
+    expect(findModelPricing("claude-sonnet-5-6")).toBeNull();
+    expect(findModelPricing("claude-opus-5-6")).toBeNull();
+    expect(findModelPricing("claude-sonnet-5-5")).not.toBeNull();
     // A dated release of the same version still matches
-    expect(findAnthropicPricing("claude-sonnet-5-20261001")).not.toBeNull();
+    expect(findModelPricing("claude-sonnet-5-20261001")).not.toBeNull();
   });
 
   describe("Haiku 5.5 long-context tier", () => {
     it("charges the higher prices for a prompt over 100,000 tokens", () => {
-      const low = findAnthropicPricing("claude-haiku-5-5", 100_000)!;
-      const high = findAnthropicPricing("claude-haiku-5-5", 100_001)!;
+      const low = findModelPricing("claude-haiku-5-5", 100_000)!;
+      const high = findModelPricing("claude-haiku-5-5", 100_001)!;
       expect(low.input).toBe(0.1);
       expect(high.input).toBe(0.5);
       expect(high.cacheRead).toBeCloseTo(0.05, 6);
@@ -566,11 +573,8 @@ describe("Bedrock regional endpoint price factor", () => {
   });
 
   it("scales the Haiku 5.5 long-context tier too", () => {
-    const low = findAnthropicPricing("us.anthropic.claude-haiku-5-5", 100_000)!;
-    const high = findAnthropicPricing(
-      "us.anthropic.claude-haiku-5-5",
-      100_001,
-    )!;
+    const low = findModelPricing("us.anthropic.claude-haiku-5-5", 100_000)!;
+    const high = findModelPricing("us.anthropic.claude-haiku-5-5", 100_001)!;
     expect(low.input).toBe(0.11);
     expect(high.input).toBe(0.55);
     expect(high.output).toBe(2.75);
@@ -579,8 +583,8 @@ describe("Bedrock regional endpoint price factor", () => {
   });
 
   it("does not change the shared price table", () => {
-    findAnthropicPricing("us.anthropic.claude-opus-5-5");
-    expect(findAnthropicPricing("claude-opus-5-5")!.input).toBe(4);
+    findModelPricing("us.anthropic.claude-opus-5-5");
+    expect(findModelPricing("claude-opus-5-5")!.input).toBe(4);
   });
 
   it("says in the breakdown that the factor was applied", () => {
@@ -606,7 +610,7 @@ describe("every Claude model in llm-info has a price", () => {
     .filter((id) => !/claude-(2|instant)/.test(id));
 
   it.each(claudeIds)("%s", (id) => {
-    expect(findAnthropicPricing(id)).not.toBeNull();
+    expect(findModelPricing(id)).not.toBeNull();
   });
 });
 
@@ -626,7 +630,7 @@ describe("Fable and Mythos prices", () => {
     "us.anthropic.claude-fable-5-1",
     "global.anthropic.claude-mythos-5",
   ])("%s is priced", (id) => {
-    expect(findAnthropicPricing(id)).not.toBeNull();
+    expect(findModelPricing(id)).not.toBeNull();
   });
 
   it("charges 10 in and 50 out per million tokens", () => {
@@ -660,8 +664,8 @@ describe("Fable and Mythos prices", () => {
   });
 
   it("does not price a later minor version at an earlier one's price", () => {
-    expect(findAnthropicPricing("claude-fable-5-2")).toBeNull();
-    expect(findAnthropicPricing("claude-mythos-5-2")).toBeNull();
+    expect(findModelPricing("claude-fable-5-2")).toBeNull();
+    expect(findModelPricing("claude-mythos-5-2")).toBeNull();
   });
 
   it("adds the regional premium on a geographic profile, not on global", () => {

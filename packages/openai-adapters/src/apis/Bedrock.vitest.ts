@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { BedrockApi } from "./Bedrock.js";
+import {
+  fieldFallbacks,
+  formatFieldFallback,
+  onFieldFallback,
+  resetFieldFallbacksForTests,
+} from "./fieldFallbacks.js";
 
 const calls: Array<string | undefined> = [];
 let chainImpl: (p: string | undefined) => Promise<any>;
@@ -583,6 +589,229 @@ describe("BedrockApi cache points on non-Claude models", () => {
     "global.anthropic.claude-sonnet-5-5",
   ])("still sends cachePoint to %s", (model) => {
     expect(JSON.stringify(body(model))).toContain("cachePoint");
+  });
+});
+
+describe("BedrockApi pinned cache point (a fork point)", () => {
+  const NL = String.fromCharCode(10);
+  const taskList = ["<task_list>", "[>] a", "</task_list>"].join(NL);
+  const tool = {
+    type: "function",
+    function: { name: "read", description: "d", parameters: {} },
+  };
+  const convert = (
+    messages: any[],
+    config: any = { promptCaching: true },
+    model = "anthropic.claude-sonnet-4-6",
+  ) =>
+    (
+      new TestApi({ provider: "bedrock", env: {}, ...config } as any) as any
+    )._convertBody({ model, messages, tools: [tool] });
+  const pointsIn = (body: any) =>
+    body.messages.map(
+      (m: any) => (m.content ?? []).filter((b: any) => b.cachePoint).length,
+    );
+  const pin = (m: any) => ({ ...m, x_continue_cache_pin: true });
+
+  it("puts a cache point right after the pinned message and one on the last user message", () => {
+    const body = convert([
+      { role: "system", content: "be brief" },
+      pin({ role: "user", content: "item prompt" }),
+      { role: "assistant", content: "ok" },
+      { role: "user", content: "next" },
+      { role: "assistant", content: "ok" },
+      { role: "user", content: "last" },
+    ]);
+    // user, assistant, user, assistant, user
+    expect(pointsIn(body)).toEqual([1, 0, 0, 0, 1]);
+    expect(body.messages[0].content.at(-1)).toEqual({
+      cachePoint: { type: "default" },
+    });
+    // four in all with the tools and the system prompt
+    expect(JSON.stringify(body).split("cachePoint").length - 1).toBe(4);
+    expect(JSON.stringify(body)).not.toContain("x_continue_cache_pin");
+  });
+
+  it("keeps the pinned point even when later tool turns push it out of the last-two window", () => {
+    const body = convert([
+      { role: "system", content: "be brief" },
+      pin({ role: "user", content: "item prompt" }),
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "c1",
+            type: "function",
+            function: { name: "read", arguments: "{}" },
+          },
+        ],
+      },
+      { role: "tool", tool_call_id: "c1", content: "one" },
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "c2",
+            type: "function",
+            function: { name: "read", arguments: "{}" },
+          },
+        ],
+      },
+      { role: "tool", tool_call_id: "c2", content: "two" },
+    ]);
+    // user(pinned), assistant, user(result), assistant, user(result)
+    expect(pointsIn(body)).toEqual([1, 0, 0, 0, 1]);
+  });
+
+  it("puts the pin before a task list block merged into the same message, with no second point", () => {
+    const body = convert([
+      { role: "system", content: "be brief" },
+      pin({ role: "user", content: "item prompt" }),
+      { role: "user", content: taskList },
+    ]);
+    const blocks = body.messages[0].content;
+    expect(blocks.map((b: any) => (b.cachePoint ? "point" : "text"))).toEqual([
+      "text",
+      "point",
+      "text",
+    ]);
+    expect(blocks.at(-1).text).toContain("<task_list>");
+  });
+
+  it("sends no pin when the conversation is not cached", () => {
+    const body = convert(
+      [{ role: "system", content: "s" }, pin({ role: "user", content: "x" })],
+      {},
+    );
+    expect(JSON.stringify(body)).not.toContain("cachePoint");
+    expect(JSON.stringify(body)).not.toContain("x_continue_cache_pin");
+  });
+
+  it("works on Nova, whose cache points go in the messages but not the tools", () => {
+    const body = convert(
+      [
+        { role: "system", content: "s" },
+        pin({ role: "user", content: "item prompt" }),
+        { role: "assistant", content: "ok" },
+        { role: "user", content: "next" },
+      ],
+      { promptCaching: true },
+      "us.amazon.nova-2-lite-v1:0",
+    );
+    expect(pointsIn(body)).toEqual([1, 0, 1]);
+    expect(JSON.stringify(body.toolConfig)).not.toContain("cachePoint");
+  });
+});
+
+describe("BedrockApi sends once more without a field the model refuses", () => {
+  const streamOf = (...texts: string[]) => ({
+    stream: (async function* () {
+      for (const text of texts)
+        yield { contentBlockDelta: { delta: { text } } };
+      yield { metadata: { usage: { inputTokens: 1, outputTokens: 1 } } };
+    })(),
+  });
+
+  /** A client whose first send refuses with `message` when the input carries the field. */
+  const refusing = (message: string) => {
+    const inputs: any[] = [];
+    class Api extends TestApi {
+      async getClient() {
+        return {
+          send: async (command: any) => {
+            inputs.push(JSON.parse(JSON.stringify(command.input)));
+            if (inputs.length === 1) throw new Error(message);
+            return streamOf("ok");
+          },
+        } as any;
+      }
+    }
+    const api = new Api({
+      provider: "bedrock",
+      env: {},
+      promptCaching: true,
+    } as any);
+    return { api, inputs };
+  };
+
+  const run = async (api: any, model = "us.openai.gpt-6.1-sol") => {
+    let text = "";
+    for await (const chunk of api.chatCompletionStream(
+      {
+        model,
+        messages: [
+          { role: "system", content: "be brief" },
+          { role: "user", content: "hi" },
+        ],
+        stream: true,
+      },
+      new AbortController().signal,
+    )) {
+      text += chunk.choices?.[0]?.delta?.content ?? "";
+    }
+    return text;
+  };
+
+  beforeEach(() => resetFieldFallbacksForTests());
+
+  it("drops the cache points, remembers the model, and records the fallback", async () => {
+    // Claude here, so the table lets cache points through and the refusal is the model's.
+    const { api, inputs } = refusing(
+      "This model doesn't support the cachePoint field",
+    );
+    const seen: any[] = [];
+    onFieldFallback((f) => seen.push(f));
+
+    expect(await run(api, "anthropic.claude-sonnet-4-6")).toBe("ok");
+    expect(inputs).toHaveLength(2);
+    expect(JSON.stringify(inputs[0])).toContain("cachePoint");
+    expect(JSON.stringify(inputs[1])).not.toContain("cachePoint");
+    expect(inputs[1].messages[0].content[0].text).toContain("hi");
+
+    expect(fieldFallbacks()).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      provider: "bedrock",
+      model: "anthropic.claude-sonnet-4-6",
+      field: "cachePoint",
+    });
+
+    // The next request leaves the field out up front: one send, no point.
+    expect(await run(api, "anthropic.claude-sonnet-4-6")).toBe("ok");
+    expect(inputs).toHaveLength(3);
+    expect(JSON.stringify(inputs[2])).not.toContain("cachePoint");
+  });
+
+  it("does not retry when the refused field is not in the request", async () => {
+    const { api, inputs } = refusing(
+      "This model doesn't support the stopSequences field",
+    );
+    await expect(run(api, "anthropic.claude-sonnet-4-6")).rejects.toThrow(
+      /stopSequences/,
+    );
+    expect(inputs).toHaveLength(1);
+    expect(fieldFallbacks()).toHaveLength(0);
+  });
+
+  it("does not retry other errors", async () => {
+    const { api, inputs } = refusing("ThrottlingException: Too many requests");
+    await expect(run(api, "anthropic.claude-sonnet-4-6")).rejects.toThrow(
+      /Too many requests/,
+    );
+    expect(inputs).toHaveLength(1);
+  });
+
+  it("gives the user a line with the config change", () => {
+    const line = formatFieldFallback({
+      provider: "bedrock",
+      model: "us.openai.gpt-6.1-sol",
+      field: "cachePoint",
+      error: "x",
+      at: 0,
+    });
+    expect(line).toContain("us.openai.gpt-6.1-sol refused prompt cache points");
+    expect(line).toContain("promptCaching: false");
   });
 });
 
