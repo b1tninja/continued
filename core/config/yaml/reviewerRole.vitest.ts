@@ -129,3 +129,36 @@ describe("modeModels.reviewer", () => {
     expect(selected.selectedModelByRole.reviewer?.title).toBe("Reviewer");
   });
 });
+
+describe("modeModels reasoningEffort check at load", () => {
+  it("warns once when the CLI would ignore the effort", async () => {
+    const anthropic = {
+      name: "Opus",
+      provider: "anthropic",
+      model: "claude-opus",
+      apiKey: "k",
+    };
+    const { errors } = await configYamlToContinueConfig({
+      unrolledAssistant: {
+        name: "t",
+        version: "1.0.0",
+        models: [anthropic, chatModel],
+        modeModels: {
+          plan: { model: "Opus", reasoningEffort: "high" },
+          agent: { model: "Chat", reasoningEffort: "low" },
+          loop: { model: "Missing" },
+        },
+      } as any,
+      ide,
+      ideInfo,
+      uniqueId: "test",
+      llmLogger,
+    });
+    const messages = (errors ?? []).map((e) => e.message);
+    expect(messages.filter((m) => m.includes("ignored by the CLI"))).toEqual([
+      expect.stringContaining("modeModels.plan"),
+    ]);
+    // the unknown name is reported once, by resolveModeModels
+    expect(messages.filter((m) => m.includes('"Missing"'))).toHaveLength(1);
+  });
+});

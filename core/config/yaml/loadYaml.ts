@@ -1,3 +1,4 @@
+import { ignoredReasoningEffort } from "../../util/modeModelsCheck";
 import { resolveModeModels } from "./modeModels";
 import { validateToolPermissions } from "../../tools/permissions/names";
 import {
@@ -435,6 +436,17 @@ export async function configYamlToContinueConfig(options: {
   );
   continueConfig.modeModels = modeModelsResult.modeModels;
   localErrors.push(...modeModelsResult.errors);
+  // Unknown and non-chat names are reported by resolveModeModels above; this
+  // adds the efforts the CLI would ignore
+  localErrors.push(
+    ...ignoredReasoningEffort(
+      config.modeModels,
+      (config.models ?? []).filter(
+        (m): m is NonNullable<typeof m> & { provider: string } =>
+          !!m && "provider" in m,
+      ),
+    ).map((w) => ({ fatal: false, message: w.message })),
+  );
   // `modeModels.reviewer` is the reviewer: it joins the role's list if it is
   // not there and is selected (a Settings pick holds until reload, as a
   // manual pick does for a mode; see rectifySelectedModelsFromGlobalContext).

@@ -1,5 +1,6 @@
 import { AssistantUnrolled, ModelConfig } from "@continuedev/config-yaml";
 import type { ModelUse } from "core/index.js";
+import { checkModeModels } from "core/util/modeModelsCheck.js";
 import { modeModelFor } from "core/util/modelUse.js";
 
 import { AuthConfig, getModelName } from "../auth/workos.js";
@@ -55,6 +56,13 @@ export class ModelService
 
     this.assistant = assistant;
     this.authConfig = authConfig;
+    // Entries the CLI skips or half-applies would otherwise fail silently
+    for (const w of checkModeModels(
+      (assistant as { modeModels?: Record<string, any> }).modeModels,
+      (assistant.models ?? []).filter((m): m is ModelConfig => !!m),
+    )) {
+      logger.warn(w.message);
+    }
     this.availableModels = (assistant.models?.filter(
       (model) =>
         model && (model.roles?.includes("chat") || model.roles === undefined),

@@ -9,6 +9,7 @@ import * as workos from "../auth/workos.js";
 import { AuthConfig } from "../auth/workos.js";
 import * as config from "../config.js";
 
+import { logger } from "../util/logger.js";
 import { ModelService, withReasoningEffort } from "./ModelService.js";
 
 describe("ModelService", () => {
@@ -407,6 +408,18 @@ describe("ModelService: the model for a use (modeModels)", () => {
     expect(await service.switchToModelForUse("replan")).toBe(false); // falls back to plan
     expect(await service.switchToModelForUse("loop")).toBe(true);
     expect(service.getState().model?.model).toBe("gpt-4");
+  });
+
+  test("warns at start about a name that is not a chat model and an effort the provider ignores", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    await start({
+      subagent: { model: "Judge" },
+      plan: { model: "Claude 3", reasoningEffort: "high" },
+    });
+    const messages = warn.mock.calls.map((c) => String(c[0]));
+    expect(messages.some((m) => m.includes("modeModels.subagent"))).toBe(true);
+    expect(messages.some((m) => m.includes("modeModels.plan"))).toBe(true);
+    warn.mockRestore();
   });
 
   test("leaves the model alone for a use with no entry or a non-chat model", async () => {
