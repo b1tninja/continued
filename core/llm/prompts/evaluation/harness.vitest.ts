@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { BuiltInToolNames } from "../../../tools/builtIn";
-import { actTurn, actTurnShort, planTurn, planTurnShort } from "../turns";
+import {
+  actTurn,
+  actTurnShort,
+  actTurnTailored,
+  planTurn,
+  planTurnShort,
+  planTurnTailored,
+} from "../turns";
 import { TURNS_QUALITY_BAR } from "./qualityBar";
 import {
   answerRead,
@@ -79,6 +86,13 @@ describe("system message per profile", () => {
     expect(systemMessageFor("plan", "full")).toBe(planTurn());
     expect(systemMessageFor("plan", "short")).toBe(planTurnShort());
     expect(systemMessageFor("plan", "full")).toContain("present_plan");
+    const qwen = "qwen.qwen3-coder-30b-a3b-v1:0";
+    expect(systemMessageFor("act", "tailored", qwen)).toBe(
+      actTurnTailored(qwen),
+    );
+    expect(systemMessageFor("plan", "tailored", qwen)).toBe(
+      planTurnTailored(qwen),
+    );
   });
 });
 

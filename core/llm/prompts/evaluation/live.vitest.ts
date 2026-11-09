@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { PromptProfile } from "../turns";
+import { PROMPT_PROFILES, type PromptProfile } from "../turns";
 import type { ReasoningEffort } from "./runner";
 import {
   anthropicMessages,
@@ -28,7 +28,7 @@ import { oracleModel, textOnlyModel } from "./stubs";
  *   TURNS_EVAL_REGION=<bedrock region, default us-east-1>
  *   TURNS_EVAL_AWS_PROFILE=<bedrock: a profile in ~/.aws/config, else the default chain>
  *   TURNS_EVAL_DUMP=<optional path; every reply (text, calls, failures) as JSON>
- *   TURNS_EVAL_PROFILES=full,short         (default both)
+ *   TURNS_EVAL_PROFILES=full,short,tailored   (default full,short; tailored reads the model id)
  *   TURNS_EVAL_REASONING=off|low|medium|high   (default off: no reasoning fields sent)
  *   TURNS_EVAL_OUT=<optional path for the markdown report>
  *   TURNS_EVAL_RESULT=<optional path; gets {"passed": boolean} as JSON>
@@ -86,7 +86,9 @@ function pickProfiles(): readonly PromptProfile[] {
   const chosen = raw
     .split(",")
     .map((s) => s.trim())
-    .filter((s): s is PromptProfile => s === "full" || s === "short");
+    .filter((s): s is PromptProfile =>
+      (PROMPT_PROFILES as readonly string[]).includes(s),
+    );
   return chosen.length ? chosen : PROFILES;
 }
 
@@ -102,6 +104,7 @@ describe.skipIf(!model && !stub)("turn prompt evaluation (live model)", () => {
         concurrency: 2,
         timeoutMs: 120_000,
         reasoning,
+        model,
       });
       const summary = summarize(results, undefined, profiles);
       const report = formatReport(

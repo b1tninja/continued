@@ -350,7 +350,7 @@ cd core
 npm run eval:turns -- --help
 ```
 
-It prints the report (the bar, then per text the measures and one row per scenario) and exits 0, or 1 with `--strict` when a text misses the bar. A full run is 10 requests plus any read rounds. `--profile full|short` runs one text; `--reasoning low|medium|high` switches the model's reasoning on at that effort for every request (Bedrock gets the family's own switch, OpenAI-compatible servers `reasoning_effort`, Anthropic a thinking budget), which is how to measure a model under the `reasoningEffort` a `modeModels` entry would give it; `--out <file>` also writes the report to a file; `--dump <file>` writes every reply (text, calls, failures) as JSON, which is how to read what a model said before changing a scenario or a prompt.
+It prints the report (the bar, then per text the measures and one row per scenario) and exits 0, or 1 with `--strict` when a text misses the bar. A full run is 10 requests plus any read rounds. `--profile full|short|tailored` runs one text (`all` runs the three; `tailored` is the Qwen coder text and reads the model id); `--reasoning low|medium|high` switches the model's reasoning on at that effort for every request (Bedrock gets the family's own switch, OpenAI-compatible servers `reasoning_effort`, Anthropic a thinking budget), which is how to measure a model under the `reasoningEffort` a `modeModels` entry would give it; `--out <file>` also writes the report to a file; `--dump <file>` writes every reply (text, calls, failures) as JSON, which is how to read what a model said before changing a scenario or a prompt.
 
 **With a hosted API key.** The script refuses to call a hosted API unless you pass `--yes`, because the provider bills the requests.
 

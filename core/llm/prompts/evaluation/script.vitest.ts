@@ -38,6 +38,7 @@ describe("npm run eval:turns (scripts/turns-eval.mjs)", () => {
     expect(run(["--nope"]).status).toBe(2);
     expect(run(["--stub", "allow-all"]).status).toBe(2);
     expect(run(["--stub", "oracle", "--profile", "terse"]).status).toBe(2);
+    expect(run(["--stub", "oracle", "--profile", "tailored"]).status).toBe(0);
     expect(run(["--stub", "oracle", "--reasoning", "max"]).status).toBe(2);
   });
 

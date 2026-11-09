@@ -32,7 +32,8 @@ Model (pick one way):
   --ollama --model <name> [--host http://localhost:11434]   local Ollama (no key, no cost)
 
 Options:
-  --profile full|short|both   Which prompt texts to send (default both)
+  --profile full|short|tailored|both|all   Which prompt texts to send (default both: full and short;
+                         all adds tailored, the Qwen coder text, which reads the model id)
   --reasoning off|low|medium|high   Switch the model's reasoning on at this effort (default off):
                          Bedrock gets the family's own switch through core, OpenAI-compatible
                          servers reasoning_effort, Anthropic a thinking budget
@@ -153,11 +154,15 @@ const env = { ...process.env };
 let target;
 
 if (opts.profile) {
-  if (!["full", "short", "both"].includes(opts.profile)) {
-    fail("--profile must be full, short or both");
+  if (!["full", "short", "tailored", "both", "all"].includes(opts.profile)) {
+    fail("--profile must be full, short, tailored, both or all");
   }
   env.TURNS_EVAL_PROFILES =
-    opts.profile === "both" ? "full,short" : opts.profile;
+    opts.profile === "both"
+      ? "full,short"
+      : opts.profile === "all"
+        ? "full,short,tailored"
+        : opts.profile;
 }
 
 if (opts.reasoning) {

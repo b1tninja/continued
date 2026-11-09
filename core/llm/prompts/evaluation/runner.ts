@@ -3,9 +3,12 @@ import { BuiltInToolNames } from "../../../tools/builtIn";
 import {
   actTurn,
   actTurnShort,
+  actTurnTailored,
   IDE_TURN_TOOL_NAMES,
   planTurn,
   planTurnShort,
+  planTurnTailored,
+  PROMPT_PROFILES,
   type PromptProfile,
 } from "../turns";
 import { TURNS_QUALITY_BAR, type TurnsQualityBar } from "./qualityBar";
@@ -13,18 +16,42 @@ import { TURN_SCENARIOS, type TurnScenario } from "./scenarios";
 
 type Chat = Pick<ILLM, "chat">;
 
+/**
+ * The profiles a run covers by default. "tailored" is the short text plus a
+ * tool-calls group written for the Qwen coder and MoE models (turns.ts), so
+ * it is run on request (`--profile tailored` or `all`) with the model id,
+ * which that group reads.
+ */
 export const PROFILES: readonly PromptProfile[] = ["full", "short"];
+
+/** Every built-in text, for `--profile all`. */
+export const ALL_PROFILES: readonly PromptProfile[] = PROMPT_PROFILES;
 
 /** The system message a scenario gets under a profile: the turn text, nothing else. */
 export function systemMessageFor(
   kind: TurnScenario["kind"],
   profile: PromptProfile,
+  model?: string,
 ): string {
   const names = IDE_TURN_TOOL_NAMES;
   if (kind === "act") {
-    return profile === "short" ? actTurnShort(names) : actTurn(names);
+    switch (profile) {
+      case "tailored":
+        return actTurnTailored(model, names);
+      case "short":
+        return actTurnShort(names);
+      default:
+        return actTurn(names);
+    }
   }
-  return profile === "short" ? planTurnShort(names) : planTurn(names);
+  switch (profile) {
+    case "tailored":
+      return planTurnTailored(model, names);
+    case "short":
+      return planTurnShort(names);
+    default:
+      return planTurn(names);
+  }
 }
 
 export interface ScoredCall {
@@ -377,6 +404,8 @@ export async function runTurnsEval(
     maxReadRounds?: number;
     /** Switch the model's reasoning on at this effort for every request. */
     reasoning?: ReasoningEffort;
+    /** The model id, which the tailored text reads for its tool-call markup line. */
+    model?: string;
     onProgress?: (done: number, total: number) => void;
   } = {},
 ): Promise<ReplyResult[]> {
@@ -445,7 +474,10 @@ export async function runTurnsEval(
       if (i >= jobs.length) return;
       const { profile, scenario } = jobs[i];
       const messages: ChatMessage[] = [
-        { role: "system", content: systemMessageFor(scenario.kind, profile) },
+        {
+          role: "system",
+          content: systemMessageFor(scenario.kind, profile, opts.model),
+        },
         ...scenario.messages,
       ];
       let readRounds = 0;
