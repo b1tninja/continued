@@ -192,4 +192,104 @@ describe("runTerminalCommand timeout functionality", () => {
     expect(mockChildProc.kill).toHaveBeenCalledTimes(1); // Only SIGTERM
     expect(mockChildProc.kill).not.toHaveBeenCalledWith("SIGKILL");
   });
+
+  describe("a child that keeps the pipes open", () => {
+    /** A shell that dies on kill while something it started holds its pipes. */
+    const pipesStayOpen = () => {
+      mockChildProc.kill = vi.fn((signal?: NodeJS.Signals) => {
+        mockChildProc.killed = true;
+        mockChildProc.exitCode = null;
+        mockChildProc.signalCode = null;
+        return signal ? true : true;
+      });
+      mockChildProc.stdout.destroy = vi.fn();
+      mockChildProc.stderr.destroy = vi.fn();
+    };
+
+    it("finishes the call as timed out instead of staying running (streaming)", async () => {
+      pipesStayOpen();
+      const extras = createMockExtras();
+      let settled = false;
+      const resultPromise = runTerminalCommandImpl(
+        { command: "pytest | Select-Object -Last 45", waitForCompletion: true },
+        extras,
+      ).then((r) => {
+        settled = true;
+        return r;
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(mockChildProc.kill).toHaveBeenCalledWith("SIGTERM");
+      // Killed, but no close event ever comes
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(mockChildProc.kill).toHaveBeenCalledWith("SIGKILL");
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(3_000);
+      const result = await resultPromise;
+      expect(settled).toBe(true);
+      expect(result[0].status).toBe("Command timed out");
+      expect(result[0].content).toContain(
+        "[Timeout: process killed after 2 minutes]",
+      );
+      // The streams were let go, so nothing keeps listening to the child
+      expect(mockChildProc.stdout.destroy).toHaveBeenCalled();
+      expect(mockChildProc.stderr.destroy).toHaveBeenCalled();
+    });
+
+    it("a late close after the forced finish changes nothing", async () => {
+      pipesStayOpen();
+      const resultPromise = runTerminalCommandImpl(
+        { command: "pytest", waitForCompletion: true },
+        createMockExtras(),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(128_000);
+      const result = await resultPromise;
+      mockChildProc.emit("close", 143);
+      expect(result[0].status).toBe("Command timed out");
+    });
+
+    it("finishes a timed-out call without streaming too, naming the timeout", async () => {
+      pipesStayOpen();
+      const finished = runTerminalCommandImpl(
+        { command: "pytest", waitForCompletion: true },
+        createMockExtras({ onPartialOutput: undefined }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(128_000);
+      const result = await finished;
+      expect(result[0].content).toContain("[Timeout:");
+    });
+
+    it("finishes shortly after the shell exits even if the pipes never close", async () => {
+      const resultPromise = runTerminalCommandImpl(
+        { command: "start-server", waitForCompletion: true },
+        createMockExtras(),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      mockChildProc.stdout.destroy = vi.fn();
+      mockChildProc.stderr.destroy = vi.fn();
+      mockChildProc.stdout.emit("data", Buffer.from("listening\n"));
+      mockChildProc.exitCode = 0;
+      mockChildProc.emit("exit", 0);
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await resultPromise;
+      expect(result[0].content).toContain("listening");
+      expect(result[0].status).toBe("Command completed");
+    });
+
+    it("a normal close right after exit does not wait for the grace period", async () => {
+      const resultPromise = runTerminalCommandImpl(
+        { command: "echo hi", waitForCompletion: true },
+        createMockExtras(),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      mockChildProc.stdout.emit("data", Buffer.from("hi\n"));
+      mockChildProc.exitCode = 0;
+      mockChildProc.emit("exit", 0);
+      mockChildProc.emit("close", 0);
+      const result = await resultPromise;
+      expect(result[0].content).toContain("hi");
+    });
+  });
 });
