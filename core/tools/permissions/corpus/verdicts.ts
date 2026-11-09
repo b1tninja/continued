@@ -266,6 +266,26 @@ export const VERDICT_CASES: VerdictCase[] = [
     "reads",
     "a filter script block",
   ),
+  c(PS, "Get-ChildItem -Rec src", "reads", "an abbreviated parameter"),
+  c(PS, "gci -File", "reads", "an alias with a parameter"),
+  c(PS, "Get-Content -Path:a.txt", "reads", "the colon form of a parameter"),
+  c(PS, "Get-Content a.txt -Tail 5", "reads", "the end of a file"),
+  c(PS, "gc -TotalCount 3 a.txt", "reads", "the start of a file"),
+  c(PS, "Select-String -Pattern x -Path a.txt", "reads", "named parameters"),
+  c(PS, "Get-Process -Name node", "reads", "one process"),
+  c(PS, "Get-Service -Name x", "reads", "one service"),
+  c(
+    PS,
+    "ls | Sort-Object -Property Length -Descending | Select-Object -First 3",
+    "reads",
+    "a pipeline of readers",
+  ),
+  c(
+    PS,
+    "Get-Content a.txt -ErrorAction SilentlyContinue",
+    "reads",
+    "a common parameter",
+  ),
   // ---- PowerShell: writes
   c(PS, "Remove-Item a.txt", "writes", "deletes", { resolves: "Remove-Item" }),
   c(PS, "rm a.txt", "writes", "an alias of Remove-Item", {
@@ -321,7 +341,40 @@ export const VERDICT_CASES: VerdictCase[] = [
   c(PS, "Start-Process git -ArgumentList push", "writes", "runs git push", {
     resolves: "git push",
   }),
+  c(
+    PS,
+    "Remove-Item -Rec x",
+    "writes",
+    "an abbreviated parameter on a deleting cmdlet",
+    { resolves: "Remove-Item" },
+  ),
+  c(PS, "rd x", "writes", "an alias of Remove-Item", {
+    resolves: "Remove-Item",
+  }),
+  c(PS, "rmdir x", "writes", "an alias of Remove-Item", {
+    resolves: "Remove-Item",
+  }),
+  c(PS, "erase a.txt", "writes", "an alias of Remove-Item", {
+    resolves: "Remove-Item",
+  }),
+  c(PS, "kill 123", "writes", "an alias of Stop-Process", {
+    resolves: "Stop-Process",
+  }),
+  c(PS, "sc a.txt hi", "writes", "an alias of Set-Content", {
+    resolves: "Set-Content",
+  }),
+  c(PS, "mi a b", "writes", "an alias of Move-Item", { resolves: "Move-Item" }),
+  c(PS, "rni a b", "writes", "an alias of Rename-Item", {
+    resolves: "Rename-Item",
+  }),
+  c(PS, "cpi a b", "writes", "an alias of Copy-Item", {
+    resolves: "Copy-Item",
+  }),
   // ---- PowerShell: unsure
+  c(PS, "iwr https://example.com", "unsure", "the network (an alias)"),
+  c(PS, "irm https://example.com", "unsure", "the network (an alias)"),
+  c(PS, "Get-ChildItem -Foo", "unsure", "a parameter the cmdlet does not have"),
+  c(PS, "saps x", "unsure", "an alias of Start-Process"),
   c(PS, "Invoke-Expression 'ls'", "unsure", "runs a string"),
   c(PS, "iex ls", "unsure", "an alias of Invoke-Expression"),
   c(

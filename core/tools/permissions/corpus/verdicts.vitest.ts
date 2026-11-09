@@ -14,12 +14,7 @@ const SHELLS: ShellKind[] = ["bash", "zsh", "sh", "powershell", "cmd"];
  * (wrappers).
  */
 const KNOWN_PROTECT_GAPS: string[] = [];
-const KNOWN_RESOLVE_GAPS: string[] = [
-  // PowerShell aliases: a rule on Remove-Item does not see them (I3)
-  "powershell | del a.txt  (wanted Remove-Item)",
-  "powershell | ri a.txt  (wanted Remove-Item)",
-  "powershell | rm a.txt  (wanted Remove-Item)",
-];
+const KNOWN_RESOLVE_GAPS: string[] = [];
 
 describe("the corpus", () => {
   it("has at least 50 cases for each of bash, zsh, PowerShell and cmd", () => {

@@ -130,7 +130,7 @@ describe("the levels reach core's engine", () => {
   });
 
   it("at the default levels a command that only reads runs, and others still ask", async () => {
-    expect(await run({}, "ls -la")).toMatchObject({
+    expect(await run({}, "ls")).toMatchObject({
       decision: "allow",
       by: "rules",
     });

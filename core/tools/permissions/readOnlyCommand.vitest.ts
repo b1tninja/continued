@@ -315,13 +315,13 @@ describe("PowerShell", () => {
     ["Get-Content a.txt > out.txt", "redirect"],
     ["Get-Content (Get-Item x)", "("],
     ["& ls", "background"],
-    ["Remove-Item x", "not on the PowerShell read-only list"],
-    ["Set-Content a.txt hi", "not on the PowerShell read-only list"],
-    ["Tee-Object -FilePath x", "not on the PowerShell read-only list"],
-    ["Invoke-Expression 'ls'", "not on the PowerShell read-only list"],
-    ["iex ls", "not on the PowerShell read-only list"],
-    ["curl https://example.com", "not on the PowerShell read-only list"],
-    ["Start-Process notepad", "not on the PowerShell read-only list"],
+    ["Remove-Item x", "not a known read cmdlet"],
+    ["Set-Content a.txt hi", "not a known read cmdlet"],
+    ["Tee-Object -FilePath x", "not a known read cmdlet"],
+    ["Invoke-Expression 'ls'", "not a known read cmdlet"],
+    ["iex ls", "not a known read cmdlet"],
+    ["curl https://example.com", "not a known read cmdlet"],
+    ["Start-Process notepad", "not a known read cmdlet"],
     ["powershell -EncodedCommand AAAA", "not on the PowerShell read-only list"],
     ["\\\\server\\share\\f", "network path"],
   ])("%s", (command, reason) => {
@@ -341,6 +341,60 @@ describe("PowerShell", () => {
       vouched: true,
       judge: "parser",
       claim: "only reads: get-content, select-object",
+    });
+  });
+});
+
+describe("PowerShell parameters", () => {
+  it.each([
+    "Get-ChildItem -Recurse src",
+    "Get-ChildItem -Rec src",
+    "Get-ChildItem -recurse -Force",
+    "ls -Name",
+    "gci -File",
+    "Get-Content a.txt -Tail 5",
+    "Get-Content -Path:a.txt",
+    "Get-Content a.txt -Wait",
+    "gc -TotalCount 3 a.txt",
+    "Select-String -Pattern x -Path a.txt",
+    "Select-String x a.txt -Quiet",
+    "Get-Process",
+    "Get-Process -Name node",
+    "Get-Service -Name x",
+    "Sort-Object -Descending",
+    "ls | Sort-Object -Property Length -Descending | Select-Object -First 3",
+    "Get-Content a.txt -ErrorAction SilentlyContinue",
+    "Get-ChildItem -ea 0",
+  ])("vouches %s", (command) => {
+    expect(vouched(command, PS)).toBe(true);
+  });
+
+  it.each([
+    ["Get-ChildItem -Foo", "not recognised"],
+    ["Get-ChildItem -r", "ambiguous"],
+    ["Get-Content -Wait:$true", "$"],
+    ["Select-String --% x", "stop-parsing"],
+    ["Get-Content a.txt -Credential x", "not recognised for"],
+    ["Get-Date -Set", "not recognised"],
+  ])("%s", (command, reason) => {
+    expect(vouched(command, PS)).toBe(false);
+    expect(why(command, PS)).toContain(reason);
+  });
+
+  it("an alias is checked as the cmdlet it stands for", () => {
+    // -Recurse is a Get-ChildItem parameter, so `ls -Recurse` is read
+    expect(vouched("ls -Recurse", PS)).toBe(true);
+    // but sort is Sort-Object, which has no -Path
+    expect(why("sort -Path x", PS)).toContain("not recognised for sort-object");
+    // and rm is Remove-Item, a cmdlet that is not read-only whatever its parameters
+    expect(why("rm -Rec x", PS)).toContain("remove-item");
+  });
+
+  it("the claim names the cmdlet, not the alias", () => {
+    expect(classifyReadOnly("ls -Rec | sort", PS)).toEqual({
+      vouched: true,
+      judge: "parser",
+      claim: "only reads: get-childitem, sort-object",
     });
   });
 });

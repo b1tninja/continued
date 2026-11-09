@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { isPosixShell, type ShellKind } from "../../util/shell";
+import { canonicalCmdlet, checkReadCmdlet } from "./powershell";
 
 /**
  * Is this command certain to only read? (plans/policy-areas.md, "Which area a
@@ -124,53 +125,12 @@ const READ_ONLY: Record<string, Check> = {
 };
 
 /**
- * The same, for PowerShell: its cmdlets and the aliases that stand for them
- * (`ls`, `cat`, `type`, `sort`, `diff`, `echo` are not the GNU programs
- * there), and a few programs that exist the same way on every shell. Names
- * that are other programs on Windows (`find`, `date`, `sort` in cmd) are not
- * here: not being on this list is not being vouched.
+ * Programs PowerShell runs the same way every shell does. Its own cmdlets and
+ * their aliases are not a list of names here: they go through powershell.ts,
+ * which knows each cmdlet's parameters. Names that are other programs on
+ * Windows (`find`, `date`) are not here, so they are not vouched.
  */
-const POWERSHELL_READ_ONLY: Record<string, Check> = {
-  "get-childitem": anyArgs,
-  gci: anyArgs,
-  ls: anyArgs,
-  dir: anyArgs,
-  "get-content": anyArgs,
-  gc: anyArgs,
-  cat: anyArgs,
-  type: anyArgs,
-  "select-string": anyArgs,
-  sls: anyArgs,
-  "get-location": anyArgs,
-  gl: anyArgs,
-  pwd: anyArgs,
-  "get-item": anyArgs,
-  gi: anyArgs,
-  "test-path": anyArgs,
-  "resolve-path": anyArgs,
-  "split-path": anyArgs,
-  "get-filehash": anyArgs,
-  "get-date": anyArgs,
-  "select-object": anyArgs,
-  select: anyArgs,
-  "measure-object": anyArgs,
-  measure: anyArgs,
-  "sort-object": anyArgs,
-  sort: anyArgs,
-  "format-table": anyArgs,
-  ft: anyArgs,
-  "format-list": anyArgs,
-  fl: anyArgs,
-  "write-output": anyArgs,
-  echo: anyArgs,
-  "compare-object": anyArgs,
-  diff: anyArgs,
-  // moving around changes nothing on disk
-  "set-location": (args) =>
-    args.length > 2 ? "set-location with several arguments" : undefined,
-  sl: (args) => (args.length > 2 ? "sl with several arguments" : undefined),
-  cd: (args) => (args.length > 2 ? "cd with several arguments" : undefined),
-  // programs that are the same everywhere
+const POWERSHELL_EXTERNAL: Record<string, Check> = {
   rg: READ_ONLY.rg,
   jq: READ_ONLY.jq,
   grep: READ_ONLY.grep,
@@ -180,7 +140,7 @@ const POWERSHELL_READ_ONLY: Record<string, Check> = {
 };
 
 /** Names that move the working directory, after which git's config was not checked. */
-const CHANGES_DIRECTORY = new Set(["cd", "set-location", "sl"]);
+const CHANGES_DIRECTORY = new Set(["cd", "set-location"]);
 
 /** git subcommands that read, with the extra arguments each may take. */
 const GIT_READ: Record<string, Check> = {
@@ -498,7 +458,18 @@ export function classifyReadOnly(
       names.push(`git ${sub}`);
       continue;
     }
-    const list = shell === "powershell" ? POWERSHELL_READ_ONLY : READ_ONLY;
+    if (shell === "powershell" && !(name in POWERSHELL_EXTERNAL)) {
+      // A cmdlet or an alias of one: known by its parameters, not its name
+      const cmdlet = canonicalCmdlet(name);
+      if (cmdlet) {
+        if (CHANGES_DIRECTORY.has(cmdlet)) movedDirectory = true;
+        const problem = checkReadCmdlet(cmdlet, rest);
+        if (problem) return no(problem);
+        names.push(cmdlet);
+        continue;
+      }
+    }
+    const list = shell === "powershell" ? POWERSHELL_EXTERNAL : READ_ONLY;
     const check = list[name];
     if (!check) {
       return no(

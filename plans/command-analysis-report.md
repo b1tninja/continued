@@ -11,7 +11,7 @@ Each case says what is true of a command in a shell: it **reads**, it **writes**
 | bash | 112 | 50 | 43 | 19 | 43 | 86% | 0 |
 | zsh | 117 | 53 | 45 | 19 | 44 | 83% | 0 |
 | sh | 111 | 49 | 43 | 19 | 42 | 86% | 0 |
-| powershell | 88 | 36 | 37 | 15 | 33 | 92% | 0 |
+| powershell | 111 | 46 | 46 | 19 | 44 | 96% | 0 |
 | cmd | 52 | 15 | 29 | 8 | 0 | 0% | 0 |
 
 ## Reads the classifier does not vouch for
@@ -52,7 +52,6 @@ The work list for the parsers: each is truly read-only, and the reason is what t
 
 ### powershell
 
-- `Get-Process`: get-process is not on the PowerShell read-only list
 - `Get-ChildItem | Where-Object { $_.Length -gt 1 }`: "{" is not understood
 - `Get-Content $env:USERPROFILE\.aws\credentials`: "$" is not understood
 
@@ -82,8 +81,6 @@ No disagreements.
 
 ## The text a deny or ask rule is tried against
 
-Cases with an expectation: 61.
+Cases with an expectation: 70.
 
-- powershell | del a.txt: a text rule should see `Remove-Item`
-- powershell | ri a.txt: a text rule should see `Remove-Item`
-- powershell | rm a.txt: a text rule should see `Remove-Item`
+No disagreements.
