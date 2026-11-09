@@ -516,6 +516,25 @@ Problem: the model's context is bounded by compaction, but the session in memory
 | V7  | Loop and workers: transcripts by reference, a retained-transcript budget, worker output spilled to files                                                           | V4, N0     | Not started |
 | V8  | Search over cold history and rewind to a cold item                                                                                                                 | V5         | Not started |
 
+### Track W: isolation (WSL, containers, dev containers, sandboxes)
+
+Plan: [`isolation.md`](./isolation.md). Builds on the policy areas (the reserved `sandbox` axis), command analysis and Loop mode. Target: 2.7 for W0 and W1, the rest as measured.
+
+Problem: policy is a guard against accidents, not a sandbox, and commands can only run on the host (or where the VS Code window already is). People would grant an agent far more autonomy if what it can touch were guaranteed, and "run commands in WSL" is wanted on its own. The track starts with an executor abstraction and WSL, then containers and dev containers, an OS sandbox, a jail for whole loop runs with the model key kept outside, network policy, escape tests that generate the claim the UI makes, and the policy axis that uses it.
+
+| PR  | Scope                                                                                                                                                        | Depends on | State       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ----------- |
+| W0  | The `CommandExecutor` interface and the local executor behind the IDE's and the CLI's terminal tools; shell kind and path mapping from the executor          | none       | Not started |
+| W1  | Run commands in WSL: `terminal.shell: wsl`, distro setting, path translation, environment, exit codes, abort, shell kind `bash` for the lint and classifiers | W0         | Not started |
+| W2  | Container executor (docker, podman rootless): bind-mounted workspace, mapped user, read-only root, no socket, limits, no network by default                  | W0         | Not started |
+| W3  | Dev container: detect, `devcontainer up` and `exec`, optional CLI, properties reported as found                                                              | W0         | Not started |
+| W4  | OS sandbox wrapper (bubblewrap, Seatbelt, Landlock) for Linux, macOS and WSL, or `sandbox-runtime` if it fits                                                | W0         | Not started |
+| W5  | Whole-process jail for `cn serve` and loops, with model calls through a host proxy so the API key never enters the jail                                      | W2, W6     | Not started |
+| W6  | Network policy: none, allowlist, open; one egress proxy; registry presets                                                                                    | W2         | Not started |
+| W7  | Escape tests per backend, and the UI's claim generated from the results                                                                                      | W1-W4      | Not started |
+| W8  | Policy integration: the `sandbox` axis, decisions that read the properties, "Unattended, in a jail", the badge, fail closed                                  | W7         | Not started |
+| W9  | Windows research: WSL2 with bubblewrap against Windows Sandbox for whole loop runs; size a native restricted-token sandbox                                   | W1, W4     | Not started |
+
 ## Later
 
 Carried over from `fork-plan.md` section 4.7, item 4. The four items it listed (checkpoints #185, a global rules toggle per mode #187, context-window and cost display #182, the Cline MCP import #193) have shipped; see the Shipped table. What is left:
