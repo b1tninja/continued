@@ -4,6 +4,7 @@ import type {
   LoopAutonomy,
   LoopBudget,
   LoopCheckResult,
+  LoopItemModel,
   LoopItemState,
   LoopItemStatus,
   LoopQuestion,
@@ -1093,6 +1094,13 @@ export function startItemRun(
   itemId: string,
   historyIndex: number,
   now: Date,
+  options: {
+    /**
+     * The model this run goes to when the item names one (TaskItem.model,
+     * resolved by modelForLoopItem); replaces what the last run recorded
+     */
+    model?: LoopItemModel;
+  } = {},
 ): LoopState {
   const state = itemState(loop, itemId);
   return {
@@ -1100,6 +1108,7 @@ export function startItemRun(
       status: "running",
       attempts: (state?.attempts ?? 0) + 1,
       setAside: undefined,
+      model: options.model,
     }),
     status: "running",
     current: { kind: "item", itemId, historyIndex, startedAt: iso(now) },
@@ -2004,7 +2013,8 @@ export function taskPlanWithLoop(plan: TaskPlan, loop: LoopState): TaskPlan {
     switch (state.status) {
       case "running":
         status = "in_progress";
-        note = undefined;
+        // An item whose own model is not configured runs on the loop model
+        note = state.model?.fallbackReason;
         break;
       case "checking":
         status = "in_progress";
