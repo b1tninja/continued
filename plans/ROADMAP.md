@@ -453,6 +453,36 @@ Problem: the agent writes files through the shell (`cat > f <<EOF`, `echo ... > 
 | R5  | ShellCheck-class checks on the graph: unquoted expansions that split, `cd` without `                                                                                                                                                                                                                                                                                                             |            | `, `rm -rf $VAR/`, a glob that matches flags (SC2086, SC2164, SC2115, SC2035), as warnings; and `shellcheck`itself when it is installed (run with`--format=json`, never required) | R0, P2 | Not started |
 | R6  | Use the lint to steer: when a write through the shell is found, the message offers the equivalent edit-tool call, filled in from the heredoc (path and content), so the agent confirms it with one call                                                                                                                                                                                          | R0         | Not started                                                                                                                                                                       |
 
+### Track S: stuck detection
+
+Plan: [`stuck-detection.md`](./stuck-detection.md). Builds on the repeated-call guard, Loop mode's stops, M3 escalation and the toolbox drawer. Target: 2.7.
+
+Problem: the only detector is an identical-call counter. An agent that varies a failing command, edits and reverts, re-reads the same files or restates its plan is not caught until a budget runs out, and nothing reads back what it tried or offers a way out.
+
+| PR  | Scope                                                                                                                                                                                                   | Depends on | State       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
+| S0  | Signals as pure functions in core (near-repeat, repeat-error, ping-pong, edit-revert, no-progress, monologue, retry-after-fail) with a corpus of recorded histories, and the work log as a derived view | none       | Not started |
+| S1  | Measure on the dev data and bench runs: fire rate, lead time, false positives; set thresholds                                                                                                           | S0         | Not started |
+| S2  | L1 notes in tool results; the CLI repeat guard moved onto the shared signal                                                                                                                             | S1         | Not started |
+| S3  | L2 check-in: the work log plus a guidance line from the toolbox, measured against no check-in on a stuck bench scenario                                                                                 | S1         | Not started |
+| S4  | The IDE chip ("Looks stuck: ...") with a button into the toolbox card, and a Work log view                                                                                                              | S3         | Not started |
+| S5  | L3 and L4: escalation through M3, the stop report with the log, loop mode on the shared signals                                                                                                         | S3, M3     | Not started |
+| S6  | Settings (`stuckDetection: off, notes, full`), per-signal thresholds, docs                                                                                                                              | S2         | Not started |
+
+### Track T: loop budgets and their controls
+
+Plan: [`loop-budgets.md`](./loop-budgets.md). Builds on Loop mode, the usage ledger and the autonomy levels. Target: 2.7.
+
+Problem: a loop stops on a budget, and today the budgets are rounds, tokens and time (the rest are not in the UI). There is no cost budget, nothing shows which limit will fire first, and a limit stops the loop without warning.
+
+| PR  | Scope                                                                                                                                                | Depends on | State       |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
+| T0  | `maxCostUsd` and a per-loop cost total from the ledger in core; the stop names the budget and figures; unpriced models cannot take a cost budget     | none       | Not started |
+| T1  | The control in the IDE: cost, turns, tokens and time rows with live meters, an 80% note, stop or ask at the limit, editable while running            | T0         | Not started |
+| T2  | Presets (Frugal, Balanced, Thorough, Unlimited) mapped to the autonomy levels, savable; per-item turn and cost-share limits                          | T1         | Not started |
+| T3  | The CLI and `cn serve`: `--max-cost`, `--max-turns`, `--max-tokens`, `--max-minutes`, the `/state` fields, the report naming the budget that stopped | T0         | Not started |
+| T4  | Budgets shared across parallel workers (Track N), a settings page for defaults, docs                                                                 | T2, N0     | Not started |
+
 ## Later
 
 Carried over from `fork-plan.md` section 4.7, item 4. The four items it listed (checkpoints #185, a global rules toggle per mode #187, context-window and cost display #182, the Cline MCP import #193) have shipped; see the Shipped table. What is left:
