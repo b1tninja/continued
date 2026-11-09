@@ -284,21 +284,29 @@ export function hasReplanReminder(loop: LoopState): boolean {
 /**
  * The run that was given these reminders ended without reporting (stopped,
  * failed, reloaded), so they go back to being undelivered: the next run
- * starts without its context and has no other way to get them. A takes them
- * with the same time its run starts at, which is how they are recognised.
+ * starts without its context and has no other way to get them. A run takes
+ * them with the same time it starts at, which is how they are recognised.
+ * `startedAt` names the runs: by default the current one, when it has no
+ * report; a parallel wave's runs are named by the caller.
  */
 export function releasedReminders(
   loop: LoopState,
+  startedAt: string[] = unreportedRun(loop),
 ): Pick<LoopState, "reminders"> | Record<string, never> {
-  const startedAt = loop.current?.startedAt;
-  if (!startedAt || loop.current?.report || !loop.reminders) return {};
+  if (!startedAt.length || !loop.reminders) return {};
   return {
     reminders: loop.reminders.map((r) => {
-      if (r.deliveredAt !== startedAt) return r;
+      if (!r.deliveredAt || !startedAt.includes(r.deliveredAt)) return r;
       const { deliveredAt: _deliveredAt, ...rest } = r;
       return rest;
     }),
   };
+}
+
+/** The current run's start, when it ended without its report. */
+export function unreportedRun(loop: LoopState): string[] {
+  const current = loop.current;
+  return current?.startedAt && !current.report ? [current.startedAt] : [];
 }
 
 /**

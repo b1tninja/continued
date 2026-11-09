@@ -19,6 +19,7 @@ import {
   endReplan,
   finishItemRun,
   holdCheck,
+  inlineInsteadOfWave,
   loopItemPrompt,
   loopReplanTurnPrompt,
   markDelivered,
@@ -506,10 +507,13 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
       return;
     }
     loop = reconcileLoop(loop, plan);
-    const action = decideNext(loop, plan, {
-      now,
-      sessionTokens: sessionTokens(state),
-    });
+    // Waves (run_parallel) run inline until the IDE runs workers (L4 P4)
+    const action = inlineInsteadOfWave(
+      decideNext(loop, plan, {
+        now,
+        sessionTokens: sessionTokens(state),
+      }),
+    );
     const planFile = await displayPath(state.session.planFile, () =>
       ide.getWorkspaceDirs(),
     );
