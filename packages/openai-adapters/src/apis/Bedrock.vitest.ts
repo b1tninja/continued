@@ -682,6 +682,26 @@ describe("BedrockApi request shape per model family (probed live 2026-11-08)", (
     expect(body.inferenceConfig.maxTokens).toBe(2048);
   });
 
+  it("takes reasoning_effort from requestOptions.extraBodyProperties when the body has none, and the body wins", () => {
+    const cfg = {
+      provider: "bedrock",
+      env: {},
+      requestOptions: { extraBodyProperties: { reasoning_effort: "low" } },
+    };
+    const run = (extra: any = {}) =>
+      (new TestApi(cfg as any) as any)._convertBody({
+        model: haiku45,
+        messages: [{ role: "user", content: "hi" }],
+        ...extra,
+      });
+    expect(run().additionalModelRequestFields).toEqual({
+      thinking: { type: "enabled", budget_tokens: 1024 },
+    });
+    expect(
+      run({ reasoning_effort: "medium" }).additionalModelRequestFields,
+    ).toEqual({ thinking: { type: "enabled", budget_tokens: 4096 } });
+  });
+
   it("sends nothing about reasoning when the body says nothing", () => {
     expect(convert(haiku45)).not.toHaveProperty("additionalModelRequestFields");
     expect(convert("qwen.qwen3-32b-v1:0")).not.toHaveProperty(

@@ -230,6 +230,44 @@ describe("resolveSubagentTools", () => {
     expect(names(tools)).toContain(BuiltInToolNames.RunTerminalCommand);
   });
 
+  it("a Loop worker keeps the loop tools and the exact edits, never the lazy edit", () => {
+    const parent = [
+      ...PARENT_TOOLS,
+      tool(BuiltInToolNames.MultiEdit),
+      tool(BuiltInToolNames.FinishItem),
+      tool(BuiltInToolNames.HoldQuestion),
+      tool(BuiltInToolNames.RemindMe),
+    ];
+    const { tools, excluded } = resolveSubagentTools({}, parent, {
+      loopItem: true,
+    });
+    expect(names(tools)).toEqual(
+      expect.arrayContaining([
+        BuiltInToolNames.FinishItem,
+        BuiltInToolNames.HoldQuestion,
+        BuiltInToolNames.RemindMe,
+        BuiltInToolNames.SingleFindAndReplace,
+        BuiltInToolNames.MultiEdit,
+      ]),
+    );
+    expect(names(tools)).not.toContain(BuiltInToolNames.EditExistingFile);
+    expect(names(tools)).not.toContain(BuiltInToolNames.Subagent);
+    expect(names(tools)).not.toContain("TaskList");
+    expect(excluded).toEqual(
+      expect.arrayContaining([
+        {
+          name: BuiltInToolNames.EditExistingFile,
+          reason: "needs-diff-review",
+        },
+        { name: "TaskList", reason: "task-list" },
+      ]),
+    );
+    // Without the option, the same parent gives the subagent none of them
+    const plain = names(resolveSubagentTools({}, parent).tools);
+    expect(plain).not.toContain(BuiltInToolNames.FinishItem);
+    expect(plain).not.toContain(BuiltInToolNames.MultiEdit);
+  });
+
   it("never gives a subagent the session's task list or plan tools", () => {
     const parent = [
       ...PARENT_TOOLS,
