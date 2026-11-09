@@ -1,0 +1,42 @@
+---
+title: "Command Checks"
+---
+
+Before a terminal command runs, Continuous reads it for mistakes in how it is written. A command with a certain mistake does not run. A command with a likely mistake does not run the first time; sending the identical command again runs it as written. The agent receives the finding in place of the command's output.
+
+The check looks at the command text and the shell that will run it (PowerShell on Windows, your login shell elsewhere). It does not decide whether a command is allowed; that is [tool permissions](/reference#toolpermissions).
+
+## What it finds
+
+| Code  | Stops    | Finding                                                                                                         |
+| ----- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| CL000 | always   | The bash grammar reports a syntax error, with line and column (IDE only)                                         |
+| CL001 | always   | A bash heredoc (`<<EOF`) in PowerShell, which has no heredoc operator                                           |
+| CL002 | always   | `export NAME=value` in PowerShell                                                                               |
+| CL003 | always   | `NAME=value command` in PowerShell                                                                              |
+| CL004 | once     | `$env:NAME` or a `Get-` cmdlet in a POSIX shell                                                                 |
+| CL010 | once     | A heredoc or `tee` that writes a file                                                                           |
+| CL011 | once     | `echo` or `printf` writing a file with backslash escapes in the text                                            |
+| CL012 | once     | `echo "...\n..."` without `-e`, which prints `\n` literally in bash                                             |
+| CL020 | always   | A heredoc with no closing line                                                                                  |
+| CL021 | always   | A closing line that is indented or padded, so the shell reads it as content                                     |
+| CL022 | once     | An unquoted heredoc delimiter over a body containing `$`, a backtick or a backslash, which the shell expands    |
+| CL030 | once     | A long `python -c`, `node -e`, `perl -e` or `pwsh -Command` script in double quotes using `$`, a backtick or `\"` |
+
+A heredoc that only feeds a command (`python - <<'PY'`), a here-string (`<<<`) and a `<<` inside a quoted string are not flagged.
+
+## Writing files from the shell
+
+Writing a file through `cat > file <<EOF` sends its content through the shell's quoting, where quotes, `$` and backslashes can change. The message tells the agent to use the edit or create-file tool instead. If the shell route is intended, quote the delimiter and keep the body free of a line equal to the delimiter:
+
+```bash
+cat > run.sh <<'EOF'
+echo "$HOME"
+EOF
+```
+
+The `'EOF'` form passes the body unchanged. With a bare `EOF`, `$HOME` is replaced before the file is written.
+
+## Turn it off
+
+Set `CONTINUE_COMMAND_LINT=off` in the environment that starts the editor or the CLI to skip the check.
