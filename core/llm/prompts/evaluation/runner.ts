@@ -63,6 +63,8 @@ export interface ScoredCall {
 export interface ReplyResult {
   scenario: TurnScenario;
   profile: PromptProfile;
+  /** Which repetition this reply came from, from 1. */
+  run: number;
   ms: number;
   /** Set when the model call failed; the reply then counts as text with no call. */
   error?: string;
@@ -191,6 +193,7 @@ export function scoreReply(
     stopReason?: string;
   },
 ): ReplyResult {
+  // `run` is set by the runner; a reply scored on its own is run 1.
   const { text, calls } = reply;
   const failures: string[] = [];
   const warnings: string[] = [];
@@ -299,6 +302,7 @@ export function scoreReply(
   return {
     scenario,
     profile,
+    run: 1,
     ms: reply.ms,
     error: reply.error,
     readRounds: reply.readRounds ?? 0,
@@ -428,14 +432,21 @@ export async function runTurnsEval(
     reasoning?: ReasoningEffort;
     /** The model id, which the tailored text reads for its tool-call markup line. */
     model?: string;
+    /** Repetitions of every scenario under every profile; the bar is then a rate over all of them. */
+    runs?: number;
+    /** The output budget per reply; reasoning tokens count against it on Bedrock. */
+    maxTokens?: number;
     onProgress?: (done: number, total: number) => void;
   } = {},
 ): Promise<ReplyResult[]> {
   const scenarios = opts.scenarios ?? TURN_SCENARIOS;
   const profiles = opts.profiles ?? PROFILES;
   const maxReadRounds = opts.maxReadRounds ?? DEFAULT_MAX_READ_ROUNDS;
+  const runs = Math.max(1, opts.runs ?? 1);
   const jobs = profiles.flatMap((profile) =>
-    scenarios.map((scenario) => ({ profile, scenario })),
+    Array.from({ length: runs }, (_, i) => i + 1).flatMap((run) =>
+      scenarios.map((scenario) => ({ profile, scenario, run })),
+    ),
   );
   const results: ReplyResult[] = new Array(jobs.length);
   let next = 0;
@@ -462,7 +473,7 @@ export async function runTurnsEval(
       const message = await model.chat(messages, controller.signal, {
         tools: scenario.tools,
         temperature: 0,
-        maxTokens: REPLY_MAX_TOKENS,
+        maxTokens: opts.maxTokens ?? REPLY_MAX_TOKENS,
         ...reasoningOptions(opts.reasoning),
       });
       const raw = message.role === "assistant" ? (message.toolCalls ?? []) : [];
@@ -494,7 +505,7 @@ export async function runTurnsEval(
     for (;;) {
       const i = next++;
       if (i >= jobs.length) return;
-      const { profile, scenario } = jobs[i];
+      const { profile, scenario, run } = jobs[i];
       const messages: ChatMessage[] = [
         {
           role: "system",
@@ -529,15 +540,18 @@ export async function runTurnsEval(
         });
         reply = await ask(messages, scenario);
       }
-      results[i] = scoreReply(scenario, profile, {
-        text: reply.text,
-        calls: reply.calls,
-        error: reply.error,
-        stopReason: reply.stopReason,
-        // The scored reply's own time: the bar is per reply, not per scenario.
-        ms: reply.ms,
-        readRounds,
-      });
+      results[i] = {
+        ...scoreReply(scenario, profile, {
+          text: reply.text,
+          calls: reply.calls,
+          error: reply.error,
+          stopReason: reply.stopReason,
+          // The scored reply's own time: the bar is per reply, not per scenario.
+          ms: reply.ms,
+          readRounds,
+        }),
+        run,
+      };
       opts.onProgress?.(++done, jobs.length);
     }
   }
@@ -586,6 +600,16 @@ function pct(x: number): string {
   return `${(x * 100).toFixed(0)}%`;
 }
 
+/** Scenario ids of the hits, each once, with "(k of n)" when the profile ran more than once. */
+function idsWithCounts(hits: ReplyResult[], all: ReplyResult[]): string[] {
+  const runs = new Set(all.map((r) => r.run)).size;
+  const ids = [...new Set(hits.map((r) => r.scenario.id))];
+  return ids.map((id) => {
+    const k = hits.filter((r) => r.scenario.id === id).length;
+    return runs > 1 ? `${id} (${k} of ${runs})` : id;
+  });
+}
+
 export function summarizeProfile(
   profile: PromptProfile,
   results: ReplyResult[],
@@ -598,12 +622,14 @@ export function summarizeProfile(
   const planWithPresentPlan = plan.filter((r) => r.calledPresentPlan).length;
   const actToolCallRate = rate(actWithToolCall, act.length);
   const presentPlanRate = rate(planWithPresentPlan, plan.length);
-  const reservedDecided = rs
-    .filter((r) => r.reservedDecided)
-    .map((r) => r.scenario.id);
-  const refusedRetried = rs
-    .filter((r) => r.retriedRefused)
-    .map((r) => r.scenario.id);
+  const reservedDecided = idsWithCounts(
+    rs.filter((r) => r.reservedDecided),
+    rs,
+  );
+  const refusedRetried = idsWithCounts(
+    rs.filter((r) => r.retriedRefused),
+    rs,
+  );
   const errors = rs.filter((r) => r.error).map((r) => r.scenario.id);
   const truncated = rs.filter((r) => r.truncated).map((r) => r.scenario.id);
   const leakedCalls = rs.filter((r) => r.leakedCall).map((r) => r.scenario.id);
@@ -669,6 +695,39 @@ export function summarize(
   return { profiles: ps, passed: ps.every((p) => p.passed) };
 }
 
+function runsOf(results: ReplyResult[]): number {
+  return new Set(results.map((r) => r.run)).size;
+}
+
+/**
+ * One row per scenario: passes over runs, the range of read rounds, the
+ * tools called (each once), and the distinct failures and notes.
+ */
+function scenarioRows(rs: ReplyResult[]): string[] {
+  const ids = [...new Set(rs.map((r) => r.scenario.id))];
+  return ids.map((id) => {
+    const runs = rs.filter((r) => r.scenario.id === id);
+    const passed = runs.filter((r) => r.ok).length;
+    const reads = runs.map((r) => r.readRounds);
+    const readsCell =
+      Math.min(...reads) === Math.max(...reads)
+        ? String(reads[0])
+        : `${Math.min(...reads)} to ${Math.max(...reads)}`;
+    const called = [
+      ...new Set(
+        runs.map((r) => r.calls.map((c) => c.name).join(", ") || "(text only)"),
+      ),
+    ].join(" / ");
+    const failures = [...new Set(runs.flatMap((r) => r.failures))];
+    const notes = [...new Set(runs.flatMap((r) => r.warnings))];
+    const result = [
+      passed === runs.length ? "ok" : failures.join("; "),
+      ...notes.map((w) => `note: ${w}`),
+    ].join("; ");
+    return `| ${id} | ${runs[0].scenario.kind} | ${passed}/${runs.length} | ${readsCell} | ${cell(called)} | ${cell(result)} |`;
+  });
+}
+
 function cell(text: string): string {
   return text.replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ");
 }
@@ -679,11 +738,12 @@ export function formatReport(
   results: ReplyResult[],
   summary: TurnsEvalSummary,
   bar: TurnsQualityBar = TURNS_QUALITY_BAR,
+  maxTokens: number = REPLY_MAX_TOKENS,
 ): string {
   const lines: string[] = [
     `## Turn prompts: ${model}`,
     "",
-    `${results.length} replies: ${summary.profiles.map((p) => `${p.total} under the ${p.profile} profile`).join(", ")}. Nothing the model called was run.`,
+    `${results.length} replies: ${summary.profiles.map((p) => `${p.total} under the ${p.profile} profile`).join(", ")}${runsOf(results) > 1 ? `, ${runsOf(results)} runs of every scenario` : ""}. Nothing the model called was run.`,
     "",
     "Quality bar (fixed 2026-11-08, before the first run; it applies to each profile):",
     "",
@@ -710,15 +770,12 @@ export function formatReport(
       `| Refused calls retried or routed around | ${p.refusedRetried.length} | max ${bar.refusedRetriedMax} |`,
       `| Median latency per reply | ${p.medianLatencyMs === undefined ? "n/a" : `${Math.round(p.medianLatencyMs)} ms`} | max ${bar.medianLatencyMsMax} ms |`,
       `| Model calls that failed | ${p.errors.length} | not part of the bar |`,
-      `| Replies cut off at the output budget (${REPLY_MAX_TOKENS} tokens) | ${p.truncated.length} | not part of the bar |`,
+      `| Replies cut off at the output budget (${maxTokens} tokens) | ${p.truncated.length} | not part of the bar |`,
       `| Tool calls written as text, not made | ${p.leakedCalls.length} | not part of the bar |`,
       "",
-      "| Scenario | Kind | Reads | Called | Result |",
-      "| --- | --- | --- | --- | --- |",
-      ...rs.map(
-        (r) =>
-          `| ${r.scenario.id} | ${r.scenario.kind} | ${r.readRounds} | ${cell(r.calls.map((c) => c.name).join(", ") || "(text only)")} | ${cell([r.ok ? "ok" : r.failures.join("; "), ...r.warnings.map((w) => `note: ${w}`)].join("; "))} |`,
-      ),
+      "| Scenario | Kind | Passed | Reads | Called | Result |",
+      "| --- | --- | --- | --- | --- | --- |",
+      ...scenarioRows(rs),
       "",
       p.passed
         ? `Profile ${p.profile}: meets the bar.`

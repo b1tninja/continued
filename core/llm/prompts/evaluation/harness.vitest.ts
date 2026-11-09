@@ -488,6 +488,35 @@ describe("harness with stub models (no real model)", () => {
   });
 });
 
+describe("runs", () => {
+  it("repeats every scenario under every profile and counts passes per scenario", async () => {
+    let n = 0;
+    // Passes the oracle reply on even calls and text on odd ones, so passes are mixed.
+    const oracle = oracleModel(TURN_SCENARIOS);
+    const flaky = {
+      chat: async (messages: any[], signal: any, options: any) => {
+        n++;
+        if (n % 2 === 0) return oracle.chat(messages, signal, options);
+        return {
+          role: "assistant",
+          content: "Here is what I would do.",
+        } as any;
+      },
+    };
+    const results = await runTurnsEval(flaky, { profiles: ["full"], runs: 4 });
+    expect(results).toHaveLength(TURN_SCENARIOS.length * 4);
+    expect(new Set(results.map((r) => r.run))).toEqual(new Set([1, 2, 3, 4]));
+    const s = summarize(results, undefined, ["full"]);
+    expect(s.profiles[0].total).toBe(TURN_SCENARIOS.length * 4);
+    expect(s.profiles[0].reservedDecided[0]).toMatch(
+      /^plan-reserved-choice \(\d of 4\)$/,
+    );
+    const report = formatReport("flaky (stub)", results, s);
+    expect(report).toContain("4 runs of every scenario");
+    expect(report).toMatch(/\| plan-presents \| plan \| [0-4]\/4 \|/);
+  });
+});
+
 describe("reasoning effort", () => {
   it("maps to core's reasoning fields, and off sends nothing", async () => {
     expect(reasoningOptions(undefined)).toEqual({});

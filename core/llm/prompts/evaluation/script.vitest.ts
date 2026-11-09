@@ -38,8 +38,16 @@ describe("npm run eval:turns (scripts/turns-eval.mjs)", () => {
     expect(run(["--nope"]).status).toBe(2);
     expect(run(["--stub", "allow-all"]).status).toBe(2);
     expect(run(["--stub", "oracle", "--profile", "terse"]).status).toBe(2);
-    expect(run(["--stub", "oracle", "--profile", "tailored"]).status).toBe(0);
     expect(run(["--stub", "oracle", "--reasoning", "max"]).status).toBe(2);
+    expect(run(["--stub", "oracle", "--runs", "0"]).status).toBe(2);
+    expect(run(["--stub", "oracle", "--max-tokens", "10"]).status).toBe(2);
+  });
+
+  it("--profile tailored runs the Qwen coder text alone", () => {
+    const r = run(["--stub", "oracle", "--profile", "tailored"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("### Profile: tailored");
+    expect(r.stdout).not.toContain("### Profile: full");
   });
 
   it("will not call a hosted API without a key", () => {
@@ -84,6 +92,13 @@ describe("npm run eval:turns (scripts/turns-eval.mjs)", () => {
     expect(r.status).toBe(1);
     expect(r.stdout).toContain("Result: does not meet the bar.");
     expect(r.stderr).toContain("NOT met");
+  });
+
+  it("--runs repeats every scenario and reports passes per scenario", () => {
+    const r = run(["--stub", "oracle", "--runs", "3", "--profile", "full"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("3 runs of every scenario");
+    expect(r.stdout).toMatch(/\| act-calls-tool \| act \| 3\/3 \|/);
   });
 
   it("without --strict a missed bar still exits 0, and --profile narrows the run", () => {

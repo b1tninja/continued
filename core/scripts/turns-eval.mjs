@@ -34,6 +34,12 @@ Model (pick one way):
 Options:
   --profile full|short|tailored|both|all   Which prompt texts to send (default both: full and short;
                          all adds tailored, the Qwen coder text, which reads the model id)
+  --runs <n>             Repeat every scenario under every profile n times (default 1); the
+                         report shows passes per scenario and the bar is a rate over all runs.
+                         Five is the practitioner minimum for a temperature-0 eval.
+  --max-tokens <n>       Output budget per reply (default 4000). On Bedrock, reasoning tokens
+                         count against it: AWS suggests about 15000 at low and 30000 at medium
+                         for Nova 2, and a cut-off reply is reported as such, not as text only.
   --reasoning off|low|medium|high   Switch the model's reasoning on at this effort (default off):
                          Bedrock gets the family's own switch through core, OpenAI-compatible
                          servers reasoning_effort, Anthropic a thinking budget
@@ -52,7 +58,8 @@ Options:
 
 Environment (alternative to flags): TURNS_EVAL_PROVIDER, TURNS_EVAL_MODEL,
 TURNS_EVAL_BASE_URL, TURNS_EVAL_API_KEY, TURNS_EVAL_REGION, TURNS_EVAL_AWS_PROFILE,
-TURNS_EVAL_PROFILES, TURNS_EVAL_REASONING, TURNS_EVAL_OUT, TURNS_EVAL_DUMP.
+TURNS_EVAL_PROFILES, TURNS_EVAL_REASONING, TURNS_EVAL_RUNS, TURNS_EVAL_MAX_TOKENS, TURNS_EVAL_OUT,
+TURNS_EVAL_DUMP.
 
 Examples:
   npm run eval:turns -- --stub oracle --strict
@@ -108,6 +115,12 @@ function parse(argv) {
         break;
       case "--reasoning":
         o.reasoning = next();
+        break;
+      case "--runs":
+        o.runs = next();
+        break;
+      case "--max-tokens":
+        o.maxTokens = next();
         break;
       case "--yes":
         o.yes = true;
@@ -165,6 +178,22 @@ if (opts.profile) {
         : opts.profile;
 }
 
+if (opts.maxTokens !== undefined) {
+  const n = Number(opts.maxTokens);
+  if (!Number.isInteger(n) || n < 256 || n > 200000) {
+    fail("--max-tokens must be a whole number from 256 to 200000");
+  }
+  env.TURNS_EVAL_MAX_TOKENS = String(n);
+}
+
+if (opts.runs !== undefined) {
+  const n = Number(opts.runs);
+  if (!Number.isInteger(n) || n < 1 || n > 50) {
+    fail("--runs must be a whole number from 1 to 50");
+  }
+  env.TURNS_EVAL_RUNS = String(n);
+}
+
 if (opts.reasoning) {
   if (!["off", "low", "medium", "high"].includes(opts.reasoning)) {
     fail("--reasoning must be off, low, medium or high");
@@ -195,7 +224,7 @@ if (opts.stub) {
     const region = opts.region ?? env.TURNS_EVAL_REGION ?? "us-east-1";
     if (!opts.yes) {
       fail(
-        `This sends 10 requests to Bedrock in ${region}, which AWS bills.\n` +
+        `This sends ${10 * Number(env.TURNS_EVAL_RUNS ?? 1)} requests to Bedrock in ${region}, which AWS bills.\n` +
           "Re-run with --yes to go ahead.",
       );
     }
@@ -226,7 +255,7 @@ if (opts.stub) {
       if (!key) fail(`No API key: set ${keyName} (or TURNS_EVAL_API_KEY).`);
       if (!opts.yes) {
         fail(
-          `This sends 10 requests to ${new URL(effectiveUrl).host}, which the provider bills.\n` +
+          `This sends ${10 * Number(env.TURNS_EVAL_RUNS ?? 1)} requests to ${new URL(effectiveUrl).host}, which the provider bills.\n` +
             "Re-run with --yes to go ahead, or use --ollama / a localhost --base-url.",
         );
       }

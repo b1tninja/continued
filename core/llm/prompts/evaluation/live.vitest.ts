@@ -30,6 +30,8 @@ import { oracleModel, textOnlyModel } from "./stubs";
  *   TURNS_EVAL_DUMP=<optional path; every reply (text, calls, failures) as JSON>
  *   TURNS_EVAL_PROFILES=full,short,tailored   (default full,short; tailored reads the model id)
  *   TURNS_EVAL_REASONING=off|low|medium|high   (default off: no reasoning fields sent)
+ *   TURNS_EVAL_RUNS=<n>                     (default 1; the bar is then a rate over all runs)
+ *   TURNS_EVAL_MAX_TOKENS=<n>               (default 4000; Bedrock counts reasoning tokens against it)
  *   TURNS_EVAL_OUT=<optional path for the markdown report>
  *   TURNS_EVAL_RESULT=<optional path; gets {"passed": boolean} as JSON>
  *   TURNS_EVAL_STUB=oracle|text-only       (stand-in instead of a model)
@@ -99,18 +101,30 @@ describe.skipIf(!model && !stub)("turn prompt evaluation (live model)", () => {
       const { label, model: chat } = pickModel();
       const profiles = pickProfiles();
       const reasoning = pickReasoning();
+      const runs = Math.max(1, Number(process.env.TURNS_EVAL_RUNS ?? 1) || 1);
+      const maxTokens = Number(process.env.TURNS_EVAL_MAX_TOKENS) || undefined;
       const results = await runTurnsEval(chat, {
         profiles,
         concurrency: 2,
-        timeoutMs: 120_000,
+        timeoutMs: 300_000,
         reasoning,
         model,
+        runs,
+        maxTokens,
       });
       const summary = summarize(results, undefined, profiles);
       const report = formatReport(
-        reasoning ? `${label} (reasoning ${reasoning})` : label,
+        [
+          label,
+          reasoning ? `reasoning ${reasoning}` : "",
+          maxTokens ? `${maxTokens} max tokens` : "",
+        ]
+          .filter(Boolean)
+          .join(", "),
         results,
         summary,
+        undefined,
+        maxTokens,
       );
       // Written to stdout directly so the report is not swallowed by a reporter.
       process.stdout.write(`\n${report}\n`);
@@ -124,6 +138,7 @@ describe.skipIf(!model && !stub)("turn prompt evaluation (live model)", () => {
             results.map((r) => ({
               scenario: r.scenario.id,
               profile: r.profile,
+              run: r.run,
               ms: r.ms,
               error: r.error,
               text: r.text,
