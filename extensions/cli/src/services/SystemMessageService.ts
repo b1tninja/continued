@@ -119,7 +119,7 @@ export class SystemMessageService extends BaseService<SystemMessageServiceState>
 
   /**
    * The tail for this turn's use (`modeModels.<use>.tail`): the line the
-   * request appends to its newest user message, or undefined for none. Read
+   * request appends to each of its user messages, or undefined for none. Read
    * from the config as written, like the prompt choice; by default on for
    * Loop items and for the short prompt profile (core's tailFor). It is not
    * part of the system message, and so not of its cache key.

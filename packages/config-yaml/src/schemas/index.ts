@@ -111,11 +111,12 @@ export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 export const promptChoiceSchema = z.string().min(1);
 
 /**
- * The one-line reminder appended to the newest user message of a request
+ * The one-line reminder appended to every user message of a request
  * (`modeModels.<use>.tail`): `on` for the built-in line of the use's turn
- * kind, `off`, or a short text of your own. It rides on the newest message so
- * that the system prompt and the history stay cached. Booleans are the same
- * setting as written by a YAML 1.1 parser.
+ * kind, `off`, or a short text of your own. It rides on the user messages,
+ * the same line each time, so that the system prompt stays cached and each
+ * request extends the one before. Booleans are the same setting as written
+ * by a YAML 1.1 parser.
  */
 export const turnTailSchema = z.union([z.boolean(), z.string().min(1)]);
 export type TurnTail = z.infer<typeof turnTailSchema>;
