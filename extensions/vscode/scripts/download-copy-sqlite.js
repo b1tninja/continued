@@ -7,7 +7,8 @@ const { rimrafSync } = require("rimraf");
 
 const { execCmdSync } = require("../../../scripts/util");
 
-const FETCH_ATTEMPTS = 4;
+// GitHub's 504 bursts have outlasted four attempts (2s + 4s + 8s); six give about a minute.
+const FETCH_ATTEMPTS = 6;
 
 /** fetch, trying again after a server error or a dropped connection. */
 async function fetchWithRetry(url, options) {
