@@ -1,3 +1,4 @@
+import type { ExternalAccount } from "core/config/providers/externalAccounts";
 import type {
   AssistantChatMessage,
   ChatMessage,
@@ -22,10 +23,11 @@ interface ContinuedModelInfo extends vscode.LanguageModelChatInformation {
 }
 
 /**
- * Offers the chat models of the selected Continuous config to VS Code's chat
- * and agents. Requests run through Continuous's own LLM classes, so they use
- * the keys and settings from the config and providers.yaml; keys never pass
- * to VS Code.
+ * Offers the chat models of the selected Continuous config, then the rest of
+ * the model catalog (models.yaml, each variant too), to VS Code's chat and
+ * agents. Requests run through Continuous's own LLM classes, so they use the
+ * keys and settings from the config and providers.yaml; keys never pass to
+ * VS Code.
  */
 export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelChatProvider<ContinuedModelInfo> {
   private readonly changed = new vscode.EventEmitter<void>();
@@ -34,9 +36,21 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
   private models: ILLM[] = [];
   private enabled = true;
 
-  /** Called when the config reloads. */
-  update(chatModels: ILLM[] | undefined) {
-    const next = chatModels ?? [];
+  /**
+   * Set when accounts from VS Code's Language Models editor are on: takes
+   * a group's configuration, makes it an account (reloading the config when
+   * it changed) and returns the account's name.
+   */
+  onGroupConfiguration?: (
+    configuration: Record<string, unknown>,
+  ) => Promise<string | undefined>;
+
+  /**
+   * Called when the config reloads: the config's chat models, and the
+   * catalog models it does not use (ContinueConfig.offeredModels).
+   */
+  update(chatModels: ILLM[] | undefined, offeredModels?: ILLM[]) {
+    const next = [...(chatModels ?? []), ...(offeredModels ?? [])];
     const key = (list: ILLM[]) =>
       list.map((m) => `${m.title}|${m.providerName}|${m.model}`).join(",");
     if (key(next) === key(this.models)) {
@@ -53,10 +67,27 @@ export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelC
     this.changed.fire();
   }
 
-  provideLanguageModelChatInformation(): ContinuedModelInfo[] {
+  async provideLanguageModelChatInformation(
+    options?: vscode.PrepareLanguageModelChatModelOptions,
+  ): Promise<ContinuedModelInfo[]> {
     if (!this.enabled) return [];
+    let models = this.models;
+    // A group from the Language Models editor (proposed; see package.json)
+    const configuration = (
+      options as { configuration?: Record<string, unknown> } | undefined
+    )?.configuration;
+    if (configuration && Object.keys(configuration).length) {
+      // The models served through the group's account
+      const account = await this.onGroupConfiguration?.(configuration);
+      if (!account) return [];
+      models = this.models.filter(
+        (m) =>
+          (m as { routeName?: string }).routeName === account ||
+          m.routeNames?.includes(account),
+      );
+    }
     const seen = new Set<string>();
-    return this.models.flatMap((llm) => {
+    return models.flatMap((llm) => {
       const title = llm.title ?? llm.model;
       if (seen.has(title)) return [];
       seen.add(title);
@@ -158,6 +189,7 @@ export function modelInfo(llm: ILLM, title: string): ContinuedModelInfo {
     model: llm.model,
     capabilities: llm.capabilities,
   } as any);
+  const routes = llm.routeNames;
   return {
     id: title,
     llmTitle: title,
@@ -165,10 +197,17 @@ export function modelInfo(llm: ILLM, title: string): ContinuedModelInfo {
     family: llm.providerName,
     version: llm.model,
     detail: "Continuous",
-    tooltip: `${llm.providerName} · ${llm.model} (from your Continuous config)`,
+    tooltip: `${llm.providerName} · ${llm.model}${
+      routes ? ` (routes: ${routes.join(", ")})` : ""
+    } (from your Continuous setup)`,
     maxInputTokens: Math.max(1, contextLength - maxOutputTokens),
     maxOutputTokens,
     capabilities: { toolCalling: !!toolCalling, imageInput: false },
+    // Proposed chatProvider API (the agents build declares it; elsewhere
+    // VS Code ignores these): the model runs on the user's own accounts,
+    // which is what the Agents window forwards to its agent sessions, and
+    // it can be picked in the model picker.
+    ...({ isBYOK: true, isUserSelectable: true } as object),
   };
 }
 
@@ -287,4 +326,41 @@ export class ToolCallCollector {
         return { id: c.id, name: c.name, input };
       });
   }
+}
+
+const ACCOUNT_NAME = /[^A-Za-z0-9_.-]+/g;
+
+/**
+ * A group from VS Code's Language Models editor as a Continuous account and
+ * the catalog models it offers. Undefined without a provider.
+ */
+export function groupToAccount(
+  configuration: Record<string, unknown>,
+): ({ name: string } & ExternalAccount) | undefined {
+  const str = (k: string) =>
+    typeof configuration[k] === "string" && configuration[k]
+      ? (configuration[k] as string).trim()
+      : undefined;
+  const provider = str("provider");
+  if (!provider) return undefined;
+  const name = (str("name") ?? `${provider}-vscode`).replace(ACCOUNT_NAME, "-");
+  const region = str("region");
+  const account: ExternalAccount["account"] = {
+    name,
+    provider,
+    ...(str("apiKey") ? { apiKey: str("apiKey") } : {}),
+    ...(str("apiBase") ? { apiBase: str("apiBase") } : {}),
+    ...(region ? { env: { region } } : {}),
+  };
+  const ids = Array.isArray(configuration.models)
+    ? configuration.models.filter(
+        (m): m is string => typeof m === "string" && m.trim() !== "",
+      )
+    : [];
+  const models: ExternalAccount["models"] = ids.map((id) => ({
+    name: `${id.trim()} (${name})`.replace(/#/g, "-"),
+    model: id.trim(),
+    connection: name,
+  }));
+  return { name, account, models };
 }

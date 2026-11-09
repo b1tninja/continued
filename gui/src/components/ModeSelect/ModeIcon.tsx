@@ -1,10 +1,10 @@
 import {
-  ArrowPathIcon,
   ChatBubbleLeftIcon,
   RocketLaunchIcon,
   SparklesIcon,
   SwatchIcon,
 } from "@heroicons/react/24/outline";
+import { LoopPhaseMark } from "../LoopPhaseMark";
 import type { ModeEntry } from "../../redux/selectors/selectModeEntry";
 
 interface ModeIconProps {
@@ -26,6 +26,6 @@ export function ModeIcon({
     case "background":
       return <RocketLaunchIcon className={className} />;
     case "loop":
-      return <ArrowPathIcon className={className} />;
+      return <LoopPhaseMark className={className} />;
   }
 }

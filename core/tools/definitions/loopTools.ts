@@ -1,5 +1,9 @@
 import { Tool } from "../..";
-import { LOOP_LIMITS, QUESTION_TYPES } from "../../util/loopMode";
+import {
+  LOOP_LIMITS,
+  LOOP_NEEDS_LIMITS,
+  QUESTION_TYPES,
+} from "../../util/loopMode";
 import {
   LOOP_REMINDER_LIMITS,
   LOOP_REMINDER_WHEN,
@@ -59,7 +63,7 @@ export const HOLD_QUESTION_PARAMETERS = {
 };
 
 export const FINISH_ITEM_TOOL_DESCRIPTION =
-  'Report the item you were given and end your turn. This is the only way to end a turn: a turn that ends without it is not counted. outcome "done" when it is finished and its check, if it has one, exited 0 when you ran it; "waiting" when it needs an answer to a blocking question; "stuck" when you cannot finish it (say why in summary); "later" when another item may settle it: the item comes back after the others, once, and needs `reminder`. A second "later" counts as stuck.';
+  'Report the item you were given and end your turn. This is the only way to end a turn: a turn that ends without it is not counted. outcome "done" when it is finished and its check, if it has one, exited 0 when you ran it; "waiting" when it needs an answer to a blocking question; "stuck" when you cannot finish it (say why in summary, and name what is in the way in `blocker`; when other work must come first, use blocker "dependency" and list it in `needs`: that is how you add a to-do you have just discovered you need); "later" when another item may settle it: the item comes back after the others, once, and needs `reminder`. A second "later" counts as stuck.';
 
 export const FINISH_ITEM_PARAMETERS = {
   type: "object" as const,
@@ -76,6 +80,17 @@ export const FINISH_ITEM_PARAMETERS = {
     notes: {
       type: "string",
       description: `Optional. What a later item should know: a command that works, a trap you hit. One or two lines, at most ${LOOP_LIMITS.maxNoteLength} characters; not progress.`,
+    },
+    blocker: {
+      type: "string",
+      enum: ["answer", "observe", "plan", "environment", "dependency"],
+      description:
+        'With outcome "stuck": what is in the way. answer: only the person can say or supply it. observe: you cannot see what you need. plan: the item itself is wrong (too big, too vague). environment: a tool, credential or the machine. dependency: other work must be done first, named in `needs`.',
+    },
+    needs: {
+      type: "array",
+      items: { type: "string" },
+      description: `With blocker "dependency": up to ${LOOP_NEEDS_LIMITS.count} pieces of work that must be done before this item, each a short to-do. The re-plan puts them first.`,
     },
     reminder: {
       type: "string",

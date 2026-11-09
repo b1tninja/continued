@@ -6,6 +6,7 @@ import { parseReviewerReply } from "./parse";
 import { buildReviewMessages, FLAGGED_OUTPUT_NOTE } from "./prompt";
 import { reviewToolCall } from "./review";
 import { AutoReviewSessions, AutoReviewState } from "./state";
+import { DEFAULT_POLICY_LEVELS, type PolicyLevels } from "../policy";
 
 const allow = JSON.stringify({ decision: "allow", reason: "Runs the tests." });
 const deny = (category: string) =>
@@ -343,32 +344,43 @@ describe("autoReviewToolCall: rules come first", () => {
     expect(llm.chat).toHaveBeenCalledTimes(1);
   });
 
-  it("a category switch settles the call before the reviewer", async () => {
+  const auto = (over: Partial<PolicyLevels>) => ({
+    levels: { ...DEFAULT_POLICY_LEVELS, tools: "automatic" as const, ...over },
+  });
+
+  it("a Permissive area settles the call before the reviewer", async () => {
     const { llm, deps } = setup(deny("production-impact"));
-    const r = await run(deps, "ls -la", {
-      approval: { mode: "auto", categories: { runSafeCommands: true } },
+    const r = await run(deps, "make deploy", {
+      approval: auto({ tools: "permissive" }),
     });
     expect(r).toMatchObject({
       decision: "allow",
       by: "rules",
-      ruleSource: "category",
+      ruleSource: "permissive",
     });
     expect(llm.chat).not.toHaveBeenCalled();
   });
 
-  it("a switch that does not cover the command leaves it to the reviewer", async () => {
-    const { llm, deps } = setup(deny("production-impact"));
-    const r = await run(deps, "make deploy", {
-      approval: { mode: "auto", categories: { runSafeCommands: true } },
+  it("an area that is not Automatic leaves an open call to the person", async () => {
+    const { llm, deps } = setup(allow);
+    const r = await run(deps, "npm test", {
+      approval: auto({ tools: "cautious" }),
     });
+    expect(r).toMatchObject({ decision: "ask", by: "rules" });
+    expect(llm.chat).not.toHaveBeenCalled();
+  });
+
+  it("an Automatic area asks the reviewer", async () => {
+    const { llm, deps } = setup(deny("production-impact"));
+    const r = await run(deps, "make deploy", { approval: auto({}) });
     expect(r).toMatchObject({ decision: "deny", by: "reviewer" });
     expect(llm.chat).toHaveBeenCalledTimes(1);
   });
 
-  it("a protected path still asks with run-all on, and the reviewer is not asked", async () => {
+  it("a protected path still asks at Permissive, and the reviewer is not asked", async () => {
     const { llm, deps } = setup(allow);
     const r = await run(deps, "cat .env", {
-      approval: { mode: "auto", categories: { runAllCommands: true } },
+      approval: auto({ tools: "permissive" }),
     });
     expect(r).toMatchObject({
       decision: "ask",

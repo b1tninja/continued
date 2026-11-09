@@ -6,6 +6,47 @@ import { ContinueError, ContinueErrorReason } from "../../util/errors";
 // Default timeout for terminal commands (2 minutes)
 const DEFAULT_TOOL_TIMEOUT_MS = 120_000;
 
+/**
+ * After a kill, how long to wait for the process's streams to close before
+ * the call is finished anyway. A child of the shell (a pipeline, a test run)
+ * can outlive it and keep the pipes open, and a call that waits for them
+ * would stay "running" for ever.
+ */
+export const FORCE_FINISH_AFTER_KILL_MS = 3_000;
+
+/** How long after the shell exits to wait for its streams before finishing. */
+export const EXIT_GRACE_MS = 2_000;
+
+/**
+ * Ends the process and everything it started. `kill` on Windows ends only the
+ * shell, so its children go on running and holding the pipes; taskkill /T
+ * takes the whole tree.
+ */
+export function killProcessTree(
+  child: childProcess.ChildProcess,
+  signal: NodeJS.Signals,
+): void {
+  child.kill(signal);
+  if (process.platform === "win32" && child.pid) {
+    try {
+      const killer = childProcess.spawn(
+        "taskkill",
+        ["/pid", String(child.pid), "/T", "/F"],
+        { stdio: "ignore", windowsHide: true },
+      );
+      killer?.on?.("error", () => undefined);
+    } catch {
+      // The shell is already killed; the forced finish covers the rest
+    }
+  }
+}
+
+/** Stops listening to a process whose streams will not close. */
+function releaseStreams(child: childProcess.ChildProcess): void {
+  child.stdout?.destroy?.();
+  child.stderr?.destroy?.();
+}
+
 // Automatically decode the buffer according to the platform to avoid garbled Chinese
 function getDecodedOutput(data: Buffer): string {
   if (process.platform === "win32") {
@@ -23,20 +64,14 @@ function getDecodedOutput(data: Buffer): string {
   }
 } // Simple helper function to use login shell on Unix/macOS and PowerShell on Windows
 function getShellCommand(command: string): { shell: string; args: string[] } {
-  if (process.platform === "win32") {
-    // Windows: Use PowerShell
-    return {
-      shell: "powershell.exe",
-      args: ["-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", command],
-    };
-  } else {
-    // Unix/macOS: Use login shell to source .bashrc/.zshrc etc.
-    const userShell = process.env.SHELL || "/bin/bash";
-    return { shell: userShell, args: ["-l", "-c", command] };
-  }
+  // Windows PowerShell on Windows, the login shell elsewhere (resolveShell)
+  const shell = resolveShell();
+  return { shell: shell.executable, args: shell.args(command) };
 }
 
 import { fileURLToPath } from "node:url";
+import { resolveShell } from "../../util/shell";
+import { commandLintGate } from "../permissions/commandLint";
 import { ToolImpl } from ".";
 import {
   isProcessBackgrounded,
@@ -106,6 +141,18 @@ const getColorEnv = () => ({
 // integrated terminal and executes in the correct remote environment.
 const LOCAL_ONLY = ["", "local"];
 
+/** The result of a command the lint stopped: nothing ran. */
+function commandNotRun(message: string) {
+  return [
+    {
+      name: "Terminal",
+      description: "Command not run",
+      content: message,
+      status: "Command not run",
+    },
+  ];
+}
+
 export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
   const command = getStringArg(args, "command");
   // Default to waiting for completion if not specified
@@ -114,6 +161,12 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
 
   const ideInfo = await extras.ide.getIdeInfo();
   const toolCallId = extras.toolCallId || "";
+
+  // Mistakes in how the command is written, before the shell reports them
+  const lintMessage = commandLintGate(command, resolveShell().kind);
+  if (lintMessage) {
+    return commandNotRun(lintMessage);
+  }
 
   if (LOCAL_ONLY.includes(ideInfo.remoteName)) {
     // For streaming output
@@ -126,6 +179,10 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
           let terminalOutput = "";
           let timeoutId: ReturnType<typeof setTimeout> | undefined;
           let sigkillTimeoutId: ReturnType<typeof setTimeout> | undefined;
+          let forceTimeoutId: ReturnType<typeof setTimeout> | undefined;
+          let exitTimeoutId: ReturnType<typeof setTimeout> | undefined;
+          let timedOut = false;
+          let finished = false;
 
           if (!waitForCompletion) {
             const status = "Command is running in the background...";
@@ -171,6 +228,7 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
           if (waitForCompletion) {
             timeoutId = setTimeout(() => {
               if (isRunning()) {
+                timedOut = true;
                 terminalOutput +=
                   "\n[Timeout: process killed after 2 minutes]\n";
 
@@ -190,14 +248,20 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
                 }
 
                 // Try graceful termination first
-                childProc.kill("SIGTERM");
+                killProcessTree(childProc, "SIGTERM");
 
                 // Force kill after 5 seconds if still running
                 sigkillTimeoutId = setTimeout(() => {
                   if (isRunning()) {
-                    childProc.kill("SIGKILL");
+                    killProcessTree(childProc, "SIGKILL");
                   }
                 }, 5_000);
+
+                // A child holding the pipes open must not hold the call open
+                forceTimeoutId = setTimeout(() => {
+                  releaseStreams(childProc);
+                  onDone(null);
+                }, 5_000 + FORCE_FINISH_AFTER_KILL_MS);
               }
             }, DEFAULT_TOOL_TIMEOUT_MS);
           }
@@ -273,7 +337,9 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
             ]);
           }
 
-          childProc.on("close", (code) => {
+          const onDone = (code: number | null) => {
+            if (finished) return;
+            finished = true;
             // Clear timeout on normal completion
             if (timeoutId) {
               clearTimeout(timeoutId);
@@ -283,6 +349,8 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
             if (sigkillTimeoutId) {
               clearTimeout(sigkillTimeoutId);
             }
+            if (forceTimeoutId) clearTimeout(forceTimeoutId);
+            if (exitTimeoutId) clearTimeout(exitTimeoutId);
 
             // Clean up process tracking
             if (toolCallId) {
@@ -296,7 +364,16 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
 
             if (waitForCompletion) {
               // Normal completion, resolve now
-              if (!code || code === 0) {
+              if (timedOut) {
+                resolve([
+                  {
+                    name: "Terminal",
+                    description: "Terminal command output",
+                    content: terminalOutput,
+                    status: "Command timed out",
+                  },
+                ]);
+              } else if (!code || code === 0) {
                 const status = "Command completed";
                 resolve([
                   {
@@ -337,9 +414,23 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
                 });
               }
             }
+          };
+
+          childProc.on("close", onDone);
+          // The shell is gone but something it started may hold the pipes:
+          // finish shortly after the exit instead of waiting for them
+          childProc.on("exit", (code) => {
+            if (!waitForCompletion || finished) return;
+            exitTimeoutId = setTimeout(() => {
+              releaseStreams(childProc);
+              onDone(code);
+            }, EXIT_GRACE_MS);
           });
 
           childProc.on("error", (error) => {
+            finished = true;
+            if (forceTimeoutId) clearTimeout(forceTimeoutId);
+            if (exitTimeoutId) clearTimeout(exitTimeoutId);
             // Clear timeout on error
             if (timeoutId) {
               clearTimeout(timeoutId);
@@ -381,6 +472,9 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
             (resolve, reject) => {
               let timeoutId: ReturnType<typeof setTimeout> | undefined;
               let sigkillTimeoutId: ReturnType<typeof setTimeout> | undefined;
+              let forceTimeoutId: ReturnType<typeof setTimeout> | undefined;
+              let exitTimeoutId: ReturnType<typeof setTimeout> | undefined;
+              let finished = false;
 
               const childProc = childProcess.spawn(
                 nonStreamingShell,
@@ -411,14 +505,20 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
                   stderr += "\n[Timeout: process killed after 2 minutes]\n";
 
                   // Try graceful termination first
-                  childProc.kill("SIGTERM");
+                  killProcessTree(childProc, "SIGTERM");
 
                   // Force kill after 5 seconds if still running
                   sigkillTimeoutId = setTimeout(() => {
                     if (isRunning()) {
-                      childProc.kill("SIGKILL");
+                      killProcessTree(childProc, "SIGKILL");
                     }
                   }, 5_000);
+
+                  // A child holding the pipes open must not hold the call open
+                  forceTimeoutId = setTimeout(() => {
+                    releaseStreams(childProc);
+                    onDone(null);
+                  }, 5_000 + FORCE_FINISH_AFTER_KILL_MS);
                 }
               }, DEFAULT_TOOL_TIMEOUT_MS);
 
@@ -430,7 +530,11 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
                 stderr += getDecodedOutput(data);
               });
 
-              childProc.on("close", (code) => {
+              const onDone = (code: number | null) => {
+                if (finished) return;
+                finished = true;
+                if (forceTimeoutId) clearTimeout(forceTimeoutId);
+                if (exitTimeoutId) clearTimeout(exitTimeoutId);
                 // Clear outer timeout
                 if (timeoutId) {
                   clearTimeout(timeoutId);
@@ -456,9 +560,21 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
                   (error as any).stderr = stderr;
                   reject(error);
                 }
+              };
+
+              childProc.on("close", onDone);
+              childProc.on("exit", (code) => {
+                if (finished) return;
+                exitTimeoutId = setTimeout(() => {
+                  releaseStreams(childProc);
+                  onDone(code);
+                }, EXIT_GRACE_MS);
               });
 
               childProc.on("error", (error) => {
+                finished = true;
+                if (forceTimeoutId) clearTimeout(forceTimeoutId);
+                if (exitTimeoutId) clearTimeout(exitTimeoutId);
                 // Clear timeout on error
                 if (timeoutId) {
                   clearTimeout(timeoutId);

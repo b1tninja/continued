@@ -4,11 +4,14 @@ import { ToolPolicy } from "@continuedev/terminal-security";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { MessageModes, RuleWithSource, Tool } from "core";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
-import type {
-  ApprovalCategories,
-  ApprovalCategoryName,
-  ApprovalModeName,
-} from "core/tools/permissions/approval";
+import {
+  DEFAULT_POLICY_LEVELS,
+  type BuiltinRuleId,
+  type PolicyArea,
+  type PolicyLevel,
+  type PolicyLevels,
+  type QuestionType,
+} from "core/tools/permissions/policy";
 import {
   defaultOnboardingCardState,
   OnboardingCardState,
@@ -44,24 +47,25 @@ type UIState = {
   /** Model the user picked by hand per mode; wins over `modeModels` until reload. */
   modeModelOverrides: Partial<Record<MessageModes, string>>;
   ttsActive: boolean;
-  /** "auto" needs the experimental flag and a reviewer model; see selectAutoApproval. */
-  approvalMode: ApprovalMode;
-  /** The Auto-approve switches; used by Auto-approve and Auto modes. */
-  approvalCategories: ApprovalCategories;
-  /** Per-MCP-server switch, by server name; wins over the global MCP switch. */
-  approvalMcpServers: { [serverName: string]: boolean };
+  /**
+   * The level chosen for each policy area (plans/policy-areas.md). "automatic"
+   * needs the experimental flag and a reviewer model; see selectPolicySettings.
+   */
+  policyLevels: PolicyLevels;
+  /** The rest of the shared settings file; see PolicyExtras */
+  policyExtras: PolicyExtras;
 };
 
-/**
- * manual: ask as today. autoApprove: the switches allow. auto: the switches,
- * then a reviewer model (experimental). review: allow everything that no deny
- * rule, protected path or ask rule stops. yolo: allow absolutely everything.
- */
-export type ApprovalMode = ApprovalModeName;
-
-export const DEFAULT_APPROVAL_CATEGORIES: ApprovalCategories = {
-  readFiles: true,
-};
+/** The settings beside the levels (plans/policy-areas.md, "Settings"). */
+export interface PolicyExtras {
+  /** Permissive on Plan edits: new to-dos a re-plan may add by itself */
+  maxNewPlanItems?: number;
+  questions?: { youDecide?: QuestionType[]; agentDecides?: QuestionType[] };
+  /** Built-in rules by id; absent means on */
+  builtin?: Partial<Record<BuiltinRuleId, boolean>>;
+  /** Deny rules that bind at every level; read from the file, never written here */
+  floor?: string[];
+}
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";
 export const DEFAULT_RULE_SETTING: RulePolicy = "on";
@@ -75,9 +79,8 @@ export const DEFAULT_UI_SLICE: UIState = {
     getLocalStorage(LocalStorageKey.HasDismissedExploreDialog) ?? false,
   shouldAddFileForEditing: false,
   ttsActive: false,
-  approvalMode: "manual",
-  approvalCategories: DEFAULT_APPROVAL_CATEGORIES,
-  approvalMcpServers: {},
+  policyLevels: DEFAULT_POLICY_LEVELS,
+  policyExtras: {},
   toolSettings: {},
   toolGroupSettings: {
     [BUILT_IN_GROUP_NAME]: "include",
@@ -177,28 +180,23 @@ export const uiSlice = createSlice({
           break;
       }
     },
-    setApprovalMode: (state, { payload }: PayloadAction<ApprovalMode>) => {
-      state.approvalMode = payload;
-    },
-    setApprovalCategory: (
+    setPolicyLevel: (
       state,
-      {
-        payload,
-      }: PayloadAction<{ category: ApprovalCategoryName; enabled: boolean }>,
+      { payload }: PayloadAction<{ area: PolicyArea; level: PolicyLevel }>,
     ) => {
-      state.approvalCategories = {
-        ...state.approvalCategories,
-        [payload.category]: payload.enabled,
+      state.policyLevels = {
+        ...state.policyLevels,
+        [payload.area]: payload.level,
       };
     },
-    setApprovalMcpServer: (
+    setPolicyLevels: (state, { payload }: PayloadAction<PolicyLevels>) => {
+      state.policyLevels = { ...payload };
+    },
+    setPolicyExtras: (
       state,
-      { payload }: PayloadAction<{ server: string; enabled: boolean }>,
+      { payload }: PayloadAction<Partial<PolicyExtras>>,
     ) => {
-      state.approvalMcpServers = {
-        ...state.approvalMcpServers,
-        [payload.server]: payload.enabled,
-      };
+      state.policyExtras = { ...state.policyExtras, ...payload };
     },
     setTTSActive: (state, { payload }: PayloadAction<boolean>) => {
       state.ttsActive = payload;
@@ -261,9 +259,9 @@ export const {
   addTool,
   addRule,
   toggleRuleSetting,
-  setApprovalMode,
-  setApprovalCategory,
-  setApprovalMcpServer,
+  setPolicyLevel,
+  setPolicyLevels,
+  setPolicyExtras,
   setTTSActive,
   setReasoningSetting,
   setPromptCacheSetting,

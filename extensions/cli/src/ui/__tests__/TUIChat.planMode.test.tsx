@@ -144,7 +144,8 @@ describe("TUIChat - plan mode", () => {
 
   it("asks before Bash in plan mode", async () => {
     const llm = new ScriptedLlm([
-      toolTurn("Bash", { command: "echo should-not-run" }),
+      // Not a command that only reads: those run in a plan turn
+      toolTurn("Bash", { command: "npm install should-not-run" }),
       textTurn("unreachable"),
     ]);
     await registerFlowServices({ llm, mode: "plan" });

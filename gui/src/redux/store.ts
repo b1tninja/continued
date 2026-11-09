@@ -23,6 +23,7 @@ import { profilesReducer } from "./slices/profilesSlice";
 import sessionReducer from "./slices/sessionSlice";
 import tabsReducer from "./slices/tabsSlice";
 import uiReducer from "./slices/uiSlice";
+import { migrateApproval } from "core/tools/permissions/policy";
 
 const rootReducer = combineReducers({
   session: sessionReducer,
@@ -55,9 +56,7 @@ const saveSubsetFilters = [
   ]),
   createFilter("config", []),
   createFilter("ui", [
-    "approvalMode",
-    "approvalCategories",
-    "approvalMcpServers",
+    "policyLevels",
     "toolSettings",
     "toolGroupSettings",
     "ruleSettings",
@@ -94,10 +93,28 @@ const migrations: MigrationManifest = {
       _persist: oldState?._persist,
     };
   },
+  // One approval mode and its switches became a level per policy area. The
+  // old saved settings carry over as equal or stricter, never looser.
+  "2": (state) => {
+    const ui = (state as any)?.ui;
+    if (!ui || ui.policyLevels) return state as any;
+    const { approvalMode, approvalCategories, ...rest } = ui;
+    delete rest.approvalMcpServers;
+    return {
+      ...(state as any),
+      ui: {
+        ...rest,
+        policyLevels: migrateApproval({
+          mode: approvalMode,
+          categories: approvalCategories,
+        }),
+      },
+    };
+  },
 };
 
 const persistConfig = {
-  version: 1,
+  version: 2,
   key: "root",
   storage,
   transforms: [...saveSubsetFilters],

@@ -25,6 +25,10 @@ import { CacheMissNotice } from "../../components/mainInput/CacheMissNotice";
 import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
 import { LoopInbox } from "../../components/mainInput/LoopInbox";
+import {
+  QuestionPanel,
+  QuestionPanelContext,
+} from "../../components/QuestionPanel";
 import { TaskListPanel } from "../../components/mainInput/TaskListPanel";
 import { useLoopDriver } from "../../hooks/useLoopDriver";
 import { LargeMessageNotice } from "../../components/mainInput/LargeMessageNotice";
@@ -123,6 +127,7 @@ function fallbackRender({ error, resetErrorBoundary }: any) {
 export function Chat() {
   // Loop mode: take the next step whenever nothing is running
   useLoopDriver();
+  const hasLoop = useAppSelector((state) => !!state.session.loop);
   useApplyModeModel();
   const dispatch = useAppDispatch();
   const ideMessenger = useContext(IdeMessengerContext);
@@ -510,7 +515,7 @@ export function Chat() {
   const showScrollbar = showChatScrollbar ?? window.innerHeight > 5000;
 
   return (
-    <>
+    <QuestionPanelContext.Provider value={true}>
       {!!showSessionTabs && !isInEdit && <TabBar ref={tabsRef} />}
       {widget}
 
@@ -545,8 +550,10 @@ export function Chat() {
         <ColdCacheNotice />
         <CachingOffNotice />
         <LargeMessageNotice />
-        <TaskListPanel />
+        {/* A loop shows its own plan in its panel */}
+        {!hasLoop && <TaskListPanel />}
         <LoopInbox />
+        <QuestionPanel />
         <QueuedMessages
           onSendNow={sendNowOrSteer}
           onSteerNow={(ids) => void steerNow(ids)}
@@ -590,6 +597,6 @@ export function Chat() {
           )}
         </div>
       </div>
-    </>
+    </QuestionPanelContext.Provider>
   );
 }

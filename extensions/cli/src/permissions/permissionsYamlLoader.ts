@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 
+import { POLICY_FILE_KEYS } from "core/tools/permissions/settingsFile.js";
 import YAML from "yaml";
 
 import { env } from "../env.js";
@@ -22,26 +23,32 @@ export interface PermissionsYamlConfig {
  * Loads permissions from ~/.continue/permissions.yaml
  * Returns null if file doesn't exist or can't be parsed
  */
-export function loadPermissionsYaml(): PermissionsYamlConfig | null {
+export function loadPermissionsYaml(
+  file: string = PERMISSIONS_YAML_PATH,
+): PermissionsYamlConfig | null {
   try {
-    if (!fs.existsSync(PERMISSIONS_YAML_PATH)) {
+    if (!fs.existsSync(file)) {
       logger.debug("Permissions YAML file does not exist", {
-        path: PERMISSIONS_YAML_PATH,
+        path: file,
       });
       return null;
     }
 
-    const content = fs.readFileSync(PERMISSIONS_YAML_PATH, "utf-8");
+    const content = fs.readFileSync(file, "utf-8");
     const parsed = YAML.parse(content) as PermissionsYamlConfig;
 
     // Validate the structure
     if (parsed && typeof parsed === "object") {
       const validKeys = ["allow", "ask", "exclude"];
+      // The policy levels share this file (see core settingsFile): its keys
+      // are read there, not here
+      const policyKeys: readonly string[] = POLICY_FILE_KEYS;
       const hasValidStructure = Object.keys(parsed).every(
         (key) =>
-          validKeys.includes(key) &&
-          (!parsed[key as keyof PermissionsYamlConfig] ||
-            Array.isArray(parsed[key as keyof PermissionsYamlConfig])),
+          policyKeys.includes(key) ||
+          (validKeys.includes(key) &&
+            (!parsed[key as keyof PermissionsYamlConfig] ||
+              Array.isArray(parsed[key as keyof PermissionsYamlConfig]))),
       );
 
       if (hasValidStructure) {
@@ -55,13 +62,13 @@ export function loadPermissionsYaml(): PermissionsYamlConfig | null {
     }
 
     logger.warn("Invalid permissions YAML structure", {
-      path: PERMISSIONS_YAML_PATH,
+      path: file,
     });
     return null;
   } catch (error) {
     logger.error("Failed to load permissions YAML", {
       error,
-      path: PERMISSIONS_YAML_PATH,
+      path: file,
     });
     return null;
   }

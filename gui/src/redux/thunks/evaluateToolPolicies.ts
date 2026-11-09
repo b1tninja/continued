@@ -1,6 +1,9 @@
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { ChatHistoryItem, MessageModes, Tool, ToolCallState } from "core";
-import type { ApprovalSettings } from "core/tools/permissions/approval";
+import {
+  levelOfCall,
+  type ApprovalSettings,
+} from "core/tools/permissions/approval";
 import type { AutoReviewReply } from "core/tools/permissions/auto/handler";
 import type { ReviewHistory } from "core/tools/permissions/auto/prompt";
 import { isFlaggedOutput } from "core/tools/permissions/injection";
@@ -37,6 +40,8 @@ export interface EvaluatedPolicy {
   /** The reviewer's named reason (Auto mode). */
   category?: string;
   reason?: string;
+  /** A command the parser vouched as only reading (core) */
+  readOnly?: string;
   rule?: string;
   toolCallState: ToolCallState;
 }
@@ -54,11 +59,18 @@ export const PLAN_MODE_HOLD_REASON =
 export function holdInPlanMode(
   result: EvaluatedPolicy,
   activeTools: Tool[],
+  approval?: ApprovalSettings,
 ): EvaluatedPolicy {
   if (result.policy !== "allowedWithoutPermission") return result;
   const name = result.toolCallState.toolCall.function.name;
   const tool = activeTools.find((t) => t.function.name === name);
   if (tool?.readonly) return result;
+  // A command the parser vouched as only reading may run in a plan turn:
+  // that is how a re-plan looks at `git log` or `ls`
+  if (result.readOnly) return result;
+  // An area set to YOLO runs everything, in Plan mode too: that is what the
+  // level says. Permissive and below still wait for the person here.
+  if (levelOfCall(approval, name, tool)?.level === "yolo") return result;
   return {
     ...result,
     policy: "allowedWithPermission",
@@ -86,9 +98,11 @@ export async function evaluateToolPolicy(
     toolPolicies,
     approval,
   );
-  // Plan mode changes nothing until the plan is accepted, in every approval
-  // mode: YOLO is about what runs while building
-  return mode === "plan" ? holdInPlanMode(result, activeTools) : result;
+  // Plan mode changes nothing until the plan is accepted, at every level
+  // below YOLO
+  return mode === "plan"
+    ? holdInPlanMode(result, activeTools, approval)
+    : result;
 }
 
 async function evaluateBasePolicy(
@@ -167,8 +181,7 @@ async function evaluateBasePolicy(
     // goes for the approval mode and switches, which core applies only to a
     // call no rule, protected path or safety check has settled.
     details.source !== "allow-rule" &&
-    details.source !== "category" &&
-    details.source !== "review" &&
+    details.source !== "permissive" &&
     details.source !== "yolo"
   ) {
     return { ...details, policy: "allowedWithPermission", toolCallState }; // Cannot make more lenient
@@ -234,8 +247,16 @@ async function reviewOpenCalls(
         r.source !== "ask-rule" &&
         r.source !== "protected-path" &&
         // Plan mode's hold is for the user, not the reviewer
-        r.source !== "plan-mode";
+        r.source !== "plan-mode" &&
+        // Manual asks every time; only an area set to Automatic has a reviewer
+        r.source !== "manual";
       if (!open) return r;
+      const found = levelOfCall(
+        approval,
+        toolName,
+        activeTools.find((t) => t.function.name === toolName),
+      );
+      if (found && found.level !== "automatic") return r;
 
       const basePolicy =
         toolPolicies[toolName] ??
@@ -394,6 +415,7 @@ export async function evaluateToolPolicies(
       reason &&
       (source === "protected-path" ||
         source === "ask-rule" ||
+        source === "manual" ||
         source === "auto" ||
         source === "plan-mode")
     ) {
@@ -414,8 +436,7 @@ export async function evaluateToolPolicies(
       (source === "allow-rule" ||
         source === "auto" ||
         source === "once" ||
-        source === "category" ||
-        source === "review" ||
+        source === "permissive" ||
         source === "yolo")
     ) {
       dispatch(

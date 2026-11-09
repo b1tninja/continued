@@ -12,6 +12,7 @@ import { IDE } from "../..";
 import { getContinueGlobalPath } from "../../util/paths";
 import { localPathToUri } from "../../util/pathToUri";
 import { joinPathsToUri } from "../../util/uri";
+import { externalProviderInstances } from "./externalAccounts";
 import { WORKSPACE_DIRS } from "../../util/workspaceDirs";
 
 export const PROVIDERS_FILE_NAME = "providers.yaml";
@@ -85,6 +86,8 @@ export async function loadProviderInstances(
 ): Promise<{ providers: ProviderInstance[]; errors: ConfigValidationError[] }> {
   const errors: ConfigValidationError[] = [];
   const byName = new Map<string, ProviderInstance>();
+  // Accounts from the IDE's own settings first; the files win on a name
+  for (const p of externalProviderInstances()) byName.set(p.name, p);
 
   const add = (content: string, source: string) => {
     const parsed = parseProvidersFile(content, source);

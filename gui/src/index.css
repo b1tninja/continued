@@ -3,6 +3,16 @@
    theme colours derived from src/styles/theme.ts. */
 @import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css";
+
+/*
+ * The angle the input border's comets travel at. Registered, so the browser
+ * can animate it (a bare custom property would jump).
+ */
+@property --loop-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
 @config "../tailwind.config.cjs";
 
 /* Tailwind 3's fixed line-heights for text-xs..text-4xl. Tailwind 4 uses
