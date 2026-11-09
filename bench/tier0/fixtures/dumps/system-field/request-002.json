@@ -1,0 +1,17 @@
+{
+  "system": "S",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Do the thing"
+    },
+    {
+      "role": "assistant",
+      "content": "Done."
+    },
+    {
+      "role": "user",
+      "content": "Thanks"
+    }
+  ]
+}
