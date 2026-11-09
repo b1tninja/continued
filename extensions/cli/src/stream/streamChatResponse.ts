@@ -21,6 +21,7 @@ import { withEnvironmentBlock } from "../environmentContext.js";
 import {
   consumeLoopTurnEnd,
   loopRequestHistory,
+  currentModelUse,
   loopRunGoing,
 } from "../loop/loopSession.js";
 import { services } from "../services/index.js";
@@ -606,9 +607,11 @@ export async function streamChatResponse(
     chatHistory = refreshChatHistoryFromService(chatHistory, isCompacting);
     logger.debug("Starting conversation iteration");
 
-    // Get system message once per iteration (can change based on tool permissions mode)
+    // Get system message once per iteration (can change based on tool
+    // permissions mode, and a Loop turn has a use of its own)
     const systemMessage = await services.systemMessage.getSystemMessage(
       services.toolPermissions.getState().currentMode,
+      currentModelUse(),
     );
 
     // Recompute tools on each iteration to handle mode changes during streaming

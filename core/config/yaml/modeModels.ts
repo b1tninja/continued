@@ -1,7 +1,17 @@
 import type { ModeModels } from "@continuedev/config-yaml";
 import type { ConfigValidationError } from "@continuedev/config-yaml";
 import type { ILLM, ModeModelsConfig, ModelUse } from "../..";
+import { isPromptProfile } from "../../llm/prompts/usePrompts";
 import { MODEL_USES, PICKER_USES } from "../../util/modelUse";
+
+/** The uses whose system prompt can be chosen (`prompt`). */
+const PROMPT_USES: readonly ModelUse[] = [
+  "chat",
+  "plan",
+  "agent",
+  "loop",
+  "replan",
+];
 
 /**
  * Resolve `modeModels:` (which names models) against the loaded models.
@@ -16,11 +26,15 @@ import { MODEL_USES, PICKER_USES } from "../../util/modelUse";
  *   removed.
  * - `reviewer` may name any model, whatever its roles; every other use names
  *   a chat model.
+ * - `prompt` (chat, plan, agent, loop, replan): `full`, `short`, or the name
+ *   of one of `prompts`, whose text is copied in as `promptText`. An unknown
+ *   name is dropped with an error; the entry keeps its model.
  */
 export function resolveModeModels(
   modeModels: ModeModels | undefined,
   chatModels: Pick<ILLM, "title">[],
   allModels: Pick<ILLM, "title">[] = chatModels,
+  prompts: readonly { name: string; prompt: string }[] = [],
 ): {
   modeModels: ModeModelsConfig | undefined;
   errors: ConfigValidationError[];
@@ -67,19 +81,41 @@ export function resolveModeModels(
       }
     }
 
+    // The prompt: a built-in profile, or a prompt block's name and text
+    let prompt: { prompt: string; promptText?: string } | undefined;
+    const wanted = PROMPT_USES.includes(use)
+      ? (entry as { prompt?: string }).prompt
+      : undefined;
+    if (wanted) {
+      if (isPromptProfile(wanted)) {
+        prompt = { prompt: wanted };
+      } else {
+        const block = prompts.find((p) => p.name === wanted);
+        if (block) prompt = { prompt: wanted, promptText: block.prompt };
+        else {
+          const names = prompts.map((p) => p.name);
+          errors.push({
+            fatal: false,
+            message: `modeModels.${use}.prompt: "${wanted}" is not "full", "short" or the name of a prompt block.${names.length ? ` Prompt blocks: ${names.join(", ")}.` : ""}`,
+          });
+        }
+      }
+    }
+
     const title = preferred ?? listed[0];
-    if (title === undefined) continue; // nothing usable: drop the entry
+    if (title === undefined && !prompt) continue; // nothing usable: drop the entry
 
     const offered = list
-      ? [title, ...listed.filter((name) => name !== title)]
+      ? [title!, ...listed.filter((name) => name !== title)]
       : undefined;
     resolved[use] = {
-      title,
+      ...(title !== undefined ? { title } : {}),
       ...(offered ? { titles: offered } : {}),
       ...(entry.reasoningEffort
         ? { reasoningEffort: entry.reasoningEffort }
         : {}),
-    };
+      ...prompt,
+    } as ModeModelsConfig[ModelUse];
   }
 
   return {
