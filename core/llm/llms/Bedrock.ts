@@ -45,6 +45,13 @@ import { createBedrockRequestHandler } from "./bedrockHttp.js";
 import { withResponseInfo } from "../utils/cacheStats.js";
 import { getSecureID } from "../utils/getSecureID.js";
 import { isTaskPlanBlockText } from "../../util/taskPlan.js";
+import {
+  type BedrockRefusableField,
+  bedrockRefusedField,
+  converseRequestHasField,
+  converseRequestWithoutField,
+} from "@continuedev/llm-info";
+
 import { resolvePromptCacheTtl } from "./anthropicCache.js";
 import {
   applyCrossRegionInference,
@@ -54,7 +61,6 @@ import {
   bedrockUsageToUsage,
   buildModelCatalog,
   getBedrockErrorHint,
-  isStopSequencesUnsupportedError,
   isUseCaseFormMissingError,
   markAnthropicUseCaseNeeded,
   normalizeToolUseIds,
@@ -68,7 +74,11 @@ const USE_CASE_LOOKUP_TIMEOUT_MS = 2000;
  * without it from then on; callers that need stops (autocomplete) also cut the
  * output at the stop tokens themselves.
  */
-const modelsWithoutStopSequences = new Set<string>();
+/**
+ * Fields each model refused this process (the request-field policy,
+ * plans/ROADMAP.md C58): left out of later requests. In memory only.
+ */
+const refusedFieldsByModel = new Map<string, Set<BedrockRefusableField>>();
 
 interface ModelConfig {
   formatPayload: (text: string) => any;
@@ -397,40 +407,37 @@ class Bedrock extends BaseLLM {
   }
 
   /**
-   * Sends a ConverseStream request. A model that refuses `stopSequences` is
-   * retried once without them and remembered, so later requests skip the
-   * failing attempt.
+   * Sends a ConverseStream request. A model that refuses an optional field
+   * that only changes cost (`stopSequences`, a `cachePoint`) is sent the
+   * request once more without it and remembered, so later requests leave the
+   * field out up front. Fields that change the answer are never dropped.
    */
   private async _sendConverseStream(
     client: BedrockRuntimeClient,
     input: ConverseStreamCommandInput,
     signal: AbortSignal,
   ): Promise<ConverseStreamCommandOutput> {
+    const modelKey = input.modelId ?? "";
+    let request = input;
+    for (const field of refusedFieldsByModel.get(modelKey) ?? []) {
+      request = converseRequestWithoutField(request, field);
+    }
     const send = async () =>
-      (await client.send(new ConverseStreamCommand(input), {
+      (await client.send(new ConverseStreamCommand(request), {
         abortSignal: signal,
       })) as ConverseStreamCommandOutput;
-    const withoutStops = () => {
-      input.inferenceConfig = {
-        ...input.inferenceConfig,
-        stopSequences: undefined,
-      };
-    };
-
-    const modelKey = input.modelId ?? "";
-    if (modelsWithoutStopSequences.has(modelKey)) withoutStops();
 
     try {
       return await send();
     } catch (e) {
-      if (
-        !input.inferenceConfig?.stopSequences?.length ||
-        !isStopSequencesUnsupportedError(e)
-      ) {
+      const field = bedrockRefusedField(e);
+      if (!field || !converseRequestHasField(request, field)) {
         throw e;
       }
-      modelsWithoutStopSequences.add(modelKey);
-      withoutStops();
+      const refused = refusedFieldsByModel.get(modelKey) ?? new Set();
+      refused.add(field);
+      refusedFieldsByModel.set(modelKey, refused);
+      request = converseRequestWithoutField(request, field);
       return await send();
     }
   }

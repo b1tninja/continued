@@ -64,3 +64,4 @@ export function getAllRecommendedFor(useCase: UseCase): LlmInfoWithProvider[] {
 }
 
 export * from "./promptCache.js";
+export * from "./providerErrors.js";

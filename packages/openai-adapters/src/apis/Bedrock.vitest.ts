@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { BedrockApi } from "./Bedrock.js";
+import {
+  fieldFallbacks,
+  formatFieldFallback,
+  onFieldFallback,
+  resetFieldFallbacksForTests,
+} from "./fieldFallbacks.js";
 
 const calls: Array<string | undefined> = [];
 let chainImpl: (p: string | undefined) => Promise<any>;
@@ -620,6 +626,116 @@ describe("BedrockApi pinned cache point (a fork point)", () => {
     );
     expect(pointsIn(body)).toEqual([1, 0, 1]);
     expect(JSON.stringify(body.toolConfig)).not.toContain("cachePoint");
+  });
+});
+
+describe("BedrockApi sends once more without a field the model refuses", () => {
+  const streamOf = (...texts: string[]) => ({
+    stream: (async function* () {
+      for (const text of texts)
+        yield { contentBlockDelta: { delta: { text } } };
+      yield { metadata: { usage: { inputTokens: 1, outputTokens: 1 } } };
+    })(),
+  });
+
+  /** A client whose first send refuses with `message` when the input carries the field. */
+  const refusing = (message: string) => {
+    const inputs: any[] = [];
+    class Api extends TestApi {
+      async getClient() {
+        return {
+          send: async (command: any) => {
+            inputs.push(JSON.parse(JSON.stringify(command.input)));
+            if (inputs.length === 1) throw new Error(message);
+            return streamOf("ok");
+          },
+        } as any;
+      }
+    }
+    const api = new Api({
+      provider: "bedrock",
+      env: {},
+      promptCaching: true,
+    } as any);
+    return { api, inputs };
+  };
+
+  const run = async (api: any, model = "us.openai.gpt-6.1-sol") => {
+    let text = "";
+    for await (const chunk of api.chatCompletionStream(
+      {
+        model,
+        messages: [
+          { role: "system", content: "be brief" },
+          { role: "user", content: "hi" },
+        ],
+        stream: true,
+      },
+      new AbortController().signal,
+    )) {
+      text += chunk.choices?.[0]?.delta?.content ?? "";
+    }
+    return text;
+  };
+
+  beforeEach(() => resetFieldFallbacksForTests());
+
+  it("drops the cache points, remembers the model, and records the fallback", async () => {
+    // Claude here, so the table lets cache points through and the refusal is the model's.
+    const { api, inputs } = refusing(
+      "This model doesn't support the cachePoint field",
+    );
+    const seen: any[] = [];
+    onFieldFallback((f) => seen.push(f));
+
+    expect(await run(api, "anthropic.claude-sonnet-4-6")).toBe("ok");
+    expect(inputs).toHaveLength(2);
+    expect(JSON.stringify(inputs[0])).toContain("cachePoint");
+    expect(JSON.stringify(inputs[1])).not.toContain("cachePoint");
+    expect(inputs[1].messages[0].content[0].text).toContain("hi");
+
+    expect(fieldFallbacks()).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      provider: "bedrock",
+      model: "anthropic.claude-sonnet-4-6",
+      field: "cachePoint",
+    });
+
+    // The next request leaves the field out up front: one send, no point.
+    expect(await run(api, "anthropic.claude-sonnet-4-6")).toBe("ok");
+    expect(inputs).toHaveLength(3);
+    expect(JSON.stringify(inputs[2])).not.toContain("cachePoint");
+  });
+
+  it("does not retry when the refused field is not in the request", async () => {
+    const { api, inputs } = refusing(
+      "This model doesn't support the stopSequences field",
+    );
+    await expect(run(api, "anthropic.claude-sonnet-4-6")).rejects.toThrow(
+      /stopSequences/,
+    );
+    expect(inputs).toHaveLength(1);
+    expect(fieldFallbacks()).toHaveLength(0);
+  });
+
+  it("does not retry other errors", async () => {
+    const { api, inputs } = refusing("ThrottlingException: Too many requests");
+    await expect(run(api, "anthropic.claude-sonnet-4-6")).rejects.toThrow(
+      /Too many requests/,
+    );
+    expect(inputs).toHaveLength(1);
+  });
+
+  it("gives the user a line with the config change", () => {
+    const line = formatFieldFallback({
+      provider: "bedrock",
+      model: "us.openai.gpt-6.1-sol",
+      field: "cachePoint",
+      error: "x",
+      at: 0,
+    });
+    expect(line).toContain("us.openai.gpt-6.1-sol refused prompt cache points");
+    expect(line).toContain("promptCaching: false");
   });
 });
 

@@ -1,5 +1,6 @@
 import {
   Base64ImageSource,
+  ContentBlockParam,
   ErrorResponse,
   MessageParam,
   Tool,

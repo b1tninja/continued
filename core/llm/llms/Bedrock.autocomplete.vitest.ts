@@ -72,6 +72,31 @@ describe("Bedrock autocomplete", () => {
     expect(sent[2].inferenceConfig.stopSequences).toBeUndefined();
   });
 
+  it("retries without cache points when the model refuses them, and remembers", async () => {
+    const llm = new Bedrock({
+      apiKey: "k",
+      model: "anthropic.claude-sonnet-4-6",
+      region: "us-east-1",
+      cacheBehavior: { cacheConversation: true },
+    });
+    send
+      .mockRejectedValueOnce(
+        new Error("This model doesn't support the cachePoint field"),
+      )
+      .mockResolvedValueOnce(stream({ text: "one" }))
+      .mockResolvedValueOnce(stream({ text: "two" }));
+
+    expect(await complete(llm)).toBe("one");
+    expect(JSON.stringify(sent[0])).toContain("cachePoint");
+    expect(JSON.stringify(sent[1])).not.toContain("cachePoint");
+    // the prompt itself is untouched
+    expect(sent[1].messages[0].content[0].text).toContain("prompt");
+
+    expect(await complete(llm)).toBe("two");
+    expect(sent).toHaveLength(3);
+    expect(JSON.stringify(sent[2])).not.toContain("cachePoint");
+  });
+
   it("still sends stop sequences to models that accept them", async () => {
     const llm = new Bedrock({
       apiKey: "k",

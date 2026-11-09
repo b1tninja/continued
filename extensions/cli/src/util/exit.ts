@@ -5,6 +5,7 @@ import { getSessionUsage } from "../session.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 
 import { formatCacheTally } from "./cacheTally.js";
+import { fieldFallbackLines } from "./fieldFallbackLines.js";
 import { hadUnhandledError } from "./errorState.js";
 import { getGitDiffSnapshot } from "./git.js";
 import { logger } from "./logger.js";
@@ -184,6 +185,12 @@ function displaySessionUsage(): void {
     if (cacheLine) {
       logger.info("");
       logger.info(cacheLine);
+    }
+    // Request fields a model refused and the run went on without.
+    const fallbackLines = fieldFallbackLines();
+    if (fallbackLines.length > 0) {
+      logger.info("");
+      for (const line of fallbackLines) logger.info(line);
     }
     logger.info("=".repeat(60) + "\n");
   } catch (err) {

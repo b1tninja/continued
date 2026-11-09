@@ -193,6 +193,10 @@ Prompt caching is not supported in JSON configuration files, so use the YAML syn
 
 The cache lifetime is chosen from the chat toolbar, and 1 hour is available only for some Claude models; Nova takes 5 minutes only. See [Prompt Caching](../../deep-dives/prompt-caching.mdx).
 
+## When Bedrock refuses a request field
+
+Some models refuse an optional field: Qwen, the newer Mistral models and gpt-oss refuse `stopSequences`, and GPT, Grok and some Nova requests refuse a `cachePoint`. Continuous knows the documented cases up front and never sends those fields to such models. If a model still refuses one of these two fields, the request is sent once more without it, the model is remembered for the rest of the run, and the `cn` command line says so once and lists it in its exit summary, with the config change that makes it permanent: `defaultCompletionOptions.promptCaching: false` for cache points, or removing `stop` from the model's options. Fields that change the answer, such as tools or the system prompt, are never dropped this way. Nothing is remembered across runs; put the setting in `config.yaml` to make it stick.
+
 ## Authentication
 
 ### Bedrock API key

@@ -253,6 +253,16 @@ Bedrock has no server-side conversation to branch from; a fork is a resend of th
 
 Two things the pin does not solve, both on the roadmap: branches sent at the same instant each write (AWS: a request sent before an identical one has started its response writes a new entry), so a fan-out should wait for the first response to start (C51); and the per-process marker on the first user message keeps separate `cn` processes from sharing a cache at all (C52).
 
+## When a provider refuses a request field (2026-11-08)
+
+The code had three unrelated behaviours: cache points were decided from a table and never probed; core's Bedrock provider resent once without `stopSequences` on the refusal text and remembered the model in memory, silently, and the adapter did not; access, TLS and Mantle errors stopped with a hint. Now one policy, roadmap C58:
+
+1. **Documented first.** A capability the vendor documents is read from `PROMPT_CACHE_RULES` before the request is built. No request is sent to find out: a probe costs money and a rate-limit slot, and answers for one model in one region on one day.
+2. **One resend, cost-only fields, process memory.** `bedrockRefusedField` (in `@continuedev/llm-info`, `providerErrors.ts`) reads Bedrock's validation texts seen live ("doesn't support the stopSequences/cachePoint field", "extraneous key [cachePoint]", "does not allow prompt caching"). When the request carries that field, the adapter and core's provider send once more without it (`converseRequestWithoutField`) and remember the model for the rest of the process, so later requests leave it out up front. Only fields whose removal changes cost: stop sequences and cache points. A refusal of anything that changes the answer, and any 5xx or throttle, is thrown as before.
+3. **Tell the user once, offer the config.** The adapter records each fallback (`fieldFallbacks`, `onFieldFallback`); the CLI logs one warning when it happens and lists them in the exit summary, each with the config line that makes it permanent (`promptCaching: false`, or removing `stop`). Nothing is persisted by the app: a saved refusal would outlive the day the provider adds support and could pin a transient error as a fact. The user's config line is the durable form.
+
+Not done: the chat window shows nothing when core falls back (C59); other adapters have no refusal texts recorded yet (C60).
+
 ## Sources, read 2026-11-04
 
 What the vendors' own documentation says about each finding. Quotes are from the pages named. The AWS

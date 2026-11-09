@@ -41,11 +41,18 @@ import {
   normalizeToolUseIds,
 } from "./bedrockHelpers.js";
 import {
+  bedrockRefusedField,
+  converseRequestHasField,
+  converseRequestWithoutField,
+} from "@continuedev/llm-info";
+
+import {
   AutoCacheTtl,
   isCachePinned,
   optsOutOfPromptCache,
   requestedCacheTtl,
 } from "./cacheTtl.js";
+import { recordFieldFallback, refusedFields } from "./fieldFallbacks.js";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import {
   createAgentForUrl,
@@ -696,15 +703,41 @@ export class BedrockApi implements BaseLlmApi {
     body: ChatCompletionCreateParamsStreaming,
     signal: AbortSignal,
   ): AsyncGenerator<ChatCompletionChunk> {
-    const requestBody = this._convertBody(body);
+    let requestBody = this._convertBody(body);
+    // Fields this model refused earlier in the process are left out up front.
+    const modelKey = requestBody.modelId ?? body.model;
+    for (const field of refusedFields(modelKey)) {
+      requestBody = converseRequestWithoutField(requestBody, field);
+    }
 
     try {
-      const command = new ConverseStreamCommand({
-        ...requestBody,
-      });
-
       const client = await this.getClient();
-      const response = await client.send(command, { abortSignal: signal });
+      const send = () =>
+        client.send(new ConverseStreamCommand({ ...requestBody }), {
+          abortSignal: signal,
+        });
+      let response;
+      try {
+        response = await send();
+      } catch (error) {
+        // The request-field policy (plans/ROADMAP.md C58): a validation error
+        // that names an optional field the request carries, one that changes
+        // cost and not the answer, is answered by sending once more without
+        // it, remembering the model for this process, and telling the client.
+        const field = bedrockRefusedField(error);
+        if (!field || !converseRequestHasField(requestBody, field)) {
+          throw error;
+        }
+        recordFieldFallback({
+          provider: "bedrock",
+          model: modelKey,
+          field,
+          error: error instanceof Error ? error.message : String(error),
+          at: Date.now(),
+        });
+        requestBody = converseRequestWithoutField(requestBody, field);
+        response = await send();
+      }
 
       if (!response?.stream) {
         throw new Error("No stream received from Bedrock API");
