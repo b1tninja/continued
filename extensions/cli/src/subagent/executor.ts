@@ -70,7 +70,10 @@ export interface SubAgentResult {
 export const MAX_SUBAGENT_STOP_CONTINUATIONS = 8;
 
 /**
- * Build system message for the agent
+ * Build system message for the agent: the mode's turn text for the
+ * `subagent` use (the text the model id decides, not the prompt `modeModels`
+ * gives the parent's mode or a running Loop item), then the definition's own
+ * prompt.
  */
 async function buildAgentSystemMessage(
   agent: ModelServiceState,
@@ -79,6 +82,7 @@ async function buildAgentSystemMessage(
   const baseMessage = services.systemMessage
     ? await services.systemMessage.getSystemMessage(
         services.toolPermissions.getState().currentMode,
+        "subagent",
       )
     : "";
 
@@ -359,8 +363,10 @@ async function runSubAgent(
           callbacks,
           false, // Not compacting
           // Auto-compaction still runs within the sub-agent's budget, but
-          // the child history must not overwrite the parent session
-          { persistSession: false },
+          // the child history must not overwrite the parent session. The
+          // requests are the subagent's use, not the parent turn's (a Loop
+          // item's prompt and tail would otherwise reach it).
+          { persistSession: false, use: "subagent" },
         );
         if (signal.aborted) break;
 

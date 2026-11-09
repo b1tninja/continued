@@ -216,6 +216,25 @@ describe("prompt per use", () => {
     });
   });
 
+  it("keeps the tail as written, a boolean as on or off, and an entry with only a tail", () => {
+    const { modeModels, errors } = resolveModeModels(
+      {
+        agent: { model: "Sonnet", tail: "on" },
+        loop: { tail: false },
+        replan: { model: "Opus", tail: "Plan, then present it." },
+        reviewer: { model: "Haiku", tail: "on" } as any,
+      },
+      chat,
+    );
+    expect(errors).toEqual([]);
+    expect(modeModels).toEqual({
+      agent: { title: "Sonnet", tail: "on" },
+      loop: { tail: "off" },
+      replan: { title: "Opus", tail: "Plan, then present it." },
+      reviewer: { title: "Haiku" },
+    });
+  });
+
   it("an entry may choose only a prompt", () => {
     const { modeModels } = resolveModeModels(
       { loop: { prompt: "short" } },

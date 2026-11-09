@@ -111,6 +111,17 @@ export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 export const promptChoiceSchema = z.string().min(1);
 
 /**
+ * The one-line reminder appended to every user message of a request
+ * (`modeModels.<use>.tail`): `on` for the built-in line of the use's turn
+ * kind, `off`, or a short text of your own. It rides on the user messages,
+ * the same line each time, so that the system prompt stays cached and each
+ * request extends the one before. Booleans are the same setting as written
+ * by a YAML 1.1 parser.
+ */
+export const turnTailSchema = z.union([z.boolean(), z.string().min(1)]);
+export type TurnTail = z.infer<typeof turnTailSchema>;
+
+/**
  * Model (by its `name` in `models:`) to use in a chat mode, plus an optional
  * reasoning effort and system prompt for that mode.
  */
@@ -125,14 +136,16 @@ export const modeModelSchema = z
     models: z.array(z.string()).optional(),
     reasoningEffort: reasoningEffortSchema.optional(),
     prompt: promptChoiceSchema.optional(),
+    tail: turnTailSchema.optional(),
   })
   .refine(
     (m) =>
       m.model !== undefined ||
       (m.models?.length ?? 0) > 0 ||
-      m.prompt !== undefined,
+      m.prompt !== undefined ||
+      m.tail !== undefined,
     {
-      message: "Set `model`, a non-empty `models` list, or `prompt`",
+      message: "Set `model`, a non-empty `models` list, `prompt` or `tail`",
     },
   );
 export type ModeModel = z.infer<typeof modeModelSchema>;
@@ -148,18 +161,24 @@ export const useModelSchema = z.object({
 export type UseModel = z.infer<typeof useModelSchema>;
 
 /**
- * A turn use (Loop items, re-plans): a model and, or, a system prompt. The
- * model may be left out when only the prompt differs from the fallback.
+ * A turn use (Loop items, re-plans): a model and, or, a system prompt and a
+ * tail. The model may be left out when only the prompt or the tail differs
+ * from the fallback.
  */
 export const turnUseModelSchema = z
   .object({
     model: z.string().min(1).optional(),
     reasoningEffort: reasoningEffortSchema.optional(),
     prompt: promptChoiceSchema.optional(),
+    tail: turnTailSchema.optional(),
   })
-  .refine((m) => m.model !== undefined || m.prompt !== undefined, {
-    message: "Set `model`, `prompt`, or both",
-  });
+  .refine(
+    (m) =>
+      m.model !== undefined || m.prompt !== undefined || m.tail !== undefined,
+    {
+      message: "Set `model`, `prompt`, `tail`, or several of them",
+    },
+  );
 export type TurnUseModel = z.infer<typeof turnUseModelSchema>;
 
 /**

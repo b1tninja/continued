@@ -108,99 +108,104 @@ export async function runReviewWorker(): Promise<void> {
 
   process.on("message", async (msg: { type: string; config: WorkerConfig }) => {
     if (msg.type !== "run-review") return;
-
-    const { config } = msg;
-    const startTime = Date.now();
-
-    try {
-      // Change working directory to the worktree
-      process.chdir(config.worktreePath);
-
-      // Initialize services in auto mode (full tool access)
-      await initializeServices({
-        options: {
-          config: config.options.config,
-          org: config.options.org,
-          rule: config.options.rule,
-        },
-        headless: true,
-        toolPermissionOverrides: {
-          mode: "auto",
-        },
-      });
-
-      // Get model service
-      const modelState = await getService<ModelServiceState>(
-        SERVICE_NAMES.MODEL,
-      );
-
-      if (!modelState.model || !modelState.llmApi) {
-        throw new Error("Failed to initialize model service");
-      }
-
-      // Build the review prompt
-      const reviewPrompt = buildReviewPrompt(config.diffContext);
-
-      // Load agent-specific instructions if it's a local file
-      let agentInstructions = "";
-      if (
-        config.agentSource.endsWith(".md") &&
-        fs.existsSync(config.agentSource)
-      ) {
-        agentInstructions = loadLocalAgentInstructions(config.agentSource);
-      }
-
-      // Build the user prompt parts and add to ChatHistoryService
-      // so streamChatResponse picks them up via refreshChatHistoryFromService
-      const chatHistorySvc = services.chatHistory;
-
-      const promptParts: string[] = [];
-      if (agentInstructions) {
-        promptParts.push(`## Agent Instructions\n\n${agentInstructions}`);
-      }
-      promptParts.push(reviewPrompt);
-
-      const userMessage = promptParts.join("\n\n");
-      chatHistorySvc.addUserMessage(userMessage);
-
-      const chatHistory = chatHistorySvc.getHistory();
-
-      // Collect agent text output
-      let agentOutput = "";
-
-      // Run the agent
-      const abortController = new AbortController();
-      const response = await streamChatResponse(
-        chatHistory,
-        modelState.model,
-        modelState.llmApi,
-        abortController,
-      );
-
-      agentOutput = response || "";
-
-      // Capture the diff of changes the agent made
-      const patch = captureWorktreeDiff(config.worktreePath);
-
-      const result: WorkerResult = {
-        patch,
-        agentOutput,
-        duration: (Date.now() - startTime) / 1000,
-      };
-
-      process.send!({ type: "result", result });
-    } catch (e: any) {
-      const result: WorkerResult = {
-        patch: "",
-        agentOutput: "",
-        duration: (Date.now() - startTime) / 1000,
-        error: e.message || String(e),
-      };
-
-      process.send!({ type: "result", result });
-    }
+    const result = await runReview(msg.config);
+    process.send!({ type: "result", result });
   });
 
   // Signal ready
   process.send!({ type: "ready" });
+}
+
+/**
+ * One review: the services in the worktree, the agent's request, and the
+ * diff it left. The request is made as the `reviewer` use, not the session's
+ * (`agent`, the mode's): the review prompt is fixed, and the agent entry's
+ * `tail`, or the short profile's default tail for a small model id, would
+ * otherwise be appended to it. The reviewer use never gets a tail or a
+ * prompt choice (core/llm/prompts/usePrompts.ts).
+ */
+export async function runReview(config: WorkerConfig): Promise<WorkerResult> {
+  const startTime = Date.now();
+  const duration = () => (Date.now() - startTime) / 1000;
+
+  try {
+    // Change working directory to the worktree
+    process.chdir(config.worktreePath);
+
+    // Initialize services in auto mode (full tool access)
+    await initializeServices({
+      options: {
+        config: config.options.config,
+        org: config.options.org,
+        rule: config.options.rule,
+      },
+      headless: true,
+      toolPermissionOverrides: {
+        mode: "auto",
+      },
+    });
+
+    // Get model service
+    const modelState = await getService<ModelServiceState>(SERVICE_NAMES.MODEL);
+
+    if (!modelState.model || !modelState.llmApi) {
+      throw new Error("Failed to initialize model service");
+    }
+
+    // Build the review prompt
+    const reviewPrompt = buildReviewPrompt(config.diffContext);
+
+    // Load agent-specific instructions if it's a local file
+    let agentInstructions = "";
+    if (
+      config.agentSource.endsWith(".md") &&
+      fs.existsSync(config.agentSource)
+    ) {
+      agentInstructions = loadLocalAgentInstructions(config.agentSource);
+    }
+
+    // Build the user prompt parts and add to ChatHistoryService
+    // so streamChatResponse picks them up via refreshChatHistoryFromService
+    const chatHistorySvc = services.chatHistory;
+
+    const promptParts: string[] = [];
+    if (agentInstructions) {
+      promptParts.push(`## Agent Instructions\n\n${agentInstructions}`);
+    }
+    promptParts.push(reviewPrompt);
+
+    const userMessage = promptParts.join("\n\n");
+    chatHistorySvc.addUserMessage(userMessage);
+
+    const chatHistory = chatHistorySvc.getHistory();
+
+    // Collect agent text output
+    let agentOutput = "";
+
+    // Run the agent
+    const abortController = new AbortController();
+    const response = await streamChatResponse(
+      chatHistory,
+      modelState.model,
+      modelState.llmApi,
+      abortController,
+      undefined,
+      false,
+      { use: "reviewer" },
+    );
+
+    agentOutput = response || "";
+
+    // Capture the diff of changes the agent made
+    const patch = captureWorktreeDiff(config.worktreePath);
+
+    return { patch, agentOutput, duration: duration() };
+  } catch (e: any) {
+    return {
+      patch: "",
+      agentOutput: "",
+      duration: duration(),
+      error: e.message || String(e),
+    };
+  }
 }

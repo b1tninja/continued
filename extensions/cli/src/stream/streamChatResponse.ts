@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
-import type { ChatHistoryItem } from "core/index.js";
+import type { ChatHistoryItem, ModelUse } from "core/index.js";
 import {
   ACT_TURN_NUDGE,
   announcesNextStep,
@@ -173,6 +173,12 @@ interface ProcessStreamingResponseOptions {
   tools?: ChatCompletionTool[];
   systemMessage: string;
   isCompacting?: boolean; // also: compaction gets no Loop mode plan block
+  /**
+   * The use's tail (`modeModels.<use>.tail`), appended to every user message
+   * of this request, the same line each time, so the system message is
+   * unchanged and each request extends the one before it.
+   */
+  turnTail?: string;
 }
 
 /** Bedrock's request ID or the provider's response ID, from the first chunk that has one. */
@@ -309,6 +315,7 @@ export async function processStreamingResponse(
     tools,
     systemMessage,
     isCompacting = false,
+    turnTail,
   } = options;
 
   // The request carries one system message, the current `systemMessage`.
@@ -327,10 +334,19 @@ export async function processStreamingResponse(
 
   // Validate context length INCLUDING system message and tools
   // The task list block is counted with the system message: it is sent with
-  // every request and is never pruned.
-  const fixedText = taskListBlock
-    ? `${systemMessage}\n${taskListBlock}`
-    : systemMessage;
+  // every request and is never pruned. The tail goes on every user message,
+  // so it is counted once per user message of the unpruned history (a
+  // pruned history has fewer, so the count errs on the long side).
+  const userMessages = chatHistory.filter(
+    (item) => item.message.role === "user",
+  ).length;
+  const fixedText = [
+    systemMessage,
+    ...(turnTail ? Array<string>(userMessages).fill(turnTail) : []),
+    taskListBlock,
+  ]
+    .filter(Boolean)
+    .join("\n");
   let validation = validateContextLength({
     chatHistory,
     model,
@@ -361,8 +377,9 @@ export async function processStreamingResponse(
     throw new Error(`Context length validation failed: ${validation.error}`);
   }
 
-  // The request: system message, validated history, task list block last
-  // (see buildChatRequestBody for why the order matters to the prompt cache).
+  // The request: system message, validated history with the environment
+  // block and the use's tail on the user messages, task list block last (see
+  // buildChatRequestBody for why the order matters to the prompt cache).
   const requestBody = buildChatRequestBody({
     model,
     chatHistory,
@@ -370,6 +387,7 @@ export async function processStreamingResponse(
     tools,
     taskListBlock,
     isCompacting,
+    turnTail,
   });
   const requestStartTime = Date.now();
 
@@ -551,6 +569,33 @@ export interface StreamChatResponseOptions {
    * session. False for sub-agents, whose child history is not the session's.
    */
   persistSession?: boolean;
+  /**
+   * The use the requests are made for, when it is not the session's
+   * (currentModelUse: a running Loop item or re-plan, else the permission
+   * mode's). A subagent's run passes `subagent`: its requests then take the
+   * subagent's prompt and no tail, whatever the parent turn is doing.
+   */
+  use?: ModelUse;
+}
+
+/**
+ * The system message for this request and the use's tail for its newest user
+ * message. A compaction's request gets no tail; test doubles of the service
+ * may not have the method.
+ */
+async function turnTextsForRequest(
+  isCompacting: boolean,
+  fixedUse?: ModelUse,
+): Promise<{ systemMessage: string; turnTail: string | undefined }> {
+  const use = fixedUse ?? currentModelUse();
+  const systemMessage = await services.systemMessage.getSystemMessage(
+    services.toolPermissions.getState().currentMode,
+    use,
+  );
+  const turnTail = isCompacting
+    ? undefined
+    : services.systemMessage.turnTail?.(use);
+  return { systemMessage, turnTail };
 }
 
 // Main function that handles the conversation loop
@@ -564,11 +609,12 @@ export async function streamChatResponse(
   isCompacting = false,
   options: StreamChatResponseOptions = {},
 ) {
-  const { persistSession = true } = options;
+  const { persistSession = true, use: fixedUse } = options;
   logger.debug("streamChatResponse called", {
     model,
     historyLength: chatHistory.length,
     hasCallbacks: !!callbacks,
+    use: fixedUse,
   });
 
   const isHeadless = services.toolPermissions.isHeadless();
@@ -586,11 +632,13 @@ export async function streamChatResponse(
     chatHistory = refreshChatHistoryFromService(chatHistory, isCompacting);
     logger.debug("Starting conversation iteration");
 
-    // Get system message once per iteration (can change based on tool
-    // permissions mode, and a Loop turn has a use of its own)
-    const systemMessage = await services.systemMessage.getSystemMessage(
-      services.toolPermissions.getState().currentMode,
-      currentModelUse(),
+    // The system message and the use's tail, once per iteration (both can
+    // change with the permission mode, and a Loop turn has a use of its own);
+    // a caller with a use of its own (a subagent's run, the review worker)
+    // keeps it
+    const { systemMessage, turnTail } = await turnTextsForRequest(
+      isCompacting,
+      fixedUse,
     );
 
     // Recompute tools on each iteration to handle mode changes during streaming
@@ -633,6 +681,7 @@ export async function streamChatResponse(
         tools,
         systemMessage,
         isCompacting,
+        turnTail,
       }).finally(() => callbacks?.onModelStreaming?.(false));
 
     if (abortController?.signal.aborted) {
