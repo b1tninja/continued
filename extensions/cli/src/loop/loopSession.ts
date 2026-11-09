@@ -7,6 +7,7 @@ import type {
   LoopQuestion,
   LoopState,
   LoopStrategy,
+  ModelUse,
   TaskPlan,
 } from "core/index.js";
 import {
@@ -31,10 +32,16 @@ import {
   type LoopControlResult,
 } from "core/util/loopMode.js";
 import { createHistoryItem } from "core/util/messageConversion.js";
+import { useForLoopTurn } from "core/util/modelUse.js";
 
 import { isAutoReviewEnabled } from "../permissions/coreRules.js";
 import type { PermissionMode } from "../permissions/types.js";
-import { serviceContainer, services } from "../services/index.js";
+import {
+  applyModelForLoopTurn,
+  applyModelNamed,
+  serviceContainer,
+  services,
+} from "../services/index.js";
 import { SERVICE_NAMES } from "../services/types.js";
 import {
   getSessionLoop,
@@ -68,7 +75,11 @@ export function commitLoop(loop: LoopState | undefined): void {
     const synced = taskPlanWithLoop(plan, loop);
     if (synced !== plan) updateSessionTaskPlan(synced);
   }
-  if (wasActive && !isActiveLoop(loop)) afterLoopEnded();
+  if (wasActive && !isActiveLoop(loop)) {
+    afterLoopEnded();
+    // An item's own model was selected when the loop ended: come back
+    if (loop?.modelBefore) void applyModelNamed(loop.modelBefore);
+  }
 }
 
 function isActiveLoop(loop: LoopState | undefined): boolean {
@@ -223,7 +234,11 @@ export function planFilePath(uri = getSessionPlanFile()): string | undefined {
 
 let modeBeforeReplan: PermissionMode | undefined;
 
-/** An item runs in the mode the person works in, never in Plan mode. */
+/**
+ * An item runs in the mode the person works in, never in Plan mode. Its model
+ * (`modeModels.loop`, else the agent model) is switched where the turn is
+ * sent: prepareLoopTurn.
+ */
 export function enterItemMode(): void {
   const permissions = services.toolPermissions;
   if (permissions.getCurrentMode() === "plan") {
@@ -239,6 +254,35 @@ export function enterReplanMode(): void {
   if (mode !== "plan") {
     modeBeforeReplan = mode;
     permissions.switchMode("plan");
+  }
+}
+
+/**
+ * Before a Loop turn is sent: switch to the model `modeModels` gives it
+ * (`loop` for an item, `replan` otherwise, falling back to the agent and plan
+ * entries), or to the item's own model when its to-do names one
+ * (TaskItem.model; a name that is not configured falls back to the loop
+ * model). Without an entry for the use, the other turns come back to the
+ * model an own model switched away from (LoopState.modelBefore). Awaited, so
+ * the turn goes to that model and not the one before.
+ */
+export async function prepareLoopTurn(turn: {
+  kind: "item" | "replan";
+  /** The item that runs, whose to-do may name its model */
+  itemId?: string;
+}): Promise<void> {
+  const itemModel =
+    turn.kind === "item" && turn.itemId
+      ? getSessionTaskPlan()?.items.find((i) => i.id === turn.itemId)?.model
+      : undefined;
+  const modelBefore = await applyModelForLoopTurn(
+    useForLoopTurn(turn.kind),
+    itemModel,
+    getSessionLoop()?.modelBefore,
+  );
+  const loop = getSessionLoop();
+  if (loop && loop.modelBefore !== modelBefore) {
+    updateSessionLoop({ ...loop, modelBefore });
   }
 }
 
@@ -368,8 +412,7 @@ export function answerLoopQuestion(
   input: LoopAnswerInput,
   now = new Date(),
 ):
-  | { ok: true; route: string; answerId: string }
-  | { ok: false; error: string } {
+  { ok: true; route: string; answerId: string } | { ok: false; error: string } {
   const loop = getSessionLoop();
   if (!loop) return { ok: false, error: "No loop is running" };
   const result = answerLoop(loop, input, now);
@@ -527,6 +570,19 @@ export function loopRequestHistory(
 /** Whether the loop is running an item or a re-plan in the main session. */
 export function loopRunGoing(): boolean {
   return !!getSessionLoop()?.current;
+}
+
+/**
+ * What the next request is for, as `modeModels` keys it: a Loop item or
+ * re-plan while one runs, else the permission mode's use (Plan plans, the
+ * others act).
+ */
+export function currentModelUse(): ModelUse {
+  const current = getSessionLoop()?.current;
+  if (current) return useForLoopTurn(current.kind);
+  // Read as the stream does (getState), which test doubles provide
+  const mode = services.toolPermissions.getState?.()?.currentMode;
+  return mode === "plan" ? "plan" : "agent";
 }
 
 /** Whether the loop is running an item in the main session. */

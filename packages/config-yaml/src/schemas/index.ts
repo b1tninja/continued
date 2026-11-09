@@ -104,8 +104,15 @@ export const reasoningEffortSchema = z.enum(["off", "low", "medium", "high"]);
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 
 /**
+ * Which system prompt a use gets: `full` or `short` (the two built-in turn
+ * texts; by default the model's id decides, short for small models), or the
+ * name of a prompt block in `prompts:`, whose text replaces the turn text.
+ */
+export const promptChoiceSchema = z.string().min(1);
+
+/**
  * Model (by its `name` in `models:`) to use in a chat mode, plus an optional
- * reasoning effort for that mode.
+ * reasoning effort and system prompt for that mode.
  */
 export const modeModelSchema = z
   .object({
@@ -117,17 +124,62 @@ export const modeModelSchema = z
      */
     models: z.array(z.string()).optional(),
     reasoningEffort: reasoningEffortSchema.optional(),
+    prompt: promptChoiceSchema.optional(),
   })
-  .refine((m) => m.model !== undefined || (m.models?.length ?? 0) > 0, {
-    message: "Set `model`, or a non-empty `models` list",
-  });
+  .refine(
+    (m) =>
+      m.model !== undefined ||
+      (m.models?.length ?? 0) > 0 ||
+      m.prompt !== undefined,
+    {
+      message: "Set `model`, a non-empty `models` list, or `prompt`",
+    },
+  );
 export type ModeModel = z.infer<typeof modeModelSchema>;
 
-/** Per-mode model selection. Modes without an entry keep the current model. */
+/**
+ * Model (by its `name` in `models:`) for a use that has no picker of its own:
+ * loop items, re-plans, the reviewer, subagents. One model, no list.
+ */
+export const useModelSchema = z.object({
+  model: z.string().min(1),
+  reasoningEffort: reasoningEffortSchema.optional(),
+});
+export type UseModel = z.infer<typeof useModelSchema>;
+
+/**
+ * A turn use (Loop items, re-plans): a model and, or, a system prompt. The
+ * model may be left out when only the prompt differs from the fallback.
+ */
+export const turnUseModelSchema = z
+  .object({
+    model: z.string().min(1).optional(),
+    reasoningEffort: reasoningEffortSchema.optional(),
+    prompt: promptChoiceSchema.optional(),
+  })
+  .refine((m) => m.model !== undefined || m.prompt !== undefined, {
+    message: "Set `model`, `prompt`, or both",
+  });
+export type TurnUseModel = z.infer<typeof turnUseModelSchema>;
+
+/**
+ * Which model does what. Modes without an entry keep the current model;
+ * `loop` falls back to `agent`, `replan` to `plan`, `subagent` to the chat
+ * model of the turn that started it, and `reviewer` to the model selected
+ * for the reviewer role.
+ */
 export const modeModelsSchema = z.object({
   chat: modeModelSchema.optional(),
   agent: modeModelSchema.optional(),
   plan: modeModelSchema.optional(),
+  /** Loop item turns. */
+  loop: turnUseModelSchema.optional(),
+  /** Loop re-plans, check-ins and repairs. */
+  replan: turnUseModelSchema.optional(),
+  /** The Auto reviewer. Any model, whatever its roles. */
+  reviewer: useModelSchema.optional(),
+  /** Subagents whose definition does not name a model. */
+  subagent: useModelSchema.optional(),
 });
 export type ModeModels = z.infer<typeof modeModelsSchema>;
 
@@ -139,6 +191,10 @@ export const rulesByModeSchema = z.object({
   chat: z.boolean().optional(),
   agent: z.boolean().optional(),
   plan: z.boolean().optional(),
+  /** Loop item turns; left out, they follow `agent`. */
+  loop: z.boolean().optional(),
+  /** Loop re-plans; left out, they follow `plan`. */
+  replan: z.boolean().optional(),
 });
 export type RulesByMode = z.infer<typeof rulesByModeSchema>;
 

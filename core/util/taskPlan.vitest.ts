@@ -154,6 +154,13 @@ describe("formatTaskPlanBlock", () => {
     ]);
     const lines = formatTaskPlanBlock(p).split("\n");
     expect(lines[0]).toBe(TASK_LIST_BLOCK_OPEN);
+    // Says what the block is before saying how to change it, so the list is
+    // not read as an instruction to resend it
+    expect(lines[1]).toMatch(
+      /^This is your saved task list; it is shown with every request\./,
+    );
+    expect(lines[1]).toContain("never to resend it unchanged");
+    expect(lines[1]).toContain("Markers: [ ] pending");
     expect(lines.slice(2)).toEqual([
       "[x] 1. a",
       "[>] 2. b",
@@ -252,6 +259,31 @@ describe("parseMarkdownChecklist", () => {
       { text: "three", status: "in_progress" },
       { text: "four", status: "blocked" },
       { text: "five", status: "cancelled" },
+    ]);
+  });
+
+  it("gives indented after:, check: and model: lines to the item above", () => {
+    expect(
+      parseMarkdownChecklist(
+        [
+          "- [ ] one",
+          "  after: 2",
+          "  check: npm test",
+          "  model: Claude Opus",
+          "- [ ] two",
+          "\tmodel: fast",
+          "model: not indented",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      {
+        text: "one",
+        status: "pending",
+        after: "2",
+        check: "npm test",
+        model: "Claude Opus",
+      },
+      { text: "two", status: "pending", model: "fast" },
     ]);
   });
 });

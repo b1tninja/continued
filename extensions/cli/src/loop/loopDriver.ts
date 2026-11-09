@@ -30,8 +30,9 @@ import {
   parsePlanFile,
   PRESENT_PLAN_CLI_TOOL_NAME,
 } from "core/util/planFile.js";
+import { finishItemNudge, presentPlanNudge } from "core/util/turnEnd.js";
 
-import { services } from "../services/index.js";
+import { loopItemModelRecord, services } from "../services/index.js";
 import { getSessionLoop, getSessionTaskPlan } from "../session.js";
 import { logger } from "../util/logger.js";
 
@@ -48,6 +49,7 @@ import {
   planFileDisplayPath,
   planFilePath,
   sessionTokens,
+  prepareLoopTurn,
 } from "./loopSession.js";
 
 /**
@@ -61,6 +63,8 @@ export interface LoopTurn {
   kind: "item" | "replan";
   /** The user message to send; it starts the run's fresh context */
   prompt: string;
+  /** An item turn: the item that runs (its to-do may name its model) */
+  itemId?: string;
 }
 
 /** What the loop does next: a model turn to send, or an item's check to run. */
@@ -96,9 +100,34 @@ function planTitle(): string | undefined {
   }
 }
 
-/** Records the end of the run that was going: its report, or a re-plan's plan. */
-function finishRun(loop: LoopState): LoopState | "accepted" | "awaiting" {
+/**
+ * A run that ended without what ends it (finish_item's report, a re-plan's
+ * plan) is told once to call the tool, in the same run; only a second such
+ * end counts. Returns the nudge turn, or undefined when the run was nudged
+ * already (core/util/turnEnd.ts).
+ */
+function nudgeRun(loop: LoopState, prompt: string): LoopTurn | undefined {
+  const current = loop.current;
+  if (!current || current.nudged) return undefined;
+  commitLoop({ ...loop, current: { ...current, nudged: true } });
+  return { kind: current.kind === "replan" ? "replan" : "item", prompt };
+}
+
+/**
+ * Records the end of the run that was going: its report, or a re-plan's
+ * plan. A LoopTurn means the run is not over: it is being told to report.
+ */
+function finishRun(
+  loop: LoopState,
+): LoopState | LoopTurn | "accepted" | "awaiting" {
   if (loop.current?.kind === "item") {
+    if (!loop.current.report) {
+      const nudge = nudgeRun(
+        loop,
+        finishItemNudge(CLI_LOOP_TOOL_NAMES.finishItem),
+      );
+      if (nudge) return nudge;
+    }
     const pending = new Set(pendingSteerIds());
     dropPendingSteers();
     const delivered = loop.answers
@@ -118,6 +147,13 @@ function finishRun(loop: LoopState): LoopState | "accepted" | "awaiting" {
   }
   if (loop.current?.kind === "replan") {
     if (!presentedSince(loop.current.historyIndex)) {
+      // One nudge first: a small model wrote the PresentPlan call as text
+      // once in six runs, and one text reply must not end the whole loop
+      const nudge = nudgeRun(
+        loop,
+        presentPlanNudge(CLI_LOOP_TOOL_NAMES.presentPlan),
+      );
+      if (nudge) return nudge;
       commitLoop(
         stopLoop(
           loop,
@@ -162,6 +198,8 @@ export function nextLoopTurn(
       const finished = finishRun(loop);
       if (finished === "awaiting") return undefined;
       if (finished === "accepted") continue;
+      // The run is not over: it is being told to call its finishing tool
+      if ("prompt" in finished) return finished;
       loop = finished;
     }
 
@@ -240,10 +278,15 @@ export function nextLoopTurn(
           loop,
           answers.map((a) => a.id),
         );
-        loop = startItemRun(loop, action.itemId, historyLength, now);
+        // The to-do's own model (TaskItem.model) wins over modeModels.loop;
+        // one that is not configured falls back to it, noted on the run.
+        // prepareLoopTurn makes the switch before the turn is sent.
+        loop = startItemRun(loop, action.itemId, historyLength, now, {
+          model: loopItemModelRecord(item.model),
+        });
         enterItemMode();
         commitLoop(loop);
-        return { kind: "item", prompt };
+        return { kind: "item", prompt, itemId: action.itemId };
       }
       case "replan": {
         // A round's re-plan, a check-in, or a repair of one failed item
@@ -324,8 +367,12 @@ export class LoopRunner {
       while (!this.disposed && this.host.isIdle()) {
         const step = nextLoopTurn(this.host.historyLength());
         if (!step) break;
-        if (step.kind === "check") await runLoopCheck(step);
-        else await this.host.send(step);
+        if (step.kind === "check") {
+          await runLoopCheck(step);
+        } else {
+          await prepareLoopTurn(step);
+          await this.host.send(step);
+        }
       }
     } catch (error) {
       logger.error("Loop step failed", { error });

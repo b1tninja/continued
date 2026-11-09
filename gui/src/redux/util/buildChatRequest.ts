@@ -1,7 +1,8 @@
 import type { LLMFullCompletionOptions, ModelDescription, Tool } from "core";
 import type { ChatMessage, RuleMetadata } from "core";
 import { modelSupportsNativeTools } from "core/llm/toolSupport";
-import { rulesEnabledForMode } from "core/llm/rules/rulesByMode";
+import { promptChoiceFor } from "core/llm/prompts/usePrompts";
+import { rulesEnabledForUse } from "core/llm/rules/rulesByMode";
 import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { SystemMessageToolCodeblocksFramework } from "core/tools/systemMessageTools/toolCodeblocks";
@@ -13,6 +14,7 @@ import {
   reasoningOptionsForEffort,
 } from "../../util/modeModels";
 import { selectActiveTools } from "../selectors/selectActiveTools";
+import { selectModelUse } from "../selectors/selectModelUse";
 import { selectSelectedChatModel } from "../slices/configSlice";
 import type { RootState } from "../store";
 import { constructMessages } from "./constructMessages";
@@ -128,12 +130,14 @@ export function buildChatRequest(
     };
   }
 
-  // An explicit reasoning toggle wins; otherwise use the mode's configured
-  // reasoning effort (`modeModels.<mode>.reasoningEffort`).
+  // An explicit reasoning toggle wins; otherwise use the configured reasoning
+  // effort for what this request is (`modeModels.<use>.reasoningEffort`: the
+  // mode, or a Loop item or re-plan).
+  const use = selectModelUse(state);
   const modeReasoning =
-    state.session.hasReasoningEnabled === undefined
+    state.session.hasReasoningEnabled === undefined && use
       ? reasoningOptionsForEffort(
-          getModeReasoningEffort(state.config.config, state.session.mode),
+          getModeReasoningEffort(state.config.config, use),
         )
       : undefined;
   completionOptions = modeReasoning
@@ -144,11 +148,14 @@ export function buildChatRequest(
         model,
       );
 
-  // Construct messages (excluding system message)
+  // Construct messages (excluding system message). The use's prompt choice
+  // (`modeModels.<use>.prompt`) picks the turn text: a Loop item may run on
+  // the short text while Agent mode keeps the full one.
   const baseSystemMessage = getBaseSystemMessage(
     state.session.mode,
     model,
     activeTools,
+    use ? promptChoiceFor(state.config.config.modeModels, use) : undefined,
   );
 
   const systemMessage = systemToolsFramework
@@ -203,9 +210,10 @@ export function buildChatRequest(
   } = constructMessages(
     withoutMessageIds as any,
     systemMessage,
-    // The per-mode global rules switch (rulesByMode): off for this mode means
-    // no rules are matched at all.
-    rulesEnabledForMode(state.config.config.rulesByMode, state.session.mode)
+    // The per-use global rules switch (rulesByMode): off for this use means
+    // no rules are matched at all. A Loop item follows Agent, a re-plan Plan,
+    // unless given a switch of its own.
+    rulesEnabledForUse(state.config.config.rulesByMode, use)
       ? state.config.config.rules
       : [],
     state.ui.ruleSettings,

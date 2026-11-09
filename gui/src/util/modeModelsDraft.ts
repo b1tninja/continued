@@ -4,8 +4,27 @@ import type {
 } from "core";
 import type { ModeModelsInput } from "core/config/yaml/saveModeModels";
 
-export const TABLE_MODES = ["chat", "plan", "agent"] as const;
+/**
+ * The table's columns: the three modes, which offer a list of models, then
+ * the single-model uses (one star, no list). The reviewer has its own picker
+ * in the Models section and is not here.
+ */
+export const TABLE_MODES = [
+  "chat",
+  "plan",
+  "agent",
+  "loop",
+  "replan",
+  "subagent",
+] as const;
 export type TableMode = (typeof TABLE_MODES)[number];
+
+/** The columns with a model picker, where ticking several models makes sense. */
+export const LIST_MODES: readonly TableMode[] = ["chat", "plan", "agent"];
+
+export function isListMode(mode: TableMode): boolean {
+  return LIST_MODES.includes(mode);
+}
 
 /** What the Models tab shows and edits for one mode. */
 export interface ModeDraft {
@@ -32,16 +51,18 @@ export function draftFromConfig(
   const drafts = {} as ModeDrafts;
   for (const mode of TABLE_MODES) {
     const entry = config.modeModels?.[mode];
+    // An entry may choose only a prompt (`loop: { prompt: short }`): no
+    // model, so nothing is ticked and the table leaves the prompt alone
     const offered = entry?.titles?.length
       ? [...entry.titles]
-      : entry
+      : entry?.title
         ? [entry.title]
         : [];
     drafts[mode] = {
       offered,
       defaultTitle: entry?.title,
       effort: entry?.reasoningEffort,
-      implicitAll: !!entry && !entry.titles?.length,
+      implicitAll: !!entry?.title && !entry.titles?.length,
     };
   }
   return drafts;
@@ -84,6 +105,11 @@ export function toggleOffered(
     defaultTitle:
       draft.defaultTitle === title && !on ? undefined : draft.defaultTitle,
   });
+}
+
+/** A single-model use with nothing chosen: the fallback applies. */
+export function clearDefault(draft: ModeDraft): ModeDraft {
+  return { ...draft, offered: [], defaultTitle: undefined, implicitAll: false };
 }
 
 /** Make a model the mode's default; this also ticks it. */
@@ -142,8 +168,9 @@ export function buildUpdate(
     // One ticked model on a mode that had no list stays a plain `model:`
     // (every model is still offered, as before). More than one, or a mode that
     // already had an explicit list, is written as a list.
+    // A single-model use never has a list.
     const hadExplicitList = before.offered.length > 0 && !before.implicitAll;
-    if (after.offered.length > 1 || hadExplicitList) {
+    if (isListMode(mode) && (after.offered.length > 1 || hadExplicitList)) {
       change.models = after.offered;
     }
     if (after.effort !== before.effort) {

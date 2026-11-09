@@ -84,3 +84,49 @@ test("getBaseSystemMessage should append no-tools warning for agent/plan modes w
     "Custom Plan System Message" + NO_TOOL_WARNING,
   );
 });
+
+test("getBaseSystemMessage picks the turn text by the model's prompt profile", () => {
+  const qwen = { model: "qwen.qwen3-coder-30b-a3b-v1:0" } as ModelDescription;
+  const claude = { model: "claude-sonnet-4-6" } as ModelDescription;
+  const tool = {
+    function: { name: "t", description: "", parameters: {} },
+  } as Tool;
+
+  expect(getBaseSystemMessage("agent", qwen, [tool])).toContain(
+    "Keep going until the request is done",
+  );
+  expect(getBaseSystemMessage("plan", qwen, [tool])).toContain(
+    "do not make a task list",
+  );
+  expect(getBaseSystemMessage("agent", claude, [tool])).toBe(
+    DEFAULT_AGENT_SYSTEM_MESSAGE,
+  );
+  expect(getBaseSystemMessage("plan", claude, [tool])).toBe(
+    DEFAULT_PLAN_SYSTEM_MESSAGE,
+  );
+});
+
+test("getBaseSystemMessage follows the use's prompt choice unless the model has its own text", () => {
+  const tool = {
+    function: { name: "t", description: "", parameters: {} },
+  } as Tool;
+  const claude = { model: "claude-sonnet-4-6" } as ModelDescription;
+  const short = getBaseSystemMessage("agent", claude, [tool], {
+    profile: "short",
+  });
+  expect(short).toContain("Keep going until the request is done");
+  expect(short).not.toBe(DEFAULT_AGENT_SYSTEM_MESSAGE);
+  expect(
+    getBaseSystemMessage("agent", claude, [tool], { profile: "full" }),
+  ).toBe(DEFAULT_AGENT_SYSTEM_MESSAGE);
+  expect(
+    getBaseSystemMessage("plan", claude, [tool], { text: "Plan briefly." }),
+  ).toContain("<important_rules>\nPlan briefly.");
+  expect(
+    getBaseSystemMessage("chat", claude, [tool], { text: "Chat briefly." }),
+  ).toBe("Chat briefly.");
+  const own = { ...claude, baseAgentSystemMessage: "Mine" } as ModelDescription;
+  expect(getBaseSystemMessage("agent", own, [tool], { profile: "short" })).toBe(
+    "Mine",
+  );
+});

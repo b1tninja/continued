@@ -146,3 +146,74 @@ describe("a loop item's plan block", () => {
     expect(buildChatRequest(idle).taskListMessage).toBeUndefined();
   });
 });
+
+describe("a loop turn's reasoning effort", () => {
+  const withEffort = (state: RootState, modeModels: any): RootState => ({
+    ...state,
+    config: {
+      ...state.config,
+      config: { ...state.config.config, modeModels },
+    },
+  });
+
+  it("an item takes modeModels.loop's effort, not the mode's", () => {
+    const state = withEffort(stateWith(), {
+      agent: { title: "Claude", reasoningEffort: "high" },
+      loop: { title: "Claude", reasoningEffort: "off" },
+    });
+    expect(buildChatRequest(state).completionOptions).toMatchObject({
+      reasoning: false,
+    });
+  });
+
+  it("falls back to the agent entry when loop sets none", () => {
+    const state = withEffort(stateWith(), {
+      agent: { title: "Claude", reasoningEffort: "low" },
+    });
+    expect(buildChatRequest(state).completionOptions).toMatchObject({
+      reasoning: true,
+      reasoningBudgetTokens: 1024,
+    });
+  });
+});
+
+describe("a loop turn's system prompt and rules", () => {
+  const withConfig = (state: RootState, extra: object): RootState => ({
+    ...state,
+    config: {
+      ...state.config,
+      config: { ...state.config.config, ...extra },
+    },
+  });
+  const systemText = (state: RootState) =>
+    renderChatMessage(
+      buildChatRequest(state).messages.find((m) => m.role === "system")!,
+    );
+
+  it("an item takes modeModels.loop's prompt: the short text here", () => {
+    const state = withConfig(stateWith(), {
+      modeModels: { loop: { title: "Claude", prompt: "short" } },
+    });
+    expect(systemText(state)).toContain("Keep going until the request is done");
+    expect(systemText(stateWith())).toContain("Stopping");
+  });
+
+  it("an item follows the Agent rules switch unless loop has its own", () => {
+    const rule = {
+      name: "house",
+      rule: "Always write tests first.",
+      source: "default-chat",
+      alwaysApply: true,
+    };
+    const off = withConfig(stateWith(), {
+      rules: [rule],
+      rulesByMode: { agent: false },
+    });
+    expect(systemText(off)).not.toContain("Always write tests first.");
+    const on = withConfig(stateWith(), {
+      rules: [rule],
+      rulesByMode: { agent: false, loop: true },
+    });
+    expect(systemText(on)).toContain("Always write tests first.");
+  });
+});

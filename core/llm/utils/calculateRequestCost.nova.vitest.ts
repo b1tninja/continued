@@ -7,18 +7,17 @@ import {
   bedrockRegionalPriceFactor,
   calculateRequestCost,
   findModelPricing,
+  findNovaPricing,
   normalizeNovaModelId,
-  NOVA_PRICING,
 } from "./calculateRequestCost";
 
 /**
- * Amazon Nova on Bedrock, from the Amazon Nova tables of
- * aws.amazon.com/bedrock/pricing (Standard tier, US East (Ohio), read
- * 2026-11-08): Nova 2 Lite $0.30 / $2.50 global and $0.33 / $2.75 geo
- * cross-region and in-region; Nova Pro $0.80 / $3.20, Nova Lite $0.06 / $0.24
- * and Nova Micro $0.035 / $0.14 at one price. Cache reads are 75% below the
- * input price; the page lists no write price, so a write is estimated at the
- * input price.
+ * Amazon Nova on Bedrock, from the AWS Price List API (offer AmazonBedrock,
+ * us-east-1 on-demand, read 2026-11-08): Nova 2 Lite $0.33 / $2.75, Nova Pro
+ * $0.80 / $3.20, Nova Lite $0.06 / $0.24 and Nova Micro $0.035 / $0.14 per
+ * MTok. A cache read is a quarter of the input price and a cache write $0.00
+ * (the written tokens are billed as input). The Price List has no regional
+ * premium for Nova, so a `us.` profile and a bare ID price the same.
  */
 const MTOK = 1_000_000;
 
@@ -45,7 +44,7 @@ describe("normalizeNovaModelId", () => {
     expect(normalizeNovaModelId(id)).toBeUndefined();
   });
 
-  it("prices exactly the models that take cache points", () => {
+  it("names exactly the models that take cache points and have a price", () => {
     for (const id of [
       "amazon.nova-2-lite-v1:0",
       "amazon.nova-pro-v1:0",
@@ -54,64 +53,61 @@ describe("normalizeNovaModelId", () => {
       "amazon.nova-premier-v1:0",
       "us.amazon.nova-2-pro-v1:0",
     ]) {
-      expect(normalizeNovaModelId(id) !== undefined).toBe(
-        bedrockCachePointFields(id) !== undefined,
-      );
+      const named = normalizeNovaModelId(id) !== undefined;
+      expect(named).toBe(bedrockCachePointFields(id) !== undefined);
+      expect(named).toBe(findNovaPricing(id) !== null);
     }
   });
 });
 
 describe("Nova list prices", () => {
   it.each([
-    ["nova-2-lite", 0.3, 2.5],
-    ["nova-pro", 0.8, 3.2],
-    ["nova-lite", 0.06, 0.24],
-    ["nova-micro", 0.035, 0.14],
+    ["amazon.nova-2-lite-v1:0", 0.33, 2.75],
+    ["amazon.nova-pro-v1:0", 0.8, 3.2],
+    ["amazon.nova-lite-v1:0", 0.06, 0.24],
+    ["amazon.nova-micro-v1:0", 0.035, 0.14],
   ])(
-    "%s: $%s in, $%s out, read a quarter, write at input",
-    (key, input, output) => {
-      const p = NOVA_PRICING[key];
+    "%s: $%s in, $%s out, read a quarter, write nothing",
+    (id, input, output) => {
+      const p = findNovaPricing(id)!;
       expect(p.input).toBe(input);
       expect(p.output).toBe(output);
       expect(p.cacheRead).toBeCloseTo(input / 4, 9);
-      expect(p.cacheWrite).toBe(input);
-      expect(p.cacheWrite1h).toBe(input);
+      expect(p.cacheWrite).toBe(0);
+      expect(p.cacheWrite1h).toBe(0);
       expect(p.longContext).toBeUndefined();
     },
   );
 
-  it("is what findModelPricing returns for a bare or global ID", () => {
+  it("is what findModelPricing returns, so the chat window prices Nova too", () => {
     expect(findModelPricing("amazon.nova-2-lite-v1:0")).toEqual(
-      NOVA_PRICING["nova-2-lite"],
+      findNovaPricing("amazon.nova-2-lite-v1:0"),
     );
     expect(findModelPricing("global.amazon.nova-2-lite-v1:0")).toEqual(
-      NOVA_PRICING["nova-2-lite"],
+      findNovaPricing("amazon.nova-2-lite-v1:0"),
     );
     expect(findModelPricing("amazon.nova-premier-v1:0")).toBeNull();
   });
 });
 
-describe("Nova 2 Lite regional premium", () => {
+describe("Nova has no regional premium", () => {
   it.each([
-    ["us.amazon.nova-2-lite-v1:0", 1.1],
-    ["eu.amazon.nova-2-lite-v1:0", 1.1],
-    ["apac.amazon.nova-2-lite-v1:0", 1.1],
-    ["global.amazon.nova-2-lite-v1:0", 1],
-    ["amazon.nova-2-lite-v1:0", 1],
-    // One listed price: nothing to scale
-    ["us.amazon.nova-pro-v1:0", 1],
-    ["us.amazon.nova-lite-v1:0", 1],
-    ["us.amazon.nova-micro-v1:0", 1],
-    ["us.amazon.nova-premier-v1:0", 1],
-  ])("%s has factor %s", (id, factor) => {
-    expect(bedrockRegionalPriceFactor(id)).toBe(factor);
+    "us.amazon.nova-2-lite-v1:0",
+    "eu.amazon.nova-2-lite-v1:0",
+    "apac.amazon.nova-2-lite-v1:0",
+    "global.amazon.nova-2-lite-v1:0",
+    "amazon.nova-2-lite-v1:0",
+    "us.amazon.nova-pro-v1:0",
+    "us.amazon.nova-premier-v1:0",
+  ])("%s has factor 1", (id) => {
+    expect(bedrockRegionalPriceFactor(id)).toBe(1);
   });
 
-  it("gives AWS's geo cross-region figures for a us. profile", () => {
+  it("prices a us. profile at the same in-region rate", () => {
     const p = findModelPricing("us.amazon.nova-2-lite-v1:0")!;
     expect(p.input).toBe(0.33);
     expect(p.output).toBe(2.75);
-    expect(p.cacheWrite).toBe(0.33);
+    expect(p.cacheWrite).toBe(0);
     expect(p.cacheRead).toBe(0.0825);
   });
 });
@@ -130,15 +126,17 @@ describe("calculateRequestCost for Nova on Bedrock", () => {
     )!;
     expect(r).not.toBeNull();
     const expected =
-      (101 / MTOK) * 0.3 + (400 / MTOK) * 2.5 + (3022 / MTOK) * 0.075;
+      (101 / MTOK) * 0.33 + (400 / MTOK) * 2.75 + (3022 / MTOK) * 0.0825;
     expect(r.cost).toBeCloseTo(expected, 9);
-    expect(r.breakdown).toContain("Cache Read: 3,022 tokens × $0.075/MTok");
-    expect(r.breakdown).not.toContain("Prices:");
+    expect(r.breakdown).toContain("Cache Read: 3,022 tokens × $0.0825/MTok");
+    expect(r.breakdown).toContain(
+      "Prices: AWS Price List, us-east-1 on-demand (Amazon Nova)",
+    );
   });
 
-  it("prices a cache write at the input rate", () => {
+  it("prices a cache write at nothing beyond the input it was counted in", () => {
     const usage: Usage = {
-      promptTokens: 0,
+      promptTokens: 3123,
       completionTokens: 0,
       promptTokensDetails: { cachedTokens: 0, cacheWriteTokens: 3123 },
     };
@@ -147,11 +145,11 @@ describe("calculateRequestCost for Nova on Bedrock", () => {
       "amazon.nova-2-lite-v1:0",
       usage,
     )!;
-    expect(r.cost).toBeCloseTo((3123 / MTOK) * 0.3, 9);
-    expect(r.breakdown).toContain("Cache Write (5m): 3,123 tokens × $0.3/MTok");
+    expect(r.cost).toBeCloseTo((3123 / MTOK) * 0.33, 9);
+    expect(r.breakdown).toContain("Cache Write (5m): 3,123 tokens × $0/MTok");
   });
 
-  it("says in the breakdown that a us. profile is AWS list times 1.1", () => {
+  it("prices a us. profile at the in-region rate, with no factor line", () => {
     const usage: Usage = { promptTokens: MTOK, completionTokens: 0 };
     const us = calculateRequestCost(
       "bedrock",
@@ -159,9 +157,7 @@ describe("calculateRequestCost for Nova on Bedrock", () => {
       usage,
     )!;
     expect(us.cost).toBeCloseTo(0.33, 9);
-    expect(us.breakdown).toContain(
-      "Prices: AWS list × 1.1 (Bedrock regional endpoint)",
-    );
+    expect(us.breakdown).not.toContain("Bedrock regional endpoint");
   });
 
   it.each([

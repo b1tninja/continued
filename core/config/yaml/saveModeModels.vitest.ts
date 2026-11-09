@@ -164,3 +164,62 @@ modeModels:
     expect(text).toMatch(/# cheap\s+- Sonnet/);
   });
 });
+
+describe("applyModeModelsUpdate: single-model uses", () => {
+  it("writes one model for loop, replan and subagent, never a list", () => {
+    const { text } = apply(BASE, {
+      loop: { model: "Sonnet", models: ["Sonnet", "Opus"] },
+      replan: { model: "Opus", reasoningEffort: "high" },
+      subagent: { model: "Sonnet" },
+    });
+    const parsed = YAML.parse(text ?? "");
+    expect(parsed.modeModels).toEqual({
+      loop: { model: "Sonnet" },
+      replan: { model: "Opus", reasoningEffort: "high" },
+      subagent: { model: "Sonnet" },
+    });
+  });
+
+  it("removes a single-model use set to null and leaves the modes alone", () => {
+    const start = apply(BASE, {
+      plan: { model: "Opus" },
+      loop: { model: "Sonnet" },
+    }).text;
+    const { text } = apply(start ?? "", { loop: null });
+    expect(YAML.parse(text ?? "").modeModels).toEqual({
+      plan: { model: "Opus" },
+    });
+  });
+});
+
+describe("applyModeModelsUpdate: entries that only choose a prompt", () => {
+  it("keeps a prompt-only entry when its model is removed", () => {
+    const start = `name: Local
+version: 1.0.0
+modeModels:
+  loop:
+    model: Sonnet
+    prompt: short
+`;
+    // A list means nothing on a single-model use, so nothing changes
+    const same = applyModeModelsUpdate(YAML.parse(start), {
+      loop: { models: [] },
+    });
+    expect(same.modeModels).toEqual({
+      loop: { model: "Sonnet", prompt: "short" },
+    });
+    const promptOnly = applyModeModelsUpdate(
+      {
+        name: "Local",
+        version: "1.0.0",
+        modeModels: { loop: { prompt: "short" } },
+      } as any,
+      { loop: { reasoningEffort: "low" } },
+    );
+    expect(promptOnly.modeModels).toEqual({
+      loop: { prompt: "short", reasoningEffort: "low" },
+    });
+    const { text: cleared } = apply(start, { loop: null });
+    expect(YAML.parse(cleared!).modeModels).toBeUndefined();
+  });
+});

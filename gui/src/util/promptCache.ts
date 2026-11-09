@@ -466,8 +466,11 @@ export function switchCost(
   const tokens = state.lastInputTokens;
   let extraUsd: number | undefined;
   if (pricing) {
-    const write =
+    const writeRate =
       status.ttl === "1h" ? pricing.cacheWrite1h : pricing.cacheWrite;
+    // A model with no cache write rate (Amazon Nova) bills the tokens it
+    // writes as plain input, so that is what the re-send costs.
+    const write = writeRate > 0 ? writeRate : pricing.input;
     extraUsd = (tokens / 1_000_000) * (write - pricing.cacheRead);
   }
   return { tokens, extraUsd };

@@ -1,4 +1,6 @@
 import { AssistantUnrolled, ModelConfig } from "@continuedev/config-yaml";
+import type { LoopItemModel, ModelUse } from "core/index.js";
+import { modeModelFor, modelForLoopItem } from "core/util/modelUse.js";
 
 import { AuthConfig, getModelName } from "../auth/workos.js";
 import { createLlmApi, getLlmApi } from "../config.js";
@@ -255,6 +257,87 @@ export class ModelService
       this.emit("error", error);
       throw error;
     }
+  }
+
+  /**
+   * The chat model `modeModels` gives a use (a mode, a Loop item or re-plan,
+   * a subagent), as an index into the available models; -1 when the config
+   * names none for it (and its fallback) or the name is not a chat model.
+   */
+  modelIndexForUse(use: ModelUse): number {
+    const assistant = this.getState().assistant ?? this.assistant;
+    // The config names models (`model`, or the first of `models`); the shared
+    // helper reads resolved titles, so each name stands in as its title
+    const raw = (assistant?.modeModels ?? {}) as Record<
+      string,
+      { model?: string; models?: string[] } | undefined
+    >;
+    const named: Parameters<typeof modeModelFor>[0] = {};
+    for (const [key, entry] of Object.entries(raw)) {
+      const name = entry?.model ?? entry?.models?.[0];
+      if (name) named[key as ModelUse] = { title: name };
+    }
+    const entry = modeModelFor(named, use);
+    if (!entry) return -1;
+    return this.getModelIndexByName(entry.title);
+  }
+
+  /**
+   * The chat models as the shared resolver reads them: the config's `name`
+   * as the title, with each one's index among the chat models.
+   */
+  private chatModelCandidates() {
+    const assistant = this.getState().assistant ?? this.assistant;
+    const available = (assistant?.models?.filter(
+      (model) =>
+        model && (model.roles?.includes("chat") || model.roles === undefined),
+    ) ?? []) as ModelConfig[];
+    return available.map((model, index) => ({
+      title: String((model as any).name ?? model.model),
+      model: String(model.model ?? ""),
+      provider: model.provider,
+      index,
+    }));
+  }
+
+  /**
+   * The model a use's turn goes to, as an index into the chat models (-1:
+   * keep the current one). With `itemModel`, a Loop item's own model
+   * (TaskItem.model): that model when it is configured, else the use's (or
+   * the current one), with what the item's run records about it.
+   */
+  resolveModelForUse(
+    use: ModelUse,
+    itemModel?: string,
+  ): { index: number; record?: LoopItemModel } {
+    const useIndex = this.modelIndexForUse(use);
+    if (!itemModel?.trim()) return { index: useIndex };
+    const candidates = this.chatModelCandidates();
+    const fallbackIndex =
+      useIndex === -1 ? this.getCurrentModelIndex() : useIndex;
+    const chosen = modelForLoopItem(
+      { model: itemModel },
+      candidates,
+      candidates[fallbackIndex],
+    );
+    return { index: chosen.model?.index ?? -1, record: chosen.record };
+  }
+
+  /**
+   * Switch to the model configured for a use, when there is one and it is not
+   * the current model; a Loop item's own model (`itemModel`) wins over the
+   * use's. Returns true when the model changed. The choice is not persisted
+   * as the person's: it follows the config, as a mode's model does in the IDE.
+   */
+  async switchToModelForUse(
+    use: ModelUse,
+    itemModel?: string,
+  ): Promise<boolean> {
+    const { index } = this.resolveModelForUse(use, itemModel);
+    if (index === -1 || index === this.getCurrentModelIndex()) return false;
+    await this.switchModel(index);
+    logger.debug("Model switched for use", { use, itemModel, index });
+    return true;
   }
 
   /**

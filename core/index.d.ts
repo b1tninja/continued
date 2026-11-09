@@ -310,6 +310,12 @@ export interface SessionUsage extends Usage {
    * to models without a known price add nothing (see `ModelUsage.pricedRequests`).
    */
   totalCost: number;
+  /**
+   * True when part of `totalCost` was priced at a fallback rate because the
+   * model has no entry in the price tables, so the figure is an estimate and
+   * is shown as one.
+   */
+  costEstimated?: boolean;
   /** Totals per model, keyed `provider/model`. */
   byModel?: Record<string, ModelUsage>;
   /** The latest request, for the context-window display. */
@@ -393,6 +399,14 @@ export interface Session {
 export type LoopItemStatus =
   "pending" | "running" | "checking" | "done" | "waiting" | "redo" | "failed";
 
+/** The model a run of an item that names one (TaskItem.model) went to. */
+export interface LoopItemModel {
+  /** The title of the chat model the run went to */
+  title: string;
+  /** Set when the item's model is not configured and the loop model ran instead */
+  fallbackReason?: string;
+}
+
 /** The last time an item's check (TaskItem.check) ran, or why it did not. */
 export interface LoopCheckResult {
   /**
@@ -441,6 +455,11 @@ export interface LoopItemState {
   /** The last run of the item's check (TaskItem.check) */
   check?: LoopCheckResult;
   /**
+   * The model the item's last run went to, when the item names one
+   * (TaskItem.model): its title, and why the item's own model was not used.
+   */
+  model?: LoopItemModel;
+  /**
    * Fix forward: re-plans scoped to this item after it failed (at most
    * LOOP_MAX_REPAIRS_PER_ITEM). To-dos a repair splits it into inherit it.
    */
@@ -454,6 +473,21 @@ export interface LoopItemState {
  */
 export type LoopQuestionKind = "blocking" | "assumption" | "approval";
 
+/**
+ * What a wrong answer to a question would cost, as the agent labels it
+ * (plans/policy-areas.md, "Questions are about who decides"). Recorded with
+ * the question; the Questions level will route on it, with checks. The list
+ * is QUESTION_TYPES in core/util/loopMode.ts.
+ */
+export type QuestionType =
+  | "access"
+  | "irreversible"
+  | "security"
+  | "cost"
+  | "scope"
+  | "design"
+  | "detail";
+
 export interface LoopQuestion {
   /** IDGAF: the agent decided this itself; it never reached the inbox */
   decidedAlone?: boolean;
@@ -462,6 +496,8 @@ export interface LoopQuestion {
   itemId?: string;
   question: string;
   kind: LoopQuestionKind;
+  /** The agent's label for what a wrong answer would cost */
+  type?: QuestionType;
   /** The default the item continued with (kind assumption) */
   assumption?: string;
   /** The held tool call (kind approval) */
@@ -626,6 +662,12 @@ export interface LoopState {
     checkIn?: string;
     /** A repair re-plan (fix forward): the failed item's text */
     itemText?: string;
+    /**
+     * The run ended once without its report (finish_item, or a re-plan's
+     * present_plan) and was told to call it; a second such end counts
+     * (core/util/turnEnd.ts)
+     */
+    nudged?: boolean;
   };
   /**
    * The re-plan whose plan waits to be accepted: what it was for, so
@@ -644,6 +686,13 @@ export interface LoopState {
   checkInDue?: string;
   /** Fix forward: the failed item waiting for its scoped re-plan */
   repairItemId?: string;
+  /**
+   * The chat model an item's own model (TaskItem.model) switched away from
+   * when `modeModels` names none for the loop: the next turn without an own
+   * model, and the loop's end, come back to it, so the other items run on
+   * the model the person had selected.
+   */
+  modelBefore?: string;
   questions: LoopQuestion[];
   answers: LoopAnswer[];
   /** Items finished in this round, for the no-progress check */
@@ -709,6 +758,14 @@ export interface TaskItem {
    * command. The plan file writes it as `check: <command>` under the to-do.
    */
   check?: string;
+  /**
+   * The `name` of the chat model this item's Loop run goes to instead of
+   * `modeModels.loop`; the prompt and reasoning effort still come from the
+   * loop entry. The plan file writes it as `model: <name>` under the to-do.
+   * A name that is not configured falls back to the loop model, with the
+   * reason on the item's run (LoopItemState.model).
+   */
+  model?: string;
 }
 
 export interface TaskPlan {
@@ -2452,25 +2509,44 @@ export type ModeReasoningEffort = "off" | "low" | "medium" | "high";
 
 /** Chat model (by title) and reasoning effort to use in a mode. */
 export interface ModeModelSetting {
-  /** The default model: selected when switching into the mode. */
-  title: string;
+  /**
+   * The default model: selected when switching into the mode. Absent for an
+   * entry that only chooses a prompt (`loop: { prompt: short }`).
+   */
+  title?: string;
   /**
    * Every model offered in the mode, default first. Absent when the config sets
    * only `model`, in which case all models are offered as before.
    */
   titles?: string[];
   reasoningEffort?: ModeReasoningEffort;
+  /**
+   * Which system prompt the use gets: `full`, `short`, or the name of a
+   * prompt block (core/llm/prompts/usePrompts.ts). Absent: the model's
+   * prompt profile decides.
+   */
+  prompt?: string;
+  /** The prompt block's text, when `prompt` names one. */
+  promptText?: string;
 }
 
-/** Whether rules are sent in each mode. A mode left out is enabled. */
+/**
+ * Whether rules are sent in each mode. A mode left out is enabled; `loop`
+ * follows `agent` and `replan` follows `plan` when left out.
+ */
 export type RulesByModeConfig = Partial<
-  Record<"chat" | "agent" | "plan", boolean>
+  Record<"chat" | "agent" | "plan" | "loop" | "replan", boolean>
 >;
 
-/** Per-mode model selection from `modeModels:` in config.yaml. */
-export type ModeModelsConfig = Partial<
-  Record<"chat" | "agent" | "plan", ModeModelSetting>
->;
+/**
+ * What a model can be used for: the three chat modes, Loop item turns,
+ * Loop re-plans, the Auto reviewer and subagents (see core/util/modelUse.ts).
+ */
+export type ModelUse =
+  "chat" | "agent" | "plan" | "loop" | "replan" | "reviewer" | "subagent";
+
+/** Which model does what, from `modeModels:` in config.yaml. */
+export type ModeModelsConfig = Partial<Record<ModelUse, ModeModelSetting>>;
 
 export interface ContinueConfig {
   allowAnonymousTelemetry?: boolean;

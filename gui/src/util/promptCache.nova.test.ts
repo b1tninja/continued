@@ -216,7 +216,7 @@ describe("switching away from a warm Nova cache", () => {
     const status = promptCacheStatus(novaLite2, "5m", state, t0 + MIN);
     const cost = switchCost(status, state, findModelPricing(novaLite2.model))!;
     expect(cost.tokens).toBe(20_000);
-    // 20,000 tokens * ($0.33 write - $0.0825 read)/MTok on a us. profile
+    // 20,000 tokens * ($0.33 input, as Nova has no write rate, - $0.0825 read)/MTok
     expect(cost.extraUsd).toBeCloseTo(0.00495, 6);
   });
 });

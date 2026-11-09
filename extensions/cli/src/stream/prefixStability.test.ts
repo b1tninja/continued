@@ -391,10 +391,14 @@ describe("a branch from a pinned fork point reads what the parent's run cached",
       taskListBlock: plan(["in_progress"]),
     });
 
+  // Nova takes no cache point next to a tool result (Bedrock refuses it), so
+  // a turn whose last user message holds only tool results adds none on Nova;
+  // the fork point still covers the item prompt. Claude takes it after the
+  // tool result.
   describe.each([
-    ["Claude on Bedrock", "us.anthropic.claude-sonnet-4-6"],
-    ["Nova 2 Lite on Bedrock", "us.amazon.nova-2-lite-v1:0"],
-  ])("%s", (_name, id) => {
+    ["Claude on Bedrock", "us.anthropic.claude-sonnet-4-6", true],
+    ["Nova 2 Lite on Bedrock", "us.amazon.nova-2-lite-v1:0", false],
+  ])("%s", (_name, id, lastTurnHasOwnPoint) => {
     const m = model(id, "bedrock");
 
     it("every request of the run carries the fork point, and the branch starts with it", () => {
@@ -403,8 +407,11 @@ describe("a branch from a pinned fork point reads what the parent's run cached",
       const want = prefixUpToPoint(requests[0], 0);
       for (const r of requests) expect(prefixUpToPoint(r, 0)).toBe(want);
       expect(prefixUpToPoint(forked, 0)).toBe(want);
-      // and the fork point is not the only point: the last turn has its own
-      expect(lastCachePoint(requests.at(-1)!).message).toBeGreaterThan(0);
+      // and, where the model takes one there, the fork point is not the only
+      // point: the last turn has its own
+      const last = lastCachePoint(requests.at(-1)!).message;
+      if (lastTurnHasOwnPoint) expect(last).toBeGreaterThan(0);
+      else expect(last).toBe(0);
     });
   });
 

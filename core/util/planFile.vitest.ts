@@ -1,7 +1,9 @@
 import type { TaskPlan } from "../index.js";
 import { describe, expect, it } from "vitest";
 import {
+  answeredDecisions,
   choosePlanFileName,
+  describeDecisions,
   parsePlanFile,
   planBuildMessage,
   planKeepPlanningResult,
@@ -56,6 +58,7 @@ describe("plan file format", () => {
       title: doc.title,
       body: doc.body,
       items: doc.items,
+      decisions: [],
     });
   });
 
@@ -69,6 +72,7 @@ describe("plan file format", () => {
         { text: "One", status: "pending" },
         { text: "Two", status: "completed" },
       ],
+      decisions: [],
     });
   });
 
@@ -95,6 +99,100 @@ describe("parseMarkdownChecklist id comments", () => {
   });
 });
 
+describe("a to-do's model: line", () => {
+  const file = [
+    "# Parser",
+    "",
+    "## To-dos",
+    "",
+    "- [ ] Design the grammar <!-- id: 1 -->",
+    "  model: Claude Opus",
+    "- [ ] Write the lexer <!-- id: 2 -->",
+    "  after: 1",
+    "  check: npm test -- lexer",
+    "  Model: fast",
+    "- [ ] Document it <!-- id: 3 -->",
+    "",
+  ].join("\n");
+
+  it("is read under its to-do, in any case, next to after: and check:", () => {
+    const read = taskPlanFromPlanFile(file, undefined, now);
+    if (!read.ok) throw new Error(read.error);
+    expect(read.plan.items).toEqual([
+      {
+        id: "1",
+        text: "Design the grammar",
+        status: "pending",
+        model: "Claude Opus",
+      },
+      {
+        id: "2",
+        text: "Write the lexer",
+        status: "pending",
+        after: ["1"],
+        check: "npm test -- lexer",
+        model: "fast",
+      },
+      { id: "3", text: "Document it", status: "pending" },
+    ]);
+  });
+
+  it("is written back under the to-do, after its after: and check: lines", () => {
+    const read = taskPlanFromPlanFile(file, undefined, now);
+    if (!read.ok) throw new Error(read.error);
+    const doc = parsePlanFile(file);
+    expect(
+      serializePlanFile({
+        title: doc.title,
+        body: doc.body,
+        items: read.plan.items,
+      }),
+    ).toBe(file.replace("  Model: fast", "  model: fast"));
+  });
+
+  it("comes from the plan tool as a to-do object or in todo_details", () => {
+    const args = validatePlanArgs({
+      title: "Parser",
+      todos: [
+        { text: "Design the grammar", model: "Claude Opus" },
+        "Write the lexer",
+      ],
+      todo_details: [{ todo: 2, model: "fast" }],
+    });
+    expect(args.ok && args.items).toEqual([
+      { text: "Design the grammar", status: "pending", model: "Claude Opus" },
+      { text: "Write the lexer", status: "pending", model: "fast" },
+    ]);
+    const built = args.ok && taskPlanForProposal(args.items, undefined, now);
+    expect(built && built.ok && built.plan.items.map((i) => i.model)).toEqual([
+      "Claude Opus",
+      "fast",
+    ]);
+  });
+
+  it("is refused when it is not a string or is too long", () => {
+    expect(
+      taskPlanForProposal([{ text: "A", model: 3 }], undefined, now),
+    ).toEqual({ ok: false, error: "Item 1: model must be a string" });
+    expect(
+      taskPlanForProposal(
+        [{ text: "A", model: "x".repeat(101) }],
+        undefined,
+        now,
+      ),
+    ).toEqual({
+      ok: false,
+      error: "Item 1: model is longer than 100 characters",
+    });
+    // A blank line is no model
+    const blank = taskPlanForProposal(
+      [{ text: "A", model: "  " }],
+      undefined,
+      now,
+    );
+    expect(blank.ok && blank.plan.items[0].model).toBeUndefined();
+  });
+});
 describe("file names", () => {
   it("slugifies titles", () => {
     expect(slugifyPlanTitle("Add retry to the Uploader!")).toBe(
@@ -127,6 +225,7 @@ describe("validatePlanArgs", () => {
         { text: "One", status: "pending" },
         { text: "Two", status: "pending" },
       ],
+      decisions: [],
     });
   });
 
@@ -137,10 +236,141 @@ describe("validatePlanArgs", () => {
     expect(md.ok && md.items.map((i) => i.text)).toEqual(["a", "b"]);
   });
 
+  it("accepts XML-shaped lists for to-dos and decisions", () => {
+    const r = validatePlanArgs({
+      title: "T",
+      todos: "<item>Write it</item>\n<item><![CDATA[Test it]]></item>",
+      decisions:
+        '<item>{"question":"Which format?","options":["ISO","readable"],"pick":"ISO"}</item><item>Keep the helper?</item>',
+    });
+    expect(r.ok && r.items.map((i) => i.text)).toEqual(["Write it", "Test it"]);
+    expect(r.ok && r.decisions).toEqual([
+      { question: "Which format?", options: ["ISO", "readable"], pick: "ISO" },
+      { question: "Keep the helper?" },
+    ]);
+  });
+
   it("refuses a missing title or no to-dos", () => {
     expect(validatePlanArgs({ todos: ["a"] }).ok).toBe(false);
     expect(validatePlanArgs({ title: "T", todos: [] }).ok).toBe(false);
     expect(validatePlanArgs({ title: "T", todos: [""] }).ok).toBe(false);
+  });
+
+  it("takes decisions with options, pick, type and the to-dos that wait", () => {
+    const r = validatePlanArgs({
+      title: "T",
+      todos: ["Write formatDate", "Test it"],
+      decisions: [
+        {
+          question: "Which format should formatDate return?",
+          options: ["ISO 8601", "November 8, 2026"],
+          pick: "ISO 8601",
+          type: "scope",
+          todos: [1, 2, 2],
+        },
+        "Keep the old helper?",
+      ],
+    });
+    expect(r.ok && r.decisions).toEqual([
+      {
+        question: "Which format should formatDate return?",
+        options: ["ISO 8601", "November 8, 2026"],
+        pick: "ISO 8601",
+        type: "scope",
+        todos: [1, 2],
+      },
+      { question: "Keep the old helper?" },
+    ]);
+  });
+
+  it("refuses a decision without a question, a bad type or a to-do out of range", () => {
+    const base = { title: "T", todos: ["a"] };
+    expect(validatePlanArgs({ ...base, decisions: [{}] }).ok).toBe(false);
+    expect(
+      validatePlanArgs({ ...base, decisions: [{ question: "q", type: "big" }] })
+        .ok,
+    ).toBe(false);
+    expect(
+      validatePlanArgs({ ...base, decisions: [{ question: "q", todos: [2] }] })
+        .ok,
+    ).toBe(false);
+    const many = validatePlanArgs({
+      ...base,
+      decisions: Array.from({ length: 6 }, (_, i) => `q${i}`),
+    });
+    expect(!many.ok && many.error).toMatch(/Too many decisions/);
+  });
+});
+
+describe("decisions in the plan file", () => {
+  const decisions = [
+    {
+      question: "Which format should formatDate return?",
+      options: ["ISO 8601", "November 8, 2026"],
+      pick: "ISO 8601",
+      type: "scope" as const,
+      todos: [1, 2],
+    },
+    { question: "Keep the old helper?" },
+  ];
+
+  it("writes a Decisions section before the to-dos and reads it back", () => {
+    const text = serializePlanFile({
+      title: "Dates",
+      body: "Add formatDate.",
+      items: plan([
+        { id: "1", text: "Write formatDate", status: "pending" },
+        { id: "2", text: "Test it", status: "pending" },
+      ]).items,
+      decisions,
+    });
+    expect(text).toContain(
+      "## Decisions\n\n- Which format should formatDate return?\n  - type: scope\n  - options: ISO 8601 | November 8, 2026\n  - pick: ISO 8601\n  - to-dos: 1, 2\n- Keep the old helper?\n\n## To-dos",
+    );
+    const doc = parsePlanFile(text);
+    expect(doc.decisions).toEqual(decisions);
+    expect(doc.body).toBe("Add formatDate.");
+    expect(doc.items.map((i) => i.text)).toEqual([
+      "Write formatDate",
+      "Test it",
+    ]);
+  });
+
+  it("reads an answer the person wrote and ignores a ticked box", () => {
+    const doc = parsePlanFile(
+      "# Dates\n\n## Decisions\n\n- [x] Which format?\n  - options: ISO 8601 | readable\n  - pick: ISO 8601\n  - answer: readable\n\n## To-dos\n\n- [ ] Write it\n",
+    );
+    expect(doc.decisions).toEqual([
+      {
+        question: "Which format?",
+        options: ["ISO 8601", "readable"],
+        pick: "ISO 8601",
+        answer: "readable",
+      },
+    ]);
+  });
+
+  it("a file without the section has no decisions", () => {
+    expect(
+      parsePlanFile("# T\n\nBody\n\n## To-dos\n\n- [ ] a\n").decisions,
+    ).toEqual([]);
+  });
+
+  it("merges answers and describes them for the model", () => {
+    const answered = answeredDecisions(decisions, [
+      { question: "Keep the old helper?", answer: "No" },
+    ]);
+    expect(answered[1].answer).toBe("No");
+    expect(answered[0].answer).toBeUndefined();
+    const text = describeDecisions(answered);
+    expect(text).toContain(
+      "1. Which format should formatDate return? (to-dos 1, 2): open; the person has not decided. Do not start to-dos 1, 2 until it is decided.",
+    );
+    expect(describeDecisions([{ question: "Keep it?" }])).toContain(
+      "open; the person has not decided. Do not settle it.",
+    );
+    expect(text).toContain("2. Keep the old helper?: decided: No");
+    expect(describeDecisions([])).toBe("");
   });
 });
 

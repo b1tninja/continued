@@ -12,6 +12,7 @@ import type {
 } from "openai/resources.mjs";
 
 import { getRequestBodyHints } from "../contextManagement.js";
+import { withEnvironmentBlock } from "../environmentContext.js";
 
 import { getDefaultCompletionOptions } from "./streamChatResponse.types.js";
 
@@ -25,7 +26,9 @@ import { getDefaultCompletionOptions } from "./streamChatResponse.types.js";
  * Order matters for the prompt cache: the system message first, then the
  * history, and the task list block last, as its own user message, so a change
  * to the list changes only the tail of the request and the Bedrock adapter can
- * put its cache point before it.
+ * put its cache point before it. The date and git status go on the first user
+ * message (`withEnvironmentBlock`), after the system checkpoint, so the system
+ * text is the same across sessions.
  */
 /**
  * Providers whose adapters build their own request body and read
@@ -45,10 +48,12 @@ export function buildChatRequestBody(args: {
   isCompacting?: boolean;
 }): ChatCompletionCreateParamsStreaming {
   const { model, chatHistory, systemMessage, tools, taskListBlock } = args;
-  const messages = convertFromUnifiedHistoryWithSystemMessage(
-    chatHistory,
-    systemMessage,
-  ) as ChatCompletionMessageParam[];
+  const messages = withEnvironmentBlock(
+    convertFromUnifiedHistoryWithSystemMessage(
+      chatHistory,
+      systemMessage,
+    ) as ChatCompletionMessageParam[],
+  );
   if (taskListBlock) {
     messages.push({ role: "user", content: taskListBlock });
   }
@@ -59,7 +64,8 @@ export function buildChatRequestBody(args: {
   if (pinAt >= 0 && PIN_PROVIDERS.has(model.provider)) {
     const index =
       1 + convertFromUnifiedHistory(chatHistory.slice(0, pinAt)).length;
-    const pinned = messages[index] as Record<string, unknown> | undefined;
+    const pinned = messages[index] as unknown as
+      Record<string, unknown> | undefined;
     if (pinned) pinned[CACHE_PIN_FIELD] = true;
   }
   return {
