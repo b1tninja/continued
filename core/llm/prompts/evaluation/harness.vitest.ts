@@ -445,7 +445,12 @@ describe("harness with stub models (no real model)", () => {
       expect(p.reservedDecided).toEqual([]);
       expect(p.refusedRetried).toEqual([]);
     }
+    for (const p of s.profiles) {
+      expect(p.latencyRangeMs).toBeDefined();
+      expect(p.latencyRangeMs![0]).toBeLessThanOrEqual(p.latencyRangeMs![1]);
+    }
     const report = formatReport("oracle (stub)", results, s);
+    expect(report).toMatch(/Median latency per reply \| \d+ ms \(\d+ to \d+\)/);
     expect(report).toContain("### Profile: full");
     expect(report).toContain("### Profile: short");
     expect(report).toContain("Result: meets the bar.");

@@ -578,6 +578,8 @@ export interface ProfileSummary {
   /** Replies that wrote a tool call as text instead of making one. */
   leakedCalls: string[];
   medianLatencyMs: number | undefined;
+  /** The fastest and slowest reply, so a median is read with its spread. */
+  latencyRangeMs: [number, number] | undefined;
   failures: string[];
   passed: boolean;
 }
@@ -634,6 +636,9 @@ export function summarizeProfile(
   const truncated = rs.filter((r) => r.truncated).map((r) => r.scenario.id);
   const leakedCalls = rs.filter((r) => r.leakedCall).map((r) => r.scenario.id);
   const medianLatencyMs = median(rs.map((r) => r.ms));
+  const latencyRangeMs: [number, number] | undefined = rs.length
+    ? [Math.min(...rs.map((r) => r.ms)), Math.max(...rs.map((r) => r.ms))]
+    : undefined;
 
   const failures: string[] = [];
   if (reservedDecided.length > bar.reservedDecidedMax) {
@@ -681,6 +686,7 @@ export function summarizeProfile(
     truncated,
     leakedCalls,
     medianLatencyMs,
+    latencyRangeMs,
     failures,
     passed: failures.length === 0,
   };
@@ -768,7 +774,7 @@ export function formatReport(
       `| present_plan called (plan scenarios) | ${p.planWithPresentPlan}/${p.planTotal} (${pct(p.presentPlanRate)}) | min ${pct(bar.presentPlanMinRate)} |`,
       `| A tool called (act scenarios) | ${p.actWithToolCall}/${p.actTotal} (${pct(p.actToolCallRate)}) | min ${pct(bar.actToolCallMinRate)} |`,
       `| Refused calls retried or routed around | ${p.refusedRetried.length} | max ${bar.refusedRetriedMax} |`,
-      `| Median latency per reply | ${p.medianLatencyMs === undefined ? "n/a" : `${Math.round(p.medianLatencyMs)} ms`} | max ${bar.medianLatencyMsMax} ms |`,
+      `| Median latency per reply | ${p.medianLatencyMs === undefined ? "n/a" : `${Math.round(p.medianLatencyMs)} ms${p.latencyRangeMs ? ` (${Math.round(p.latencyRangeMs[0])} to ${Math.round(p.latencyRangeMs[1])})` : ""}`} | max ${bar.medianLatencyMsMax} ms |`,
       `| Model calls that failed | ${p.errors.length} | not part of the bar |`,
       `| Replies cut off at the output budget (${maxTokens} tokens) | ${p.truncated.length} | not part of the bar |`,
       `| Tool calls written as text, not made | ${p.leakedCalls.length} | not part of the bar |`,
