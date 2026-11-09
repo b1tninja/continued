@@ -55,6 +55,13 @@ runs:
         version: 7.1
         token: ${{ inputs.github-token }}
 
+    # The wrapper downloads the Gradle distribution from services.gradle.org on a cold run,
+    # which has timed out. Cache it keyed on the wrapper properties, which name the version.
+    - uses: actions/cache@v6
+      with:
+        path: ~/.gradle/wrapper/dists
+        key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('extensions/intellij/gradle/wrapper/gradle-wrapper.properties') }}
+
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v6
 
@@ -81,6 +88,15 @@ runs:
       with:
         path: extensions/vscode/build
         key: ${{ runner.os }}-vscode-prepackage-${{ hashFiles('extensions/vscode/package-lock.json', 'extensions/vscode/**/*.ts', 'extensions/vscode/**/*.json') }}
+
+    # The pre-built sqlite3 binary comes from GitHub releases, which has returned 504s. Cache
+    # the extracted build; download-copy-sqlite.js skips its download when the marker in it
+    # matches. Bump the key when SQLITE_VERSION changes.
+    - uses: actions/cache@v6
+      id: sqlite-prebuilt-cache
+      with:
+        path: core/node_modules/sqlite3/build
+        key: ${{ runner.os }}-sqlite3-prebuilt-v5.1.7
 
     # Only run prepackage if not cached - saves ~1 minute
     - name: Run prepackage script
