@@ -107,6 +107,11 @@ export function normalizeProtectedPath(
   // Fold `.` and `..` before the home-prefix test. Doing it afterwards leaves
   // a path that climbed back into the home directory looking unrelated.
   if (!p.startsWith("~")) p = posix.normalize(p);
+  // A WSL path `/mnt/c/...` is the Windows drive `c:/...`.
+  p = p.replace(
+    /^\/mnt\/([a-zA-Z])(?=\/|$)/,
+    (_, drive: string) => `${drive}:`,
+  );
   return rewriteHome(p, home);
 }
 

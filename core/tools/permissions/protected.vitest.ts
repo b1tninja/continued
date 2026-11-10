@@ -88,6 +88,19 @@ describe("normalizeProtectedPath", () => {
     ).toBe("~/.ssh/config");
   });
 
+  it("treats a WSL /mnt drive path as the Windows path", () => {
+    expect(
+      normalizeProtectedPath("/mnt/c/Users/me/.aws/credentials", HOME),
+    ).toBe("~/.aws/credentials");
+    expect(hit("/mnt/c/users/me/.config/gh/hosts.yml")).toBe("secret");
+    expect(hit("/mnt/c/users/me/.kube/config")).toBe("secret");
+    expect(hit("/home/someone/.config/gh/hosts.yml")).toBe("secret");
+    expect(normalizeProtectedPath("/mnt/cdrom/file", HOME)).toBe(
+      "/mnt/cdrom/file",
+    );
+    expect(hit("/mnt/cdrom/file")).toBeUndefined();
+  });
+
   it("expands ~user next to the home directory", () => {
     expect(normalizeProtectedPath("~u/.aws/credentials", "/home/u")).toBe(
       "~/.aws/credentials",
