@@ -55,6 +55,35 @@ describe("stuckNote (L1)", () => {
     expect(noteOf([e("a"), e("b"), e("a")])).toContain("back to content");
   });
 
+  it("notes calls that keep being refused, ahead of the generic repeated error", () => {
+    const held =
+      "This call needs the person's approval, so it was not run. It is held as question q1.";
+    const note = noteOf(
+      ["ls /a", "ls /b", "cat /c"].map((c) => step(bash(c, held))),
+    );
+    expect(note).toContain("refused or held");
+    expect(note).toContain("Do not retry");
+  });
+
+  it("notes the same failure surviving edits", () => {
+    const steps: StuckStep[] = [];
+    for (let n = 1; n <= 4; n++) {
+      steps.push(
+        step(
+          call(
+            "Edit",
+            { path: "a.ts" },
+            { result: "ok", changed: [{ path: "a.ts", hash: `h${n}` }] },
+          ),
+        ),
+        step(bash("npm test", "AssertionError: limit is 3, expected 5")),
+      );
+    }
+    const note = noteOf(steps);
+    expect(note).toContain("across your edits");
+    expect(note).toContain("change your approach");
+  });
+
   it("leaves repeat-call to the repeat guard", () => {
     const r = step(
       call("Read", { path: "a.ts" }, { result: "x", read: ["a.ts"] }),

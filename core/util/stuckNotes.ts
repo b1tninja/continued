@@ -1,4 +1,8 @@
-import type { StuckReport, StuckSignal, StuckSignalKind } from "./stuckSignals";
+import type {
+  StuckReport,
+  StuckSignal,
+  StuckSignalKind,
+} from "./stuckSignals.js";
 
 /**
  * L1 of the stuck ladder (plans/stuck-detection.md): a one-line note appended
@@ -32,6 +36,10 @@ const WORDING: Record<
     `${s.count} steps in a row have changed no file, read no new file and hit no new error. Restate the goal and take the next concrete step.`,
   "retry-after-fail": (s) =>
     `this is the ${ordinal(s.count)} failed attempt of the same command since the last file change. Reproduce the failure smaller, or find what differs from the passing case.`,
+  "repeated-block": (s) =>
+    `${s.count} calls have been refused or held for the person with the same answer. Do not retry them: use a different approach that needs no approval, or ask the person.`,
+  "persistent-failure": (s) =>
+    `the same command has failed the same way ${s.count} times across your edits. Stop editing, read the error, and change your approach.`,
 };
 
 function ordinal(n: number): string {
@@ -45,13 +53,20 @@ function ordinal(n: number): string {
 
 /**
  * The note for a report, or undefined when no signal that has a note is
- * active. One note per call: the most severe signal wins, then the first.
+ * active. One note per call: a signal that names the cause (repeated-block,
+ * persistent-failure) wins, then the most severe, then the first.
  */
 export function stuckNote(report: StuckReport): string | undefined {
   const candidates = report.signals.filter((s) => !NO_NOTE.has(s.kind));
+  // A signal that names the cause outranks the generic repeat-error and
+  // retry-after-fail it fires beside (a refused call is also a repeated error)
+  const specific = candidates.filter(
+    (s) => s.kind === "repeated-block" || s.kind === "persistent-failure",
+  );
+  const pool = specific.length > 0 ? specific : candidates;
   const pick =
-    candidates.find((s) => s.level === "stuck") ??
-    candidates.find((s) => s.level === "note");
+    pool.find((s) => s.level === "stuck") ??
+    pool.find((s) => s.level === "note");
   if (!pick) return undefined;
   const say = WORDING[pick.kind as keyof typeof WORDING];
   return `${STUCK_NOTE_MARK}${say(pick)}`;
