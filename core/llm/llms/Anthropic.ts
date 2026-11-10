@@ -393,7 +393,17 @@ class Anthropic extends BaseLLM {
     }
 
     if (!response.ok) {
-      const json = await response.json();
+      const text = await response.text();
+      let json: any;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // A proxy or load balancer often answers with an HTML page. Parsing
+        // that as JSON hid the status behind "Unexpected token <".
+        throw new Error(
+          `Anthropic API sent back ${response.status}: ${text.slice(0, 500)}`,
+        );
+      }
       if (json.type === "error") {
         throw new Error(getAnthropicErrorMessage(json));
       }

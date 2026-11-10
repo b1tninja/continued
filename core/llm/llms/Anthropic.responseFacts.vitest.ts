@@ -220,3 +220,33 @@ describe("Anthropic non-stream response", () => {
     expect(out[1].cost).toBeUndefined();
   });
 });
+
+describe("Anthropic error bodies", () => {
+  async function fail(res: Response) {
+    const a = new Anthropic({ apiKey: "k", model: "claude-sonnet-4-6" } as any);
+    const out: any[] = [];
+    for await (const m of (a as any).handleResponse(res, false)) out.push(m);
+    return out;
+  }
+
+  test("an HTML proxy page keeps the HTTP status", async () => {
+    const html = `<html><body>bad gateway</body></html>`;
+    await expect(
+      fail(new Response(html, { status: 502, statusText: "Bad Gateway" })),
+    ).rejects.toThrow(/Anthropic API sent back 502: <html>/);
+  });
+
+  test("a JSON error is still the Anthropic message", async () => {
+    await expect(
+      fail(
+        new Response(
+          JSON.stringify({
+            type: "error",
+            error: { type: "overloaded_error", message: "overloaded" },
+          }),
+          { status: 529 },
+        ),
+      ),
+    ).rejects.toThrow(/temporarily overloaded/);
+  });
+});
