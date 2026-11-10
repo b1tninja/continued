@@ -127,6 +127,214 @@ const ZSH_QUALIFIER_CLOSE: Record<string, string> = {
   "(": ")",
 };
 
+interface Heredoc {
+  delim: string;
+  quoted: boolean;
+  strip: boolean;
+}
+
+/** The state of one POSIX scan: the text, the position, and what is open. */
+interface Posix {
+  s: string;
+  zsh: boolean;
+  out: Out;
+  mode: Mode;
+  nest: number;
+  pending: Heredoc[];
+  /** Inside double quotes (always, in a heredoc body) */
+  dq: boolean;
+  i: number;
+}
+
+const WORD_START = /[\s;|&(]/;
+
+/** Reads a substitution body at the cursor, then moves past its end. */
+function emitPosix(p: Posix, bodyStart: number, close: number): void {
+  const body = p.s.slice(bodyStart, close < 0 ? p.s.length : close);
+  p.out.subs.push(body);
+  scanPosix(body, p.zsh, p.out, {}, p.nest + 1);
+  p.i = close < 0 ? p.s.length : close + 1;
+}
+
+/** Single quotes and `$'...'`: nothing inside is read. */
+function posixSingleQuote(p: Posix): boolean {
+  const { s, i } = p;
+  if (p.dq) return false;
+  if (s[i] === "'") {
+    const e = s.indexOf("'", i + 1);
+    // an unterminated quote is not a quote: keep reading what follows
+    p.i = e < 0 ? i + 1 : e + 1;
+    return true;
+  }
+  if (s[i] === "$" && s[i + 1] === "'") {
+    let j = i + 2;
+    while (j < s.length && s[j] !== "'") j += s[j] === "\\" ? 2 : 1;
+    p.i = j >= s.length ? i + 2 : j + 1;
+    return true;
+  }
+  return false;
+}
+
+function posixComment(p: Posix): boolean {
+  const { s, i } = p;
+  if (p.dq || s[i] !== "#") return false;
+  if (i > 0 && !WORD_START.test(s[i - 1])) return false;
+  const nl = s.indexOf("\n", i);
+  p.i = nl < 0 ? s.length : nl;
+  return true;
+}
+
+/** `<<WORD` queues a heredoc whose body starts after the line ends. */
+function posixHeredocStart(p: Posix): boolean {
+  const { s, i } = p;
+  if (p.dq || p.mode.arith || s[i] !== "<" || s[i + 1] !== "<") return false;
+  const m = s[i + 2] === "<" ? null : HEREDOC.exec(s.slice(i));
+  if (m) {
+    p.pending.push({
+      delim: m[3] ?? m[4] ?? m[5],
+      quoted: m[2] === "\\" || m[3] !== undefined || m[4] !== undefined,
+      strip: m[1] === "-",
+    });
+    p.i += m[0].length;
+  } else {
+    p.i += s[i + 2] === "<" ? 3 : 2;
+  }
+  return true;
+}
+
+/** Where a heredoc body ends: the start of its closing line and the text after it. */
+function heredocEnd(
+  s: string,
+  pos: number,
+  h: Heredoc,
+): { bodyEnd: number; next: number } {
+  const n = s.length;
+  for (let q = pos; q <= n;) {
+    let nl = s.indexOf("\n", q);
+    if (nl < 0) nl = n;
+    const line = s.slice(q, nl).replace(/\r$/, "");
+    if ((h.strip ? line.replace(/^\t+/, "") : line) === h.delim) {
+      return { bodyEnd: q, next: Math.min(nl + 1, n) };
+    }
+    if (nl >= n) break;
+    q = nl + 1;
+  }
+  return { bodyEnd: -1, next: n };
+}
+
+/** At the newline that ends a line with heredocs: read their bodies. */
+function posixHeredocBodies(p: Posix): boolean {
+  const { s } = p;
+  if (s[p.i] !== "\n" || p.pending.length === 0) return false;
+  let pos = p.i + 1;
+  for (const h of p.pending) {
+    const { bodyEnd, next } = heredocEnd(s, pos, h);
+    // A quoted delimiter makes the body literal, but only a body that
+    // ends is known to be one: an open one is read as live text
+    if (!(h.quoted && bodyEnd >= 0)) {
+      const body = s.slice(pos, bodyEnd < 0 ? s.length : bodyEnd);
+      scanPosix(body, p.zsh, p.out, { body: true }, p.nest + 1);
+    }
+    pos = bodyEnd < 0 ? s.length : next;
+  }
+  p.pending.length = 0;
+  p.i = pos;
+  return true;
+}
+
+/** `$((1+2))` is arithmetic unless the text inside is a command. */
+function posixArithmetic(p: Posix): boolean {
+  const { s, i } = p;
+  let depth = 2;
+  let j = i + 3;
+  for (; j < s.length && depth > 0; j++) {
+    if (s[j] === "(") depth++;
+    else if (s[j] === ")") depth--;
+  }
+  const end = j - 1;
+  const inner = s.slice(i + 3, end - 1);
+  const command = /[;|`]|[A-Za-z_]\w*[ \t]+[A-Za-z_$"'./-]/.test(
+    inner.replace(/\$\(.*\)/s, ""),
+  );
+  if (depth !== 0 || s[end - 1] !== ")" || command) return false;
+  scanPosix(inner, p.zsh, p.out, { arith: true }, p.nest + 1);
+  p.i = end + 1;
+  return true;
+}
+
+/** `$(...)`, and `<(...)`, `>(...)`, zsh `=(...)` outside quotes. */
+function posixSubstitution(p: Posix): boolean {
+  const { s, i } = p;
+  const c = s[i];
+  if (c === "$" && s[i + 1] === "(") {
+    if (s[i + 2] === "(" && posixArithmetic(p)) return true;
+    emitPosix(p, i + 2, closeParenPosix(s, i + 2));
+    return true;
+  }
+  const process =
+    !p.dq &&
+    !p.mode.arith &&
+    (c === "<" || c === ">" || (p.zsh && c === "=")) &&
+    s[i + 1] === "(";
+  if (process && (c !== "=" || i === 0 || WORD_START.test(s[i - 1]))) {
+    emitPosix(p, i + 2, closeParenPosix(s, i + 2));
+    return true;
+  }
+  if (c === "`") {
+    const end = endBacktick(s, i);
+    const raw = s.slice(i + 1, end);
+    const body = raw.replace(p.dq ? /\\([`\\$"])/g : /\\([`\\$])/g, "$1");
+    p.out.subs.push(body);
+    scanPosix(body, p.zsh, p.out, {}, p.nest + 1);
+    p.i = end + 1;
+    return true;
+  }
+  return false;
+}
+
+const ZSH_QUALIFIER = "[A-Za-z0-9.^@/\\-+,%=*#~]*";
+
+/** zsh code the text only hints at: `${(e)x}` and glob qualifiers `*(e:cmd:)`. */
+function zshCodeHints(p: Posix): void {
+  const { s, i } = p;
+  if (s[i] === "$" && s[i + 1] === "{" && s[i + 2] === "(") {
+    const m = /^\$\{\(([^)]*)\)/.exec(s.slice(i));
+    if (m && m[1].includes("e")) {
+      p.out.dynamic.push("${(e)...} evaluates its value as shell code (zsh)");
+    }
+    return;
+  }
+  if (s[i] !== "(" || p.dq || i === 0 || /[\s$(|&;]/.test(s[i - 1])) return;
+  // a glob qualifier: `*(e:'cmd':)` runs cmd for every match
+  const m = new RegExp(`^\\(${ZSH_QUALIFIER}?e([^\\sA-Za-z0-9)])`).exec(
+    s.slice(i),
+  );
+  if (m) {
+    const start = i + m[0].length;
+    const close = ZSH_QUALIFIER_CLOSE[m[1]] ?? m[1];
+    const e = s.indexOf(close, start);
+    if (e < 0) p.out.dynamic.push("a glob qualifier that runs code (zsh)");
+    else {
+      const body = s.slice(start, e);
+      p.out.subs.push(body);
+      scanPosix(body, p.zsh, p.out, {}, p.nest + 1);
+    }
+  } else if (new RegExp(`^\\(${ZSH_QUALIFIER}\\+\\w+\\)`).test(s.slice(i))) {
+    p.out.dynamic.push("a glob qualifier that calls a function (zsh)");
+  }
+}
+
+/** The constructs that only apply outside a heredoc body or here-string. */
+function posixQuoting(p: Posix): boolean {
+  if (posixSingleQuote(p)) return true;
+  if (p.s[p.i] === '"') {
+    p.dq = !p.dq;
+    p.i++;
+    return true;
+  }
+  return posixComment(p) || posixHeredocStart(p) || posixHeredocBodies(p);
+}
+
 function scanPosix(
   s: string,
   zsh: boolean,
@@ -138,164 +346,25 @@ function scanPosix(
     out.dynamic.push("substitutions nested too deeply to read");
     return;
   }
-  const n = s.length;
-  const emit = (body: string) => {
-    out.subs.push(body);
-    scanPosix(body, zsh, out, {}, nest + 1);
+  const p: Posix = {
+    s,
+    zsh,
+    out,
+    mode,
+    nest,
+    pending: [],
+    dq: !!mode.body,
+    i: 0,
   };
-  const pending: { delim: string; quoted: boolean; strip: boolean }[] = [];
-  let dq = !!mode.body;
-  let i = 0;
-  while (i < n) {
-    const c = s[i];
-    if (c === "\\") {
-      i += 2;
+  while (p.i < s.length) {
+    if (s[p.i] === "\\") {
+      p.i += 2;
       continue;
     }
-    if (!mode.body) {
-      if (!dq && c === "'") {
-        const e = s.indexOf("'", i + 1);
-        // an unterminated quote is not a quote: keep reading what follows
-        i = e < 0 ? i + 1 : e + 1;
-        continue;
-      }
-      if (!dq && c === "$" && s[i + 1] === "'") {
-        let j = i + 2;
-        while (j < n && s[j] !== "'") j += s[j] === "\\" ? 2 : 1;
-        i = j >= n ? i + 2 : j + 1;
-        continue;
-      }
-      if (c === '"') {
-        dq = !dq;
-        i++;
-        continue;
-      }
-      if (!dq && c === "#" && (i === 0 || /[\s;|&(]/.test(s[i - 1]))) {
-        const nl = s.indexOf("\n", i);
-        i = nl < 0 ? n : nl;
-        continue;
-      }
-      if (!dq && !mode.arith && c === "<" && s[i + 1] === "<") {
-        const m = s[i + 2] === "<" ? null : HEREDOC.exec(s.slice(i));
-        if (m) {
-          pending.push({
-            delim: m[3] ?? m[4] ?? m[5],
-            quoted: m[2] === "\\" || m[3] !== undefined || m[4] !== undefined,
-            strip: m[1] === "-",
-          });
-          i += m[0].length;
-        } else {
-          i += s[i + 2] === "<" ? 3 : 2;
-        }
-        continue;
-      }
-      if (c === "\n" && pending.length) {
-        let pos = i + 1;
-        for (const h of pending) {
-          let bodyEnd = -1;
-          let next = n;
-          for (let p = pos; p <= n;) {
-            let nl = s.indexOf("\n", p);
-            if (nl < 0) nl = n;
-            const line = s.slice(p, nl).replace(/\r$/, "");
-            if ((h.strip ? line.replace(/^\t+/, "") : line) === h.delim) {
-              bodyEnd = p;
-              next = Math.min(nl + 1, n);
-              break;
-            }
-            if (nl >= n) break;
-            p = nl + 1;
-          }
-          // A quoted delimiter makes the body literal, but only a body that
-          // ends is known to be one: an open one is read as live text
-          if (!(h.quoted && bodyEnd >= 0)) {
-            scanPosix(
-              s.slice(pos, bodyEnd < 0 ? n : bodyEnd),
-              zsh,
-              out,
-              {
-                body: true,
-              },
-              nest + 1,
-            );
-          }
-          pos = bodyEnd < 0 ? n : next;
-        }
-        pending.length = 0;
-        i = pos;
-        continue;
-      }
-    }
-    if (c === "$" && s[i + 1] === "(") {
-      if (s[i + 2] === "(") {
-        // `$((1+2))` is arithmetic, unless the text inside is a command
-        let depth = 2;
-        let j = i + 3;
-        for (; j < n && depth > 0; j++) {
-          if (s[j] === "(") depth++;
-          else if (s[j] === ")") depth--;
-        }
-        const end = j - 1;
-        const inner = s.slice(i + 3, end - 1);
-        if (
-          depth === 0 &&
-          s[end - 1] === ")" &&
-          !/[;|`]|[A-Za-z_]\w*[ \t]+[A-Za-z_$"'./-]/.test(
-            inner.replace(/\$\(.*\)/s, ""),
-          )
-        ) {
-          scanPosix(inner, zsh, out, { arith: true }, nest + 1);
-          i = end + 1;
-          continue;
-        }
-      }
-      const close = closeParenPosix(s, i + 2);
-      emit(s.slice(i + 2, close < 0 ? n : close));
-      i = close < 0 ? n : close + 1;
-      continue;
-    }
-    if (
-      !dq &&
-      !mode.arith &&
-      (c === "<" || c === ">" || (zsh && c === "=")) &&
-      s[i + 1] === "("
-    ) {
-      if (c !== "=" || i === 0 || /[\s;|&(]/.test(s[i - 1])) {
-        const close = closeParenPosix(s, i + 2);
-        emit(s.slice(i + 2, close < 0 ? n : close));
-        i = close < 0 ? n : close + 1;
-        continue;
-      }
-    }
-    if (c === "`") {
-      const end = endBacktick(s, i);
-      const raw = s.slice(i + 1, end);
-      emit(raw.replace(dq ? /\\([`\\$"])/g : /\\([`\\$])/g, "$1"));
-      i = end + 1;
-      continue;
-    }
-    if (zsh && c === "$" && s[i + 1] === "{" && s[i + 2] === "(") {
-      const m = /^\$\{\(([^)]*)\)/.exec(s.slice(i));
-      if (m && m[1].includes("e")) {
-        out.dynamic.push("${(e)...} evaluates its value as shell code (zsh)");
-      }
-    }
-    if (zsh && c === "(" && !dq && i > 0 && !/[\s$(|&;]/.test(s[i - 1])) {
-      // a glob qualifier: `*(e:'cmd':)` runs cmd for every match
-      const m = /^\([A-Za-z0-9.^@/\-+,%=*#~]*?e([^\sA-Za-z0-9)])/.exec(
-        s.slice(i),
-      );
-      if (m) {
-        const start = i + m[0].length;
-        const close = ZSH_QUALIFIER_CLOSE[m[1]] ?? m[1];
-        const e = s.indexOf(close, start);
-        if (e < 0) out.dynamic.push("a glob qualifier that runs code (zsh)");
-        else emit(s.slice(start, e));
-      } else if (/^\([A-Za-z0-9.^@/\-+,%=*#~]*\+\w+\)/.test(s.slice(i))) {
-        out.dynamic.push("a glob qualifier that calls a function (zsh)");
-      }
-    }
-    i++;
+    if (!mode.body && posixQuoting(p)) continue;
+    if (posixSubstitution(p)) continue;
+    if (zsh) zshCodeHints(p);
+    p.i++;
   }
 }
 
