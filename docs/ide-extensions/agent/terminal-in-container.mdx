@@ -1,0 +1,45 @@
+---
+title: "Commands in a container"
+---
+
+By default the agent's terminal commands run in your own shell. To run each one in a Docker or Podman container instead, set `continuous.terminal.shell` to `container`:
+
+```json title="settings.json"
+{
+  "continuous.terminal.shell": "container",
+  "continuous.terminal.containerRuntime": "docker",
+  "continuous.terminal.containerImage": "ubuntu:24.04"
+}
+```
+
+`continuous.terminal.containerRuntime` is `auto`, `docker` or `podman`. `auto` uses Docker when it is installed, else Podman. `continuous.terminal.containerImage` needs `bash` and `base64`; empty uses `ubuntu:24.04`. The settings apply to the next command; no reload is needed. In the terminal agent, set the environment variable instead:
+
+```bash
+export CONTINUOUS_TERMINAL_SHELL="container:podman:debian:12"   # or "container"
+continuous
+```
+
+The format is `container`, `container:<runtime>`, `container:<runtime>:<image>` or `container:<image>`.
+
+## What changes
+
+- **The shell.** Commands run in `bash` inside a new container that is removed when the command ends. The agent is told this, so it writes `a && b` and Linux paths. The [command checks](/ide-extensions/agent/command-checks) read the command as bash too.
+- **The workspace.** The workspace folder is the only thing mounted, read-write, and the command starts in it. On Windows it appears as `/workspace`.
+- **No network.** The container has no network access, so commands such as `npm install` or `git clone` fail inside it.
+- **Locked down.** The image is read-only apart from `/tmp` and the workspace, all capabilities are dropped, and memory and process counts are limited. Your environment variables and the Docker socket are not passed in. On Linux and macOS the command runs as you, so files it writes belong to you.
+- **Nothing is kept.** Anything written outside the workspace is gone when the command ends.
+
+## If no container runtime is available
+
+Commands are not run, and are not sent to your own shell instead. The agent receives a message and VS Code shows a notice:
+
+- **The runtime is not installed.** The notice has **Copy install hint**. Install Docker (Docker Desktop on Windows and macOS, or your distribution's `docker` package on Linux) or Podman, which on Windows and macOS also needs `podman machine init` and `podman machine start`.
+- **The daemon is not running.** Start Docker Desktop (or `sudo systemctl start docker` on Linux), or run `podman machine start`, then run the command again.
+
+Continuous never installs a runtime, starts a daemon or pulls an image on its own: the runtime pulls the image the first time it is used.
+
+## Limits
+
+- The workspace is writable from the container, so this does not protect the files in it.
+- The setting applies to the agent's terminal tool only. VS Code's own terminal keeps its profile.
+- Files the agent edits with the edit tools are edited on the host, in the same folder the container sees.
