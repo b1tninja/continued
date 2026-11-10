@@ -1,4 +1,8 @@
-import { ModelRole, ToolDialectSetting } from "@continuedev/config-yaml";
+import {
+  ModelRole,
+  ToolDialectSetting,
+  withToolDialect,
+} from "@continuedev/config-yaml";
 import { fetchwithRequestOptions, redactUrl } from "@continuedev/fetch";
 import { findLlmInfo } from "@continuedev/llm-info";
 import {
@@ -42,6 +46,7 @@ import { Logger } from "../util/Logger.js";
 import mergeJson from "../util/merge.js";
 import { renderChatMessage } from "../util/messageContent.js";
 import { isOllamaInstalled } from "../util/ollamaHelper.js";
+import { providerRecoversText } from "../util/toolDialectLeak.js";
 import {
   MissingSecretError,
   unresolvedSecretNamesOfLlm,
@@ -1156,13 +1161,31 @@ export abstract class BaseLLM implements ILLM {
     );
   }
 
+  /**
+   * The model's `toolDialect` as the recovery switch the OpenAI-compatible
+   * adapter reads (and removes) from the body. Nothing changes without one,
+   * for providers that do not go through that adapter, or with the
+   * CONTINUE_RECOVER_TEXT_TOOL_CALLS variable set (it wins).
+   */
+  private withRecoverySwitch(
+    body: ChatCompletionCreateParams,
+  ): ChatCompletionCreateParams {
+    if (!this.toolDialect || !providerRecoversText(this.providerName)) {
+      return body;
+    }
+    return withToolDialect(
+      body as unknown as Record<string, unknown>,
+      this.toolDialect,
+    ) as unknown as ChatCompletionCreateParams;
+  }
+
   private async *openAIAdapterStream(
     body: ChatCompletionCreateParams,
     signal: AbortSignal,
     onCitations: (c: string[]) => void,
   ): AsyncGenerator<ChatMessage> {
     const stream = this.openaiAdapter!.chatCompletionStream(
-      { ...body, stream: true },
+      { ...this.withRecoverySwitch(body), stream: true },
       signal,
     );
     for await (const chunk of stream) {
@@ -1201,7 +1224,7 @@ export abstract class BaseLLM implements ILLM {
     signal: AbortSignal,
   ): AsyncGenerator<ChatMessage> {
     const response = await this.openaiAdapter!.chatCompletionNonStream(
-      { ...body, stream: false },
+      { ...this.withRecoverySwitch(body), stream: false },
       signal,
     );
     this.lastRequestId = response.id ?? this.lastRequestId;

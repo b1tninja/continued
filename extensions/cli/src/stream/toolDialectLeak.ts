@@ -27,7 +27,8 @@ export function hintToolDialectLeak(args: {
   print?: (line: string) => void;
 }): void {
   const { model } = args;
-  if (!providerRecoversText(model.provider) || hinted.has(model.name)) return;
+  if (!providerRecoversText(model.provider, "cli") || hinted.has(model.name))
+    return;
   const leak = detectToolDialectLeak({
     content: args.content,
     toolCalls: args.toolCalls.map((c) => ({

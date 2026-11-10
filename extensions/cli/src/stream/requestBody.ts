@@ -6,6 +6,7 @@ import {
   convertFromUnifiedHistory,
   convertFromUnifiedHistoryWithSystemMessage,
 } from "core/util/messageConversion.js";
+import { providerRecoversText } from "core/util/toolDialectLeak.js";
 import type {
   ChatCompletionCreateParamsStreaming,
   ChatCompletionMessageParam,
@@ -87,10 +88,10 @@ export function buildChatRequestBody(args: {
       model,
       args.isCompacting ? "oneShot" : "conversation",
     ),
-    // The model's `toolDialect`, as the recovery switch the Bedrock adapter
-    // reads from the body. Nothing is added without one, or with the
+    // The model's `toolDialect`, as the recovery switch the Bedrock and
+    // OpenAI-compatible adapters read from the body (and remove). Nothing is added without one, or with the
     // CONTINUE_RECOVER_TEXT_TOOL_CALLS variable set (it wins).
-    ...(model.provider === "bedrock"
+    ...(providerRecoversText(model.provider, "cli")
       ? withToolDialect({}, model.toolDialect)
       : {}),
   } as ChatCompletionCreateParamsStreaming;
