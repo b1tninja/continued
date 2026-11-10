@@ -1414,7 +1414,12 @@ export abstract class BaseLLM implements ILLM {
           // llama.cpp and Strata report how far they are in a long prompt
           if (
             completionOptions.stream !== false &&
-            (await streamsPromptProgress(this.apiBase, this.apiKey))
+            (await streamsPromptProgress(
+              this.apiBase,
+              this.apiKey,
+              fetch,
+              this.requestOptions,
+            ))
           ) {
             // Not an OpenAI field, so not in the SDK's type
             body = { ...body, return_progress: true } as unknown as typeof body;
