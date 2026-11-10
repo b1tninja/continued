@@ -35,6 +35,7 @@
                   "ide-extensions/agent/plan-mode",
                   "ide-extensions/agent/task-list",
                   "ide-extensions/agent/loop-budgets",
+                  "ide-extensions/agent/leave-and-resume-loop",
                   "ide-extensions/agent/command-checks",
                   "ide-extensions/agent/terminal-in-wsl",
                   "ide-extensions/agent/terminal-in-container",

@@ -1300,16 +1300,146 @@ describe("Loop in the mode picker", () => {
     await pickMode(h, "mode-option-chat");
     // The item goes on in Agent mode; the picker shows the choice
     expect(h.loop().stopRequested).toBe(true);
+    expect(h.loop().leaveRequested).toBe(true);
     expect(h.store.getState().session.mode).toBe("agent");
     expect(h.store.getState().session.loopRequested).toBeUndefined();
     expect(modeButton()).toContain("Chat");
 
     await act(async () => release());
     await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    // A pause, not an end: the loop says why and keeps its items
+    expect(h.loop().stopReason).toBe("left_loop");
     expect(h.itemStatus("1")).toBe("done");
     expect(h.itemStatus("2")).toBe("pending");
     expect(h.requests).toHaveLength(2);
     expect(h.store.getState().session.mode).toBe("chat");
+  });
+});
+
+describe("leaving Loop and coming back", () => {
+  const presentPlan = calls({
+    name: BuiltInToolNames.PresentPlan,
+    args: {
+      title: "Build the parser",
+      plan: "Parse the grammar.",
+      todos: ["Write the lexer", "Add tests"],
+    },
+  });
+  const el = (id: string) =>
+    document.querySelector<HTMLElement>(`[data-testid=${id}]`);
+
+  /** Starts the loop, leaves Loop for Agent while item 1 runs, lets it finish. */
+  async function pause(level: "permissive" | "cautious") {
+    const h = await setup([]);
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+    });
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    h.turns.push(presentPlan, async function* () {
+      yield [{ role: "assistant", content: "Working" }];
+      await held;
+      yield* finish("done", "lexer written")(new AbortController().signal);
+    });
+    await pickMode(h, "mode-option-loop");
+    await send("Plan the parser");
+    await waitFor(() => expect(h.requests).toHaveLength(2));
+    await pickMode(h, "mode-option-agent");
+    await act(async () => release());
+    await waitFor(() => expect(h.loop().stopReason).toBe("left_loop"));
+    // The returning level is the one in force when Loop is chosen again
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level }));
+    });
+    return h;
+  }
+
+  test("the paused loop says so, and an Agent turn meanwhile is not a loop item", async () => {
+    const h = await pause("permissive");
+    expect(h.store.getState().session.mode).toBe("agent");
+    expect(el("loop-paused")?.textContent).toContain(
+      "Paused: you are in Agent mode",
+    );
+    expect(el("loop-phase")?.getAttribute("data-phase")).toBe("paused");
+
+    const before = JSON.stringify(h.loop().items);
+    h.turns.push(async function* () {
+      yield [{ role: "assistant", content: "Fixed the typo" }];
+    });
+    const editor = await getMainEditor();
+    await act(async () => {
+      editor.commands.insertContent("Fix the typo in the readme");
+    });
+    // Earlier messages keep their own toolbars; the main input's is the last
+    const submits = document.querySelectorAll<HTMLElement>(
+      "[data-testid=submit-input-button]",
+    );
+    await act(async () => submits[submits.length - 1].click());
+    await waitFor(() => expect(h.requests).toHaveLength(3));
+    // An ordinary turn: the loop's items, budgets and status are untouched
+    expect(h.requests[2].tools).not.toContain(BuiltInToolNames.FinishItem);
+    expect(JSON.stringify(h.loop().items)).toBe(before);
+    expect(h.loop().status).toBe("stopped");
+    expect(h.loop().stopReason).toBe("left_loop");
+  });
+
+  test("back in Loop at Permissive it resumes by itself, telling the next item the workspace may have changed", async () => {
+    const h = await pause("permissive");
+    h.turns.push(finish("done", "tests added"));
+    await pickMode(h, "mode-option-loop");
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+    expect(h.itemStatus("2")).toBe("done");
+    expect(h.prompt(2)).toContain("only this item: Add tests");
+    expect(h.prompt(2)).toContain("paused while the person was outside Loop");
+    // Said once
+    expect(h.loop().workedOutside).toBeUndefined();
+  });
+
+  test("back in Loop at Cautious it asks: Resume loop (1 task left) goes on, Start fresh plans again", async () => {
+    const h = await pause("cautious");
+    await pickMode(h, "mode-option-loop");
+    expect(h.loop().status).toBe("stopped");
+    expect(el("loop-resume")?.textContent).toBe("Resume loop (1 task left)");
+    expect(el("loop-paused")?.textContent).toContain("start fresh");
+
+    h.turns.push(finish("done", "tests added"));
+    await act(async () => {
+      fireEvent.click(el("loop-resume")!);
+    });
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+    expect(h.prompt(2)).toContain("paused while the person was outside Loop");
+  });
+
+  test("Start fresh drops the paused loop", async () => {
+    const h = await pause("cautious");
+    await pickMode(h, "mode-option-loop");
+    await act(async () => {
+      fireEvent.click(el("loop-start-fresh")!);
+    });
+    expect(h.store.getState().session.loop).toBeUndefined();
+    expect(h.store.getState().session.mode).toBe("plan");
+    expect(h.store.getState().session.loopRequested).toBe(true);
+  });
+
+  test("a finished loop has nothing to resume: Loop plans again", async () => {
+    const h = await setup([]);
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "plan", level: "permissive" }));
+    });
+    h.turns.push(
+      presentPlan,
+      finish("done", "lexer written"),
+      finish("done", "tests added"),
+    );
+    await pickMode(h, "mode-option-loop");
+    await send("Plan the parser");
+    await waitFor(() => expect(h.loop().stopReason).toBe("done"));
+    await pickMode(h, "mode-option-agent");
+    expect(h.store.getState().session.mode).toBe("agent");
+    await pickMode(h, "mode-option-loop");
+    expect(h.loop().stopReason).toBe("done");
+    expect(h.store.getState().session.mode).toBe("plan");
+    expect(el("loop-resume")).toBeNull();
   });
 });
 

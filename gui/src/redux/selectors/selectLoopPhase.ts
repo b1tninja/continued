@@ -7,13 +7,15 @@ import type { RootState } from "../store";
  * no loop at all.
  */
 export type LoopPhase =
-  "planning" | "building" | "waiting" | "stopped" | "idle";
+  "planning" | "building" | "waiting" | "paused" | "stopped" | "idle";
 
 export function selectLoopPhase(state: RootState): LoopPhase {
   const { loop, loopRequested } = state.session;
   // Chosen Loop and not yet planned: the first turn is a plan turn
   if (!loop) return loopRequested ? "planning" : "idle";
-  if (loop.status === "stopped") return "stopped";
+  if (loop.status === "stopped") {
+    return loop.stopReason === "left_loop" ? "paused" : "stopped";
+  }
   if (
     loop.current?.kind === "replan" ||
     loop.status === "replanning" ||
@@ -29,6 +31,7 @@ export const LOOP_PHASE_LABEL: Record<LoopPhase, string> = {
   planning: "Planning",
   building: "Building",
   waiting: "Waiting for you",
+  paused: "Paused",
   stopped: "Stopped",
   idle: "Loop",
 };
