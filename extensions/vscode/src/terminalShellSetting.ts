@@ -83,13 +83,16 @@ export function registerTerminalShellSetting(
 
   const apply = () => {
     const config = vscode.workspace.getConfiguration();
-    if (config.get<string>(SHELL) === "container") {
-      const configured = config.get<string>(RUNTIME);
+    // Machine settings. Only the user value is read, so a workspace
+    // .vscode/settings.json cannot choose where commands run, or which image.
+    const shell = config.inspect<string>(SHELL)?.globalValue;
+    if (shell === "container") {
+      const configured = config.inspect<string>(RUNTIME)?.globalValue;
       const runtime =
         configured === "docker" || configured === "podman"
           ? configured
           : undefined;
-      const image = (config.get<string>(IMAGE) ?? "").trim();
+      const image = (config.inspect<string>(IMAGE)?.globalValue ?? "").trim();
       setTerminalShellPreference({
         kind: "container",
         ...(runtime ? { runtime } : {}),
@@ -99,8 +102,8 @@ export function registerTerminalShellSetting(
       setTimeout(() => void tellContainer(runtime), 0);
       return;
     }
-    if (config.get<string>(SHELL) === "wsl") {
-      const distro = (config.get<string>(DISTRO) ?? "").trim();
+    if (shell === "wsl") {
+      const distro = (config.inspect<string>(DISTRO)?.globalValue ?? "").trim();
       setTerminalShellPreference(
         distro ? { kind: "wsl", distro } : { kind: "wsl" },
       );

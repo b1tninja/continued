@@ -12,7 +12,10 @@ const state = vi.hoisted(() => ({
 
 vi.mock("vscode", () => ({
   workspace: {
-    getConfiguration: () => ({ get: (k: string) => state.config[k] }),
+    getConfiguration: () => ({
+      get: (k: string) => state.config[k],
+      inspect: (k: string) => ({ globalValue: state.config[k] }),
+    }),
     onDidChangeConfiguration: (cb: (e: any) => void) => {
       state.changeListener = cb;
       return { dispose() {} };

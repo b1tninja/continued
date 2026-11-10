@@ -170,12 +170,14 @@
             "Run each terminal command in a fresh Docker or Podman container, with the workspace mounted."
           ],
           "default": "default",
-          "markdownDescription": "Where the agent's terminal commands run. With `wsl` on Windows, each command runs through `wsl.exe` in bash, starting in the workspace folder (a Windows drive appears as `/mnt/c`). It does not change the shell of VS Code's own terminal. It is not isolation by itself: a WSL distribution can reach your Windows drives. Windows only: elsewhere the setting is ignored. Without a distribution installed, commands are not run and you are shown how to install one (`wsl --install` in an administrator PowerShell, then restart). With `container`, each command runs in a new container (see `#continuous.terminal.containerRuntime#` and `#continuous.terminal.containerImage#`); if no runtime is installed or its daemon is not running, commands are not run and you are told how to fix it."
+          "scope": "machine",
+          "markdownDescription": "Where the agent's terminal commands run. With `wsl` on Windows, each command runs through `wsl.exe` in bash, starting in the workspace folder (a Windows drive appears as `/mnt/c`). It does not change the shell of VS Code's own terminal. It is not isolation by itself: a WSL distribution can reach your Windows drives. Windows only: elsewhere the setting is ignored. Without a distribution installed, commands are not run and you are shown how to install one (`wsl --install` in an administrator PowerShell, then restart). With `container`, each command runs in a new container (see `#continuous.terminal.containerRuntime#` and `#continuous.terminal.containerImage#`); if no runtime is installed or its daemon is not running, commands are not run and you are told how to fix it. This is a machine setting, so a workspace cannot change where commands run."
         },
         "continuous.terminal.wslDistro": {
           "type": "string",
           "default": "",
-          "markdownDescription": "The WSL distribution for `#continuous.terminal.shell#` set to `wsl`, as listed by `wsl -l`. Empty uses the default distribution."
+          "scope": "machine",
+          "markdownDescription": "The WSL distribution for `#continuous.terminal.shell#` set to `wsl`, as listed by `wsl -l`. Empty uses the default distribution. This is a machine setting, so a workspace cannot change it."
         },
         "continuous.terminal.containerRuntime": {
           "type": "string",
@@ -185,11 +187,13 @@
             "podman"
           ],
           "default": "auto",
+          "scope": "machine",
           "markdownDescription": "The container runtime for `#continuous.terminal.shell#` set to `container`. `auto` uses Docker when it is installed, else Podman."
         },
         "continuous.terminal.containerImage": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "markdownDescription": "The image for `#continuous.terminal.shell#` set to `container`. It needs `bash` and `base64`. Empty uses `ubuntu:24.04`. The runtime pulls it on first use."
         },
         "continuous.shareMcpServersWithVSCode": {
