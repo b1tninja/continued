@@ -38,17 +38,21 @@ const PATTERNS: Pattern[] = [
   {
     id: "important-for-ai",
     label: "has a note meant for an AI reader",
-    re: /\b(important|note|attention|instruction)s?\b[^.\n]{0,20}\b(for|to)\s+(the\s+)?(ai|assistant|agent|llm|language model)\b/i,
+    // The address has to end in a colon, comma or dash, so a heading such as
+    // "Important: for the agent module" is not taken for one.
+    re: /\b(important|note|attention|instruction)s?\b[^.\n]{0,20}\b(for|to)\s+(the\s+)?(ai\s+)?(ai|assistant|agent|llm|language model)\s*[:,\-\u2014]/i,
   },
   {
     id: "conceal-from-user",
     label: "asks to hide something from the user",
-    re: /\b(do not|don't|never)\s+(tell|inform|mention|show|reveal|let)\b[^.\n]{0,25}\b(the\s+)?user\b/i,
+    re: /\b(do not|don't|never)\s+(tell|inform|notify|alert|let|show|reveal\s+to|mention\s+to)\s+(the\s+)?user\b(?!\s+(their|his|her|your|a|an)\b)|\b(do not|don't|never)\s+(mention|reveal|disclose|show)\s+(this|it|that|these|the steps|the above)\b[^.\n]{0,40}\buser\b|\bwithout\s+(telling|informing|notifying)\s+the\s+user\b/i,
   },
   {
     id: "run-this-command",
     label: "tells the reader to run a command",
-    re: /\b(you\s+(must|should|need to)\s+(now\s+)?|please\s+|now\s+|first,?\s+)(run|execute)\s+(the\s+following|this)\s+(shell\s+)?(command|script|code)/i,
+    // "you should run the following command" is ordinary documentation, so
+    // only wording that interrupts the task counts.
+    re: /\b(you\s+must\s+(now\s+)?|now\s+|first,?\s+|instead,?\s+|immediately\s+|before\s+(responding|answering|continuing),?\s+(you\s+(must|need to)\s+)?)(run|execute)\s+(the\s+following|this)\s+(shell\s+)?(command|script|code)/i,
   },
   {
     id: "send-data",
@@ -58,7 +62,59 @@ const PATTERNS: Pattern[] = [
   {
     id: "fake-role-tag",
     label: "contains a fake system or instruction tag",
-    re: /<\s*\/?\s*(system|instructions?|system[-_ ]prompt|assistant)\s*>|\[\s*(system|inst)\s*\]|^\s*(system|assistant)\s*:\s*you\b/im,
+    // A <system> element in a config file is common, so a tag followed by
+    // another element is not taken for a role marker.
+    re: /<\s*\/?\s*(system|instructions?|system[-_ ]prompt|assistant|important)\s*>(?=\s*[^\s<])|\[\s*(system|inst)\s*\]|^\s*(system|assistant)\s*:\s*you\b/im,
+  },
+  {
+    id: "chat-template-token",
+    label: "contains a chat-template control token",
+    re: /<\|(im_start|im_end|system|user|assistant|endoftext)\|>|<<\/?SYS>>|\[\/?INST\]/i,
+  },
+  {
+    id: "forget-above",
+    label: "asks to drop what came before",
+    re: /\b(forget|disregard|ignore)\s+(everything|all|the)\s+(above|you were told|you have been told|that came before|before this)\b/i,
+  },
+  {
+    id: "role-reassign",
+    label: "tries to reassign the agent's role or task",
+    re: /\b(you are now (in [a-z ]{1,20}mode|an? unrestricted|root\b)|from now on,?\s+you\s+(will|must|are|should)|your\s+(real|new|actual|true)\s+(task|goal|objective|job)\b)/i,
+  },
+  {
+    id: "claims-authority",
+    label: "claims to speak for the user or to hold the user's approval",
+    re: /\bmessage\s+(from|by)\s+the\s+(user|developer|system|administrator|admin)\s*:|\bthe\s+user\s+(has|have)\s+(already\s+)?(authori[sz]ed|approved|allowed|granted|permitted)\b/i,
+  },
+  {
+    id: "weaken-approval",
+    label: "asks to switch off tool approval",
+    re: /autoApprove\s*(to|=|:)\s*true|dangerously-?skip-?permissions|yolo\s+mode/i,
+  },
+  {
+    id: "secret-path",
+    label: "asks to read or send a credential file",
+    re: /\b(read|cat|include|send|upload|print|output|copy|pass)\b[^.\n]{0,40}(~\/\.ssh|\.ssh\/id_|\.aws\/credentials|\.cursor\/mcp\.json|\/etc\/passwd)/i,
+  },
+  {
+    id: "system-prompt-leak",
+    label: "asks to reveal the system prompt",
+    re: /\b(write|print|reveal|output|repeat|send|show)\b[^.\n]{0,20}\b(your|the)\s+system\s+prompt\b/i,
+  },
+  {
+    id: "addresses-ai-readers",
+    label: "addresses AI readers of the page",
+    re: /\b(ai|llm)\s+(agents?|assistants?|models?)\s+(reading|processing|summari[sz]ing|who read)\b/i,
+  },
+  {
+    id: "fetch-and-follow",
+    label: "asks to fetch a URL and follow what it says",
+    re: /\b(fetch|download|open|visit|load)\b[^.\n]{0,60}\bhttps?:\/\/\S+[^.\n]{0,30}\b(and|then)\s+(follow|obey|execute|run|apply)\b/i,
+  },
+  {
+    id: "image-exfil",
+    label: "has an image link whose address carries a secret",
+    re: /!\[[^\]]*\]\(https?:\/\/[^)\s]*(secret|token|api[_-]?key|passw|credential)[^)\s]*\)/i,
   },
 ];
 
@@ -70,10 +126,47 @@ export interface InjectionMatch {
 /** Which instruction-like patterns the text matches. */
 export function detectInstructionLikeText(text: string): InjectionMatch[] {
   if (!text) return [];
-  return PATTERNS.filter((p) => p.re.test(text)).map(({ id, label }) => ({
-    id,
-    label,
-  }));
+  const seen = normalizeForDetection(text);
+  const found = PATTERNS.filter((p) => p.re.test(seen)).map(
+    ({ id, label }) => ({ id, label }),
+  );
+  if (HIDDEN_UNICODE.test(text)) {
+    found.push({
+      id: "hidden-unicode",
+      label:
+        "contains invisible Unicode tag or bidirectional control characters",
+    });
+  }
+  return found;
+}
+
+/** Unicode tag characters (the U+E0000 block) and bidirectional overrides. */
+const HIDDEN_UNICODE = /[\u{E0000}-\u{E007F}\u202A-\u202E\u2066-\u2069]/u;
+
+/**
+ * The text as the patterns see it: compatibility-normalised, with soft
+ * hyphens and zero-width characters removed (they split words so a pattern
+ * misses), and Unicode tag characters mapped back to the ASCII they encode
+ * (the "ASCII smuggling" trick, which renders as nothing but reads as text to
+ * a model). Used for matching only; the output the model gets is unchanged.
+ */
+export function normalizeForDetection(text: string): string {
+  return text
+    .normalize("NFKC")
+    .replace(
+      /[\u00AD\u200B-\u200F\u2060-\u2064\uFEFF\u202A-\u202E\u2066-\u2069]/g,
+      "",
+    )
+    .replace(
+      /[\u{E0020}-\u{E007E}]+/gu,
+      (run) =>
+        " " +
+        [...run]
+          .map((c) => String.fromCharCode(c.codePointAt(0)! - 0xe0000))
+          .join("") +
+        " ",
+    )
+    .replace(/[\u{E0000}-\u{E007F}]/gu, "");
 }
 
 /** The reminder put before flagged output. One short paragraph. */
