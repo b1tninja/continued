@@ -31,11 +31,11 @@ describe("cn serve binding", () => {
     }
   });
 
-  it("refuses a short explicit token off loopback and accepts a missing one", () => {
+  it("requires a token of 16 characters or more off loopback", () => {
     for (const host of ["0.0.0.0", "::", "192.168.1.20", "myhost"]) {
       expect(isLoopbackHost(host)).toBe(false);
-      expect(serveBindingProblem(host, undefined)).toBeUndefined();
-      expect(serveBindingProblem(host, "   ")).toBeUndefined();
+      expect(serveBindingProblem(host, undefined)).toMatch(/16 characters/);
+      expect(serveBindingProblem(host, "   ")).toMatch(/16 characters/);
       expect(serveBindingProblem(host, "short")).toMatch(/16 characters/);
       expect(serveBindingProblem(host, "0123456789abcdef0123")).toBeUndefined();
     }
@@ -43,24 +43,18 @@ describe("cn serve binding", () => {
 });
 
 describe("the serve access token", () => {
-  it("keeps an explicit token and generates one when --token is omitted", () => {
-    expect(resolveServeToken(`  ${TOKEN}  `)).toEqual({
-      token: TOKEN,
-      generated: false,
-    });
-    const generated = resolveServeToken(
-      undefined,
-      () => "generated-token-value",
-    );
-    expect(generated).toEqual({
-      token: "generated-token-value",
-      generated: true,
-    });
-    expect(resolveServeToken("   ").generated).toBe(true);
-    const first = resolveServeToken(undefined).token;
-    const second = resolveServeToken(undefined).token;
-    expect(first.length).toBeGreaterThanOrEqual(16);
-    expect(first).not.toBe(second);
+  it("is optional: absent without --token, taken from --token or the environment", () => {
+    expect(resolveServeToken(undefined, {})).toBeUndefined();
+    expect(resolveServeToken("   ", {})).toBeUndefined();
+    expect(resolveServeToken(`  ${TOKEN}  `, {})).toBe(TOKEN);
+    expect(
+      resolveServeToken(undefined, { CONTINUOUS_SERVE_TOKEN: ` ${TOKEN} ` }),
+    ).toBe(TOKEN);
+    expect(
+      resolveServeToken("from-flag-0123456789", {
+        CONTINUOUS_SERVE_TOKEN: TOKEN,
+      }),
+    ).toBe("from-flag-0123456789");
   });
 });
 
@@ -148,9 +142,12 @@ describe("serve request guards", () => {
     }
   });
 
-  async function start(boundHost = "127.0.0.1"): Promise<number> {
+  async function start(
+    boundHost = "127.0.0.1",
+    token: string | undefined = TOKEN,
+  ): Promise<number> {
     const app = express();
-    installServeGuards(app, { boundHost, token: TOKEN });
+    installServeGuards(app, { boundHost, token });
     app.use(express.json());
     let hits = 0;
     app.post("/exit", (_req, res) => {
@@ -224,6 +221,19 @@ describe("serve request guards", () => {
     });
     expect(accepted.status).toBe(200);
     expect(JSON.parse(accepted.body).hits).toBe(1);
+  });
+
+  it("without a token still checks Host and Origin but needs no bearer", async () => {
+    const port = await start("127.0.0.1", undefined);
+    const ok = await request(port, { host: `127.0.0.1:${port}` });
+    expect(ok.status).toBe(200);
+    const badHost = await request(port, { host: "evil.example" });
+    expect(badHost.status).toBe(421);
+    const badOrigin = await request(port, {
+      host: `127.0.0.1:${port}`,
+      origin: "https://evil.example",
+    });
+    expect(badOrigin.status).toBe(403);
   });
 
   it("accepts localhost when the server is bound to the loopback address", async () => {

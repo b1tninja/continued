@@ -25,7 +25,9 @@ import { logger } from "../util/logger.js";
  * "cn serve"). The server takes messages, approvals and loop answers, and
  * will take the policy levels, so anything that can reach the port can act
  * as the person. It listens on loopback unless told otherwise. Every request
- * carries a bearer token, generated and printed when `--token` is omitted.
+ * carries a bearer token when one is given with `--token` (or
+ * `CONTINUOUS_SERVE_TOKEN`). On loopback a token is optional; a server that
+ * listens beyond this computer will not start without one.
  * On loopback the Host header must be a loopback name or address, and a
  * request that carries an Origin header is refused.
  */
@@ -48,31 +50,30 @@ export function isLoopbackHost(host: string): boolean {
 
 /**
  * Why the server must not start with these options, or undefined when it
- * may. A missing token is filled in with a generated one. An explicit token
- * shorter than 16 characters is refused when the host is not loopback.
+ * may. On loopback a token is optional. Off loopback one is required, at
+ * least 16 characters, because anything on the network could otherwise act
+ * as the person.
  */
 export function serveBindingProblem(
   host: string,
   token: string | undefined,
 ): string | undefined {
+  if (isLoopbackHost(host)) return undefined;
   const trimmed = token?.trim() ?? "";
-  if (!trimmed || isLoopbackHost(host) || trimmed.length >= 16) {
-    return undefined;
-  }
-  return `--host ${host} listens beyond this computer, so --token must be at least 16 characters.`;
+  if (trimmed.length >= 16) return undefined;
+  return `--host ${host} listens beyond this computer, so --token (or CONTINUOUS_SERVE_TOKEN) is required and must be at least 16 characters.`;
 }
 
 /**
- * The token every request must carry. An omitted or blank `--token` is
- * replaced with a generated one, which the server prints at startup.
+ * The token every request must carry, from `--token` or the environment, or
+ * undefined when none was given (loopback only, see `serveBindingProblem`).
  */
 export function resolveServeToken(
   token: string | undefined,
-  generate: () => string = () => randomBytes(24).toString("base64url"),
-): { token: string; generated: boolean } {
-  const trimmed = token?.trim() ?? "";
-  if (trimmed) return { token: trimmed, generated: false };
-  return { token: generate(), generated: true };
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const trimmed = (token ?? env.CONTINUOUS_SERVE_TOKEN ?? "").trim();
+  return trimmed || undefined;
 }
 
 /** The host from a Host header, without a port and without IPv6 brackets. */
@@ -92,7 +93,7 @@ export function hostHeaderName(hostHeader: string | undefined): string {
 const UNSPECIFIED_HOSTS = new Set([
   "0.0.0.0",
   "::",
-  "https://example.org/m/orchid",
+  "0:0:0:0:0:0:0:0",
 ]);
 
 /**
@@ -160,7 +161,7 @@ function headerValue(value: string | string[] | undefined): string | undefined {
  */
 export function installServeGuards(
   app: Express,
-  options: { boundHost: string; token: string },
+  options: { boundHost: string; token: string | undefined },
 ): void {
   const { boundHost, token } = options;
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -177,7 +178,7 @@ export function installServeGuards(
     }
     next();
   });
-  app.use(bearerTokenMiddleware(token));
+  if (token) app.use(bearerTokenMiddleware(token));
 }
 
 /** Whether a request's Authorization header carries the token, compared in constant time. */
