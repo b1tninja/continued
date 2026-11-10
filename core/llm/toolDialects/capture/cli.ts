@@ -5,7 +5,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { parseArgs } from "node:util";
 
 import {
   createBedrockClient,
@@ -54,29 +53,64 @@ export interface CliOptions extends PlanOptions {
 
 const STREAMING = { both: [false, true], stream: [true], whole: [false] };
 
+const VALUE_FLAGS = [
+  "model",
+  "passes",
+  "temps",
+  "streaming",
+  "profile",
+  "region",
+  "base-url",
+  "api-key-env",
+  "max-tokens",
+  "price-in",
+  "price-out",
+  "max-calls",
+  "out",
+];
+
+interface Flags {
+  model?: string[];
+  passes?: string;
+  temps?: string;
+  streaming?: string;
+  profile?: string;
+  region?: string;
+  "base-url"?: string;
+  "api-key-env"?: string;
+  "max-tokens"?: string;
+  "price-in"?: string;
+  "price-out"?: string;
+  "max-calls"?: string;
+  out?: string;
+  run?: boolean;
+}
+
+/** `--name value` pairs and the `--run` switch; --model may repeat. */
+function parseFlags(argv: string[]): Flags {
+  const out: Record<string, string | string[] | boolean> = {};
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--run") {
+      out.run = true;
+      continue;
+    }
+    const name = arg.startsWith("--") ? arg.slice(2) : "";
+    if (!VALUE_FLAGS.includes(name)) throw new Error(`unknown option ${arg}`);
+    const value = argv[++i];
+    if (value === undefined) throw new Error(`${arg} needs a value`);
+    if (name === "model")
+      out.model = [...((out.model as string[]) ?? []), value];
+    else out[name] = value;
+  }
+  return out as Flags;
+}
+
 export function parseCli(
   argv: string[],
   tools: PlanOptions["tools"],
 ): CliOptions {
-  const { values } = parseArgs({
-    args: argv,
-    options: {
-      model: { type: "string", multiple: true },
-      passes: { type: "string" },
-      temps: { type: "string" },
-      streaming: { type: "string" },
-      profile: { type: "string" },
-      region: { type: "string" },
-      "base-url": { type: "string" },
-      "api-key-env": { type: "string" },
-      "max-tokens": { type: "string" },
-      "price-in": { type: "string" },
-      "price-out": { type: "string" },
-      "max-calls": { type: "string" },
-      out: { type: "string" },
-      run: { type: "boolean" },
-    },
-  });
+  const values = parseFlags(argv);
   const streamingKey = (values.streaming ?? "both") as keyof typeof STREAMING;
   if (!STREAMING[streamingKey])
     throw new Error("--streaming is both, stream or whole");
