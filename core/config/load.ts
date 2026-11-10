@@ -811,7 +811,8 @@ async function loadContinueConfigFromJson(
   overrideConfigJson: SerializedContinueConfig | undefined,
 ): Promise<ConfigResult<ContinueConfig>> {
   beginTrustCheck();
-  const workspaceConfigs = await getWorkspaceRcConfigs(ide);
+  const { configs: workspaceConfigs, errors: rcErrors } =
+    await getWorkspaceRcConfigs(ide);
   // Serialized config
   let {
     config: serialized,
@@ -824,6 +825,7 @@ async function loadContinueConfigFromJson(
     overrideConfigJson,
     ide,
   );
+  errors = [...rcErrors, ...(errors ?? [])];
 
   if (!serialized || configLoadInterrupted) {
     return { errors, config: undefined, configLoadInterrupted: true };
