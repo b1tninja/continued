@@ -106,6 +106,11 @@ const INSTALL: Record<ContainerRuntime, string> = {
     "Install Podman (https://podman.io/docs/installation; on Windows and macOS it also needs `podman machine init` and `podman machine start`)",
 };
 
+/** How to get the runtime, for a notice's copy action. */
+export function containerInstallHint(runtime: ContainerRuntime): string {
+  return INSTALL[runtime];
+}
+
 /**
  * The sentence for a status that is not ready, or undefined when it is. It
  * says how to get the runtime and never does it for the person.

@@ -36,6 +36,7 @@
                   "ide-extensions/agent/task-list",
                   "ide-extensions/agent/command-checks",
                   "ide-extensions/agent/terminal-in-wsl",
+                  "ide-extensions/agent/terminal-in-container",
                   "ide-extensions/agent/model-setup",
                   "ide-extensions/agent/how-to-customize",
                   "ide-extensions/agent/context-selection"
