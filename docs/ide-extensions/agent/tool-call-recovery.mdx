@@ -1,0 +1,32 @@
+---
+title: "Text Tool-Call Recovery"
+---
+
+Some models on Bedrock write a tool call as plain text in their reply instead of making the call, so the agent shows the text and does nothing. Recovery reads such a reply and turns the text into the call. It is experimental and off by default.
+
+```bash
+CONTINUE_RECOVER_TEXT_TOOL_CALLS=qwen-xml
+```
+
+Set the variable in the environment that starts the editor or the CLI. It takes one name or a comma-separated list:
+
+| Value                | Recovers                                                              | Only for model ids containing |
+| -------------------- | --------------------------------------------------------------------- | ----------------------------- |
+| `qwen-xml`           | Qwen3-Coder's markup: `<tool_call><function=NAME><parameter=KEY>...`  | `qwen`                        |
+| `pythonic`           | Python call syntax, as Nova 2 Lite writes it: `present_plan(title="...")` | `nova`                    |
+| `qwen-xml,pythonic`  | Both                                                                  | each by its own match         |
+
+The same setting can be given per model as `x_continue_recover_text_tool_calls` in `requestOptions.extraBodyProperties`; it takes the same values. Recovery applies to Amazon Bedrock models only, and a model whose id does not match gets no recovery whatever the setting says.
+
+## Rules
+
+Recovery is strict, because text that looks like a call is sometimes an example. A call is recovered only when all of these hold:
+
+- The model made no tool call of its own in that reply.
+- The call names a tool that is in the request, and every argument is one the tool's schema declares, with a value of the type the schema asks for. Every required argument is present.
+- For `qwen-xml`, the reply is nothing but calls and whitespace, and a marker inside a code fence or right after a backtick does not start a call.
+- For `pythonic`, each call starts a line at column 0 outside a code fence, uses keyword arguments only, and the reply is nothing but such calls. Values are read as Python literals (strings, numbers, `True`, `False`, `None`, lists, tuples, dicts with string keys) by a small parser. Nothing is evaluated.
+
+Anything else stays text, exactly as the model wrote it. While a reply streams, text that might be the start of a call is held back until the reply ends, so a recovered call never shows as text first; with recovery on, replies from a matching model can appear later than without it.
+
+A recovered call goes through the same tool permissions as any other call.

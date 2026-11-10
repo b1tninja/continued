@@ -6,6 +6,7 @@ import {
   type ToolPolicy,
 } from "@continuedev/terminal-security";
 import { commandLintGate } from "core/tools/permissions/commandLint.js";
+import { missingBinaryGate } from "core/tools/permissions/missingBinaryGate.js";
 import { getCommandExecutor } from "core/util/commandExecutor.js";
 import { getTerminalShellPreference } from "core/util/shell.js";
 
@@ -101,7 +102,11 @@ export function describeShell(
 // Why a command is not run: its place (WSL) is not there, or the lint
 function commandBlocked(command: string): string | undefined {
   const executor = getCommandExecutor();
-  return executor.unavailable ?? commandLintGate(command, executor.shell.kind);
+  return (
+    executor.unavailable ??
+    commandLintGate(command, executor.shell.kind) ??
+    missingBinaryGate(command, executor)
+  );
 }
 
 // Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL

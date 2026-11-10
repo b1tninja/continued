@@ -1,0 +1,45 @@
+---
+title: "continuous acp"
+---
+
+`continuous acp` runs the terminal agent as an [Agent Client Protocol](https://agentclientprotocol.com) (ACP) agent. An editor that runs ACP agents starts it as a subprocess and talks to it over stdin and stdout.
+
+```bash
+continuous acp
+```
+
+Run by hand, it waits for JSON-RPC on stdin and prints nothing else; it is meant to be started by the editor. stdout carries the protocol only. Logs and anything else that would print go to stderr.
+
+The agent uses the terminal agent's own configuration: the same config file, model, MCP servers, rules and tool permissions as `continuous` in a terminal. It offers no ACP authentication method, so the credentials the terminal agent already has are the ones used.
+
+## Point an editor at it
+
+Register `continuous` as a custom agent with the argument `acp`. The editor's own documentation says where its agent list lives (Zed and JetBrains IDEs both run ACP agents). The command is:
+
+| Field     | Value        |
+| --------- | ------------ |
+| Command   | `continuous` |
+| Arguments | `acp`        |
+
+The editor sends the project folder as the session's working directory, and the agent runs its tools there. This has been tested against a scripted client, not yet against Zed or a JetBrains IDE, so expect to report problems a real editor shows.
+
+## What is supported
+
+- One session per process. A second `session/new` is refused; start another process for another conversation.
+- Text prompts, and file references (`resource_link`), which reach the model as `@<uri>`.
+- The model's reply as streamed text, and each tool call with its kind (read, edit, delete, search, execute, fetch or other), a title, the file path when the arguments name one, and its result, trimmed to 50,000 characters.
+- Cancel. A cancelled prompt ends with the stop reason `cancelled`, and permission requests waiting at that moment are refused.
+
+## What is not supported
+
+- Loading or listing earlier sessions (`loadSession` is off).
+- Images, audio and embedded resources in a prompt. A prompt that has them is refused with an invalid-params error rather than having them dropped.
+- MCP servers sent by the editor. The agent loads the MCP servers of its own configuration.
+- The editor's file and terminal methods. The agent reads and writes the disk and runs its own shell, so unsaved editor buffers are not seen and diffs are not drawn by the editor.
+- Session modes (chat, agent, plan) and plan or thought updates.
+
+## Permission requests fail closed
+
+When the tool permission policy asks about a call, the agent sends the editor a permission request with two options, Allow and Reject. The call runs only if the editor answers by selecting Allow. Any other result refuses it: Reject, a cancelled answer, an error, a malformed reply, an unknown option, a closed connection, a cancelled prompt, or the end of the turn. An editor that cannot answer permission requests therefore cannot run anything the policy asks about.
+
+There is no "always allow" option. A standing rule belongs in your [tool permissions](/reference#toolpermissions), not in an editor popup. Calls the policy allows run without a request, and calls it denies are refused as they are in the terminal.
