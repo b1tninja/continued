@@ -146,7 +146,11 @@ function finishRun(
     )?.check;
     const itemId = loop.current.itemId;
     const settled = settleSteeredAnswers(
-      finishItemRun(loop, loop.current.report, { check }),
+      finishItemRun(loop, loop.current.report, {
+        check,
+        sessionTokens: sessionTokens(),
+        now: new Date(),
+      }),
       delivered,
     );
     // Waiting with no question open would wait forever
@@ -255,6 +259,7 @@ export function nextLoopTurn(
         // prepareLoopTurn makes the switch before the turn is sent.
         loop = startItemRun(prepared.loop, action.itemId, historyLength, now, {
           model: loopItemModelRecord(item.model),
+          sessionTokens: sessionTokens(),
         });
         enterItemMode();
         commitLoop(loop);

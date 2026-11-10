@@ -25,8 +25,14 @@ export interface LoopUsage {
   items: { done: number; total: number };
   /** Item runs started, counting each re-run of an item */
   runs: number;
-  /** Per item: its runs and where it stands */
-  perItem: Array<{ id: string; runs: number; status: string }>;
+  /** Per item: its runs, where it stands and what its runs used (when recorded) */
+  perItem: Array<{
+    id: string;
+    runs: number;
+    status: string;
+    tokens?: number;
+    ms?: number;
+  }>;
 }
 
 function limit(used: number, max: number): LoopLimitUsage {
@@ -62,6 +68,7 @@ export function loopUsage(
       id: i.id,
       runs: i.attempts,
       status: i.status,
+      ...(i.usage ? { tokens: i.usage.tokens, ms: i.usage.ms } : {}),
     })),
   };
 }

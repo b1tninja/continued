@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createLoop } from "./loopMode";
+import {
+  createLoop,
+  finishItemRun,
+  finishParallelRun,
+  startItemRun,
+  startParallelRun,
+} from "./loopMode";
 import {
   describeRoundUsage,
   describeTimeUsage,
@@ -107,5 +113,68 @@ describe("formatting", () => {
     expect(describeTokenUsage(free.tokens)).toBe("60K used");
     expect(describeTimeUsage(free.time)).toBe("19m in");
     expect(describeRoundUsage(free.rounds)).toBe("Round 1");
+  });
+});
+
+describe("per-item usage", () => {
+  const usageOf = (loop: ReturnType<typeof loopWith>, id: string) =>
+    loop.items.find((i) => i.id === id)?.usage;
+
+  it("counts a run's own tokens and time, and adds a second run's", () => {
+    let loop = loopWith();
+    loop = startItemRun(loop, "1", 0, T0, { sessionTokens: 1_000 });
+    loop = finishItemRun(
+      loop,
+      { outcome: "later" },
+      { sessionTokens: 4_000, now: minutes(3) },
+    );
+    expect(usageOf(loop, "1")).toEqual({ tokens: 3_000, ms: 3 * 60_000 });
+    loop = startItemRun(loop, "1", 0, minutes(10), { sessionTokens: 4_000 });
+    loop = finishItemRun(
+      loop,
+      { outcome: "done" },
+      { sessionTokens: 4_500, now: minutes(12) },
+    );
+    expect(usageOf(loop, "1")).toEqual({ tokens: 3_500, ms: 5 * 60_000 });
+  });
+
+  it("records only what it was given", () => {
+    let loop = loopWith();
+    loop = startItemRun(loop, "1", 0, T0);
+    loop = finishItemRun(loop, { outcome: "done" }, { now: minutes(2) });
+    expect(usageOf(loop, "1")).toEqual({ tokens: 0, ms: 2 * 60_000 });
+    loop = startItemRun(loop, "2", 0, T0);
+    loop = finishItemRun(loop, { outcome: "done" });
+    expect(usageOf(loop, "2")).toBeUndefined();
+  });
+
+  it("counts a parallel worker's time from its start and the tokens it reports", () => {
+    let loop = loopWith();
+    loop = startParallelRun(loop, "3", T0);
+    loop = finishParallelRun(
+      loop,
+      "3",
+      { report: { outcome: "done" }, tokens: 7_500 },
+      minutes(6),
+    );
+    expect(usageOf(loop, "3")).toEqual({ tokens: 7_500, ms: 6 * 60_000 });
+  });
+
+  it("is in the usage's per-item list", () => {
+    let loop = loopWith();
+    loop = startItemRun(loop, "1", 0, T0, { sessionTokens: 1_000 });
+    loop = finishItemRun(
+      loop,
+      { outcome: "done" },
+      { sessionTokens: 2_000, now: minutes(1) },
+    );
+    const u = loopUsage(loop, { sessionTokens: 2_000, now: minutes(1) });
+    expect(u.perItem[0]).toMatchObject({
+      id: "1",
+      runs: 1,
+      tokens: 1_000,
+      ms: 60_000,
+    });
+    expect(u.perItem[1].tokens).toBeUndefined();
   });
 });

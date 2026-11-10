@@ -470,6 +470,11 @@ export interface LoopItemState {
   /** The last run of the item's check (TaskItem.check) */
   check?: LoopCheckResult;
   /**
+   * What the item's runs have used, all of them: tokens (output and input
+   * the provider did not cache, as the loop's budget counts) and wall time
+   */
+  usage?: { tokens: number; ms: number };
+  /**
    * The model the item's last run went to, when the item names one
    * (TaskItem.model): its title, and why the item's own model was not used.
    */
@@ -707,6 +712,8 @@ export interface LoopState {
     /** History length when it started; its messages come after */
     historyIndex: number;
     startedAt: string;
+    /** Session tokens when an item's run started, to count the run's own */
+    tokensAtStart?: number;
     /** What finish_item reported during this run */
     report?: {
       outcome: "done" | "stuck" | "waiting" | "later";
