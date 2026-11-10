@@ -21,9 +21,17 @@ The plan tool takes the same text as `budget` in `todo_details`. Parts go in any
 | `turns`   | `25 turns`                              | Model requests in one run of the to-do                         |
 | `tokens`  | `200K tokens`, `1.5M tokens`, `5000 tok` | Output plus input the provider did not cache, over all its runs |
 | `minutes` | `20 min`, `20 minutes`, `20m`           | Wall time over all its runs                                    |
-| dollars   | `$0.60`                                 | Kept in the plan, not enforced: the loop has no cost counter   |
+| dollars   | `$0.60`                                 | Cost over all its runs, at list price; enforced only while the cost is known |
 
 `K` and `M` apply to tokens only; `5m` is five minutes.
+
+### Dollar budgets
+
+`budget: $0.60` limits what the to-do may cost. The loop prices the session's usage by model and kind (input, output, cache reads, cache writes) between the start and end of each run, and adds the runs. Prices are list prices for the standard tier; batch, flex and fast tiers are not detected. The same price table drives the cost shown in chat.
+
+A dollar budget is enforced only while the cost is known. A model with no price in the table has an unknown cost, which is never counted as zero: the to-do shows `cost unknown for this model; dollar budget not enforced`, and the other limits still apply. A cost is also unknown when a to-do ran tokens that were not priced, or when the loop was saved by a version without the cost counter.
+
+When the cost is known, a to-do shows `$0.42 of $0.60, $0.18 left`, gets the same 80% note as the other limits (`this item has used 80% of its cost budget`), and ends as over budget with its work kept when it reaches the limit. The at-a-limit policy below applies to it like any other limit. Dollars are not divided by the Set a budget step; they come from the plan or your numbers.
 
 ## Set a budget when you build
 
@@ -61,8 +69,8 @@ An extension is half of the to-do's limit for the kind that ran out. Tokens and 
 
 Review reads the to-do's progress: files changed or its check improving, and no stuck signal. It extends at most once per to-do, and by at most half of the reserve left. A to-do that cannot be extended but is progressing is split; one that is not progressing stops. The IDE does not pass progress to Review yet, so there it stops the to-do the way Force does.
 
-The limit policy runs in the IDE. In the terminal agent, a to-do over its token or minute budget ends as over budget with its work kept; turns are not counted there.
+The limit policy runs in the IDE. In the terminal agent, a to-do over its token, minute or dollar budget ends as over budget with its work kept.
 
 ## Usage
 
-Once a budget is set, the loop controls show meters for rounds, tokens and time (amber from 80%, red at the limit), and each to-do shows its runs, tokens and time, for example `2 runs · 180K tokens · 14 min`.
+Once a budget is set, the loop controls show meters for rounds, tokens and time (amber from 80%, red at the limit), and each to-do shows its runs, tokens, cost and time, for example `2 runs · 180K tokens · $0.74 · 14 min`. A **Cost** line under the meters shows what the loop has cost so far; hovering it says it is an estimate at list price. It reads `cost unknown` when any model used in the loop has no price.

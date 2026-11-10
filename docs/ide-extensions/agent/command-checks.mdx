@@ -24,12 +24,12 @@ The check looks at the command text and the shell that will run it (PowerShell o
 | CL030 | once   | A long `python -c`, `node -e`, `perl -e` or `pwsh -Command` script in double quotes using `$`, a backtick or `\"` |
 | CL040 | once   | `&&` or `\|\|` in PowerShell, where Windows PowerShell 5.1 reports a syntax error                                 |
 | CL041 | once   | `2>/dev/null` in PowerShell, which wants `2>$null`                                                                |
-| CL042 | once   | Text that reads as bash (`ls -la`, `rm -rf`, `sudo`) in PowerShell, with the PowerShell equivalent                |
+| CL042 | once   | Text that reads as bash (`ls -la`, `rm -rf`, `touch`, `sudo`) in PowerShell, with the PowerShell equivalent                |
 | CL043 | once   | Text that reads as cmd (`%NAME%`, `if exist`, `dir /b`) in PowerShell                                             |
-| CL044 | once   | Text that reads as PowerShell in bash or zsh                                                                      |
-| CL045 | once   | Text written for another shell in cmd                                                                             |
+| CL044 | once   | Text that reads as PowerShell or cmd in bash or zsh |
+| CL045 | once   | Text that reads as another shell in cmd |
 
-A heredoc that only feeds a command (`python - <<'PY'`), a here-string (`<<<`) and a `<<` inside a quoted string are not flagged.
+CL042 to CL045 are skipped when a more specific finding from CL001 to CL004 already applies, and when the shell is not known. A heredoc that only feeds a command (`python - <<'PY'`), a here-string (`<<<`) and a `<<` inside a quoted string are not flagged.
 
 ## Writing files from the shell
 
