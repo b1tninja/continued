@@ -152,6 +152,11 @@ export function buildTaskPlan(
      * six to-dos of a plan.
      */
     keepOpen?: boolean;
+    /**
+     * While a loop item is running, the model cannot change a check that
+     * already exists. The check is what marks the item done.
+     */
+    lockChecks?: boolean;
   } = {},
 ): TaskPlanResult {
   if (!Array.isArray(input)) {
@@ -323,7 +328,9 @@ export function buildTaskPlan(
   return {
     ok: true,
     plan: {
-      items: finalItems,
+      items: options.lockChecks
+        ? lockExistingChecks(finalItems, previousItems)
+        : finalItems,
       updatedAt: (options.now ?? new Date()).toISOString(),
       updatedBy: options.updatedBy ?? "model",
     },
@@ -377,6 +384,19 @@ function withOmittedItems(
  * what the update did not say, the rest stay, and new items go last. An item
  * left out stops being in progress when the update names another that is.
  */
+/** A loop item's check stays as it was when the run started. */
+function lockExistingChecks(
+  items: TaskItem[],
+  previous: TaskItem[],
+): TaskItem[] {
+  const prev = new Map(previous.map((item) => [item.id, item]));
+  return items.map((item) => {
+    const old = prev.get(item.id);
+    if (old?.check === undefined || item.check === old.check) return item;
+    return { ...item, check: old.check };
+  });
+}
+
 function mergeIntoPrevious(
   previous: TaskItem[],
   items: TaskItem[],
