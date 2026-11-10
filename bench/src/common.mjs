@@ -149,16 +149,59 @@ export function tally(history) {
   return byName;
 }
 
+/**
+ * Tool names a model may write as a Python call: the CLI's own, their
+ * snake_case forms (Nova 2 Lite wrote `present_plan(...)` for `PresentPlan`,
+ * plans/ROADMAP.md H13) and the IDE's.
+ */
+const PYTHON_CALL_NAMES = [
+  "Write",
+  "Read",
+  "Edit",
+  "Bash",
+  "Grep",
+  "Glob",
+  "PresentPlan",
+  "FinishItem",
+  "present_plan",
+  "finish_item",
+  "read_file",
+  "write_file",
+  "create_new_file",
+  "edit_existing_file",
+  "run_terminal_command",
+  "grep_search",
+];
+
+/** `Name(key=` at the start of a line: a call with keyword arguments. */
+const PYTHON_CALL = new RegExp(
+  String.raw`^(?:${PYTHON_CALL_NAMES.join("|")})\(\s*[A-Za-z_][A-Za-z0-9_]*\s*=`,
+  "m",
+);
+
+/**
+ * Whether a reply wrote a tool call as text: Qwen's `<tool_call>` and
+ * `<function=` markup, JSON naming a tool, or a Python-syntax call at the
+ * start of a line. A Python call inside a code fence is an example, not a
+ * leak.
+ */
+export function isTextLeak(text) {
+  if (
+    /<tool_?call|<function=|"name"\s*:\s*"(Write|Read|PresentPlan|FinishItem)"/.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  return PYTHON_CALL.test(text.replace(/```[\s\S]*?(```|$)/g, ""));
+}
+
 /** Assistant replies that wrote a tool call as text instead of making it. */
 export function textLeaks(history) {
   return (history ?? [])
     .filter((i) => i.message?.role === "assistant")
     .map((i) => textOf(i.message))
-    .filter((t) =>
-      /<tool_?call|<function=|"name"\s*:\s*"(Write|Read|PresentPlan|FinishItem)"/.test(
-        t,
-      ),
-    )
+    .filter(isTextLeak)
     .map((t) => t.slice(0, 200));
 }
 
