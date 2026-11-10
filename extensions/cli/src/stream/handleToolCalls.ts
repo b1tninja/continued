@@ -33,6 +33,7 @@ import {
   preprocessStreamedToolCalls,
 } from "./streamChatResponse.helpers.js";
 import { StreamCallbacks } from "./streamChatResponse.types.js";
+import { stuckNoteForHistory } from "./stuckNotes.js";
 
 interface HandleToolCallsOptions {
   toolCalls: ToolCall[];
@@ -136,6 +137,45 @@ function recordRunOutcomes(
   for (const entry of chatHistoryEntries) {
     const call = toRun.find((tc) => tc.id === entry.tool_call_id);
     if (call) recordRepeatOutcome(call, entry.status !== "done");
+  }
+}
+
+/**
+ * L1 of the stuck ladder: when a shared signal has reached `note`, append one
+ * line to the newest result of this round. Only that result changes, so the
+ * system prompt and the earlier messages stay as they were (cache-safe).
+ */
+function noteStuckRound(
+  chatHistoryEntries: { tool_call_id: string; status: string }[],
+  ctx: {
+    useService: boolean;
+    chatHistorySvc: typeof services.chatHistory;
+    chatHistory: ChatHistoryItem[];
+  },
+): void {
+  const last = chatHistoryEntries.findLast(
+    (e) => e.status === "done" || e.status === "errored",
+  );
+  if (!last) return;
+  const history = ctx.useService
+    ? ctx.chatHistorySvc.getHistory?.()
+    : ctx.chatHistory;
+  if (!history) return;
+  const note = stuckNoteForHistory(history);
+  if (!note) return;
+  const owner = history.findLast((item) =>
+    item.toolCallStates?.some((ts) => ts.toolCallId === last.tool_call_id),
+  );
+  const state = owner?.toolCallStates?.find(
+    (ts) => ts.toolCallId === last.tool_call_id,
+  );
+  const text = state?.output?.[0]?.content;
+  if (typeof text !== "string") return;
+  const status = last.status as ToolStatus;
+  if (ctx.useService) {
+    ctx.chatHistorySvc.addToolResult(last.tool_call_id, text + note, status);
+  } else {
+    setLocalToolResult(ctx.chatHistory, last.tool_call_id, text + note, status);
   }
 }
 
@@ -281,6 +321,11 @@ export async function handleToolCalls(
   }
 
   recordRunOutcomes(chatHistoryEntries, toRun);
+  noteStuckRound(chatHistoryEntries, {
+    useService,
+    chatHistorySvc,
+    chatHistory,
+  });
   if (repeatEndsTurn) {
     logger.debug("Repeat guard reached; ending the turn");
     return true;
