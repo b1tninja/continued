@@ -333,6 +333,74 @@ const CMD_INTERNAL: Record<string, Check> = {
 };
 CMD_INTERNAL.chdir = CMD_INTERNAL.cd;
 
+/**
+ * For each simple command, whether the shell will expand an unquoted glob
+ * (`* ? [` ) before a `--` word. A name produced by that expansion is an
+ * argument, so a file named like a flag is a flag. Quoted globs are patterns,
+ * not file names, and words after `--` are not options.
+ */
+function unquotedGlobBeforeOptionsEnd(command: string): boolean[] {
+  const flags: boolean[] = [];
+  let quote: "'" | '"' | null = null;
+  let word = "";
+  let glob = false;
+  let optionsEnded = false;
+  const endWord = () => {
+    if (word === "--") optionsEnded = true;
+    word = "";
+  };
+  const endCommand = () => {
+    endWord();
+    flags.push(glob);
+    glob = false;
+    optionsEnded = false;
+  };
+  let saw = false;
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (quote) {
+      if (c === quote) quote = null;
+      else word += ".";
+      saw = true;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      quote = c;
+      saw = true;
+      continue;
+    }
+    if (c === "\\") {
+      if (i + 1 < command.length) {
+        word += ".";
+        i++;
+      }
+      saw = true;
+      continue;
+    }
+    if (c === " " || c === "\t" || c === "\r") {
+      endWord();
+      continue;
+    }
+    const two = command.slice(i, i + 2);
+    if (two === "&&" || two === "||") {
+      endCommand();
+      i++;
+      saw = true;
+      continue;
+    }
+    if (c === "|" || c === ";" || c === "\n") {
+      endCommand();
+      saw = true;
+      continue;
+    }
+    if (!optionsEnded && (c === "*" || c === "?" || c === "[")) glob = true;
+    word += c;
+    saw = true;
+  }
+  if (saw) endCommand();
+  return flags;
+}
+
 /** Does this command only read? See the file comment for what that takes. */
 export function classifyReadOnly(
   command: string,
@@ -361,7 +429,17 @@ export function classifyReadOnly(
   const names: string[] = [];
   // After a cd the command runs somewhere whose git config was not checked
   let movedDirectory = false;
-  for (const { words } of scanned.graph.commands) {
+  const globRisk = unquotedGlobBeforeOptionsEnd(command);
+  if (
+    globRisk.length !== scanned.graph.commands.length &&
+    globRisk.some(Boolean)
+  ) {
+    return no("a glob can expand to a flag");
+  }
+  const globAt = (i: number) =>
+    globRisk.length === scanned.graph.commands.length && globRisk[i] === true;
+  for (let index = 0; index < scanned.graph.commands.length; index++) {
+    const { words } = scanned.graph.commands[index];
     const [first, ...rest] = words;
     // An environment prefix (FOO=bar cmd) can change what a command does
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(first)) {
@@ -380,6 +458,9 @@ export function classifyReadOnly(
       }
       const problem = check(rest);
       if (problem) return no(`${name}: ${problem}`);
+      if (globAt(index) && check !== anyArgs) {
+        return no("a glob can expand to a flag");
+      }
       names.push(name);
       continue;
     }
@@ -410,6 +491,7 @@ export function classifyReadOnly(
         );
       const problem = check(rest.slice(i + 1));
       if (problem) return no(`git ${sub}: ${problem}`);
+      if (globAt(index)) return no("a glob can expand to a flag");
       names.push(`git ${sub}`);
       continue;
     }
@@ -420,6 +502,7 @@ export function classifyReadOnly(
         if (CHANGES_DIRECTORY.has(cmdlet)) movedDirectory = true;
         const problem = checkReadCmdlet(cmdlet, rest);
         if (problem) return no(problem);
+        if (globAt(index)) return no("a glob can expand to a flag");
         names.push(cmdlet);
         continue;
       }
@@ -433,6 +516,9 @@ export function classifyReadOnly(
     }
     const problem = check(rest);
     if (problem) return no(`${name}: ${problem}`);
+    if (globAt(index) && check !== anyArgs) {
+      return no("a glob can expand to a flag");
+    }
     names.push(name);
   }
   return {

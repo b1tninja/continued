@@ -152,6 +152,34 @@ describe("arguments that make a read-only command write or run", () => {
   });
 });
 
+describe("globs the shell expands", () => {
+  it.each([
+    "rg TODO *",
+    "rg pattern *.txt",
+    "sort *.txt",
+    "git grep TODO *",
+    "find . -name *.ts",
+    "ls *.ts | rg TODO *",
+  ])("does not vouch %s", (command) => {
+    expect(vouched(command)).toBe(false);
+    expect(why(command)).toContain("glob");
+  });
+
+  it.each([
+    "ls *",
+    "ls *.ts",
+    "cat *.md",
+    "head *.txt",
+    "wc *",
+    "rg --files -g '*.ts'",
+    "find . -name '*.ts' -type f",
+    "rg TODO -- *",
+    "ls *.ts | head",
+  ])("still vouches %s", (command) => {
+    expect(vouched(command)).toBe(true);
+  });
+});
+
 describe("git", () => {
   it("is not vouched after a cd: the folder it runs in was not checked", () => {
     expect(why("cd other && git log")).toContain("after cd");
