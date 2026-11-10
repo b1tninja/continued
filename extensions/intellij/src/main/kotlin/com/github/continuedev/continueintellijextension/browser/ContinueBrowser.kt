@@ -1,6 +1,6 @@
 package com.github.continuedev.continueintellijextension.browser
 
-import com.github.continuedev.continueintellijextension.constants.MessageTypes
+import com.github.continuedev.continueintellijextension.constants.WebviewIdeGate
 import com.github.continuedev.continueintellijextension.services.ContinuePluginService
 import com.github.continuedev.continueintellijextension.services.GsonService
 import com.github.continuedev.continueintellijextension.utils.uuid
@@ -34,22 +34,36 @@ class ContinueBrowser(
             val data = json.data
             val messageId = json.messageId
 
-            if (MessageTypes.PASS_THROUGH_TO_CORE.contains(messageType)) {
-                project.service<ContinuePluginService>().coreMessenger?.request(messageType, data, messageId) { data ->
-                    sendToWebview(messageType, data, messageId ?: uuid())
+            when (WebviewIdeGate.route(messageType)) {
+                WebviewIdeGate.Route.CORE -> {
+                    project.service<ContinuePluginService>().coreMessenger?.request(messageType, data, messageId) { response ->
+                        sendToWebview(messageType, response, messageId ?: uuid())
+                    }
                 }
-                return@addHandler null
-            }
 
-            // If not pass through, then put it in the status/content/done format for webview
-            // Core already sends this format
-            if (msg != null) {
-                project.service<ContinuePluginService>().ideProtocolClient?.handleMessage(msg) { data ->
+                WebviewIdeGate.Route.IDE -> {
+                    if (msg != null) {
+                        project.service<ContinuePluginService>().ideProtocolClient?.handleMessage(msg) { response ->
+                            sendToWebview(
+                                messageType,
+                                mapOf(
+                                    "status" to "success",
+                                    "content" to response,
+                                    "done" to true
+                                ),
+                                messageId ?: uuid()
+                            )
+                        }
+                    }
+                }
+
+                WebviewIdeGate.Route.REJECT -> {
+                    log.warn("Rejected panel message: $messageType")
                     sendToWebview(
-                        messageType,
+                        messageType ?: "",
                         mapOf(
-                            "status" to "success",
-                            "content" to data,
+                            "status" to "error",
+                            "error" to "This message is not available to the panel",
                             "done" to true
                         ),
                         messageId ?: uuid()
