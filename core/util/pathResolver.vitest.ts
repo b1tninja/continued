@@ -42,7 +42,9 @@ describe("resolveInputPath workspace boundary", () => {
 
     const inside = await resolveInputPath(ide, "inside.txt");
     expect(inside?.isWithinWorkspace).toBe(true);
-    expect(inside?.uri).toBe(pathToFileURL(path.join(workspace, "inside.txt")).href);
+    expect(inside?.uri).toBe(
+      pathToFileURL(path.join(workspace, "inside.txt")).href,
+    );
 
     const climbed = await resolveInputPath(ide, "../secret.txt");
     expect(climbed?.isWithinWorkspace).toBe(false);
@@ -52,11 +54,24 @@ describe("resolveInputPath workspace boundary", () => {
     expect(nested?.isWithinWorkspace).toBe(false);
     expect(fileURLToPath(nested!.uri)).toBe(outside);
 
-    expect(await resolveRelativePathInDir("../secret.txt", ide)).toBeUndefined();
+    expect(
+      await resolveRelativePathInDir("../secret.txt", ide),
+    ).toBeUndefined();
     expect(await resolveRelativePathInDir("inside.txt", ide)).toBe(
       pathToFileURL(path.join(workspace, "inside.txt")).href,
     );
     expect(await resolveInputPath(ide, "missing.txt")).toBeNull();
+
+    const wsUri = pathToFileURL(workspace).href.replace(/\/$/, "");
+    const byUri = await resolveInputPath(ide, `${wsUri}/../secret.txt`);
+    expect(byUri?.isWithinWorkspace).toBe(false);
+    expect(fileURLToPath(byUri!.uri)).toBe(outside);
+    const encoded = await resolveInputPath(ide, `${wsUri}/%2E%2E/secret.txt`);
+    expect(encoded?.isWithinWorkspace).toBe(false);
+    expect(fileURLToPath(encoded!.uri)).toBe(outside);
+    const stayed = await resolveInputPath(ide, `${wsUri}/sub/../inside.txt`);
+    expect(stayed?.isWithinWorkspace).toBe(true);
+    expect(fileURLToPath(stayed!.uri)).toBe(path.join(workspace, "inside.txt"));
   });
 
   it("follows a symlink to the file it names", async () => {

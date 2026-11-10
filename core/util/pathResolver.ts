@@ -26,8 +26,10 @@ function followLocalSymlink(uri: string): string {
   } catch {
     return uri;
   }
-  const real = realpathOrParent(fsPath);
-  if (!real || path.resolve(real) === path.resolve(fsPath)) return uri;
+  // fileURLToPath has already resolved "." / ".." and percent-decoding.
+  // Rebuild the URI from that path so a later containment check cannot see
+  // the raw segments. realpath then follows a symlink when the file exists.
+  const real = realpathOrParent(fsPath) ?? fsPath;
   return pathToFileURL(real).href;
 }
 
