@@ -1,5 +1,6 @@
-import { HookService } from "../hooks/HookService.js";
 import { setProjectConfigTrustedForRun } from "core/config/projectTrust.js";
+
+import { HookService } from "../hooks/HookService.js";
 import { setTrustProjectHooksForRun } from "../hooks/hookTrust.js";
 import { initializeWithOnboarding } from "../onboarding.js";
 import {
