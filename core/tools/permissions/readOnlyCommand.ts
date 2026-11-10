@@ -36,6 +36,21 @@ const no = (why: string): ReadOnlyClaim => ({
 
 type Check = (args: string[]) => string | undefined;
 
+/** Words that are file names: flags skipped, a lone `-` kept, and everything after `--`. */
+function positionalOperands(args: string[]): string[] {
+  const out: string[] = [];
+  let ended = false;
+  for (const a of args) {
+    if (!ended && a === "--") {
+      ended = true;
+      continue;
+    }
+    if (!ended && a.startsWith("-") && a !== "-") continue;
+    out.push(a);
+  }
+  return out;
+}
+
 const anyArgs: Check = () => undefined;
 
 /**
@@ -111,8 +126,10 @@ const READ_ONLY: Record<string, Check> = {
     "-fls",
   ),
   sort: reject("-o", "--output", "--compress-program"),
+  // A lone `-` is stdin, an operand. A second operand is the output file
+  // (`uniq - package.json`, `uniq in out`).
   uniq: (args) =>
-    args.filter((a) => !a.startsWith("-")).length > 1
+    positionalOperands(args).length > 1
       ? "a second file would be written to"
       : undefined,
   cut: anyArgs,

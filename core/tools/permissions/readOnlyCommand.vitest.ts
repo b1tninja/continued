@@ -54,6 +54,8 @@ describe("commands that only read", () => {
     "git stash show",
     "git grep -n TODO src",
     "sort -u file.txt",
+    "uniq file.txt",
+    "uniq -c file.txt",
   ])("vouches %s", (command) => {
     expect(vouched(command)).toBe(true);
   });
@@ -148,6 +150,8 @@ describe("arguments that make a read-only command write or run", () => {
     ["tail -f log.txt", "-f"],
     ["date -s 12:00", "-s"],
     ["uniq in.txt out.txt", "written"],
+    ["uniq - package.json", "written"],
+    ["uniq -- in.txt out.txt", "written"],
     ["jq -f prog.jq data.json", "-f"],
     ["hostname newname", "hostname"],
   ])("%s", (command, reason) => {
