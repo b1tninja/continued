@@ -751,6 +751,13 @@ export interface LoopState {
    * (core/util/loopBudgetSplit.ts); an extension draws it down
    */
   reserve?: { tokens?: number; minutes?: number };
+  /**
+   * A command the harness runs after an item reports done when the item has
+   * no `check:` of its own (the project's test or build command). Exit 0
+   * confirms it, as for a check of its own. Missing: such an item is done on
+   * its own report.
+   */
+  fallbackCheck?: string;
   /** The plan's title, to name the loop in its panel */
   title?: string;
   /** Missing on loops saved before strategies: treated as "finish" */

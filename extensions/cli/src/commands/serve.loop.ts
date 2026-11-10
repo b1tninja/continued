@@ -1,6 +1,7 @@
 import type { LoopAutonomy, LoopState, LoopStrategy } from "core/index.js";
 import {
   formatLoopStatus,
+  LOOP_FALLBACK_CHECK_LENGTH,
   LOOP_AUTONOMY_LEVELS,
   setLoopBudget,
   LOOP_STRATEGY_ORDER,
@@ -16,6 +17,7 @@ import {
   runLoopItemAgain,
   setRunningLoopAutonomy,
   setRunningLoopBudget,
+  setRunningLoopFallbackCheck,
   setRunningLoopParallel,
   skipLoopItem,
   setRunningLoopStrategy,
@@ -51,6 +53,9 @@ import {
  *   to N re-plans"; 0 means no limit for tokens and time. An out-of-range
  *   value is refused and nothing changes. It applies after `loopAutonomy`
  *   when both are given.
+ * - `loopFallbackCheck: "<command>"` is the check an item without its own
+ *   `check:` is held to, run by the harness after the item reports done
+ *   (core's LoopState.fallbackCheck); "" clears it. Off by default.
  */
 
 /** Loop mode's fields in `GET /state`. */
@@ -186,6 +191,7 @@ export function handleLoopMessage(
     loopStrategy,
     loopParallel,
     loopBudget,
+    loopFallbackCheck,
     itemId,
   } = body;
   if (
@@ -194,7 +200,8 @@ export function handleLoopMessage(
     loopAutonomy === undefined &&
     loopStrategy === undefined &&
     loopParallel === undefined &&
-    loopBudget === undefined
+    loopBudget === undefined &&
+    loopFallbackCheck === undefined
   ) {
     return undefined;
   }
@@ -206,6 +213,15 @@ export function handleLoopMessage(
     loopParallel,
   });
   if (invalid) return fail(invalid);
+  if (
+    loopFallbackCheck !== undefined &&
+    (typeof loopFallbackCheck !== "string" ||
+      loopFallbackCheck.trim().length > LOOP_FALLBACK_CHECK_LENGTH)
+  ) {
+    return fail(
+      `loopFallbackCheck must be a command of at most ${LOOP_FALLBACK_CHECK_LENGTH} characters`,
+    );
+  }
   const parsed =
     loopAnswer === undefined ? undefined : parseLoopAnswer(loopAnswer);
   if (parsed && !parsed.ok) return fail(parsed.error);
@@ -236,6 +252,12 @@ export function handleLoopMessage(
   if (
     loopParallel !== undefined &&
     !setRunningLoopParallel(loopParallel as boolean)
+  ) {
+    return fail("No loop in this session");
+  }
+  if (
+    loopFallbackCheck !== undefined &&
+    !setRunningLoopFallbackCheck(loopFallbackCheck as string)
   ) {
     return fail("No loop in this session");
   }

@@ -181,7 +181,9 @@ async function setup(
     return undefined as PromptLog | undefined;
   };
 
-  const start = async (options: { parallel?: boolean } = {}) => {
+  const start = async (
+    options: { parallel?: boolean; fallbackCheck?: string } = {},
+  ) => {
     await act(async () => {
       // Waves need a level that does not ask before each edit: Plan edits
       // Permissive is Unattended, and the switch is on from the start
@@ -190,7 +192,11 @@ async function setup(
       }
       store.dispatch(setPlanFile(PLAN_FILE));
       await store.dispatch(
-        startLoopFromPlan({ planFile: PLAN_FILE, parallel: options.parallel }),
+        startLoopFromPlan({
+          planFile: PLAN_FILE,
+          parallel: options.parallel,
+          fallbackCheck: options.fallbackCheck,
+        }),
       );
     });
   };
@@ -1611,6 +1617,40 @@ describe("Loop mode's checks and dependencies", () => {
     });
     expect(el("loop-check-result-1")!.textContent).toContain("check passed");
     expect(el("loop-check-2")).toBeNull();
+  });
+
+  test("a loop's fallback check holds an item with no check of its own, and an item's own check wins", async () => {
+    const h = await setup([
+      "Add a retry helper",
+      { text: "Document it", check: "npm run docs:check" },
+    ]);
+    allowTerminal(h);
+    const ran = subprocess(h, "Tests: 3 passed", "docs ok");
+    h.turns.push(finish("done", "helper added"), finish("done", "documented"));
+    await h.start({ fallbackCheck: "npm test" });
+
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    expect(h.loop().fallbackCheck).toBe("npm test");
+    expect(ran.map((r) => r.command)).toEqual([
+      "npm test",
+      "npm run docs:check",
+    ]);
+    expect(h.prompt(0)).toContain("its check runs: `npm test`");
+    expect(h.loop().items[0]).toMatchObject({
+      status: "done",
+      check: { status: "passed", command: "npm test" },
+    });
+  });
+
+  test("without a fallback check an item with none is done on its own report", async () => {
+    const h = await setup(["Add a retry helper"]);
+    const ran = subprocess(h);
+    h.turns.push(finish("done", "helper added"));
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(ran).toHaveLength(0);
+    expect(h.loop().items[0].check).toBeUndefined();
   });
 
   test("a failing check sends the item back with the failure in its prompt", async () => {

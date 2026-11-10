@@ -17,6 +17,7 @@ import {
   acceptReplan,
   answerLoop,
   createLoop,
+  LOOP_FALLBACK_CHECK_LENGTH,
   interruptLoop,
   LOOP_CLI_TOOL_NAMES,
   loopPolicyOf,
@@ -27,6 +28,7 @@ import {
   setLoopAutonomy,
   setLoopPolicy,
   setLoopBudget,
+  setLoopFallbackCheck,
   setLoopParallel,
   skipItem,
   setLoopStrategy,
@@ -332,6 +334,7 @@ export function startLoopFromPlan(
     sessionTokens: sessionTokens(),
     costMark: sessionCostMark(),
     policy: cliLoopPolicy(mode),
+    fallbackCheck: envFallbackCheck(),
   });
   pendingSteers.length = 0;
   turnEndRequested = false;
@@ -474,6 +477,29 @@ export function setRunningLoopParallel(on: boolean): boolean {
   if (!loop) return false;
   commitLoop(setLoopParallel(loop, on));
   return true;
+}
+
+/**
+ * The check every item without its own `check:` is held to (core's
+ * LoopState.fallbackCheck). An empty command clears it. False when there is
+ * no loop, or the command is over the length limit.
+ */
+export function setRunningLoopFallbackCheck(command: string): boolean {
+  const loop = getSessionLoop();
+  if (!loop) return false;
+  if (command.trim().length > LOOP_FALLBACK_CHECK_LENGTH) return false;
+  commitLoop(setLoopFallbackCheck(loop, command));
+  return true;
+}
+
+/**
+ * Off unless CONTINUOUS_LOOP_FALLBACK_CHECK names a command: a loop started
+ * from a plan then holds its check-less items to it.
+ */
+export function envFallbackCheck(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  return env.CONTINUOUS_LOOP_FALLBACK_CHECK?.trim() || undefined;
 }
 
 // --- Answers ---

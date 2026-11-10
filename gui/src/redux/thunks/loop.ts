@@ -31,6 +31,7 @@ import {
   LOOP_LIMITS,
   openLoopItems,
   pauseLoop,
+  itemCheck,
   loopItemPrompt,
   loopPlanBlock,
   loopReplanTurnPrompt,
@@ -189,11 +190,20 @@ async function readPlanIntoTaskList(
  */
 export const startLoopFromPlan = createAsyncThunk<
   void,
-  { planFile: string; parallel?: boolean; budget?: PlanBudgetSetup },
+  {
+    planFile: string;
+    parallel?: boolean;
+    budget?: PlanBudgetSetup;
+    /** The check an item without its own is held to (LoopState.fallbackCheck) */
+    fallbackCheck?: string;
+  },
   ThunkApiType
 >(
   "loop/start",
-  async ({ planFile, parallel, budget }, { dispatch, getState, extra }) => {
+  async (
+    { planFile, parallel, budget, fallbackCheck },
+    { dispatch, getState, extra },
+  ) => {
     const { title } = await readPlanIntoTaskList(
       planFile,
       dispatch,
@@ -209,6 +219,7 @@ export const startLoopFromPlan = createAsyncThunk<
       costMark: sessionCostMark(getState()),
       // Plans and questions follow the levels chosen for them
       policy: selectLoopPolicy(getState()),
+      fallbackCheck,
     });
     if (parallel) loop = setLoopParallel(loop, true);
     // The plan card's budget step; without it the strategy is None
@@ -603,6 +614,7 @@ async function itemRunPrompt(
     reminders: taken.reminders,
     returning: itemState?.setAside,
     decideAlone: loopDecidesAlone(loop),
+    fallbackCheck: loop.fallbackCheck,
     unanswered: loop.questions.filter((q) =>
       itemState?.unanswered?.includes(q.id),
     ),
@@ -722,7 +734,8 @@ async function settleWorker(
     if (!loop) return;
     const now = new Date();
     const plan = getState().session.taskPlan;
-    const check = plan?.items.find((t) => t.id === worker.itemId)?.check;
+    const checked = plan?.items.find((t) => t.id === worker.itemId);
+    const check = checked ? itemCheck(loop, checked) : undefined;
     let next = finishParallelRun(
       loop,
       worker.itemId,
@@ -831,9 +844,10 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
         .map((a) => a.id);
       // An item with a check is not done until its check passes
       const itemId = loop.current.itemId;
-      const check = state.session.taskPlan?.items.find(
+      const checked = state.session.taskPlan?.items.find(
         (t) => t.id === itemId,
-      )?.check;
+      );
+      const check = checked ? itemCheck(loop, checked) : undefined;
       loop = finishItemRun(loop, loop.current.report, {
         check,
         sessionTokens: sessionTokens(state),
