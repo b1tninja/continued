@@ -1,5 +1,8 @@
+import { fileURLToPath } from "node:url";
+
 import type { FileCheckpoint, IDE, TurnCheckpoint } from "..";
 import { BuiltInToolNames } from "../tools/builtIn";
+import { protectedPathHit } from "../tools/permissions/protected";
 import {
   inferResolvedUriFromRelativePath,
   resolveRelativePathInDir,
@@ -81,6 +84,26 @@ export function utf8ByteLength(content: string): number {
   return new TextEncoder().encode(content).length;
 }
 
+/** Path form used by the secret-path check. File URIs are decoded first. */
+function pathForSecretCheck(uri: string): string {
+  if (uri.startsWith("file:")) {
+    try {
+      return fileURLToPath(uri);
+    } catch {
+      return uri;
+    }
+  }
+  return uri;
+}
+
+/**
+ * Secret files are not copied into the session JSON. Restore leaves them as
+ * they are; the snapshot only records that they existed.
+ */
+export function checkpointHoldsSecret(uri: string): boolean {
+  return protectedPathHit(pathForSecretCheck(uri), ["secret"]) !== undefined;
+}
+
 /** Capture the current state of one file. Never throws. */
 export async function snapshotFile(
   ide: IDE,
@@ -89,6 +112,9 @@ export async function snapshotFile(
   try {
     if (!(await ide.fileExists(uri))) {
       return { uri, existed: false };
+    }
+    if (checkpointHoldsSecret(uri)) {
+      return { uri, existed: true, skipped: "secret" };
     }
     let size: number | undefined;
     try {

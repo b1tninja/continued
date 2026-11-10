@@ -9,6 +9,7 @@ import {
   planRestore,
   previewRestore,
   pruneCheckpointsFrom,
+  checkpointHoldsSecret,
   resolveCheckpointTargets,
   snapshotFile,
 } from "./checkpoints";
@@ -153,6 +154,20 @@ describe("snapshotFile", () => {
       existed: true,
       skipped: "too_large",
     });
+  });
+
+  it("does not store the contents of a secret file", async () => {
+    const uri = `${WS}/.env`;
+    const ide = makeIde({ [uri]: "API_KEY=secret-value" });
+    expect(checkpointHoldsSecret(uri)).toBe(true);
+    expect(await snapshotFile(ide, uri)).toEqual({
+      uri,
+      existed: true,
+      skipped: "secret",
+    });
+    expect(JSON.stringify(await snapshotFile(ide, uri))).not.toContain(
+      "secret-value",
+    );
   });
 
   it("does not throw when the IDE fails", async () => {
@@ -395,12 +410,7 @@ describe("restore", () => {
         files: [{ uri: "a", existed: true, content: "a1" }],
       },
     ];
-    const kept = pruneCheckpointsFrom(
-      cps,
-      ["t1", "t2"],
-      "t1",
-      new Set(["b"]),
-    );
+    const kept = pruneCheckpointsFrom(cps, ["t1", "t2"], "t1", new Set(["b"]));
     expect(kept).toEqual([
       {
         turnId: "t1",
