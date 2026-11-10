@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { newSession } from "../../../redux/slices/sessionSlice";
 import { renderWithProviders } from "../../../util/test/render";
 import { Chat } from "../Chat";
-import { mcpAppTurnContent } from "./mcpAppTurn";
+import { mcpAppTurnContent } from "./mcpAppTurnContent";
 
 describe("MCP app turns in the chat", () => {
   it("shows an app turn apart from a message the person wrote", async () => {

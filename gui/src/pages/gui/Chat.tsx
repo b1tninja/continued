@@ -65,7 +65,7 @@ import { streamResponseThunk } from "../../redux/thunks/streamResponse";
 import { isJetBrains, isMetaEquivalentKeyPressed } from "../../util";
 import { ToolCallDiv } from "./ToolCallDiv";
 import { McpAppTurn } from "./ToolCallDiv/McpAppTurn";
-import { isMcpAppTurn } from "./ToolCallDiv/mcpAppTurn";
+import { isMcpAppTurn } from "./ToolCallDiv/mcpAppTurnContent";
 
 import { useStore } from "react-redux";
 import FeedbackDialog from "../../components/dialogs/FeedbackDialog";

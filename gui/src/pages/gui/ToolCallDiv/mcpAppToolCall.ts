@@ -35,7 +35,7 @@ import {
   MCP_APP_MESSAGE_SOURCE,
   mcpAppServerLabel,
   mcpAppTurnContent,
-} from "./mcpAppTurn";
+} from "./mcpAppTurnContent";
 
 export interface McpAppApproval {
   /** The tool's display title. */

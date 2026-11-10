@@ -9,7 +9,7 @@ import {
   getEmptyRootState,
 } from "../../../util/test/mockStore";
 import { RootState } from "../../../redux/store";
-import { isMcpAppTurn, mcpAppTurnContent } from "./mcpAppTurn";
+import { isMcpAppTurn, mcpAppTurnContent } from "./mcpAppTurnContent";
 import {
   findMcpAppTool,
   McpAppApproval,
