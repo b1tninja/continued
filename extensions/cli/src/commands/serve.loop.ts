@@ -8,6 +8,7 @@ import {
   type LoopAnswerInput,
 } from "core/util/loopMode.js";
 
+import { setRunningLoopFallbackCheck } from "../loop/loopFallbackCheck.js";
 import {
   acceptLoopPlan,
   answerLoopQuestion,
@@ -17,7 +18,6 @@ import {
   runLoopItemAgain,
   setRunningLoopAutonomy,
   setRunningLoopBudget,
-  setRunningLoopFallbackCheck,
   setRunningLoopParallel,
   skipLoopItem,
   setRunningLoopStrategy,
@@ -177,6 +177,35 @@ export interface LoopMessageResponse {
   json: Record<string, unknown>;
 }
 
+/** The error for a bad `loopFallbackCheck` (not a string, or too long), if any. */
+function invalidFallbackCheck(value: unknown): string | undefined {
+  if (
+    value !== undefined &&
+    (typeof value !== "string" ||
+      value.trim().length > LOOP_FALLBACK_CHECK_LENGTH)
+  ) {
+    return `loopFallbackCheck must be a command of at most ${LOOP_FALLBACK_CHECK_LENGTH} characters`;
+  }
+  return undefined;
+}
+
+/**
+ * Applies the level, strategy, parallel and fallback-check fields the body
+ * carries, in that order. False when one is given and there is no loop.
+ */
+function applyRunningSettings(body: Record<string, unknown>): boolean {
+  const { loopAutonomy, loopStrategy, loopParallel, loopFallbackCheck } = body;
+  const steps: [unknown, (value: never) => boolean][] = [
+    [loopAutonomy, (v: LoopAutonomy) => setRunningLoopAutonomy(v)],
+    [loopStrategy, (v: LoopStrategy) => setRunningLoopStrategy(v)],
+    [loopParallel, (v: boolean) => setRunningLoopParallel(v)],
+    [loopFallbackCheck, (v: string) => setRunningLoopFallbackCheck(v)],
+  ];
+  return steps.every(
+    ([value, apply]) => value === undefined || apply(value as never),
+  );
+}
+
 /**
  * POST /message with Loop mode fields. Returns undefined when the body has
  * none of them, so it is an ordinary message.
@@ -213,15 +242,8 @@ export function handleLoopMessage(
     loopParallel,
   });
   if (invalid) return fail(invalid);
-  if (
-    loopFallbackCheck !== undefined &&
-    (typeof loopFallbackCheck !== "string" ||
-      loopFallbackCheck.trim().length > LOOP_FALLBACK_CHECK_LENGTH)
-  ) {
-    return fail(
-      `loopFallbackCheck must be a command of at most ${LOOP_FALLBACK_CHECK_LENGTH} characters`,
-    );
-  }
+  const badFallback = invalidFallbackCheck(loopFallbackCheck);
+  if (badFallback) return fail(badFallback);
   const parsed =
     loopAnswer === undefined ? undefined : parseLoopAnswer(loopAnswer);
   if (parsed && !parsed.ok) return fail(parsed.error);
@@ -237,30 +259,7 @@ export function handleLoopMessage(
     const error = applyLoopAction(loopAction as LoopAction, itemId);
     if (error) return fail(error);
   }
-  if (
-    loopAutonomy !== undefined &&
-    !setRunningLoopAutonomy(loopAutonomy as LoopAutonomy)
-  ) {
-    return fail("No loop in this session");
-  }
-  if (
-    loopStrategy !== undefined &&
-    !setRunningLoopStrategy(loopStrategy as LoopStrategy)
-  ) {
-    return fail("No loop in this session");
-  }
-  if (
-    loopParallel !== undefined &&
-    !setRunningLoopParallel(loopParallel as boolean)
-  ) {
-    return fail("No loop in this session");
-  }
-  if (
-    loopFallbackCheck !== undefined &&
-    !setRunningLoopFallbackCheck(loopFallbackCheck as string)
-  ) {
-    return fail("No loop in this session");
-  }
+  if (!applyRunningSettings(body)) return fail("No loop in this session");
   if (loopBudget !== undefined) {
     const budgeted = setRunningLoopBudget(loopBudget);
     if (!budgeted.ok) return fail(budgeted.error);

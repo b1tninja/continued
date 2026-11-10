@@ -38,6 +38,7 @@ import {
 
 import { runLoopCheck } from "./loopChecks.js";
 import { loopWakeDelay, nextLoopTurn, type LoopTurn } from "./loopDriver.js";
+import { setRunningLoopFallbackCheck } from "./loopFallbackCheck.js";
 import { holdLoopCall, loopRepeatGuard } from "./loopHolds.js";
 import {
   acceptLoopPlan,
@@ -51,7 +52,6 @@ import {
   resetLoopMemory,
   runLoopItemAgain,
   setRunningLoopBudget,
-  setRunningLoopFallbackCheck,
   skipLoopItem,
   startLoopFromPlan,
   withLoopSteering,

@@ -17,7 +17,6 @@ import {
   acceptReplan,
   answerLoop,
   createLoop,
-  LOOP_FALLBACK_CHECK_LENGTH,
   interruptLoop,
   LOOP_CLI_TOOL_NAMES,
   loopPolicyOf,
@@ -28,7 +27,6 @@ import {
   setLoopAutonomy,
   setLoopPolicy,
   setLoopBudget,
-  setLoopFallbackCheck,
   setLoopParallel,
   skipItem,
   setLoopStrategy,
@@ -476,19 +474,6 @@ export function setRunningLoopParallel(on: boolean): boolean {
   const loop = getSessionLoop();
   if (!loop) return false;
   commitLoop(setLoopParallel(loop, on));
-  return true;
-}
-
-/**
- * The check every item without its own `check:` is held to (core's
- * LoopState.fallbackCheck). An empty command clears it. False when there is
- * no loop, or the command is over the length limit.
- */
-export function setRunningLoopFallbackCheck(command: string): boolean {
-  const loop = getSessionLoop();
-  if (!loop) return false;
-  if (command.trim().length > LOOP_FALLBACK_CHECK_LENGTH) return false;
-  commitLoop(setLoopFallbackCheck(loop, command));
   return true;
 }
 
