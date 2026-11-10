@@ -32,6 +32,7 @@ import { readFileTool } from "./readFile.js";
 import { reportFailureTool } from "./reportFailure.js";
 import { runTerminalCommandTool } from "./runTerminalCommand.js";
 import { checkIfRipgrepIsInstalled, searchCodeTool } from "./searchCode.js";
+import { applyCliToolSearch } from "./searchTools.js";
 import { skillsTool } from "./skills.js";
 import { subagentTool } from "./subagent.js";
 import { taskListTool } from "./taskList.js";
@@ -181,7 +182,12 @@ export async function getAllAvailableTools(
   );
   tools.push(...mcpState.tools.map(convertMcpToolToContinueTool));
 
-  return tools;
+  // CONTINUE_TOOL_SEARCH=auto: defer MCP tools above a token budget. With it
+  // unset this returns `tools` unchanged.
+  return applyCliToolSearch(tools, {
+    mode: mode === "plan" ? "plan" : "agent",
+    family: name,
+  });
 }
 
 /**

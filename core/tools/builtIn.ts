@@ -26,6 +26,8 @@ export enum BuiltInToolNames {
   CodeNavigation = "code_navigation",
   // Only offered when history ageing is on (CONTINUE_HISTORY_AGEING)
   RecallMaskedResult = "recall_masked_result",
+  // Only offered when tool search is on (experimental.toolSearch: auto)
+  SearchTools = "search_tools",
 
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",

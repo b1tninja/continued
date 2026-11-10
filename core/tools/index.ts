@@ -38,6 +38,12 @@ export const getConfigDependentToolDefinitions = async (
     tools.push(toolDefinitions.recallMaskedResultTool);
   }
 
+  // Off by default. When on, the request builder keeps or drops it with the
+  // MCP budget (toolSearch.ts); it is never in the list when off.
+  if (params.toolSearch === "auto") {
+    tools.push(toolDefinitions.searchToolsTool);
+  }
+
   if (enableExperimentalTools) {
     tools.push(
       toolDefinitions.viewRepoMapTool,
