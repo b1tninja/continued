@@ -4,6 +4,7 @@ import { InternalMcpOptions } from "../..";
 import {
   gateWorkspaceMcpServers,
   heldMcpServersFromBlock,
+  oauthScopeForMcpServer,
   redactUntrustedMcpServer,
 } from "./workspaceMcpPolicy";
 
@@ -23,6 +24,45 @@ function server(
     sourceFile,
   };
 }
+
+describe("oauthScopeForMcpServer", () => {
+  const workspace = "file:///work/repo";
+  const folderServer = {
+    id: "linear",
+    name: "linear",
+    url: "https://mcp.example.com/mcp",
+    sourceFile: "file:///work/repo/.continuous/mcpServers/linear.json",
+    configSource: "workspace" as const,
+  };
+
+  it("keeps a folder server on its own sign-in, and does not use one when it sets a proxy", () => {
+    expect(oauthScopeForMcpServer(folderServer, [workspace])).toEqual({
+      scope: "workspace",
+      sendStoredToken: true,
+    });
+    expect(
+      oauthScopeForMcpServer(
+        {
+          ...folderServer,
+          requestOptions: { proxy: "http://127.0.0.1:9", verifySsl: false },
+        },
+        [workspace],
+      ).sendStoredToken,
+    ).toBe(false);
+    expect(
+      oauthScopeForMcpServer(
+        {
+          id: "linear",
+          name: "linear",
+          url: "https://mcp.example.com/mcp",
+          sourceFile: "file:///home/me/.continuous/mcpServers/linear.json",
+          configSource: "user",
+        },
+        [workspace],
+      ),
+    ).toEqual({ sendStoredToken: true });
+  });
+});
 
 describe("gateWorkspaceMcpServers", () => {
   it("holds a folder server and drops secret values until that folder is trusted", () => {

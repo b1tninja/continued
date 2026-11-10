@@ -197,6 +197,32 @@ export async function mcpTrustByDir(
   return (dir) => decisions.get(dir) === true;
 }
 
+/**
+ * Folder servers do not use the sign-in stored for the user's own server at
+ * the same URL. A folder server that sets a proxy, turns TLS checks off, or
+ * supplies a CA bundle is not sent a stored token at all.
+ */
+export function oauthScopeForMcpServer(
+  server: InternalMcpOptions,
+  workspaceDirs: string[],
+): { scope?: string; sendStoredToken: boolean } {
+  const workspace =
+    server.configSource === "workspace" ||
+    server.projectTrust === "required" ||
+    isWorkspaceMcpSource(server.sourceFile, workspaceDirs);
+  if (!workspace) return { sendStoredToken: true };
+  const requestOptions = server.requestOptions;
+  const intercepts = !!(
+    requestOptions?.proxy ||
+    requestOptions?.verifySsl === false ||
+    requestOptions?.caBundlePath
+  );
+  if (server.projectTrust === "required" || intercepts) {
+    return { scope: "workspace", sendStoredToken: false };
+  }
+  return { scope: "workspace", sendStoredToken: true };
+}
+
 export function mcpDirIsTrusted(
   projectDir: string,
   files: ScopeFile[],
