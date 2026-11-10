@@ -730,8 +730,20 @@ describe("Fable and Mythos prices", () => {
   });
 
   it("does not price a later minor version at an earlier one's price", () => {
-    expect(findModelPricing("claude-fable-5-2")).toBeNull();
-    expect(findModelPricing("claude-mythos-5-2")).toBeNull();
+    expect(findModelPricing("claude-fable-5-3")).toBeNull();
+    expect(findModelPricing("claude-mythos-5-3")).toBeNull();
+  });
+
+  it("prices 5.2 at $8 / $40 with reads at 0.025x (pricing page, 2026-11-10)", () => {
+    for (const id of ["claude-fable-5-2", "claude-mythos-5-2"]) {
+      expect(findModelPricing(id)).toEqual({
+        input: 8,
+        output: 40,
+        cacheWrite: 10,
+        cacheWrite1h: 16,
+        cacheRead: 0.2,
+      });
+    }
   });
 
   it("adds the regional premium on a geographic profile, not on global", () => {

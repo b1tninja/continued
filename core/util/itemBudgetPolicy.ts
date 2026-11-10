@@ -1,5 +1,10 @@
 import type { LoopAnswer, LoopAutonomy, LoopQuestion, LoopState } from "..";
-import { describeBreach, type ItemBudget, type BudgetKind } from "./itemBudget";
+import {
+  describeBreach,
+  type BreachKind,
+  type BudgetKind,
+  type ItemBudget,
+} from "./itemBudget";
 import { skipItem } from "./loopMode";
 import type { StuckLevel } from "./stuckSignals";
 
@@ -65,13 +70,14 @@ export interface ItemRef {
   budget?: ItemBudget;
 }
 
-type Breach = { which: BudgetKind; used: number; limit: number };
+type Breach = { which: BreachKind; used: number; limit: number };
 
 export type ExtensionPlan =
   | { ok: true; which: BudgetKind; amount: number }
   | { ok: false; reason: string };
 
-const UNIT: Record<BudgetKind, string> = {
+const UNIT: Record<BreachKind, string> = {
+  usd: "dollars",
   turns: "turns",
   tokens: "tokens",
   minutes: "minutes",
@@ -95,6 +101,10 @@ export function planExtension(
   const want = Math.max(1, Math.ceil(limit * EXTENSION_SHARE));
   if (options.review && (state?.extensions ?? 0) >= 1) {
     return { ok: false, reason: "it was extended once already" };
+  }
+  if (breach.which === "usd") {
+    // The loop's reserve holds tokens and minutes only
+    return { ok: false, reason: "there is no cost reserve to extend from" };
   }
   if (breach.which === "turns") {
     if ((state?.extensions ?? 0) >= 1) {

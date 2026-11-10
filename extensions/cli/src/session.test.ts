@@ -106,6 +106,7 @@ describe("SessionManager", () => {
             cachedTokens: 0,
             cacheWriteTokens: 0,
           },
+          byModel: {},
         },
       });
     });

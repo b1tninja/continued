@@ -24,6 +24,8 @@ import {
   maxRoundsForReplan,
   unmetDependencies,
 } from "core/util/loopMode";
+import { formatCostAmount } from "core/util/costOf";
+import { costMarkOf, dollarBudgetNote, itemCostNow } from "core/util/loopCost";
 import {
   describeRoundUsage,
   describeTimeUsage,
@@ -214,10 +216,13 @@ function ModelLine({ task, model }: { task: TaskItem; model?: LoopItemModel }) {
 function BudgetLine({
   task,
   state,
+  loop,
 }: {
   task: TaskItem;
   state: LoopState["items"][number];
+  loop: LoopState;
 }) {
+  const sessionUsage = useAppSelector((s) => s.session.usage);
   const budget = task.budget;
   if (!budget && !state.overBudget) return null;
   const parts: string[] = [];
@@ -234,6 +239,14 @@ function BudgetLine({
     );
   }
   if (budget?.turns !== undefined) parts.push(`${budget.turns} turns a run`);
+  const cost = itemCostNow(loop, task.id, costMarkOf(sessionUsage));
+  if (budget?.usd !== undefined && typeof cost === "number") {
+    parts.push(
+      `${formatCostAmount(cost)} of ${formatCostAmount(budget.usd)}, ${formatCostAmount(Math.max(0, budget.usd - cost))} left`,
+    );
+  }
+  const costNote = dollarBudgetNote(budget, cost);
+  if (costNote) parts.push(costNote);
   return (
     <div
       data-testid={`loop-budget-${task.id}`}
@@ -307,6 +320,7 @@ function LoopUsagePanel({ loop }: { loop: LoopState }) {
   }, [loop.status]);
   const u = loopUsage(loop, {
     sessionTokens: sessionUsage ? loopTokensFromUsage(sessionUsage) : 0,
+    costMark: costMarkOf(sessionUsage),
     now,
   });
   return (
@@ -329,6 +343,13 @@ function LoopUsagePanel({ loop }: { loop: LoopState }) {
         fraction={u.time.fraction}
         text={describeTimeUsage(u.time)}
       />
+      <div
+        data-testid="loop-usage-cost"
+        className="text-description-muted"
+        title="An estimate at list price, from the session's usage by model"
+      >
+        Cost: {formatCostAmount(u.cost)}
+      </div>
       <div data-testid="loop-usage-totals" className="text-description-muted">
         {u.items.done}/{u.items.total} done · {u.runs} run
         {u.runs === 1 ? "" : "s"}
@@ -431,7 +452,11 @@ export function LoopControls({
                     >
                       {state.attempts} run{state.attempts === 1 ? "" : "s"}
                       {state.usage
-                        ? ` · ${formatTokenCount(state.usage.tokens)} tokens · ${formatDuration(state.usage.ms)}`
+                        ? ` · ${formatTokenCount(state.usage.tokens)} tokens${
+                            state.usage.cost !== undefined
+                              ? ` · ${formatCostAmount(state.usage.cost)}`
+                              : ""
+                          } · ${formatDuration(state.usage.ms)}`
                         : ""}
                     </span>
                   )}
@@ -471,7 +496,7 @@ export function LoopControls({
                 )}
                 <CheckLine task={task} check={state.check} />
                 <FilesLine task={task} />
-                <BudgetLine task={task} state={state} />
+                <BudgetLine task={task} state={state} loop={loop} />
                 <ModelLine task={task} model={state.model} />
               </li>
             );

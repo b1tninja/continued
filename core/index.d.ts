@@ -474,7 +474,15 @@ export interface LoopItemState {
    * What the item's runs have used, all of them: tokens (output and input
    * the provider did not cache, as the loop's budget counts) and wall time
    */
-  usage?: { tokens: number; ms: number };
+  usage?: {
+    tokens: number;
+    ms: number;
+    /**
+     * USD over the runs that were measured (core/util/loopCost.ts), or
+     * "unknown" when a run's model has no price. Missing: no run measured.
+     */
+    cost?: number | "unknown";
+  };
   /**
    * The item's last run ended over its own budget (TaskItem.budget): which
    * limit, and the figures. Its status is failed, but it does not count
@@ -482,7 +490,7 @@ export interface LoopItemState {
    * when the item runs again.
    */
   overBudget?: {
-    which: "turns" | "tokens" | "minutes";
+    which: "turns" | "tokens" | "minutes" | "usd";
     used: number;
     limit: number;
   };
@@ -547,7 +555,7 @@ export interface LoopQuestion {
   approval?: { toolName: string; summary: string; grantKey: string };
   /** The item ran out of its own budget (limit policy Suggest): which limit, and the figures */
   overBudget?: {
-    which: "turns" | "tokens" | "minutes";
+    which: "turns" | "tokens" | "minutes" | "usd";
     used: number;
     limit: number;
   };
@@ -701,6 +709,24 @@ export interface LoopReminder {
   deliveredAt?: string;
 }
 
+/**
+ * A snapshot of the session's usage by model and kind (from
+ * `SessionUsage.byModel`), taken when a loop or a run starts; the difference
+ * to a later snapshot is what the loop used (core/util/loopCost.ts).
+ */
+export type LoopCostMark = Record<
+  string,
+  {
+    provider: string;
+    model: string;
+    requests: number;
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+  }
+>;
+
 export interface LoopState {
   status: LoopStatus;
   /** 1 for the plan the loop started with, +1 at each accepted re-plan */
@@ -708,6 +734,8 @@ export interface LoopState {
   startedAt: string;
   /** Session tokens when the loop started, so the budget counts only its own */
   tokensAtStart: number;
+  /** The session's per-model totals when the loop started, to price its own use */
+  costAtStart?: LoopCostMark;
   budget: LoopBudget;
   /** Missing on loops saved before autonomy levels: treated as "auto" */
   autonomy?: LoopAutonomy;
@@ -746,12 +774,14 @@ export interface LoopState {
     startedAt: string;
     /** Session tokens when an item's run started, to count the run's own */
     tokensAtStart?: number;
+    /** The session's per-model totals when an item's run started */
+    costAtStart?: LoopCostMark;
     /**
      * The run went over the item's own budget (itemBudgetStatus): the host
      * sets this with the report that ends it, and finishItemRun records it
      */
     overBudget?: {
-      which: "turns" | "tokens" | "minutes";
+      which: "turns" | "tokens" | "minutes" | "usd";
       used: number;
       limit: number;
     };
@@ -785,7 +815,7 @@ export interface LoopState {
      */
     nudged?: boolean;
     /** Item budgets the run was already told it passed 80% of (core/util/itemBudget.ts) */
-    budgetWarned?: Array<"turns" | "tokens" | "minutes">;
+    budgetWarned?: Array<"turns" | "tokens" | "minutes" | "usd">;
   };
   /**
    * The re-plan whose plan waits to be accepted: what it was for, so
