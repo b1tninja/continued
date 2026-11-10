@@ -475,6 +475,7 @@ export const streamNormalInput = createAsyncThunk<
         : undefined,
       selectApprovalSettings(state3),
       state3.session.mode,
+      state3.session.id,
     );
     // Loop mode: a run past its turn limit that keeps calling tools ends here
     if (endRunAtTurnLimit(dispatch, getState)) {

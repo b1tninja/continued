@@ -10,6 +10,11 @@ import { ChatCompletionToolMessageParam } from "openai/resources/chat/completion
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
 import type { ModelServiceState } from "src/services/types.js";
 
+import {
+  recordCliDecision,
+  recordCliOutcome,
+  type ApprovalTrace,
+} from "../audit/cliAudit.js";
 import { itemBudgetNoteNow } from "../loop/loopBudget.js";
 import { holdLoopCall, loopRepeatGuard } from "../loop/loopHolds.js";
 import {
@@ -231,14 +236,35 @@ function assistantHasRules(): boolean {
   }
 }
 
-// Helper function to check if tool permission is needed
+// Helper function to check if tool permission is needed. The decision and who
+// made it go to the audit trail; the outcome is written where the call ends.
 export async function checkToolPermissionApproval(
   permissions: ToolPermissions,
   toolCall: PreprocessedToolCall,
   callbacks?: StreamCallbacks,
   isHeadless?: boolean,
-  /** What PreToolUse hooks asked for. They can tighten the policy, never loosen an exclude. */
   hookDecision?: "allow" | "ask",
+): ReturnType<typeof decideToolApproval> {
+  const trace: ApprovalTrace = {};
+  const result = await decideToolApproval(permissions, toolCall, trace, {
+    callbacks,
+    isHeadless,
+    hookDecision,
+  });
+  recordCliDecision(toolCall, trace, result);
+  return result;
+}
+
+async function decideToolApproval(
+  permissions: ToolPermissions,
+  toolCall: PreprocessedToolCall,
+  trace: ApprovalTrace,
+  options: {
+    callbacks?: StreamCallbacks;
+    isHeadless?: boolean;
+    /** What PreToolUse hooks asked for. They can tighten the policy, never loosen an exclude. */
+    hookDecision?: "allow" | "ask";
+  },
 ): Promise<{
   approved: boolean;
   /** "loop": Loop mode held the call as a question instead of asking */
@@ -246,6 +272,7 @@ export async function checkToolPermissionApproval(
   /** Why a rule, protected path or the reviewer refused it, to tell the model. */
   denialMessage?: string;
 }> {
+  const { callbacks, isHeadless, hookDecision } = options;
   const permissionCheck = withReadOnlyMcp(
     checkToolPermission(toolCall, permissions),
     toolCall.tool,
@@ -266,6 +293,7 @@ export async function checkToolPermissionApproval(
   // but not one a hook asked for: the hook wants the user to confirm.
   if (permission !== "exclude") {
     const verdict = await coreRulesVerdict(toolCall, permission, isHeadless);
+    trace.verdict = verdict;
     if (verdict?.decision === "allow" && hookDecision !== "ask") {
       return { approved: true };
     }
@@ -282,7 +310,10 @@ export async function checkToolPermissionApproval(
       // "ask" (or an allow rule over a hook's ask): Loop mode holds it as a
       // question; otherwise nobody to ask when headless, so it is a refusal.
       const held = holdLoopCall(toolCall, verdict.reason);
-      if (held) return held;
+      if (held) {
+        trace.held = true;
+        return held;
+      }
       if (isHeadless) {
         return {
           approved: false,
@@ -290,6 +321,7 @@ export async function checkToolPermissionApproval(
           denialMessage: `${verdict.reason ?? "This call needs approval."} Running headless, so it was refused.`,
         };
       }
+      trace.askedPerson = true;
       const userApproved = await requestUserPermission(toolCall, callbacks);
       return userApproved
         ? { approved: true }
@@ -301,11 +333,15 @@ export async function checkToolPermissionApproval(
     return { approved: true };
   } else if (permission === "ask") {
     const held = holdLoopCall(toolCall);
-    if (held) return held;
+    if (held) {
+      trace.held = true;
+      return held;
+    }
     if (isHeadless) {
       // "ask" tools are excluded in headless so can only get here by policy evaluation
       return { approved: false, denialReason: "policy" };
     }
+    trace.askedPerson = true;
     const userApproved = await requestUserPermission(toolCall, callbacks);
     return userApproved
       ? { approved: true }
@@ -853,6 +889,7 @@ export async function executeStreamedToolCalls(
           status: "canceled",
         };
         entriesByIndex.set(index, deniedEntry);
+        recordCliOutcome(call, { ran: false, error: deniedMessage });
         callbacks?.onToolResult?.(
           String(deniedEntry.content),
           call.name,
@@ -888,6 +925,7 @@ export async function executeStreamedToolCalls(
               arguments: approvedCall.arguments,
             });
 
+            const startedAt = Date.now();
             const rawResult = await executeToolCall(approvedCall, {
               parallelToolCallCount,
               abortSignal,
@@ -897,6 +935,11 @@ export async function executeStreamedToolCalls(
               approvedCall,
               rawResult,
             );
+            recordCliOutcome(approvedCall, {
+              ran: true,
+              durMs: Date.now() - startedAt,
+              output: typeof toolResult === "string" ? toolResult : undefined,
+            });
             const entry: ToolResultWithStatus = {
               role: "tool",
               tool_call_id: approvedCall.id,
@@ -919,6 +962,11 @@ export async function executeStreamedToolCalls(
             }`;
             logger.error("Tool execution failed", {
               name: approvedCall.name,
+              error: errorMessage,
+            });
+            recordCliOutcome(approvedCall, {
+              ran: true,
+              exit: 1,
               error: errorMessage,
             });
             await runPostToolUseFailureHooks(approvedCall, errorMessage);

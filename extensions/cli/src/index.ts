@@ -6,6 +6,7 @@ import "./init.js";
 import { Command } from "commander";
 
 import { acp } from "./commands/acp.js";
+import { auditCommand } from "./commands/audit.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { hooksCommand } from "./commands/hooks.js";
@@ -411,6 +412,32 @@ program
     const code = await hooksCommand(action, { yes: options.yes });
     await gracefulExit(code);
   });
+
+// Audit subcommand
+program
+  .command("audit [action] [session]")
+  .description(
+    "Read the audit trail of tool call decisions (list, show <session>, prune)",
+  )
+  .option("--json", "Machine-readable output")
+  .option("--session <id>", "Only this session")
+  .option("--decision <d>", "allow, ask, deny or reviewer")
+  .option("--tool <name>", "Only this tool")
+  .option("--since <date>", "From this date (inclusive)")
+  .option("--until <date>", "Up to this date (inclusive)")
+  .option("--limit <n>", "Only the last n calls")
+  .option("--days <n>", "prune: delete files older than this many days")
+  .option("--dry-run", "prune: say what would be deleted")
+  .action(
+    async (
+      action: string | undefined,
+      session: string | undefined,
+      options,
+    ) => {
+      const code = auditCommand(action, session, options);
+      await gracefulExit(code);
+    },
+  );
 
 // Handle unknown commands
 program.on("command:*", () => {

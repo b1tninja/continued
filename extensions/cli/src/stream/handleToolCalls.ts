@@ -6,6 +6,7 @@ import { isAutoReviewEnabled } from "src/permissions/coreRules.js";
 import { checkToolPermission } from "src/permissions/permissionChecker.js";
 import { withReadOnlyMcp } from "src/permissions/readOnlyMcp.js";
 
+import { cliAuditSession, cliAuditTrail } from "../audit/cliAudit.js";
 import { loopItemRunning } from "../loop/loopSession.js";
 import {
   SERVICE_NAMES,
@@ -33,7 +34,7 @@ import {
   preprocessStreamedToolCalls,
 } from "./streamChatResponse.helpers.js";
 import { StreamCallbacks } from "./streamChatResponse.types.js";
-import { stuckNoteForHistory } from "./stuckNotes.js";
+import { auditStepsOf, stuckNoteForHistory } from "./stuckNotes.js";
 
 interface HandleToolCallsOptions {
   toolCalls: ToolCall[];
@@ -161,7 +162,9 @@ function noteStuckRound(
     ? ctx.chatHistorySvc.getHistory?.()
     : ctx.chatHistory;
   if (!history) return;
-  const note = stuckNoteForHistory(history);
+  const note = stuckNoteForHistory(history, () =>
+    auditStepsOf(cliAuditTrail().dir, cliAuditSession()),
+  );
   if (!note) return;
   const owner = history.findLast((item) =>
     item.toolCallStates?.some((ts) => ts.toolCallId === last.tool_call_id),
