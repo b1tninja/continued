@@ -105,7 +105,7 @@ function CheckLine({
   return (
     <div
       data-testid={`loop-check-${task.id}`}
-      className="text-2xs text-description-muted ml-3 min-w-0"
+      className="ml-3 min-w-0 text-2xs text-description-muted"
     >
       <div className="truncate" title={task.check ?? check?.command}>
         check: <code>{task.check ?? check?.command}</code>
@@ -125,7 +125,7 @@ function CheckLine({
       {check?.status === "failed" && check.output && (
         <pre
           data-testid={`loop-check-output-${task.id}`}
-          className="m-0 max-h-16 overflow-auto whitespace-pre-wrap break-words"
+          className="m-0 max-h-16 overflow-auto break-words whitespace-pre-wrap"
         >
           {check.output.trim()}
         </pre>
@@ -140,7 +140,7 @@ function FilesLine({ task }: { task: TaskItem }) {
   return (
     <div
       data-testid={`loop-files-${task.id}`}
-      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
+      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
       title="The files this item changes; items with disjoint files may run at the same time"
     >
       files: <code>{task.files.join(", ")}</code>
@@ -164,7 +164,7 @@ function WorkerLine({
   return (
     <div
       data-testid={`loop-worker-${task.id}`}
-      className="text-2xs text-description-muted ml-3 flex min-w-0 items-center gap-1"
+      className="ml-3 flex min-w-0 items-center gap-1 text-2xs text-description-muted"
     >
       <span className="min-w-0 flex-1 truncate" title={run.worktree}>
         in its own worktree{run.worktree ? `: ${run.worktree}` : ""}
@@ -192,7 +192,7 @@ function ModelLine({ task, model }: { task: TaskItem; model?: LoopItemModel }) {
   return (
     <div
       data-testid={`loop-model-${task.id}`}
-      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
+      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
       title={model?.fallbackReason ?? "The model this item runs with"}
     >
       model: {task.model}
@@ -250,7 +250,7 @@ function BudgetLine({
   return (
     <div
       data-testid={`loop-budget-${task.id}`}
-      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
+      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
       title="The item's own budget and what is left of it"
     >
       budget: {parts.join(" · ")}
@@ -291,10 +291,10 @@ function UsageMeter({
   return (
     <div
       data-testid={testId}
-      className="text-description flex min-w-0 items-center gap-1"
+      className="flex min-w-0 items-center gap-1 text-description"
     >
       <span className="w-12 shrink-0">{label}</span>
-      <span className="bg-input h-1 w-16 shrink-0 overflow-hidden rounded">
+      <span className="h-1 w-16 shrink-0 overflow-hidden rounded bg-input">
         <span
           className={`block h-full ${tone}`}
           style={{ width: `${Math.round((fraction ?? 0) * 100)}%` }}
@@ -406,7 +406,7 @@ export function LoopControls({
   const replan = loopReplanSetting(loop);
 
   return (
-    <details data-testid="loop-controls" open className="text-description mt-1">
+    <details data-testid="loop-controls" open className="mt-1 text-description">
       <summary className="cursor-pointer">
         Plan and limits · {describeLoopReplan(loop)}
       </summary>
@@ -431,24 +431,24 @@ export function LoopControls({
                   data-testid={`loop-item-${task.id}`}
                   className="flex min-w-0 items-center gap-1"
                 >
-                  <span className="text-foreground min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1 truncate text-foreground">
                     {task.id}. {task.text}
                   </span>
                   {dependency && (
                     <span
                       data-testid={`loop-after-${task.id}`}
-                      className="text-description-muted shrink-0"
+                      className="shrink-0 text-description-muted"
                     >
                       {dependency}
                     </span>
                   )}
-                  <span className="text-description-muted shrink-0">
+                  <span className="shrink-0 text-description-muted">
                     {statusLabel(loop, task.id)}
                   </span>
                   {showUsage && state.attempts > 0 && (
                     <span
                       data-testid={`loop-runs-${task.id}`}
-                      className="text-description-muted shrink-0"
+                      className="shrink-0 text-description-muted"
                     >
                       {state.attempts} run{state.attempts === 1 ? "" : "s"}
                       {state.usage
@@ -517,7 +517,7 @@ export function LoopControls({
                   : { kind },
               );
             }}
-            className="border-border bg-input text-foreground cursor-pointer rounded border border-solid px-1 text-xs"
+            className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
           >
             <option value="never">never</option>
             <option value="up_to">up to N times</option>
@@ -543,7 +543,7 @@ export function LoopControls({
           data-testid="loop-budget-toggle"
           aria-expanded={budgetOpen}
           title={describeLoopBudget(loop.budget)}
-          className="text-link shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs hover:underline"
+          className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
           onClick={() => {
             if (budgetOpen) setDraft(draftOf(loop));
             setBudgetOpen(!budgetOpen);
@@ -590,7 +590,7 @@ export function LoopControls({
                   setLimitPolicyThunk(e.target.value as LimitPolicy),
                 )
               }
-              className="border-border bg-input text-foreground cursor-pointer rounded border border-solid px-1 text-xs"
+              className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
             >
               {LIMIT_POLICIES.map((policy) => (
                 <option key={policy} value={policy}>
@@ -628,7 +628,7 @@ export function LoopControls({
         <div
           role="alert"
           data-testid="loop-controls-error"
-          className="text-error mt-0.5 break-words"
+          className="mt-0.5 break-words text-error"
         >
           {error}
         </div>
