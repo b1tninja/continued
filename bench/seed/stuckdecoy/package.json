@@ -1,0 +1,9 @@
+{
+  "name": "stuckdecoy",
+  "version": "1.0.0",
+  "description": "A request client with a limit setting, and a stale config file beside the real one.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

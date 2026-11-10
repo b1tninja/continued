@@ -1,0 +1,38 @@
+{
+  "name": "stuck-decoy",
+  "group": "guidance",
+  "kind": "agent",
+  "surface": "serve",
+  "what": "The S3 experiment's stuck scenario (plans/stuck-calibration.md): the failing test reads src/settings.js, a stale src/config.js named by the README and the failure text sits beside it, so the obvious edit changes nothing and the test fails with the same message each time. Recovery is finding the module the code imports.",
+  "prompt": "The test in test/limit.test.js fails: the request limit should be 5, not 3. Make `npm test` pass without changing the test, then tell me what you changed.",
+  "seed": {
+    "from": "seed/stuckdecoy",
+    "mkdirs": ["src", "test"]
+  },
+  "config": {},
+  "policy": {
+    "serve": ["--auto"]
+  },
+  "expectations": [
+    {
+      "check": "command-exits-0",
+      "command": "npm test"
+    },
+    {
+      "check": "command-exits-0",
+      "command": "node -e \"process.exit(require('fs').readFileSync('test/limit.test.js','utf8').includes('expected 5 (configured in src/config.js)')?0:1)\""
+    },
+    {
+      "check": "final-report"
+    },
+    {
+      "check": "turns-at-most",
+      "n": 40
+    }
+  ],
+  "budget": {
+    "maxRequests": 40,
+    "maxTokens": 400000,
+    "deadlineSeconds": 600
+  }
+}
