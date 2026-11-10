@@ -26,5 +26,10 @@
       "core": ["../../core/dist/index.js"]
     }
   },
-  "include": ["src/**/*", "vitest.setup.ts", "vitest.global-dir-setup.ts"]
+  "include": [
+    "src/**/*",
+    "scripts/measureStuck.ts",
+    "vitest.setup.ts",
+    "vitest.global-dir-setup.ts"
+  ]
 }
