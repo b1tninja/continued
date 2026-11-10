@@ -17,3 +17,5 @@ Each row has:
 **Clear** in the header removes the whole list and asks for confirmation the same way. A text box at the bottom adds an item.
 
 An edit you make wins over the agent's: the next request tells the model that the list was changed by you. When a loop runs the plan, an item's `model:` line shows after its text.
+
+A `budget:` line under an item, such as `budget: 25 turns, 200K tokens, 20 min`, limits what a loop lets that item use. See [Loop budgets](/ide-extensions/agent/loop-budgets).

@@ -1,0 +1,68 @@
+---
+title: "Loop Budgets"
+---
+
+A loop has limits of its own (rounds, tokens, minutes), and each to-do can have a budget inside them. A to-do that uses up its budget stops with its work kept, and the limit policy decides what happens next.
+
+## Per-to-do budgets
+
+A `budget:` line indented under a to-do in the plan file sets what that to-do may use:
+
+```md title=".continuous/plans/retry.md"
+- [ ] Add a retry helper <!-- id: 1 -->
+  check: npm test -- retry
+  budget: 25 turns, 200K tokens, 20 min
+```
+
+The plan tool takes the same text as `budget` in `todo_details`. Parts go in any order, separated by commas, each kind at most once and each number above zero.
+
+| Part      | Written as                              | Counts                                                         |
+| --------- | --------------------------------------- | -------------------------------------------------------------- |
+| `turns`   | `25 turns`                              | Model requests in one run of the to-do                         |
+| `tokens`  | `200K tokens`, `1.5M tokens`, `5000 tok` | Output plus input the provider did not cache, over all its runs |
+| `minutes` | `20 min`, `20 minutes`, `20m`           | Wall time over all its runs                                    |
+| dollars   | `$0.60`                                 | Kept in the plan, not enforced: the loop has no cost counter   |
+
+`K` and `M` apply to tokens only; `5m` is five minutes.
+
+## Set a budget when you build
+
+On the plan card, **Set a budget…** next to **Build in a loop** opens the budget step. It divides the loop's tokens and minutes among the plan's to-dos. The first line shows the loop's own limits. With no token or time limit there is nothing to divide; `budget:` lines and the numbers you type still apply.
+
+- **Divide** picks a strategy:
+  - **None**: no budget per to-do except the `budget:` lines in the plan.
+  - **Equal**: the loop's budget divided by the number of to-dos.
+  - **Weighted**: divided by size. Each to-do gets an S, M or L menu; a medium to-do is twice a small one and a large one four times.
+  - **Fair share of what is left**: each to-do may use a third of what remains, or one over the to-dos left if that is larger. Unused budget rolls forward.
+- **Reserve %** holds back part of the loop's budget, 0 to 90, for extensions, re-plans and a final check. Choosing a strategy other than None sets it to 20 if it was 0. **Held back** shows the amount.
+- A number box beside each to-do for tokens, minutes and turns. A number you type wins over everything else.
+- **Use the proposal** fills the boxes from the to-dos this loop has already finished: the median tokens and minutes, times two, scaled by the to-do's size. With none finished it says so and proposes nothing.
+- **Apply** uses these budgets when the loop starts. **Skip** leaves the strategy at None.
+
+A to-do's budget is the first that exists of: your number, the planner's `budget:` line, the strategy's share. A number larger than what the loop has left is cut to it, and the row says "capped at what the loop has left". Turns and dollars are not divided, so a strategy never sets them; they come from your numbers or the plan.
+
+Who sets the budgets follows the **Plan edits** level. At Manual the planner's `budget:` lines are shown as proposals and nothing applies until you apply the step. At the other levels they stand, within the loop's total, and you can change any of them here.
+
+## At a to-do's limit
+
+When a run ends over its to-do's budget, **At a to-do's limit** in the loop's budget settings (under **Set a budget…** on the Re-plan row) decides what follows. Its default follows the loop's autonomy level.
+
+| Policy      | Default at                | What happens                                                                                                      |
+| ----------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Suggest** | Supervised                | The to-do waits and a question offers **Extend**, **Split**, **Skip** or **Block**.                               |
+| **Review**  | Auto                      | An extension is given to a to-do that is making progress, once; otherwise it is split or stopped.                 |
+| **Force**   | Unattended and IDGAF      | The to-do ends over budget and the loop continues as it does after any failed to-do.                              |
+
+An extension is half of the to-do's limit for the kind that ran out. Tokens and minutes come out of the loop's reserve, so the loop's total stays a ceiling, and a to-do cannot be extended when the reserve is empty. Turns are not divided, so there is no reserve of them: half the limit, once. **Extend** is left out of the question when it is not possible, and the question says why.
+
+- **Split** fails the to-do and asks for a re-plan that sees what the to-do found.
+- **Skip** finishes it as skipped.
+- **Block** leaves it failed for you to deal with.
+
+Review reads the to-do's progress: files changed or its check improving, and no stuck signal. It extends at most once per to-do, and by at most half of the reserve left. A to-do that cannot be extended but is progressing is split; one that is not progressing stops. The IDE does not pass progress to Review yet, so there it stops the to-do the way Force does.
+
+The limit policy runs in the IDE. In the terminal agent, a to-do over its token or minute budget ends as over budget with its work kept; turns are not counted there.
+
+## Usage
+
+Once a budget is set, the loop controls show meters for rounds, tokens and time (amber from 80%, red at the limit), and each to-do shows its runs, tokens and time, for example `2 runs · 180K tokens · 14 min`.

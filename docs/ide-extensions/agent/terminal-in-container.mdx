@@ -12,7 +12,7 @@ By default the agent's terminal commands run in your own shell. To run each one 
 }
 ```
 
-`continuous.terminal.containerRuntime` is `auto`, `docker` or `podman`. `auto` uses Docker when it is installed, else Podman. `continuous.terminal.containerImage` needs `bash` and `base64`; empty uses `ubuntu:24.04`. The settings apply to the next command; no reload is needed. In the terminal agent, set the environment variable instead:
+`continuous.terminal.containerRuntime` is `auto`, `docker` or `podman`. `auto` uses Docker when it is installed, else Podman. `continuous.terminal.containerImage` needs `bash` and `base64`; empty uses `ubuntu:24.04`. The settings apply to the next command; no reload is needed. They are machine settings, so only your user settings count: a workspace `settings.json` cannot change where commands run. In the terminal agent, set the environment variable instead:
 
 ```bash
 export CONTINUOUS_TERMINAL_SHELL="container:podman:debian:12"   # or "container"
