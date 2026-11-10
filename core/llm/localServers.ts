@@ -1,5 +1,4 @@
 import type { RequestOptions } from "@continuedev/config-types";
-import { fetchwithRequestOptions } from "@continuedev/fetch";
 
 import type { FetchedModel } from "./fetchModels.js";
 
@@ -168,9 +167,13 @@ async function probeCapabilities(
   };
   try {
     // requestOptions carries a custom CA, proxy and headers. Global fetch
-    // would send the bearer key without them.
+    // would send the bearer key without them. Imported only when needed:
+    // this module is also loaded by the webview, and @continuedev/fetch
+    // pulls in node-fetch, which crashes that page before the chat input exists.
     const response = requestOptions
-      ? await fetchwithRequestOptions(url, init, requestOptions)
+      ? await (
+          await import("@continuedev/fetch")
+        ).fetchwithRequestOptions(url, init, requestOptions)
       : await fetchFn(url, init);
     if (!response.ok) {
       // 4xx: the server is up and has no /props. 5xx may be temporary.
