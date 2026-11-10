@@ -1473,3 +1473,133 @@ describe("BedrockApi Nova <thinking> tags (Nova Pro, seen live 2026-11-08)", () 
     expect(joined(claude, "reasoning_content")).toBe("");
   });
 });
+
+describe("BedrockApi Qwen XML tool calls written as text (recovery, off by default)", () => {
+  const signal = new AbortController().signal;
+  const MODEL = "qwen.qwen3-coder-30b-a3b-v1:0";
+  const readTool = {
+    type: "function",
+    function: {
+      name: "Read",
+      description: "read a file",
+      parameters: {
+        type: "object",
+        properties: { filepath: { type: "string" } },
+        required: ["filepath"],
+      },
+    },
+  };
+  const leaked =
+    "<function=Read>\n<parameter=filepath>\na.txt\n</parameter>\n</function>";
+
+  function streaming(events: any[]) {
+    class StreamApi extends TestApi {
+      async getClient() {
+        return {
+          send: async () => ({
+            $metadata: { requestId: "req-1" },
+            stream: (async function* () {
+              for (const e of events) yield e;
+            })(),
+          }),
+        } as any;
+      }
+    }
+    const api = new StreamApi({ provider: "bedrock", env: {} } as any);
+    return async (extra: Record<string, unknown> = {}) => {
+      const chunks: any[] = [];
+      for await (const c of api.chatCompletionStream(
+        {
+          model: MODEL,
+          messages: [{ role: "user", content: "read a.txt" }],
+          tools: [readTool],
+          stream: true,
+          ...extra,
+        } as any,
+        signal,
+      )) {
+        chunks.push(c);
+      }
+      return chunks.map((c) => c.choices[0]).filter(Boolean);
+    };
+  }
+  const text = (t: string) => ({ contentBlockDelta: { delta: { text: t } } });
+  const content = (choices: any[]) =>
+    choices.map((c) => c.delta?.content ?? "").join("");
+  const callsOf = (choices: any[]) =>
+    choices.flatMap((c) => c.delta?.tool_calls ?? []);
+  const finish = (choices: any[]) =>
+    // Plain text chunks carry finish_reason "stop"; the last one counts.
+    [
+      choices
+        .map((c) => c.finish_reason)
+        .filter(Boolean)
+        .at(-1),
+    ];
+
+  const reply = [
+    text("I will read it.\n"),
+    text(leaked.slice(0, 10)),
+    text(leaked.slice(10)),
+    { contentBlockStop: {} },
+    { messageStop: { stopReason: "end_turn" } },
+  ];
+
+  it("leaves the text alone when the setting is off", async () => {
+    const choices = await streaming(reply)();
+    expect(content(choices)).toBe("I will read it.\n" + leaked);
+    expect(callsOf(choices)).toEqual([]);
+    expect(finish(choices)).toEqual(["stop"]);
+  });
+
+  it("makes the call from the text when the request asks for it", async () => {
+    const choices = await streaming(reply)({
+      x_continue_recover_text_tool_calls: "qwen-xml",
+    });
+    expect(content(choices)).toBe("I will read it.\n");
+    const calls = callsOf(choices);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].index).toBe(0);
+    expect(calls[0].function.name).toBe("Read");
+    expect(JSON.parse(calls[0].function.arguments)).toEqual({
+      filepath: "a.txt",
+    });
+    expect(calls[0].id).toMatch(/^recovered_0_/);
+    expect(finish(choices)).toEqual(["tool_calls"]);
+  });
+
+  it("does not make a call from prose that quotes the markup", async () => {
+    const prose =
+      "A call looks like <function=Read> with a <parameter=filepath>.";
+    const choices = await streaming([
+      text(prose),
+      { contentBlockStop: {} },
+      { messageStop: { stopReason: "end_turn" } },
+    ])({ x_continue_recover_text_tool_calls: "qwen-xml" });
+    expect(content(choices)).toBe(prose);
+    expect(callsOf(choices)).toEqual([]);
+    expect(finish(choices)).toEqual(["stop"]);
+  });
+
+  it("makes no second call when the model also made a toolUse of its own", async () => {
+    const choices = await streaming([
+      text(leaked),
+      { contentBlockStop: {} },
+      {
+        contentBlockStart: {
+          start: { toolUse: { toolUseId: "t1", name: "Read" } },
+        },
+      },
+      {
+        contentBlockDelta: {
+          delta: { toolUse: { input: '{"filepath":"a.txt"}' } },
+        },
+      },
+      { contentBlockStop: {} },
+      { messageStop: { stopReason: "tool_use" } },
+    ])({ x_continue_recover_text_tool_calls: "qwen-xml" });
+    const calls = callsOf(choices);
+    expect(calls.map((c) => c.id).filter(Boolean)).toEqual(["t1"]);
+    expect(finish(choices)).toEqual(["tool_calls"]);
+  });
+});
