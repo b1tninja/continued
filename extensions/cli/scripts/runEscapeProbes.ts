@@ -29,10 +29,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { getCommandExecutor } from "core/util/commandExecutor.js";
-import {
-  createCanaries,
-  runProbes,
-} from "core/util/escapeProbeRunner.js";
+import { createCanaries, runProbes } from "core/util/escapeProbeRunner.js";
 import {
   COMMON_PROBES,
   summarizeProbes,
