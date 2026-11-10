@@ -19,6 +19,37 @@ Set the variable in the environment that starts the editor or the CLI. It takes 
 
 The same setting can be given per model as `x_continue_recover_text_tool_calls` in `requestOptions.extraBodyProperties`; it takes the same values. Recovery applies to Amazon Bedrock models only, and a model whose id does not match gets no recovery whatever the setting says.
 
+## Per-model setting
+
+A model entry in `config.yaml` can turn recovery on without environment variables:
+
+```yaml
+models:
+  - name: Qwen3-Coder
+    provider: bedrock
+    model: qwen.qwen3-coder-30b-a3b-v1:0
+    toolDialect: qwen-xml
+```
+
+| `toolDialect` | Effect                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `auto`        | The default. Nothing changes.                                                           |
+| `native`      | The model's calls arrive structured. Recovery is off for this model.                    |
+| `off`         | Recovery is off for this model.                                                         |
+| `qwen-xml`    | Recover Qwen markup for this model, whatever its id is.                                 |
+| `pythonic`    | Recover Python call syntax for this model, whatever its id is.                          |
+| `llama-json`  | Recover Llama JSON calls for this model, whatever its id is.                            |
+
+Any other value is rejected when the config loads. When `CONTINUE_RECOVER_TEXT_TOOL_CALLS` is set, it wins over `toolDialect`. The setting applies to Bedrock models in the IDE and in the CLI (`cn`); the rules below apply unchanged.
+
+## Test connection
+
+In the Bedrock add-model form, **Test connection** also sends one request with a made-up tool at temperature 0 and shows one line: `Tool calls: native`, `Tool calls: written as text (qwen-xml)`, `Tool calls: not supported` or `Tool calls: unknown`. The request costs a few hundred tokens, the tool is never run, and the check is never sent anywhere else. A result of `written as text` tells you which `toolDialect` to set. Timeouts and errors show `unknown`, not `not supported`.
+
+## Live notice
+
+When a Bedrock model writes a recoverable tool call as text in a reply (not inside a code fence) and `toolDialect` is not set, the IDE shows one dismissible notice per model per session: "This model wrote a tool call as text (looks like qwen-xml). Turn on recovery for this model?" **Turn on recovery** sets `toolDialect` for that model in `config.yaml`. Nothing is turned on until you click it. The CLI prints a one-line hint once per session instead, naming the key to set.
+
 ## Rules
 
 Recovery is strict, because text that looks like a call is sometimes an example. A call is recovered only when all of these hold:

@@ -46,6 +46,23 @@ export function recoverySettings(
   );
 }
 
+/**
+ * Whether `dialect` is asked for and applies to `model`. A plain name applies
+ * to models whose id matches `nameRe`; `force:<name>` (what a model's
+ * `toolDialect` config sets) applies whatever the model is called.
+ */
+function wants(
+  settings: Set<string>,
+  dialect: string,
+  model: string,
+  nameRe: RegExp,
+): boolean {
+  return (
+    settings.has(`force:${dialect}`) ||
+    (settings.has(dialect) && nameRe.test(model))
+  );
+}
+
 /** The recovery stage for this model and setting, or undefined when off. */
 export function createTextToolRecovery(
   model: string,
@@ -54,13 +71,13 @@ export function createTextToolRecovery(
   env?: Record<string, string | undefined>,
 ): TextToolRecovery | undefined {
   const settings = recoverySettings(body, env);
-  if (settings.has("qwen-xml") && /qwen/i.test(model)) {
+  if (wants(settings, "qwen-xml", model, /qwen/i)) {
     return new QwenXmlRecovery(tools);
   }
-  if (settings.has("pythonic") && /nova/i.test(model)) {
+  if (wants(settings, "pythonic", model, /nova/i)) {
     return new PythonicRecovery(tools);
   }
-  if (settings.has("llama-json") && /llama/i.test(model)) {
+  if (wants(settings, "llama-json", model, /llama/i)) {
     return new LlamaJsonRecovery(tools);
   }
   return undefined;
@@ -75,13 +92,13 @@ export function recoverFromText(
   env?: Record<string, string | undefined>,
 ): { text: string; calls: RecoveredCall[] } {
   const settings = recoverySettings(body, env);
-  if (settings.has("qwen-xml") && /qwen/i.test(model)) {
+  if (wants(settings, "qwen-xml", model, /qwen/i)) {
     return recoverQwenXmlFromText(text, tools);
   }
-  if (settings.has("pythonic") && /nova/i.test(model)) {
+  if (wants(settings, "pythonic", model, /nova/i)) {
     return recoverPythonicFromText(text, tools);
   }
-  if (settings.has("llama-json") && /llama/i.test(model)) {
+  if (wants(settings, "llama-json", model, /llama/i)) {
     return recoverLlamaJsonFromText(text, tools);
   }
   return { text, calls: [] };

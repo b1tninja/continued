@@ -2,6 +2,7 @@ import {
   DataDestination,
   ModelRole,
   PromptTemplates,
+  ToolDialectSetting,
   ToolOverrideConfig,
   ToolPermissions,
 } from "@continuedev/config-yaml";
@@ -1466,6 +1467,7 @@ export interface LLMOptions {
   title?: string;
   uniqueId?: string;
   baseAgentSystemMessage?: string;
+  toolDialect?: ToolDialectSetting;
   basePlanSystemMessage?: string;
   baseChatSystemMessage?: string;
   autocompleteOptions?: Partial<TabAutocompleteOptions>;
@@ -2116,6 +2118,7 @@ export interface ModelDescription {
   template?: TemplateType;
   completionOptions?: BaseCompletionOptions;
   baseAgentSystemMessage?: string;
+  toolDialect?: ToolDialectSetting;
   basePlanSystemMessage?: string;
   baseChatSystemMessage?: string;
   requestOptions?: RequestOptions;

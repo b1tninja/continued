@@ -1,6 +1,7 @@
 import { useContext, useState } from "react";
 import type {
   BedrockConnectionParams,
+  BedrockProbeToolCallsResult,
   BedrockTestModelResult,
 } from "core/protocol/core";
 import { Button } from "../components/ui/Button";
@@ -49,20 +50,46 @@ export function BedrockConnectionTester({
   const [listResult, setListResult] = useState<BedrockAllModelsResult>();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<BedrockTestModelResult>();
+  const [toolCalls, setToolCalls] = useState<BedrockProbeToolCallsResult>();
 
   async function testConnection() {
     setListing(true);
     setListResult(undefined);
     setTestResult(undefined);
+    setToolCalls(undefined);
     onModelsLoaded(undefined, []);
     try {
       const result = await listBedrockModelsFor(ideMessenger, connection);
       setListResult(result);
       if (result.ok) {
         onModelsLoaded(result.models, result.notes);
+        if (model && !testEndpoint) await probeToolCalls();
       }
     } finally {
       setListing(false);
+    }
+  }
+
+  /**
+   * One request with a made-up tool (a few hundred tokens, temperature 0); the
+   * tool is never run. Only here, on "Test connection", never in the background.
+   */
+  async function probeToolCalls() {
+    try {
+      const res = await ideMessenger.request("bedrock/probeToolCalls", {
+        ...(connection as BedrockConnectionParams),
+        model,
+      });
+      setToolCalls(
+        res.status === "success"
+          ? res.content
+          : { ok: false, error: String(res.error ?? "Request failed") },
+      );
+    } catch (e) {
+      setToolCalls({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -138,6 +165,19 @@ export function BedrockConnectionTester({
               ? `; ${needAccess} need${needAccess === 1 ? "s" : ""} access in the Bedrock console and ${needAccess === 1 ? "is" : "are"} marked`
               : ""}
             .
+          </span>
+        </Alert>
+      )}
+
+      {toolCalls && (
+        <Alert
+          type={toolCalls.ok && toolCalls.kind !== "none" ? "info" : "warning"}
+          size="sm"
+        >
+          <span className="text-xs" data-testid="tool-calls-result">
+            {toolCalls.ok
+              ? toolCalls.label
+              : `Tool calls: unknown (${toolCalls.error})`}
           </span>
         </Alert>
       )}

@@ -80,3 +80,33 @@ describe("buildChatRequestBody and the fork-point pin", () => {
     expect(JSON.stringify(body)).not.toContain("x_continue_cache_pin");
   });
 });
+
+describe("buildChatRequestBody and toolDialect", () => {
+  const build = (m: object) =>
+    buildChatRequestBody({
+      model: { ...model("bedrock"), ...m } as ModelConfig,
+      chatHistory: [user("hi")],
+      systemMessage: "sys",
+    }) as any;
+
+  it("adds nothing without a toolDialect", () => {
+    delete process.env.CONTINUE_RECOVER_TEXT_TOOL_CALLS;
+    expect(build({})).not.toHaveProperty("x_continue_recover_text_tool_calls");
+  });
+
+  it("maps toolDialect onto the recovery field for Bedrock", () => {
+    delete process.env.CONTINUE_RECOVER_TEXT_TOOL_CALLS;
+    expect(build({ toolDialect: "qwen-xml" })).toMatchObject({
+      x_continue_recover_text_tool_calls: "force:qwen-xml",
+    });
+  });
+
+  it("leaves other providers alone", () => {
+    const body = buildChatRequestBody({
+      model: { ...model("openai"), toolDialect: "qwen-xml" } as ModelConfig,
+      chatHistory: [user("hi")],
+      systemMessage: "sys",
+    }) as any;
+    expect(body).not.toHaveProperty("x_continue_recover_text_tool_calls");
+  });
+});

@@ -5,6 +5,7 @@ import {
   createSelector,
   createSlice,
 } from "@reduxjs/toolkit";
+import type { ToolDialectSetting } from "@continuedev/config-yaml";
 import { JSONContent } from "@tiptap/react";
 import {
   ApplyState,
@@ -249,6 +250,14 @@ type SessionState = {
   hasReasoningEnabled?: boolean;
   /** What Auto learned about this session's pauses; see util/promptCache.ts. */
   promptCache?: PromptCacheSessionState;
+  /**
+   * Models seen writing a tool call as text this session, by model title. An
+   * entry is added once and never replaced, so the notice shows once per model.
+   */
+  toolDialectNotices?: Record<
+    string,
+    { dialect: ToolDialectSetting; dismissed: boolean }
+  >;
   /**
    * How far a local server is in reading the current request's prompt, while
    * it says so (llama.cpp's prompt_progress). Not saved.
@@ -1405,6 +1414,24 @@ export const sessionSlice = createSlice({
       const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
       state.promptCache = { ...current, dismissedColdFor: action.payload };
     },
+    noteToolDialectLeak: (
+      state,
+      action: PayloadAction<{ model: string; dialect: ToolDialectSetting }>,
+    ) => {
+      const notices = state.toolDialectNotices ?? {};
+      if (notices[action.payload.model]) return;
+      state.toolDialectNotices = {
+        ...notices,
+        [action.payload.model]: {
+          dialect: action.payload.dialect,
+          dismissed: false,
+        },
+      };
+    },
+    dismissToolDialectNotice: (state, action: PayloadAction<string>) => {
+      const entry = state.toolDialectNotices?.[action.payload];
+      if (entry) entry.dismissed = true;
+    },
     dismissCachingOffNotice: (state) => {
       const current = state.promptCache ?? INITIAL_PROMPT_CACHE_STATE;
       state.promptCache = { ...current, dismissedCachingOff: true };
@@ -1570,6 +1597,8 @@ export const {
   acknowledgeCacheMisses,
   dismissColdCacheNotice,
   dismissCachingOffNotice,
+  noteToolDialectLeak,
+  dismissToolDialectNotice,
   setInlineErrorMessage,
   setIsPruned,
   setContextPercentage,

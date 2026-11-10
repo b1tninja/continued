@@ -146,6 +146,8 @@ class MessageTypes {
             "bedrock/listModels",
             "bedrock/globalProfile",
             "bedrock/testModel",
+            "bedrock/probeToolCalls",
+            "config/setToolDialect",
             "llm/compileChat",
             "streamDiffLines",
             "getDiffLines",

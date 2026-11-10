@@ -23,6 +23,7 @@ import ThinkingBlockPeek from "../../components/mainInput/belowMainInput/Thinkin
 import ContinueInputBox from "../../components/mainInput/ContinueInputBox";
 import { CacheMissNotice } from "../../components/mainInput/CacheMissNotice";
 import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
+import { ToolDialectNotice } from "../../components/mainInput/ToolDialectNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
 import { LoopInbox } from "../../components/mainInput/LoopInbox";
 import {
@@ -563,6 +564,7 @@ export function Chat() {
         <CacheMissNotice />
         <ColdCacheNotice />
         <CachingOffNotice />
+        <ToolDialectNotice />
         <LargeMessageNotice />
         {/* A loop shows its own plan in its panel */}
         {!hasLoop && <TaskListPanel />}

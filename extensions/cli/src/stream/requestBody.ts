@@ -1,4 +1,4 @@
-import type { ModelConfig } from "@continuedev/config-yaml";
+import { type ModelConfig, withToolDialect } from "@continuedev/config-yaml";
 import { CACHE_PIN_FIELD } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
 import { withTurnTail } from "core/llm/prompts/usePrompts.js";
@@ -87,5 +87,11 @@ export function buildChatRequestBody(args: {
       model,
       args.isCompacting ? "oneShot" : "conversation",
     ),
+    // The model's `toolDialect`, as the recovery switch the Bedrock adapter
+    // reads from the body. Nothing is added without one, or with the
+    // CONTINUE_RECOVER_TEXT_TOOL_CALLS variable set (it wins).
+    ...(model.provider === "bedrock"
+      ? withToolDialect({}, model.toolDialect)
+      : {}),
   } as ChatCompletionCreateParamsStreaming;
 }

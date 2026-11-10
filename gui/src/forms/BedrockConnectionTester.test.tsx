@@ -194,3 +194,45 @@ describe("BedrockConnectionTester", () => {
     });
   });
 });
+
+describe("BedrockConnectionTester tool-call line", () => {
+  const list = async () => ({ ok: true, models });
+
+  it("shows the probe label after Test connection", async () => {
+    const probe = vi.fn(async () => ({
+      ok: true,
+      label: "Tool calls: written as text (qwen-xml)",
+      kind: "text",
+    }));
+    const { user } = setup({
+      "bedrock/listModels": list,
+      "bedrock/probeToolCalls": probe,
+    });
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("tool-calls-result").textContent).toBe(
+        "Tool calls: written as text (qwen-xml)",
+      ),
+    );
+    expect(probe).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not sent without a click on Test connection", async () => {
+    const probe = vi.fn();
+    setup({ "bedrock/listModels": list, "bedrock/probeToolCalls": probe });
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("reports unknown when the probe fails", async () => {
+    const { user } = setup({
+      "bedrock/listModels": list,
+      "bedrock/probeToolCalls": async () => ({ ok: false, error: "timeout" }),
+    });
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("tool-calls-result").textContent).toBe(
+        "Tool calls: unknown (timeout)",
+      ),
+    );
+  });
+});
