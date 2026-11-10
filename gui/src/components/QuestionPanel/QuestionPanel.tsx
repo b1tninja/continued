@@ -15,6 +15,7 @@ import {
   answerLoopQuestion,
   type LoopAnswerInput,
 } from "../../redux/thunks/loop";
+import { answerLimitQuestionThunk } from "../../redux/thunks/loopBudget";
 import { recordPlanAnswer } from "../../util/planDecisions";
 import { AnswerChoices } from "./AnswerChoices";
 
@@ -50,6 +51,13 @@ function LoopQuestionRow({
     ).unwrap();
     setError(result.ok ? undefined : result.error);
     if (result.ok) setText("");
+  };
+  // An item out of its own budget: the choice is applied by the limit policy
+  const answerLimit = async (choice: string) => {
+    const result = await dispatch(
+      answerLimitQuestionThunk({ questionId: question.id, choice }),
+    ).unwrap();
+    setError(result.ok ? undefined : result.error);
   };
   const hasOptions =
     question.kind !== "approval" && (question.options?.length ?? 0) > 1;
@@ -96,7 +104,11 @@ function LoopQuestionRow({
               pick={question.assumption}
               testIdPrefix="loop-choice"
               maxLength={LOOP_LIMITS.maxAnswerLength}
-              onChoose={(choice) => answer({ text: choice })}
+              onChoose={(choice) =>
+                question.overBudget
+                  ? answerLimit(choice)
+                  : answer({ text: choice })
+              }
             />
           ) : (
             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">

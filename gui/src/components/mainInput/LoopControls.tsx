@@ -6,6 +6,13 @@ import type {
   TaskItem,
   TaskPlan,
 } from "core";
+import { describeBreach } from "core/util/itemBudget";
+import {
+  LIMIT_POLICIES,
+  LIMIT_POLICY_LABEL,
+  limitPolicyOf,
+  type LimitPolicy,
+} from "core/util/itemBudgetPolicy";
 import {
   blockingDependencies,
   describeLoopBudget,
@@ -32,6 +39,7 @@ import {
   setLoopBudgetThunk,
   skipLoopItemThunk,
 } from "../../redux/thunks/loop";
+import { setLimitPolicyThunk } from "../../redux/thunks/loopBudget";
 import { stopLoopWorker } from "../../util/subagents/loopWorkers";
 
 const BUTTON =
@@ -193,6 +201,54 @@ function ModelLine({ task, model }: { task: TaskItem; model?: LoopItemModel }) {
         >
           {" "}
           · not configured, ran on {model.title}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The item's own budget (TaskItem.budget) with what its runs used and what is
+ * left of it; shown when the item has one. An item that ran over says so.
+ */
+function BudgetLine({
+  task,
+  state,
+}: {
+  task: TaskItem;
+  state: LoopState["items"][number];
+}) {
+  const budget = task.budget;
+  if (!budget && !state.overBudget) return null;
+  const parts: string[] = [];
+  const tokens = state.usage?.tokens ?? 0;
+  const minutes = (state.usage?.ms ?? 0) / 60_000;
+  if (budget?.tokens !== undefined) {
+    parts.push(
+      `${formatTokenCount(tokens)} of ${formatTokenCount(budget.tokens)} tokens, ${formatTokenCount(Math.max(0, budget.tokens - tokens))} left`,
+    );
+  }
+  if (budget?.minutes !== undefined) {
+    parts.push(
+      `${formatDuration(minutes * 60_000)} of ${budget.minutes}m, ${formatDuration(Math.max(0, budget.minutes - minutes) * 60_000)} left`,
+    );
+  }
+  if (budget?.turns !== undefined) parts.push(`${budget.turns} turns a run`);
+  return (
+    <div
+      data-testid={`loop-budget-${task.id}`}
+      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
+      title="The item's own budget and what is left of it"
+    >
+      budget: {parts.join(" · ")}
+      {state.extensions ? ` · extended ${state.extensions}×` : ""}
+      {state.overBudget && (
+        <span
+          data-testid={`loop-over-budget-${task.id}`}
+          className="text-error"
+        >
+          {" "}
+          · {describeBreach(state.overBudget)}
         </span>
       )}
     </div>
@@ -415,6 +471,7 @@ export function LoopControls({
                 )}
                 <CheckLine task={task} check={state.check} />
                 <FilesLine task={task} />
+                <BudgetLine task={task} state={state} />
                 <ModelLine task={task} model={state.model} />
               </li>
             );
@@ -495,6 +552,28 @@ export function LoopControls({
               />
             </label>
           ))}
+          <label
+            className="flex shrink-0 items-center gap-0.5"
+            title="When a to-do uses up its own budget: Suggest asks you, Force stops it, Review has its work reviewed and extends it once if it is progressing"
+          >
+            At a to-do's limit
+            <select
+              data-testid="loop-limit-policy"
+              value={limitPolicyOf(loop)}
+              onChange={(e) =>
+                void dispatch(
+                  setLimitPolicyThunk(e.target.value as LimitPolicy),
+                )
+              }
+              className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+            >
+              {LIMIT_POLICIES.map((policy) => (
+                <option key={policy} value={policy}>
+                  {LIMIT_POLICY_LABEL[policy]}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             data-testid="loop-limits-apply"

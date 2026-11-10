@@ -12,6 +12,8 @@ import {
 } from "core";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import { finishItemNudge, presentPlanNudge } from "core/util/turnEnd";
+import type { PlanBudgetSetup } from "core/util/planBudget";
+import { applyBudgetStep, applyLimitAfterRun } from "./loopBudget";
 import { applyModeModel } from "./applyModeModel";
 import {
   acceptReplan,
@@ -178,11 +180,11 @@ async function readPlanIntoTaskList(
  */
 export const startLoopFromPlan = createAsyncThunk<
   void,
-  { planFile: string; parallel?: boolean },
+  { planFile: string; parallel?: boolean; budget?: PlanBudgetSetup },
   ThunkApiType
 >(
   "loop/start",
-  async ({ planFile, parallel }, { dispatch, getState, extra }) => {
+  async ({ planFile, parallel, budget }, { dispatch, getState, extra }) => {
     const { title } = await readPlanIntoTaskList(
       planFile,
       dispatch,
@@ -199,6 +201,8 @@ export const startLoopFromPlan = createAsyncThunk<
       policy: selectLoopPolicy(getState()),
     });
     if (parallel) loop = setLoopParallel(loop, true);
+    // The plan card's budget step; without it the strategy is None
+    loop = applyBudgetStep(dispatch, getState, loop, budget);
     dispatch(setMode("agent"));
     commitLoop(dispatch, getState, loop);
   },
@@ -771,6 +775,8 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
       });
       loop = settleSteeredAnswers(loop, delivered);
       if (itemId) loop = releaseEmptyWait(loop, itemId);
+      // An item over its own budget: the limit policy decides what follows
+      if (itemId) loop = applyLimitAfterRun(dispatch, getState, loop, itemId);
     } else if (loop.current?.kind === "check") {
       // A check that did not finish (the gui reloaded while it ran): the
       // item stays checking, and its check runs again

@@ -486,6 +486,8 @@ export interface LoopItemState {
     used: number;
     limit: number;
   };
+  /** Times the item's budget was extended from the reserve (core/util/itemBudgetPolicy.ts) */
+  extensions?: number;
   /**
    * The model the item's last run went to, when the item names one
    * (TaskItem.model): its title, and why the item's own model was not used.
@@ -543,6 +545,12 @@ export interface LoopQuestion {
   options?: string[];
   /** The held tool call (kind approval) */
   approval?: { toolName: string; summary: string; grantKey: string };
+  /** The item ran out of its own budget (limit policy Suggest): which limit, and the figures */
+  overBudget?: {
+    which: "turns" | "tokens" | "minutes";
+    used: number;
+    limit: number;
+  };
   askedAt: string;
   /** Set once answered */
   answerId?: string;
@@ -703,6 +711,16 @@ export interface LoopState {
   autonomy?: LoopAutonomy;
   /** The Plan edits and Questions levels in force; see LoopPolicy */
   policy?: LoopPolicy;
+  /**
+   * What happens when an item runs out of its own budget: ask, stop, or have
+   * it reviewed. Missing: the autonomy level's default (defaultLimitPolicy)
+   */
+  limitPolicy?: "suggest" | "force" | "review";
+  /**
+   * What is left of the part of the loop's budget held back for extensions
+   * (core/util/loopBudgetSplit.ts); an extension draws it down
+   */
+  reserve?: { tokens?: number; minutes?: number };
   /** The plan's title, to name the loop in its panel */
   title?: string;
   /** Missing on loops saved before strategies: treated as "finish" */
