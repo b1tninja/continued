@@ -91,7 +91,7 @@ describe("AuditWriter", () => {
         durMs: 1200,
         outBytes: 300,
         error: "FAIL src/a.test.ts took 123ms",
-        changed: ["src/a.ts"],
+        changed: [{ path: "src/a.ts", hash: "h1" }],
         read: ["src/b.ts"],
       }),
     );
@@ -113,7 +113,7 @@ describe("AuditWriter", () => {
     expect(recs[0].ts).toBe(T0);
     const out = recs[1] as OutcomeEvent;
     expect(out.errSig).toBe("FAIL src/a.test.ts took #ms");
-    expect(out.changed).toEqual(["src/a.ts"]);
+    expect(out.changed).toEqual([{ path: "src/a.ts", hash: "h1" }]);
     expect(Object.keys(JSON.parse(lines[0])).slice(0, 5)).toEqual([
       "v",
       "ev",

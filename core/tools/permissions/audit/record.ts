@@ -1,4 +1,4 @@
-import { clipMasked, maskForAudit, maskText } from "./mask";
+import { clipMasked, hashMasked, maskForAudit, maskText } from "./mask";
 
 /**
  * The audit record (plans/reviewer-audit.md, section 6): one JSON line per
@@ -96,9 +96,16 @@ export interface OutcomeEvent extends AuditEnvelope {
   exit?: number;
   durMs?: number;
   outBytes?: number;
+  /**
+   * SHA-256 of the masked, trimmed output. The output is not stored; two runs
+   * that printed the same thing have the same hash, which is all the stuck
+   * signals ask of it.
+   */
+  outHash?: string;
   /** Normalised first error line, masked; what the stuck signals compare */
   errSig?: string;
-  changed?: string[];
+  /** Files the call changed, with a hash of the content after (for edit-revert) */
+  changed?: { path: string; hash: string }[];
   read?: string[];
 }
 
@@ -174,9 +181,11 @@ export interface OutcomeInput {
   exit?: number;
   durMs?: number;
   outBytes?: number;
+  /** The call's output. It is hashed after masking and never stored. */
+  output?: string;
   /** The first error line of the output. It is normalised and masked here. */
   error?: string;
-  changed?: string[];
+  changed?: { path: string; hash: string }[];
   read?: string[];
 }
 
@@ -196,10 +205,17 @@ export function errorSignature(error: string): string {
 }
 
 export function outcomeDraft(input: OutcomeInput): AuditDraft {
-  const { error, ...rest } = input;
+  const { error, output, ...rest } = input;
   return clean({
     ...rest,
     ev: "outcome" as const,
+    outBytes:
+      input.outBytes ??
+      (output === undefined ? undefined : Buffer.byteLength(output, "utf8")),
+    outHash:
+      output === undefined
+        ? undefined
+        : hashMasked(maskText(output.trim()).text),
     errSig: error ? errorSignature(error) : undefined,
   }) as AuditDraft;
 }
