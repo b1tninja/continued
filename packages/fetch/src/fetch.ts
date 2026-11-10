@@ -6,6 +6,7 @@ import { HttpsProxyAgentWithTls } from "./agent.js";
 import { DEFAULT_CONNECT_TIMEOUT_SECONDS } from "./connectTimeout.js";
 import { getAgentOptions } from "./getAgentOptions.js";
 import patchedFetch from "./node-fetch-patch.js";
+import { redactBody, redactHeaderValue, redactUrl } from "./redact.js";
 import { getProxy, shouldBypassProxy } from "./util.js";
 import { createWebFetch } from "./webFetch.js";
 
@@ -28,14 +29,15 @@ function logRequest(
   proxy?: string,
   shouldBypass?: boolean,
 ) {
+  const safeUrl = redactUrl(url.toString());
   console.log("=== FETCH REQUEST ===");
   console.log(`Method: ${method}`);
-  console.log(`URL: ${url.toString()}`);
+  console.log(`URL: ${safeUrl}`);
 
   // Log headers in curl format
   console.log("Headers:");
   for (const [key, value] of Object.entries(headers)) {
-    console.log(`  -H '${key}: ${value}'`);
+    console.log(`  -H '${key}: ${redactHeaderValue(key, value)}'`);
   }
 
   // Log proxy information
@@ -43,23 +45,24 @@ function logRequest(
     console.log(`Proxy: ${proxy}`);
   }
 
+  const safeBody = body ? redactBody(body) : undefined;
   // Log body
-  if (body) {
-    console.log(`Body: ${body}`);
+  if (safeBody) {
+    console.log(`Body: ${safeBody}`);
   }
 
   // Generate equivalent curl command
   let curlCommand = `curl -X ${method}`;
   for (const [key, value] of Object.entries(headers)) {
-    curlCommand += ` -H '${key}: ${value}'`;
+    curlCommand += ` -H '${key}: ${redactHeaderValue(key, value)}'`;
   }
-  if (body) {
-    curlCommand += ` -d '${body}'`;
+  if (safeBody) {
+    curlCommand += ` -d '${safeBody}'`;
   }
   if (proxy && !shouldBypass) {
     curlCommand += ` --proxy '${proxy}'`;
   }
-  curlCommand += ` '${url.toString()}'`;
+  curlCommand += ` '${safeUrl}'`;
   console.log(`Equivalent curl: ${curlCommand}`);
   console.log("=====================");
 }
