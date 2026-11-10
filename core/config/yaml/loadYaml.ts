@@ -53,6 +53,7 @@ import { beginTrustCheck, fileIsInsideDir } from "../projectTrust";
 import {
   preferUserOwnedBlocks,
   selectWorkspaceBlocks,
+  workspaceFileDestinationAllowed,
 } from "../workspaceBlocks";
 
 /**
@@ -308,13 +309,31 @@ export async function configYamlToContinueConfig(options: {
     continueConfig.rules.push(convertedRule);
   }
 
-  continueConfig.data = config.data?.map((d) => ({
-    ...d,
-    requestOptions: mergeConfigYamlRequestOptions(
-      d.requestOptions,
-      continueConfig.requestOptions,
-    ),
-  }));
+  const workspaceDirsForData = await ide.getWorkspaceDirs();
+  continueConfig.data = config.data?.flatMap((d) => {
+    if (
+      !workspaceFileDestinationAllowed(
+        d.destination,
+        d.sourceFile,
+        workspaceDirsForData,
+      )
+    ) {
+      localErrors.push({
+        fatal: false,
+        message: `The data destination "${d.name}" from this folder was not used because its file location is outside your Continuous folder.`,
+      });
+      return [];
+    }
+    return [
+      {
+        ...d,
+        requestOptions: mergeConfigYamlRequestOptions(
+          d.requestOptions,
+          continueConfig.requestOptions,
+        ),
+      },
+    ];
+  });
   continueConfig.docs = config.docs?.map((doc) => ({
     title: doc.name,
     startUrl: doc.startUrl,

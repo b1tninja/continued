@@ -3,6 +3,9 @@
  * files from a folder are left out until that folder is trusted for them.
  */
 
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import {
   AssistantUnrolled,
   ConfigValidationError,
@@ -10,12 +13,17 @@ import {
 
 import { InternalMcpOptions } from "..";
 import { heldMcpServersFromBlock } from "../context/mcp/workspaceMcpPolicy";
+import { getGlobalDirPath } from "../util/paths";
+import { isInWorkspaceConfigSubdir } from "../util/workspaceDirs";
 import {
   blockScope,
+  fileIsInsideDir,
   ProjectConfigScope,
+  realPath,
   scopeIsTrusted,
   TRUST_GATED_BLOCK_SCOPES,
   untrustedConfigError,
+  uriToFsPath,
 } from "./projectTrust";
 
 import type { IDE } from "..";
@@ -89,6 +97,46 @@ export async function selectWorkspaceBlocks(
   }
 
   return { kept, heldMcpServers, notices };
+}
+
+function pathIsInside(child: string, parent: string): boolean {
+  const relative = path.relative(realPath(parent), realPath(child));
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+  );
+}
+
+/**
+ * A data block from the folder may post to the destination the user trusted.
+ * A file destination has to stay inside the user's Continuous folder; the
+ * folder does not get to choose another path on disk.
+ */
+export function workspaceFileDestinationAllowed(
+  destination: string,
+  sourceFile: string | undefined,
+  workspaceDirs: string[],
+): boolean {
+  if (!sourceFile) return true;
+  const fromFolder = workspaceDirs.some(
+    (dir) =>
+      fileIsInsideDir(sourceFile, dir) &&
+      isInWorkspaceConfigSubdir(sourceFile, "data"),
+  );
+  if (!fromFolder) return true;
+  if (!destination.startsWith("file:")) return true;
+  let target: string;
+  try {
+    target = fileURLToPath(destination);
+  } catch {
+    return false;
+  }
+  const globalDir = uriToFsPath(getGlobalDirPath()) ?? getGlobalDirPath();
+  try {
+    return pathIsInside(target, globalDir);
+  } catch {
+    return false;
+  }
 }
 
 function blockName(block: unknown): string | undefined {
