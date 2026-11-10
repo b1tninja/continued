@@ -49,12 +49,13 @@ vi.mock("./searchCode.js", async (orig) => ({
   checkIfRipgrepIsInstalled: async () => true,
 }));
 
-import { getAllAvailableTools } from "./index.js";
 import {
   applyCliToolSearch,
   getActivatedToolNames,
   resetToolSearchState,
 } from "./searchTools.js";
+
+import { getAllAvailableTools } from "./index.js";
 
 const mcpOf = (n: number) =>
   MCP_FIXTURES[n].tools.map((m) => ({
