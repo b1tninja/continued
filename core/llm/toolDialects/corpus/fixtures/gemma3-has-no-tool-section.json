@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "id": "gemma3-has-no-tool-section",
+  "family": "gemma-3",
+  "dialect": "none",
+  "kind": "negative",
+  "failureMode": "template-parser-mismatch",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "https://huggingface.co/unsloth/gemma-3-27b-it/blob/main/chat_template.jinja (mirror; no tool rendering in the template)",
+    "retrieved": "2026-11-10",
+    "note": "Gemma 3's template renders no tools; any call is a prompt-engineered convention. Expected calls is empty because no dialect is defined; policy either."
+  },
+  "policy": "either",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}",
+  "markers": ["{\"name\""],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"n",
+        "ame\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": "{\"name\""
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"name\"",
+        ": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"na",
+        "me",
+        "\": \"g",
+        "et_w",
+        "eat",
+        "her\"",
+        ",",
+        " ",
+        "\"pa",
+        "ramet",
+        "ers\"",
+        ": ",
+        "{\"ci",
+        "ty\": ",
+        "\"P",
+        "aris\"",
+        "}}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+  }
+}

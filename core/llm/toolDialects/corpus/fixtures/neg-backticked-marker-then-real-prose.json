@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-backticked-marker-then-real-prose",
+  "family": "qwen3-coder",
+  "dialect": "qwen-xml",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: written to mention or quote a call without making one (false-positive guard)",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "The literal `<function=read>` is documented above.\n\nNo call is being made.",
+  "markers": [
+    "<tool_call>",
+    "<function=",
+    "<parameter=",
+    "</parameter>",
+    "</function>",
+    "</tool_call>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "The literal `<function=read>` is documented above.\n\nNo call is being made."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "T",
+        "h",
+        "e",
+        " ",
+        "l",
+        "i",
+        "t",
+        "e",
+        "r",
+        "a",
+        "l",
+        " ",
+        "`",
+        "<",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "=",
+        "r",
+        "e",
+        "a",
+        "d",
+        ">",
+        "`",
+        " ",
+        "i",
+        "s",
+        " ",
+        "d",
+        "o",
+        "c",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "e",
+        "d",
+        " ",
+        "a",
+        "b",
+        "o",
+        "v",
+        "e",
+        ".",
+        "\n",
+        "\n",
+        "N",
+        "o",
+        " ",
+        "c",
+        "a",
+        "l",
+        "l",
+        " ",
+        "i",
+        "s",
+        " ",
+        "b",
+        "e",
+        "i",
+        "n",
+        "g",
+        " ",
+        "m",
+        "a",
+        "d",
+        "e",
+        "."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "The literal `<func",
+        "tion=read>` is documented above.\n\nNo call is being made."
+      ],
+      "splitInside": "<function="
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "The literal `",
+        "<function=",
+        "read>` is documented above.\n\nNo call is being made."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "T",
+        "he ",
+        "liter",
+        "al `",
+        "<fu",
+        "nct",
+        "io",
+        "n=rea",
+        "d>",
+        "`",
+        " is ",
+        "doc",
+        "ument",
+        "ed a",
+        "bove.",
+        "\n\nN",
+        "o cal",
+        "l ",
+        "is ",
+        "be",
+        "i",
+        "ng ",
+        "m",
+        "ade."
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "The literal `<function=read>` is documented above.\n\nNo call is being made."
+  }
+}

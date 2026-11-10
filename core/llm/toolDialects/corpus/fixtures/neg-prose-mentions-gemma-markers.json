@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-prose-mentions-gemma-markers",
+  "family": "gemma-4",
+  "dialect": "gemma-call",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: written to mention or quote a call without making one (false-positive guard)",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "Gemma 4 uses `<|tool_call>call:name{...}<tool_call|>` for calls.",
+  "markers": ["<|tool_call>", "call:", "<|\"|>", "<tool_call|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "Gemma 4 uses `<|tool_call>call:name{...}<tool_call|>` for calls."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "G",
+        "e",
+        "m",
+        "m",
+        "a",
+        " ",
+        "4",
+        " ",
+        "u",
+        "s",
+        "e",
+        "s",
+        " ",
+        "`",
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "c",
+        "a",
+        "l",
+        "l",
+        ":",
+        "n",
+        "a",
+        "m",
+        "e",
+        "{",
+        ".",
+        ".",
+        ".",
+        "}",
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">",
+        "`",
+        " ",
+        "f",
+        "o",
+        "r",
+        " ",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        "."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "Gemma 4 uses `<|tool",
+        "_call>call:name{...}<tool_call|>` for calls."
+      ],
+      "splitInside": "<|tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "Gemma 4 uses `",
+        "<|tool_call>",
+        "call:",
+        "name{...}",
+        "<tool_call|>",
+        "` for calls."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "Gem",
+        "ma 4",
+        " us",
+        "es",
+        " `<|t",
+        "ool_c",
+        "all",
+        ">",
+        "ca",
+        "ll",
+        ":nam",
+        "e{",
+        "...",
+        "}<too",
+        "l_",
+        "call|",
+        ">` ",
+        "for ",
+        "calls",
+        "."
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "Gemma 4 uses `<|tool_call>call:name{...}<tool_call|>` for calls."
+  }
+}

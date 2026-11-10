@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "id": "glm45-newline-layout",
+  "family": "glm-4.x",
+  "dialect": "glm-xml",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "https://huggingface.co/zai-org/GLM-4.5/blob/main/chat_template.jinja (instruction block layout), not observed",
+    "retrieved": "2026-11-10",
+    "note": "GLM-4.5 template shows arguments on separate lines; 4.7 compacts them. A parser must accept both."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<tool_call>get_weather\n<arg_key>city</arg_key>\n<arg_value>Paris</arg_value>\n</tool_call>",
+  "markers": [
+    "<tool_call>",
+    "<arg_key>",
+    "</arg_key>",
+    "<arg_value>",
+    "</arg_value>",
+    "</tool_call>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>get_weather\n<arg_key>city</arg_key>\n<arg_value>Paris</arg_value>\n</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\n",
+        "<",
+        "a",
+        "r",
+        "g",
+        "_",
+        "k",
+        "e",
+        "y",
+        ">",
+        "c",
+        "i",
+        "t",
+        "y",
+        "<",
+        "/",
+        "a",
+        "r",
+        "g",
+        "_",
+        "k",
+        "e",
+        "y",
+        ">",
+        "\n",
+        "<",
+        "a",
+        "r",
+        "g",
+        "_",
+        "v",
+        "a",
+        "l",
+        "u",
+        "e",
+        ">",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "<",
+        "/",
+        "a",
+        "r",
+        "g",
+        "_",
+        "v",
+        "a",
+        "l",
+        "u",
+        "e",
+        ">",
+        "\n",
+        "<",
+        "/",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_call>get_weather\n<arg_key>city</arg_key>\n<arg_value>Paris</arg_value>\n</tool_call>"
+      ],
+      "splitInside": "<tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>",
+        "get_weather\n",
+        "<arg_key>",
+        "city",
+        "</arg_key>",
+        "\n",
+        "<arg_value>",
+        "Paris",
+        "</arg_value>",
+        "\n",
+        "</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<too",
+        "l_",
+        "call>",
+        "ge",
+        "t_we",
+        "athe",
+        "r\n<ar",
+        "g",
+        "_",
+        "ke",
+        "y>ci",
+        "ty",
+        "</",
+        "a",
+        "r",
+        "g_",
+        "key>\n",
+        "<ar",
+        "g",
+        "_va",
+        "lu",
+        "e>",
+        "P",
+        "ar",
+        "is",
+        "</",
+        "arg_",
+        "valu",
+        "e>\n<",
+        "/to",
+        "ol",
+        "_c",
+        "a",
+        "ll",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

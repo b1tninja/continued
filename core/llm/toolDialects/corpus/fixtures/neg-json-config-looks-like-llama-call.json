@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-json-config-looks-like-llama-call",
+  "family": "llama-3.x",
+  "dialect": "llama-json",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: written to mention or quote a call without making one (false-positive guard)",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "The config looks like {\"name\": \"app\", \"parameters\": {\"debug\": true}} and needs no change.",
+  "markers": ["{\"name\""],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "The config looks like {\"name\": \"app\", \"parameters\": {\"debug\": true}} and needs no change."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "T",
+        "h",
+        "e",
+        " ",
+        "c",
+        "o",
+        "n",
+        "f",
+        "i",
+        "g",
+        " ",
+        "l",
+        "o",
+        "o",
+        "k",
+        "s",
+        " ",
+        "l",
+        "i",
+        "k",
+        "e",
+        " ",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "a",
+        "p",
+        "p",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "d",
+        "e",
+        "b",
+        "u",
+        "g",
+        "\"",
+        ":",
+        " ",
+        "t",
+        "r",
+        "u",
+        "e",
+        "}",
+        "}",
+        " ",
+        "a",
+        "n",
+        "d",
+        " ",
+        "n",
+        "e",
+        "e",
+        "d",
+        "s",
+        " ",
+        "n",
+        "o",
+        " ",
+        "c",
+        "h",
+        "a",
+        "n",
+        "g",
+        "e",
+        "."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "The config looks like {\"n",
+        "ame\": \"app\", \"parameters\": {\"debug\": true}} and needs no change."
+      ],
+      "splitInside": "{\"name\""
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "The config looks like ",
+        "{\"name\"",
+        ": \"app\", \"parameters\": {\"debug\": true}} and needs no change."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "The c",
+        "onfig",
+        " ",
+        "lo",
+        "oks",
+        " like",
+        " {\"n",
+        "ame\":",
+        " \"app",
+        "\", \"p",
+        "arame",
+        "ter",
+        "s",
+        "\": {\"",
+        "debug",
+        "\":",
+        " true",
+        "}}",
+        " an",
+        "d ne",
+        "eds n",
+        "o cha",
+        "n",
+        "ge."
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "The config looks like {\"name\": \"app\", \"parameters\": {\"debug\": true}} and needs no change."
+  }
+}

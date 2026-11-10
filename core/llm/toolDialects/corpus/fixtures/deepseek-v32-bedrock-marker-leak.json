@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "id": "deepseek-v32-bedrock-marker-leak",
+  "family": "deepseek-v3.2",
+  "dialect": "dsml",
+  "kind": "negative",
+  "failureMode": "special-token-leak",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "our own code core/llm/llms/bedrockHelpers.ts (DEEPSEEK_DSML_MARKER) describes the leak on Bedrock; no raw capture is in the repo, this text is reconstructed",
+    "retrieved": "2026-11-10",
+    "note": "Bedrock ends the text block with this fragment before the structured toolUse block. The call arrives separately, so a text parser must not produce one and should not show the marker."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "Let me check.\n\n<｜DSML｜function_calls",
+  "markers": [
+    "<｜DSML｜function_calls>",
+    "<｜DSML｜invoke",
+    "<｜DSML｜parameter",
+    "</｜DSML｜parameter>",
+    "</｜DSML｜invoke>",
+    "</｜DSML｜function_calls>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["Let me check.\n\n<｜DSML｜function_calls"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "L",
+        "e",
+        "t",
+        " ",
+        "m",
+        "e",
+        " ",
+        "c",
+        "h",
+        "e",
+        "c",
+        "k",
+        ".",
+        "\n",
+        "\n",
+        "<",
+        "｜",
+        "D",
+        "S",
+        "M",
+        "L",
+        "｜",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "Let ",
+        "me ch",
+        "ec",
+        "k",
+        ".\n\n<｜",
+        "DSML｜",
+        "fun",
+        "ct",
+        "ion_c",
+        "al",
+        "ls"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-multibyte-char",
+      "encoding": "base64",
+      "chunks": [
+        "TGV0IG1lIGNoZWNrLgoKPO8=",
+        "vZxEU01M772cZnVuY3Rpb25fY2FsbHM="
+      ],
+      "splitInside": "utf8-codepoint"
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "Let me check.\n\n<｜DSML｜function_calls"
+  }
+}

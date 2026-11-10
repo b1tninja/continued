@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "id": "harmony-non-json-body-ollama-12884",
+  "family": "gpt-oss",
+  "dialect": "harmony",
+  "kind": "negative",
+  "failureMode": "invalid-json-arguments",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "https://github.com/ollama/ollama/issues/12884",
+    "retrieved": "2026-11-10",
+    "reportDate": "2025-10-31",
+    "note": "The reporter's error shows raw='54354/9943' was parsed as arguments; the Harmony wrapper here is reconstructed. Invalid JSON must not become a call."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "python",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": ["code"]
+      }
+    }
+  ],
+  "text": "<|channel|>commentary to=functions.python <|constrain|>json<|message|>54354/9943<|call|>",
+  "markers": [
+    "<|channel|>",
+    "<|constrain|>",
+    "<|message|>",
+    "<|call|>",
+    "<|start|>",
+    "<|end|>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|channel|>commentary to=functions.python <|constrain|>json<|message|>54354/9943<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "c",
+        "h",
+        "a",
+        "n",
+        "n",
+        "e",
+        "l",
+        "|",
+        ">",
+        "c",
+        "o",
+        "m",
+        "m",
+        "e",
+        "n",
+        "t",
+        "a",
+        "r",
+        "y",
+        " ",
+        "t",
+        "o",
+        "=",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "s",
+        ".",
+        "p",
+        "y",
+        "t",
+        "h",
+        "o",
+        "n",
+        " ",
+        "<",
+        "|",
+        "c",
+        "o",
+        "n",
+        "s",
+        "t",
+        "r",
+        "a",
+        "i",
+        "n",
+        "|",
+        ">",
+        "j",
+        "s",
+        "o",
+        "n",
+        "<",
+        "|",
+        "m",
+        "e",
+        "s",
+        "s",
+        "a",
+        "g",
+        "e",
+        "|",
+        ">",
+        "5",
+        "4",
+        "3",
+        "5",
+        "4",
+        "/",
+        "9",
+        "9",
+        "4",
+        "3",
+        "<",
+        "|",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|cha",
+        "nnel|>commentary to=functions.python <|constrain|>json<|message|>54354/9943<|call|>"
+      ],
+      "splitInside": "<|channel|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|channel|>",
+        "commentary to=functions.python ",
+        "<|constrain|>",
+        "json",
+        "<|message|>",
+        "54354/9943",
+        "<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|chan",
+        "nel",
+        "|",
+        ">comm",
+        "ent",
+        "ar",
+        "y to=",
+        "fun",
+        "c",
+        "tio",
+        "n",
+        "s.py",
+        "t",
+        "hon ",
+        "<|con",
+        "st",
+        "rai",
+        "n|",
+        ">j",
+        "so",
+        "n",
+        "<",
+        "|mes",
+        "s",
+        "a",
+        "ge|>",
+        "54354",
+        "/99",
+        "43<|",
+        "call|",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<|channel|>commentary to=functions.python <|constrain|>json<|message|>54354/9943<|call|>"
+  }
+}

@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "id": "glm47-missing-arg-value-open-vllm-49248",
+  "family": "glm-4.x",
+  "dialect": "glm-xml",
+  "kind": "positive",
+  "failureMode": "missing-open-tag",
+  "flag": "observed",
+  "provenance": {
+    "source": "https://github.com/vllm-project/vllm/issues/49248",
+    "retrieved": "2026-11-10",
+    "reportDate": "2026-07-20",
+    "note": "Raw sampled tokens captured by the reporter via logprobs (GLM-5.2 NVFP4, 5-17% of calls under concurrency)."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "search",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": ["query"]
+      }
+    }
+  ],
+  "text": "<tool_call>search<arg_key>query</arg_key>how many vacation days left</arg_value></tool_call>",
+  "markers": [
+    "<tool_call>",
+    "<arg_key>",
+    "</arg_key>",
+    "<arg_value>",
+    "</arg_value>",
+    "</tool_call>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>search<arg_key>query</arg_key>how many vacation days left</arg_value></tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "s",
+        "e",
+        "a",
+        "r",
+        "c",
+        "h",
+        "<",
+        "a",
+        "r",
+        "g",
+        "_",
+        "k",
+        "e",
+        "y",
+        ">",
+        "q",
+        "u",
+        "e",
+        "r",
+        "y",
+        "<",
+        "/",
+        "a",
+        "r",
+        "g",
+        "_",
+        "k",
+        "e",
+        "y",
+        ">",
+        "h",
+        "o",
+        "w",
+        " ",
+        "m",
+        "a",
+        "n",
+        "y",
+        " ",
+        "v",
+        "a",
+        "c",
+        "a",
+        "t",
+        "i",
+        "o",
+        "n",
+        " ",
+        "d",
+        "a",
+        "y",
+        "s",
+        " ",
+        "l",
+        "e",
+        "f",
+        "t",
+        "<",
+        "/",
+        "a",
+        "r",
+        "g",
+        "_",
+        "v",
+        "a",
+        "l",
+        "u",
+        "e",
+        ">",
+        "<",
+        "/",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_call>search<arg_key>query</arg_key>how many vacation days left</arg_value></tool_call>"
+      ],
+      "splitInside": "<tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>",
+        "search",
+        "<arg_key>",
+        "query",
+        "</arg_key>",
+        "how many vacation days left",
+        "</arg_value>",
+        "</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<t",
+        "o",
+        "ol",
+        "_cal",
+        "l>",
+        "searc",
+        "h<a",
+        "rg_ke",
+        "y",
+        ">qu",
+        "ery</",
+        "ar",
+        "g_",
+        "key>h",
+        "ow m",
+        "any",
+        " vaca",
+        "tio",
+        "n",
+        " day",
+        "s",
+        " l",
+        "eft<",
+        "/arg_",
+        "v",
+        "a",
+        "lue><",
+        "/t",
+        "ool_c",
+        "all>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "how many vacation days left"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

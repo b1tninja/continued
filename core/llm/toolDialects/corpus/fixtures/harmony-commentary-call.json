@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "id": "harmony-commentary-call",
+  "family": "gpt-oss",
+  "dialect": "harmony",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja, not observed and https://developers.openai.com/cookbook/articles/openai-harmony",
+    "retrieved": "2026-11-10",
+    "note": "Output after the generation prompt <|start|>assistant. <|call|> is a stop token."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{\"city\":\"Paris\"}<|call|>",
+  "markers": [
+    "<|channel|>",
+    "<|constrain|>",
+    "<|message|>",
+    "<|call|>",
+    "<|start|>",
+    "<|end|>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{\"city\":\"Paris\"}<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "c",
+        "h",
+        "a",
+        "n",
+        "n",
+        "e",
+        "l",
+        "|",
+        ">",
+        "c",
+        "o",
+        "m",
+        "m",
+        "e",
+        "n",
+        "t",
+        "a",
+        "r",
+        "y",
+        " ",
+        "t",
+        "o",
+        "=",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "s",
+        ".",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        " ",
+        "<",
+        "|",
+        "c",
+        "o",
+        "n",
+        "s",
+        "t",
+        "r",
+        "a",
+        "i",
+        "n",
+        "|",
+        ">",
+        "j",
+        "s",
+        "o",
+        "n",
+        "<",
+        "|",
+        "m",
+        "e",
+        "s",
+        "s",
+        "a",
+        "g",
+        "e",
+        "|",
+        ">",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "<",
+        "|",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|cha",
+        "nnel|>commentary to=functions.get_weather <|constrain|>json<|message|>{\"city\":\"Paris\"}<|call|>"
+      ],
+      "splitInside": "<|channel|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|channel|>",
+        "commentary to=functions.get_weather ",
+        "<|constrain|>",
+        "json",
+        "<|message|>",
+        "{\"city\":\"Paris\"}",
+        "<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|c",
+        "h",
+        "ann",
+        "el|>",
+        "c",
+        "om",
+        "menta",
+        "ry ",
+        "t",
+        "o",
+        "=fu",
+        "nc",
+        "tio",
+        "ns",
+        ".",
+        "ge",
+        "t_we",
+        "ath",
+        "er ",
+        "<|c",
+        "on",
+        "stra",
+        "in|>j",
+        "son<|",
+        "me",
+        "ss",
+        "a",
+        "ge",
+        "|>{",
+        "\"city",
+        "\":",
+        "\"Pa",
+        "r",
+        "is\"}",
+        "<|c",
+        "a",
+        "l",
+        "l",
+        "|>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

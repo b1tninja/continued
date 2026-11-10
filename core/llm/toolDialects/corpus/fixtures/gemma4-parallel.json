@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 1,
+  "id": "gemma4-parallel",
+  "family": "gemma-4",
+  "dialect": "gemma-call",
+  "kind": "positive",
+  "failureMode": "parallel-merged",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/google/gemma-4-31B-it/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "<|tool_call>call:get_weather{city:<|\"|>Paris<|\"|>}<tool_call|><|tool_call>call:get_time{tz:<|\"|>UTC<|\"|>}<tool_call|>",
+  "markers": ["<|tool_call>", "call:", "<|\"|>", "<tool_call|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call>call:get_weather{city:<|\"|>Paris<|\"|>}<tool_call|><|tool_call>call:get_time{tz:<|\"|>UTC<|\"|>}<tool_call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "c",
+        "a",
+        "l",
+        "l",
+        ":",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "{",
+        "c",
+        "i",
+        "t",
+        "y",
+        ":",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "}",
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">",
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "c",
+        "a",
+        "l",
+        "l",
+        ":",
+        "g",
+        "e",
+        "t",
+        "_",
+        "t",
+        "i",
+        "m",
+        "e",
+        "{",
+        "t",
+        "z",
+        ":",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "U",
+        "T",
+        "C",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "}",
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool",
+        "_call>call:get_weather{city:<|\"|>Paris<|\"|>}<tool_call|><|tool_call>call:get_time{tz:<|\"|>UTC<|\"|>}<tool_call|>"
+      ],
+      "splitInside": "<|tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call>",
+        "call:",
+        "get_weather{city:",
+        "<|\"|>",
+        "Paris",
+        "<|\"|>",
+        "}",
+        "<tool_call|>",
+        "<|tool_call>",
+        "call:",
+        "get_time{tz:",
+        "<|\"|>",
+        "UTC",
+        "<|\"|>",
+        "}",
+        "<tool_call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|t",
+        "o",
+        "o",
+        "l_",
+        "call>",
+        "ca",
+        "l",
+        "l:",
+        "g",
+        "e",
+        "t_w",
+        "eat",
+        "her{c",
+        "it",
+        "y:<",
+        "|\"|>",
+        "Paris",
+        "<",
+        "|",
+        "\"|>",
+        "}<to",
+        "ol_c",
+        "all|>",
+        "<|to",
+        "o",
+        "l_ca",
+        "ll>",
+        "ca",
+        "ll:ge",
+        "t_tim",
+        "e{t",
+        "z:<|",
+        "\"|>",
+        "UT",
+        "C<|\"|",
+        ">",
+        "}",
+        "<to",
+        "o",
+        "l_ca",
+        "ll|>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      },
+      {
+        "name": "get_time",
+        "arguments": {
+          "tz": "UTC"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

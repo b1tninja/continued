@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "id": "llama3-python-tag-builtin",
+  "family": "llama-3.x",
+  "dialect": "llama-json",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/unsloth/Llama-3.3-70B-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": "Built-in tools use name.call(k=\"v\") after <|python_tag|> and end with <|eom_id|>."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "brave_search",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": ["query"]
+      }
+    }
+  ],
+  "text": "<|python_tag|>brave_search.call(query=\"weather paris\")",
+  "markers": ["<|python_tag|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["<|python_tag|>brave_search.call(query=\"weather paris\")"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "p",
+        "y",
+        "t",
+        "h",
+        "o",
+        "n",
+        "_",
+        "t",
+        "a",
+        "g",
+        "|",
+        ">",
+        "b",
+        "r",
+        "a",
+        "v",
+        "e",
+        "_",
+        "s",
+        "e",
+        "a",
+        "r",
+        "c",
+        "h",
+        ".",
+        "c",
+        "a",
+        "l",
+        "l",
+        "(",
+        "q",
+        "u",
+        "e",
+        "r",
+        "y",
+        "=",
+        "\"",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        " ",
+        "p",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        ")"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|pytho",
+        "n_tag|>brave_search.call(query=\"weather paris\")"
+      ],
+      "splitInside": "<|python_tag|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|python_tag|>",
+        "brave_search.call(query=\"weather paris\")"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|pyth",
+        "on_t",
+        "ag|>",
+        "bra",
+        "ve_",
+        "se",
+        "arc",
+        "h.ca",
+        "ll",
+        "(",
+        "q",
+        "uery",
+        "=\"wea",
+        "ther ",
+        "pari",
+        "s\")"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "brave_search",
+        "arguments": {
+          "query": "weather paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

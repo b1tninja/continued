@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "id": "qwen3-coder-unknown-tool",
+  "family": "qwen3-coder",
+  "dialect": "qwen-xml",
+  "kind": "negative",
+  "failureMode": "unknown-tool",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": "A well-formed call to a tool that was not offered is not a call."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<tool_call>\n<function=rm_rf>\n<parameter=path>\n/\n</parameter>\n</function>\n</tool_call>",
+  "markers": [
+    "<tool_call>",
+    "<function=",
+    "<parameter=",
+    "</parameter>",
+    "</function>",
+    "</tool_call>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>\n<function=rm_rf>\n<parameter=path>\n/\n</parameter>\n</function>\n</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "\n",
+        "<",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "=",
+        "r",
+        "m",
+        "_",
+        "r",
+        "f",
+        ">",
+        "\n",
+        "<",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "=",
+        "p",
+        "a",
+        "t",
+        "h",
+        ">",
+        "\n",
+        "/",
+        "\n",
+        "<",
+        "/",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        ">",
+        "\n",
+        "<",
+        "/",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        ">",
+        "\n",
+        "<",
+        "/",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_call>\n<function=rm_rf>\n<parameter=path>\n/\n</parameter>\n</function>\n</tool_call>"
+      ],
+      "splitInside": "<tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>",
+        "\n",
+        "<function=",
+        "rm_rf>\n",
+        "<parameter=",
+        "path>\n/\n",
+        "</parameter>",
+        "\n",
+        "</function>",
+        "\n",
+        "</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "to",
+        "ol_",
+        "call",
+        ">\n<f",
+        "uncti",
+        "on",
+        "=",
+        "rm_rf",
+        ">",
+        "\n<par",
+        "ame",
+        "ter",
+        "=pa",
+        "th>\n",
+        "/\n",
+        "</p",
+        "a",
+        "r",
+        "a",
+        "met",
+        "er>\n<",
+        "/fu",
+        "nctio",
+        "n>\n</",
+        "tool",
+        "_call",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<tool_call>\n<function=rm_rf>\n<parameter=path>\n/\n</parameter>\n</function>\n</tool_call>"
+  }
+}

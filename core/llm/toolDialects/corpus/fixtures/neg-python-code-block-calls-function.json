@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-python-code-block-calls-function",
+  "family": "llama-4",
+  "dialect": "pythonic",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: written to mention or quote a call without making one (false-positive guard)",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "```python\nresult = get_weather(city=\"Paris\")\nprint(result)\n```\nRun this to get the weather.",
+  "markers": ["get_weather("],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "```python\nresult = get_weather(city=\"Paris\")\nprint(result)\n```\nRun this to get the weather."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "`",
+        "`",
+        "`",
+        "p",
+        "y",
+        "t",
+        "h",
+        "o",
+        "n",
+        "\n",
+        "r",
+        "e",
+        "s",
+        "u",
+        "l",
+        "t",
+        " ",
+        "=",
+        " ",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "(",
+        "c",
+        "i",
+        "t",
+        "y",
+        "=",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        ")",
+        "\n",
+        "p",
+        "r",
+        "i",
+        "n",
+        "t",
+        "(",
+        "r",
+        "e",
+        "s",
+        "u",
+        "l",
+        "t",
+        ")",
+        "\n",
+        "`",
+        "`",
+        "`",
+        "\n",
+        "R",
+        "u",
+        "n",
+        " ",
+        "t",
+        "h",
+        "i",
+        "s",
+        " ",
+        "t",
+        "o",
+        " ",
+        "g",
+        "e",
+        "t",
+        " ",
+        "t",
+        "h",
+        "e",
+        " ",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "```python\nresult = get_we",
+        "ather(city=\"Paris\")\nprint(result)\n```\nRun this to get the weather."
+      ],
+      "splitInside": "get_weather("
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "```python\nresult = ",
+        "get_weather(",
+        "city=\"Paris\")\nprint(result)\n```\nRun this to get the weather."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "```p",
+        "y",
+        "thon",
+        "\nres",
+        "ul",
+        "t = ",
+        "g",
+        "et_w",
+        "e",
+        "athe",
+        "r(ci",
+        "ty=\"",
+        "Paris",
+        "\")",
+        "\n",
+        "pri",
+        "nt(re",
+        "su",
+        "lt",
+        ")\n``",
+        "`\nR",
+        "u",
+        "n t",
+        "hi",
+        "s",
+        " t",
+        "o get",
+        " the ",
+        "w",
+        "eat",
+        "her",
+        "."
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "```python\nresult = get_weather(city=\"Paris\")\nprint(result)\n```\nRun this to get the weather."
+  }
+}

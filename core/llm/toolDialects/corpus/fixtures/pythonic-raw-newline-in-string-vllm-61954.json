@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "id": "pythonic-raw-newline-in-string-vllm-61954",
+  "family": "llama-4",
+  "dialect": "pythonic",
+  "kind": "positive",
+  "failureMode": "nested-quote-escape",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "https://github.com/vllm-project/vllm/issues/61954",
+    "retrieved": "2026-11-10",
+    "reportDate": "2026-10-16",
+    "note": "Reporter's repro string; a raw newline inside a quoted string is not valid Python, which is why ast.parse fails."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "write_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "[write_file(path='a.py', content='a\nb'), get_time(tz='UTC')]",
+  "markers": ["[write_file("],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "[write_file(path='a.py', content='a\nb'), get_time(tz='UTC')]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "w",
+        "r",
+        "i",
+        "t",
+        "e",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        "(",
+        "p",
+        "a",
+        "t",
+        "h",
+        "=",
+        "'",
+        "a",
+        ".",
+        "p",
+        "y",
+        "'",
+        ",",
+        " ",
+        "c",
+        "o",
+        "n",
+        "t",
+        "e",
+        "n",
+        "t",
+        "=",
+        "'",
+        "a",
+        "\n",
+        "b",
+        "'",
+        ")",
+        ",",
+        " ",
+        "g",
+        "e",
+        "t",
+        "_",
+        "t",
+        "i",
+        "m",
+        "e",
+        "(",
+        "t",
+        "z",
+        "=",
+        "'",
+        "U",
+        "T",
+        "C",
+        "'",
+        ")",
+        "]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "[write",
+        "_file(path='a.py', content='a\nb'), get_time(tz='UTC')]"
+      ],
+      "splitInside": "[write_file("
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "[write_file(",
+        "path='a.py', content='a\nb'), get_time(tz='UTC')]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[wr",
+        "it",
+        "e_",
+        "fi",
+        "l",
+        "e",
+        "(pat",
+        "h",
+        "='",
+        "a.",
+        "py',",
+        " ",
+        "c",
+        "onte",
+        "n",
+        "t='a\n",
+        "b'",
+        "), g",
+        "et_ti",
+        "me(",
+        "tz=",
+        "'UTC",
+        "'",
+        ")]"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "write_file",
+        "arguments": {
+          "path": "a.py",
+          "content": "a\nb"
+        }
+      },
+      {
+        "name": "get_time",
+        "arguments": {
+          "tz": "UTC"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

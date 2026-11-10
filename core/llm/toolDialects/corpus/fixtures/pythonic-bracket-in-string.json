@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "id": "pythonic-bracket-in-string",
+  "family": "llama-4",
+  "dialect": "pythonic",
+  "kind": "positive",
+  "failureMode": "nested-quote-escape",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "https://github.com/sgl-project/sglang/issues/31915 (pythonic detector bracket matching, as listed there)",
+    "retrieved": "2026-11-10",
+    "reportDate": "2026-07-21",
+    "note": "Issue states the detector counts brackets without respecting strings; this text is invented to exercise it."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "write_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"]
+      }
+    }
+  ],
+  "text": "[write_file(path='a.py', content='x = items[0]')]",
+  "markers": ["[write_file("],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["[write_file(path='a.py', content='x = items[0]')]"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "w",
+        "r",
+        "i",
+        "t",
+        "e",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        "(",
+        "p",
+        "a",
+        "t",
+        "h",
+        "=",
+        "'",
+        "a",
+        ".",
+        "p",
+        "y",
+        "'",
+        ",",
+        " ",
+        "c",
+        "o",
+        "n",
+        "t",
+        "e",
+        "n",
+        "t",
+        "=",
+        "'",
+        "x",
+        " ",
+        "=",
+        " ",
+        "i",
+        "t",
+        "e",
+        "m",
+        "s",
+        "[",
+        "0",
+        "]",
+        "'",
+        ")",
+        "]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": ["[write", "_file(path='a.py', content='x = items[0]')]"],
+      "splitInside": "[write_file("
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": ["[write_file(", "path='a.py', content='x = items[0]')]"],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "wri",
+        "te_",
+        "file(",
+        "path",
+        "='",
+        "a.p",
+        "y', c",
+        "o",
+        "nte",
+        "nt=",
+        "'x",
+        " =",
+        " item",
+        "s[",
+        "0]')]"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "write_file",
+        "arguments": {
+          "path": "a.py",
+          "content": "x = items[0]"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

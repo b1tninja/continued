@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "id": "hermes-truncated-json",
+  "family": "qwen3-hermes",
+  "dialect": "hermes-json",
+  "kind": "negative",
+  "failureMode": "partial-args",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "write_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"]
+      }
+    }
+  ],
+  "text": "<tool_call>\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"a.txt\", \"content\": \"abc",
+  "markers": ["<tool_call>", "</tool_call>", "<think>", "</think>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"a.txt\", \"content\": \"abc"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "\n",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "w",
+        "r",
+        "i",
+        "t",
+        "e",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "p",
+        "a",
+        "t",
+        "h",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "a",
+        ".",
+        "t",
+        "x",
+        "t",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "c",
+        "o",
+        "n",
+        "t",
+        "e",
+        "n",
+        "t",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "a",
+        "b",
+        "c"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_call>\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"a.txt\", \"content\": \"abc"
+      ],
+      "splitInside": "<tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>",
+        "\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"a.txt\", \"content\": \"abc"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "tool",
+        "_call",
+        ">\n{\"n",
+        "ame\"",
+        ": \"wr",
+        "i",
+        "te_",
+        "fi",
+        "l",
+        "e\"",
+        ",",
+        " \"a",
+        "rgu",
+        "ment",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{\"pat",
+        "h",
+        "\"",
+        ":",
+        " \"a.t",
+        "xt",
+        "\",",
+        " \"con",
+        "te",
+        "nt\": ",
+        "\"",
+        "ab",
+        "c"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<tool_call>\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"a.txt\", \"content\": \"abc"
+  }
+}
