@@ -1,8 +1,33 @@
+import * as path from "node:path";
 import { describe, expect, it } from "vitest";
-import { QwenXmlRecovery } from "../../../../packages/openai-adapters/src/dialects/qwenXml";
 import { failures, runCorpus, type CorpusParser } from "./runCorpus";
 
-/** The Qwen XML recovery from packages/openai-adapters, as a corpus parser. */
+type RecoveryEvent =
+  | { type: "text"; text: string }
+  | {
+      type: "call";
+      call: { name: string; arguments: Record<string, unknown> };
+    };
+interface Recovery {
+  push(chunk: string): RecoveryEvent[];
+  end(): RecoveryEvent[];
+}
+
+/**
+ * The recovery lives in packages/openai-adapters. It is loaded by absolute path
+ * at run time, not imported, so core's tsc program (and the dist layout the CLI
+ * resolves `core/*` against) does not grow to include another package. Core
+ * must not depend on the adapters package.
+ */
+const QWEN_XML = path.resolve(
+  __dirname,
+  "../../../../packages/openai-adapters/src/dialects/qwenXml.ts",
+);
+const { QwenXmlRecovery } = (await import(/* @vite-ignore */ QWEN_XML)) as {
+  QwenXmlRecovery: new (tools: unknown[]) => Recovery;
+};
+
+/** The Qwen XML recovery, as a corpus parser. */
 const qwenXml: CorpusParser = ({ chunks, tools }) => {
   const parser = new QwenXmlRecovery(tools);
   const events = chunks.flatMap((c) => parser.push(c));
