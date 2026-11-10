@@ -1,6 +1,8 @@
 import { execFile, spawn } from "child_process";
 import type { ChildProcess } from "child_process";
 
+import { terminalEnvironment } from "core/util/terminalEnvironment.js";
+
 import { logger } from "../util/logger.js";
 
 import { getMatchingHookGroups } from "./hookConfig.js";
@@ -94,7 +96,7 @@ function executeCommandHook(
 
   return new Promise((resolve) => {
     const env = {
-      ...process.env,
+      ...terminalEnvironment(),
       CLAUDE_PROJECT_DIR: cwd,
       CONTINUE_PROJECT_DIR: cwd,
     };

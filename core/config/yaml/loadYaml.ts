@@ -82,6 +82,7 @@ function withoutUntrustedLoosening(
   return YAML.stringify(config);
 }
 import { loadModelCatalog } from "../providers/modelsFile";
+import { setTerminalEnvironmentSettings } from "../../util/terminalEnvironment";
 import { loadProviderInstances } from "../providers/providersFile";
 import { LocalPlatformClient } from "./LocalPlatformClient";
 import { llmsFromModelConfig } from "./models";
@@ -512,6 +513,7 @@ export async function configYamlToContinueConfig(options: {
   // Tool rules. Kept even when some entries are unreadable: those are skipped
   // and reported, rather than failing the config.
   continueConfig.toolPermissions = config.toolPermissions;
+  setTerminalEnvironmentSettings(config.terminal);
   localErrors.push(...validateToolPermissions(config.toolPermissions));
 
   // Secrets that no .env file or environment variable provided are still

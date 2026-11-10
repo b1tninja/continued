@@ -1,5 +1,7 @@
 import { ChildProcess, spawn } from "child_process";
 
+import { terminalEnvironment } from "core/util/terminalEnvironment.js";
+
 import { shellChildEnv } from "../childEnv.js";
 import { logger } from "../util/logger.js";
 
@@ -64,7 +66,7 @@ export class BackgroundJobService {
 
     const child = spawn(shell, args, {
       stdio: "pipe",
-      env: shellChildEnv(),
+      env: terminalEnvironment(shellChildEnv()),
     });
     this.processes.set(jobId, child);
 

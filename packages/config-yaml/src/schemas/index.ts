@@ -254,6 +254,20 @@ export const toolPermissionsSchema = z.object({
 });
 export type ToolPermissions = z.infer<typeof toolPermissionsSchema>;
 
+/**
+ * What a command the agent starts inherits from the host's environment.
+ * `scrub` (default) removes names that look like secrets, `inherit` passes
+ * everything, `allowlist` passes only the basics and `allow`.
+ */
+export const terminalSchema = z.object({
+  environment: z.enum(["scrub", "inherit", "allowlist"]).optional(),
+  /** Exact variable names that always pass through. */
+  passEnv: z.array(z.string()).optional(),
+  /** Extra names or patterns kept in `allowlist` mode. */
+  allow: z.array(z.string()).optional(),
+});
+export type TerminalConfig = z.infer<typeof terminalSchema>;
+
 export const baseConfigYamlSchema = z.object({
   name: z.string(),
   version: z.string(),
@@ -265,6 +279,7 @@ export const baseConfigYamlSchema = z.object({
   modeModels: modeModelsSchema.optional(),
   rulesByMode: rulesByModeSchema.optional(),
   toolPermissions: toolPermissionsSchema.optional(),
+  terminal: terminalSchema.optional(),
   env: envRecord.optional(),
   requestOptions: requestOptionsSchema.optional(),
 });

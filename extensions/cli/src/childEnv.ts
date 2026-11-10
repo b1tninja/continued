@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 
+import { terminalEnvironment } from "core/util/terminalEnvironment.js";
 import dotenv from "dotenv";
 
 import { startupEnv } from "./startupEnv.js";
@@ -90,7 +91,11 @@ export function mcpStdioEnv(
   baseline: NodeJS.ProcessEnv = startupEnv,
 ): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [key, value] of stringEntries(shellChildEnv(current, baseline))) {
+  // The host's own variables pass through the same scrub as a command's; the
+  // server's `env` block below is the person's explicit choice and is not
+  for (const [key, value] of stringEntries(
+    terminalEnvironment(shellChildEnv(current, baseline)),
+  )) {
     if (value.length > 0) env[key] = value;
   }
   for (const [key, value] of Object.entries(serverEnv ?? {})) {
