@@ -211,7 +211,7 @@ describe("runTerminalCommand timeout functionality", () => {
       const extras = createMockExtras();
       let settled = false;
       const resultPromise = runTerminalCommandImpl(
-        { command: "pytest | Select-Object -Last 45", waitForCompletion: true },
+        { command: "pytest | tail -45", waitForCompletion: true },
         extras,
       ).then((r) => {
         settled = true;
