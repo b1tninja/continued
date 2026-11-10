@@ -86,6 +86,14 @@ describe("commands that mention a protected path", () => {
     expect(cmd("echo .env")).toBe("secret");
   });
 
+  it("does not treat a git revision as a Windows short name", () => {
+    expect(cmd("git diff HEAD~1")).toBeUndefined();
+    expect(
+      protectedCommandHit("git diff --stat HEAD~3", HOME, [], "/home/dev/shop"),
+    ).toBeUndefined();
+    expect(cmd("type GITHUB~1\\workflows\\x.yml")).toBe("secret");
+  });
+
   it("known gap: a path hidden behind a variable, a glob or cd is not seen", () => {
     expect(cmd("cat $FILE")).toBeUndefined();
     expect(cmd("cat .e*")).toBeUndefined();

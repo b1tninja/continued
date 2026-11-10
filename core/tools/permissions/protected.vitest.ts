@@ -29,6 +29,24 @@ describe("normalizeProtectedPath", () => {
     expect(normalizeProtectedPath("src\\..\\.env", HOME)).toBe(".env");
   });
 
+  it("strips Windows trailing dots, spaces and alternate streams", () => {
+    expect(normalizeProtectedPath(".env.", HOME)).toBe(".env");
+    expect(normalizeProtectedPath(".env ", HOME)).toBe(".env");
+    expect(normalizeProtectedPath(".env::$DATA", HOME)).toBe(".env");
+    expect(normalizeProtectedPath(".git./hooks/pre-commit", HOME)).toBe(
+      ".git/hooks/pre-commit",
+    );
+    expect(hit(".env.")).toBe("secret");
+    expect(hit(".env::$DATA")).toBe("secret");
+    expect(hit(".git./hooks/pre-commit")).toBe("config");
+    expect(hit("C:\\Users\\me\\.env.")).toBe("secret");
+  });
+
+  it("treats an 8.3 short name in a path as protected, but not a git revision", () => {
+    expect(hit("GITHUB~1/workflows/x.yml")).toBe("secret");
+    expect(hit("HEAD~1")).toBeUndefined();
+  });
+
   it("treats a file URI's /C:/ path like a drive path", () => {
     expect(normalizeProtectedPath("/C:/Users/me/.aws/credentials", HOME)).toBe(
       "~/.aws/credentials",

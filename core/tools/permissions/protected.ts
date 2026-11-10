@@ -1,6 +1,11 @@
 import * as os from "node:os";
 import * as posix from "node:path/posix";
-import { isConfigPath, isSecretPath } from "./protectedPaths";
+import {
+  hasWindowsShortName,
+  isConfigPath,
+  isSecretPath,
+  stripWindowsPathAliases,
+} from "./protectedPaths";
 
 /**
  * Paths a tool call should never touch without the user saying yes, whatever
@@ -95,6 +100,7 @@ export function normalizeProtectedPath(
     /^(\$HOME|\$\{HOME\}|%USERPROFILE%|\$env:USERPROFILE)(?=\/|$)/i,
     "~",
   );
+  p = stripWindowsPathAliases(p);
   p = expandTilde(p, home);
   p = stripProcRoot(p);
   p = resolveAgainstCwd(p, cwd);
@@ -119,6 +125,14 @@ export function protectedPathHit(
   }
   if (kinds.includes("config") && isConfigPath(path)) {
     return { kind: "config", path };
+  }
+  // An 8.3 name can be another spelling of a protected file. Judge the path as
+  // written: joining a bare revision such as HEAD~1 to the working directory
+  // would make it look like a short name.
+  const written = stripWindowsPathAliases(raw.trim().replace(/\\/g, "/"));
+  if (hasWindowsShortName(written)) {
+    if (kinds.includes("secret")) return { kind: "secret", path: written };
+    if (kinds.includes("config")) return { kind: "config", path: written };
   }
   return undefined;
 }

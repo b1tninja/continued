@@ -71,6 +71,7 @@ describe("protected paths work with no rules at all", () => {
       toolName: "run_terminal_command",
       basePolicy: ALLOW,
       parsedArgs: { command: "cat ../.aws/credentials" },
+      permissions: undefined,
       cwd: "/home/u/proj",
     });
     expect(r).toMatchObject({ policy: ASK, source: "protected-path" });

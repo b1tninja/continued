@@ -88,6 +88,32 @@ const SYSTEM_SECRET = [
 
 const ENV_TEMPLATE = /\.(example|sample|template|dist|defaults)$/i;
 
+/**
+ * Win32 ignores trailing dots and spaces on each segment, and `name:stream`
+ * (an alternate data stream) is the same file as `name`. `.` and `..` are kept
+ * so a relative path can still be resolved afterwards.
+ */
+export function stripWindowsPathAliases(p: string): string {
+  const drive = /^[a-zA-Z]:/.test(p) ? p.slice(0, 2) : "";
+  let rest = drive ? p.slice(2) : p;
+  const colon = rest.indexOf(":");
+  if (colon >= 0) rest = rest.slice(0, colon);
+  return (drive + rest)
+    .split("/")
+    .map((seg) =>
+      seg === "." || seg === ".." ? seg : seg.replace(/[. ]+$/g, ""),
+    )
+    .join("/");
+}
+
+/** An 8.3 short name (`GITHUB~1`) inside a path. A bare `HEAD~1` has no slash. */
+const WINDOWS_SHORT_NAME = /^[A-Za-z0-9_$]{1,6}~[0-9](?:\.[A-Za-z0-9]{1,3})?$/;
+
+export function hasWindowsShortName(p: string): boolean {
+  if (!p.includes("/")) return false;
+  return p.split("/").some((seg) => WINDOWS_SHORT_NAME.test(seg));
+}
+
 /** True for `.env`, `.env.local`, `prod.env`; false for `.env.example` and `.environment`. */
 function isEnvFile(base: string): boolean {
   if (ENV_TEMPLATE.test(base)) return false;
