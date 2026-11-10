@@ -21,6 +21,8 @@ import {
   describeRoundUsage,
   describeTimeUsage,
   describeTokenUsage,
+  formatDuration,
+  formatTokenCount,
   loopUsage,
 } from "core/util/loopUsage";
 import { useEffect, useState } from "react";
@@ -372,6 +374,9 @@ export function LoopControls({
                       className="shrink-0 text-description-muted"
                     >
                       {state.attempts} run{state.attempts === 1 ? "" : "s"}
+                      {state.usage
+                        ? ` · ${formatTokenCount(state.usage.tokens)} tokens · ${formatDuration(state.usage.ms)}`
+                        : ""}
                     </span>
                   )}
                   {canSkip && (

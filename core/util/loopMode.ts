@@ -1425,6 +1425,8 @@ export function startItemRun(
      * resolved by modelForLoopItem); replaces what the last run recorded
      */
     model?: LoopItemModel;
+    /** The session's token total now, to count what this run uses */
+    sessionTokens?: number;
   } = {},
 ): LoopState {
   const state = itemState(loop, itemId);
@@ -1436,8 +1438,32 @@ export function startItemRun(
       model: options.model,
     }),
     status: "running",
-    current: { kind: "item", itemId, historyIndex, startedAt: iso(now) },
+    current: {
+      kind: "item",
+      itemId,
+      historyIndex,
+      startedAt: iso(now),
+      ...(options.sessionTokens !== undefined
+        ? { tokensAtStart: options.sessionTokens }
+        : {}),
+    },
   };
+}
+
+/** Adds a run's tokens and time to the item's totals (what is unknown is not counted). */
+function addItemUsage(
+  loop: LoopState,
+  itemId: string,
+  add: { tokens?: number; ms?: number },
+): LoopState {
+  if (add.tokens === undefined && add.ms === undefined) return loop;
+  const prev = itemState(loop, itemId)?.usage;
+  return withItem(loop, itemId, {
+    usage: {
+      tokens: (prev?.tokens ?? 0) + Math.max(0, add.tokens ?? 0),
+      ms: (prev?.ms ?? 0) + Math.max(0, add.ms ?? 0),
+    },
+  });
 }
 
 /**
@@ -1670,15 +1696,29 @@ export function finishItemRun(
         needs?: string[];
       }
     | undefined,
-  /** The item's check (TaskItem.check): done then waits for it to pass */
-  options: { check?: string } = {},
+  /**
+   * The item's check (TaskItem.check): done then waits for it to pass. With
+   * `sessionTokens` and `now` the run's tokens and time are added to the
+   * item's usage.
+   */
+  options: { check?: string; sessionTokens?: number; now?: Date } = {},
 ): LoopState {
-  const itemId = loop.current?.itemId;
-  if (!itemId || loop.current?.kind !== "item") return loop;
-  return {
+  const current = loop.current;
+  const itemId = current?.itemId;
+  if (!current || !itemId || current.kind !== "item") return loop;
+  const finished = {
     ...finishRunOf(loop, itemId, report, options, unreportedRun(loop)),
     current: undefined,
   };
+  return addItemUsage(finished, itemId, {
+    tokens:
+      options.sessionTokens !== undefined && current.tokensAtStart !== undefined
+        ? options.sessionTokens - current.tokensAtStart
+        : undefined,
+    ms: options.now
+      ? options.now.getTime() - new Date(current.startedAt).getTime()
+      : undefined,
+  });
 }
 
 /** What a worker of a parallel wave brings back when its run ends. */
@@ -1703,6 +1743,8 @@ export interface ParallelRunResult {
    * limit): the run counts as an attempt with this as the item's summary.
    */
   error?: string;
+  /** Tokens the worker used (output and uncached input), for the item's usage */
+  tokens?: number;
 }
 
 /**
@@ -1727,6 +1769,10 @@ export function finishParallelRun(
     const held = holdQuestion(next, { ...q, itemId }, now);
     if (held.ok) next = held.loop;
   }
+  next = addItemUsage(next, itemId, {
+    tokens: result.tokens,
+    ms: now.getTime() - new Date(run.startedAt).getTime(),
+  });
   const rest = (loop.parallel ?? []).filter((r) => r.itemId !== itemId);
   const parallel = rest.length ? rest : undefined;
   if (result.mergeFailed) {
