@@ -808,6 +808,7 @@ const EXISTENCE_ONLY_COMMANDS = new Set([
   "test",
   "[",
   "[[",
+  ":",
   "ls",
   "stat",
   "cat",
@@ -832,20 +833,69 @@ const EXISTENCE_ONLY_COMMANDS = new Set([
   "select-string",
 ]);
 
+const NOOP_INTERPRETER_BODY =
+  /^(?:0|pass|none|nil|true|false|:|exit(?:\s*\(\s*0?\s*\))?)$/i;
+
+function unquoteCheck(body: string): string {
+  const trimmed = body.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function shellScript(segment: string): string | undefined {
+  const run = /^(?:sh|bash|dash|zsh|ksh)\s+([\s\S]+)$/i.exec(segment);
+  if (!run) return undefined;
+  const flagged = /^(?:-\w*c\w*|--command)\s+([\s\S]+)$/i.exec(run[1].trim());
+  return flagged ? unquoteCheck(flagged[1]) : undefined;
+}
+
+function segmentIsWeak(segment: string): boolean {
+  const shell = shellScript(segment);
+  if (shell !== undefined) return isExistenceOnlyCheck(shell);
+  const interpreter =
+    /^(?:node|nodejs|python|python3|perl|ruby|php)\s+(?:-[a-zA-Z]+\s+)*-(?:e|c)\s+([\s\S]+)$/i.exec(
+      segment,
+    );
+  if (interpreter)
+    return NOOP_INTERPRETER_BODY.test(unquoteCheck(interpreter[1]));
+  const words = segment.replace(/^[!(\s]+/, "").split(/\s+/);
+  // Skip leading VAR=value assignments
+  const first = words.find((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) ?? "";
+  const name = first.replace(/^.*[\\/]/, "").toLowerCase();
+  return EXISTENCE_ONLY_COMMANDS.has(name);
+}
+
 /** True for a check command that only tests that a file or a string exists. */
 export function isExistenceOnlyCheck(command: string): boolean {
+  const wrapped = shellScript(command.trim());
+  if (wrapped !== undefined) return isExistenceOnlyCheck(wrapped);
   const segments = command
     .split(/\s*(?:&&|\|\||;|\|)\s*/)
     .map((s) => s.trim())
     .filter(Boolean);
   if (segments.length === 0) return false;
-  return segments.every((segment) => {
-    const words = segment.replace(/^[!(\s]+/, "").split(/\s+/);
-    // Skip leading VAR=value assignments
-    const first = words.find((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) ?? "";
-    const name = first.replace(/^.*[\\/]/, "").toLowerCase();
-    return EXISTENCE_ONLY_COMMANDS.has(name);
+  return segments.every(segmentIsWeak);
+}
+
+/**
+ * The checks a person should see before a loop runs, including an unattended
+ * one. Empty when no to-do has a check. A weak check is still only a hint.
+ */
+export function planCheckSummary(
+  items: readonly { check?: unknown }[],
+): string {
+  const lines = items.flatMap((item, index) => {
+    const check = typeof item.check === "string" ? item.check.trim() : "";
+    return check ? [`${index + 1}. ${check}`] : [];
   });
+  if (lines.length === 0) return "";
+  const weak = weakCheckNotes(items);
+  return `Checks the loop will run:\n${lines.join("\n")}${weak ? `\n\n${weak}` : ""}`;
 }
 
 /**
