@@ -629,6 +629,55 @@ export class Core {
     );
   }
 
+  /** Auto approval and the audit answer: the reviewer's decision is written to the audit trail. */
+  private registerAutoReviewHandlers() {
+    const on = this.messenger.on.bind(this.messenger);
+
+    on("tools/autoReview", async ({ data }) => {
+      const { config } = await this.configHandler.loadConfig();
+      if (!config) {
+        throw new Error("Config not loaded");
+      }
+      const dirs = await this.ide.getWorkspaceDirs();
+      const repo = dirs[0] ? await this.ide.getRepoName(dirs[0]) : undefined;
+      const reply = await autoReviewToolCall(
+        {
+          tool: config.tools.find((t) => t.function.name === data.toolName),
+          permissions: config.toolPermissions,
+          enabled: config.experimental?.enableAutoApproval === true,
+          reviewer: config.selectedModelByRole.reviewer,
+          shell: resolveShell().kind,
+          reviewerReasoning: reasoningOptionsForEffort(
+            config.modeModels?.reviewer?.reasoningEffort,
+          ),
+          environment: {
+            workspaceDirs: dirs,
+            gitRemotes: repo ? [repo] : undefined,
+            os: process.platform,
+          },
+          sessions: this.autoReviewSessions,
+        },
+        data,
+      );
+      recordReviewDecision(
+        getAuditTrail(),
+        {
+          session: data.sessionId,
+          callId: data.callId,
+          toolName: data.toolName,
+          parsedArgs: data.parsedArgs,
+          approval: data.approval,
+        },
+        reply,
+      );
+      return reply;
+    });
+
+    on("audit/answer", async ({ data }) => {
+      getAuditTrail().answer(data.callId, data.approved);
+    });
+  }
+
   private registerMessageHandlers(ideSettingsPromise: Promise<IdeSettings>) {
     const on = this.messenger.on.bind(this.messenger);
 
@@ -1820,49 +1869,7 @@ export class Core {
       },
     );
 
-    on("tools/autoReview", async ({ data }) => {
-      const { config } = await this.configHandler.loadConfig();
-      if (!config) {
-        throw new Error("Config not loaded");
-      }
-      const dirs = await this.ide.getWorkspaceDirs();
-      const repo = dirs[0] ? await this.ide.getRepoName(dirs[0]) : undefined;
-      const reply = await autoReviewToolCall(
-        {
-          tool: config.tools.find((t) => t.function.name === data.toolName),
-          permissions: config.toolPermissions,
-          enabled: config.experimental?.enableAutoApproval === true,
-          reviewer: config.selectedModelByRole.reviewer,
-          shell: resolveShell().kind,
-          reviewerReasoning: reasoningOptionsForEffort(
-            config.modeModels?.reviewer?.reasoningEffort,
-          ),
-          environment: {
-            workspaceDirs: dirs,
-            gitRemotes: repo ? [repo] : undefined,
-            os: process.platform,
-          },
-          sessions: this.autoReviewSessions,
-        },
-        data,
-      );
-      recordReviewDecision(
-        getAuditTrail(),
-        {
-          session: data.sessionId,
-          callId: data.callId,
-          toolName: data.toolName,
-          parsedArgs: data.parsedArgs,
-          approval: data.approval,
-        },
-        reply,
-      );
-      return reply;
-    });
-
-    on("audit/answer", async ({ data }) => {
-      getAuditTrail().answer(data.callId, data.approved);
-    });
+    this.registerAutoReviewHandlers();
 
     on(
       "tools/preprocessArgs",

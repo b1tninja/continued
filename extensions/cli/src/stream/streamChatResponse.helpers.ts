@@ -246,14 +246,11 @@ export async function checkToolPermissionApproval(
   hookDecision?: "allow" | "ask",
 ): ReturnType<typeof decideToolApproval> {
   const trace: ApprovalTrace = {};
-  const result = await decideToolApproval(
-    permissions,
-    toolCall,
+  const result = await decideToolApproval(permissions, toolCall, trace, {
     callbacks,
     isHeadless,
     hookDecision,
-    trace,
-  );
+  });
   recordCliDecision(toolCall, trace, result);
   return result;
 }
@@ -261,11 +258,13 @@ export async function checkToolPermissionApproval(
 async function decideToolApproval(
   permissions: ToolPermissions,
   toolCall: PreprocessedToolCall,
-  callbacks: StreamCallbacks | undefined,
-  isHeadless: boolean | undefined,
-  /** What PreToolUse hooks asked for. They can tighten the policy, never loosen an exclude. */
-  hookDecision: "allow" | "ask" | undefined,
   trace: ApprovalTrace,
+  options: {
+    callbacks?: StreamCallbacks;
+    isHeadless?: boolean;
+    /** What PreToolUse hooks asked for. They can tighten the policy, never loosen an exclude. */
+    hookDecision?: "allow" | "ask";
+  },
 ): Promise<{
   approved: boolean;
   /** "loop": Loop mode held the call as a question instead of asking */
@@ -273,6 +272,7 @@ async function decideToolApproval(
   /** Why a rule, protected path or the reviewer refused it, to tell the model. */
   denialMessage?: string;
 }> {
+  const { callbacks, isHeadless, hookDecision } = options;
   const permissionCheck = withReadOnlyMcp(
     checkToolPermission(toolCall, permissions),
     toolCall.tool,

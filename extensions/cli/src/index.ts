@@ -6,9 +6,9 @@ import "./init.js";
 import { Command } from "commander";
 
 import { acp } from "./commands/acp.js";
+import { auditCommand } from "./commands/audit.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
-import { auditCommand } from "./commands/audit.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { projectCommand } from "./commands/project.js";
@@ -449,9 +449,8 @@ program.on("command:*", () => {
 export async function runCli(): Promise<void> {
   // Handle internal worker subprocess for cn review
   if (process.argv.includes("--internal-review-worker")) {
-    const { runReviewWorker } = await import(
-      "./commands/review/reviewWorker.js"
-    );
+    const { runReviewWorker } =
+      await import("./commands/review/reviewWorker.js");
     await runReviewWorker();
     return;
   }

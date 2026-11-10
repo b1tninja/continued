@@ -1,12 +1,12 @@
 import type { ChatHistoryItem } from "core/index.js";
+import { readAuditSession } from "core/tools/permissions/audit/reader.js";
+import { auditToSteps } from "core/tools/permissions/audit/steps.js";
 import { stepsFromHistory } from "core/util/stuckHistory.js";
 import {
   stripStuckNote,
   STUCK_NOTE_MARK,
   stuckNote,
 } from "core/util/stuckNotes.js";
-import { readAuditSession } from "core/tools/permissions/audit/reader.js";
-import { auditToSteps } from "core/tools/permissions/audit/steps.js";
 import { detectStuck, type StuckStep } from "core/util/stuckSignals.js";
 
 /**

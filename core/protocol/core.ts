@@ -127,8 +127,7 @@ export interface BedrockModelOptionInfo {
 }
 
 export type BedrockListModelsResult =
-  | { ok: true; models: BedrockModelOptionInfo[] }
-  | { ok: false; error: string };
+  { ok: true; models: BedrockModelOptionInfo[] } | { ok: false; error: string };
 
 /**
  * Whether the account lists the `global.` inference profile of a configured
@@ -142,8 +141,7 @@ export type BedrockTestModelResult =
   | { ok: false; error: string };
 
 export type ProfileFileResult =
-  | { ok: true; profileId?: string }
-  | { ok: false; error: string };
+  { ok: true; profileId?: string } | { ok: false; error: string };
 
 export type ToCoreFromIdeOrWebviewProtocol = {
   // Special

@@ -171,8 +171,7 @@ export function createReviewer(
 }
 
 let cachedReviewer:
-  | { assistant: unknown; reviewer: ChatLike | null }
-  | undefined;
+  { assistant: unknown; reviewer: ChatLike | null } | undefined;
 
 /** One reviewer per loaded assistant, so a client is not built for every call. */
 export function getReviewer(

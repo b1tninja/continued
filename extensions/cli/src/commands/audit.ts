@@ -19,6 +19,7 @@ import {
   type AuditCallRow,
   type AuditFilter,
 } from "core/tools/permissions/audit/reader.js";
+import type { DecisionEvent } from "core/tools/permissions/audit/record.js";
 
 export interface AuditCommandOptions {
   json?: boolean;
@@ -96,6 +97,88 @@ function filterOf(options: AuditCommandOptions): AuditFilter | string {
   };
 }
 
+function decisionDetail(d: DecisionEvent): string {
+  const usage = d.reviewer?.usage;
+  return [
+    `${d.policy} by ${d.by}`,
+    d.source && `source ${d.source}`,
+    d.rule && `rule ${d.rule}`,
+    d.reviewer?.model && `model ${d.reviewer.model}`,
+    d.reviewer?.latencyMs !== undefined && `${d.reviewer.latencyMs} ms`,
+    usage && `tokens ${usage.input ?? "?"} in, ${usage.output ?? "?"} out`,
+    d.reason && `"${d.reason}"`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function listAction(dir: string, options: AuditCommandOptions): number {
+  const filter = filterOf(options);
+  if (typeof filter === "string") {
+    err(filter);
+    return 2;
+  }
+  let rows = listCalls(dir, filter);
+  const limit = Number(options.limit);
+  if (Number.isFinite(limit) && limit > 0) rows = rows.slice(-limit);
+  if (options.json) {
+    out(JSON.stringify(rows.map(({ decisions: _d, outcome: _o, ...r }) => r)));
+    return 0;
+  }
+  if (rows.length === 0) {
+    out("No audit records match.");
+    return 0;
+  }
+  for (const row of rows) out(line(row));
+  return 0;
+}
+
+function showAction(
+  dir: string,
+  session: string | undefined,
+  options: AuditCommandOptions,
+): number {
+  if (!session) {
+    err("Usage: continuous audit show <session>");
+    return 2;
+  }
+  const filter = filterOf(options);
+  if (typeof filter === "string") {
+    err(filter);
+    return 2;
+  }
+  const records = readAuditSession(dir, session);
+  if (records.length === 0) {
+    err(`No audit records for session ${session}.`);
+    return 1;
+  }
+  if (options.json) {
+    out(JSON.stringify(records));
+    return 0;
+  }
+  for (const row of callRows(records).filter((r) => matchesFilter(r, filter))) {
+    out(line(row));
+    for (const d of row.decisions) out(`    ${decisionDetail(d)}`);
+  }
+  return 0;
+}
+
+function pruneAction(dir: string, options: AuditCommandOptions): number {
+  const days = parseDays(options.days) ?? auditSettings().retentionDays;
+  const result = pruneAudit(dir, {
+    retentionDays: days,
+    dryRun: options.dryRun,
+  });
+  if (options.json) {
+    out(JSON.stringify(result));
+    return 0;
+  }
+  out(
+    `${options.dryRun ? "Would delete" : "Deleted"} ${result.deleted.length} audit file(s), ${result.bytes} bytes, older than ${days} days.`,
+  );
+  return 0;
+}
+
 /** Returns the process exit code. */
 export function auditCommand(
   action: string | undefined,
@@ -104,79 +187,12 @@ export function auditCommand(
 ): number {
   const dir = options.dir ?? auditDir();
   switch (action ?? "list") {
-    case "list": {
-      const filter = filterOf(options);
-      if (typeof filter === "string") {
-        err(filter);
-        return 2;
-      }
-      let rows = listCalls(dir, filter);
-      const limit = Number(options.limit);
-      if (Number.isFinite(limit) && limit > 0) rows = rows.slice(-limit);
-      if (options.json) {
-        out(JSON.stringify(rows.map(({ decisions, outcome, ...r }) => r)));
-        return 0;
-      }
-      if (rows.length === 0) {
-        out("No audit records match.");
-        return 0;
-      }
-      for (const row of rows) out(line(row));
-      return 0;
-    }
-    case "show": {
-      if (!arg) {
-        err("Usage: continuous audit show <session>");
-        return 2;
-      }
-      const filter = filterOf(options);
-      if (typeof filter === "string") {
-        err(filter);
-        return 2;
-      }
-      const records = readAuditSession(dir, arg);
-      if (records.length === 0) {
-        err(`No audit records for session ${arg}.`);
-        return 1;
-      }
-      if (options.json) {
-        out(JSON.stringify(records));
-        return 0;
-      }
-      const rows = callRows(records).filter((r) => matchesFilter(r, filter));
-      for (const row of rows) {
-        out(line(row));
-        for (const d of row.decisions) {
-          const detail = [
-            `${d.policy} by ${d.by}`,
-            d.source && `source ${d.source}`,
-            d.rule && `rule ${d.rule}`,
-            d.reviewer?.model && `model ${d.reviewer.model}`,
-            d.reviewer?.latencyMs !== undefined && `${d.reviewer.latencyMs} ms`,
-            d.reviewer?.usage &&
-              `tokens ${d.reviewer.usage.input ?? "?"} in, ${d.reviewer.usage.output ?? "?"} out`,
-            d.reason && `"${d.reason}"`,
-          ].filter(Boolean);
-          out(`    ${detail.join(", ")}`);
-        }
-      }
-      return 0;
-    }
-    case "prune": {
-      const days = parseDays(options.days) ?? auditSettings().retentionDays;
-      const result = pruneAudit(dir, {
-        retentionDays: days,
-        dryRun: options.dryRun,
-      });
-      if (options.json) {
-        out(JSON.stringify(result));
-        return 0;
-      }
-      out(
-        `${options.dryRun ? "Would delete" : "Deleted"} ${result.deleted.length} audit file(s), ${result.bytes} bytes, older than ${days} days.`,
-      );
-      return 0;
-    }
+    case "list":
+      return listAction(dir, options);
+    case "show":
+      return showAction(dir, arg, options);
+    case "prune":
+      return pruneAction(dir, options);
     default:
       err(`Unknown audit action '${action}'. Use list, show or prune.`);
       return 2;
