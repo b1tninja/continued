@@ -29,6 +29,7 @@
   "include": [
     "src/**/*",
     "scripts/measureStuck.ts",
+    "scripts/probeWindowsSandbox.ts",
     "vitest.setup.ts",
     "vitest.global-dir-setup.ts"
   ]
