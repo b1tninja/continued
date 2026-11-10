@@ -29,9 +29,7 @@ interface ContinuedModelInfo extends vscode.LanguageModelChatInformation {
  * keys and settings from the config and providers.yaml; keys never pass to
  * VS Code.
  */
-export class ContinuedLanguageModelChatProvider
-  implements vscode.LanguageModelChatProvider<ContinuedModelInfo>
-{
+export class ContinuedLanguageModelChatProvider implements vscode.LanguageModelChatProvider<ContinuedModelInfo> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeLanguageModelChatInformation = this.changed.event;
 
