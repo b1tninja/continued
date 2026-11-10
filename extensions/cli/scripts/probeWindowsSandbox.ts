@@ -2,9 +2,9 @@
  * Times one Windows Sandbox cycle: start, share, exec, poll, stop
  * (plans/isolation.md, W9). Windows only.
  *
- *   npx tsx scripts/probeWindowsSandbox.ts            # detect only, starts nothing
- *   npx tsx scripts/probeWindowsSandbox.ts --run      # really starts a sandbox
- *   npx tsx scripts/probeWindowsSandbox.ts --run --json
+ *   npx tsx --tsconfig scripts/tsconfig.json scripts/probeWindowsSandbox.ts            # detect only, starts nothing
+ *   npx tsx --tsconfig scripts/tsconfig.json scripts/probeWindowsSandbox.ts --run      # really starts a sandbox
+ *   npx tsx --tsconfig scripts/tsconfig.json scripts/probeWindowsSandbox.ts --run --json
  *
  * `--run` is required because it starts a Windows Sandbox VM (several hundred
  * MB of memory, a few seconds to tens of seconds). It refuses if a sandbox is
