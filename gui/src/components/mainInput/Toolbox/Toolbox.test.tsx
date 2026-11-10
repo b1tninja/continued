@@ -1,4 +1,4 @@
-import { act, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import type { ModelDescription } from "core";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -48,6 +48,74 @@ const open = async () => {
     screen.getByTestId("toolbox-toggle").click();
   });
 };
+
+describe("Toolbox glyph", () => {
+  it("is a labelled icon button that reports its state", async () => {
+    await setup();
+    const glyph = screen.getByTestId("toolbox-toggle");
+    expect(glyph).toHaveAttribute("aria-label", "Toolbox");
+    expect(glyph).toHaveAttribute("aria-expanded", "false");
+    expect(glyph.textContent).toBe("");
+    await open();
+    expect(glyph).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("moves focus into the panel on open and back to the glyph on Escape", async () => {
+    await setup();
+    await open();
+    expect(screen.getByTestId("toolbox-drawer")).toHaveFocus();
+    await act(async () => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+    expect(screen.queryByTestId("toolbox-drawer")).toBeNull();
+    expect(screen.getByTestId("toolbox-toggle")).toHaveFocus();
+  });
+
+  it("closes on a press outside, but not inside, the panel", async () => {
+    await setup();
+    await open();
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByTestId("toolbox-drawer"));
+    });
+    expect(screen.getByTestId("toolbox-drawer")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.mouseDown(document.body);
+    });
+    expect(screen.queryByTestId("toolbox-drawer")).toBeNull();
+  });
+
+  it("toggles closed when the glyph is pressed again, and keeps focus on it", async () => {
+    await setup();
+    await open();
+    await open();
+    expect(screen.queryByTestId("toolbox-drawer")).toBeNull();
+    expect(screen.getByTestId("toolbox-toggle")).toHaveFocus();
+  });
+
+  it("closes when a card is sent or inserted", async () => {
+    await setup();
+    await open();
+    await act(async () => {
+      screen.getByTestId("toolbox-card-small-loop-insert").click();
+    });
+    expect(screen.queryByTestId("toolbox-drawer")).toBeNull();
+    await open();
+    await act(async () => {
+      screen.getByTestId("toolbox-card-small-loop-send").click();
+    });
+    expect(screen.queryByTestId("toolbox-drawer")).toBeNull();
+    expect(screen.getByTestId("toolbox-toggle")).toHaveFocus();
+  });
+
+  it("stays open when a prompt is expanded", async () => {
+    await setup();
+    await open();
+    await act(async () => {
+      screen.getByTestId("toolbox-card-why-chain-expand").click();
+    });
+    expect(screen.getByTestId("toolbox-drawer")).toBeInTheDocument();
+  });
+});
 
 describe("Toolbox drawer", () => {
   it("is closed until the toggle is pressed", async () => {

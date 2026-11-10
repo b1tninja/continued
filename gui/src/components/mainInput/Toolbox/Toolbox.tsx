@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { BriefcaseIcon } from "@heroicons/react/24/outline";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fillToolboxCard,
   TOOLBOX_GROUPS,
   toolboxCardsIn,
   type ToolboxCard,
 } from "core/util/toolboxCards";
+import { ToolTip } from "../../gui/Tooltip";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
 import { useMainEditor } from "../TipTapEditor";
 import {
@@ -14,7 +16,13 @@ import {
 } from "./toolboxActions";
 
 /**
- * The toolbox drawer: problem-solving prompts grouped by what the person is
+ * The toolbox: a small glyph that pulls the drawer out. The drawer is a panel
+ * anchored to the glyph, so it takes no toolbar or input space while closed. It
+ * closes on Escape, on a press outside it and when a card is sent or inserted;
+ * focus moves into the panel on open and back to the glyph on close (an insert
+ * leaves focus in the editor, which is where the person goes next).
+ *
+ * The drawer: problem-solving prompts grouped by what the person is
  * trying to do. Each card is inserted into the input for editing or sent as the
  * next message. Its text is shown filled in from the session before either,
  * so the person sees exactly what will be sent.
@@ -39,22 +47,64 @@ export function Toolbox() {
 
   const textFor = (card: ToolboxCard) => fillToolboxCard(card, facts);
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const glyphRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const close = useCallback((returnFocus = true) => {
+    setOpen(false);
+    if (returnFocus) {
+      glyphRef.current?.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    panelRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        close();
+      }
+    };
+    const onPointerDown = (event: Event) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        close(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [open, close]);
+
   return (
-    <div className="px-1 pb-1">
-      <button
-        type="button"
-        data-testid="toolbox-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-        className="hover:bg-list-item-hover rounded-sm border-none bg-transparent px-1 py-0.5 text-xs text-description"
-      >
-        {open ? "Hide toolbox" : "Toolbox"}
-      </button>
+    <div ref={rootRef} className="relative shrink-0">
+      <ToolTip content="Toolbox: problem-solving prompts" delayShow={700}>
+        <button
+          ref={glyphRef}
+          type="button"
+          data-testid="toolbox-toggle"
+          aria-label="Toolbox"
+          aria-haspopup="true"
+          aria-expanded={open}
+          onClick={() => (open ? close() : setOpen(true))}
+          className="hover:bg-list-item-hover focus-visible:ring-ring flex h-5 w-5 cursor-pointer items-center justify-center rounded-sm border-none bg-transparent p-0 text-description focus-visible:ring-2 focus-visible:outline-hidden"
+        >
+          <BriefcaseIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </ToolTip>
 
       {open && (
         <div
+          ref={panelRef}
+          role="region"
+          aria-label="Toolbox"
+          tabIndex={-1}
           data-testid="toolbox-drawer"
-          className="mt-1 max-h-72 space-y-3 overflow-y-auto rounded-default border border-command-border p-2"
+          className="toolbox-slide-out absolute right-0 bottom-full z-50 mb-1 max-h-72 w-[min(22rem,calc(100vw-1rem))] space-y-3 overflow-y-auto rounded-default border border-command-border bg-background p-2 shadow-lg focus:outline-hidden"
         >
           {TOOLBOX_GROUPS.map((group) => (
             <section key={group.id} data-testid={`toolbox-group-${group.id}`}>
@@ -95,9 +145,10 @@ export function Toolbox() {
                       <button
                         type="button"
                         data-testid={`toolbox-card-${card.id}-insert`}
-                        onClick={() =>
-                          insertToolboxText(mainEditor, textFor(card))
-                        }
+                        onClick={() => {
+                          close(false);
+                          insertToolboxText(mainEditor, textFor(card));
+                        }}
                         className="rounded-sm border border-command-border bg-transparent px-1.5 py-0.5 text-xs"
                       >
                         Insert
@@ -111,7 +162,10 @@ export function Toolbox() {
                             ? "Wait for the reply to finish, or insert the card and edit it"
                             : undefined
                         }
-                        onClick={() => sendToolboxText(dispatch, textFor(card))}
+                        onClick={() => {
+                          close();
+                          sendToolboxText(dispatch, textFor(card));
+                        }}
                         className="rounded-sm border border-command-border bg-transparent px-1.5 py-0.5 text-xs disabled:opacity-40"
                       >
                         Send
