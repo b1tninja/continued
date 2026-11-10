@@ -58,6 +58,13 @@ import {
   writesThinkingTags,
 } from "./bedrockHelpers.js";
 import {
+  qwenXmlRecoveryEnabled,
+  QwenXmlRecovery,
+  recoverQwenXmlFromText,
+  type DialectTool,
+  type RecoveredCall,
+} from "../dialects/qwenXml.js";
+import {
   bedrockRefusedField,
   converseRequestHasField,
   converseRequestWithoutField,
@@ -188,6 +195,44 @@ interface ToolUseState {
   toolUseId: string;
   name: string;
   input: string;
+}
+
+/** The request's tools as the dialects see them. */
+function dialectToolsOf(request: ConverseStreamCommandInput): DialectTool[] {
+  const out: DialectTool[] = [];
+  for (const t of request.toolConfig?.tools ?? []) {
+    const spec = t.toolSpec;
+    if (spec?.name) {
+      out.push({ name: spec.name, parameters: spec.inputSchema?.json });
+    }
+  }
+  return out;
+}
+
+/** A recovered call as one OpenAI-style tool_calls chunk. */
+function recoveredCallChunk(
+  call: RecoveredCall,
+  index: number,
+  model: string,
+  id: string | undefined,
+): ChatCompletionChunk {
+  return chatChunkFromDelta({
+    model,
+    id,
+    delta: {
+      tool_calls: [
+        {
+          index,
+          id: `recovered_${index}_${Math.random().toString(36).slice(2, 10)}`,
+          type: "function",
+          function: {
+            name: call.name,
+            arguments: JSON.stringify(call.arguments),
+          },
+        },
+      ],
+    },
+  });
 }
 
 export class BedrockApi implements BaseLlmApi {
@@ -900,8 +945,14 @@ export class BedrockApi implements BaseLlmApi {
     const id = response.$metadata?.requestId;
     const isNova2 = /nova-2-/i.test(model);
     let toolIndex = -1;
+    const recoverText = qwenXmlRecoveryEnabled(model, undefined);
+    const recovered: RecoveredCall[] = [];
     for (const block of response.output?.message?.content ?? []) {
-      if (block.text) {
+      if (block.text && recoverText) {
+        const found = recoverQwenXmlFromText(block.text, dialectToolsOf(input));
+        recovered.push(...found.calls);
+        if (found.text) yield chatChunk({ content: found.text, model, id });
+      } else if (block.text) {
         yield chatChunk({ content: block.text, model, id });
       } else if (block.reasoningContent) {
         const reasoningDelta = reasoningDeltaFor(
@@ -939,12 +990,21 @@ export class BedrockApi implements BaseLlmApi {
         });
       }
     }
+    const makeRecovered = toolIndex === -1 && recovered.length > 0;
+    if (makeRecovered) {
+      for (const call of recovered) {
+        toolIndex++;
+        yield recoveredCallChunk(call, toolIndex, model, id);
+      }
+    }
     if (response.stopReason) {
       yield chatChunkFromDelta({
         model,
         id,
         delta: {},
-        finish_reason: bedrockFinishReason(response.stopReason),
+        finish_reason: makeRecovered
+          ? "tool_calls"
+          : bedrockFinishReason(response.stopReason),
       });
     }
     if (response.usage) {
@@ -1134,11 +1194,30 @@ export class BedrockApi implements BaseLlmApi {
         return chunks;
       };
       const isNova2 = /nova-2-/i.test(body.model);
+      // Off unless asked for (qwenXmlRecoveryEnabled): Qwen3-Coder sometimes
+      // writes its tool call as text, which ends the turn with nothing done.
+      // Calls found in the text are held until the reply ends and are made
+      // only when the model made no toolUse of its own.
+      const recovery = qwenXmlRecoveryEnabled(body.model, body)
+        ? new QwenXmlRecovery(dialectToolsOf(requestBody))
+        : undefined;
+      const recovered: RecoveredCall[] = [];
+      const recoveryChunks = function* (
+        events: ReturnType<QwenXmlRecovery["end"]>,
+      ): Generator<ChatCompletionChunk> {
+        for (const event of events) {
+          if (event.type === "call") recovered.push(event.call);
+          else yield chatChunk({ content: event.text, model: body.model, id });
+        }
+      };
       // Each toolUse block gets its own tool_calls index, so a reply with
       // several calls is not merged into one.
       let toolIndex = -1;
 
       for await (const chunk of response.stream) {
+        if (recovery && (chunk.contentBlockStop || chunk.messageStop)) {
+          yield* recoveryChunks(recovery.end());
+        }
         if (dsmlHold && (chunk.contentBlockStop || chunk.messageStop)) {
           const text = flushDsmlHold(dsmlHold);
           dsmlHold = "";
@@ -1158,6 +1237,10 @@ export class BedrockApi implements BaseLlmApi {
               const split = holdBackDsmlMarker(dsmlHold + text);
               dsmlHold = split.hold;
               text = split.emit;
+            }
+            if (recovery) {
+              yield* recoveryChunks(recovery.push(text));
+              continue;
             }
             if (thinkingTags) {
               yield* splitChunks(thinkingTags.push(text));
@@ -1239,11 +1322,20 @@ export class BedrockApi implements BaseLlmApi {
         // empty delta, so a client can tell truncation (max_tokens) from a
         // finished answer.
         if (chunk.messageStop?.stopReason) {
+          const makeRecovered = toolIndex === -1 && recovered.length > 0;
+          if (makeRecovered) {
+            for (const call of recovered) {
+              toolIndex++;
+              yield recoveredCallChunk(call, toolIndex, body.model, id);
+            }
+          }
           yield chatChunkFromDelta({
             model: body.model,
             id,
             delta: {},
-            finish_reason: bedrockFinishReason(chunk.messageStop.stopReason),
+            finish_reason: makeRecovered
+              ? "tool_calls"
+              : bedrockFinishReason(chunk.messageStop.stopReason),
           });
         }
 

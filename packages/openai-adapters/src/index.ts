@@ -288,3 +288,14 @@ export {
   type ThinkingSplit,
   writesThinkingTags,
 } from "./dialects/textFilters.js";
+export {
+  QwenXmlRecovery,
+  qwenXmlRecoveryEnabled,
+  recoverQwenXmlCalls,
+  recoverQwenXmlFromText,
+  RECOVER_TEXT_TOOL_CALLS_ENV,
+  RECOVER_TEXT_TOOL_CALLS_FIELD,
+  renderQwenXmlCall,
+  type DialectTool,
+  type RecoveredCall,
+} from "./dialects/qwenXml.js";
