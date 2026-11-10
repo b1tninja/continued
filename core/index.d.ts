@@ -782,6 +782,8 @@ export interface LoopState {
      * (core/util/turnEnd.ts)
      */
     nudged?: boolean;
+    /** Item budgets the run was already told it passed 80% of (core/util/itemBudget.ts) */
+    budgetWarned?: Array<"turns" | "tokens" | "minutes">;
   };
   /**
    * The re-plan whose plan waits to be accepted: what it was for, so

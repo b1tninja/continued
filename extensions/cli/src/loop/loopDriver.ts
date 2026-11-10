@@ -1,11 +1,7 @@
 import fs from "fs";
 
 import type { ChatHistoryItem, LoopState } from "core/index.js";
-import {
-  itemBudgetStatus,
-  overBudgetReport,
-  type ItemBudgetBreach,
-} from "core/util/itemBudget.js";
+import { overBudgetReport } from "core/util/itemBudget.js";
 import {
   decideNext,
   endReplan,
@@ -37,6 +33,7 @@ import { loopItemModelRecord, services } from "../services/index.js";
 import { getSessionLoop, getSessionTaskPlan } from "../session.js";
 import { logger } from "../util/logger.js";
 
+import { itemOverBudget } from "./loopBudget.js";
 import { type LoopCheckStep, runLoopCheck } from "./loopChecks.js";
 import { prepareItemRun } from "./loopItemRun.js";
 import { stampFiles } from "./loopReminderFiles.js";
@@ -102,30 +99,12 @@ function presentedSince(index: number): boolean {
     );
 }
 
-/** The item's own budget the running item has gone over (not reported yet), if any. */
-function overBudgetOf(loop: LoopState): ItemBudgetBreach | undefined {
-  const current = loop.current;
-  if (!current || current.kind !== "item" || current.report) return undefined;
-  const item = getSessionTaskPlan()?.items.find((t) => t.id === current.itemId);
-  if (!item?.budget) return undefined;
-  // The CLI's turn is one chat turn: its requests are not counted here, so
-  // turns are not enforced, tokens and time are
-  const status = itemBudgetStatus(loop, item, {
-    sessionTokens: sessionTokens(),
-    now: new Date(),
-    turns: 0,
-  });
-  return status.state === "over"
-    ? { which: status.which, used: status.used, limit: status.limit }
-    : undefined;
-}
-
 /**
  * A run that ended over its item's own budget, with no report, is not nudged
  * to report: it ends as over budget, its work kept (core's finishItemRun).
  */
 function markOverBudget(loop: LoopState): LoopState {
-  const breach = overBudgetOf(loop);
+  const breach = loop.current ? itemOverBudget(loop) : undefined;
   if (!breach || !loop.current) return loop;
   return {
     ...loop,

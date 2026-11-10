@@ -1,9 +1,21 @@
-import type { Usage } from "core/index.js";
+import type { LoopState, Usage } from "core/index.js";
+import {
+  itemBudgetNoteDue,
+  itemBudgetStatus,
+  overBudgetReport,
+  type BudgetKind,
+  type ItemBudgetBreach,
+} from "core/util/itemBudget.js";
 import { loopBudgetStop, stopLoop } from "core/util/loopMode.js";
 
-import { getSessionLoop } from "../session.js";
+import { services } from "../services/index.js";
+import { getSessionLoop, getSessionTaskPlan } from "../session.js";
 
-import { commitLoop, sessionTokens } from "./loopSession.js";
+import {
+  CLI_LOOP_TOOL_NAMES,
+  commitLoop,
+  sessionTokens,
+} from "./loopSession.js";
 
 function counted(value: number | undefined): number {
   return typeof value === "number" && Number.isFinite(value)
@@ -58,4 +70,91 @@ export function stopLoopItemOverBudget(now = new Date()): boolean {
   if (!stop) return false;
   commitLoop(stopLoop(loop, stop.reason, stop.detail));
   return true;
+}
+
+/** Model requests the running item has made so far in this run. */
+export function itemRunTurns(loop: LoopState): number {
+  const current = loop.current;
+  if (!current) return 0;
+  try {
+    return services.chatHistory
+      .getHistory()
+      .slice(current.historyIndex)
+      .filter((h) => h.message.role === "assistant").length;
+  } catch {
+    return 0;
+  }
+}
+
+/** The running item and where it stands against its own budget now. */
+function runningItemStatus(
+  loop: LoopState,
+  now: Date,
+  told?: readonly BudgetKind[],
+) {
+  const current = loop.current;
+  if (!current || current.kind !== "item" || current.report) return undefined;
+  const item = getSessionTaskPlan()?.items.find((t) => t.id === current.itemId);
+  if (!item?.budget) return undefined;
+  return itemBudgetStatus(loop, item, {
+    sessionTokens: sessionTokens(),
+    now,
+    turns: itemRunTurns(loop),
+    told,
+  });
+}
+
+/** The item's own limit the running item has gone over (not reported yet), if any. */
+export function itemOverBudget(
+  loop: LoopState,
+  now = new Date(),
+): ItemBudgetBreach | undefined {
+  const status = runningItemStatus(loop, now);
+  return status?.state === "over"
+    ? { which: status.which, used: status.used, limit: status.limit }
+    : undefined;
+}
+
+/**
+ * Between two model requests of an item's run: ends the run over its item's
+ * own budget (turns, tokens or time), its work kept, as the IDE does. The run
+ * is recorded as over budget with its report; the caller ends the turn and the
+ * driver goes on to the next item. Returns whether it ended the run.
+ */
+export function endItemRunOverBudget(now = new Date()): boolean {
+  const loop = getSessionLoop();
+  if (!loop || loop.status === "stopped" || !loop.current) return false;
+  const breach = itemOverBudget(loop, now);
+  if (!breach) return false;
+  commitLoop({
+    ...loop,
+    current: {
+      ...loop.current,
+      overBudget: breach,
+      report: overBudgetReport(breach),
+    },
+  });
+  return true;
+}
+
+/**
+ * The 80% note for the batch of tool results just made: once per limit per
+ * run, recorded on the run. The caller appends it to the last tool result
+ * (never the system prompt, which would break the cached prefix).
+ */
+export function itemBudgetNoteNow(now = new Date()): string | undefined {
+  const loop = getSessionLoop();
+  if (!loop?.current) return undefined;
+  const status = runningItemStatus(loop, now, loop.current.budgetWarned);
+  if (!status) return undefined;
+  const due = itemBudgetNoteDue(status, CLI_LOOP_TOOL_NAMES.finishItem);
+  if (!due) return undefined;
+  commitLoop({
+    ...loop,
+    current: {
+      ...loop.current,
+      budgetWarned: [...(loop.current.budgetWarned ?? []), due.kind],
+    },
+  });
+  return due.note;
 }

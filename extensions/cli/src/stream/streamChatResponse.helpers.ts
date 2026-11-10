@@ -10,6 +10,7 @@ import { ChatCompletionToolMessageParam } from "openai/resources/chat/completion
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
 import type { ModelServiceState } from "src/services/types.js";
 
+import { itemBudgetNoteNow } from "../loop/loopBudget.js";
 import { holdLoopCall, loopRepeatGuard } from "../loop/loopHolds.js";
 import {
   evaluateWithCoreRules,
@@ -702,6 +703,26 @@ export async function preprocessStreamedToolCalls(
 }
 
 /**
+ * Loop mode: an item at 80% of a limit of its own is told so at the end of the
+ * last tool result of the batch, which leaves the system prompt and the cached
+ * prefix as they were (plans/loop-budgets.md).
+ */
+export function appendItemBudgetNote(entries: ToolResultWithStatus[]): void {
+  const last = entries.at(-1);
+  if (!last || typeof last.content !== "string") return;
+  const note = itemBudgetNoteNow();
+  if (!note) return;
+  last.content = `${last.content}\n\n${note}`;
+  try {
+    services.chatHistory.addToolResult(
+      last.tool_call_id,
+      last.content,
+      last.status,
+    );
+  } catch {}
+}
+
+/**
  * Executes preprocessed tool calls, handling permissions and results
  * @param preprocessedCalls - The preprocessed tool calls ready for execution
  * @param callbacks - Optional callbacks for notifying of events
@@ -951,6 +972,8 @@ export async function executeStreamedToolCalls(
   const chatHistoryEntries: ToolResultWithStatus[] = preprocessedCalls
     .map((_, index) => entriesByIndex.get(index))
     .filter((e): e is ToolResultWithStatus => !!e);
+
+  appendItemBudgetNote(chatHistoryEntries);
 
   return {
     hasRejection,

@@ -12,6 +12,7 @@ import {
 } from "../slices/sessionSlice";
 import { ThunkApiType } from "../store";
 import { addUserInputToHistory } from "./addUserInputToHistory";
+import { addItemBudgetNote } from "./loopHolds";
 import { streamNormalInput } from "./streamNormalInput";
 import { streamThunkWrapper } from "./streamThunkWrapper";
 
@@ -109,6 +110,12 @@ export const streamResponseAfterToolCall = createAsyncThunk<
               getState,
               ideMessenger: extra.ideMessenger,
             });
+          }
+          // Loop mode: an item at 80% of a limit of its own is told, in the
+          // last tool result, so it can wrap up
+          const lastCall = assistantMessage.toolCallStates?.at(-1);
+          if (lastCall) {
+            addItemBudgetNote(dispatch, getState, lastCall.toolCallId);
           }
           unwrapResult(await dispatch(streamNormalInput({ depth: depth + 1 })));
         } else if (

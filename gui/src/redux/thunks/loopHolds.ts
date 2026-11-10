@@ -1,5 +1,9 @@
 import { BuiltInToolNames } from "core/tools/builtIn";
-import { itemBudgetStatus, overBudgetReport } from "core/util/itemBudget";
+import {
+  itemBudgetNoteDue,
+  itemBudgetStatus,
+  overBudgetReport,
+} from "core/util/itemBudget";
 import { isEditTool } from "../../util/toolCallState";
 import {
   approvalHeldResult,
@@ -101,6 +105,65 @@ export function endRunAtTurnLimit(
   commitLoop(dispatch, getState, {
     ...loop,
     current: { ...loop.current, report: itemTurnLimitReport(turns) },
+  });
+  return true;
+}
+
+/**
+ * The 80% note (plans/loop-budgets.md): when the running item has used 80% of
+ * one of its own limits, a one-line note goes at the end of the last tool
+ * result of the batch just finished, once per limit per run. The system
+ * prompt is untouched, so the cached prefix holds. Returns whether it added one.
+ */
+export function addItemBudgetNote(
+  dispatch: AppThunkDispatch,
+  getState: () => RootState,
+  lastToolCallId: string,
+): boolean {
+  const state = getState();
+  const { loop } = state.session;
+  const current = loop?.current;
+  if (!loop || current?.kind !== "item" || current.report) return false;
+  const item = state.session.taskPlan?.items.find(
+    (i) => i.id === current.itemId,
+  );
+  if (!item?.budget) return false;
+  const status = itemBudgetStatus(loop, item, {
+    sessionTokens: state.session.usage
+      ? loopTokensFromUsage(state.session.usage)
+      : 0,
+    now: new Date(),
+    turns: itemTurns(state, current.historyIndex),
+    told: current.budgetWarned,
+  });
+  const due = itemBudgetNoteDue(status);
+  if (!due) return false;
+  const toolCall = state.session.history
+    .flatMap((h) => h.toolCallStates ?? [])
+    .find((tc) => tc.toolCallId === lastToolCallId);
+  if (!toolCall) return false;
+  dispatch(
+    updateToolCallOutput({
+      toolCallId: lastToolCallId,
+      contextItems: [
+        ...(toolCall.output ?? []),
+        {
+          icon: "problems",
+          name: "Loop mode",
+          description: "Item budget",
+          content: due.note,
+          hidden: false,
+        },
+      ],
+      mcpUiState: toolCall.mcpUiState,
+    }),
+  );
+  commitLoop(dispatch, getState, {
+    ...loop,
+    current: {
+      ...current,
+      budgetWarned: [...(current.budgetWarned ?? []), due.kind],
+    },
   });
   return true;
 }
