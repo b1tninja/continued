@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MockIdeMessenger } from "../../../context/MockIdeMessenger";
 import { EMPTY_CONFIG, updateConfig } from "../../../redux/slices/configSlice";
 import { newSession } from "../../../redux/slices/sessionSlice";
+import { setPolicyLevel } from "../../../redux/slices/uiSlice";
 import { setupStore } from "../../../redux/store";
 import { renderWithProviders } from "../../../util/test/render";
 import { PlanCard } from "./PlanCard";
@@ -232,6 +233,159 @@ describe("PlanCard", () => {
     expect(JSON.stringify(sent.editorState)).toContain(
       "Build the plan in .continuous/plans/add-retry.md",
     );
+  });
+
+  describe("the budget step", () => {
+    const FILE_WITH_BUDGET =
+      "# Add retry\n\nWrap it.\n\n## To-dos\n\n- [ ] Add a helper <!-- id: 1 -->\n  budget: 25 turns, 50K tokens\n- [ ] Use it <!-- id: 2 -->\n";
+
+    async function setupBudget(level: "manual" | "cautious" = "cautious") {
+      const ideMessenger = new MockIdeMessenger();
+      ideMessenger.responseHandlers.readFile = async () => FILE_WITH_BUDGET;
+      ideMessenger.responses["llm/compileChat"] = {
+        compiledChatMessages: [{ role: "user", content: "Build" }],
+        didPrune: false,
+        contextPercentage: 0.1,
+      };
+      ideMessenger.setChatResponseText("Building.");
+      const store = setupStore({ ideMessenger });
+      const planCall = {
+        ...toolCallState,
+        parsedArgs: {
+          ...toolCallState.parsedArgs,
+          todo_details: [{ todo: 1, budget: "25 turns, 50K tokens" }],
+        },
+      };
+      await renderWithProviders(
+        <PlanCard toolCallState={planCall} historyIndex={1} />,
+        { store, mockIdeMessenger: ideMessenger },
+      );
+      await act(async () => {
+        store.dispatch(setPolicyLevel({ area: "plan", level }));
+        store.dispatch(
+          newSession({
+            sessionId: "s1",
+            title: "Plan",
+            workspaceDirectory: "",
+            history: history(),
+            mode: "plan",
+            planFile: PLAN_URI,
+          }),
+        );
+      });
+      return { store };
+    }
+
+    it("is hidden until asked for, and says there is no history", async () => {
+      await setupBudget();
+      expect(screen.queryByTestId("plan-budget")).toBeNull();
+      fireEvent.click(screen.getByTestId("plan-card-budget-toggle"));
+      expect(screen.getByTestId("plan-budget")).toBeTruthy();
+      expect(screen.getByTestId("plan-budget-proposal").textContent).toMatch(
+        /no history/i,
+      );
+      expect(
+        (screen.getByTestId("plan-budget-propose") as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+      // The planner's line is the number beside its to-do
+      expect(
+        (screen.getByTestId("plan-budget-tokens-1") as HTMLInputElement).value,
+      ).toBe("50000");
+      expect(
+        (screen.getByTestId("plan-budget-tokens-2") as HTMLInputElement).value,
+      ).toBe("");
+    });
+
+    it("divides the loop's budget by the strategy and lets a number be edited", async () => {
+      await setupBudget();
+      fireEvent.click(screen.getByTestId("plan-card-budget-toggle"));
+      fireEvent.change(screen.getByTestId("plan-budget-strategy"), {
+        target: { value: "equal" },
+      });
+      // The default reserve is 20%; the planner's line for to-do 1 stands, and
+      // to-do 2 gets what it left of the loop's tokens
+      expect(
+        (screen.getByTestId("plan-budget-reserve") as HTMLInputElement).value,
+      ).toBe("20");
+      const second = screen.getByTestId(
+        "plan-budget-tokens-2",
+      ) as HTMLInputElement;
+      expect(Number(second.value)).toBeGreaterThan(1_000_000);
+      fireEvent.change(second, { target: { value: "90000" } });
+      expect(
+        (screen.getByTestId("plan-budget-tokens-2") as HTMLInputElement).value,
+      ).toBe("90000");
+    });
+
+    it("Apply closes the step; Build in a loop writes the budgets and the reserve", async () => {
+      const { store } = await setupBudget();
+      fireEvent.click(screen.getByTestId("plan-card-budget-toggle"));
+      fireEvent.change(screen.getByTestId("plan-budget-strategy"), {
+        target: { value: "equal" },
+      });
+      fireEvent.change(screen.getByTestId("plan-budget-tokens-2"), {
+        target: { value: "90000" },
+      });
+      fireEvent.click(screen.getByTestId("plan-budget-apply"));
+      expect(screen.queryByTestId("plan-budget")).toBeNull();
+      expect(
+        screen.getByTestId("plan-card-budget-summary").textContent,
+      ).toContain("equal");
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("plan-card-build-loop"));
+      });
+      await waitFor(() => expect(store.getState().session.loop).toBeTruthy());
+      const { loop, taskPlan } = store.getState().session;
+      expect(taskPlan?.items[0].budget).toEqual({
+        turns: 25,
+        tokens: 50_000,
+        minutes: expect.any(Number),
+      });
+      expect(taskPlan?.items[1].budget?.tokens).toBe(90_000);
+      expect(loop?.reserve?.tokens).toBeGreaterThan(0);
+    });
+
+    it("Skip leaves no strategy: no reserve, the planner's line stands below Manual", async () => {
+      const { store } = await setupBudget("cautious");
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("plan-card-build-loop"));
+      });
+      await waitFor(() => expect(store.getState().session.loop).toBeTruthy());
+      const { loop, taskPlan } = store.getState().session;
+      expect(loop?.reserve).toBeUndefined();
+      expect(taskPlan?.items[0].budget?.turns).toBe(25);
+      expect(taskPlan?.items[1].budget).toBeUndefined();
+    });
+
+    it("at Manual nothing applies without the person: the planner's line is dropped", async () => {
+      const { store } = await setupBudget("manual");
+      fireEvent.click(screen.getByTestId("plan-card-budget-toggle"));
+      expect(screen.getByTestId("plan-budget-authority").textContent).toContain(
+        "Manual",
+      );
+      fireEvent.click(screen.getByTestId("plan-budget-skip"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("plan-card-build-loop"));
+      });
+      await waitFor(() => expect(store.getState().session.loop).toBeTruthy());
+      expect(
+        store.getState().session.taskPlan?.items.every((i) => !i.budget),
+      ).toBe(true);
+    });
+
+    it("at Manual, applying the step is what makes the planner's line count", async () => {
+      const { store } = await setupBudget("manual");
+      fireEvent.click(screen.getByTestId("plan-card-budget-toggle"));
+      fireEvent.click(screen.getByTestId("plan-budget-apply"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("plan-card-build-loop"));
+      });
+      await waitFor(() => expect(store.getState().session.loop).toBeTruthy());
+      expect(store.getState().session.taskPlan?.items[0].budget?.turns).toBe(
+        25,
+      );
+    });
   });
 
   it("hides the buttons once something was sent after the plan", async () => {

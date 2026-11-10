@@ -39,6 +39,7 @@ import {
   type LoopDeliveredReminder,
 } from "./loopReminders.js";
 import { TASK_LIST_BLOCK_CLOSE, TASK_LIST_BLOCK_OPEN } from "./taskPlan.js";
+import { describeBreach } from "./itemBudget";
 
 /**
  * Loop mode: build a plan item by item without the person driving each step.
@@ -3187,7 +3188,10 @@ function itemLines(loop: LoopState, plan: TaskPlan): string[] {
     const blocked = state?.blocker
       ? `; blocked: ${state.blocker}${state.needs?.length ? `, needs ${state.needs.map(quote).join("; ")} first` : ""}`
       : "";
-    return `- ${STATUS_MARK[status]} ${quote(task.text)} (${status}${detail ? `: ${detail}` : ""}${blocked})`;
+    const over = state?.overBudget
+      ? `; over budget: ${describeBreach(state.overBudget)} (split it or change the approach)`
+      : "";
+    return `- ${STATUS_MARK[status]} ${quote(task.text)} (${status}${detail ? `: ${detail}` : ""}${blocked}${over})`;
   });
 }
 
