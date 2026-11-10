@@ -108,14 +108,16 @@ export async function fetchwithRequestOptions(
   // Check if should bypass proxy based on requestOptions or NO_PROXY env var
   const shouldBypass = shouldBypassProxy(url.hostname, requestOptions);
 
-  // Create agent
+  // Create agent. A caller can pin `lookup` to addresses it already checked.
   const protocol = url.protocol === "https:" ? https : http;
+  const lookup = (init as { lookup?: unknown } | undefined)?.lookup;
+  const directOptions = lookup ? { ...agentOptions, lookup } : agentOptions;
   const agent =
     proxy && !shouldBypass
       ? protocol === https
         ? new HttpsProxyAgentWithTls(proxy, agentOptions)
         : new HttpProxyAgent(proxy, agentOptions)
-      : new protocol.Agent(agentOptions);
+      : new protocol.Agent(directOptions);
 
   let headers: { [key: string]: string } = {};
 
