@@ -13,7 +13,7 @@
 const SECRET_WORD =
   /^(keys?|secrets?|tokens?|passw(or)?ds?|pwd|credentials?|creds?|cookies?|(api|access|private|secret|auth|signing|encryption)keys?|apitokens?|authtokens?|accesstokens?|bearer|sessions?|jwt|dsn)$/i;
 
-function looksSecret(name: string): boolean {
+export function looksSecret(name: string): boolean {
   return name.split(/[_-]/).some((w) => SECRET_WORD.test(w));
 }
 

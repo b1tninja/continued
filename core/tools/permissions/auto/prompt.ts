@@ -25,17 +25,17 @@ export interface ReviewPromptInput {
   nonce: string;
 }
 
-const MAX_ARGS_CHARS = 4000;
-const MAX_USER_MESSAGES = 10;
-const MAX_USER_MESSAGE_CHARS = 1500;
-const MAX_TOOL_CALLS = 30;
-const MAX_TOOL_CALL_CHARS = 400;
+export const MAX_ARGS_CHARS = 4000;
+export const MAX_USER_MESSAGES = 10;
+export const MAX_USER_MESSAGE_CHARS = 1500;
+export const MAX_TOOL_CALLS = 30;
+export const MAX_TOOL_CALL_CHARS = 400;
 
-function clip(text: string, max: number): string {
+export function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)} [cut]`;
 }
 
-function show(value: unknown): string {
+export function show(value: unknown): string {
   try {
     return JSON.stringify(value) ?? "null";
   } catch {
@@ -51,7 +51,7 @@ export function newNonce(): string {
 }
 
 /** Fence untrusted text. If the nonce somehow appears inside, it is removed. */
-function fenced(label: string, nonce: string, body: string): string {
+export function fenced(label: string, nonce: string, body: string): string {
   const safe = body.split(nonce).join("");
   return `<<<${label} ${nonce}\n${safe}\n${label} END ${nonce}>>>`;
 }
@@ -61,7 +61,7 @@ function fenced(label: string, nonce: string, body: string): string {
  * untrusted fences are never instructions does not cover what the person wrote
  * or the guidance in their settings.
  */
-function trusted(label: string, body: string): string {
+export function trusted(label: string, body: string): string {
   const safe = body
     .split(`[[${label}]]`)
     .join("")
