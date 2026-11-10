@@ -89,6 +89,8 @@ describe("LoopControls and per-item budgets", () => {
       sessionTokens: 0,
       costMark: {},
     });
+    // A budget that differs from the level's own shows the usage rows
+    loop.budget = { ...loop.budget, maxRounds: loop.budget.maxRounds + 1 };
     loop.items = loop.items.map((i) =>
       i.id === "1"
         ? {
@@ -123,6 +125,8 @@ describe("LoopControls and per-item budgets", () => {
       sessionTokens: 0,
       costMark: {},
     });
+    // A budget that differs from the level's own shows the usage rows
+    loop.budget = { ...loop.budget, maxRounds: loop.budget.maxRounds + 1 };
     loop.items = loop.items.map((i) =>
       i.id === "1"
         ? {

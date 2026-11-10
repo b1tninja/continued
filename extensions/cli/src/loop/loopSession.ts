@@ -12,6 +12,7 @@ import type {
   ModelUse,
   TaskPlan,
 } from "core/index.js";
+import { costMarkOf } from "core/util/loopCost.js";
 import {
   acceptReplan,
   answerLoop,
@@ -36,7 +37,6 @@ import {
   type LoopAnswerInput,
   type LoopControlResult,
 } from "core/util/loopMode.js";
-import { costMarkOf } from "core/util/loopCost.js";
 import { createHistoryItem } from "core/util/messageConversion.js";
 import { useForLoopTurn } from "core/util/modelUse.js";
 
