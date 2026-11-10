@@ -22,7 +22,9 @@ import { commitLoop } from "./loopSession.js";
  * command goes through the same permission decision as a Bash call the model
  * makes: the person's rules and protected paths decide, a call that would ask
  * is held as an approval question in the inbox (loopHolds.ts, as `current`
- * names the item), and a refused one leaves the item done without its check.
+ * names the item). A refused one (a rule, the person, or a headless run that
+ * cannot ask) leaves the item failed: the check did not run, so it is not
+ * done.
  */
 
 /** How long a check may run before it counts as failed. */
