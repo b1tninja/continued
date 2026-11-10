@@ -41,6 +41,43 @@ describe("normalizeProtectedPath", () => {
       "C:/Users/meagan/x",
     );
   });
+
+  it("resolves a relative path against the working directory", () => {
+    const home = "/home/u";
+    expect(
+      normalizeProtectedPath("../.aws/credentials", home, "/home/u/proj"),
+    ).toBe("~/.aws/credentials");
+    expect(
+      normalizeProtectedPath(
+        "..\\..\\.config\\gh\\hosts.yml",
+        home,
+        "/home/u/proj/pkg",
+      ),
+    ).toBe("~/.config/gh/hosts.yml");
+    expect(hit("../.aws/credentials")).toBeUndefined();
+  });
+
+  it("folds .. and a proc root before comparing to the home directory", () => {
+    const home = "/home/u";
+    expect(
+      normalizeProtectedPath("/home/../home/u/.config/gh/hosts.yml", home),
+    ).toBe("~/.config/gh/hosts.yml");
+    expect(
+      normalizeProtectedPath("/proc/self/root/home/u/.aws/credentials", home),
+    ).toBe("~/.aws/credentials");
+    expect(
+      normalizeProtectedPath("/proc/42/root/home/u/.ssh/config", home),
+    ).toBe("~/.ssh/config");
+  });
+
+  it("expands ~user next to the home directory", () => {
+    expect(normalizeProtectedPath("~u/.aws/credentials", "/home/u")).toBe(
+      "~/.aws/credentials",
+    );
+    expect(normalizeProtectedPath("~other/.ssh/id_rsa", "/home/u")).toBe(
+      "/home/other/.ssh/id_rsa",
+    );
+  });
 });
 
 describe("secret paths", () => {

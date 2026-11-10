@@ -59,6 +59,28 @@ describe("commands that mention a protected path", () => {
     });
   });
 
+  it("resolves a relative path against the working directory", () => {
+    const home = "/home/u";
+    const cwd = "/home/u/proj";
+    expect(
+      protectedCommandHit("cat ../.aws/credentials", home, [], cwd),
+    ).toMatchObject({ kind: "secret", path: "~/.aws/credentials" });
+    expect(
+      protectedCommandHit("head -50 ../.config/gh/hosts.yml", home, [], cwd),
+    ).toMatchObject({ kind: "secret" });
+    expect(
+      protectedCommandHit("cat ../.aws/credentials", home),
+    ).toBeUndefined();
+    expect(
+      findProtected({
+        toolName: "read_file",
+        parsedArgs: { filepath: "../.kube/config" },
+        home,
+        cwd,
+      })?.kind,
+    ).toBe("secret");
+  });
+
   it("known false positive: a command that only mentions the path", () => {
     // Same trade as deny rules: a missed secret read is worse than one extra ask.
     expect(cmd("echo .env")).toBe("secret");
