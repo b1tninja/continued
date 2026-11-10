@@ -15,7 +15,12 @@ import {
   Model,
 } from "openai/resources/index";
 import { VertexAIConfig } from "../types.js";
-import { chatChunk, chatCompletion, customFetch, embedding } from "../util.js";
+import { chatChunk, customFetch, embedding } from "../util.js";
+import {
+  anthropicResponseToChatCompletion,
+  geminiResponseToChatCompletion,
+  openAiStyleResponseToChatCompletion,
+} from "./vertexNonStream.js";
 import { AnthropicApi } from "./Anthropic.js";
 import {
   BaseLlmApi,
@@ -184,7 +189,8 @@ export class VertexAIApi implements BaseLlmApi {
     // TODO - support anthropic prompt caching with "anthropic-beta" header
 
     if (this.config.apiKey) {
-      // Express mode - no Authorization header needed, API key is in URL
+      // Express mode sends the key as a header so it is not part of the URL.
+      headers["x-goog-api-key"] = this.config.apiKey;
       return headers;
     } else {
       // Standard mode - use OAuth token
@@ -203,10 +209,6 @@ export class VertexAIApi implements BaseLlmApi {
   private buildUrl(endpoint: string, model?: string): URL {
     const apiBase = this.getApiBase();
     const url = new URL(endpoint, apiBase);
-
-    if (this.config.apiKey) {
-      url.searchParams.set("key", this.config.apiKey);
-    }
 
     return url;
   }
@@ -287,23 +289,15 @@ export class VertexAIApi implements BaseLlmApi {
       );
     }
 
-    // Convert response to OpenAI format
+    // Convert response to OpenAI format, including every text part, tool
+    // calls and usage. The first text part alone drops the rest of the reply.
     switch (vertexProvider) {
       case "anthropic":
-        return chatCompletion({
-          content: data.content?.[0]?.text || "",
-          model: body.model,
-        });
+        return anthropicResponseToChatCompletion(data, body.model);
       case "gemini":
-        return chatCompletion({
-          content: data.candidates?.[0]?.content?.parts?.[0]?.text || "",
-          model: body.model,
-        });
+        return geminiResponseToChatCompletion(data, body.model);
       case "mistral":
-        return chatCompletion({
-          content: data.choices?.[0]?.message?.content || "",
-          model: body.model,
-        });
+        return openAiStyleResponseToChatCompletion(data, body.model);
       default:
         throw new Error(`Unsupported provider: ${vertexProvider}`);
     }

@@ -910,7 +910,7 @@ export function loopTokensUsed(loop: LoopState, sessionTokens: number): number {
   return Math.max(0, sessionTokens - loop.tokensAtStart);
 }
 
-function budgetStop(
+export function loopBudgetStop(
   loop: LoopState,
   ctx: LoopContext,
 ): { reason: LoopStopReason; detail: string } | undefined {
@@ -958,7 +958,7 @@ export function decideNext(
   if (loop.stopRequested) {
     return { kind: "stop", reason: "stopped", detail: "You stopped the loop." };
   }
-  const overBudget = budgetStop(loop, ctx);
+  const overBudget = loopBudgetStop(loop, ctx);
   if (overBudget) {
     return { kind: "stop", ...overBudget };
   }
@@ -1518,11 +1518,20 @@ export function startCheck(
   };
 }
 
+/** What the item's row says when its check was not allowed to run. */
+function checkNotRunSummary(output: string | undefined): string {
+  const summary = output?.trim()
+    ? `check not run: ${output.trim()}`
+    : "check not run";
+  return summary.slice(0, LOOP_LIMITS.maxSummaryLength);
+}
+
 /**
  * The check ran, or could not. passed (exit 0): the item is done. failed:
  * the item runs again with the output, up to maxAttempts, then is failed.
- * refused (a rule refused the command, or the person did not allow it): the
- * item is done without its check.
+ * refused (a rule refused the command, the person did not allow it, or a
+ * headless run could not ask): the check did not run, so the item is failed,
+ * never done.
  */
 export function recordCheck(
   loop: LoopState,
@@ -1556,6 +1565,9 @@ export function recordCheck(
     status =
       (state?.attempts ?? 0) >= loop.budget.maxAttempts ? "failed" : "pending";
     summary = `The check failed${typeof result.exitCode === "number" ? ` (exit ${result.exitCode})` : ""}: ${result.command}`;
+  } else if (result.status === "refused") {
+    status = "failed";
+    summary = checkNotRunSummary(result.output);
   } else {
     status = "done";
   }
@@ -2401,7 +2413,12 @@ function routeAnswer(
   state: LoopItemState | undefined,
   question: LoopQuestion | undefined,
   input: LoopAnswerInput,
-): { route: LoopAnswerRoute; itemChange?: Partial<LoopItemState> } {
+): {
+  route: LoopAnswerRoute;
+  itemChange?: Partial<LoopItemState>;
+  /** The person did not allow the item's check: record it as refused */
+  refuseCheck?: boolean;
+} {
   if (!state) return { route: input.standing ? "standing" : "replan" };
   const confirmsAssumption = !!input.confirm && question?.kind === "assumption";
   switch (state.status) {
@@ -2428,22 +2445,12 @@ function routeAnswer(
     case "running":
       return { route: confirmsAssumption ? "confirmed" : "steer" };
     case "checking":
-      // Allowing the check lets the loop run it; not allowing it leaves
-      // the item done without its check
+      // Allowing the check lets the loop run it. Not allowing it is a
+      // refused check: the caller records that, and the item is not done.
       if (question?.kind === "approval") {
         return input.approve
           ? { route: "confirmed" }
-          : {
-              route: "confirmed",
-              itemChange: {
-                status: "done",
-                check: {
-                  status: "refused",
-                  command: question.approval?.summary ?? "",
-                  at: question.askedAt,
-                },
-              },
-            };
+          : { route: "confirmed", refuseCheck: true };
       }
       return { route: confirmsAssumption ? "confirmed" : "next-run" };
     case "done":
@@ -2485,7 +2492,12 @@ export function answerLoop(
   if (itemId && !state) {
     return { ok: false, error: `No item ${itemId} in the loop` };
   }
-  const { route, itemChange } = routeAnswer(loop, state, question, input);
+  const { route, itemChange, refuseCheck } = routeAnswer(
+    loop,
+    state,
+    question,
+    input,
+  );
 
   const answer: LoopAnswer = {
     id: nextId("a", loop.answers),
@@ -2507,6 +2519,18 @@ export function answerLoop(
     ),
   };
   if (itemId && itemChange) next = withItem(next, itemId, itemChange);
+  if (refuseCheck && itemId) {
+    next = recordCheck(
+      next,
+      {
+        status: "refused",
+        command: question?.approval?.summary ?? "",
+        output: "Not allowed.",
+      },
+      now,
+      itemId,
+    );
+  }
   if (route === "redo") {
     next = checkInOnRedo(
       next,
@@ -2524,6 +2548,7 @@ export function answerLoop(
   const unblocks =
     route !== "confirmed" ||
     !!itemChange ||
+    !!refuseCheck ||
     (question?.kind === "approval" && !!input.approve);
   if (next.status === "waiting" && route !== "standing" && unblocks) {
     next = { ...next, status: "running", waitingSince: undefined };

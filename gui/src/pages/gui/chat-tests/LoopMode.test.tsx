@@ -1574,7 +1574,7 @@ describe("Loop mode's checks and dependencies", () => {
     expect(h.requests).toHaveLength(2);
   });
 
-  test("a check a rule refuses is not run, and the item is done without it", async () => {
+  test("a check a rule refuses is not run, and the item is not done", async () => {
     const h = await setup([]);
     terminalPolicy(h, {
       policy: "disabled",
@@ -1582,15 +1582,25 @@ describe("Loop mode's checks and dependencies", () => {
       reason: "Blocked by your rule run_terminal_command(npm test*)",
     });
     const ran = subprocess(h, "ok");
+    const reply = (content: string): Turn =>
+      async function* () {
+        yield [{ role: "assistant", content }];
+      };
+    // The refusal fails the item. The repair re-plan that follows gets two
+    // replies and no new plan, so the loop stops. The item is not done.
     h.turns.push(
       presentPlan(["Add a retry helper"], [{ todo: 1, check: CHECK }]),
       finish("done", "helper added"),
+      reply("Looking"),
+      reply("Still looking"),
     );
     await startInLoop(h);
 
     await waitFor(() => expect(h.loop().status).toBe("stopped"));
-    expect(h.loop().stopReason).toBe("done");
+    expect(h.loop().stopReason).not.toBe("done");
     expect(ran).toEqual([]);
+    expect(h.itemStatus("1")).toBe("failed");
+    expect(h.loop().items[0].summary).toContain("check not run");
     expect(h.loop().items[0].check).toMatchObject({
       status: "refused",
       output: "Blocked by your rule run_terminal_command(npm test*)",

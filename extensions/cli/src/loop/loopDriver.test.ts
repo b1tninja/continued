@@ -638,6 +638,46 @@ describe("Loop mode's driver in the CLI", () => {
       expect(again?.prompt).toContain("1 test failed");
     });
 
+    it("a check a rule excludes fails the item and does not count it done", async () => {
+      await planWith([{ text: "One", check: PASS }, { text: "Two" }]);
+      startLoopFromPlan("normal");
+      services.toolPermissions.initializeSync({
+        mode: "normal",
+        exclude: ["Bash"],
+      });
+      runItem("done");
+      await runCheck("1");
+      expect(loopNow().items[0]).toMatchObject({
+        status: "failed",
+        check: { status: "refused" },
+      });
+      expect(loopNow().items[0].summary).toContain("check not run");
+      expect(loopNow().items[1].status).toBe("pending");
+      expect(loopNow().doneThisRound).toBe(0);
+      expect(loopNow().stopReason).not.toBe("done");
+      // The item failed its check, so the loop does not go on as if it were done
+      const next = nextLoopTurn(history().length);
+      const prompt = next && "prompt" in next ? next.prompt : "";
+      expect(prompt).toContain("check not run");
+      expect(prompt).not.toContain("All 2 items are done");
+    });
+
+    it("not allowing a held check leaves the item failed, not done", async () => {
+      await planWith([{ text: "One", check: PASS }]);
+      startLoopFromPlan("normal");
+      runItem("done");
+      await runCheck("1");
+      const q = loopNow().questions.find((x) => x.kind === "approval")!;
+      answerLoopQuestion({ questionId: q.id, text: "", approve: false });
+      expect(loopNow().items[0]).toMatchObject({
+        status: "failed",
+        check: { status: "refused" },
+      });
+      expect(loopNow().items[0].summary).toContain("check not run");
+      expect(loopNow().doneThisRound).toBe(0);
+      expect(loopNow().stopReason).not.toBe("done");
+    });
+
     it("a check that would ask is held in the inbox; Allow once runs it", async () => {
       await planWith([{ text: "One", check: PASS }]);
       startLoopFromPlan("normal");

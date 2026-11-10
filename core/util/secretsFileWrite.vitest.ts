@@ -30,6 +30,16 @@ describe("setSecretInEnvFile", () => {
     }
   });
 
+  it("tightens an existing world-readable file before the new value is in it", () => {
+    const file = path.join(dir, ".env");
+    fs.writeFileSync(file, "A=1\n", { mode: 0o644 });
+    setSecretInEnvFile(dir, "B", "secret-value");
+    expect(read()).toBe("A=1\nB=secret-value\n");
+    if (process.platform !== "win32") {
+      expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    }
+  });
+
   it("replaces an existing line and keeps the others", () => {
     fs.writeFileSync(
       path.join(dir, ".env"),
@@ -92,6 +102,22 @@ describe("setSecretInEnvFile", () => {
 
   it("refuses a value holding every quote kind", () => {
     expect(() => formatEnvValue(`'"\``)).toThrow(/cannot be stored/);
+  });
+
+  it("does not let a quote and a backslash-n become a newline", () => {
+    const value = "it's a \\n key";
+    setSecretInEnvFile(dir, "K", value);
+    expect(readSecretFromEnvFile(dir, "K")).toBe(value);
+    expect(read()).not.toMatch(/^K="/m);
+  });
+
+  it("refuses a value dotenv cannot quote without changing it", () => {
+    const value = `quote ' " \` and \\n`;
+    expect(() => formatEnvValue(value)).toThrow(/cannot be stored/);
+    expect(() => setSecretInEnvFile(dir, "K", value)).toThrow(
+      /cannot be stored/,
+    );
+    expect(fs.existsSync(path.join(dir, ".env"))).toBe(false);
   });
 });
 
