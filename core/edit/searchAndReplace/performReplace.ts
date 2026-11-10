@@ -1,6 +1,7 @@
 import { EditOperation } from "../../tools/definitions/multiEdit";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 import { SearchMatchResult, findSearchMatches } from "./findSearchMatch";
+import { recoverMatch } from "./recoverMatch";
 
 /**
  * Get the leading whitespace of the first non-empty line in a string.
@@ -92,9 +93,26 @@ export function executeFindAndReplace(
   const matches = findSearchMatches(fileContent, oldString);
 
   if (matches.length === 0) {
+    // No existing strategy matched. A single unambiguous recovered location is
+    // applied (one occurrence only, so never with replace_all); anything else
+    // is an error that says where old_string diverged.
+    const recovered = recoverMatch(fileContent, oldString, newString);
+    if (recovered.ok && !replaceAll) {
+      const m = recovered.match;
+      return (
+        fileContent.substring(0, m.startIndex) +
+        m.newString +
+        fileContent.substring(m.endIndex)
+      );
+    }
+    const detail = recovered.ok
+      ? "A near match exists, but replace_all needs an exact string; copy the lines exactly."
+      : recovered.message;
     throw new ContinueError(
-      ContinueErrorReason.FindAndReplaceOldStringNotFound,
-      `Edit at index ${editIndex}: string not found in file: "${oldString}"`,
+      recovered.ok || recovered.reason === "notFound"
+        ? ContinueErrorReason.FindAndReplaceOldStringNotFound
+        : ContinueErrorReason.FindAndReplaceMultipleOccurrences,
+      `Edit at index ${editIndex}: string not found in file: "${oldString}"\n${detail}`,
     );
   }
 
