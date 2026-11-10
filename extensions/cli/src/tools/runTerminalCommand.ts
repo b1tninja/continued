@@ -76,8 +76,12 @@ export function describeShell(
   shell: string | undefined = process.env.SHELL,
   wsl: boolean = platform === "linux" && isRunningInWsl(),
 ): string {
+  const preference = getTerminalShellPreference();
+  if (preference?.kind === "container") {
+    return `Runs in ${getCommandExecutor().describe()}: use bash syntax and Linux paths; the command starts in the workspace folder and cannot see anything else.`;
+  }
   const wslShell =
-    platform === "win32" ? getTerminalShellPreference() : undefined;
+    platform === "win32" && preference?.kind === "wsl" ? preference : undefined;
   if (wslShell) {
     return `Runs in bash as a login shell inside WSL${wslShell.distro ? ` (${wslShell.distro})` : ""}, started from the workspace folder (a Windows drive appears as /mnt/c): use bash syntax and Linux paths.`;
   }
