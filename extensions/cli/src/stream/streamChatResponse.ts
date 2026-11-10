@@ -58,6 +58,7 @@ import {
 } from "./streamChatResponse.helpers.js";
 import { StreamCallbacks } from "./streamChatResponse.types.js";
 import { taskListBlockForRequest } from "./taskListBlock.js";
+import { hintToolDialectLeak } from "./toolDialectLeak.js";
 
 function updateFinalResponse(
   content: string,
@@ -490,6 +491,12 @@ export async function processStreamingResponse(
     }
 
     noteTruncation(finishReason, { requestId, outputTokens }, callbacks);
+    hintToolDialectLeak({
+      model,
+      content: aiResponse,
+      toolCalls: Array.from(toolCallsMap.values()),
+      callbacks,
+    });
 
     logger.debug("Stream complete", {
       requestId,

@@ -3,6 +3,7 @@ import {
   ConfigResult,
   DevDataLogEvent,
   ModelRole,
+  ToolDialectSetting,
 } from "@continuedev/config-yaml";
 import { ToolPolicy } from "@continuedev/terminal-security";
 
@@ -140,6 +141,11 @@ export type BedrockTestModelResult =
   | { ok: true; modelId: string; latencyMs: number; reply: string }
   | { ok: false; error: string };
 
+/** The wizard's tool-call probe: what the model did with a made-up tool. */
+export type BedrockProbeToolCallsResult =
+  | { ok: true; label: string; kind: "native" | "text" | "none" | "unknown" }
+  | { ok: false; error: string };
+
 export type ProfileFileResult =
   { ok: true; profileId?: string } | { ok: false; error: string };
 
@@ -204,6 +210,15 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    * whether a config.yaml was edited; false means there was none to edit.
    */
   "config/setModeModels": [ModeModelsInput, { saved: boolean }];
+  /**
+   * Set `toolDialect` on the model with this title in the local config.yaml
+   * (the leak notice's one-click action). `saved` is false when there is no
+   * such entry to edit.
+   */
+  "config/setToolDialect": [
+    { title: string; toolDialect: ToolDialectSetting },
+    { saved: boolean },
+  ];
   /**
    * Switch rules on or off per mode in the global config.yaml (comments kept).
    * `null` removes a mode's entry. Returns false when there is no config.yaml.
@@ -452,6 +467,10 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "bedrock/testModel": [
     BedrockConnectionParams & { model: string },
     BedrockTestModelResult,
+  ];
+  "bedrock/probeToolCalls": [
+    BedrockConnectionParams & { model: string },
+    BedrockProbeToolCallsResult,
   ];
   "llm/streamChat": [
     {

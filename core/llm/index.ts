@@ -1,4 +1,4 @@
-import { ModelRole } from "@continuedev/config-yaml";
+import { ModelRole, ToolDialectSetting } from "@continuedev/config-yaml";
 import { fetchwithRequestOptions, redactUrl } from "@continuedev/fetch";
 import { findLlmInfo } from "@continuedev/llm-info";
 import {
@@ -206,6 +206,7 @@ export abstract class BaseLLM implements ILLM {
   baseChatSystemMessage?: string;
   basePlanSystemMessage?: string;
   baseAgentSystemMessage?: string;
+  toolDialect?: ToolDialectSetting;
   _contextLength: number | undefined;
   maxStopWords?: number | undefined;
   completionOptions: CompletionOptions;
@@ -289,6 +290,7 @@ export abstract class BaseLLM implements ILLM {
     this.title = options.title;
     this.uniqueId = options.uniqueId ?? "None";
     this.baseAgentSystemMessage = options.baseAgentSystemMessage;
+    this.toolDialect = options.toolDialect;
     this.basePlanSystemMessage = options.basePlanSystemMessage;
     this.baseChatSystemMessage = options.baseChatSystemMessage;
     this._contextLength = options.contextLength ?? llmInfo?.contextLength;

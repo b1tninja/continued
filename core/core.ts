@@ -13,6 +13,7 @@ import {
 import { ConfigHandler } from "./config/ConfigHandler";
 import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
+import { saveToolDialect } from "./config/yaml/saveToolDialect";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { uriToPath } from "./tools/permissions/names";
@@ -678,6 +679,67 @@ export class Core {
     });
   }
 
+  /**
+   * The Bedrock test-connection handlers and the tool-dialect setting. Kept
+   * out of registerMessageHandlers, which is at its statement limit.
+   */
+  private registerToolDialectHandlers(
+    on: IMessenger<ToCoreProtocol, FromCoreProtocol>["on"],
+  ) {
+    on("bedrock/testModel", async (msg) => {
+      try {
+        const { endpoint, ...params } = msg.data;
+        if (endpoint === "mantle") {
+          const unavailable = mantleRegionError(params.region);
+          if (unavailable) return { ok: false as const, error: unavailable };
+          const mantle = new BedrockMantle({ ...params });
+          return { ok: true as const, ...(await mantle.testModel()) };
+        }
+        const bedrock = new Bedrock({ ...params });
+        return { ok: true as const, ...(await bedrock.testModel()) };
+      } catch (e) {
+        return {
+          ok: false as const,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    });
+
+    // The wizard's tool-call probe: one request with a made-up tool, never run.
+    on("bedrock/probeToolCalls", async (msg) => {
+      try {
+        const { endpoint, ...params } = msg.data;
+        if (endpoint === "mantle") {
+          return {
+            ok: false as const,
+            error: "The tool-call check is not available for Mantle yet.",
+          };
+        }
+        const result = await new Bedrock({ ...params }).probeToolCalls();
+        return {
+          ok: true as const,
+          label: result.label,
+          kind: result.support.kind,
+        };
+      } catch (e) {
+        return {
+          ok: false as const,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    });
+
+    on("config/setToolDialect", async (msg) => {
+      const saved = saveToolDialect(msg.data.title, msg.data.toolDialect);
+      if (saved) {
+        await this.configHandler.reloadConfig(
+          "Tool dialect changed (config/setToolDialect message)",
+        );
+      }
+      return { saved };
+    });
+  }
+
   private registerMessageHandlers(ideSettingsPromise: Promise<IdeSettings>) {
     const on = this.messenger.on.bind(this.messenger);
 
@@ -1340,24 +1402,7 @@ export class Core {
         return "unknown" as const;
       }
     });
-    on("bedrock/testModel", async (msg) => {
-      try {
-        const { endpoint, ...params } = msg.data;
-        if (endpoint === "mantle") {
-          const unavailable = mantleRegionError(params.region);
-          if (unavailable) return { ok: false as const, error: unavailable };
-          const mantle = new BedrockMantle({ ...params });
-          return { ok: true as const, ...(await mantle.testModel()) };
-        }
-        const bedrock = new Bedrock({ ...params });
-        return { ok: true as const, ...(await bedrock.testModel()) };
-      } catch (e) {
-        return {
-          ok: false as const,
-          error: e instanceof Error ? e.message : String(e),
-        };
-      }
-    });
+    this.registerToolDialectHandlers(on);
 
     on("llm/compileChat", async (msg) => {
       const { messages, options } = msg.data;

@@ -236,6 +236,24 @@ export const catalogRouteSchema = z.object({
     .optional(),
   requestOptions: requestOptionsSchema.optional(),
 });
+/**
+ * How this model writes tool calls, when the server does not turn them into
+ * structured calls: `auto` (default, as before), `native` or `off` (never
+ * recover calls from text), or the markup to recover for this model.
+ */
+export const TOOL_DIALECT_VALUES = [
+  "auto",
+  "native",
+  "qwen-xml",
+  "pythonic",
+  "llama-json",
+  "off",
+] as const;
+export const toolDialectSchema = z.enum(TOOL_DIALECT_VALUES, {
+  error: `toolDialect must be one of: ${TOOL_DIALECT_VALUES.join(", ")}`,
+});
+export type ToolDialectSetting = z.infer<typeof toolDialectSchema>;
+
 const baseModelFields = {
   name: z.string(),
   model: z.string(),
@@ -261,6 +279,7 @@ const baseModelFields = {
   promptTemplates: promptTemplatesSchema.optional(),
   useLegacyCompletionsEndpoint: z.boolean().optional(),
   useResponsesApi: z.boolean().optional(),
+  toolDialect: toolDialectSchema.optional(),
   env: z
     .record(z.string(), z.union([z.string(), z.boolean(), z.number()]))
     .optional(),

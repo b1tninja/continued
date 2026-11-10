@@ -25,6 +25,7 @@ import {
   ListInferenceProfilesCommand,
 } from "@aws-sdk/client-bedrock";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
+import { withToolDialect } from "@continuedev/config-yaml";
 import { getTlsErrorHint } from "@continuedev/fetch";
 import {
   bedrockModelAccessMessage,
@@ -44,6 +45,10 @@ import type { Usage } from "../../index.js";
 import { CANCELLED_TOOL_CALL_MESSAGE } from "../../tools/constants.js";
 import { safeParseToolCallArgs } from "../../tools/parseArgs.js";
 import { renderChatMessage, stripImages } from "../../util/messageContent.js";
+import {
+  probeToolDialect,
+  type ToolDialectProbeResult,
+} from "../../util/toolDialectProbe.js";
 import { parseDataUrl } from "../../util/url.js";
 import { BaseLLM } from "../index.js";
 import { DEFAULT_REASONING_TOKENS } from "../constants.js";
@@ -620,6 +625,73 @@ class Bedrock extends BaseLLM {
     };
   }
 
+  /**
+   * The request body the recovery switch reads: the extra body properties
+   * with this model's `toolDialect` applied (nothing changes without one).
+   */
+  private _recoveryBody(): Record<string, unknown> | undefined {
+    return withToolDialect(
+      this._httpRequestOptions?.extraBodyProperties,
+      this.toolDialect,
+    );
+  }
+
+  /**
+   * The add-model wizard's tool-call probe: one Converse request offering a
+   * made-up tool at temperature 0. The calls in the reply are never run.
+   */
+  async probeToolCalls(): Promise<ToolDialectProbeResult> {
+    const modelId = applyCrossRegionInference(
+      this.model,
+      this.crossRegionInference,
+      this.region,
+    );
+    const client = await this._getClient();
+    return probeToolDialect(async (probe) => {
+      const response = await client.send(
+        new ConverseCommand({
+          modelId,
+          system: [{ text: probe.messages[0].content }],
+          messages: [
+            { role: "user", content: [{ text: probe.messages[1].content }] },
+          ],
+          toolConfig: {
+            tools: probe.tools.map((t) => ({
+              toolSpec: {
+                name: t.function.name,
+                description: t.function.description,
+                inputSchema: { json: t.function.parameters },
+              },
+            })),
+            toolChoice: { auto: {} },
+          },
+          inferenceConfig: {
+            temperature: probe.params.temperature,
+            maxTokens: probe.params.max_tokens,
+          },
+          ...this._extraConverseFields(),
+        } as any),
+      );
+      const blocks = response.output?.message?.content ?? [];
+      return {
+        content: blocks
+          .map((b) => ("text" in b ? (b.text ?? "") : ""))
+          .join(""),
+        toolCalls: blocks.flatMap((b, i) =>
+          "toolUse" in b && b.toolUse
+            ? [
+                {
+                  id: b.toolUse.toolUseId ?? `call_${i}`,
+                  name: b.toolUse.name ?? "",
+                  arguments: JSON.stringify(b.toolUse.input ?? {}),
+                },
+              ]
+            : [],
+        ),
+      };
+    });
+  }
+
   /** Send a tiny request to verify credentials, region and access to `model`. */
   async testModel(): Promise<{
     modelId: string;
@@ -900,7 +972,7 @@ class Bedrock extends BaseLLM {
       const recovery = createTextToolRecovery(
         options.model,
         dialectToolsFromConverse(input.toolConfig),
-        this._httpRequestOptions?.extraBodyProperties,
+        this._recoveryBody(),
       );
       const recovered: RecoveredCall[] = [];
       let sawToolUse = false;
@@ -1006,7 +1078,7 @@ class Bedrock extends BaseLLM {
             input.modelId ?? "",
             cleaned.content,
             dialectToolsFromConverse(input.toolConfig),
-            this._httpRequestOptions?.extraBodyProperties,
+            this._recoveryBody(),
           )
         : undefined;
       if (cleaned && found) {

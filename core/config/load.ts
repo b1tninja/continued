@@ -619,6 +619,7 @@ function llmToSerializedModelDescription(llm: ILLM): ModelDescription {
     template: llm.template,
     completionOptions: llm.completionOptions,
     baseAgentSystemMessage: llm.baseAgentSystemMessage,
+    toolDialect: llm.toolDialect,
     basePlanSystemMessage: llm.basePlanSystemMessage,
     baseChatSystemMessage: llm.baseChatSystemMessage,
     requestOptions: llm.requestOptions,

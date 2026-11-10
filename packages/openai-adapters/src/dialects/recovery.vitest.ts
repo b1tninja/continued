@@ -44,6 +44,22 @@ describe("text tool recovery switch", () => {
     expect(out.calls.map((c) => c.name)).toEqual(["Read"]);
   });
 
+  it("force: applies whatever the model is called, an empty field turns it off", () => {
+    const body = { x_continue_recover_text_tool_calls: "force:qwen-xml" };
+    expect(
+      createTextToolRecovery("my-company-coder-v7", tools, body, {}),
+    ).toBeDefined();
+    expect(
+      recoverFromText("my-company-coder-v7", text, tools, body, {}).calls,
+    ).toHaveLength(1);
+    const off = { x_continue_recover_text_tool_calls: "" };
+    expect(
+      createTextToolRecovery("qwen.qwen3-coder", tools, off, {
+        CONTINUE_RECOVER_TEXT_TOOL_CALLS: "qwen-xml",
+      }),
+    ).toBe(undefined);
+  });
+
   it("reads tools out of a Converse toolConfig", () => {
     expect(
       dialectToolsFromConverse({

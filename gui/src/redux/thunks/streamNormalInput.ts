@@ -72,6 +72,7 @@ import {
   preprocessToolCalls,
   refuseTruncatedToolCalls,
 } from "./preprocessToolCallArgs";
+import { checkToolDialectLeak } from "./noteToolDialectLeak";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
 
 export const streamNormalInput = createAsyncThunk<
@@ -361,6 +362,8 @@ export const streamNormalInput = createAsyncThunk<
       if (getState().session.promptProgress) {
         dispatch(setPromptProgress(undefined));
       }
+
+      if (next.done) checkToolDialectLeak(getState(), dispatch);
 
       // Attach prompt log and end thinking for reasoning models
       if (next.done && next.value) {
