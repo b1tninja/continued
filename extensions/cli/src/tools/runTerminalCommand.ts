@@ -6,7 +6,8 @@ import {
   type ToolPolicy,
 } from "@continuedev/terminal-security";
 import { commandLintGate } from "core/tools/permissions/commandLint.js";
-import { getTerminalShellPreference, resolveShell } from "core/util/shell.js";
+import { getCommandExecutor } from "core/util/commandExecutor.js";
+import { getTerminalShellPreference } from "core/util/shell.js";
 
 import { backgroundJobService } from "../services/BackgroundJobService.js";
 import { services } from "../services/index.js";
@@ -92,10 +93,9 @@ export function describeShell(
   return `Runs in ${name} as a login shell on ${where}.`;
 }
 
-// Windows PowerShell on Windows, the login shell elsewhere (WSL is a Linux)
+// Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL
 function getShellCommand(command: string): { shell: string; args: string[] } {
-  const shell = resolveShell();
-  return { shell: shell.executable, args: shell.args(command) };
+  return getCommandExecutor().invocation(command);
 }
 
 export function runCommandInBackground(command: string): {
@@ -197,7 +197,10 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
     const maxLines = Math.floor(baseMaxLines / parallelCount);
 
     // Mistakes in how the command is written, before the shell reports them
-    const lintMessage = commandLintGate(command, resolveShell().kind);
+    const lintMessage = commandLintGate(
+      command,
+      getCommandExecutor().shell.kind,
+    );
     if (lintMessage) {
       return lintMessage;
     }
