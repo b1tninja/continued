@@ -11,10 +11,12 @@ export function Lump() {
     <div className="mx-1.5 rounded-t-default bg-input">
       <RecentlyBlocked />
       <YoloBanner />
-      <div className="px-1 py-0.5 xs:px-2">
-        <LumpToolbar />
+      <div className="flex items-center gap-1 px-1 py-0.5 xs:px-2">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <LumpToolbar />
+        </div>
+        <Toolbox />
       </div>
-      <Toolbox />
     </div>
   );
 }
