@@ -910,7 +910,7 @@ export function loopTokensUsed(loop: LoopState, sessionTokens: number): number {
   return Math.max(0, sessionTokens - loop.tokensAtStart);
 }
 
-function budgetStop(
+export function loopBudgetStop(
   loop: LoopState,
   ctx: LoopContext,
 ): { reason: LoopStopReason; detail: string } | undefined {
@@ -958,7 +958,7 @@ export function decideNext(
   if (loop.stopRequested) {
     return { kind: "stop", reason: "stopped", detail: "You stopped the loop." };
   }
-  const overBudget = budgetStop(loop, ctx);
+  const overBudget = loopBudgetStop(loop, ctx);
   if (overBudget) {
     return { kind: "stop", ...overBudget };
   }
