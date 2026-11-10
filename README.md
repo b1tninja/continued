@@ -92,6 +92,7 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 | 2.8     | The command lint, `effect:` rules for commands, an editable task list with real checkboxes and drag-to-reorder, and new documentation pages                             |
 | 2.8.1   | Run the agent's terminal commands in WSL, and parallel waves of loop items in the terminal agent                                                                        |
 | 2.8.2   | A two-phase infinity as the Loop mark and the logo, and narrower policy chips with a glyph and colour for each level                                                    |
+| 2.10.0  | Security hardening from an outside review (folder trust, fail-closed permissions), run commands in a container, loop budgets, and host rules                            |
 
 ## Where it is heading
 
