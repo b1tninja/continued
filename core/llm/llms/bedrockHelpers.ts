@@ -816,6 +816,12 @@ export function bedrockSamplingParams(
   return { temperature, topP };
 }
 
+// The DSML hold-back and the thinking-tag splitter below also live in
+// packages/openai-adapters/src/dialects/textFilters.ts, which the adapter
+// uses. This file must not import @continuedev/openai-adapters: the GUI
+// (gui/src/util/promptCache.ts) imports it, and the package index pulls the AWS
+// SDK and the provider SDKs into the webview bundle. Keep the two in sync.
+
 /**
  * DeepSeek V3.2 on Bedrock ends the text block before each `toolUse` block
  * with this fragment of its own tool-call markup (fullwidth bars), in Converse
