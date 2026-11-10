@@ -20,6 +20,7 @@ export const BUILT_IN_TOOL_NAMES = [
   "ReportFailure",
   "Bash",
   "Search",
+  "SearchTools",
   "Status",
   "Subagent",
   "Skills",

@@ -18,6 +18,7 @@ import {
   reasoningOptionsForEffort,
 } from "../../util/modeModels";
 import { selectActiveTools } from "../selectors/selectActiveTools";
+import { applyToolSearch } from "./applyToolSearch";
 import { selectModelUse } from "../selectors/selectModelUse";
 import { selectSelectedChatModel } from "../slices/configSlice";
 import type { RootState } from "../store";
@@ -116,6 +117,14 @@ export function buildChatRequest(
       }
     }
   }
+
+  // experimental.toolSearch: "auto" defers MCP tools above a token budget
+  activeTools = applyToolSearch(activeTools, {
+    setting: state.config.config.experimental?.toolSearch,
+    mode: state.session.mode,
+    family: model.model,
+    history,
+  });
 
   // Use the centralized selector to determine if system message tools should be used
   const useNativeTools = state.config.config.experimental

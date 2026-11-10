@@ -2043,6 +2043,8 @@ export interface ConfigDependentToolParams {
   isRemote: boolean;
   modelName: string | undefined;
   ide: IDE;
+  /** `experimental.toolSearch`: "auto" adds the search_tools meta-tool. Default off. */
+  toolSearch?: "off" | "auto";
 }
 
 export type GetTool = (params: ConfigDependentToolParams) => Promise<Tool>;
@@ -2542,6 +2544,12 @@ export interface ExperimentalConfig {
   promptPath?: string;
   enableExperimentalTools?: boolean;
   onlyUseSystemMessageTools?: boolean;
+
+  /**
+   * "auto": when MCP tools cost more than a token budget, offer the ones that
+   * fit and a `search_tools` tool for the rest. Default "off" (plans/tool-overhead.md).
+   */
+  toolSearch?: "off" | "auto";
 
   /**
    * Show the "Auto" approval option, where a reviewer model decides tool calls

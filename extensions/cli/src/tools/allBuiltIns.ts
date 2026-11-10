@@ -12,6 +12,7 @@ import { readFileTool } from "./readFile.js";
 import { reportFailureTool } from "./reportFailure.js";
 import { runTerminalCommandTool } from "./runTerminalCommand.js";
 import { searchCodeTool } from "./searchCode.js";
+import { searchToolsMeta } from "./searchTools.js";
 import { SKILLS_TOOL_META } from "./skills.js";
 import { statusTool } from "./status.js";
 import { taskListTool } from "./taskList.js";
@@ -36,6 +37,7 @@ export const ALL_BUILT_IN_TOOLS = [
   reportFailureTool,
   runTerminalCommandTool,
   searchCodeTool,
+  searchToolsMeta,
   statusTool,
   taskListTool,
   SUBAGENT_TOOL_META,

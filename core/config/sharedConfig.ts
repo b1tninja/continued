@@ -21,6 +21,7 @@ export const sharedConfigSchema = z
     useCurrentFileAsContext: z.boolean(),
     enableExperimentalTools: z.boolean(),
     onlyUseSystemMessageTools: z.boolean(),
+    toolSearch: z.enum(["off", "auto"]),
     enableAutoApproval: z.boolean(),
     codebaseToolCallingOnly: z.boolean(),
     enableStaticContextualization: z.boolean(),
@@ -187,6 +188,10 @@ export function modifyAnyConfigWithSharedConfig<
   if (sharedConfig.onlyUseSystemMessageTools !== undefined) {
     configCopy.experimental.onlyUseSystemMessageTools =
       sharedConfig.onlyUseSystemMessageTools;
+  }
+
+  if (sharedConfig.toolSearch !== undefined) {
+    configCopy.experimental.toolSearch = sharedConfig.toolSearch;
   }
 
   if (sharedConfig.enableAutoApproval !== undefined) {

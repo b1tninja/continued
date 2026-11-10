@@ -25,6 +25,7 @@ import { readSkillImpl } from "./implementations/readSkill";
 import { recallMaskedResultImpl } from "./implementations/recallMaskedResult";
 import { requestRuleImpl } from "./implementations/requestRule";
 import { runTerminalCommandImpl } from "./implementations/runTerminalCommand";
+import { searchToolsImpl } from "./implementations/searchTools";
 import { searchWebImpl } from "./implementations/searchWeb";
 import { viewDiffImpl } from "./implementations/viewDiff";
 import { viewRepoMapImpl } from "./implementations/viewRepoMap";
@@ -228,6 +229,8 @@ export async function callBuiltInTool(
       return await codebaseToolImpl(args, extras);
     case BuiltInToolNames.RecallMaskedResult:
       return await recallMaskedResultImpl(args, extras);
+    case BuiltInToolNames.SearchTools:
+      return await searchToolsImpl(args, extras);
     case BuiltInToolNames.ReadSkill:
       return await readSkillImpl(args, extras);
     case BuiltInToolNames.ViewRepoMap:

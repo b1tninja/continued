@@ -316,6 +316,7 @@ export default async function doLoadConfig(options: {
       isRemote: await ide.isWorkspaceRemote(),
       modelName: newConfig.selectedModelByRole.chat?.model,
       ide,
+      toolSearch: newConfig.experimental?.toolSearch,
     })),
   );
 
