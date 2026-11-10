@@ -39,6 +39,8 @@ import {
   bedrockCacheTtl,
   bedrockFinishReason,
   bedrockModelAccessMessage,
+  bedrockMinMaxTokens,
+  bedrockOmitUnsupportedInference,
   bedrockReasoningFields,
   bedrockSamplingParams,
   bedrockToolsNeedNonStreaming,
@@ -792,18 +794,18 @@ export class BedrockApi implements BaseLlmApi {
       ),
       messages: convertedMessages,
       ...this.extraConverseFields(),
-      inferenceConfig: {
+      inferenceConfig: bedrockOmitUnsupportedInference(oaiBody.model, {
         temperature: sampling.temperature,
         topP: sampling.topP,
         maxTokens: reasoningRequest.omitMaxTokens
           ? undefined
-          : oaiBody.max_tokens,
+          : bedrockMinMaxTokens(oaiBody.model, oaiBody.max_tokens ?? undefined),
         stopSequences: Array.isArray(oaiBody.stop)
           ? oaiBody.stop.filter((s) => s.trim() !== "").slice(0, 4)
           : oaiBody.stop
             ? [oaiBody.stop].filter((s) => s.trim() !== "")
             : undefined,
-      },
+      }),
     };
 
     // Add system message if present

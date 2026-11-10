@@ -4,7 +4,11 @@ import {
   promptCacheSupportsLifetime,
 } from "@continuedev/llm-info";
 import { resolveCacheParts } from "./anthropicCache.js";
-import { familyRuleFor } from "./bedrockFamilyRules.js";
+import {
+  familyRuleFor,
+  minMaxTokensFor,
+  unsupportedInferenceFor,
+} from "./bedrockFamilyRules.js";
 import {
   budgetTokensToEffort,
   supportsAdaptiveThinking,
@@ -756,7 +760,14 @@ const REASONING_EFFORT_MODEL = /(^|\.)(qwen\.|deepseek\.v3)/i;
  *   says `reasoning: false`, never by default. `xhigh` is refused.
  * - Kimi K3 and K3.1: `reasoning_effort` per the AWS model card (2026-11-10),
  *   `none` when the config says `reasoning: false`, nothing by default.
- *   Documented, not probed (bedrockFamilyRules.ts).
+ *   Probed 2026-11-10: Converse accepts none, low, medium, max and minimal, but
+ *   the reasoning length did not follow the value, so the switch is unproven.
+ * - gpt-oss: `reasoning_effort` low, medium, high from the budget; `none` is
+ *   refused by the model ("Harmony does not support reasoning_effort='none'"),
+ *   so `reasoning: false` sends `low`.
+ * - GLM 5 and Nemotron 3 Super accept every candidate field but return no
+ *   reasoning block, and Kimi K2 Thinking and MiniMax M2.5 accept theirs and
+ *   still reason, so nothing is sent to them.
  * - DeepSeek R1 reasons always and refuses every additional field; Llama
  *   refuses `thinking` as an extraneous key; Mistral ignores it. Nothing is
  *   sent to them.
@@ -854,6 +865,53 @@ export function bedrockSamplingParams(
   if (reasoning) return {};
   if (temperature !== undefined && topP !== undefined) return { temperature };
   return { temperature, topP };
+}
+
+const omittedLogged = new Set<string>();
+
+/**
+ * Leaves out the `inferenceConfig` fields a family refuses (measured
+ * 2026-11-10, `unsupportedInference` in bedrockFamilyRules.ts): Kimi K3 answers
+ * "This model doesn't support the temperature field", Kimi K3, GLM 5, Nemotron
+ * 3 Super and gpt-oss the same for `stopSequences`. A configured temperature or
+ * stop list would otherwise fail every request for that model. Each omission
+ * is logged once per model and field, not silently dropped. Two copies, as
+ * `bedrockReasoningFields`.
+ */
+export function bedrockOmitUnsupportedInference<
+  T extends { temperature?: number; topP?: number; stopSequences?: string[] },
+>(modelId: string, config: T): T {
+  const refused = unsupportedInferenceFor(modelId);
+  if (refused.length === 0) return config;
+  const out = { ...config };
+  for (const field of refused) {
+    if (out[field] === undefined) continue;
+    delete out[field];
+    const key = `${modelId}:${field}`;
+    if (!omittedLogged.has(key)) {
+      omittedLogged.add(key);
+      console.debug(
+        `Bedrock: ${modelId} does not accept ${field} on Converse; omitting it from the request`,
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * Raises a tiny `maxTokens` for a family that reasons whether or not asked to
+ * (`minMaxTokens` in bedrockFamilyRules.ts): Kimi K3 and K3.1, Kimi K2
+ * Thinking, MiniMax M2.5 and gpt-oss spent a 20-token budget entirely on
+ * reasoning and returned no visible text. Undefined stays undefined. Two
+ * copies, as `bedrockReasoningFields`.
+ */
+export function bedrockMinMaxTokens(
+  modelId: string,
+  maxTokens: number | undefined,
+): number | undefined {
+  const floor = minMaxTokensFor(modelId);
+  if (maxTokens === undefined || floor === undefined) return maxTokens;
+  return Math.max(maxTokens, floor);
 }
 
 // The DSML hold-back and the thinking-tag splitter below also live in

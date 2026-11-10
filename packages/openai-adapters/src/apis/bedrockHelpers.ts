@@ -8,7 +8,11 @@ import {
 } from "@continuedev/llm-info";
 
 import type { CacheTtl } from "./cacheTtl.js";
-import { familyRuleFor } from "./bedrockFamilyRules.js";
+import {
+  familyRuleFor,
+  minMaxTokensFor,
+  unsupportedInferenceFor,
+} from "./bedrockFamilyRules.js";
 
 // The text-stream filters moved to ../dialects/textFilters.ts; re-exported so
 // existing imports of this file keep working.
@@ -614,6 +618,53 @@ export function bedrockSamplingParams(
   if (reasoning) return {};
   if (temperature !== undefined && topP !== undefined) return { temperature };
   return { temperature, topP };
+}
+
+const omittedLogged = new Set<string>();
+
+/**
+ * Leaves out the `inferenceConfig` fields a family refuses (measured
+ * 2026-11-10, `unsupportedInference` in bedrockFamilyRules.ts): Kimi K3 answers
+ * "This model doesn't support the temperature field", Kimi K3, GLM 5, Nemotron
+ * 3 Super and gpt-oss the same for `stopSequences`. A configured temperature or
+ * stop list would otherwise fail every request for that model. Each omission
+ * is logged once per model and field, not silently dropped. Two copies, as
+ * `bedrockReasoningFields`.
+ */
+export function bedrockOmitUnsupportedInference<
+  T extends { temperature?: number; topP?: number; stopSequences?: string[] },
+>(modelId: string, config: T): T {
+  const refused = unsupportedInferenceFor(modelId);
+  if (refused.length === 0) return config;
+  const out = { ...config };
+  for (const field of refused) {
+    if (out[field] === undefined) continue;
+    delete out[field];
+    const key = `${modelId}:${field}`;
+    if (!omittedLogged.has(key)) {
+      omittedLogged.add(key);
+      console.debug(
+        `Bedrock: ${modelId} does not accept ${field} on Converse; omitting it from the request`,
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * Raises a tiny `maxTokens` for a family that reasons whether or not asked to
+ * (`minMaxTokens` in bedrockFamilyRules.ts): Kimi K3 and K3.1, Kimi K2
+ * Thinking, MiniMax M2.5 and gpt-oss spent a 20-token budget entirely on
+ * reasoning and returned no visible text. Undefined stays undefined. Two
+ * copies, as `bedrockReasoningFields`.
+ */
+export function bedrockMinMaxTokens(
+  modelId: string,
+  maxTokens: number | undefined,
+): number | undefined {
+  const floor = minMaxTokensFor(modelId);
+  if (maxTokens === undefined || floor === undefined) return maxTokens;
+  return Math.max(maxTokens, floor);
 }
 
 /**

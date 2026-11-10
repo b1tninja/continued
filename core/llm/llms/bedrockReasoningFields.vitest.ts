@@ -385,7 +385,7 @@ describe("the unmeasured families (plans/model-families-2026-11.md)", () => {
     }
   });
 
-  it("sends nothing to the families whose Converse field no page documents", () => {
+  it("sends nothing to the families with no Converse reasoning switch (documented or measured)", () => {
     const unwired = [
       "moonshotai.kimi-k2.5",
       "moonshot.kimi-k2-thinking",
@@ -393,7 +393,6 @@ describe("the unmeasured families (plans/model-families-2026-11.md)", () => {
       "minimax.minimax-m2.5",
       "nvidia.nemotron-super-3-120b",
       "us.xai.grok-4.6",
-      "openai.gpt-oss-120b-1:0",
     ];
     for (const id of unwired) {
       for (const reasoning of REASONING) {
@@ -410,9 +409,136 @@ describe("the unmeasured families (plans/model-families-2026-11.md)", () => {
     }
   });
 
-  it("marks no entry probed, because nothing here was run", () => {
-    expect(coreRules.FAMILY_RULES.every((r) => r.status === "unprobed")).toBe(
-      true,
-    );
+  it("marks an entry probed only with the date and evidence of a run", () => {
+    for (const r of coreRules.FAMILY_RULES) {
+      if (r.status === "probed") {
+        expect(r.probedOn, r.id).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(r.evidence?.length, r.id).toBeGreaterThan(0);
+      } else {
+        expect(r.probedOn, r.id).toBeUndefined();
+      }
+    }
+  });
+});
+
+describe("the families measured live on 2026-11-10", () => {
+  const CONFIGS = [
+    { temperature: 0.3, topP: 0.9, stopSequences: ["END"], maxTokens: 20 },
+    { stopSequences: ["END"] },
+    { temperature: 0.7, topP: 0.9 },
+    {},
+  ];
+  it.each(MODELS)("agree between the copies on %j", (id) => {
+    for (const config of CONFIGS) {
+      expect(adapter.bedrockOmitUnsupportedInference(id, config)).toEqual(
+        core.bedrockOmitUnsupportedInference(id, config),
+      );
+    }
+    for (const n of [undefined, 20, 1024, 8192]) {
+      expect(adapter.bedrockMinMaxTokens(id, n)).toBe(
+        core.bedrockMinMaxTokens(id, n),
+      );
+    }
+  });
+
+  it("marks every measured row probed with the date and evidence, and Kimi K2.5 and Grok still unprobed", () => {
+    for (const rules of [coreRules, adapterRules]) {
+      for (const id of [
+        "kimi-k3",
+        "kimi-k2-thinking",
+        "glm-5",
+        "minimax-m2.5",
+        "nemotron-3-super",
+        "gpt-oss",
+      ]) {
+        const row = rules.FAMILY_RULES.find((r) => r.id === id)!;
+        expect(row.status).toBe("probed");
+        expect(row.probedOn).toBe("2026-11-10");
+        expect(row.evidence!.length).toBeGreaterThan(0);
+      }
+      for (const id of ["kimi-k2.5", "grok-4.6"]) {
+        expect(rules.FAMILY_RULES.find((r) => r.id === id)!.status).toBe(
+          "unprobed",
+        );
+      }
+    }
+  });
+
+  it("omits what Bedrock refused: Kimi K3 temperature and stopSequences, the rest stopSequences", () => {
+    for (const helpers of [core, adapter]) {
+      expect(
+        helpers.bedrockOmitUnsupportedInference("us.moonshotai.kimi-k3", {
+          temperature: 0.3,
+          topP: 0.9,
+          stopSequences: ["END"],
+          maxTokens: 256,
+        }),
+      ).toEqual({ topP: 0.9, maxTokens: 256 });
+      for (const id of [
+        "zai.glm-5",
+        "nvidia.nemotron-super-3-120b",
+        "openai.gpt-oss-120b-1:0",
+      ]) {
+        expect(
+          helpers.bedrockOmitUnsupportedInference(id, {
+            temperature: 0.7,
+            topP: 0.9,
+            stopSequences: ["END"],
+          }),
+        ).toEqual({ temperature: 0.7, topP: 0.9 });
+      }
+      for (const id of ["minimax.minimax-m2.5", "us.amazon.nova-2-lite-v1:0"]) {
+        expect(
+          helpers.bedrockOmitUnsupportedInference(id, {
+            temperature: 0.7,
+            topP: 0.9,
+          }),
+        ).toEqual({ temperature: 0.7, topP: 0.9 });
+      }
+    }
+  });
+
+  it("maps gpt-oss reasoning off to low, never none, and low, medium, high from the budget", () => {
+    const id = "openai.gpt-oss-120b-1:0";
+    for (const helpers of [core, adapter]) {
+      const f = (r: boolean | undefined, b: number) =>
+        helpers.bedrockReasoningFields(id, r, b).additionalModelRequestFields;
+      expect(f(false, 4096)).toEqual({ reasoning_effort: "low" });
+      expect(f(true, 1024)).toEqual({ reasoning_effort: "low" });
+      expect(f(true, 4096)).toEqual({ reasoning_effort: "medium" });
+      expect(f(true, 16384)).toEqual({ reasoning_effort: "high" });
+      expect(f(undefined, 4096)).toEqual({});
+    }
+  });
+
+  it("sends nothing to the families with no working switch", () => {
+    for (const id of [
+      "zai.glm-5",
+      "nvidia.nemotron-super-3-120b",
+      "moonshot.kimi-k2-thinking",
+      "minimax.minimax-m2.5",
+    ]) {
+      for (const r of [undefined, false, true] as const) {
+        expect(
+          core.bedrockReasoningFields(id, r, 4096).additionalModelRequestFields,
+        ).toEqual({});
+      }
+    }
+  });
+
+  it("raises a 20-token maxTokens to the floor for the always-reasoning families only", () => {
+    for (const id of [
+      "us.moonshotai.kimi-k3",
+      "global.moonshotai.kimi-k3.1",
+      "moonshot.kimi-k2-thinking",
+      "minimax.minimax-m2.5",
+      "openai.gpt-oss-120b-1:0",
+    ]) {
+      expect(core.bedrockMinMaxTokens(id, 20)).toBe(1024);
+      expect(core.bedrockMinMaxTokens(id, 8192)).toBe(8192);
+      expect(core.bedrockMinMaxTokens(id, undefined)).toBeUndefined();
+    }
+    expect(core.bedrockMinMaxTokens("zai.glm-5", 20)).toBe(20);
+    expect(core.bedrockMinMaxTokens("us.amazon.nova-pro-v1:0", 20)).toBe(20);
   });
 });
