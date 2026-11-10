@@ -14,6 +14,7 @@ import { listSessionsCommand } from "./commands/ls.js";
 import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
 import { serve } from "./commands/serve.js";
+import { terminalEnvCommand } from "./commands/terminalEnv.js";
 import {
   handleValidationErrors,
   validateFlags,
@@ -410,6 +411,17 @@ program
   .option("-y, --yes", "Trust without asking, for scripts")
   .action(async (action: string | undefined, options) => {
     const code = await hooksCommand(action, { yes: options.yes });
+    await gracefulExit(code);
+  });
+
+// Terminal environment subcommand
+program
+  .command("terminal-env [action]")
+  .description(
+    "Show whether commands inherit your environment variables and secrets (show)",
+  )
+  .action(async (action: string | undefined) => {
+    const code = terminalEnvCommand(action);
     await gracefulExit(code);
   });
 
