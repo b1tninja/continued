@@ -89,7 +89,8 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 | 2.4.2   | The name Continuous: its own `~/.continuous` folder, `continuous.*` settings, with the old names still read                                                             |
 | 2.6     | Loop mode with autonomy levels, checks and an inbox, policy areas, Bedrock by model family, Nova caching, the terminal agent and `cn serve`, language-server tools      |
 | 2.6.1   | Policy areas wired through the IDE, CLI and loops, command analysis, a Loops panel, and the toolbox drawer of problem-solving prompts                                   |
-| main    | Not yet released: the command lint, `effect:` rules for commands, and an editable task list with real checkboxes, drag-to-reorder and a confirmed delete                |
+| 2.8     | The command lint, `effect:` rules for commands, an editable task list with real checkboxes and drag-to-reorder, and new documentation pages                             |
+| 2.8.1   | Run the agent's terminal commands in WSL, and parallel waves of loop items in the terminal agent                                                                        |
 
 ## Where it is heading
 
