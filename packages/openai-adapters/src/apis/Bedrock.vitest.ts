@@ -1710,3 +1710,99 @@ describe("BedrockApi Python-syntax tool calls written as text (Nova 2 Lite, reco
     expect(r.calls).toEqual([]);
   });
 });
+
+describe("BedrockApi request shape for the families measured live on 2026-11-10", () => {
+  const convert = (model: string, extra: any = {}) =>
+    (new TestApi({ provider: "bedrock", env: {} } as any) as any)._convertBody({
+      model,
+      messages: [{ role: "user", content: "hi" }],
+      ...extra,
+    });
+  const kimi = "us.moonshotai.kimi-k3";
+
+  it("leaves temperature and stop sequences out for Kimi K3, which refuses both", () => {
+    const body = convert(kimi, {
+      temperature: 0.3,
+      top_p: 0.9,
+      stop: ["END"],
+      max_tokens: 4096,
+    });
+    expect(body.inferenceConfig).toEqual({ topP: 0.9, maxTokens: 4096 });
+  });
+
+  it("leaves stop sequences out for GLM 5, Nemotron 3 Super and gpt-oss and keeps temperature and topP", () => {
+    for (const model of [
+      "zai.glm-5",
+      "nvidia.nemotron-super-3-120b",
+      "openai.gpt-oss-120b-1:0",
+    ]) {
+      const body = convert(model, {
+        temperature: 0.7,
+        top_p: 0.9,
+        stop: ["END"],
+        max_tokens: 4096,
+      });
+      expect(body.inferenceConfig).toEqual({
+        temperature: 0.7,
+        topP: 0.9,
+        maxTokens: 4096,
+      });
+    }
+  });
+
+  it("keeps the sampling fields MiniMax M2.5 accepted", () => {
+    expect(
+      convert("minimax.minimax-m2.5", { temperature: 0.7, top_p: 0.9 })
+        .inferenceConfig,
+    ).toMatchObject({ temperature: 0.7, topP: 0.9 });
+  });
+
+  it("maps gpt-oss reasoning off to low, because the model refuses none", () => {
+    const gptOss = "openai.gpt-oss-120b-1:0";
+    expect(
+      convert(gptOss, { reasoning_effort: "none" })
+        .additionalModelRequestFields,
+    ).toEqual({ reasoning_effort: "low" });
+    expect(
+      convert(gptOss, { reasoning_effort: "high" })
+        .additionalModelRequestFields,
+    ).toEqual({ reasoning_effort: "high" });
+    expect(convert(gptOss)).not.toHaveProperty("additionalModelRequestFields");
+  });
+
+  it("sends nothing to GLM 5 and Nemotron 3 Super, which have no reasoning switch", () => {
+    for (const model of ["zai.glm-5", "nvidia.nemotron-super-3-120b"]) {
+      expect(convert(model, { reasoning_effort: "none" })).not.toHaveProperty(
+        "additionalModelRequestFields",
+      );
+      expect(convert(model, { reasoning_effort: "high" })).not.toHaveProperty(
+        "additionalModelRequestFields",
+      );
+    }
+  });
+
+  it("keeps what Kimi K3 sent before: reasoning_effort only when the body names one", () => {
+    expect(convert(kimi).additionalModelRequestFields).toBeUndefined();
+    expect(
+      convert(kimi, { reasoning_effort: "none" }).additionalModelRequestFields,
+    ).toEqual({ reasoning_effort: "none" });
+  });
+
+  it("raises a tiny maxTokens for the families that spend it all on reasoning", () => {
+    expect(convert(kimi, { max_tokens: 20 }).inferenceConfig.maxTokens).toBe(
+      1024,
+    );
+    expect(
+      convert("openai.gpt-oss-120b-1:0", { max_tokens: 20 }).inferenceConfig
+        .maxTokens,
+    ).toBe(1024);
+    expect(convert(kimi, { max_tokens: 8192 }).inferenceConfig.maxTokens).toBe(
+      8192,
+    );
+    expect(convert(kimi).inferenceConfig.maxTokens).toBeUndefined();
+    // A family without a floor is left alone.
+    expect(
+      convert("zai.glm-5", { max_tokens: 20 }).inferenceConfig.maxTokens,
+    ).toBe(20);
+  });
+});

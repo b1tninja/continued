@@ -72,6 +72,8 @@ import {
   bedrockCachePartsForModel,
   bedrockCachePointAfterTextOnly,
   bedrockCacheTtl,
+  bedrockMinMaxTokens,
+  bedrockOmitUnsupportedInference,
   bedrockReasoningFields,
   bedrockSamplingParams,
   bedrockToolsNeedNonStreaming,
@@ -1186,10 +1188,10 @@ class Bedrock extends BaseLLM {
         : undefined,
       toolConfig: toolConfig,
       messages: convertedMessages,
-      inferenceConfig: {
+      inferenceConfig: bedrockOmitUnsupportedInference(options.model, {
         maxTokens: reasoningRequest.omitMaxTokens
           ? undefined
-          : options.maxTokens,
+          : bedrockMinMaxTokens(options.model, options.maxTokens),
         temperature: sampling.temperature,
         topP: sampling.topP,
         // TODO: The current approach selects the first 4 items from the list to comply with Bedrock's requirement
@@ -1203,7 +1205,7 @@ class Bedrock extends BaseLLM {
         stopSequences: options.stop
           ?.filter((stop) => stop.trim() !== "")
           .slice(0, 4),
-      },
+      }),
       ...this._extraConverseFields(),
       additionalModelRequestFields: {
         ...reasoningRequest.additionalModelRequestFields,

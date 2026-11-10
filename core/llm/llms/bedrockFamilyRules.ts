@@ -6,9 +6,12 @@
  * `bench/probe.mjs` (probes in bench/probes/families.yaml) says otherwise, and
  * the entry changes to `probed` with the run's date in the same commit.
  *
- * Only `converseReasoning` is read by code (`bedrockReasoningFields`), and only
- * where AWS documents the Converse field. The rest is the table the probes are
- * checked against and the CLI's model picker can show.
+ * Measured entries say `probed` with the date and the evidence file (live
+ * Bedrock Converse calls, 2026-11-10, account torgate, us-east-1). Code reads
+ * three things from a row: `converseReasoning` (`bedrockReasoningFields`),
+ * `unsupportedInference` (`bedrockOmitUnsupportedInference`) and
+ * `minMaxTokens` (`bedrockMinMaxTokens`). The rest is the table the probes
+ * are checked against and the CLI's model picker can show.
  *
  * Two copies, this one and packages/openai-adapters/src/apis/bedrockFamilyRules.ts
  * (core cannot import that package; see `bedrockSupportsOneHourCache`).
@@ -16,6 +19,9 @@
  */
 
 export type FamilyStatus = "unprobed" | "probed";
+
+/** `inferenceConfig` fields a family's Converse endpoint refuses. */
+export type InferenceField = "temperature" | "topP" | "stopSequences";
 
 /** How a Converse request switches reasoning for a family. */
 export interface ConverseReasoningRule {
@@ -36,6 +42,20 @@ export interface FamilyRule {
   status: FamilyStatus;
   /** Date the sources were read, YYYY-MM-DD. */
   read: string;
+  /** Date of the live run behind a `probed` entry, YYYY-MM-DD. */
+  probedOn?: string;
+  /** Evidence file names (`<family>/<case>.out.json` or `.err.txt`) of that run. */
+  evidence?: string[];
+  /**
+   * `inferenceConfig` fields Bedrock answered with "This model doesn't support
+   * the <field> field". Request builders leave them out.
+   */
+  unsupportedInference?: InferenceField[];
+  /**
+   * Floor for `maxTokens` on a family that reasons whether or not asked to:
+   * a 20-token budget was spent entirely on reasoning and returned no text.
+   */
+  minMaxTokens?: number;
   /** Vendor and AWS pages the entry rests on. */
   sources: string[];
   /** Converse field wired into the request builder; absent means none is. */
@@ -45,7 +65,7 @@ export interface FamilyRule {
    * the probe. Not sent by any code.
    */
   candidateReasoningFields: string[];
-  /** Tool-choice values the sources claim; `unknown` when no page says. */
+  /** Tool-choice values the sources claim or a probe confirmed; `unknown` when neither. */
   toolChoice: "auto-any-tool" | "unknown" | "disputed";
   /** Sampling constraints the sources state, plain words. */
   sampling: string;
@@ -64,8 +84,20 @@ export const FAMILY_RULES: FamilyRule[] = [
   {
     id: "kimi-k3",
     match: /(^|\.)moonshotai\.kimi-k3(\.1)?$/i,
-    status: "unprobed",
+    status: "probed",
     read: "2026-11-10",
+    probedOn: "2026-11-10",
+    evidence: [
+      "kimi-k3/sampling-temperature.err.txt",
+      "kimi-k3/sampling-both.err.txt",
+      "kimi-k3/stop-sequences.err.txt",
+      "kimi-k3/reasoning-variant.effort-{none,low,medium,max,minimal}.out.json",
+      "kimi-k3/replay-reasoning.out.json",
+      "kimi-k3/tool-{auto,any,named}.out.json",
+    ],
+    unsupportedInference: ["temperature", "stopSequences"],
+    minMaxTokens: 1024,
+
     sources: [
       `${AWS}/model-card-moonshot-ai-kimi-k3.html`,
       `${AWS}/model-card-moonshot-ai-kimi-k3-1-highspeed.html`,
@@ -80,25 +112,38 @@ export const FAMILY_RULES: FamilyRule[] = [
       defaultWhenAbsent: "max",
     },
     candidateReasoningFields: ["reasoning_effort"],
-    toolChoice: "disputed",
+    toolChoice: "auto-any-tool",
     sampling:
-      "third-party pages say temperature and top_p are fixed and a 400 follows; no vendor page found",
+      "temperature (alone or with topP) and stopSequences are refused on Converse (measured 2026-11-10); topP alone not tried",
     dialect: "kimi-tokens",
     contextLength: 1_000_000,
     quirks: [
       "Converse fails (InternalServerException) when reasoning content from earlier turns is replayed; AWS recommends Responses or Chat Completions",
       "output burns 10x of the token quota",
       "Moonshot's page lists low, high and max; AWS adds none, medium and xhigh",
+      "MEASURED 2026-11-10: temperature (alone or with topP) and stopSequences are refused with 'This model doesn't support the <field> field'; topP alone was not tried",
+      "MEASURED: Converse accepted reasoning_effort none, low, medium, max and minimal (AWS says minimal is unsupported and Converse does not validate), but reasoning length did not track the value (44 to 118 chars); no evidence the switch does anything",
+      "MEASURED: a replayed reasoning block was accepted, where the AWS card says Converse fails with InternalServerException",
+      "MEASURED: toolChoice auto, any and a named tool all work",
+      "MEASURED: a 20-token maxTokens was spent entirely on reasoning and returned no text (also K3.1)",
     ],
   },
   {
     id: "kimi-k2-thinking",
     match: /(^|\.)moonshot(ai)?\.kimi-k2-thinking$/i,
-    status: "unprobed",
+    status: "probed",
     read: "2026-11-10",
+    probedOn: "2026-11-10",
+    evidence: [
+      "kimi-k2-thinking/reasoning-variant.thinking-disabled.out.json",
+      "kimi-k2-thinking/replay-reasoning.out.json",
+      "kimi-k2-thinking/tool-{auto,any,named}.out.json",
+    ],
+    minMaxTokens: 1024,
+
     sources: [`${AWS}/model-card-moonshot-ai-kimi-k2-thinking.html`],
     candidateReasoningFields: [],
-    toolChoice: "unknown",
+    toolChoice: "auto-any-tool",
     sampling: "no page found",
     dialect: "kimi-tokens",
     contextLength: 256_000,
@@ -107,6 +152,10 @@ export const FAMILY_RULES: FamilyRule[] = [
       "always reasons; there is no switch",
       "bedrock-runtime id is moonshot.kimi-k2-thinking, Mantle id is moonshotai.kimi-k2-thinking",
       "Legacy, end of life 2027-03-30",
+      "MEASURED 2026-11-10: a thinking {type: disabled} field is accepted and ignored, the model still reasons",
+      "MEASURED: replaying a reasoning block is accepted but the model then writes a literal <think>...</think> block into its text",
+      "MEASURED: toolChoice auto, any and a named tool all work; sampling and stopSequences were not probed",
+      "MEASURED: a 20-token maxTokens returned no visible text",
     ],
   },
   {
@@ -135,8 +184,18 @@ export const FAMILY_RULES: FamilyRule[] = [
   {
     id: "glm-5",
     match: /(^|\.)zai\.glm-5$/i,
-    status: "unprobed",
+    status: "probed",
     read: "2026-11-10",
+    probedOn: "2026-11-10",
+    evidence: [
+      "glm5/reasoning-variant.thinking-disabled.out.json",
+      "glm5/reasoning-variant.template-enable-thinking-false.out.json",
+      "glm5/sampling-both.out.json",
+      "glm5/stop-sequences.err.txt",
+      "glm5/tool-{auto,any,named}.out.json",
+    ],
+    unsupportedInference: ["stopSequences"],
+
     sources: [
       `${AWS}/model-card-zai-glm-5.html`,
       "https://docs.z.ai/guides/capabilities/thinking-mode",
@@ -146,7 +205,7 @@ export const FAMILY_RULES: FamilyRule[] = [
       "thinking",
       "chat_template_kwargs.enable_thinking",
     ],
-    toolChoice: "unknown",
+    toolChoice: "auto-any-tool",
     sampling:
       "1.0 / 0.95 for reasoning, 0.7 / 0.95 for SWE-bench (vendor card)",
     dialect: "glm-xml",
@@ -155,20 +214,32 @@ export const FAMILY_RULES: FamilyRule[] = [
     quirks: [
       "thinking is on by default; vendor API takes thinking.type enabled or disabled",
       "clear_thinking false keeps prior reasoning and needs it returned in order",
+      "MEASURED 2026-11-10: enable_thinking and thinking {type: disabled} are accepted but no reasoning block is ever returned, so there is nothing to switch; nothing is sent",
+      "MEASURED: temperature with topP accepted; stopSequences refused",
+      "MEASURED: toolChoice auto, any and a named tool all work",
     ],
   },
   {
     id: "minimax-m2.5",
     match: /(^|\.)minimax\.minimax-m2\.5$/i,
-    status: "unprobed",
+    status: "probed",
     read: "2026-11-10",
+    probedOn: "2026-11-10",
+    evidence: [
+      "minimax-m25/reasoning-variant.reasoning-split.out.json",
+      "minimax-m25/reasoning-variant.thinking-disabled.out.json",
+      "minimax-m25/sampling-both.out.json",
+      "minimax-m25/tool-{auto,any,named}.out.json",
+    ],
+    minMaxTokens: 1024,
+
     sources: [
       `${AWS}/model-card-minimax-minimax-m2-5.html`,
       "https://huggingface.co/MiniMaxAI/MiniMax-M2.5",
       "https://platform.minimax.io/docs/api-reference/text-openai-api",
     ],
     candidateReasoningFields: ["reasoning_split", "thinking"],
-    toolChoice: "unknown",
+    toolChoice: "auto-any-tool",
     sampling:
       "recommended temperature 1.0, top_p 0.95, top_k 40; the vendor API ignores temperature, top_p and penalties",
     dialect: "minimax-xml",
@@ -178,13 +249,26 @@ export const FAMILY_RULES: FamilyRule[] = [
       "thinking tokens count toward the limit; a small limit gives finish_reason length with empty content",
       "thinking stays in <think> tags in content unless reasoning_split is true",
       "Mantle listed it but did not answer in a March 2026 third-party test; AWS lists it on Mantle now",
+      "MEASURED 2026-11-10: reasoning_split is accepted and the reasoning came back shorter; thinking {type: disabled} is accepted but it still reasons; neither is sent",
+      "MEASURED: temperature with topP accepted; stopSequences was not probed",
+      "MEASURED: toolChoice auto, any and a named tool all work; a 20-token maxTokens returned no visible text",
     ],
   },
   {
     id: "nemotron-3-super",
     match: /(^|\.)nvidia\.nemotron-super-3-120b$/i,
-    status: "unprobed",
+    status: "probed",
     read: "2026-11-10",
+    probedOn: "2026-11-10",
+    evidence: [
+      "nemotron3-super/reasoning-variant.effort-{none,low}.out.json",
+      "nemotron3-super/reasoning-variant.template-{enable-thinking-false,low-effort}.out.json",
+      "nemotron3-super/sampling-both.out.json",
+      "nemotron3-super/stop-sequences.err.txt",
+      "nemotron3-super/tool-{auto,any,named}.out.json",
+    ],
+    unsupportedInference: ["stopSequences"],
+
     sources: [
       `${AWS}/model-card-nvidia-nemotron-super-3-120b.html`,
       "https://docs.vllm.ai/en/stable/api/vllm/parser/nemotron_v3/",
@@ -196,7 +280,7 @@ export const FAMILY_RULES: FamilyRule[] = [
       "chat_template_kwargs.low_effort",
       "reasoning_budget",
     ],
-    toolChoice: "unknown",
+    toolChoice: "auto-any-tool",
     sampling: "no page found",
     dialect: "qwen-xml",
     contextLength: 256_000,
@@ -204,6 +288,9 @@ export const FAMILY_RULES: FamilyRule[] = [
     quirks: [
       "vLLM serves tools with the qwen3_coder parser",
       "force_nonempty_content is advised for coding agents by Cloudflare (unverified)",
+      "MEASURED 2026-11-10: every reasoning variant is accepted and none returns a reasoning block, so nothing is sent",
+      "MEASURED: temperature with topP accepted; stopSequences refused",
+      "MEASURED: toolChoice auto and a named tool add a stray newline text block next to the toolUse",
     ],
   },
   {
@@ -231,16 +318,34 @@ export const FAMILY_RULES: FamilyRule[] = [
   {
     id: "gpt-oss",
     match: /(^|\.)openai\.gpt-oss-(120b|20b)(-1:0)?$/i,
-    status: "unprobed",
+    status: "probed",
     read: "2026-11-10",
+    probedOn: "2026-11-10",
+    evidence: [
+      "gpt-oss-120b/reasoning-variant.effort-{low,high}.out.json",
+      "gpt-oss-120b/reasoning-variant.effort-none.err.txt",
+      "gpt-oss-120b/sampling-both.out.json",
+      "gpt-oss-120b/stop-sequences.err.txt",
+      "gpt-oss-120b/tool-{auto,any,named}.out.json",
+    ],
+    unsupportedInference: ["stopSequences"],
+    minMaxTokens: 1024,
+
     sources: [
       `${AWS}/model-card-openai-gpt-oss-120b.html`,
       "https://huggingface.co/openai/gpt-oss-120b",
     ],
     // The Hugging Face card sets effort in the system prompt ("Reasoning:
     // high"); no Bedrock field is documented.
+    converseReasoning: {
+      field: "reasoning_effort",
+      values: ["low", "medium", "high"],
+      // `none` is refused by the model, so "reasoning off" is the weakest.
+      off: "low",
+      defaultWhenAbsent: "medium",
+    },
     candidateReasoningFields: ["reasoning_effort"],
-    toolChoice: "unknown",
+    toolChoice: "auto-any-tool",
     sampling: "no page found",
     dialect: "harmony",
     contextLength: 128_000,
@@ -249,6 +354,9 @@ export const FAMILY_RULES: FamilyRule[] = [
       "refuses stopSequences on Converse (handled by isStopSequencesUnsupportedError)",
       "reasoning is on by default; low, medium, high",
       "a small max_tokens can leave content null",
+      "MEASURED 2026-11-10 (120b): reasoning_effort low and high are accepted and visibly change the reasoning; none is refused by the model (\"Harmony does not support reasoning_effort='none'\"), so off maps to low",
+      "MEASURED: temperature with topP accepted; stopSequences refused",
+      "MEASURED: a 20-token maxTokens returned no visible text; 20b was not probed beyond the availability call",
     ],
   },
 ];
@@ -256,4 +364,17 @@ export const FAMILY_RULES: FamilyRule[] = [
 /** The rule for a Bedrock model id, or undefined. */
 export function familyRuleFor(modelId: string): FamilyRule | undefined {
   return FAMILY_RULES.find((r) => r.match.test(modelId));
+}
+
+/**
+ * The `inferenceConfig` fields to leave out for a Bedrock model id, from the
+ * family's `unsupportedInference`. Empty for a family not in the table.
+ */
+export function unsupportedInferenceFor(modelId: string): InferenceField[] {
+  return familyRuleFor(modelId)?.unsupportedInference ?? [];
+}
+
+/** The `maxTokens` floor for a family that always reasons, or undefined. */
+export function minMaxTokensFor(modelId: string): number | undefined {
+  return familyRuleFor(modelId)?.minMaxTokens;
 }

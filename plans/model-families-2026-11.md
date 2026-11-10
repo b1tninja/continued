@@ -1,6 +1,6 @@
 # Model families not yet measured: what the vendors say, and what to probe (2026-11-10)
 
-Roadmap rows I2 and I4 and the "Families not yet measured" row list Kimi K3 and K3.1, Kimi K2 Thinking, Grok, GLM 5, MiniMax M2.5, Nemotron, GPT-OSS and Kimi K2.5. Nothing here was measured: no model call was made for this document. Every statement below is from a vendor or AWS page read on 2026-11-10, cited by URL, or marked unverified. The request-builder tables that came out of it (`core/llm/llms/bedrockFamilyRules.ts` and its adapter copy) mark every entry `unprobed` until a probe from `bench/probes/families.yaml` has run.
+Roadmap rows I2 and I4 and the "Families not yet measured" row list Kimi K3 and K3.1, Kimi K2 Thinking, Grok, GLM 5, MiniMax M2.5, Nemotron, GPT-OSS and Kimi K2.5. Nothing here was measured: no model call was made for this document. Every statement below is from a vendor or AWS page read on 2026-11-10, cited by URL, or marked unverified. The request-builder tables that came out of it (`core/llm/llms/bedrockFamilyRules.ts` and its adapter copy) mark every entry `unprobed` until a probe from `bench/probes/families.yaml` has run. Section 7 records the 2026-11-10 live run that changed six of them to `probed`.
 
 ## 1. Decisions
 
@@ -103,3 +103,28 @@ Tier 1 is 4 to 15 requests per family at under 300 tokens each. At K3.1 US CRIS 
 - The Zenn article's Mantle results are from March 2026 and one prompt; the AWS endpoint table lists GLM 5 and MiniMax M2.5 on Mantle now.
 - Pricing for GLM 5, MiniMax M2.5, Nemotron 3 Super, GPT-OSS 120B and K2 Thinking lives on https://aws.amazon.com/bedrock/pricing/, not on the cards; the matrix leaves those rows unpriced so totals are flagged estimated.
 - The AWS pages in this document include model names (GPT-6, Claude Mythos 5.2 and others) that are outside this task and were not checked.
+
+## 7. Measured 2026-11-10
+
+Live Bedrock Converse calls, account torgate, us-east-1, one request per case, no retries. Raw requests and responses are in the run's `live/probes/<family>/<family>/<case>.json`, `.out.json` and `.err.txt` (the evidence names in `bedrockFamilyRules.ts` point at them). The table rows in `core/llm/llms/bedrockFamilyRules.ts` and its adapter copy are now `probed` for the six families below; Kimi K2.5 and Grok stay `unprobed` (K2.5 was only a one-token availability call; Grok is AccessDenied on this account).
+
+| Family | Worked | Rejected or did nothing | What the request builder does |
+| --- | --- | --- | --- |
+| Kimi K3 (`us.moonshotai.kimi-k3`) | `reasoning_effort` none, low, medium, max and minimal; a replayed reasoning block; toolChoice auto, any and a named tool | `temperature` (alone and with `topP`) and `stopSequences`: "This model doesn't support the temperature field" / "...the stopSequences field". Reasoning length did not track the effort (44 to 118 chars), so the switch is unproven | omits `temperature` and `stopSequences`; keeps the `reasoning_effort` mapping |
+| Kimi K2 Thinking | a `thinking: disabled` field; replayed reasoning; all three toolChoice forms | the disabled field is ignored, it still reasons; on replay it writes a literal `<think>` block into its text. Sampling and stop not probed | sends no reasoning field |
+| GLM 5 (`zai.glm-5`) | `enable_thinking`, `thinking: disabled`, `temperature` with `topP`, toolChoice | `stopSequences`; no reasoning block is ever returned, so there is nothing to switch | omits `stopSequences`; sends no reasoning field |
+| MiniMax M2.5 | `reasoning_split` (reasoning came back shorter), `thinking: disabled`, `temperature` with `topP`, toolChoice | `thinking: disabled` is ignored, it still reasons. `stopSequences` not probed | sends no reasoning field |
+| Nemotron 3 Super | every reasoning variant tried, `temperature` with `topP` | `stopSequences`; no reasoning block returned; toolChoice auto and a named tool add a stray newline text block | omits `stopSequences`; sends no reasoning field |
+| gpt-oss-120b | `reasoning_effort` low and high (the reasoning visibly changes), `temperature` with `topP`, toolChoice | `none`: "Harmony does not support reasoning_effort='none'" (refused by the model, not Converse); `stopSequences` | reasoning off sends `low`, never `none`; low, medium, high from the budget; omits `stopSequences` |
+
+Step 1 also found that Kimi K3 and K3.1, Kimi K2 Thinking, MiniMax M2.5 and gpt-oss spend a 20-token `maxTokens` entirely on reasoning and return no visible text. The builders raise a configured `maxTokens` below 1024 to 1024 for those families (`minMaxTokens`). The 1024 is a judgment, not a measured threshold; no run searched for the smallest budget that returns text.
+
+### AWS documentation against the measurements
+
+Read 2026-11-10. AWS does not publish a per-model table of `inferenceConfig` support for Converse: the Converse API reference describes `temperature`, `topP`, `maxTokens` and `stopSequences` as the base parameters and sends model-specific ones through `additionalModelRequestFields`, and the model cards (for example https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-moonshot-ai-kimi-k3.html and https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-oss-120b.html) say nothing about which of them a model refuses. The refusals above are therefore measured only; a page to cite does not exist, and the table cites the evidence files instead. Where a card speaks, the live data:
+
+- Kimi K3 card: effort values none, low, medium, high, xhigh, max, and "minimal is not supported"; Converse "accepts `reasoning_effort` in `additionalModelRequestFields` but doesn't validate it". Measured: Converse accepted `minimal`, consistent with the note, and the effort did not visibly change the reasoning, which the card does not promise either way.
+- Kimi K3 card: Converse "fails (`InternalServerException`) when reasoning content from earlier turns is included in a multi-turn request". Measured: a replayed reasoning block succeeded on 2026-11-10. This contradicts the card; the guidance to strip reasoning from earlier turns is still safe and is kept.
+- gpt-oss-120b card: "Reasoning: Supported, on by default (effort configurable: low, medium, high)". Consistent with the live `none` refusal, which the card implies by omission.
+- The Kimi K3 card recommends Chat Completions or Responses over Converse; the measured Converse behaviour above is why the builders now work around its refusals instead.
+- The "Supported models and model features" page (https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html) did not render a per-model matrix when fetched, so no row of it could be checked against the live data.
