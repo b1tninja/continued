@@ -3,6 +3,7 @@
  * one switch both Bedrock handlers (this package and core/llm/llms) use, so
  * the setting and the parsers exist once. Off unless asked for.
  */
+import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
 import {
   type DialectTool,
@@ -59,6 +60,9 @@ export function createTextToolRecovery(
   if (settings.has("pythonic") && /nova/i.test(model)) {
     return new PythonicRecovery(tools);
   }
+  if (settings.has("llama-json") && /llama/i.test(model)) {
+    return new LlamaJsonRecovery(tools);
+  }
   return undefined;
 }
 
@@ -76,6 +80,9 @@ export function recoverFromText(
   }
   if (settings.has("pythonic") && /nova/i.test(model)) {
     return recoverPythonicFromText(text, tools);
+  }
+  if (settings.has("llama-json") && /llama/i.test(model)) {
+    return recoverLlamaJsonFromText(text, tools);
   }
   return { text, calls: [] };
 }

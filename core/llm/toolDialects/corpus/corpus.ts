@@ -139,8 +139,16 @@ function validateProvenance(raw: Record<string, unknown>): string[] {
   if (typeof prov.note !== "string") errors.push("provenance.note required");
   const source = typeof prov.source === "string" ? prov.source : "";
   if (raw.flag === "observed") {
-    if (!/^https:\/\//.test(source)) {
-      errors.push("an observed fixture needs a URL as its source");
+    // A report is cited by its URL; our own runs are cited as "Observed live
+    // on <where> <date>, model <id>".
+    if (
+      !/^https:\/\/|^Observed live on .+ \d{4}-\d{2}-\d{2}, model \S+/.test(
+        source,
+      )
+    ) {
+      errors.push(
+        "an observed fixture needs a URL, or 'Observed live on ... <date>, model <id>', as its source",
+      );
     }
     if (/synthesised/i.test(source)) {
       errors.push("an observed fixture must not call its source synthesised");

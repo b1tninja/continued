@@ -169,7 +169,7 @@ type Schema = {
   required?: string[];
 };
 
-function typeFits(
+export function typeFits(
   value: unknown,
   type: string | string[] | undefined,
 ): boolean {

@@ -606,18 +606,32 @@ export function isStreamingToolUseUnsupportedError(e: unknown): boolean {
   return /doesn't support tool use in streaming mode/i.test(message);
 }
 
+/** The literal tags a model writes its reasoning between, when it does. */
+export interface ThinkingTags {
+  open: string;
+  close: string;
+}
+
 /**
  * Nova Pro, Lite, Micro and Premier write their reasoning into the text as
  * literal `<thinking>...</thinking>` (Nova Pro, seen live 2026-11-08), so the
  * GUI showed the reasoning as the answer. Nova 2 uses reasoningContent and
- * does not match.
+ * does not match. Kimi K2 Thinking leaked a literal `<think>...</think>` into
+ * the text of a reply to a tool result (seen live 2026-11-10).
  */
-export function writesThinkingTags(modelId: string): boolean {
-  return /nova-(pro|lite|micro|premier)/i.test(modelId);
+export function thinkingTagsFor(modelId: string): ThinkingTags | undefined {
+  if (/nova-(pro|lite|micro|premier)/i.test(modelId)) {
+    return { open: "<thinking>", close: "</thinking>" };
+  }
+  if (/kimi-k2-thinking/i.test(modelId)) {
+    return { open: "<think>", close: "</think>" };
+  }
+  return undefined;
 }
 
-const THINKING_OPEN = "<thinking>";
-const THINKING_CLOSE = "</thinking>";
+export function writesThinkingTags(modelId: string): boolean {
+  return thinkingTagsFor(modelId) !== undefined;
+}
 
 /** Text split into what is shown as the answer and what is shown as reasoning. */
 export interface ThinkingSplit {
@@ -647,6 +661,13 @@ export class ThinkingTagSplitter {
   private inside = false;
   private skipNewlines = false;
 
+  constructor(
+    private readonly tags: ThinkingTags = {
+      open: "<thinking>",
+      close: "</thinking>",
+    },
+  ) {}
+
   push(text: string): ThinkingSplit {
     let buffered = this.hold + text;
     this.hold = "";
@@ -656,7 +677,7 @@ export class ThinkingTagSplitter {
         buffered = buffered.replace(/^[\r\n]+/, "");
         if (buffered) this.skipNewlines = false;
       }
-      const tag = this.inside ? THINKING_CLOSE : THINKING_OPEN;
+      const tag = this.inside ? this.tags.close : this.tags.open;
       const at = buffered.indexOf(tag);
       if (at !== -1) {
         this.emit(out, buffered.slice(0, at));
@@ -853,6 +874,23 @@ export function leaksDsmlMarker(modelId: string): boolean {
 }
 
 /**
+ * What every DSML tag starts with, fullwidth bars (U+FF5C) as the tokenizer
+ * writes them and the ASCII look-alike. The fragment seen live ends right
+ * after `function_calls` with no `>`, so the hold-back keys on the start of the
+ * markup, not on one whole tag name.
+ */
+const DSML_STARTS = [DEEPSEEK_DSML_MARKER.slice(0, 7), "<|DSML|"];
+
+function dsmlStart(text: string): number {
+  let at = -1;
+  for (const start of DSML_STARTS) {
+    const i = text.indexOf(start);
+    if (i !== -1 && (at === -1 || i < at)) at = i;
+  }
+  return at;
+}
+
+/**
  * Splits text buffered from one content block into what can be shown now and
  * what has to wait: the marker may arrive split across deltas, so a trailing
  * piece that could still become it is held back, and once the marker is seen
@@ -863,22 +901,54 @@ export function holdBackDsmlMarker(buffered: string): {
   emit: string;
   hold: string;
 } {
-  const at = buffered.indexOf(DEEPSEEK_DSML_MARKER);
+  const at = dsmlStart(buffered);
   if (at !== -1) {
     return { emit: buffered.slice(0, at), hold: buffered.slice(at) };
   }
-  const max = Math.min(buffered.length, DEEPSEEK_DSML_MARKER.length - 1);
-  for (let n = max; n > 0; n--) {
-    if (DEEPSEEK_DSML_MARKER.startsWith(buffered.slice(-n))) {
-      return { emit: buffered.slice(0, -n), hold: buffered.slice(-n) };
-    }
+  let keep = 0;
+  for (const start of DSML_STARTS) {
+    keep = Math.max(keep, trailingTagPrefix(buffered, start));
+  }
+  if (keep > 0) {
+    return { emit: buffered.slice(0, -keep), hold: buffered.slice(-keep) };
   }
   return { emit: buffered, hold: "" };
 }
 
 /** What held-back text to show when its block ends: nothing if it was the marker. */
 export function flushDsmlHold(hold: string): string {
-  return hold.startsWith(DEEPSEEK_DSML_MARKER) ? "" : hold;
+  return dsmlStart(hold) === 0 ? "" : hold;
+}
+
+/** A complete text block with the marker and what follows it removed. */
+export function stripDsmlMarker(text: string): string {
+  const at = dsmlStart(text);
+  return at === -1 ? text : text.slice(0, at);
+}
+
+/** The splitter for this model's reasoning tags, or undefined if it writes none. */
+export function createThinkingTagSplitter(
+  modelId: string,
+): ThinkingTagSplitter | undefined {
+  const tags = thinkingTagsFor(modelId);
+  return tags ? new ThinkingTagSplitter(tags) : undefined;
+}
+
+/**
+ * A complete text block (the non-streaming path) with what the stream filters
+ * remove removed: the DeepSeek DSML fragment, and reasoning tags lifted out of
+ * the answer into `reasoning`.
+ */
+export function cleanReplyText(modelId: string, text: string): ThinkingSplit {
+  const body = leaksDsmlMarker(modelId) ? stripDsmlMarker(text) : text;
+  const splitter = createThinkingTagSplitter(modelId);
+  if (!splitter) return { content: body, reasoning: "" };
+  const first = splitter.push(body);
+  const rest = splitter.flush();
+  return {
+    content: first.content + rest.content,
+    reasoning: first.reasoning + rest.reasoning,
+  };
 }
 
 /**
