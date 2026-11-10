@@ -158,8 +158,12 @@ async function probeCapabilities(
   requestOptions?: RequestOptions,
 ): Promise<{ caps: ServerCapabilities; answered: boolean }> {
   const url = localServerEndpoint(apiBase, "props");
-  const init: RequestInit = {
-    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+  const headers: Record<string, string> = {};
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  // Not typed as RequestInit: the DOM type and node-fetch's type disagree
+  // on `body`, and this call has to satisfy both.
+  const init = {
+    headers,
     signal: AbortSignal.timeout(timeoutMs),
   };
   try {
