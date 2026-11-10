@@ -7,6 +7,11 @@ import express from "express";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLoopMemory } from "../loop/loopSession.js";
+import {
+  getPolicyLevels,
+  resetPolicyLevels,
+  setPolicyLevels,
+} from "../permissions/policyLevels.js";
 import { services } from "../services/index.js";
 import {
   createSession,
@@ -93,6 +98,7 @@ describe("cn serve: Loop mode", () => {
 
   beforeEach(async () => {
     await resetFlowState();
+    resetPolicyLevels();
     updateSessionLoop(undefined);
     resetLoopMemory();
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cn-serve-loop-"));
@@ -110,6 +116,11 @@ describe("cn serve: Loop mode", () => {
   });
 
   it("runs the plan, steers an answer in, and holds an approval until it is answered", async () => {
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "manual",
+      questions: "manual",
+    });
     const notes = path.join(cwd, "notes.txt");
     fs.writeFileSync(notes, "retry notes\n");
     const target = path.join(cwd, "retry.ts");
@@ -275,7 +286,9 @@ describe("cn serve: Loop mode", () => {
       strategy: "check-in",
       strategyPicked: true,
     });
-    expect(picked.loopStatus).toMatch(/^Unattended · Check in · /);
+    expect(picked.loopStatus).toMatch(
+      /^Plan Permissive, Questions Cautious · Check in · /,
+    );
     // A pick stays when the level changes
     expect((await post({ loopAutonomy: "auto" })).body.loop.strategy).toBe(
       "check-in",
@@ -299,6 +312,11 @@ describe("cn serve: Loop mode", () => {
   });
 
   it("skips an item, runs one again, and changes the limits within bounds", async () => {
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "manual",
+      questions: "manual",
+    });
     const run = heldTurn(
       toolTurn("FinishItem", { outcome: "done", summary: "One" }),
     );

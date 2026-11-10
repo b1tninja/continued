@@ -39,17 +39,24 @@ function pathWords(command: string): string[] {
 export function protectedCommandHit(
   command: string,
   home: string = os.homedir(),
+  /** Kinds the person switched off (built-in rules by id) */
+  skip: readonly ProtectedKind[] = [],
 ): ProtectedHit | undefined {
+  const pathKinds = (["secret", "config"] as ProtectedKind[]).filter(
+    (k) => !skip.includes(k),
+  );
   for (const word of pathWords(command)) {
-    const hit = protectedPathHit(word, ["secret", "config"], home);
+    const hit = pathKinds.length
+      ? protectedPathHit(word, pathKinds, home)
+      : undefined;
     if (hit) return hit;
   }
-  for (const word of command.split(/\s+/)) {
+  for (const word of skip.includes("network") ? [] : command.split(/\s+/)) {
     if (isNetworkPath(word)) {
       return { kind: "network", path: strip(word) };
     }
   }
-  for (const words of candidateWords(command)) {
+  for (const words of skip.includes("secret") ? [] : candidateWords(command)) {
     for (let i = 0; i < words.length; i++) {
       const label = secretWordLabel(
         words[i],
@@ -82,6 +89,8 @@ export function findProtected(args: {
   parsedArgs: Record<string, unknown>;
   resolvedPath?: string;
   home?: string;
+  /** Kinds the person switched off (built-in rules by id) */
+  skip?: readonly ProtectedKind[];
 }): ProtectedHit | undefined {
   const { toolName, parsedArgs, resolvedPath } = args;
   const home = args.home ?? os.homedir();
@@ -89,7 +98,7 @@ export function findProtected(args: {
 
   if (toolName === "run_terminal_command") {
     const command = str(parsedArgs.command);
-    return command ? protectedCommandHit(command, home) : undefined;
+    return command ? protectedCommandHit(command, home, args.skip) : undefined;
   }
 
   let kinds: ProtectedKind[];
@@ -106,6 +115,8 @@ export function findProtected(args: {
   } else {
     return undefined;
   }
+  kinds = kinds.filter((k) => !args.skip?.includes(k));
+  if (kinds.length === 0) return undefined;
   return (
     protectedPathHit(written, kinds, home) ??
     protectedPathHit(resolvedPath, kinds, home)

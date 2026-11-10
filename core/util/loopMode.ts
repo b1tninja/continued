@@ -2,11 +2,13 @@ import type {
   LoopAnswer,
   LoopAnswerRoute,
   LoopAutonomy,
+  LoopBlocker,
   LoopBudget,
   LoopCheckResult,
   LoopItemModel,
   LoopItemState,
   LoopItemStatus,
+  LoopPolicy,
   LoopParallelRun,
   LoopQuestion,
   LoopQuestionKind,
@@ -19,6 +21,14 @@ import type {
   TaskPlan,
 } from "../index.js";
 import { stableStringify } from "../tools/permissions/auto/state.js";
+import {
+  DEFAULT_POLICY_LEVELS,
+  planHandoff,
+  policyLevelLabel,
+  questionDecider,
+  type PolicyLevel,
+  type PolicySettings,
+} from "../tools/permissions/policy.js";
 import {
   hasReplanReminder,
   LOOP_REMINDER_LIMITS,
@@ -145,7 +155,7 @@ export interface LoopAutonomyPreset {
    * - no-new-scope: one whose to-dos were all in the previous list;
    * - bounded: one that adds at most maxNewItemsPerReplan to-dos.
    */
-  replan: "ask" | "no-new-scope" | "bounded";
+  replan: "ask" | "no-new-scope" | "bounded" | "policy";
   maxNewItemsPerReplan: number;
   /**
    * When every open item waits on the person this long with no answer, the
@@ -242,8 +252,104 @@ export function loopAutonomyFor(
   }
 }
 
+/** The loop's policy as the settings object the policy functions take. */
+function policySettings(policy: LoopPolicy): PolicySettings {
+  return {
+    levels: {
+      ...DEFAULT_POLICY_LEVELS,
+      plan: policy.plan,
+      questions: policy.questions,
+    },
+    ...(policy.maxNewPlanItems !== undefined
+      ? { maxNewPlanItems: policy.maxNewPlanItems }
+      : {}),
+    questions: {
+      ...(policy.youDecide ? { youDecide: policy.youDecide } : {}),
+      ...(policy.agentDecides ? { agentDecides: policy.agentDecides } : {}),
+    },
+  };
+}
+
+/** The loop's two policy areas from the settings the person chose. */
+export function loopPolicyOf(settings: PolicySettings): LoopPolicy {
+  return {
+    plan: settings.levels.plan,
+    questions: settings.levels.questions,
+    ...(settings.maxNewPlanItems !== undefined
+      ? { maxNewPlanItems: settings.maxNewPlanItems }
+      : {}),
+    ...(settings.questions?.youDecide
+      ? { youDecide: settings.questions.youDecide }
+      : {}),
+    ...(settings.questions?.agentDecides
+      ? { agentDecides: settings.questions.agentDecides }
+      : {}),
+  };
+}
+
+const EXPANSIVE: readonly PolicyLevel[] = ["permissive", "yolo"];
+
+/**
+ * The preset that supplies a policy loop's budgets and default strategy. The
+ * decisions themselves (re-plans, questions) never read it: they read the
+ * policy.
+ */
+export function autonomyForPolicy(policy: LoopPolicy): LoopAutonomy {
+  if (policy.questions === "yolo") return "idgaf";
+  if (EXPANSIVE.includes(policy.plan)) return "unattended";
+  return policy.plan === "manual" ? "supervised" : "auto";
+}
+
+/** What the loop is running at, for its status line. */
+export function loopLevelLabel(loop: LoopState): string {
+  const policy = loop.policy;
+  if (!policy) return loopAutonomy(loop).label;
+  return `Plan ${policyLevelLabel("plan", policy.plan)}, Questions ${policyLevelLabel("questions", policy.questions)}`;
+}
+
 export function loopAutonomy(loop: LoopState): LoopAutonomyPreset {
-  return LOOP_AUTONOMY[loop.autonomy ?? "auto"];
+  const preset = LOOP_AUTONOMY[loop.autonomy ?? "auto"];
+  const policy = loop.policy;
+  if (!policy) return preset;
+  // A question waits until it is answered or the agent decides it: no timer
+  return {
+    ...preset,
+    replan: "policy",
+    waitTimeoutMs: policy.questions === "yolo" ? 1000 : 0,
+  };
+}
+
+/**
+ * True when nobody will answer the loop's questions: Questions is IDGAF. On a
+ * loop saved before policy areas, its IDGAF autonomy level.
+ */
+export function loopDecidesAlone(loop: LoopState): boolean {
+  return loop.policy
+    ? loop.policy.questions === "yolo"
+    : loop.autonomy === "idgaf";
+}
+
+/**
+ * Who answers a question of this type: the agent (it records its own pick
+ * and goes on) or the person. A reviewer model for questions is not built, so
+ * Automatic leaves the question to the person.
+ */
+export function loopQuestionDecider(
+  loop: LoopState,
+  type: unknown,
+): "agent" | "person" {
+  if (!loop.policy) return loopDecidesAlone(loop) ? "agent" : "person";
+  return questionDecider(policySettings(loop.policy), type) === "agent"
+    ? "agent"
+    : "person";
+}
+
+/**
+ * Changes the policy of a running loop. Budgets and the strategy stay as they
+ * are: the levels the person moves are about who decides, not about limits.
+ */
+export function setLoopPolicy(loop: LoopState, policy: LoopPolicy): LoopState {
+  return { ...loop, policy, autonomy: autonomyForPolicy(policy) };
 }
 
 /**
@@ -383,9 +489,13 @@ export function repeatedCallResult(
 export function repeatedCallReport(toolName: string): {
   outcome: FinishOutcome;
   summary: string;
+  blocker: LoopBlocker;
 } {
   return {
     outcome: "stuck",
+    // Asking the same question again is what a run does when it cannot see
+    // the answer another way
+    blocker: "observe",
     summary: `Kept repeating ${toolName} with no file change after it was refused.`,
   };
 }
@@ -417,9 +527,13 @@ export function itemTurnLimitResult(turns: number): string {
 export function itemTurnLimitReport(turns: number): {
   outcome: FinishOutcome;
   summary: string;
+  blocker: LoopBlocker;
 } {
   return {
     outcome: "stuck",
+    // A run that never reaches an end usually has an item with no end to
+    // reach: an open question to report on, a check it cannot meet
+    blocker: "plan",
     summary: `Ended after ${turns} requests without reporting.`,
   };
 }
@@ -587,8 +701,12 @@ export function createLoop(
     now: Date;
     sessionTokens: number;
     budget?: Partial<LoopBudget>;
-    /** Default auto; see loopAutonomyFor */
+    /** Default auto. Superseded by `policy`. */
     autonomy?: LoopAutonomy;
+    /** The Plan edits and Questions levels; the loop follows them */
+    policy?: LoopPolicy;
+    /** The plan's title */
+    title?: string;
     /** false: items share the session's conversation (default: a fresh context) */
     freshContext?: boolean;
     /**
@@ -598,10 +716,14 @@ export function createLoop(
     strategy?: LoopStrategy;
   },
 ): LoopState {
+  const autonomy = options.policy
+    ? autonomyForPolicy(options.policy)
+    : options.autonomy;
   const strategy =
-    options.strategy ??
-    (options.autonomy ? defaultLoopStrategy(options.autonomy) : undefined);
+    options.strategy ?? (autonomy ? defaultLoopStrategy(autonomy) : undefined);
   return {
+    ...(options.policy ? { policy: options.policy } : {}),
+    ...(options.title ? { title: options.title } : {}),
     ...(strategy ? { strategy } : {}),
     ...(options.strategy ? { strategyPicked: true } : {}),
     ...(strategy === "check-in" ? { doneSinceReplan: 0 } : {}),
@@ -610,10 +732,10 @@ export function createLoop(
     startedAt: iso(options.now),
     tokensAtStart: options.sessionTokens,
     budget: {
-      ...LOOP_AUTONOMY[options.autonomy ?? "auto"].budget,
+      ...LOOP_AUTONOMY[autonomy ?? "auto"].budget,
       ...options.budget,
     },
-    autonomy: options.autonomy ?? "auto",
+    autonomy: autonomy ?? "auto",
     items: plan.items.map(fromTask),
     questions: [],
     answers: [],
@@ -1065,7 +1187,18 @@ export function replanDecision(
   const preset = loopAutonomy(loop);
   const known = new Set(previousTexts);
   const added = plan.items.filter((i) => !known.has(i.text)).length;
+  if (loop.policy) {
+    const handoff = planHandoff({
+      policy: policySettings(loop.policy),
+      first: false,
+      added,
+    });
+    // A reviewer for plans is not built: Automatic waits for the person
+    return { accept: handoff.decision === "go", reason: handoff.reason };
+  }
   switch (preset.replan) {
+    case "policy":
+      return { accept: false, reason: "No policy is set on this loop." };
     case "ask":
       return {
         accept: false,
@@ -1091,6 +1224,63 @@ export function replanDecision(
   }
 }
 
+export interface ReplanDiffItem {
+  text: string;
+  /** Where the item stood in the loop before the re-plan, when it had a place */
+  status?: LoopItemStatus;
+}
+
+/** What a re-plan changed against the plan the loop was running. */
+export interface ReplanDiff {
+  /** To-dos the loop already had, as they stand */
+  kept: ReplanDiffItem[];
+  /** To-dos the loop has not seen */
+  added: string[];
+  /** To-dos of the old plan that the new one does not have */
+  dropped: ReplanDiffItem[];
+}
+
+/**
+ * The new plan set against the plan the loop was running, for the card that
+ * asks the person to accept it: the whole document is not the answer to "what
+ * changed". A to-do is kept when the loop already has its id or the old plan
+ * had its text word for word; a reworded to-do therefore shows as one dropped
+ * and one added, which is what the loop does with it. Undefined when no
+ * re-plan is waiting.
+ */
+export function replanDiff(
+  loop: LoopState,
+  plan: TaskPlan,
+): ReplanDiff | undefined {
+  const previous = loop.replanned?.planTexts;
+  if (!previous) return undefined;
+  // The loop's items are in the old plan's order; a person who edited the
+  // list since leaves no alignment to rely on
+  const aligned = loop.items.length === previous.length;
+  const statusOfText = (text: string) =>
+    aligned ? loop.items[previous.indexOf(text)]?.status : undefined;
+
+  const kept: ReplanDiffItem[] = [];
+  const added: string[] = [];
+  for (const task of plan.items) {
+    const known = itemState(loop, task.id);
+    if (known) kept.push({ text: task.text, status: known.status });
+    else if (previous.includes(task.text)) {
+      kept.push({ text: task.text, status: statusOfText(task.text) });
+    } else added.push(task.text);
+  }
+  const keptTexts = new Set(kept.map((k) => k.text));
+  const newIds = new Set(plan.items.map((t) => t.id));
+  const dropped: ReplanDiffItem[] = [];
+  previous.forEach((text, i) => {
+    if (keptTexts.has(text)) return;
+    const item = aligned ? loop.items[i] : undefined;
+    if (item && newIds.has(item.id)) return;
+    dropped.push({ text, status: item?.status });
+  });
+  return { kept, added, dropped };
+}
+
 function todos(n: number): string {
   return `${n} to-do${n === 1 ? "" : "s"}`;
 }
@@ -1100,6 +1290,12 @@ function todos(n: number): string {
  * changed or removed a check that had failed, which is an easy way to make an
  * item pass, or it dropped an item that was finished. Undefined if neither.
  * A model did both in a sandbox run and the loop then reported all items done.
+ *
+ * An item that ended stuck has not run its check, so its check has no
+ * status; the check it would have run is in `current.planChecks` (set by
+ * startReplan). Changing that is held too: in six fix-forward runs on
+ * Haiku 5.5 and Sonnet 5.5, three reported the item stuck and then replaced
+ * its check in the re-plan, and the hold never fired.
  */
 export function replanConcern(
   loop: LoopState,
@@ -1110,12 +1306,20 @@ export function replanConcern(
     (i) =>
       i.check?.status === "failed" && task(i.id)?.check !== i.check.command,
   );
+  const stuckCheck = loop.items.filter((i) => {
+    if (i.status !== "failed" || i.check?.status === "failed") return false;
+    const previous = loop.current?.planChecks?.[i.id];
+    return previous !== undefined && task(i.id)?.check !== previous;
+  });
   const droppedDone = loop.items.filter(
     (i) => i.status === "done" && !i.skipped && !task(i.id),
   );
   const parts = [
     failedCheck.length
       ? `It changes or removes the failing check of ${failedCheck.length === 1 ? "item" : "items"} ${failedCheck.map((i) => i.id).join(", ")}.`
+      : "",
+    stuckCheck.length
+      ? `It changes or removes the check of ${stuckCheck.length === 1 ? "item" : "items"} ${stuckCheck.map((i) => i.id).join(", ")}, which ended stuck without running it.`
       : "",
     droppedDone.length
       ? `It drops finished ${droppedDone.length === 1 ? "item" : "items"} ${droppedDone.map((i) => i.id).join(", ")}.`
@@ -1138,7 +1342,13 @@ export function repairDecision(
   itemText: string,
   plan: TaskPlan,
 ): { accept: boolean; reason: string } {
-  if (loopAutonomy(loop).replan === "ask") {
+  // Only Manual keeps a repair from going on: a repair that touches just the
+  // failed item is small, and Cautious and above let it through, as Auto did
+  if (
+    loop.policy
+      ? loop.policy.plan === "manual"
+      : loopAutonomy(loop).replan === "ask"
+  ) {
     return replanDecision(loop, previousTexts, plan);
   }
   const texts = new Set(plan.items.map((i) => i.text));
@@ -1388,7 +1598,14 @@ export function startReplan(
       kind: "replan",
       historyIndex,
       startedAt: iso(now),
-      ...(plan ? { planTexts: plan.items.map((i) => i.text) } : {}),
+      ...(plan
+        ? {
+            planTexts: plan.items.map((i) => i.text),
+            planChecks: Object.fromEntries(
+              plan.items.flatMap((i) => (i.check ? [[i.id, i.check]] : [])),
+            ),
+          }
+        : {}),
       ...(checkIn ? { checkIn } : {}),
       ...(itemId ? { itemId } : {}),
       ...(itemText !== undefined ? { itemText } : {}),
@@ -1433,7 +1650,7 @@ function statusAfterRun(
     return outOfAttempts ? "failed" : "pending";
   }
   // IDGAF: there is nobody to wait for
-  if (outcome === "waiting" && !blocked && loop.autonomy === "idgaf") {
+  if (outcome === "waiting" && !blocked && loopDecidesAlone(loop)) {
     return outOfAttempts ? "failed" : "pending";
   }
   if (blocked || outcome === "waiting") return "waiting";
@@ -1445,7 +1662,14 @@ function statusAfterRun(
 export function finishItemRun(
   loop: LoopState,
   report:
-    { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
+    | {
+        outcome: FinishOutcome;
+        summary?: string;
+        notes?: string;
+        blocker?: LoopBlocker;
+        needs?: string[];
+      }
+    | undefined,
   /** The item's check (TaskItem.check): done then waits for it to pass */
   options: { check?: string } = {},
 ): LoopState {
@@ -1578,7 +1802,14 @@ function finishRunOf(
   loop: LoopState,
   itemId: string,
   report:
-    { outcome: FinishOutcome; summary?: string; notes?: string } | undefined,
+    | {
+        outcome: FinishOutcome;
+        summary?: string;
+        notes?: string;
+        blocker?: LoopBlocker;
+        needs?: string[];
+      }
+    | undefined,
   options: { check?: string },
   unreported: string[],
 ): LoopState {
@@ -1601,6 +1832,9 @@ function finishRunOf(
         )
       : (summary ??
         (report ? state?.summary : "The turn ended without finish_item.")),
+    // Why a stuck run could not finish: the re-plan starts from it
+    blocker: status === "failed" ? report?.blocker : undefined,
+    needs: status === "failed" ? report?.needs : undefined,
     // Coming back later is not another try at it
     ...(deferred
       ? {
@@ -1947,6 +2181,26 @@ function decideAlone(
   };
 }
 
+/** Most characters of one choice the panel will show. */
+export const LOOP_OPTION_LENGTH = 160;
+
+/**
+ * The choices a held question offers: two to four distinct, trimmed, non-empty
+ * strings. Anything else is dropped, so a model that sends junk still gets
+ * its question held, as a free-text one.
+ */
+export function questionOptions(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const text = item.trim().slice(0, LOOP_OPTION_LENGTH);
+    if (text) seen.add(text);
+  }
+  const options = [...seen].slice(0, 4);
+  return options.length >= 2 ? options : undefined;
+}
+
 export function holdQuestion(
   loop: LoopState,
   input: {
@@ -1956,6 +2210,8 @@ export function holdQuestion(
     assumption?: unknown;
     /** What a wrong answer would cost, as the agent labelled it (QUESTION_TYPES) */
     type?: unknown;
+    /** Two to four short choices, the agent's default first (see questionOptions) */
+    options?: unknown;
     approval?: LoopQuestion["approval"];
     /** For the error texts; default the IDE's names */
     toolNames?: LoopToolNames;
@@ -1983,7 +2239,7 @@ export function holdQuestion(
   if (kind !== "blocking" && kind !== "assumption" && kind !== "approval") {
     return { ok: false, error: 'kind must be "blocking" or "assumption"' };
   }
-  if (loop.autonomy === "idgaf" && kind !== "approval") {
+  if (kind !== "approval" && loopQuestionDecider(loop, type) === "agent") {
     return decideAlone(loop, input.itemId, question, input.assumption, now);
   }
   const assumption =
@@ -2024,6 +2280,9 @@ export function holdQuestion(
     kind,
     ...(type ? { type } : {}),
     ...(assumption ? { assumption } : {}),
+    ...(questionOptions(input.options)
+      ? { options: questionOptions(input.options) }
+      : {}),
     ...(input.approval ? { approval: input.approval } : {}),
     askedAt: iso(now),
   };
@@ -2583,7 +2842,7 @@ export function loopItemPrompt(input: {
   }
   if (input.item.check) {
     lines.push(
-      `When you report it done, its check runs: \`${quote(input.item.check)}\`. It must exit 0, so run it yourself first.`,
+      `When you report it done, its check runs: \`${quote(input.item.check)}\`. It must exit 0, so run it yourself first. If it cannot pass as written, do not report done: report stuck and say what the check does.`,
     );
   }
   if (input.lastCheck?.status === "failed") {
@@ -2641,7 +2900,7 @@ export function loopItemPrompt(input: {
     "",
     "Before you report it done, run the checks the project has for what you changed (tests, type check, lint) and fix what fails; name them in your summary, or say there was nothing to run.",
     "",
-    `When the item is done, call ${names.finishItem} with outcome "done" and a one-line summary. If you cannot finish it, call ${names.finishItem} with outcome "stuck" and say why. Put anything a later item should know (a command that works, a trap you hit) in \`notes\`: one or two lines, not progress. End this turn only by calling ${names.finishItem}: a reply with no tool call does not end the item, and the item is not ended until ${names.finishItem} is called.`,
+    `When the item is done, call ${names.finishItem} with outcome "done" and a one-line summary. If you cannot finish it, call ${names.finishItem} with outcome "stuck", say why, and name what is in the way in \`blocker\` (answer, observe, plan, environment or dependency). If you find that other work has to be done first, use blocker "dependency" and list it in \`needs\`: the re-plan puts it ahead of this item. If you can do other items meanwhile, use outcome "later" instead. Put anything a later item should know (a command that works, a trap you hit) in \`notes\`: one or two lines, not progress. End this turn only by calling ${names.finishItem}: a reply with no tool call does not end the item, and the item is not ended until ${names.finishItem} is called.`,
     "",
     `If you learn something a later item or a retry will need, save it with ${names.remindMe} now.`,
     "",
@@ -2845,7 +3104,10 @@ function itemLines(loop: LoopState, plan: TaskPlan): string[] {
         : state?.summary
           ? quote(state.summary)
           : "";
-    return `- ${STATUS_MARK[status]} ${quote(task.text)} (${status}${detail ? `: ${detail}` : ""})`;
+    const blocked = state?.blocker
+      ? `; blocked: ${state.blocker}${state.needs?.length ? `, needs ${state.needs.map(quote).join("; ")} first` : ""}`
+      : "";
+    return `- ${STATUS_MARK[status]} ${quote(task.text)} (${status}${detail ? `: ${detail}` : ""}${blocked})`;
   });
 }
 
@@ -2872,6 +3134,22 @@ export function loopItemRepairPrompt(input: {
   const lines = [
     `This item of the plan${input.planFile ? ` in ${input.planFile}` : ""} failed: ${quote(task?.text ?? input.itemId)}`,
     `What its run reported: ${quote(state?.summary ?? "nothing")}`,
+    ...(state?.blocker
+      ? [
+          `What it says is in the way: ${state.blocker}, because ${LOOP_BLOCKER_TEXT[state.blocker]}.`,
+        ]
+      : []),
+    ...(state?.blocker === "plan"
+      ? [
+          "A run that never reaches an end usually has an item with no end to reach. Say in the item what a run produces to finish (a file it writes, a command whose output closes it) so that it can call finish_item, and make its check something that only passes once the work is done.",
+        ]
+      : []),
+    ...(state?.needs?.length
+      ? [
+          "It says these have to be done first:",
+          ...state.needs.map((n) => `- ${quote(n)}`),
+        ]
+      : []),
     "",
     "Re-plan this item only, so the plan can go on. The plan:",
     ...itemLines(loop, plan),
@@ -2894,6 +3172,12 @@ export function loopItemRepairPrompt(input: {
   lines.push(...reminderLines(input.reminders));
   lines.push(
     "",
+    ...(state?.needs?.length
+      ? [
+          `It named work that has to come first, so split it: the work it needs as its own to-dos, in order, then this item reworded to follow them (at most ${LOOP_REPAIR_MAX_TODOS} to-dos in all). Check that the work it names is real before you write it down.`,
+          "",
+        ]
+      : []),
     `Find out why it failed: read the code and what the run left. Then do one of these: reword the item so a run can finish it; split it into at most ${LOOP_REPAIR_MAX_TODOS} smaller to-dos that replace it, in its place; or drop it if the plan's goal does not need it, or it is already done.`,
     "",
     `Then call ${names.presentPlan}${input.planTitle ? ` with the title "${quote(input.planTitle)}"` : ""} with the whole list: every other to-do word for word and in its place, with this one reworded, split or left out. Do not change, add or drop any other to-do.`,
@@ -2994,7 +3278,7 @@ export function formatLoopStatus(
       ? [LOOP_STRATEGIES[loop.strategy].label]
       : [];
   const parts = [
-    ...(options.level === false ? [] : [loopAutonomy(loop).label]),
+    ...(options.level === false ? [] : [loopLevelLabel(loop)]),
     ...strategy,
     `Round ${loop.round}`,
     `${done}/${loop.items.length} done`,
@@ -3129,11 +3413,37 @@ export function approvalHeldResult(
 
 const FINISH_OUTCOMES: FinishOutcome[] = ["done", "waiting", "stuck", "later"];
 
+export const LOOP_BLOCKERS: readonly LoopBlocker[] = [
+  "answer",
+  "observe",
+  "plan",
+  "environment",
+  "dependency",
+];
+
+/** What each blocker means, for the re-plan prompts. */
+export const LOOP_BLOCKER_TEXT: Record<LoopBlocker, string> = {
+  answer: "it needs something only the person can say or supply",
+  observe: "it cannot see what it needs (a result, a log, a running system)",
+  plan: "the item itself is wrong: too big, too vague or not what the goal needs",
+  environment: "a tool, credential, network or the machine is in the way",
+  dependency: "other work has to be done first",
+};
+
+/** Most to-dos one report may name as needed first, and their length. */
+export const LOOP_NEEDS_LIMITS = { count: 3, length: 200 };
+
 /** The report a finish_item call makes, from its arguments. */
 export function finishItemReport(args: unknown):
   | {
       ok: true;
-      report: { outcome: FinishOutcome; summary?: string; notes?: string };
+      report: {
+        outcome: FinishOutcome;
+        summary?: string;
+        notes?: string;
+        blocker?: LoopBlocker;
+        needs?: string[];
+      };
       /** Outcome "later": the note for the item's return, and its files */
       later?: { note: string; files: string[] };
     }
@@ -3155,6 +3465,25 @@ export function finishItemReport(args: unknown):
       ? a.notes.trim().slice(0, LOOP_LIMITS.maxNoteLength)
       : undefined;
   const reminder = typeof a.reminder === "string" ? a.reminder.trim() : "";
+  if (
+    a.blocker !== undefined &&
+    !LOOP_BLOCKERS.includes(a.blocker as LoopBlocker)
+  ) {
+    return {
+      ok: false,
+      error: `blocker must be one of ${LOOP_BLOCKERS.join(", ")}`,
+    };
+  }
+  // Only a stuck report has a blocker: it is why the run could not finish
+  const blocker =
+    outcome === "stuck" ? (a.blocker as LoopBlocker | undefined) : undefined;
+  const needs =
+    blocker === "dependency" && Array.isArray(a.needs)
+      ? a.needs
+          .filter((n): n is string => typeof n === "string" && !!n.trim())
+          .map((n) => n.trim().slice(0, LOOP_NEEDS_LIMITS.length))
+          .slice(0, LOOP_NEEDS_LIMITS.count)
+      : [];
   if (outcome === "later") {
     if (!reminder) {
       return {
@@ -3176,6 +3505,8 @@ export function finishItemReport(args: unknown):
       outcome,
       ...(summary ? { summary } : {}),
       ...(notes ? { notes } : {}),
+      ...(blocker ? { blocker } : {}),
+      ...(needs.length ? { needs } : {}),
     },
     ...(outcome === "later"
       ? { later: { note: reminder, files: reminderFilePaths(a.files) } }

@@ -62,3 +62,6 @@ export function findLlmInfo(
 export function getAllRecommendedFor(useCase: UseCase): LlmInfoWithProvider[] {
   return allLlms.filter((llm) => llm.recommendedFor?.includes(useCase));
 }
+
+export * from "./promptCache.js";
+export * from "./providerErrors.js";

@@ -14,6 +14,11 @@ import {
 } from "core/util/loopMode.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  getPolicyLevels,
+  resetPolicyLevels,
+  setPolicyLevels,
+} from "../permissions/policyLevels.js";
 import { services } from "../services/index.js";
 import {
   createSession,
@@ -121,6 +126,7 @@ describe("Loop mode's driver in the CLI", () => {
 
   beforeEach(async () => {
     await resetFlowState();
+    resetPolicyLevels();
     updateSessionLoop(undefined);
     resetLoopMemory();
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cn-loop-driver-"));
@@ -146,7 +152,8 @@ describe("Loop mode's driver in the CLI", () => {
   it("re-plans in Plan mode, and a re-plan that adds nothing starts the next round by itself (Auto)", async () => {
     await planOf("One", "Two");
     const loop = startLoopFromPlan("normal")!;
-    commitLoop({ ...loop, autonomy: "auto" });
+    // The whole-plan re-plan: Finish, not Fix forward
+    commitLoop(setLoopStrategy({ ...loop, autonomy: "auto" }, "finish"));
 
     runItem("done");
     runItem("stuck");
@@ -156,7 +163,10 @@ describe("Loop mode's driver in the CLI", () => {
     expect(services.toolPermissions.getCurrentMode()).toBe("plan");
     // The re-plan's request starts at its own prompt
     append(user(replan!.prompt));
-    expect(loopRequestHistory(history())).toEqual([user(replan!.prompt)]);
+    // The run's first message is pinned as the prompt cache fork point.
+    expect(loopRequestHistory(history())).toEqual([
+      { ...user(replan!.prompt), cachePin: true },
+    ]);
 
     // The re-plan presents the same to-dos
     await planOf("One", "Two");
@@ -211,6 +221,11 @@ describe("Loop mode's driver in the CLI", () => {
 
   it("a supervised re-plan waits for Continue the loop", async () => {
     await planOf("One");
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "manual",
+      questions: "manual",
+    });
     startLoopFromPlan("normal");
     expect(loopNow().autonomy).toBe("supervised");
     runItem("stuck");
@@ -220,9 +235,7 @@ describe("Loop mode's driver in the CLI", () => {
 
     expect(nextTurn(history().length)).toBeUndefined();
     expect(loopNow().status).toBe("awaiting_plan");
-    expect(loopNow().replanReason).toBe(
-      "Supervised: every re-plan waits for you.",
-    );
+    expect(loopNow().replanReason).toBe("Every plan waits for you.");
     expect(acceptLoopPlan()).toBe(true);
     const next = nextTurn(history().length);
     expect(next?.prompt).toContain("only this item: One");
@@ -472,6 +485,11 @@ describe("Loop mode's driver in the CLI", () => {
 
   it("skips an item, runs a done one again, and changes the limits", async () => {
     await planOf("One", "Two", "Three");
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "manual",
+      questions: "manual",
+    });
     startLoopFromPlan("normal");
     expect(skipLoopItem("9")).toEqual({
       ok: false,

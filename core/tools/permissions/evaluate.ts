@@ -1,8 +1,16 @@
 import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { Tool } from "../..";
 import type { ResolvedPath } from "../../util/pathResolver";
-import { approvalLoosening, ApprovalSettings } from "./approval";
-import { DecisionSource, decideToolCall } from "./decide";
+import {
+  approvalLoosening,
+  ApprovalSettings,
+  isManualCall,
+  levelOfCall,
+  skippedProtections,
+} from "./approval";
+import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
+import type { ShellKind } from "../../util/shell";
+import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
 import type { ToolPermissions } from "./rules";
@@ -14,6 +22,8 @@ export interface ToolPolicyResult {
   source?: DecisionSource;
   /** A sentence a person can read, for the prompt or the refusal. */
   reason?: string;
+  /** A command the parser vouched as only reading: why it is Context use */
+  readOnly?: string;
   /** The rule that decided, as written in config.yaml. */
   rule?: string;
 }
@@ -22,7 +32,11 @@ export interface EvaluateInput {
   tool:
     | Pick<
         Tool,
-        "group" | "originalFunctionName" | "uri" | "evaluateToolCallPolicy"
+        | "group"
+        | "originalFunctionName"
+        | "uri"
+        | "evaluateToolCallPolicy"
+        | "readonly"
       >
     | undefined;
   toolName: string;
@@ -30,7 +44,11 @@ export interface EvaluateInput {
   parsedArgs: Record<string, unknown>;
   processedArgs?: Record<string, unknown>;
   permissions: ToolPermissions | undefined;
-  /** The user's approval mode and switches; absent means Manual. */
+  /** The folder a command runs in; lets git be vouched read-only */
+  cwd?: string;
+  /** The shell that runs it (resolveShell); without one no command is vouched read-only */
+  shell?: ShellKind;
+  /** The level chosen for each area; absent means Cautious everywhere. */
   approval?: ApprovalSettings;
 }
 
@@ -55,9 +73,18 @@ export function evaluateToolPolicyWithRules(
     displayValue = parsedArgs.command as string;
   }
 
-  const evaluated = tool.evaluateToolCallPolicy
+  let evaluated = tool.evaluateToolCallPolicy
     ? tool.evaluateToolCallPolicy(basePolicy, parsedArgs, processedArgs)
     : basePolicy;
+  // The person switched off the safety check's refusals: such a command asks
+  if (
+    evaluated === "disabled" &&
+    basePolicy !== "disabled" &&
+    toolName === "run_terminal_command" &&
+    !builtinRuleOn(input.approval, "refuse-dangerous-commands")
+  ) {
+    evaluated = "allowedWithPermission";
+  }
 
   const resolved = processedArgs?.resolvedPath as
     ResolvedPath | null | undefined;
@@ -66,25 +93,67 @@ export function evaluateToolPolicyWithRules(
   // Credentials and files that change what runs later always ask, with or
   // without rules, so this runs for every user and not only those with rules.
   // It only ever tightens: a call that is already refused stays refused.
-  const protectedHit = findProtected({ toolName, parsedArgs, resolvedPath });
+  const protectedHit = findProtected({
+    toolName,
+    parsedArgs,
+    resolvedPath,
+    skip: skippedProtections(input.approval),
+  });
+
+  // The floor: deny rules the person wrote to bind even at YOLO
+  const floorRules = parsePermissions({ deny: input.approval?.floor });
+  if (floorRules.length) {
+    const isMcpCall =
+      !!tool.uri?.startsWith("mcp:") && !!tool.originalFunctionName;
+    const floorMatch = findRuleMatch({
+      toolName,
+      mcp: isMcpCall
+        ? { serverName: tool.group, toolName: tool.originalFunctionName! }
+        : undefined,
+      parsedArgs,
+      resolvedPath,
+      base: basePolicy,
+      evaluated,
+      rules: floorRules,
+    });
+    if (floorMatch?.decision === "deny") {
+      return {
+        policy: "disabled",
+        displayValue,
+        source: "floor",
+        rule: floorMatch.rule.raw,
+        reason: `Blocked by your floor rule ${floorMatch.rule.raw}, which binds at every level.`,
+      };
+    }
+  }
 
   const rules = parsePermissions(input.permissions);
-  // YOLO also overrides a refusal, a rule and a protected path
-  const yoloOverrides =
-    input.approval?.mode === "yolo" &&
-    (evaluated === "disabled" || !!protectedHit || rules.length > 0);
+  const call = { parsedArgs, cwd: input.cwd, shell: input.shell };
+  const found = levelOfCall(input.approval, toolName, tool, call);
+  // YOLO reaches past a refusal, a rule and a protected path; Permissive acts
+  // only on a call that would otherwise ask
   const loosening =
-    evaluated === "allowedWithPermission" || yoloOverrides
+    found?.level === "yolo" || evaluated === "allowedWithPermission"
       ? approvalLoosening({
           approval: input.approval,
           tool,
           toolName,
           parsedArgs,
           processedArgs,
+          cwd: input.cwd,
+          shell: input.shell,
         })
       : undefined;
-  if (rules.length === 0 && !protectedHit && !loosening) {
-    return { policy: evaluated, displayValue };
+  const manual =
+    isManualCall(input.approval, toolName, tool, call) &&
+    basePolicy !== "disabled" &&
+    !loosening;
+  if (rules.length === 0 && !protectedHit && !loosening && !manual) {
+    return {
+      policy: evaluated,
+      displayValue,
+      ...(found?.readOnly ? { readOnly: found.readOnly } : {}),
+    };
   }
 
   const isMcp = !!tool.uri?.startsWith("mcp:") && !!tool.originalFunctionName;
@@ -101,6 +170,7 @@ export function evaluateToolPolicyWithRules(
     rules,
     protectedHit,
     loosening,
+    manual,
   });
 
   return {
@@ -109,5 +179,6 @@ export function evaluateToolPolicyWithRules(
     source: decision.source,
     ...(decision.reason ? { reason: decision.reason } : {}),
     ...(decision.rule ? { rule: decision.rule } : {}),
+    ...(found?.readOnly ? { readOnly: found.readOnly } : {}),
   };
 }

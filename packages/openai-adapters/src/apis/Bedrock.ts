@@ -58,10 +58,18 @@ import {
   writesThinkingTags,
 } from "./bedrockHelpers.js";
 import {
+  bedrockRefusedField,
+  converseRequestHasField,
+  converseRequestWithoutField,
+} from "@continuedev/llm-info";
+
+import {
   AutoCacheTtl,
+  isCachePinned,
   optsOutOfPromptCache,
   requestedCacheTtl,
 } from "./cacheTtl.js";
+import { recordFieldFallback, refusedFields } from "./fieldFallbacks.js";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import {
   createAgentForUrl,
@@ -88,16 +96,13 @@ import {
   RerankCreateParams,
 } from "./base.js";
 
-/**
- * First line of the agent's task list block, which clients send as the last
- * user text of a request. Must equal TASK_LIST_BLOCK_OPEN in
- * core/util/taskPlan.ts (core/util/taskPlan.vitest.ts checks it).
- */
-export const TASK_LIST_BLOCK_OPEN = "<task_list>";
+import {
+  isTaskListBlockText,
+  TASK_LIST_BLOCK_OPEN,
+} from "../util/taskListBlock.js";
 
-function isTaskListBlockText(text: string | undefined): boolean {
-  return !!text && text.startsWith(TASK_LIST_BLOCK_OPEN);
-}
+// Re-exported for the check in core/util/taskPlan.vitest.ts.
+export { TASK_LIST_BLOCK_OPEN };
 
 /**
  * Prefixed model IDs (`us.qwen...`) that Bedrock refused as invalid in this
@@ -113,6 +118,17 @@ const modelsWithoutInferencePrefix = new Set<string>();
  * bedrockToolsNeedNonStreaming.
  */
 const modelsWithoutStreamingTools = new Set<string>();
+
+/** The request without the fields this model refused earlier in the process (`refusedFields`). */
+function withoutRefusedFields(
+  input: ConverseStreamCommandInput,
+): ConverseStreamCommandInput {
+  let request = input;
+  for (const field of refusedFields(input.modelId ?? "")) {
+    request = converseRequestWithoutField(request, field);
+  }
+  return request;
+}
 
 /** Nova 2 returns this in place of its reasoning text; the tokens are billed. */
 const NOVA_REDACTED_REASONING = "[REDACTED].";
@@ -376,6 +392,7 @@ export class BedrockApi implements BaseLlmApi {
     let currentBlocks: ContentBlock[] = [];
     const converted: Message[] = [];
     const hasAddedToolCallIds = new Set<string>();
+    let pinned = 0;
 
     const pushCurrentMessage = () => {
       if (currentBlocks.length > 0) {
@@ -498,6 +515,20 @@ export class BedrockApi implements BaseLlmApi {
           }
         }
       }
+
+      // A message the client pinned (CACHE_PIN_FIELD, a fork point) gets a
+      // cache point right after its content, so every request of a run keeps
+      // that prefix warm and a branch from it reads it. Only when the
+      // conversation is cached at all: a model that takes no cache point in
+      // its messages gets none here either.
+      if (
+        cache?.conversation &&
+        isCachePinned(message) &&
+        currentBlocks.length > 0
+      ) {
+        currentBlocks.push(bedrockCachePoint(cache.ttl));
+        pinned += 1;
+      }
     }
 
     if (currentBlocks.length > 0) {
@@ -509,6 +540,7 @@ export class BedrockApi implements BaseLlmApi {
       this._addCachingToLastTwoUserMessages(
         converted,
         cache.ttl,
+        pinned,
         cache.afterTextOnly ?? false,
       );
     }
@@ -537,17 +569,24 @@ export class BedrockApi implements BaseLlmApi {
    * results only) gets none: Nova refuses a cachePoint next to a toolResult
    * ("extraneous key [cachePoint]"), which ended every multi-turn Nova run at
    * its second request. Claude takes it after a toolResult.
+   *
+   * Two cache points in the conversation at most (the tools and the system
+   * prompt take the other two of Bedrock's four). A pinned point
+   * (CACHE_PIN_FIELD, a fork point) counts as one of them, and a message that
+   * already carries one is not marked again.
    */
   private _addCachingToLastTwoUserMessages(
     converted: Message[],
     ttl?: "1h",
+    pinned = 0,
     afterTextOnly = false,
   ) {
-    let numCached = 0;
+    let numCached = Math.min(pinned, 2);
     for (let i = converted.length - 1; i >= 0 && numCached < 2; i--) {
       const message = converted[i];
       if (message.role !== "user") continue;
       const content = message.content ?? [];
+      if (content.some((block) => !!block.cachePoint)) continue;
       if (afterTextOnly) {
         const at = content.findLastIndex(
           (block) =>
@@ -571,14 +610,22 @@ export class BedrockApi implements BaseLlmApi {
    * `reasoning_effort` from the OpenAI body as the reasoning switch: unset
    * sends nothing, `none` turns reasoning off where a model takes an explicit
    * off, and the others turn it on (`minimal` as low, `xhigh` and `max` as
-   * high, the most any Bedrock family accepts). The config has no reasoning
-   * field of its own, so the body is the only source.
+   * high, the most any Bedrock family accepts). The body wins; else the
+   * config's `requestOptions.extraBodyProperties.reasoning_effort` (a catalog
+   * variant, or a CLI use's `modeModels` effort) stands in, since the config
+   * has no reasoning field of its own.
    */
   private reasoningFromBody(oaiBody: ChatCompletionCreateParams): {
     reasoning: boolean | undefined;
     budgetTokens: number;
   } {
-    const effort = oaiBody.reasoning_effort;
+    const fromConfig =
+      this.config.requestOptions?.extraBodyProperties?.reasoning_effort;
+    const effort =
+      oaiBody.reasoning_effort ??
+      (typeof fromConfig === "string"
+        ? (fromConfig as ChatCompletionCreateParams["reasoning_effort"])
+        : undefined);
     if (!effort) return { reasoning: undefined, budgetTokens: 0 };
     if (effort === "none") return { reasoning: false, budgetTokens: 0 };
     const level =
@@ -746,67 +793,87 @@ export class BedrockApi implements BaseLlmApi {
   }
 
   /**
-   * Sends a ConverseStream request. A prefixed model ID that Bedrock does not
-   * know is retried once as `fallbackModelId` (the bare ID, when the prefix
-   * came from `crossRegionInference: auto`) and remembered, so later requests
-   * skip the failing attempt.
+   * Sends a ConverseStream request, with two kinds of retry, both remembered
+   * for the process so later requests skip the failing attempt. The
+   * request-field policy (plans/ROADMAP.md C58): a validation error that
+   * names an optional field the request carries, one that changes cost and
+   * not the answer (`stopSequences`, a `cachePoint`), is answered by sending
+   * once more without it and telling the client (`recordFieldFallback`). A
+   * prefixed model ID that Bedrock does not know is retried once as
+   * `fallbackModelId` (the bare ID, when the prefix came from
+   * `crossRegionInference: auto`).
    */
-  private async sendConverseStream(
+  private sendConverseStream(
     client: BedrockRuntimeClient,
     input: ConverseStreamCommandInput,
     signal: AbortSignal,
     fallbackModelId: string | undefined,
   ) {
-    if (fallbackModelId && modelsWithoutInferencePrefix.has(input.modelId!)) {
-      input.modelId = fallbackModelId;
-    }
-    try {
-      return await client.send(new ConverseStreamCommand(input), {
+    return this.sendWithRetries(input, fallbackModelId, (request) =>
+      client.send(new ConverseStreamCommand(request), {
         abortSignal: signal,
-      });
-    } catch (e) {
-      if (
-        !fallbackModelId ||
-        input.modelId === fallbackModelId ||
-        !isInvalidModelIdentifierError(e)
-      ) {
-        throw e;
-      }
-      modelsWithoutInferencePrefix.add(input.modelId!);
-      input.modelId = fallbackModelId;
-      return await client.send(new ConverseStreamCommand(input), {
-        abortSignal: signal,
-      });
-    }
+      }),
+    );
   }
 
-  /** Converse (no stream) with the same prefix retry as sendConverseStream. */
-  private async sendConverse(
+  /** Converse (no stream) with the same retries as sendConverseStream. */
+  private sendConverse(
     client: BedrockRuntimeClient,
     input: ConverseStreamCommandInput,
     signal: AbortSignal,
     fallbackModelId: string | undefined,
   ): Promise<ConverseCommandOutput> {
+    return this.sendWithRetries(input, fallbackModelId, (request) =>
+      client.send(new ConverseCommand(request), { abortSignal: signal }),
+    );
+  }
+
+  private async sendWithRetries<T>(
+    input: ConverseStreamCommandInput,
+    fallbackModelId: string | undefined,
+    send: (request: ConverseStreamCommandInput) => Promise<T>,
+  ): Promise<T> {
     if (fallbackModelId && modelsWithoutInferencePrefix.has(input.modelId!)) {
       input.modelId = fallbackModelId;
     }
-    try {
-      return await client.send(new ConverseCommand(input), {
-        abortSignal: signal,
-      });
-    } catch (e) {
-      if (
-        !fallbackModelId ||
-        input.modelId === fallbackModelId ||
-        !isInvalidModelIdentifierError(e)
-      ) {
-        throw e;
+    let request = withoutRefusedFields(input);
+
+    let retriedPrefix = false;
+    for (;;) {
+      try {
+        return await send(request);
+      } catch (error) {
+        // Once per field: the resent request no longer carries it, so the
+        // same refusal again is thrown.
+        const field = bedrockRefusedField(error);
+        if (field && converseRequestHasField(request, field)) {
+          recordFieldFallback({
+            provider: "bedrock",
+            model: request.modelId ?? "",
+            field,
+            error: error instanceof Error ? error.message : String(error),
+            at: Date.now(),
+          });
+          request = converseRequestWithoutField(request, field);
+          continue;
+        }
+        if (
+          !retriedPrefix &&
+          fallbackModelId &&
+          request.modelId !== fallbackModelId &&
+          isInvalidModelIdentifierError(error)
+        ) {
+          retriedPrefix = true;
+          modelsWithoutInferencePrefix.add(request.modelId!);
+          input.modelId = fallbackModelId;
+          request = withoutRefusedFields({
+            ...request,
+            modelId: fallbackModelId,
+          });
+          continue;
+        }
+        throw error;
       }
-      modelsWithoutInferencePrefix.add(input.modelId!);
-      input.modelId = fallbackModelId;
-      return await client.send(new ConverseCommand(input), {
-        abortSignal: signal,
-      });
     }
   }
 

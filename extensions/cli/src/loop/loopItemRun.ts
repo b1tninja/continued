@@ -3,6 +3,7 @@ import {
   answersToDeliver,
   loopItemPrompt,
   markDelivered,
+  loopDecidesAlone,
   standingInstructions,
 } from "core/util/loopMode.js";
 import { reminderPathsDue, takeReminders } from "core/util/loopReminders.js";
@@ -59,7 +60,7 @@ export function prepareItemRun(
     lastCheck: itemState?.check,
     reminders: taken.reminders,
     returning: itemState?.setAside,
-    decideAlone: loop.autonomy === "idgaf",
+    decideAlone: loopDecidesAlone(loop),
     mergeFailed: itemState?.mergeFailed,
     worker: options.worker,
   });

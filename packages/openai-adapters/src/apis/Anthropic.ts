@@ -8,7 +8,7 @@ import {
   RawMessageStartEvent,
   RawMessageStreamEvent,
   Tool,
-  ToolUseBlock,
+  ToolUseBlockParam,
 } from "@anthropic-ai/sdk/resources";
 import { streamSse } from "@continuedev/fetch";
 import { OpenAI } from "openai/index";
@@ -41,6 +41,7 @@ import {
 } from "./AnthropicCachingStrategies.js";
 import {
   addCacheControlToLastTwoUserMessages,
+  stripCachePins,
   getAnthropicHeaders,
   getAnthropicMediaTypeFromDataUrl,
   openAiToolChoiceToAnthropicToolChoice,
@@ -49,6 +50,8 @@ import {
 import {
   applyAnthropicCacheTtl,
   AutoCacheTtl,
+  CACHE_PIN_FIELD,
+  isCachePinned,
   optsOutOfPromptCache,
   requestedCacheTtl,
 } from "./cacheTtl.js";
@@ -116,6 +119,8 @@ export class AnthropicApi implements BaseLlmApi {
     if (strategyName !== "none") {
       addCacheControlToLastTwoUserMessages(result.messages);
     }
+    // Our fork-point marks never reach the wire, caching or not.
+    stripCachePins(result.messages);
 
     // Step 4: ask for a longer lifetime if the config says so. Unset, the
     // request is exactly what it was before.
@@ -209,7 +214,7 @@ export class AnthropicApi implements BaseLlmApi {
 
   private convertToolCallsToBlocks(
     toolCall: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall,
-  ): ToolUseBlock | undefined {
+  ): ToolUseBlockParam | undefined {
     const toolCallId = toolCall.id;
     const toolName = toolCall.function?.name;
     if (toolCallId && toolName) {
@@ -358,6 +363,16 @@ export class AnthropicApi implements BaseLlmApi {
         currentRole = newRole;
       }
       currentParts.push(...this.getContentBlocksFromChatMessage(message));
+      // A pinned message (CACHE_PIN_FIELD, a fork point): its last block takes
+      // the mark, and the caching step turns it into a marker or strips it.
+      if (isCachePinned(message) && currentParts.length > 0) {
+        (
+          currentParts[currentParts.length - 1] as unknown as Record<
+            string,
+            unknown
+          >
+        )[CACHE_PIN_FIELD] = true;
+      }
     }
     flushCurrentMessage();
 

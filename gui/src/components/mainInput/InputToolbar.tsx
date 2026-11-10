@@ -21,7 +21,7 @@ import { exitEdit } from "../../redux/thunks/edit";
 import { getMetaKeyLabel, isMetaEquivalentKeyPressed } from "../../util";
 import { ToolTip } from "../gui/Tooltip";
 import ModelSelect from "../modelSelection/ModelSelect";
-import { ApprovalSelect } from "../ApprovalSelect";
+import { PolicyControls } from "../PolicyControls";
 import { ModeSelect } from "../ModeSelect";
 import { Button } from "../ui";
 import { useFontSize } from "../ui/font";
@@ -100,7 +100,7 @@ function InputToolbar(props: InputToolbarProps) {
               </HoverItem>
             </ToolTip>
           )}
-          {!isInEdit && <ApprovalSelect />}
+          {!isInEdit && <PolicyControls />}
           <ToolTip place="top" content="Select Model">
             <HoverItem className="!p-0">
               <ModelSelect />

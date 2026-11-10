@@ -4,9 +4,11 @@ import { fileURLToPath } from "url";
 import type {
   ChatHistoryItem,
   LoopAutonomy,
+  LoopPolicy,
   LoopQuestion,
   LoopState,
   LoopStrategy,
+  ModelUse,
   TaskPlan,
 } from "core/index.js";
 import {
@@ -15,11 +17,12 @@ import {
   createLoop,
   interruptLoop,
   LOOP_CLI_TOOL_NAMES,
-  loopAutonomyFor,
+  loopPolicyOf,
   requestStop,
   resumeLoop,
   runItemAgain,
   setLoopAutonomy,
+  setLoopPolicy,
   setLoopBudget,
   setLoopParallel,
   skipItem,
@@ -34,7 +37,13 @@ import {
 import { createHistoryItem } from "core/util/messageConversion.js";
 import { useForLoopTurn } from "core/util/modelUse.js";
 
-import { isAutoReviewEnabled } from "../permissions/coreRules.js";
+import {
+  effectiveLevels,
+  getPolicyExtras,
+  getPolicyLevels,
+  levelsForAutonomy,
+  setPolicyLevels,
+} from "../permissions/policyLevels.js";
 import type { PermissionMode } from "../permissions/types.js";
 import {
   applyModelForLoopTurn,
@@ -190,16 +199,18 @@ export function sessionTokens(): number {
 }
 
 /**
- * The CLI's approval setting in core's terms, for loopAutonomyFor: the
- * `auto` mode allows everything (YOLO); `--auto-review` lets a reviewer
- * model answer (Auto); otherwise the person approves (Manual).
+ * The Plan edits and Questions levels a loop follows: the person's levels,
+ * with the CLI's `auto` mode (`--auto`) raising Plan edits as it always did.
  */
-export function cliApprovalMode(
-  mode: PermissionMode,
-): "manual" | "auto" | "yolo" {
-  if (mode === "auto") return "yolo";
-  if (isAutoReviewEnabled()) return "auto";
-  return "manual";
+export function cliLoopPolicy(mode: PermissionMode): LoopPolicy {
+  const extras = getPolicyExtras();
+  return loopPolicyOf({
+    levels: effectiveLevels(mode),
+    ...(extras.maxNewPlanItems === undefined
+      ? {}
+      : { maxNewPlanItems: extras.maxNewPlanItems }),
+    ...(extras.questions ? { questions: extras.questions } : {}),
+  });
 }
 
 /** The plan file as a path for the model and the person, when there is one. */
@@ -304,7 +315,7 @@ export function startLoopFromPlan(
   const loop = createLoop(plan, {
     now,
     sessionTokens: sessionTokens(),
-    autonomy: loopAutonomyFor(cliApprovalMode(mode)),
+    policy: cliLoopPolicy(mode),
   });
   pendingSteers.length = 0;
   turnEndRequested = false;
@@ -365,10 +376,37 @@ export function resumeStoppedLoop(now = new Date()): boolean {
   return true;
 }
 
+/**
+ * A level name (the TUI's cycle key, `loopAutonomy` on `cn serve`) sets the
+ * Plan edits and Questions levels it stood for, and the loop's limits and
+ * strategy become that level's, as before.
+ */
 export function setRunningLoopAutonomy(autonomy: LoopAutonomy): boolean {
   const loop = getSessionLoop();
   if (!loop) return false;
-  commitLoop(setLoopAutonomy(loop, autonomy));
+  setPolicyLevels({ ...getPolicyLevels(), ...levelsForAutonomy(autonomy) });
+  commitLoop(
+    setLoopPolicy(
+      setLoopAutonomy(loop, autonomy),
+      cliLoopPolicy(services.toolPermissions.getCurrentMode()),
+    ),
+  );
+  return true;
+}
+
+/**
+ * Brings the running loop's policy up to date after `/policy` changed a
+ * level. Limits and strategy stay as they are.
+ */
+export function syncRunningLoopPolicy(): boolean {
+  const loop = getSessionLoop();
+  if (!loop) return false;
+  commitLoop(
+    setLoopPolicy(
+      loop,
+      cliLoopPolicy(services.toolPermissions.getCurrentMode()),
+    ),
+  );
   return true;
 }
 
@@ -564,26 +602,48 @@ export function loopRequestHistory(
   if (!loop?.current || !isMainHistory(isCompacting)) return history;
   const start = Math.min(loop.current.historyIndex, history.length);
   const block = loopPlanBlockForRequest(isCompacting);
-  const withPlan =
-    block && history[start]
-      ? [
-          ...history.slice(0, start),
-          {
-            ...history[start],
-            message: {
-              ...history[start].message,
-              content: withLoopPlanBlock(history[start].message.content, block),
-            } as ChatHistoryItem["message"],
-          },
-          ...history.slice(start + 1),
-        ]
-      : history;
+  const item = history[start];
+  // The item's first message is the run's fork point: a prompt cache point
+  // goes right after it (ChatHistoryItem.cachePin), so every request of the
+  // run keeps that prefix warm and a retry, a branch or a subagent that
+  // starts from the same context reads it instead of writing it again.
+  const withPlan = item
+    ? [
+        ...history.slice(0, start),
+        {
+          ...item,
+          cachePin: true,
+          ...(block
+            ? {
+                message: {
+                  ...item.message,
+                  content: withLoopPlanBlock(item.message.content, block),
+                } as ChatHistoryItem["message"],
+              }
+            : {}),
+        },
+        ...history.slice(start + 1),
+      ]
+    : history;
   return loop.freshContext === false ? withPlan : withPlan.slice(start);
 }
 
 /** Whether the loop is running an item or a re-plan in the main session. */
 export function loopRunGoing(): boolean {
   return !!getSessionLoop()?.current;
+}
+
+/**
+ * What the next request is for, as `modeModels` keys it: a Loop item or
+ * re-plan while one runs, else the permission mode's use (Plan plans, the
+ * others act).
+ */
+export function currentModelUse(): ModelUse {
+  const current = getSessionLoop()?.current;
+  if (current) return useForLoopTurn(current.kind);
+  // Read as the stream does (getState), which test doubles provide
+  const mode = services.toolPermissions.getState?.()?.currentMode;
+  return mode === "plan" ? "plan" : "agent";
 }
 
 /** Whether the loop is running an item in the main session. */

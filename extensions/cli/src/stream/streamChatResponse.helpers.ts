@@ -19,6 +19,12 @@ import {
 } from "../permissions/coreRules.js";
 import { checkToolPermission } from "../permissions/permissionChecker.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
+import {
+  effectiveLevels,
+  getPolicyLevels,
+  policyIsDefault,
+  approvalExtras,
+} from "../permissions/policyLevels.js";
 import { withReadOnlyMcp } from "../permissions/readOnlyMcp.js";
 import { ToolCallRequest, ToolPermissions } from "../permissions/types.js";
 import {
@@ -149,6 +155,15 @@ async function promptForPermission(
  * for rules, and for the reviewer it is an unusable reviewer (asks, or refuses
  * when headless), never an allow.
  */
+/** The permission mode, or the normal one when the service is not up yet. */
+function currentPermissionMode(): "normal" | "plan" | "auto" {
+  try {
+    return services.toolPermissions.getCurrentMode();
+  } catch {
+    return "normal";
+  }
+}
+
 async function coreRulesVerdict(
   toolCall: PreprocessedToolCall,
   cliPermission: "allow" | "ask",
@@ -161,13 +176,20 @@ async function coreRulesVerdict(
     );
     const assistant = modelState?.assistant;
     const permissions = assistant?.toolPermissions;
-    if (!permissions && !autoReview) return undefined;
-    return await evaluateWithCoreRules({
+    // The levels reach core's engine. At the defaults nothing else changes
+    // what the CLI does, so the engine may only loosen there (Context
+    // Permissive lets a command that only reads run without asking) and
+    // never tighten: a protected path or a refusal keeps the CLI's own answer.
+    const levels = effectiveLevels(currentPermissionMode());
+    const approval = { levels, ...approvalExtras() };
+    const defaultsOnly = policyIsDefault(levels);
+    const verdict = await evaluateWithCoreRules({
       cliToolName: toolCall.name,
       args: toolCall.arguments,
       cliPermission,
       evaluateToolCallPolicy: toolCall.tool?.evaluateToolCallPolicy,
       assistantPermissions: permissions,
+      approval,
       autoReview,
       reviewer:
         autoReview && modelState?.authConfig
@@ -176,10 +198,17 @@ async function coreRulesVerdict(
       isHeadless: !!isHeadless,
       history: autoReview ? services.chatHistory.getHistory() : undefined,
     });
+    return defaultsOnly && !permissions && !autoReview
+      ? verdict?.decision === "allow"
+        ? verdict
+        : undefined
+      : verdict;
   } catch (e) {
     logger.warn("Could not apply toolPermissions rules", { error: e });
     // Fail toward asking, and toward refusing when nobody can be asked.
-    return autoReview || assistantHasRules()
+    return autoReview ||
+      assistantHasRules() ||
+      !policyIsDefault(getPolicyLevels())
       ? { decision: "ask", by: "system", reason: "Could not check your rules." }
       : undefined;
   }
@@ -231,10 +260,12 @@ export async function checkToolPermissionApproval(
   // but not one a hook asked for: the hook wants the user to confirm.
   if (permission !== "exclude") {
     const verdict = await coreRulesVerdict(toolCall, permission, isHeadless);
-    if (verdict) {
-      if (verdict.decision === "allow" && hookDecision !== "ask") {
-        return { approved: true };
-      }
+    if (verdict?.decision === "allow" && hookDecision !== "ask") {
+      return { approved: true };
+    }
+    // An allow over a hook's ask is the hook's to settle: it falls through to
+    // the CLI's own ask below, with no reason of the engine's to quote
+    if (verdict && verdict.decision !== "allow") {
       if (verdict.decision === "deny") {
         return {
           approved: false,

@@ -5,6 +5,8 @@ import {
   evaluateTerminalCommandSecurity,
   type ToolPolicy,
 } from "@continuedev/terminal-security";
+import { commandLintGate } from "core/tools/permissions/commandLint.js";
+import { resolveShell } from "core/util/shell.js";
 
 import { backgroundJobService } from "../services/BackgroundJobService.js";
 import { services } from "../services/index.js";
@@ -85,28 +87,10 @@ export function describeShell(
   return `Runs in ${name} as a login shell on ${where}.`;
 }
 
-// Helper function to use login shell on Unix/macOS and PowerShell on Windows and available shell in WSL
+// Windows PowerShell on Windows, the login shell elsewhere (WSL is a Linux)
 function getShellCommand(command: string): { shell: string; args: string[] } {
-  if (process.platform === "win32") {
-    // Windows: Use PowerShell
-    return {
-      shell: "powershell.exe",
-      args: ["-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", command],
-    };
-  }
-
-  if (isRunningInWsl()) {
-    // in WSL, bash is always available
-    const wslShell = process.env.SHELL || "/bin/bash";
-    return {
-      shell: wslShell,
-      args: ["-l", "-c", command],
-    };
-  }
-
-  // Unix/macOS: Use login shell to source .bashrc/.zshrc etc.
-  const userShell = process.env.SHELL || "/bin/bash";
-  return { shell: userShell, args: ["-l", "-c", command] };
+  const shell = resolveShell();
+  return { shell: shell.executable, args: shell.args(command) };
 }
 
 export function runCommandInBackground(command: string): {
@@ -206,6 +190,12 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
     const baseMaxLines = getBashMaxLines();
     const maxChars = Math.floor(baseMaxChars / parallelCount);
     const maxLines = Math.floor(baseMaxLines / parallelCount);
+
+    // Mistakes in how the command is written, before the shell reports them
+    const lintMessage = commandLintGate(command, resolveShell().kind);
+    if (lintMessage) {
+      return lintMessage;
+    }
 
     emitBashToolStarted();
 

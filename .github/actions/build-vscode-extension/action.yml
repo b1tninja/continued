@@ -106,6 +106,17 @@ runs:
       env:
         NODE_OPTIONS: "--max-old-space-size=4096"
 
+    # The pre-built sqlite3 binary comes from GitHub releases, which has returned 504s
+    # (the PR checks log: "Download failed (status code: 504)"). Cache the extracted build
+    # after npm ci, which would otherwise wipe it; download-copy-sqlite.js skips its download
+    # when the marker in the build matches. Keyed per target, since the build is one target's.
+    # Bump the key when SQLITE_VERSION changes.
+    - uses: actions/cache@v6
+      id: sqlite-prebuilt-cache
+      with:
+        path: core/node_modules/sqlite3/build
+        key: ${{ runner.os }}-sqlite3-prebuilt-v5.1.7-${{ steps.set-target.outputs.target }}
+
     - name: Prepackage the extension
       shell: bash
       env:

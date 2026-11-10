@@ -1,0 +1,134 @@
+# Isolation: running commands, and whole loops, in a jail
+
+Status: plan and research topic, 2026-11-09. Nothing built. Roadmap row: Track W. Related: the policy areas and their reserved `sandbox` axis (`policy-areas.md`), command analysis (`command-analysis.md`), Loop mode (`loop-mode.md`), parallel agents and worktrees (Tracks N and O).
+
+## The ask
+
+Four requests from the owner, one thread:
+
+1. A mode or setting that runs loops inside a container, Windows Sandbox or an equivalent of a jail or chroot.
+2. The reason: people will give an agent autonomous control far more readily if isolation to a specific place is guaranteed, not hoped for.
+3. Research into WSL and devcontainer integration, so the working environment is self-contained.
+4. Separately, as a plain feature: "run commands in WSL".
+
+The fourth is the cheapest and independent of the rest, so it comes first in the build order.
+
+## Where we are
+
+- **Policy is a guard against accidents, not a sandbox.** The code says so in `command.ts` and `protectedCall.ts`; the policy plan reserves a `sandbox` key in the settings file (`POLICY_FILE_KEYS`) that "never changes what a level means", and lists a sandbox axis as separate work. What stands in for it today is the write-target check and a note on the File edits control, "commands can still write files".
+- **Where commands run.** The IDE runs `powershell.exe` on Windows and `$SHELL -l -c` elsewhere (`getShellCommand`, `resolveShell`); for a remote workspace (`remoteName` not empty or `local`) core hands the command to `ide.runCommand`, so a VS Code Remote window (WSL, SSH, Dev Containers) runs commands in the remote environment because the extension host itself is there. The CLI detects when it is _inside_ WSL (`isRunningInWsl`) and labels it. Neither can send a command _into_ WSL, a container or a sandbox from outside.
+- **A Windows Sandbox test recipe exists** (the `wsb` CLI, no logon, mapped folders) and is used for tests, not by the product.
+
+## What others do
+
+Read on 2026-11-09 through search results. Several of the Codex pages are third-party, partly AI-written mirrors, so Windows specifics are marked and should be checked against OpenAI's repository.
+
+| Project                                                                                                                                                   | Mechanism                                                                                                                                                                                                                                                                                                                           | Notes                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code sandboxing ([engineering post](https://anthropic.com/engineering/claude-code-sandboxing), [docs](https://code.claude.com/docs/en/sandboxing)) | Per-command filesystem and network restrictions: Seatbelt on macOS, bubblewrap with a network namespace on Linux and WSL2 (needs `bubblewrap` and `socat`); network through a proxy that enforces allowed domains. Open-sourced as `@anthropic-ai/sandbox-runtime`, which can also wrap a whole process (its MCP servers and hooks) | Secondary reports give the licence as Apache-2.0 and mention an alpha Windows backend; verify both in the repository. A reported 84 percent drop in permission prompts is from a third-party article and not verified |
+| Codex CLI ([security page](https://developers.openai.com/codex/security))                                                                                 | Workspace-write with network off by default; Seatbelt on macOS, Landlock plus seccomp (and bubblewrap) on Linux; a native Windows sandbox with restricted tokens and ACLs (sources disagree on firewall rules, a dedicated user and AppContainer); recommends WSL or Docker on Windows                                              | Shows that a native Windows sandbox is a large engineering job with failure modes on locked-down machines                                                                                                             |
+| Dev containers ([CLI docs](https://code.visualstudio.com/docs/devcontainers/devcontainer-cli.md))                                                         | `devcontainer up --workspace-folder` builds and starts the container from `devcontainer.json`; `devcontainer exec` runs a command in it using the container's `remoteUser`, `remoteEnv` and user environment probe; installable from npm as `@devcontainers/cli`                                                                    | A reference implementation, so we can drive it rather than reimplement the spec. It is not a security boundary by default (the user is often root-equivalent, the Docker socket may be mounted)                       |
+| Windows Sandbox                                                                                                                                           | A disposable lightweight VM from a `.wsb` file with mapped folders, optional networking, no persistence                                                                                                                                                                                                                             | Pro and Enterprise only, one instance at a time, slow to start. Strong isolation, poor fit for many short commands, plausible for a loop run                                                                          |
+
+## What "guaranteed" can honestly mean
+
+A jail is a set of properties, and each backend gives a different set. The control must say which ones hold, not just "sandboxed".
+
+| Property                  | Question it answers                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Write scope**           | Can anything outside the workspace (and a scratch area) be created, changed or deleted?           |
+| **Read scope**            | Can it read `~/.ssh`, browser profiles, other projects, environment secrets?                      |
+| **Network**               | Is egress denied, limited to named hosts, or open? Can it reach the host's localhost and the LAN? |
+| **Credentials**           | Which secrets are inside? The model API key must not be (see below)                               |
+| **Processes and devices** | Can it see or signal host processes, use the Docker socket, GPUs, USB?                            |
+| **Persistence**           | Is the environment disposable, or does damage in it survive the run?                              |
+| **Escapes**               | Symlinks and hard links out of the mount, `/proc`, mounted sockets, kernel exploits               |
+
+A backend's claim is whatever its **escape tests** show (W7), generated from the tests rather than written by hand. A container is not a VM; a WSL distro with `/mnt/c` automounted can write to the Windows drive; a dev container with the Docker socket is not jailed at all. The UI shows the properties that hold ("Docker: writes to the workspace only, no network, no host secrets") and warns where one does not.
+
+## Two ways to put the jail around the work
+
+| Approach                                              | What runs inside                                                                                                                         | Good for                                                                                                                      | Cost                                                                                                                                                 |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Executor: only commands run inside**             | Terminal commands (and, where the tools go through the executor, file reads and writes). The agent loop and model calls stay on the host | The IDE; keeps the model API key outside; works with any backend that can run a command; WSL and devcontainer fit it directly | File tools and MCP servers run on the host unless routed through the executor, so the guarantee covers commands and whatever is routed               |
+| **B. Whole process: the headless server runs inside** | `cn serve` (loop driver, tools, hooks, MCP), the IDE connects to it                                                                      | Loops and unattended runs: everything the agent does is inside, including file edits and MCP servers; the strongest guarantee | Model calls come from inside, so the API key must be handed in or the calls proxied from the host (a host-side proxy that adds the key; recommended) |
+
+Recommendation: build A first because it is smaller, delivers "run commands in WSL" and containers, and covers the main risk (what a command can do). Build B for loops once A's executor exists, because a loop is where nobody is watching and the guarantee matters most.
+
+## Design
+
+### The executor
+
+One interface used by the IDE's and the CLI's terminal tools (and later the file tools):
+
+```ts
+interface CommandExecutor {
+  kind: "local" | "wsl" | "container" | "devcontainer" | "sandbox";
+  describe(): IsolationProperties; // what holds, from the backend's tests
+  shell(): ResolvedShell; // the shell that parses the command: classifiers read it (P1)
+  toHostPath(inner: string): string; // and the reverse, for paths in results and file tools
+  run(
+    command: string,
+    opts: {
+      cwd: string;
+      env: Record<string, string>;
+      signal: AbortSignal;
+      onOutput(chunk: string): void;
+    },
+  ): Promise<{ exitCode: number | null }>;
+}
+```
+
+`shell()` matters: a command run in WSL is a bash command even on a Windows host, so the lint, the classifiers and the policy engine must read it with the grammar of the shell that will run it. That is the first rule of `command-analysis.md`, and an executor makes it explicit.
+
+### Backends
+
+- **WSL (feature, W1).** `wsl.exe -d <distro> --cd <linux path> -- bash -lc <command>`, a setting for the distro (default: the default distro), path translation both ways (`wslpath`, or `/mnt/c/...` and `\\wsl.localhost\...`), environment passed through (`WSLENV`), exit codes, abort by killing the process tree. The workspace should live in the Linux file system for speed; `/mnt/c` works but is slow and, unless `automount` is off, is a way out of any jail. This is a convenience first, and a jail only with the properties it can show (W7). Where VS Code is already attached with Remote WSL, the existing remote path applies and nothing new is needed.
+- **Container (W2).** `docker` or `podman` (rootless preferred): a long-lived container per session or loop, the workspace bind-mounted, the user mapped to the host user (not root), a read-only root file system with a writable scratch, no Docker socket, capabilities dropped, memory, CPU and process limits, `--network none` by default. Commands run with `exec`. An image is configured, with a documented default.
+- **Dev container (W3).** Detect `.devcontainer/devcontainer.json`; drive `devcontainer up` and `devcontainer exec` (the CLI is an optional dependency, offered when missing); use its `remoteUser`, `remoteEnv` and lifecycle commands, so the environment is the one the project already defines. Treat it as not jailed until its properties are tested: the mounts, user and sockets are the project's choice.
+- **OS sandbox on Linux, macOS and WSL (W4).** Wrap each command with bubblewrap or Seatbelt (and Landlock where available): writes limited to the workspace, a read allow or deny list, a network namespace. Consider depending on `@anthropic-ai/sandbox-runtime` rather than writing profiles (check its licence, maintenance and Windows status first; D2).
+- **Windows (W9).** Two routes, both research: **WSL2 with bubblewrap** (practical, reuses W1 and W4) and **Windows Sandbox** as a disposable VM for whole loop runs (the `wsb` recipe already exists for tests). A native restricted-token or AppContainer sandbox is a spike to size, not a plan, given how much work and how many failure modes the Codex write-ups describe.
+
+### Credentials and the network
+
+- **The model API key stays outside.** In approach A the loop runs on the host, so nothing changes. In approach B the host runs a small proxy that adds the key; the jailed process is given the proxy's address and a per-run token and cannot read the key. This is also what makes a network allowlist enforceable: one egress point.
+- **Network modes**: `none`, `allowlist` (the model proxy, the package registries the project needs, named hosts), `open`. Presets for common stacks. The jailed environment gets its own proxy settings; direct sockets are blocked by the backend, not by convention.
+- **Secrets**: environment is scrubbed by default (an allowlist of variables passed in), and `~/.ssh`, cloud credential folders and the Continuous config are never mounted. Protected paths (`protectedPaths.ts`) become a statement about the mount, not a pattern list.
+
+### Policy and the UI
+
+- **The `sandbox` axis becomes real**: `sandbox: { backend, writes, network }` in the settings file. The policy engine reads whether a call will run contained and with what properties; its decisions loosen only where the property that matters holds (a write inside a write-scoped jail, a command with no network). The floor deny list and the reviewer stay.
+- **Loop presets**: "Unattended, in a jail" pairs the Unattended level with a backend whose properties cover what the level allows, and refuses to start without one.
+- **A badge** on the chat and the loop strip: backend, and the properties that hold ("workspace only, no network, no host secrets"). A command that failed because the jail denied it says so (a denied write or connection, with the path or host), so the agent and the person know it was the jail.
+- **Fail closed**: if the backend is missing or stops, commands do not fall back to the host. They fail with a message.
+
+## Build order
+
+| #   | Scope                                                                                                                                                                                                                                           | Depends on | Done when                                                                                                                             | State       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| W0  | The `CommandExecutor` interface and the local executor (today's behaviour) behind both the IDE's and the CLI's terminal tools; the shell kind and path mapping come from the executor                                                           | none       | Every existing terminal test passes through the local executor unchanged                                                              | Not started |
+| W1  | **Run commands in WSL**: a setting (`terminal.shell: wsl`, `terminal.wsl.distro`), `wsl.exe` invocation, path translation, environment, exit codes, abort, the shell kind `bash` for the classifiers; a status line saying where commands run   | W0         | On a Windows machine with a distro, a command runs in it with the workspace as its directory, and the lint and policy read it as bash | Not started |
+| W2  | Container executor (docker, podman rootless): bind-mounted workspace, mapped user, read-only root, no socket, limits, `--network none` default, a configured image                                                                              | W0         | The escape tests of W7 pass for it, and its properties show in the UI                                                                 | Not started |
+| W3  | Dev container: detect, `devcontainer up` and `exec`, offer to install the CLI, use `remoteUser` and `remoteEnv`; properties reported as found (mounts, user, socket)                                                                            | W0         | A repository with a `devcontainer.json` runs commands in its container; a mounted Docker socket shows as "not jailed"                 | Not started |
+| W4  | OS sandbox wrapper for Linux, macOS and WSL (bubblewrap, Seatbelt, Landlock), or `sandbox-runtime` if D2 allows                                                                                                                                 | W0         | Writes outside the workspace and reads of `~/.ssh` fail; the denial is named in the result                                            | Not started |
+| W5  | Whole-process jail for `cn serve` and loops (approach B): the server runs in a container or WSL, the IDE connects, model calls go through a host proxy that adds the key                                                                        | W2, W6     | A loop runs with file edits, MCP servers and hooks all inside; the key is not readable there                                          | Not started |
+| W6  | Network policy: `none`, `allowlist` and `open`, one egress proxy, presets for registries; direct sockets blocked by the backend                                                                                                                 | W2         | A command to a host not on the list fails; the model proxy and a listed registry work                                                 | Not started |
+| W7  | Escape tests and generated claims: write outside the mount, symlink and hard link out, `/proc` and `/sys`, the Docker socket, `/mnt/c`, environment secrets, `~/.ssh`, localhost and LAN reach; per backend; the UI text comes from the results | W1 to W4   | Each backend's properties are produced by a test run, and a regression changes the claim                                              | Not started |
+| W8  | Policy integration: the `sandbox` axis in settings, decisions that read the properties, the loop preset "Unattended, in a jail", the badge, fail-closed behaviour                                                                               | W7         | A write inside a write-scoped jail is allowed without a prompt where it would ask outside one; no backend means no start              | Not started |
+| W9  | Windows research: WSL2 with bubblewrap against Windows Sandbox for whole loop runs; size a native restricted-token sandbox and say whether to do it                                                                                             | W1, W4     | A short report with a recommendation and a measured start-up time and failure modes                                                   | Not started |
+
+## Decisions for the owner
+
+| #   | Decision                                                     | Options and a recommendation                                                                                                                                                                       |
+| --- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Order of backends                                            | WSL as a feature first (W1, cheap, asked for directly), then a container (W2), then the OS sandbox and dev container (recommended). The whole-process jail for loops (W5) once the executor exists |
+| D2  | Write our own sandbox wrapper or depend on `sandbox-runtime` | Evaluate it in W4: licence, maintenance, Windows support and whether it can wrap a single command. Depend on it if it fits; it avoids owning Seatbelt profiles and bubblewrap arguments            |
+| D3  | Default when nothing is configured                           | Unchanged: no isolation, and say so in the loop controls ("commands run on this machine with your access"). Never imply a jail that is not there                                                   |
+| D4  | Words for the guarantee                                      | "Contained" only for a backend whose escape tests pass on this machine; otherwise "isolated by default settings" or "not isolated". The text is generated from W7                                  |
+| D5  | Is a dev container a jail                                    | Not by default. It is an environment. It becomes a jail only if its properties, read from its configuration and tests, say so                                                                      |
+
+## Out of scope
+
+- Hardening the host against a hostile model beyond the backend's own guarantees (kernel exploits, hypervisor escapes): a VM backend is the answer, and its limits are its own.
+- Isolating the model providers or MCP servers that are remote by nature.
+- Replacing the policy engine: a jail adds properties the engine can use; the floor and the reviewer stay.

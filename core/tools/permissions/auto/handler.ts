@@ -1,7 +1,9 @@
 import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { ILLM } from "../../..";
-import type { ApprovalSettings } from "../approval";
+import { levelOfCall, type ApprovalSettings } from "../approval";
+import type { ShellKind } from "../../../util/shell";
 import { DecisionSource } from "../decide";
+import { uriToPath } from "../names";
 import { EvaluateInput, evaluateToolPolicyWithRules } from "../evaluate";
 import type { ToolPermissions } from "../rules";
 import { ReviewCategory } from "./categories";
@@ -22,7 +24,7 @@ export interface AutoReviewRequest {
   parsedArgs: Record<string, unknown>;
   processedArgs?: Record<string, unknown>;
   history: ReviewHistory;
-  /** Approval mode and switches; absent means Manual. */
+  /** The level of each area; absent means every call is reviewed. */
   approval?: ApprovalSettings;
   /** No person to ask: an unusable reviewer refuses. */
   headless?: boolean;
@@ -55,12 +57,20 @@ export interface AutoReviewDeps {
   enabled: boolean;
   /** The model chosen for the reviewer role; never a chat model. */
   reviewer: Pick<ILLM, "chat"> | null | undefined;
+  /** The shell commands run in (resolveShell) */
+  shell?: ShellKind;
   /** `modeModels.reviewer.reasoningEffort`, as completion options. */
   reviewerReasoning?: ReviewerReasoning;
   environment: ReviewEnvironment;
   sessions: AutoReviewSessions;
   timeoutMs?: number;
   signal?: AbortSignal;
+}
+
+/** A workspace folder as a path: the IDE gives file URIs. */
+function folderPath(dir: string | undefined): string | undefined {
+  if (!dir) return undefined;
+  return dir.startsWith("file:") ? uriToPath(dir) : dir;
 }
 
 /** Sources where the user or the safety floor already spoke: the reviewer cannot move them. */
@@ -93,6 +103,8 @@ export async function autoReviewToolCall(
     processedArgs: req.processedArgs,
     permissions: deps.permissions,
     approval: req.approval,
+    cwd: folderPath(deps.environment.workspaceDirs?.[0]),
+    shell: deps.shell,
   });
   const base = { displayValue: evaluated.displayValue };
   const settled = (
@@ -114,6 +126,17 @@ export async function autoReviewToolCall(
   }
   if (evaluated.source && FINAL_SOURCES.includes(evaluated.source)) {
     return settled("ask", "Your rules ask before this runs.");
+  }
+
+  // Only an area set to Automatic has a reviewer: the others leave an open
+  // call to the person
+  const found = levelOfCall(req.approval, req.toolName, deps.tool, {
+    parsedArgs: req.parsedArgs,
+    cwd: folderPath(deps.environment.workspaceDirs?.[0]),
+    shell: deps.shell,
+  });
+  if (found && found.level !== "automatic") {
+    return settled("ask", "This area is not set to Automatic.");
   }
 
   // The call is open. From here Auto is the only thing that may loosen it.

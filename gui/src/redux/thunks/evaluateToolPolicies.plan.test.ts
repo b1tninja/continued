@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import {
   evaluateToolPolicies,
@@ -83,7 +84,7 @@ describe("Plan mode holds tools that may make changes", () => {
   });
 
   it("asks even when the user's allow rule or approval mode allowed it", async () => {
-    for (const source of ["allow-rule", "category", "yolo"]) {
+    for (const source of ["allow-rule", "permissive"]) {
       const { result } = await run(
         "github_create_issue",
         { policy: ALLOW, source },
@@ -94,18 +95,28 @@ describe("Plan mode holds tools that may make changes", () => {
     }
   });
 
-  it("YOLO does not lift it: Plan mode changes nothing", async () => {
+  async function planCall(level: "permissive" | "yolo") {
     const ide = new MockIdeMessenger();
     ide.responseHandlers["tools/evaluatePolicy"] = async () =>
-      ({ policy: ALLOW, source: "yolo" }) as any;
-    const result = await evaluateToolPolicy(
+      ({ policy: ALLOW, source: level }) as any;
+    return evaluateToolPolicy(
       ide,
       [mcpTool],
       call("github_create_issue"),
       { github_create_issue: ALLOW },
-      { mode: "yolo" },
+      { levels: { ...DEFAULT_POLICY_LEVELS, tools: level } },
       "plan",
     );
+  }
+
+  it("YOLO runs it: the level says everything runs", async () => {
+    const result = await planCall("yolo");
+    expect(result.policy).toBe(ALLOW);
+    expect(result.source).toBe("yolo");
+  });
+
+  it("Permissive does not lift it: Plan mode changes nothing below YOLO", async () => {
+    const result = await planCall("permissive");
     expect(result.policy).toBe(ASK);
     expect(result.source).toBe("plan-mode");
   });
@@ -145,5 +156,51 @@ describe("Plan mode holds tools that may make changes", () => {
       { toolPolicies: { github_create_issue: ALLOW } },
     );
     expect(result.policy).toBe(ALLOW);
+  });
+});
+
+describe("a command the parser vouched as only reading, in Plan mode", () => {
+  it("runs: that is how a re-plan looks at the repository", async () => {
+    const terminal = {
+      ...mcpTool,
+      function: { ...mcpTool.function, name: "run_terminal_command" },
+    } as any;
+    const ide = new MockIdeMessenger();
+    ide.responseHandlers["tools/evaluatePolicy"] = async () =>
+      ({
+        policy: ALLOW,
+        source: "permissive",
+        readOnly: "only reads: ls",
+      }) as any;
+    const result = await evaluateToolPolicy(
+      ide,
+      [terminal],
+      call("run_terminal_command"),
+      { run_terminal_command: ALLOW },
+      undefined,
+      "plan",
+    );
+    expect(result.policy).toBe(ALLOW);
+    expect(result.readOnly).toBe("only reads: ls");
+  });
+
+  it("a command that may write still waits", async () => {
+    const terminal = {
+      ...mcpTool,
+      function: { ...mcpTool.function, name: "run_terminal_command" },
+    } as any;
+    const ide = new MockIdeMessenger();
+    ide.responseHandlers["tools/evaluatePolicy"] = async () =>
+      ({ policy: ALLOW, source: "permissive" }) as any;
+    const result = await evaluateToolPolicy(
+      ide,
+      [terminal],
+      call("run_terminal_command"),
+      { run_terminal_command: ALLOW },
+      undefined,
+      "plan",
+    );
+    expect(result.policy).toBe(ASK);
+    expect(result.source).toBe("plan-mode");
   });
 });

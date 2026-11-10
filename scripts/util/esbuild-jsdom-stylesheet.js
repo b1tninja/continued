@@ -32,6 +32,11 @@ const jsdomDefaultStylesheetPlugin = {
           return undefined;
         }
         const source = await fs.promises.readFile(args.path, "utf8");
+        // jsdom >= 31 ships the stylesheet as a generated module and no
+        // longer reads the .css file here: nothing to inline.
+        if (!source.includes("default-stylesheet.css")) {
+          return undefined;
+        }
         if (!READ_DEFAULT_STYLESHEET.test(source)) {
           throw new Error(
             `jsdom-default-stylesheet: could not find the default stylesheet read in ${args.path}; update scripts/util/esbuild-jsdom-stylesheet.js for this jsdom version`,

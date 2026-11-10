@@ -5,6 +5,11 @@ import path from "path";
 import type { LoopState } from "core/index.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  getPolicyLevels,
+  resetPolicyLevels,
+  setPolicyLevels,
+} from "../permissions/policyLevels.js";
 import { services } from "../services/index.js";
 import {
   createSession,
@@ -95,6 +100,8 @@ describe("Loop mode's parallel waves in the CLI", () => {
 
   beforeEach(async () => {
     await resetFlowState();
+    // The levels are process-wide; an earlier test's must not carry over
+    resetPolicyLevels();
     updateSessionLoop(undefined);
     resetLoopMemory();
     created.length = 0;
@@ -190,7 +197,7 @@ describe("Loop mode's parallel waves in the CLI", () => {
     expect(loopNow().parallel?.map((r) => r.itemId)).toEqual(["1"]);
     expect(kicks).toBe(1);
     // The loop's budget counts the worker's tokens
-    expect(getCurrentSession().usage.promptTokens).toBe(100);
+    expect(getCurrentSession().usage?.promptTokens).toBe(100);
 
     // The lexer reports done with a check: it waits for the check, in the
     // main checkout, once its patch is in
@@ -292,6 +299,13 @@ describe("Loop mode's parallel waves in the CLI", () => {
       itemId: "1",
     });
     updateSessionLoop(undefined);
+    resetPolicyLevels();
+    // Supervised is the Plan edits and Questions levels at manual
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "manual",
+      questions: "manual",
+    });
     startLoopFromPlan("normal");
     setRunningLoopParallel(true);
     expect(loopNow().autonomy).toBe("supervised");

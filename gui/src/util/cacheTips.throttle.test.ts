@@ -79,7 +79,7 @@ describe("cacheTips: throttled with caching off", () => {
   it("is quiet for models the cache button does not cover (OpenAI counts cached tokens)", () => {
     expect(tip(model("openai", "gpt-4o"), "off", throttled(5))).toBeUndefined();
     expect(
-      tip(model("bedrock", "us.amazon.nova-pro-v1:0"), "off", throttled(5)),
+      tip(model("bedrock", "us.amazon.nova-premier-v1:0"), "off", throttled(5)),
     ).toBeUndefined();
   });
 

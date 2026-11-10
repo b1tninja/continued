@@ -104,6 +104,11 @@ export function resolveCatalogModels<T>(
   models: (T | null)[] | undefined,
   catalogModels: CatalogModel[] | undefined,
   modeModels?: unknown,
+  /**
+   * Also add every catalog model and variant the config does not use, with
+   * no roles, so a client can offer them elsewhere (VS Code's model picker).
+   */
+  offerAll = false,
 ): { models: (T | null)[] | undefined; errors: ConfigValidationError[] } {
   const errors: ConfigValidationError[] = [];
   if (!catalogModels || catalogModels.length === 0) {
@@ -150,6 +155,22 @@ export function resolveCatalogModels<T>(
     }
     present.add(pick);
     resolved.push(model as unknown as T);
+  }
+
+  if (offerAll) {
+    for (const entry of catalogModels) {
+      const refs = [
+        entry.name,
+        ...Object.keys(entry.variants ?? {}).map((v) => `${entry.name}#${v}`),
+      ];
+      for (const ref of refs) {
+        if (present.has(ref)) continue;
+        const { model } = expand(ref, catalog, { roles: [] });
+        if (!model) continue;
+        present.add(ref);
+        resolved.push(model as unknown as T);
+      }
+    }
   }
 
   return {

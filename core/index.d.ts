@@ -445,6 +445,10 @@ export interface LoopItemState {
   setAside?: boolean;
   /** What the run said it did (finish_item), or why it stopped */
   summary?: string;
+  /** Why a stuck run could not finish it, as the run reported (finish_item) */
+  blocker?: LoopBlocker;
+  /** Blocker dependency: what must be done before this item */
+  needs?: string[];
   /**
    * Unattended: questions that got no answer in time, so the item went on
    * with its best default. The questions stay open in the inbox.
@@ -518,6 +522,8 @@ export interface LoopQuestion {
   type?: QuestionType;
   /** The default the item continued with (kind assumption) */
   assumption?: string;
+  /** Two to four choices the agent offered, its default first */
+  options?: string[];
   /** The held tool call (kind approval) */
   approval?: { toolName: string; summary: string; grantKey: string };
   askedAt: string;
@@ -605,6 +611,36 @@ export interface LoopBudget {
 export type LoopAutonomy = "supervised" | "auto" | "unattended" | "idgaf";
 
 /**
+ * Why an item is stuck, as the run reports it (finish_item `blocker`), so the
+ * re-plan starts from the cause and not from a sentence:
+ * - answer: it needs something only the person can say or supply;
+ * - observe: it cannot see what it needs (a result, a log, a running system);
+ * - plan: the item is wrong: too big, too vague, or not what the goal needs;
+ * - environment: a tool, credential, network or the machine is in the way;
+ * - dependency: other work must be done first (`needs` names it).
+ */
+export type LoopBlocker =
+  "answer" | "observe" | "plan" | "environment" | "dependency";
+
+/**
+ * The two policy areas a loop reads while it runs (plans/policy-areas.md):
+ * what happens to a plan or re-plan (Plan edits) and who answers a question
+ * (Questions). A loop started from the IDE or the CLI carries the levels the
+ * person chose and follows them when they change. A loop saved before
+ * policy areas has none and keeps using its autonomy level.
+ */
+export interface LoopPolicy {
+  plan: import("./tools/permissions/policy").PolicyLevel;
+  questions: import("./tools/permissions/policy").PolicyLevel;
+  /** Permissive on Plan edits: new to-dos a re-plan may add by itself */
+  maxNewPlanItems?: number;
+  /** Question types the person always decides */
+  youDecide?: import("./tools/permissions/policy").QuestionType[];
+  /** Question types the agent may decide */
+  agentDecides?: import("./tools/permissions/policy").QuestionType[];
+}
+
+/**
  * How the loop moves through the plan, next to the autonomy level (how much
  * it does without the person). See LOOP_STRATEGIES in core/util/loopMode.ts.
  * - finish: plan order; re-plan only when nothing can run;
@@ -648,6 +684,10 @@ export interface LoopState {
   budget: LoopBudget;
   /** Missing on loops saved before autonomy levels: treated as "auto" */
   autonomy?: LoopAutonomy;
+  /** The Plan edits and Questions levels in force; see LoopPolicy */
+  policy?: LoopPolicy;
+  /** The plan's title, to name the loop in its panel */
+  title?: string;
   /** Missing on loops saved before strategies: treated as "finish" */
   strategy?: LoopStrategy;
   /**
@@ -671,11 +711,21 @@ export interface LoopState {
     report?: {
       outcome: "done" | "stuck" | "waiting" | "later";
       summary?: string;
+      /** Outcome stuck: what is in the way (finish_item blocker) */
+      blocker?: LoopBlocker;
+      /** Blocker dependency: the work that must come first */
+      needs?: string[];
       /** What a later item should know (finish_item notes) */
       notes?: string;
     };
     /** A re-plan: the to-dos it started from, to tell whether it adds scope */
     planTexts?: string[];
+    /**
+     * A re-plan: the check of each to-do it started from, by item id, so a
+     * re-plan that changes the check of an item that ended stuck (its check
+     * never ran) is held like one that changes a failed check
+     */
+    planChecks?: Record<string, string>;
     /** A check-in re-plan (check-in strategy): why it was due */
     checkIn?: string;
     /** A repair re-plan (fix forward): the failed item's text */
@@ -1191,6 +1241,14 @@ export interface ChatHistoryItem {
   reasoning?: Reasoning;
   appliedRules?: RuleMetadata[];
   conversationSummary?: string;
+  /**
+   * Request-time only, never saved: a prompt cache point goes right after this
+   * item (a fork point, such as a Loop item's first message), so a retry, a
+   * branch or a subagent that starts from the same context reads the cached
+   * prefix instead of writing it again. Set by the CLI's loopRequestHistory
+   * and read by buildChatRequestBody.
+   */
+  cachePin?: boolean;
 }
 
 export interface LLMFullCompletionOptions extends BaseCompletionOptions {
@@ -1807,6 +1865,12 @@ export interface ToolExtras {
   }) => void;
   config: ContinueConfig;
   codeBaseIndexer?: CodebaseIndexer;
+  /**
+   * Set when the call runs in another checkout (`tools/call` with
+   * `workspaceDirs`: a Loop worker's worktree). `ide` already answers these
+   * folders; the exact edit tools run only with this set.
+   */
+  workspaceDirs?: string[];
 }
 
 export interface McpToolMeta {
@@ -2540,19 +2604,40 @@ export type ModeReasoningEffort = "off" | "low" | "medium" | "high";
 
 /** Chat model (by title) and reasoning effort to use in a mode. */
 export interface ModeModelSetting {
-  /** The default model: selected when switching into the mode. */
-  title: string;
+  /**
+   * The default model: selected when switching into the mode. Absent for an
+   * entry that only chooses a prompt (`loop: { prompt: short }`).
+   */
+  title?: string;
   /**
    * Every model offered in the mode, default first. Absent when the config sets
    * only `model`, in which case all models are offered as before.
    */
   titles?: string[];
   reasoningEffort?: ModeReasoningEffort;
+  /**
+   * Which system prompt the use gets: `full`, `short`, or the name of a
+   * prompt block (core/llm/prompts/usePrompts.ts). Absent: the model's
+   * prompt profile decides.
+   */
+  prompt?: string;
+  /** The prompt block's text, when `prompt` names one. */
+  promptText?: string;
+  /**
+   * The reminder appended to every user message of the use's requests
+   * (`modeModels.<use>.tail`): `"on"` for the built-in line of the turn kind,
+   * `"off"`, or a short text. Absent: on for Loop items and for the `short`
+   * prompt profile, off elsewhere (core/llm/prompts/usePrompts.ts).
+   */
+  tail?: string;
 }
 
-/** Whether rules are sent in each mode. A mode left out is enabled. */
+/**
+ * Whether rules are sent in each mode. A mode left out is enabled; `loop`
+ * follows `agent` and `replan` follows `plan` when left out.
+ */
 export type RulesByModeConfig = Partial<
-  Record<"chat" | "agent" | "plan", boolean>
+  Record<"chat" | "agent" | "plan" | "loop" | "replan", boolean>
 >;
 
 /**
@@ -2584,6 +2669,11 @@ export interface ContinueConfig {
   mcpServerStatuses: MCPServerStatus[];
   rules: RuleWithSource[];
   modelsByRole: Record<ModelRole, ILLM[]>;
+  /**
+   * Catalog models (and variants) that this config does not use for any
+   * role, offered to VS Code's model picker next to the config's chat models.
+   */
+  offeredModels?: ILLM[];
   selectedModelByRole: Record<ModelRole, ILLM | null>;
   modeModels?: ModeModelsConfig;
   /** Per-mode rules switch from `rulesByMode:` in config.yaml; a missing mode is on. */

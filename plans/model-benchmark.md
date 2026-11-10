@@ -137,4 +137,102 @@ From the 2026-11-08 runs: a plan scenario is 2 to 4 requests and 10k to 40k inpu
 - Plan quality beyond structure needs a judge; keep it a separate column, scored by the reviewer model with the plan turn's rubric.
 - Provider bills lag; reconcile the accounting column against the bill weekly, not per run.
 - Local servers vary run to run in timing; compare tokens and turns, not seconds, between local and hosted.
+- A scenario that writes files can leave a process behind: on 2026-11-09 a Nova 2 Lite loop ran `node --test --watch` in its seed, the watcher outlived the run and held the run folder, and the next invocation could not move it. The sandbox of section 7 is the fix; until then, check for stray `node` processes after a slice.
 - Models on the account not yet in the matrix: Kimi K3 and K3.1, Kimi K2 Thinking, Grok, GLM 5, MiniMax M2.5, Nemotron; each gets the Tier 1 probe first.
+
+## 10. Results
+
+### 10.1 The tail reminder on Nova 2 Lite (2026-11-09, roadmap row I6)
+
+The question: does `modeModels.<use>.tail` (#362), the one-line reminder appended to every user message of a request, make a small model stop less often after announcing a step, what does it do to the finish report, and what does it cost in cache and tokens? Three arms on `nova2lite` (default profile, `full`), `loop-basic` and `agent-acts`, three runs each: `--tail on` (the built-in act line, "Act until the request is done. A reply with no tool call ends the turn."), `--tail off`, and a text that names the report tool, "Act until the item is done, then report it with FinishItem. A reply with no tool call ends the turn." Eighteen runs, $1.44 at list price. The six loop runs of the first two arms were rerun after the runner's token budget was found to count Nova's cache reads twice (every loop died at about 45 requests, half its budget); the killed runs ($0.50) are left out below. `nudges` are the CLI's own end-of-turn nudges by kind (`core/util/turnEnd.ts`, at most four per agent turn and one per Loop item turn); "without FinishItem" counts item attempts the CLI had to nudge for the report; "churn" is the prefix churn column, requests that did not extend the one before them over all requests.
+
+`loop-basic` (supervised loop, approvals answered by the harness; budget 90 requests or 900k tokens):
+
+| Arm             | Outcomes          | Nudges act / finish / plan | Attempts | Without FinishItem | Requests per attempt | Cache read | Churn  | Cost  |
+| --------------- | ----------------- | -------------------------- | -------- | ------------------ | -------------------- | ---------- | ------ | ----- |
+| tail on         | done 2, killed 1  | 2 / 6 / 1                  | 18       | 6                  | 10.9                 | 78%        | 19/230 | $0.38 |
+| tail off        | killed 3          | 0 / 6 / 0                  | 15       | 6                  | 14.5                 | 75%        | 15/244 | $0.54 |
+| FinishItem text | stuck 1, killed 2 | 1 / 5 / 0                  | 10       | 5                  | 18.7                 | 83%        | 10/215 | $0.39 |
+
+`agent-acts` (`--auto`, one turn, "create the module, the test, run it, report"):
+
+| Arm             | Outcomes | Nudges act / finish / plan | Runs at the four-nudge cap | Turns (median) | Cache read | Churn | Cost   |
+| --------------- | -------- | -------------------------- | -------------------------- | -------------- | ---------- | ----- | ------ |
+| tail on         | done 3   | 8 / 0 / 0                  | 2 of 3                     | 14             | 57%        | 0/39  | $0.061 |
+| tail off        | done 3   | 12 / 0 / 0                 | 3 of 3                     | 10             | 70%        | 0/34  | $0.037 |
+| FinishItem text | done 3   | 12 / 0 / 0                 | 3 of 3                     | 11             | 71%        | 0/34  | $0.038 |
+
+What the numbers say, at n=3 per cell (suggestive, not settled; the scorecard flags it):
+
+- The built-in line helped the loop finish: two of three loops ended `done` with all four items with it, none without it and none with the FinishItem text (one of those stopped after three items failed in a row, the other two hit the token budget). Requests per item attempt were lowest with the line (10.9 against 14.5 and 18.7).
+- It did not make the model report. Item attempts that ended without `FinishItem` and had to be nudged: 6 of 18 with the line, 6 of 15 without, 5 of 10 with the text that names the tool. The nudge stays the backstop, and the text that names the tool did not win: the built-in texts in `core/llm/prompts/turns.ts` stay as they are.
+- In agent turns the announce-and-stop pattern is what the act nudge catches: "Let me check the contents of the existing directories to understand the structure better:" and no tool call. With the line, two of three runs still reached the four-nudge cap; without it, and with the FinishItem text, all three did. Every agent run ended `done` with 7 or 8 of 8 checks whatever the arm, so on this scenario the line changes how the turn gets there, not whether.
+- The line on every user message costs nothing in prefix: zero churn inside any item attempt or agent turn in all eighteen runs (the first live run of #362, with the line on the newest message only, broke the prefix at the first user message on every request that followed an answer). The breaks the column does show are conversation starts, one per item attempt and one per plan-to-act switch, which the Loop makes by design. Cache read ratios: 75 to 83% on the loops, 57 to 71% on the agent turns.
+- Cost: the loops with the line cost less in total because two finished before the budget; the agent turns with it cost more because they ran 14 turns against 10. A `loop-basic` run on Nova 2 Lite that runs to its budget costs $0.09 to $0.21, not the ten cents the first (budget-killed) run suggested.
+- Not measured: Qwen3 Coder (row I6 names it), the `short` profile, and any arm beyond n=3.
+
+Runs and scorecards (outside the repository): the session's scratchpad `bench/tail-on`, `bench/tail-off`, `bench/tail-text`, each with `scorecards/records.jsonl`; the per-arm table is `arms-final.md` beside them, and a copy of the records is in the side-session notes folder (`tail-measurement.md`).
+
+### 10.2 The tail reminder on Qwen3 Coder 30B (2026-11-09, roadmap row I6)
+
+The same question on the second model row I6 names: `qwen3-coder-30b` (`qwen.qwen3-coder-30b-a3b-v1:0` on Bedrock, $0.15 in / $0.60 out per MTok), `loop-basic` and `agent-acts`, `--tail on` against `--tail off`, three runs per cell, on the `full` profile and again on the `short` profile, where the tail is on by default, so that pair is the one the CLI ships for a small model. Twenty-four runs, $1.24 at list price, bundle built from commit c5a824d45 (the core of 10.1); the same four arms on the local Strata server's Qwen3.8-Flash follow at the end of this section. Columns as in 10.1, plus "leaks": assistant replies that wrote a tool call as text (`<function=Write>...</function>`, Qwen's own form) instead of making it, which the `no-text-leaks` check counts and the record now carries as `textLeaks`.
+
+`loop-basic` (supervised loop, approvals answered by the harness; budget 90 requests or 900k tokens):
+
+| Profile, arm    | Outcomes                  | Nudges act / finish / plan | Attempts | Without FinishItem | Requests per attempt | Cache read | Churn  | Leaks (runs) | Cost  |
+| --------------- | ------------------------- | -------------------------- | -------- | ------------------ | -------------------- | ---------- | ------ | ------------ | ----- |
+| full, tail on   | done 2, killed 1          | 0 / 0 / 1                  | 11       | 0                  | 16.5                 | 0%         | 11/207 | 1 (1)        | $0.29 |
+| full, tail off  | done 1, stuck 1, killed 1 | 0 / 0 / 2                  | 6        | 0                  | 23.2                 | 0%         | 6/163  | 3 (1)        | $0.24 |
+| short, tail on  | done 1, stuck 1, killed 1 | 0 / 0 / 2                  | 7        | 0                  | 17.6                 | 0%         | 7/164  | 0            | $0.25 |
+| short, tail off | killed 3                  | 0 / 2 / 0                  | 13       | 2                  | 19.5                 | 0%         | 13/277 | 2 (2)        | $0.38 |
+
+`agent-acts` (`--auto`, one turn, "create the module, the test, run it, report"):
+
+| Profile, arm    | Outcomes | Checks of 8 | Nudges act / finish / plan | Turns (median) | Cache read | Churn | Leaks (runs) | Cost   |
+| --------------- | -------- | ----------- | -------------------------- | -------------- | ---------- | ----- | ------------ | ------ |
+| full, tail on   | done 3   | 7, 6, 6     | 0 / 0 / 0                  | 1              | 0%         | 0/13  | 2 (2)        | $0.009 |
+| full, tail off  | done 3   | 8, 6, 6     | 0 / 0 / 0                  | 1              | 0%         | 0/9   | 2 (2)        | $0.006 |
+| short, tail on  | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 16             | 0%         | 0/42  | 0            | $0.042 |
+| short, tail off | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 12             | 0%         | 0/34  | 0            | $0.031 |
+
+What the numbers say, at n=3 per cell:
+
+- There were no announced-step stops to remove. Qwen3 Coder ended no turn in any of the 24 runs on an announcement; the act nudge never fired. The claim behind #362, fewer announce-and-stop turns with the line, has nothing to measure on this model. The one way it ends a turn without a tool call, apart from the report, is a tool call written as text: 10 such replies in 8 of 24 runs, and the line did not change that (with the full profile, two of three agent runs in each arm ended after one such turn with nothing done). The nudge does not catch it either: `announcesNextStep` in `core/util/turnEnd.ts` reads the last paragraph, and that paragraph is the function block. In a Loop item the finish nudge catches it (the two "without FinishItem" attempts of the short/off arm are each a leaked call followed by "You ended without reporting"); in an agent turn nothing does, and the run ends `done` with the request untouched. Counting a leaked call as an announcement in `turnEnd.ts` is still open; the prompt side landed while these arms ran: #366 (merged 2026-11-09) adds the `tailored` profile, the short text plus a group that quotes the tool-call markup Qwen3-Coder was trained on and says it does nothing as text, and `promptProfile()` now returns it for this model, so the `full` and `short` arms here are the two profiles the CLI no longer picks for it by default. #366's own Bedrock runs saw no leak under `tailored` against 3 of 6 under `short`. The bundle here predates it; the tail on against off under `tailored` is the next slice on this model.
+- It reports by itself. Zero item attempts without FinishItem in three of four arms (Nova: 6 of 18 with the line), so the FinishItem text considered in 10.1 has no case on this model.
+- Loops finished more often with the line, in the same direction as Nova: full profile 2 of 3 done against 1 of 3, requests per attempt 16.5 against 23.2; short profile 1 against 0 done, 17.6 against 19.5. Suggestive at n=3, and the loop failures have nothing to do with the tail: the two stuck runs never presented a plan (one leaked PresentPlan as text three times; the other sent `todos` as a bulleted string seven times, "todos must be a non-empty array of strings"), and the killed runs spent their requests on items whose check kept failing on the truncate function, and on shell commands written for a POSIX shell (`test -f`, `&&`, `ls -la`) that the Bash tool on this Windows host runs through PowerShell, as its description says: 11 to 21 failed Bash calls per arm. Nova ran on the same host.
+- Cache: Bedrock returned zero cache read tokens on every request of the 909 in these arms, so the cache column cannot be measured for this row. The request dumps show zero prefix churn inside any attempt or agent turn in all 24 runs; every break the column counts is an attempt start (the churn count equals the attempt count in each loop arm).
+- The short profile reads the same way as the full one for tail on against off. The larger difference here is short against full on `agent-acts`: the one-turn leaks happened in 4 of 6 full-profile runs and in none of the 6 short-profile runs, which all passed 8 of 8 checks in 9 to 16 turns. The next slice on this model should run with `--profile short`.
+- Cost: $0.29, $0.24, $0.25 and $0.38 for the four loop cells (the three killed short/off loops each ran to 90 requests); the agent cells are under five cents each.
+- A scorer fix found here: `seedCheck` matched a `file-exists` expectation to the first seed check of that name whenever neither had a command, so a second file check took the first's verdict. The one-turn runs above scored 7 of 8 before the fix and 6 of 8 after. Rescoring the Nova arms of 10.1 moves three agent runs from 8 to 7 of 8 (the test file written under another name); the sentence there, 7 or 8 of 8 in every arm, stands.
+- Decision for row I6: the built-in texts in `core/llm/prompts/turns.ts` stay. Nothing in these 24 runs argues for changing either line; what they argued for, the leak handling, is the prompt side of #366 plus the `turnEnd.ts` rule above.
+
+Runs and scorecards (outside the repository): the session's scratchpad `bench/qwen-tail-on`, `bench/qwen-tail-off`, `bench/qwen-short-tail-on`, `bench/qwen-short-tail-off`, each with `scorecards/records.jsonl`; the per-arm table is `arms-qwen.md` beside them, and a copy of the records and scorecards is in the side-session notes folder (`qwen-tail-measurement/`).
+
+#### The same four arms on Qwen3.8-Flash, local Strata (2026-11-09)
+
+The `strata` row (`qwen3.8-flash-next-nvfp4-nvfp4`, 524k context, reasoning on by the server's default, free) with the same bundle, scenarios, arms and n=3, one arm at a time so the server's four conversation-cache slots were never shared between arms. Twenty-four runs, about 1h50 of wall time, 26 to 30 minutes per arm. The server reports cache reads in the usage block, so the cache column is measured here, and the runner's `/metrics` delta adds the server's own `reused` count over the requests its sliding window kept.
+
+`loop-basic`:
+
+| Profile, arm    | Outcomes         | Nudges act / finish / plan | Attempts | Without FinishItem | Requests per attempt | Cache read | Server reused | Churn  | Leaks |
+| --------------- | ---------------- | -------------------------- | -------- | ------------------ | -------------------- | ---------- | ------------- | ------ | ----- |
+| full, tail on   | done 1, killed 2 | 0 / 0 / 0                  | 14       | 0                  | 14.0                 | 92%        | 92%           | 14/214 | 0     |
+| full, tail off  | done 1, killed 2 | 0 / 0 / 0                  | 12       | 0                  | 15.9                 | 93%        | 94%           | 12/209 | 0     |
+| short, tail on  | done 2, killed 1 | 0 / 0 / 0                  | 14       | 0                  | 12.2                 | 91%        | 93%           | 14/189 | 0     |
+| short, tail off | done 2, killed 1 | 0 / 1 / 0                  | 14       | 1                  | 13.6                 | 92%        | 73%           | 14/211 | 0     |
+
+`agent-acts`:
+
+| Profile, arm    | Outcomes | Checks of 8 | Nudges act / finish / plan | Turns (median) | Cache read | Churn | Leaks |
+| --------------- | -------- | ----------- | -------------------------- | -------------- | ---------- | ----- | ----- |
+| full, tail on   | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 10             | 84%        | 0/30  | 0     |
+| full, tail off  | done 3   | 8, 8, 8     | 1 / 0 / 0                  | 13             | 89%        | 0/41  | 0     |
+| short, tail on  | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 11             | 88%        | 0/38  | 0     |
+| short, tail off | done 3   | 8, 8, 8     | 0 / 0 / 0                  | 11             | 87%        | 0/34  | 0     |
+
+- This model does by itself what the line asks: no tool call written as text in 24 runs, no announced-step stop, and FinishItem called without a nudge in 53 of 54 item attempts. The one act nudge was a false positive: a finished report whose last paragraph offered a change ("say so and I'll switch the split"), which `announcesNextStep` reads as a next step. The one finish nudge followed a reply that stopped to wait for an approval the harness had not answered yet. On a model like this the line has nothing to do, and the four cells agree: loops done 1 and 1 on `full`, 2 and 2 on `short`, with and without it.
+- Where the loops lost is planning width, not stopping: this model turned the four-line request into 4 to 6 items (Qwen3 Coder made 3) and 7 of 12 loops ran into the 900k-token budget with 2 to 4 items done; the five done loops needed 63 to 74 turns.
+- Cache: 84 to 93% of input tokens read from the cache in every cell, and the server reused 92 to 94% of prompt tokens over the requests its window kept (73% in the short/off arm, where restores and evictions show the cache slots turning over). The request dumps agree: zero prefix churn inside any attempt or agent turn in all 24 runs, every break an attempt start. The line on every user message costs this server nothing.
+- What the Strata set adds to row I6: the tail is a no-op on a model that already acts, reports and formats its calls, and a reasoning model of this size planned more than it could finish in the budget, which is a budget or a plan-width question, not a tail one.
+
+Runs and scorecards: the session's scratchpad `bench/strata-tail-on`, `bench/strata-tail-off`, `bench/strata-short-tail-on`, `bench/strata-short-tail-off`; the per-arm table is `arms-strata.md` beside them, and the records and scorecards are copied to the side-session notes folder (`qwen-tail-measurement/`, `records-strata-*.jsonl`).

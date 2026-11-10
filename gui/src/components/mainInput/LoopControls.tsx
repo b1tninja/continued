@@ -1,6 +1,7 @@
 import type {
   LoopCheckResult,
   LoopItemModel,
+  LoopParallelRun,
   LoopState,
   TaskItem,
   TaskPlan,
@@ -21,6 +22,7 @@ import {
   setLoopBudgetThunk,
   skipLoopItemThunk,
 } from "../../redux/thunks/loop";
+import { stopLoopWorker } from "../../util/subagents/loopWorkers";
 
 const BUTTON =
   "shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input";
@@ -37,9 +39,12 @@ function statusLabel(loop: LoopState, itemId: string): string {
       return loop.current?.kind === "check" && loop.current.itemId === itemId
         ? "checking"
         : "check waits";
+    case "running":
+      return loop.parallel?.some((r) => r.itemId === itemId)
+        ? "running in parallel"
+        : "running";
     case "pending":
     case "redo":
-    case "running":
     case "done":
     case "waiting":
     case "failed":
@@ -109,6 +114,55 @@ function CheckLine({
   );
 }
 
+/** The files the to-do declares (TaskItem.files): what a parallel run may change. */
+function FilesLine({ task }: { task: TaskItem }) {
+  if (!task.files?.length) return null;
+  return (
+    <div
+      data-testid={`loop-files-${task.id}`}
+      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
+      title="The files this item changes; items with disjoint files may run at the same time"
+    >
+      files: <code>{task.files.join(", ")}</code>
+    </div>
+  );
+}
+
+/**
+ * An item running as a worker of a parallel wave: its worktree, the model it
+ * runs on, and a Stop for this worker alone (its item runs again later).
+ */
+function WorkerLine({
+  task,
+  run,
+  model,
+}: {
+  task: TaskItem;
+  run: LoopParallelRun;
+  model?: LoopItemModel;
+}) {
+  return (
+    <div
+      data-testid={`loop-worker-${task.id}`}
+      className="ml-3 flex min-w-0 items-center gap-1 text-2xs text-description-muted"
+    >
+      <span className="min-w-0 flex-1 truncate" title={run.worktree}>
+        in its own worktree{run.worktree ? `: ${run.worktree}` : ""}
+        {model?.title ? ` · ${model.title}` : ""}
+      </span>
+      <button
+        type="button"
+        data-testid={`loop-worker-stop-${task.id}`}
+        className={BUTTON}
+        title="Stop this worker; its changes are dropped and the item runs again later"
+        onClick={() => stopLoopWorker(task.id)}
+      >
+        Stop
+      </button>
+    </div>
+  );
+}
+
 /**
  * The model the to-do names (TaskItem.model) and, once a run started, the one
  * it went to when that was not it: the item's own model is not configured.
@@ -173,9 +227,9 @@ export function LoopControls({
   const replan = loopReplanSetting(loop);
 
   return (
-    <details data-testid="loop-controls" className="mt-1 text-description">
+    <details data-testid="loop-controls" open className="mt-1 text-description">
       <summary className="cursor-pointer">
-        Items and limits · {describeLoopReplan(loop)}
+        Plan and limits · {describeLoopReplan(loop)}
       </summary>
       {taskPlan && (
         <ul className="m-0 mt-1 max-h-48 list-none overflow-y-auto p-0">
@@ -191,6 +245,7 @@ export function LoopControls({
             const canAgain =
               state.status === "done" || state.status === "failed";
             const dependency = dependencyLabel(loop, taskPlan, task);
+            const worker = loop.parallel?.find((r) => r.itemId === task.id);
             return (
               <li key={task.id} className="min-w-0">
                 <div
@@ -242,7 +297,11 @@ export function LoopControls({
                     </button>
                   )}
                 </div>
+                {worker && (
+                  <WorkerLine task={task} run={worker} model={state.model} />
+                )}
                 <CheckLine task={task} check={state.check} />
+                <FilesLine task={task} />
                 <ModelLine task={task} model={state.model} />
               </li>
             );
