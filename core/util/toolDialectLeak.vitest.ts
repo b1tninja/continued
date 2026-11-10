@@ -11,6 +11,15 @@ const corpus = new Map(loadCorpus().map((f) => [f.id, f]));
 const text = (id: string) => corpus.get(id)!.text;
 
 describe("detectToolDialectLeak", () => {
+  it("sees Hermes JSON and GLM markup written as text", () => {
+    expect(
+      detectToolDialectLeak({ content: text("hermes-canonical") }),
+    ).toEqual({ dialect: "hermes-json" });
+    expect(detectToolDialectLeak({ content: text("glm47-canonical") })).toEqual(
+      { dialect: "glm-xml" },
+    );
+  });
+
   it("sees qwen markup written as text", () => {
     expect(
       detectToolDialectLeak({

@@ -217,6 +217,28 @@ describe("BedrockConnectionTester tool-call line", () => {
     expect(probe).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the family preset line under the label when there is one", async () => {
+    const { user } = setup({
+      "bedrock/listModels": list,
+      "bedrock/probeToolCalls": async () => ({
+        ok: true,
+        label: "Tool calls: native",
+        kind: "native",
+        preset:
+          "GLM-4.7: text dialect glm-xml (recoverable with toolDialect: glm-xml)",
+      }),
+    });
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("tool-calls-preset").textContent).toContain(
+        "glm-xml",
+      ),
+    );
+    expect(screen.getByTestId("tool-calls-result").textContent).toBe(
+      "Tool calls: native",
+    );
+  });
+
   it("is not sent without a click on Test connection", async () => {
     const probe = vi.fn();
     setup({ "bedrock/listModels": list, "bedrock/probeToolCalls": probe });

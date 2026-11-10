@@ -52,7 +52,7 @@ import {
 import { parseDataUrl } from "../../util/url.js";
 import { BaseLLM } from "../index.js";
 import { DEFAULT_REASONING_TOKENS } from "../constants.js";
-import { PROVIDER_TOOL_SUPPORT } from "../toolSupport.js";
+import { bedrockSupportsTools } from "../toolSupport.js";
 import { createBedrockRequestHandler } from "./bedrockHttp.js";
 import { withResponseInfo } from "../utils/cacheStats.js";
 import { isTaskPlanBlockText } from "../../util/taskPlan.js";
@@ -689,7 +689,7 @@ class Bedrock extends BaseLLM {
             : [],
         ),
       };
-    });
+    }, this.model);
   }
 
   /** Send a tiny request to verify credentials, region and access to `model`. */
@@ -1202,7 +1202,7 @@ class Bedrock extends BaseLLM {
     // First get tools
     const supportsTools =
       (this.capabilities?.tools ||
-        PROVIDER_TOOL_SUPPORT.bedrock?.(options.model)) ??
+        bedrockSupportsTools(options.model, this.toolDialect)) ??
       false;
 
     let toolConfig: undefined | ToolConfiguration = undefined;

@@ -14,6 +14,10 @@ import {
   type ToolReply,
   verifyProbeCalls,
 } from "./toolDialectDetect.js";
+import {
+  describePreset,
+  resolveToolDialectPreset,
+} from "./toolDialectPresets.js";
 
 export type ToolCallSupport =
   | { kind: "native"; intact: boolean; issues: string[] }
@@ -25,6 +29,8 @@ export interface ToolDialectProbeResult {
   support: ToolCallSupport;
   /** "Tool calls: native", "Tool calls: written as text (qwen-xml)", ... */
   label: string;
+  /** The model-family preset's one-liner (toolDialectPresets.ts), when the model has one. */
+  preset?: string;
 }
 
 /** The wizard's result line for a support verdict. */
@@ -78,10 +84,12 @@ function refusedTools(error: unknown): boolean {
 /**
  * Send the probe through `send` and say what came back. A timeout or any other
  * failure is "unknown", never "not supported"; only a reply of plain prose or
- * the server saying it takes no tools is.
+ * the server saying it takes no tools is. With `model`, the result also
+ * carries what the family preset says; the preset never changes the verdict.
  */
 export async function probeToolDialect(
   send: (request: ProbeRequest) => Promise<ToolReply>,
+  model?: string,
 ): Promise<ToolDialectProbeResult> {
   let support: ToolCallSupport;
   try {
@@ -89,5 +97,10 @@ export async function probeToolDialect(
   } catch (e) {
     support = refusedTools(e) ? { kind: "none" } : { kind: "unknown" };
   }
-  return { support, label: labelFor(support) };
+  const preset = resolveToolDialectPreset(model);
+  return {
+    support,
+    label: labelFor(support),
+    ...(preset ? { preset: describePreset(preset) } : {}),
+  };
 }

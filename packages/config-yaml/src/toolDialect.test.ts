@@ -9,14 +9,18 @@ import {
 const base = { name: "m", model: "qwen3-coder", provider: "openai" };
 
 describe("toolDialect schema", () => {
-  it.each(["auto", "native", "qwen-xml", "pythonic", "llama-json", "off"])(
-    "accepts %s",
-    (v) => {
-      expect(modelSchema.parse({ ...base, toolDialect: v }).toolDialect).toBe(
-        v,
-      );
-    },
-  );
+  it.each([
+    "auto",
+    "native",
+    "qwen-xml",
+    "pythonic",
+    "llama-json",
+    "hermes-json",
+    "glm-xml",
+    "off",
+  ])("accepts %s", (v) => {
+    expect(modelSchema.parse({ ...base, toolDialect: v }).toolDialect).toBe(v);
+  });
 
   it("is optional", () => {
     expect(modelSchema.parse(base).toolDialect).toBeUndefined();
@@ -26,7 +30,7 @@ describe("toolDialect schema", () => {
     const r = modelSchema.safeParse({ ...base, toolDialect: "xml" });
     expect(r.success).toBe(false);
     expect(JSON.stringify(r.error?.issues)).toContain(
-      "toolDialect must be one of: auto, native, qwen-xml, pythonic, llama-json, off",
+      "toolDialect must be one of: auto, native, qwen-xml, pythonic, llama-json, hermes-json, glm-xml, off",
     );
   });
 });

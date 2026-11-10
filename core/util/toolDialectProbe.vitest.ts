@@ -100,4 +100,15 @@ describe("tool-call probe result line", () => {
       })),
     ).toBe("Tool calls: not supported");
   });
+
+  it("adds the family preset line when the model is named, without changing the verdict", async () => {
+    const send = async () => ({ content: "", toolCalls: good });
+    const named = await probeToolDialect(send, "zai.glm-4.7");
+    expect(named.label).toBe("Tool calls: native");
+    expect(named.preset).toContain("glm-xml");
+    expect((await probeToolDialect(send)).preset).toBeUndefined();
+    expect(
+      (await probeToolDialect(send, "unknown-model")).preset,
+    ).toBeUndefined();
+  });
 });

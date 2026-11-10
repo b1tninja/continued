@@ -179,6 +179,14 @@ export function BedrockConnectionTester({
               ? toolCalls.label
               : `Tool calls: unknown (${toolCalls.error})`}
           </span>
+          {toolCalls.ok && toolCalls.preset && (
+            <span
+              className="block text-xs opacity-80"
+              data-testid="tool-calls-preset"
+            >
+              {toolCalls.preset}
+            </span>
+          )}
         </Alert>
       )}
 

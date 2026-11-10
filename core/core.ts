@@ -720,6 +720,7 @@ export class Core {
           ok: true as const,
           label: result.label,
           kind: result.support.kind,
+          preset: result.preset,
         };
       } catch (e) {
         return {
