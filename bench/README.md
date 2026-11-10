@@ -57,7 +57,13 @@ turn kind, `off` for none, a text of your own as given), so the line can be
 measured with and without on the same model; unset, the CLI's own default
 applies (on for Loop items and the short and tailored profiles, off elsewhere), and the
 result records `cli-default`. The tail is part of the config hash, so two arms
-never compare as the same configuration. `--effort` is
+never compare as the same configuration. `--dialect off|qwen-xml|pythonic|qwen-xml,pythonic`
+sets `CONTINUE_RECOVER_TEXT_TOOL_CALLS` for the serve process (read by the Bedrock adapter and
+core's Bedrock; Qwen rows use `qwen-xml`, Nova rows `pythonic`): `off` clears an inherited value,
+unset leaves the environment alone, and the result records `dialect` (`unset` when not given).
+The scorer counts `recovered` calls (tool call ids beginning `recovered_`) beside `textLeaks`
+and reports both per arm, a model row under one dialect setting, with n (runs), in every
+scorecard and in the comparison. `--effort` is
 written into config the way the row's `effort` field says (Bedrock
 `reasoning` and `reasoningBudgetTokens`, or `reasoning_effort` for an
 OpenAI-compatible server); `--max-tokens`, `--context` and `--compact-ratio`
