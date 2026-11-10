@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-unbackticked-marker-in-sentence",
+  "family": "qwen3-coder",
+  "dialect": "qwen-xml",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: a call marker quoted mid-sentence without backticks (false-positive guard)",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "To call it you write <function=read> and then a path, which I am not doing now.",
+  "markers": [
+    "<tool_call>",
+    "<function=",
+    "<parameter=",
+    "</parameter>",
+    "</function>",
+    "</tool_call>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "To call it you write <function=read> and then a path, which I am not doing now."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "T",
+        "o",
+        " ",
+        "c",
+        "a",
+        "l",
+        "l",
+        " ",
+        "i",
+        "t",
+        " ",
+        "y",
+        "o",
+        "u",
+        " ",
+        "w",
+        "r",
+        "i",
+        "t",
+        "e",
+        " ",
+        "<",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "=",
+        "r",
+        "e",
+        "a",
+        "d",
+        ">",
+        " ",
+        "a",
+        "n",
+        "d",
+        " ",
+        "t",
+        "h",
+        "e",
+        "n",
+        " ",
+        "a",
+        " ",
+        "p",
+        "a",
+        "t",
+        "h",
+        ",",
+        " ",
+        "w",
+        "h",
+        "i",
+        "c",
+        "h",
+        " ",
+        "I",
+        " ",
+        "a",
+        "m",
+        " ",
+        "n",
+        "o",
+        "t",
+        " ",
+        "d",
+        "o",
+        "i",
+        "n",
+        "g",
+        " ",
+        "n",
+        "o",
+        "w",
+        "."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "To call it you write <func",
+        "tion=read> and then a path, which I am not doing now."
+      ],
+      "splitInside": "<function="
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "To call it you write ",
+        "<function=",
+        "read> and then a path, which I am not doing now."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "T",
+        "o ",
+        "c",
+        "a",
+        "ll it",
+        " yo",
+        "u wr",
+        "ite <",
+        "func",
+        "tion",
+        "=re",
+        "a",
+        "d> ",
+        "an",
+        "d",
+        " the",
+        "n",
+        " ",
+        "a pa",
+        "th, w",
+        "h",
+        "ich I",
+        " a",
+        "m",
+        " ",
+        "not ",
+        "do",
+        "ing n",
+        "ow",
+        "."
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "To call it you write <function=read> and then a path, which I am not doing now."
+  }
+}

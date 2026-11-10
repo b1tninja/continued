@@ -195,3 +195,12 @@ The "client-side repair" column is what a dialect parser or adapter could do. It
 - `streams` always carries a whole-text stream and a one-character stream (a seven-character stream for texts over 300 characters), a split inside the first marker, splits around every marker, a seeded random split, and, for non-ASCII texts, a byte stream split in the middle of a UTF-8 sequence (chunks are base64 so a half character can exist).
 - The loader test rejects a fixture without provenance, an `observed` fixture whose source is not a URL or has no report date, streams that do not add up to the text, a claimed split that is not inside the named marker, and expected calls that do not match the declared tools.
 - The generator is not in the repository; fixtures are the source of truth and are edited by hand or regenerated deliberately.
+
+## 6. Corpus against the Qwen XML recovery (2026-11-10)
+
+`core/llm/toolDialects/corpus/runCorpus.ts` feeds every fixture, through every stream, to a parser function and diffs the calls and the leftover text; `qwenXml.corpus.vitest.ts` wires `QwenXmlRecovery` from `packages/openai-adapters/src/dialects/qwenXml.ts` (PR #455) into it. It runs the 30 `qwen-xml` fixtures plus every negative fixture of the other dialects (a false-positive check).
+
+Result: all `must` cases pass under every chunking, no fixture changes answer with the chunking, and all the missing-opener reports (Ollama 16686 and 18530, llama.cpp 30118, the Hugging Face discussion, Roo 12185) are recovered. Findings, none hidden:
+
+- **A value that contains the family's own closing tag is not recovered** (`qwen3-coder-literal-close-function-in-value`, `qwen3-coder-literal-close-parameter-in-value`, policy `should`, synthesised). The parser matches the first `</function>` or `</parameter>` lazily, so the call stays text. This is F9. A file-writing tool is the likely trigger. The test pins these two as known gaps and fails when the list changes.
+- **Three policy cases are not recovered** (policy `either`): the unwrapped, unclosed call Continue#13057 reports (no closers at all), a call followed by prose, and two calls with prose between them. The parser's rule that the whole reply must be calls and whitespace is deliberate; the corpus records the choice rather than scoring it.
