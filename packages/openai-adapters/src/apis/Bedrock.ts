@@ -57,13 +57,14 @@ import {
   ThinkingTagSplitter,
   writesThinkingTags,
 } from "./bedrockHelpers.js";
+import type { RecoveredCall } from "../dialects/qwenXml.js";
 import {
-  qwenXmlRecoveryEnabled,
-  QwenXmlRecovery,
-  recoverQwenXmlFromText,
-  type DialectTool,
-  type RecoveredCall,
-} from "../dialects/qwenXml.js";
+  createTextToolRecovery,
+  dialectToolsFromConverse,
+  recoveredCallId,
+  recoverFromText,
+  type TextToolRecovery,
+} from "../dialects/recovery.js";
 import {
   bedrockRefusedField,
   converseRequestHasField,
@@ -197,18 +198,6 @@ interface ToolUseState {
   input: string;
 }
 
-/** The request's tools as the dialects see them. */
-function dialectToolsOf(request: ConverseStreamCommandInput): DialectTool[] {
-  const out: DialectTool[] = [];
-  for (const t of request.toolConfig?.tools ?? []) {
-    const spec = t.toolSpec;
-    if (spec?.name) {
-      out.push({ name: spec.name, parameters: spec.inputSchema?.json });
-    }
-  }
-  return out;
-}
-
 /** A recovered call as one OpenAI-style tool_calls chunk. */
 function recoveredCallChunk(
   call: RecoveredCall,
@@ -223,7 +212,7 @@ function recoveredCallChunk(
       tool_calls: [
         {
           index,
-          id: `recovered_${index}_${Math.random().toString(36).slice(2, 10)}`,
+          id: recoveredCallId(index),
           type: "function",
           function: {
             name: call.name,
@@ -945,11 +934,16 @@ export class BedrockApi implements BaseLlmApi {
     const id = response.$metadata?.requestId;
     const isNova2 = /nova-2-/i.test(model);
     let toolIndex = -1;
-    const recoverText = qwenXmlRecoveryEnabled(model, undefined);
     const recovered: RecoveredCall[] = [];
     for (const block of response.output?.message?.content ?? []) {
-      if (block.text && recoverText) {
-        const found = recoverQwenXmlFromText(block.text, dialectToolsOf(input));
+      const found = block.text
+        ? recoverFromText(
+            model,
+            block.text,
+            dialectToolsFromConverse(input.toolConfig),
+          )
+        : undefined;
+      if (block.text && found && found.calls.length > 0) {
         recovered.push(...found.calls);
         if (found.text) yield chatChunk({ content: found.text, model, id });
       } else if (block.text) {
@@ -1198,12 +1192,14 @@ export class BedrockApi implements BaseLlmApi {
       // writes its tool call as text, which ends the turn with nothing done.
       // Calls found in the text are held until the reply ends and are made
       // only when the model made no toolUse of its own.
-      const recovery = qwenXmlRecoveryEnabled(body.model, body)
-        ? new QwenXmlRecovery(dialectToolsOf(requestBody))
-        : undefined;
+      const recovery = createTextToolRecovery(
+        body.model,
+        dialectToolsFromConverse(requestBody.toolConfig),
+        body,
+      );
       const recovered: RecoveredCall[] = [];
       const recoveryChunks = function* (
-        events: ReturnType<QwenXmlRecovery["end"]>,
+        events: ReturnType<TextToolRecovery["end"]>,
       ): Generator<ChatCompletionChunk> {
         for (const event of events) {
           if (event.type === "call") recovered.push(event.call);
