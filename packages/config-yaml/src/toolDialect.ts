@@ -21,6 +21,8 @@ export function recoveryValueFor(
     case "qwen-xml":
     case "pythonic":
     case "llama-json":
+    case "hermes-json":
+    case "glm-xml":
       return `force:${toolDialect}`;
     case "native":
     case "off":

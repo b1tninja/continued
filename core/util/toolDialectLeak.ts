@@ -16,6 +16,8 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   "qwen-xml": "qwen-xml",
   pythonic: "pythonic",
   "llama-json": "llama-json",
+  "hermes-json": "hermes-json",
+  "glm-xml": "glm-xml",
 };
 
 /** Only the Bedrock handlers recover calls from text. */

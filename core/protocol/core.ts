@@ -143,7 +143,13 @@ export type BedrockTestModelResult =
 
 /** The wizard's tool-call probe: what the model did with a made-up tool. */
 export type BedrockProbeToolCallsResult =
-  | { ok: true; label: string; kind: "native" | "text" | "none" | "unknown" }
+  | {
+      ok: true;
+      label: string;
+      kind: "native" | "text" | "none" | "unknown";
+      /** What the model-family preset says about this model, when it has one. */
+      preset?: string;
+    }
   | { ok: false; error: string };
 
 export type ProfileFileResult =

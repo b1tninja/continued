@@ -1,4 +1,42 @@
+import type { ToolDialectSetting } from "@continuedev/config-yaml";
 import { ModelDescription } from "..";
+import { presetBedrockTools } from "../util/toolDialectPresets.js";
+
+/**
+ * Whether Bedrock models get tools. The preset table
+ * (util/toolDialectPresets.ts) answers for every family the live run of
+ * 2026-11-10 measured, which adds Kimi, GLM, MiniMax and Nemotron 3 (all
+ * returned structured calls) and offers Llama 3.x tools only when the model's
+ * `toolDialect` is `llama-json` (it writes its calls as JSON text, 0/8
+ * structured, so tools without recovery would print raw JSON into the chat).
+ * Families the preset leaves `unmeasured` keep the older name list.
+ */
+export function bedrockSupportsTools(
+  model: string,
+  toolDialect?: ToolDialectSetting,
+): boolean {
+  const id = model.toLowerCase();
+  if (id.includes("claude-2") || id.includes("claude-instant")) {
+    return false;
+  }
+  if (/deepseek[.-]r1/.test(id)) {
+    return false;
+  }
+  const preset = presetBedrockTools(id, toolDialect);
+  if (preset !== undefined) {
+    return preset;
+  }
+  return [
+    "claude",
+    "nova",
+    "gpt-oss",
+    "llama4",
+    "llama-4",
+    "deepseek",
+    "mistral",
+    "qwen",
+  ].some((part) => id.includes(part));
+}
 
 export const PROVIDER_TOOL_SUPPORT: Record<string, (model: string) => boolean> =
   {
@@ -88,7 +126,7 @@ export const PROVIDER_TOOL_SUPPORT: Record<string, (model: string) => boolean> =
     // ...). Only rule out non-chat models; override with `capabilities` if needed.
     "bedrock-mantle": (model) =>
       !/embed|rerank|image|whisper|tts|speech/i.test(model),
-    // Checked live on 2026-11-08 (Converse and ConverseStream): Claude, Nova
+    // The rule is bedrockSupportsTools above. Checked live on 2026-11-08 (Converse and ConverseStream): Claude, Nova
     // 2 Lite, Nova Pro, Mistral Large 3, Qwen3 and DeepSeek V3.2 return
     // toolUse blocks. DeepSeek R1 refuses tools outright. Llama 3.3 calls
     // tools only outside streaming, so it stays off. Llama 4 refuses tools
@@ -96,25 +134,7 @@ export const PROVIDER_TOOL_SUPPORT: Record<string, (model: string) => boolean> =
     // streaming mode.") but returns a proper toolUse block from Converse, so
     // it stays on and the provider sends its tool requests without streaming
     // (bedrockToolsNeedNonStreaming in llms/bedrockHelpers.ts).
-    bedrock: (model) => {
-      const id = model.toLowerCase();
-      if (id.includes("claude-2") || id.includes("claude-instant")) {
-        return false;
-      }
-      if (/deepseek[.-]r1/.test(id)) {
-        return false;
-      }
-      return [
-        "claude",
-        "nova",
-        "gpt-oss",
-        "llama4",
-        "llama-4",
-        "deepseek",
-        "mistral",
-        "qwen",
-      ].some((part) => id.includes(part));
-    },
+    bedrock: (model) => bedrockSupportsTools(model),
     mistral: (model) => {
       // https://docs.mistral.ai/capabilities/function_calling/
       return (
@@ -526,6 +546,12 @@ export function modelSupportsNativeTools(modelDescription: ModelDescription) {
     return modelDescription.capabilities.tools;
   }
 
+  if (modelDescription.provider === "bedrock") {
+    return bedrockSupportsTools(
+      modelDescription.model,
+      modelDescription.toolDialect,
+    );
+  }
   const providerSupport = PROVIDER_TOOL_SUPPORT[modelDescription.provider];
   if (!providerSupport) {
     return false;

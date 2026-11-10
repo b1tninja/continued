@@ -3,6 +3,8 @@
  * one switch both Bedrock handlers (this package and core/llm/llms) use, so
  * the setting and the parsers exist once. Off unless asked for.
  */
+import { GlmXmlRecovery, recoverGlmXmlFromText } from "./glmXml.js";
+import { HermesJsonRecovery, recoverHermesJsonFromText } from "./hermesJson.js";
 import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
 import {
@@ -80,6 +82,12 @@ export function createTextToolRecovery(
   if (wants(settings, "llama-json", model, /llama/i)) {
     return new LlamaJsonRecovery(tools);
   }
+  if (wants(settings, "hermes-json", model, /qwen|hermes/i)) {
+    return new HermesJsonRecovery(tools);
+  }
+  if (wants(settings, "glm-xml", model, /glm/i)) {
+    return new GlmXmlRecovery(tools);
+  }
   return undefined;
 }
 
@@ -100,6 +108,12 @@ export function recoverFromText(
   }
   if (wants(settings, "llama-json", model, /llama/i)) {
     return recoverLlamaJsonFromText(text, tools);
+  }
+  if (wants(settings, "hermes-json", model, /qwen|hermes/i)) {
+    return recoverHermesJsonFromText(text, tools);
+  }
+  if (wants(settings, "glm-xml", model, /glm/i)) {
+    return recoverGlmXmlFromText(text, tools);
   }
   return { text, calls: [] };
 }
