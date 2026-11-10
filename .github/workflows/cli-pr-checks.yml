@@ -202,7 +202,7 @@ jobs:
 
     steps:
       - name: Decide whether the needed jobs succeeded or failed
-        uses: re-actors/alls-green@release/v1
+        uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # release/v1
         with:
           # smoke-api is allowed to skip for fork PRs that lack secrets
           allowed-skips: smoke-api

@@ -255,7 +255,7 @@ jobs:
           echo "name=Continuous $version" >> "$GITHUB_OUTPUT"
 
       - name: Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
           tag_name: ${{ steps.notes.outputs.tag }}
           # A new tag is created at the commit that was built.
