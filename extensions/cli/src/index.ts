@@ -11,6 +11,7 @@ import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
+import { acp } from "./commands/acp.js";
 import { serve } from "./commands/serve.js";
 import {
   handleValidationErrors,
@@ -351,6 +352,17 @@ program
     }
 
     await serve(prompt, mergedOptions);
+  });
+
+// ACP subcommand: the Agent Client Protocol on stdio, for editors that run ACP agents
+program
+  .command("acp")
+  .description(
+    "Run as an Agent Client Protocol agent on stdin and stdout (for Zed, JetBrains and other ACP editors)",
+  )
+  .action(async (options) => {
+    const mergedOptions = mergeParentOptions(program, options);
+    await acp(mergedOptions);
   });
 
 // Checks subcommand
