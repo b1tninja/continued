@@ -1,12 +1,14 @@
 import type { LoopAutonomy, LoopState, LoopStrategy } from "core/index.js";
 import {
   formatLoopStatus,
+  LOOP_FALLBACK_CHECK_LENGTH,
   LOOP_AUTONOMY_LEVELS,
   setLoopBudget,
   LOOP_STRATEGY_ORDER,
   type LoopAnswerInput,
 } from "core/util/loopMode.js";
 
+import { setRunningLoopFallbackCheck } from "../loop/loopFallbackCheck.js";
 import {
   acceptLoopPlan,
   answerLoopQuestion,
@@ -51,6 +53,9 @@ import {
  *   to N re-plans"; 0 means no limit for tokens and time. An out-of-range
  *   value is refused and nothing changes. It applies after `loopAutonomy`
  *   when both are given.
+ * - `loopFallbackCheck: "<command>"` is the check an item without its own
+ *   `check:` is held to, run by the harness after the item reports done
+ *   (core's LoopState.fallbackCheck); "" clears it. Off by default.
  */
 
 /** Loop mode's fields in `GET /state`. */
@@ -172,6 +177,35 @@ export interface LoopMessageResponse {
   json: Record<string, unknown>;
 }
 
+/** The error for a bad `loopFallbackCheck` (not a string, or too long), if any. */
+function invalidFallbackCheck(value: unknown): string | undefined {
+  if (
+    value !== undefined &&
+    (typeof value !== "string" ||
+      value.trim().length > LOOP_FALLBACK_CHECK_LENGTH)
+  ) {
+    return `loopFallbackCheck must be a command of at most ${LOOP_FALLBACK_CHECK_LENGTH} characters`;
+  }
+  return undefined;
+}
+
+/**
+ * Applies the level, strategy, parallel and fallback-check fields the body
+ * carries, in that order. False when one is given and there is no loop.
+ */
+function applyRunningSettings(body: Record<string, unknown>): boolean {
+  const { loopAutonomy, loopStrategy, loopParallel, loopFallbackCheck } = body;
+  const steps: [unknown, (value: never) => boolean][] = [
+    [loopAutonomy, (v: LoopAutonomy) => setRunningLoopAutonomy(v)],
+    [loopStrategy, (v: LoopStrategy) => setRunningLoopStrategy(v)],
+    [loopParallel, (v: boolean) => setRunningLoopParallel(v)],
+    [loopFallbackCheck, (v: string) => setRunningLoopFallbackCheck(v)],
+  ];
+  return steps.every(
+    ([value, apply]) => value === undefined || apply(value as never),
+  );
+}
+
 /**
  * POST /message with Loop mode fields. Returns undefined when the body has
  * none of them, so it is an ordinary message.
@@ -186,6 +220,7 @@ export function handleLoopMessage(
     loopStrategy,
     loopParallel,
     loopBudget,
+    loopFallbackCheck,
     itemId,
   } = body;
   if (
@@ -194,7 +229,8 @@ export function handleLoopMessage(
     loopAutonomy === undefined &&
     loopStrategy === undefined &&
     loopParallel === undefined &&
-    loopBudget === undefined
+    loopBudget === undefined &&
+    loopFallbackCheck === undefined
   ) {
     return undefined;
   }
@@ -206,6 +242,8 @@ export function handleLoopMessage(
     loopParallel,
   });
   if (invalid) return fail(invalid);
+  const badFallback = invalidFallbackCheck(loopFallbackCheck);
+  if (badFallback) return fail(badFallback);
   const parsed =
     loopAnswer === undefined ? undefined : parseLoopAnswer(loopAnswer);
   if (parsed && !parsed.ok) return fail(parsed.error);
@@ -221,24 +259,7 @@ export function handleLoopMessage(
     const error = applyLoopAction(loopAction as LoopAction, itemId);
     if (error) return fail(error);
   }
-  if (
-    loopAutonomy !== undefined &&
-    !setRunningLoopAutonomy(loopAutonomy as LoopAutonomy)
-  ) {
-    return fail("No loop in this session");
-  }
-  if (
-    loopStrategy !== undefined &&
-    !setRunningLoopStrategy(loopStrategy as LoopStrategy)
-  ) {
-    return fail("No loop in this session");
-  }
-  if (
-    loopParallel !== undefined &&
-    !setRunningLoopParallel(loopParallel as boolean)
-  ) {
-    return fail("No loop in this session");
-  }
+  if (!applyRunningSettings(body)) return fail("No loop in this session");
   if (loopBudget !== undefined) {
     const budgeted = setRunningLoopBudget(loopBudget);
     if (!budgeted.ok) return fail(budgeted.error);

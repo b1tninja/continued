@@ -700,6 +700,46 @@ function fromTask(task: TaskItem): LoopItemState {
   return { id: task.id, status: done ? "done" : "pending", attempts: 0 };
 }
 
+/** The most characters of a fallback check command. */
+export const LOOP_FALLBACK_CHECK_LENGTH = 300;
+
+function fallbackCheckField(command: string | undefined): {
+  fallbackCheck?: string;
+} {
+  const trimmed = command?.trim();
+  return trimmed && trimmed.length <= LOOP_FALLBACK_CHECK_LENGTH
+    ? { fallbackCheck: trimmed }
+    : {};
+}
+
+/**
+ * The command the harness runs to confirm an item is done: the to-do's own
+ * `check:`, else the loop's fallback (LoopState.fallbackCheck: the project's
+ * test or build command), else none and the item is done on its own report.
+ */
+export function itemCheck(
+  loop: LoopState,
+  task: { check?: string },
+): string | undefined {
+  return task.check || loop.fallbackCheck || undefined;
+}
+
+/**
+ * Sets (or with an empty command, clears) the check every item without its
+ * own is held to. An item waiting for a check that is now gone is done, as
+ * reconcileLoop settles on its next step. Refused (unchanged) over the
+ * length limit.
+ */
+export function setLoopFallbackCheck(
+  loop: LoopState,
+  command: string | undefined,
+): LoopState {
+  const { fallbackCheck: _old, ...rest } = loop;
+  const trimmed = command?.trim();
+  if (trimmed && trimmed.length > LOOP_FALLBACK_CHECK_LENGTH) return loop;
+  return { ...rest, ...fallbackCheckField(trimmed) };
+}
+
 /** Starts a loop on a plan's to-dos. Completed and cancelled items count as done. */
 export function createLoop(
   plan: TaskPlan,
@@ -722,6 +762,8 @@ export function createLoop(
      * (defaultLoopStrategy), or "finish" when no level is named either.
      */
     strategy?: LoopStrategy;
+    /** See LoopState.fallbackCheck */
+    fallbackCheck?: string;
   },
 ): LoopState {
   const autonomy = options.policy
@@ -734,6 +776,7 @@ export function createLoop(
     ...(options.title ? { title: options.title } : {}),
     ...(strategy ? { strategy } : {}),
     ...(options.strategy ? { strategyPicked: true } : {}),
+    ...fallbackCheckField(options.fallbackCheck),
     ...(strategy === "check-in" ? { doneSinceReplan: 0 } : {}),
     status: "running",
     round: 1,
@@ -765,7 +808,7 @@ export function reconcileLoop(loop: LoopState, plan: TaskPlan): LoopState {
   const items = plan.items.map((task) => {
     const known = itemState(loop, task.id);
     if (!known) return fromTask(task);
-    if (known.status === "checking" && !task.check) {
+    if (known.status === "checking" && !itemCheck(loop, task)) {
       return { ...known, status: "done" as const };
     }
     if (
@@ -990,8 +1033,9 @@ export function decideNext(
     const state = itemState(loop, task.id);
     return state?.status === "checking" && !hasOpenBlocking(loop, task.id);
   });
-  if (checking?.check) {
-    return { kind: "check", itemId: checking.id, command: checking.check };
+  const checkCommand = checking ? itemCheck(loop, checking) : undefined;
+  if (checking && checkCommand) {
+    return { kind: "check", itemId: checking.id, command: checkCommand };
   }
   // A wave runs: its items finish one at a time (finishParallelRun), and
   // nothing else starts meanwhile, so no inline run races a worker on a file
@@ -1324,14 +1368,17 @@ export function replanConcern(
   plan: TaskPlan,
 ): string | undefined {
   const task = (id: string) => plan.items.find((t) => t.id === id);
+  const checkOf = (id: string) => {
+    const t = task(id);
+    return t ? itemCheck(loop, t) : undefined;
+  };
   const failedCheck = loop.items.filter(
-    (i) =>
-      i.check?.status === "failed" && task(i.id)?.check !== i.check.command,
+    (i) => i.check?.status === "failed" && checkOf(i.id) !== i.check.command,
   );
   const stuckCheck = loop.items.filter((i) => {
     if (i.status !== "failed" || i.check?.status === "failed") return false;
     const previous = loop.current?.planChecks?.[i.id];
-    return previous !== undefined && task(i.id)?.check !== previous;
+    return previous !== undefined && checkOf(i.id) !== previous;
   });
   const droppedDone = loop.items.filter(
     (i) => i.status === "done" && !i.skipped && !task(i.id),
@@ -1678,7 +1725,10 @@ export function startReplan(
         ? {
             planTexts: plan.items.map((i) => i.text),
             planChecks: Object.fromEntries(
-              plan.items.flatMap((i) => (i.check ? [[i.id, i.check]] : [])),
+              plan.items.flatMap((i) => {
+                const command = itemCheck(loop, i);
+                return command ? [[i.id, command]] : [];
+              }),
             ),
           }
         : {}),
@@ -2717,7 +2767,7 @@ export function taskPlanWithLoop(plan: TaskPlan, loop: LoopState): TaskPlan {
         status = "in_progress";
         note = open.length
           ? `Check waiting on you: ${open.map((q) => q.id).join(", ")}`
-          : `Checking: ${task.check ?? "its check"}`;
+          : `Checking: ${itemCheck(loop, task) ?? "its check"}`;
         break;
       case "done":
         if (state.skipped) {
@@ -2850,7 +2900,7 @@ export function acceptReplan(
     const rerun = repairOf ? known.id === repairOf.id : !unchangedCheckIn;
     // The result of a check the plan no longer has says nothing about the item
     const state =
-      known.check && known.check.command !== task.check
+      known.check && known.check.command !== itemCheck(loop, task)
         ? { ...known, check: undefined }
         : known;
     if (state.status === "failed" && rerun) {
@@ -2956,6 +3006,8 @@ export function loopItemPrompt(input: {
   mergeFailed?: string;
   /** The person worked outside the loop while it was paused (LoopState.workedOutside) */
   workedOutside?: boolean;
+  /** LoopState.fallbackCheck: the check of an item that has none of its own */
+  fallbackCheck?: string;
 }): string {
   const { item } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
@@ -2999,9 +3051,10 @@ export function loopItemPrompt(input: {
       "The loop was paused while the person was outside Loop mode, so files may have changed since the plan was made. Check what is there before you rely on it.",
     );
   }
-  if (input.item.check) {
+  const runsCheck = input.item.check ?? input.fallbackCheck;
+  if (runsCheck) {
     lines.push(
-      `When you report it done, its check runs: \`${quote(input.item.check)}\`. It must exit 0, so run it yourself first. If it cannot pass as written, do not report done: report stuck and say what the check does.`,
+      `When you report it done, its check runs: \`${quote(runsCheck)}\`. It must exit 0, so run it yourself first. If it cannot pass as written, do not report done: report stuck and say what the check does.`,
     );
   }
   if (input.lastCheck?.status === "failed") {
@@ -3154,11 +3207,14 @@ export function loopPlanBlock(input: {
       line += `: ${clip(state.summary, LOOP_PLAN_BLOCK_LIMITS.summaryLength)}`;
     }
     lines.push(line);
-    if (task.check) {
+    const command = itemCheck(loop, task);
+    if (command) {
       const result = state?.check
         ? ` (last run: ${state.check.status}${typeof state.check.exitCode === "number" ? `, exit ${state.check.exitCode}` : ""})`
         : "";
-      lines.push(`    check: ${quote(task.check)}${result}`);
+      lines.push(
+        `    check: ${quote(command)}${task.check ? "" : " (the loop's check for every item)"}${result}`,
+      );
     }
     for (const q of openQuestions(loop, task.id)) {
       const assumed = q.assumption

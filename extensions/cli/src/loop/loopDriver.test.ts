@@ -38,6 +38,7 @@ import {
 
 import { runLoopCheck } from "./loopChecks.js";
 import { loopWakeDelay, nextLoopTurn, type LoopTurn } from "./loopDriver.js";
+import { setRunningLoopFallbackCheck } from "./loopFallbackCheck.js";
 import { holdLoopCall, loopRepeatGuard } from "./loopHolds.js";
 import {
   acceptLoopPlan,
@@ -621,6 +622,47 @@ describe("Loop mode's driver in the CLI", () => {
       expect(nextTurn(history().length)?.prompt).toContain(
         "only this item: Two",
       );
+    });
+
+    it("holds an item with no check of its own to the fallback check, when one is set", async () => {
+      const FALLBACK_FAIL = 'node -e "process.exit(4)"';
+      await planWith([{ text: "One" }, { text: "Two", check: PASS }]);
+      startLoopFromPlan("normal");
+      expect(setRunningLoopFallbackCheck(FALLBACK_FAIL)).toBe(true);
+      services.toolPermissions.switchMode("auto");
+      const turn = runItem("done");
+      expect(turn.prompt).toContain(`its check runs: \`${FALLBACK_FAIL}\``);
+      await runCheck("1");
+      expect(loopNow().items[0]).toMatchObject({
+        status: "pending",
+        check: { status: "failed" },
+      });
+      // The fallback is the loop's: a fix that makes it pass finishes the item
+      expect(setRunningLoopFallbackCheck(PASS)).toBe(true);
+      runItem("done");
+      await runCheck("1");
+      expect(loopNow().items[0].status).toBe("done");
+    });
+
+    it("without the setting an item with no check is done on its own report", async () => {
+      await planWith([{ text: "One" }]);
+      startLoopFromPlan("normal");
+      expect(loopNow().fallbackCheck).toBeUndefined();
+      runItem("done");
+      // No check step: the next step goes straight past the finished item
+      expect(nextLoopTurn(history().length)).toBeUndefined();
+      expect(loopNow().items[0].status).toBe("done");
+    });
+
+    it("a loop started with CONTINUOUS_LOOP_FALLBACK_CHECK set carries it", async () => {
+      await planWith([{ text: "One" }]);
+      process.env.CONTINUOUS_LOOP_FALLBACK_CHECK = ` ${PASS} `;
+      try {
+        startLoopFromPlan("normal");
+      } finally {
+        delete process.env.CONTINUOUS_LOOP_FALLBACK_CHECK;
+      }
+      expect(loopNow().fallbackCheck).toBe(PASS);
     });
 
     it("a failing check sends the item back with what it printed", async () => {

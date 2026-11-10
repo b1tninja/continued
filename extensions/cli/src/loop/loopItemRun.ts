@@ -63,6 +63,7 @@ export function prepareItemRun(
     decideAlone: loopDecidesAlone(loop),
     mergeFailed: itemState?.mergeFailed,
     worker: options.worker,
+    fallbackCheck: loop.fallbackCheck,
   });
   loop = markDelivered(
     loop,

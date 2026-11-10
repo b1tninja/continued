@@ -332,6 +332,7 @@ export function startLoopFromPlan(
     sessionTokens: sessionTokens(),
     costMark: sessionCostMark(),
     policy: cliLoopPolicy(mode),
+    fallbackCheck: envFallbackCheck(),
   });
   pendingSteers.length = 0;
   turnEndRequested = false;
@@ -474,6 +475,16 @@ export function setRunningLoopParallel(on: boolean): boolean {
   if (!loop) return false;
   commitLoop(setLoopParallel(loop, on));
   return true;
+}
+
+/**
+ * Off unless CONTINUOUS_LOOP_FALLBACK_CHECK names a command: a loop started
+ * from a plan then holds its check-less items to it.
+ */
+export function envFallbackCheck(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  return env.CONTINUOUS_LOOP_FALLBACK_CHECK?.trim() || undefined;
 }
 
 // --- Answers ---

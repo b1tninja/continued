@@ -365,6 +365,17 @@ describe("cn serve: Loop mode", () => {
       maxWallMs: 600_000,
     });
 
+    // The fallback check: set, cleared, and a bad value refused
+    const fallback = await post({ loopFallbackCheck: "npm test" });
+    expect(fallback.body.loop.fallbackCheck).toBe("npm test");
+    expect((await post({ loopFallbackCheck: 5 })).status).toBe(400);
+    expect((await post({ loopFallbackCheck: "x".repeat(301) })).status).toBe(
+      400,
+    );
+    expect(getSessionLoop()?.fallbackCheck).toBe("npm test");
+    const cleared = await post({ loopFallbackCheck: "" });
+    expect(cleared.body.loop.fallbackCheck).toBeUndefined();
+
     run.release();
     await waitUntil(
       () => getSessionLoop()?.status === "stopped",

@@ -7,6 +7,7 @@ import {
   endReplan,
   enterWait,
   finishItemRun,
+  itemCheck,
   LOOP_AUTONOMY,
   loopReplanTurnPrompt,
   proceedUnanswered,
@@ -161,9 +162,10 @@ function finishRun(
       .filter((a) => a.route === "steer" && !a.delivered && !pending.has(a.id))
       .map((a) => a.id);
     // A done item with a check waits for it (core's "checking")
-    const check = getSessionTaskPlan()?.items.find(
+    const checked = getSessionTaskPlan()?.items.find(
       (t) => t.id === loop.current?.itemId,
-    )?.check;
+    );
+    const check = checked ? itemCheck(loop, checked) : undefined;
     const itemId = loop.current.itemId;
     const settled = settleSteeredAnswers(
       finishItemRun(loop, loop.current.report, {

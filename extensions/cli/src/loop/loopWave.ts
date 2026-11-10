@@ -3,6 +3,7 @@ import { execSync, fork } from "child_process";
 import type { LoopReminder, LoopState, TaskItem, Usage } from "core/index.js";
 import {
   finishParallelRun,
+  itemCheck,
   loopBudgetStop,
   loopTokensFromUsage,
   runItemInline,
@@ -415,7 +416,7 @@ async function settleRun(
       tokens: loopTokensFromUsage(output.usage),
     },
     new Date(),
-    { check: entry.item.check },
+    { check: itemCheck(loop, entry.item) },
   );
   commitLoop(withWorkerReminders(finished, output.reminders));
 }
