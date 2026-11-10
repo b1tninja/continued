@@ -6,7 +6,7 @@ import {
   type ToolPolicy,
 } from "@continuedev/terminal-security";
 import { commandLintGate } from "core/tools/permissions/commandLint.js";
-import { resolveShell } from "core/util/shell.js";
+import { getTerminalShellPreference, resolveShell } from "core/util/shell.js";
 
 import { backgroundJobService } from "../services/BackgroundJobService.js";
 import { services } from "../services/index.js";
@@ -75,6 +75,11 @@ export function describeShell(
   shell: string | undefined = process.env.SHELL,
   wsl: boolean = platform === "linux" && isRunningInWsl(),
 ): string {
+  const wslShell =
+    platform === "win32" ? getTerminalShellPreference() : undefined;
+  if (wslShell) {
+    return `Runs in bash as a login shell inside WSL${wslShell.distro ? ` (${wslShell.distro})` : ""}, started from the workspace folder (a Windows drive appears as /mnt/c): use bash syntax and Linux paths.`;
+  }
   if (platform === "win32") {
     return "Runs in Windows PowerShell 5.1 (powershell.exe) on Windows: chain commands with ; or a newline, not &&, and use PowerShell cmdlets and syntax.";
   }

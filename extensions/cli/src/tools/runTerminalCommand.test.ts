@@ -1,3 +1,5 @@
+import { setTerminalShellPreference } from "core/util/shell.js";
+
 import {
   describeShell,
   isRunningInWsl,
@@ -9,6 +11,22 @@ describe("describeShell", () => {
     const text = describeShell("win32", undefined, false);
     expect(text).toContain("Windows PowerShell");
     expect(text).toContain("not &&");
+  });
+
+  it("says bash in WSL on a Windows host when commands are sent there", () => {
+    setTerminalShellPreference({ kind: "wsl", distro: "Ubuntu" });
+    try {
+      const text = describeShell("win32", undefined, false);
+      expect(text).toContain("bash");
+      expect(text).toContain("WSL (Ubuntu)");
+      expect(text).not.toContain("PowerShell");
+      // Off Windows the preference means nothing
+      expect(describeShell("linux", "/bin/bash", false)).toBe(
+        "Runs in bash as a login shell on linux.",
+      );
+    } finally {
+      setTerminalShellPreference(undefined);
+    }
   });
 
   it("names the login shell elsewhere", () => {
