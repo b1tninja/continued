@@ -31,6 +31,7 @@ import { registerAllPromptFilesCompletionProviders } from "../lang-server/prompt
 import EditDecorationManager from "../quickEdit/EditDecorationManager";
 import { QuickEdit } from "../quickEdit/QuickEditQuickPick";
 import { UriEventHandler } from "../stubs/uriHandler";
+import { handleProfileDeepLink } from "../util/profileDeepLink";
 import { Battery } from "../util/battery";
 import { FileSearch } from "../util/FileSearch";
 import { VsCodeIdeUtils } from "../util/ideUtils";
@@ -62,6 +63,7 @@ import type { VsCodeWebviewProtocol } from "../webviewProtocol";
 import { registerVsCodeAi } from "../ai/registerVsCodeAi";
 import { registerTerminalShellSetting } from "../terminalShellSetting";
 import { registerConfigLanguageSupport } from "../lang-server/configLanguageSupport";
+import { promptForWorkspaceConfigTrust } from "../util/workspaceConfigTrust";
 
 export class VsCodeExtension {
   // Currently some of these are public so they can be used in testing (test/test-suites)
@@ -301,6 +303,7 @@ export class VsCodeExtension {
     resolveVerticalDiffManager?.(this.verticalDiffManager);
 
     void this.configHandler.loadConfig().then(async ({ config }) => {
+      void promptForWorkspaceConfigTrust(this.configHandler);
       const shouldUseFullFileDiff = await getUsingFullFileDiff();
       this.completionProvider.updateUsingFullFileDiff(shouldUseFullFileDiff);
       selectionManager.updateUsingFullFileDiff(shouldUseFullFileDiff);
@@ -317,6 +320,7 @@ export class VsCodeExtension {
 
     this.configHandler.onConfigUpdate(
       async ({ config: newConfig, configLoadInterrupted }) => {
+        void promptForWorkspaceConfigTrust(this.configHandler);
         const shouldUseFullFileDiff = await getUsingFullFileDiff();
         this.completionProvider.updateUsingFullFileDiff(shouldUseFullFileDiff);
         selectionManager.updateUsingFullFileDiff(shouldUseFullFileDiff);
@@ -359,16 +363,25 @@ export class VsCodeExtension {
       ),
     );
 
-    // Handle uri events
+    // Handle uri events. A link that names a profile waits for confirmation.
     this.uriHandler.event((uri) => {
-      const queryParams = new URLSearchParams(uri.query);
-      let profileId = queryParams.get("profile_id");
-
-      this.core.invoke("config/refreshProfiles", {
-        reason: "VS Code deep link",
-        selectProfileId:
-          profileId === "null" ? undefined : (profileId ?? undefined),
-      });
+      void handleProfileDeepLink(
+        uri.query,
+        async (label) => {
+          const choice = await vscode.window.showInformationMessage(
+            `Switch the Continuous profile to ${label}?`,
+            { modal: true },
+            "Switch",
+          );
+          return choice === "Switch";
+        },
+        (selectProfileId) => {
+          this.core.invoke("config/refreshProfiles", {
+            reason: "VS Code deep link",
+            selectProfileId,
+          });
+        },
+      );
     });
 
     // Battery

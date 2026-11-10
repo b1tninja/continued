@@ -125,6 +125,22 @@ describe("ToolCallCollector", () => {
     ]);
   });
 
+  it("merges interleaved parallel calls by index", () => {
+    const c = new ToolCallCollector();
+    c.add({
+      id: "a",
+      index: 0,
+      function: { name: "read_file", arguments: "" },
+    });
+    c.add({ id: "b", index: 1, function: { name: "ls", arguments: "" } });
+    c.add({ index: 0, function: { arguments: '{"path":"a.ts"}' } });
+    c.add({ index: 1, function: { arguments: '{"path":"."}' } });
+    expect(c.finish()).toEqual([
+      { id: "a", name: "read_file", input: { path: "a.ts" } },
+      { id: "b", name: "ls", input: { path: "." } },
+    ]);
+  });
+
   it("gives up on unparseable arguments with an empty object", () => {
     const c = new ToolCallCollector();
     c.add({ id: "a", function: { name: "x", arguments: "{oops" } });
@@ -320,6 +336,35 @@ describe("MCP provider", () => {
     ) as any;
     expect(a.version).not.toEqual(b.version);
     expect(a.version).not.toContain("ghp_secret");
+  });
+
+  it("does not offer a folder server that is waiting for trust", () => {
+    const p = new ContinuedMcpServerDefinitionProvider();
+    p.update([
+      { ...stdio, projectTrust: "required", status: "connected" },
+      http,
+    ] as any);
+    expect(
+      (p.provideMcpServerDefinitions() as any[]).map((d) => d.label),
+    ).toEqual(["docs"]);
+  });
+
+  it("starts the listed server when two share a name", () => {
+    const p = new ContinuedMcpServerDefinitionProvider();
+    const other = {
+      ...stdio,
+      id: "github-folder",
+      env: { GITHUB_TOKEN: "folder-secret" },
+      command: "sh",
+    };
+    p.update([stdio, other] as any);
+    const defs = p.provideMcpServerDefinitions() as any[];
+    expect(defs).toHaveLength(2);
+    expect((p.resolveMcpServerDefinition(defs[0]) as any).command).toBe("npx");
+    expect((p.resolveMcpServerDefinition(defs[1]) as any).env).toEqual({
+      GITHUB_TOKEN: "folder-secret",
+    });
+    expect((p.resolveMcpServerDefinition(defs[1]) as any).command).toBe("sh");
   });
 
   it("fires a change only when the servers change", () => {

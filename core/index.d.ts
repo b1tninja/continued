@@ -422,8 +422,9 @@ export interface LoopItemModel {
 export interface LoopCheckResult {
   /**
    * passed: exit 0. failed: another exit code (the item runs again).
-   * refused: a rule refused the command or the person did not allow it, so
-   * the item counts as done without its check.
+   * refused: a rule refused the command, or the person did not allow it, or
+   * a headless run could not ask. The check did not run, so the item is not
+   * done.
    */
   status: "passed" | "failed" | "refused";
   command: string;
@@ -910,7 +911,7 @@ export interface FileCheckpoint {
   /** Prior contents. Absent when `existed` is false or the file was skipped */
   content?: string;
   /** Why the contents were not stored, so this file cannot be restored */
-  skipped?: "too_large" | "unreadable" | "evicted";
+  skipped?: "too_large" | "unreadable" | "evicted" | "secret";
 }
 
 /** All files first touched during one turn (one user message and its replies). */
@@ -993,6 +994,11 @@ export interface ToolCall {
 export interface ToolCallDelta {
   id?: string;
   type?: "function";
+  /**
+   * OpenAI stream `tool_calls[].index`. Argument fragments of parallel calls
+   * omit `id` after the first chunk and are matched on this instead.
+   */
+  index?: number;
   function?: {
     name?: string;
     arguments?: string;
@@ -1209,6 +1215,11 @@ interface ToolCallState {
   toolCallId: string;
   toolCall: ToolCall;
   status: ToolStatus;
+  /**
+   * OpenAI stream index of this call, while arguments are still arriving.
+   * Not sent back to the API.
+   */
+  index?: number;
   parsedArgs: any;
   processedArgs?: Record<string, any>; // Added in preprocesing step
   /** Why this call is waiting for approval, when a rule or protected path says so. */
@@ -2195,6 +2206,16 @@ type BaseInternalMCPOptions = {
   timeout?: number;
   requestOptions?: RequestOptions;
   sourceFile?: string;
+  /**
+   * "user" for the person's own config and global MCP files. "workspace" for
+   * a file that came with the folder.
+   */
+  configSource?: "user" | "workspace";
+  /**
+   * Set when a workspace file defined this server and that folder is not
+   * trusted. The server is not started and its secret values are not kept.
+   */
+  projectTrust?: "required";
 };
 
 export type InternalStdioMcpOptions = BaseInternalMCPOptions & {
