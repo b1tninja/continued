@@ -279,3 +279,12 @@ export { isResponsesModel } from "./apis/openaiResponses.js";
 export { OPENROUTER_HEADERS } from "./apis/OpenRouter.js";
 export { extractBase64FromDataUrl, parseDataUrl } from "./util/url.js";
 export { fillMissingToolResults } from "./apis/bedrockHelpers.js";
+export {
+  DEEPSEEK_DSML_MARKER,
+  flushDsmlHold,
+  holdBackDsmlMarker,
+  leaksDsmlMarker,
+  ThinkingTagSplitter,
+  type ThinkingSplit,
+  writesThinkingTags,
+} from "./dialects/textFilters.js";
