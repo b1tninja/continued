@@ -422,8 +422,9 @@ export interface LoopItemModel {
 export interface LoopCheckResult {
   /**
    * passed: exit 0. failed: another exit code (the item runs again).
-   * refused: a rule refused the command or the person did not allow it, so
-   * the item counts as done without its check.
+   * refused: a rule refused the command, or the person did not allow it, or
+   * a headless run could not ask. The check did not run, so the item is not
+   * done.
    */
   status: "passed" | "failed" | "refused";
   command: string;
