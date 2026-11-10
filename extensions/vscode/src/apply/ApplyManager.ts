@@ -1,4 +1,3 @@
-
 import { ApplyToFilePayload } from "core";
 import { ConfigHandler } from "core/config/ConfigHandler";
 import { myersDiff } from "core/diff/myers";
