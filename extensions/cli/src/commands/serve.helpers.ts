@@ -90,11 +90,7 @@ export function hostHeaderName(hostHeader: string | undefined): string {
   return raw;
 }
 
-const UNSPECIFIED_HOSTS = new Set([
-  "0.0.0.0",
-  "::",
-  "0:0:0:0:0:0:0:0",
-]);
+const UNSPECIFIED_HOSTS = new Set(["0.0.0.0", "::", "0:0:0:0:0:0:0:0"]);
 
 /**
  * Whether this request's Host header is the interface the server bound.
