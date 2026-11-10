@@ -615,6 +615,46 @@ export async function filesForScope(
   return map;
 }
 
+/**
+ * Workspace files for one scope, kept only when that folder is trusted for
+ * those files. Files that are not inside a workspace are returned as-is.
+ */
+export async function trustedWorkspaceFiles(
+  ide: IDE,
+  scope: ProjectConfigScope,
+  files: ScopeFile[],
+): Promise<{ files: ScopeFile[]; notices: ConfigValidationError[] }> {
+  let dirs: string[] = [];
+  try {
+    dirs = await ide.getWorkspaceDirs();
+  } catch {
+    dirs = [];
+  }
+  const notices: ConfigValidationError[] = [];
+  const kept: ScopeFile[] = [];
+  const groups = new Map<string, ScopeFile[]>();
+  for (const file of files) {
+    const dir = dirs.find((candidate) => fileIsInsideDir(file.path, candidate));
+    if (!dir) {
+      kept.push(file);
+      continue;
+    }
+    const group = groups.get(dir) ?? [];
+    group.push(file);
+    groups.set(dir, group);
+  }
+  for (const [dir, group] of groups) {
+    const trusted = await scopeIsTrusted(ide, dir, scope, group);
+    if (trusted) {
+      kept.push(...group);
+      continue;
+    }
+    const notice = untrustedConfigError(dir, scope, group.length);
+    if (notice) notices.push(notice);
+  }
+  return { files: kept, notices };
+}
+
 export async function scopeIsTrusted(
   ide: IDE,
   projectDir: string,
