@@ -28,7 +28,13 @@ import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import { getTlsErrorHint } from "@continuedev/fetch";
 import {
   bedrockModelAccessMessage,
+  createTextToolRecovery,
+  dialectToolsFromConverse,
   fillMissingToolResults,
+  recoveredCallId,
+  recoverFromText,
+  type RecoveredCall,
+  type TextToolRecovery,
 } from "@continuedev/openai-adapters";
 import type { NodeHttpHandler } from "@smithy/node-http-handler";
 
@@ -193,6 +199,24 @@ function* flushHeldText(state: StreamTextState): Generator<ChatMessage> {
   if (state.thinkingTags) {
     yield* thinkingSplitMessages(state.thinkingTags.flush());
   }
+}
+
+/** A call recovered from text, as the tool call message the stream would carry. */
+function recoveredCallMessage(call: RecoveredCall, index: number): ChatMessage {
+  return {
+    role: "assistant",
+    content: "",
+    toolCalls: [
+      {
+        id: recoveredCallId(index),
+        type: "function",
+        function: {
+          name: call.name,
+          arguments: JSON.stringify(call.arguments),
+        },
+      },
+    ],
+  };
 }
 
 /** The messages for one content block delta: text, reasoning or tool input. */
@@ -868,6 +892,25 @@ class Bedrock extends BaseLLM {
       let stopReason: string | undefined;
       let latencyMs: number | undefined;
       const state = streamTextState(options.model);
+      // Off unless asked for (the CONTINUE_RECOVER_TEXT_TOOL_CALLS variable or
+      // extraBodyProperties.x_continue_recover_text_tool_calls): calls the
+      // model wrote as text are held until the reply ends and made only when
+      // it made no toolUse of its own. The parsers live in openai-adapters.
+      const recovery = createTextToolRecovery(
+        options.model,
+        dialectToolsFromConverse(input.toolConfig),
+        this._httpRequestOptions?.extraBodyProperties,
+      );
+      const recovered: RecoveredCall[] = [];
+      let sawToolUse = false;
+      const recoveryMessages = function* (
+        events: ReturnType<TextToolRecovery["end"]>,
+      ): Generator<ChatMessage> {
+        for (const event of events) {
+          if (event.type === "call") recovered.push(event.call);
+          else yield { role: "assistant", content: event.text };
+        }
+      };
       for await (const chunk of response.stream) {
         if (chunk.metadata?.usage) {
           usage = bedrockUsageToUsage(chunk.metadata.usage);
@@ -880,13 +923,27 @@ class Bedrock extends BaseLLM {
         }
         if (chunk.contentBlockStop || chunk.messageStop) {
           yield* flushHeldText(state);
+          if (recovery) yield* recoveryMessages(recovery.end());
         }
         if (chunk.contentBlockDelta?.delta) {
-          yield* deltaMessages(chunk.contentBlockDelta.delta, state);
+          const delta = chunk.contentBlockDelta.delta;
+          if (recovery && delta.text) {
+            yield* recoveryMessages(recovery.push(delta.text));
+            continue;
+          }
+          yield* deltaMessages(delta, state);
           continue;
         }
         const started = toolCallStartMessage(chunk.contentBlockStart);
-        if (started) yield started;
+        if (started) {
+          sawToolUse = true;
+          yield started;
+        }
+      }
+      if (!sawToolUse) {
+        for (const [index, call] of recovered.entries()) {
+          yield recoveredCallMessage(call, index);
+        }
       }
       if (usage) {
         // The metadata event arrives after the content; BaseLLM picks the
@@ -927,9 +984,20 @@ class Bedrock extends BaseLLM {
       fallbackModelId,
     );
     const isNova2 = /nova-2-/i.test(input.modelId ?? "");
+    const recovered: RecoveredCall[] = [];
+    let sawToolUse = false;
     for (const block of response.output?.message?.content ?? []) {
-      if (block.text) {
-        yield { role: "assistant", content: block.text };
+      const found = block.text
+        ? recoverFromText(
+            input.modelId ?? "",
+            block.text,
+            dialectToolsFromConverse(input.toolConfig),
+            this._httpRequestOptions?.extraBodyProperties,
+          )
+        : undefined;
+      if (block.text && found) {
+        recovered.push(...found.calls);
+        if (found.text) yield { role: "assistant", content: found.text };
       } else if (block.reasoningContent) {
         const { reasoningText, redactedContent } = block.reasoningContent;
         if (redactedContent) {
@@ -957,6 +1025,7 @@ class Bedrock extends BaseLLM {
           }
         }
       } else if (block.toolUse?.toolUseId && block.toolUse.name) {
+        sawToolUse = true;
         yield {
           role: "assistant",
           content: "",
@@ -971,6 +1040,11 @@ class Bedrock extends BaseLLM {
             },
           ],
         };
+      }
+    }
+    if (!sawToolUse) {
+      for (const [index, call] of recovered.entries()) {
+        yield recoveredCallMessage(call, index);
       }
     }
     if (response.usage) {

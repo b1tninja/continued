@@ -299,3 +299,11 @@ export {
   type DialectTool,
   type RecoveredCall,
 } from "./dialects/qwenXml.js";
+export {
+  createTextToolRecovery,
+  dialectToolsFromConverse,
+  recoverFromText,
+  recoveredCallId,
+  recoverySetting,
+  type TextToolRecovery,
+} from "./dialects/recovery.js";
