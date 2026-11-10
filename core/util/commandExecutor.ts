@@ -1,5 +1,6 @@
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { spawn } from "node:child_process";
+import { wslStatus, wslUnavailableMessage, type WslDistro } from "./wslStatus";
 import {
   resolveShell,
   type ResolvedShell,
@@ -31,15 +32,31 @@ export interface CommandExecutor {
   spawn(command: string, options?: SpawnOptions): ChildProcess;
   /** One sentence saying where commands run, for a status line or a tool description. */
   describe(): string;
+  /**
+   * Why commands cannot run here (WSL asked for but not installed, a
+   * distribution that is not there), or undefined when they can. The tools
+   * return it instead of running the command: an executor that is not there
+   * fails closed and never falls back to the host's shell.
+   */
+  unavailable?: string;
 }
 
 /** The executor for the current settings, or for `opts` when given. */
 export function getCommandExecutor(
-  opts: ShellEnvironment = {},
+  opts: ShellEnvironment & { wslDistros?: WslDistro[] } = {},
 ): CommandExecutor {
   const shell = resolveShell(opts);
   const wsl = shell.executable.toLowerCase().endsWith("wsl.exe");
+  const unavailable = wsl
+    ? wslUnavailableMessage(
+        wslStatus(wslDistroOf(shell), {
+          platform: opts.platform,
+          distros: opts.wslDistros,
+        }),
+      )
+    : undefined;
   return {
+    unavailable,
     kind: wsl ? "wsl" : "local",
     shell,
     invocation: (command) => ({
@@ -53,4 +70,11 @@ export function getCommandExecutor(
         ? "bash inside WSL, started from the workspace folder"
         : `${shell.kind} on this machine`,
   };
+}
+
+/** The distribution named in a WSL invocation (`-d <name>`), or undefined for the default. */
+function wslDistroOf(shell: ResolvedShell): string | undefined {
+  const args = shell.args("");
+  const i = args.indexOf("-d");
+  return i >= 0 ? args[i + 1] : undefined;
 }

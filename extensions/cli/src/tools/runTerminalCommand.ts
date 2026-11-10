@@ -93,6 +93,12 @@ export function describeShell(
   return `Runs in ${name} as a login shell on ${where}.`;
 }
 
+// Why a command is not run: its place (WSL) is not there, or the lint
+function commandBlocked(command: string): string | undefined {
+  const executor = getCommandExecutor();
+  return executor.unavailable ?? commandLintGate(command, executor.shell.kind);
+}
+
 // Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL
 function getShellCommand(command: string): { shell: string; args: string[] } {
   return getCommandExecutor().invocation(command);
@@ -196,11 +202,8 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
     const maxChars = Math.floor(baseMaxChars / parallelCount);
     const maxLines = Math.floor(baseMaxLines / parallelCount);
 
-    // Mistakes in how the command is written, before the shell reports them
-    const lintMessage = commandLintGate(
-      command,
-      getCommandExecutor().shell.kind,
-    );
+    // Where the command runs is missing, or mistakes in how it is written
+    const lintMessage = commandBlocked(command);
     if (lintMessage) {
       return lintMessage;
     }
