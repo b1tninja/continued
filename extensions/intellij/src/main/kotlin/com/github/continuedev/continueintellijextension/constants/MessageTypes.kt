@@ -148,6 +148,8 @@ class MessageTypes {
             "bedrock/testModel",
             "bedrock/probeToolCalls",
             "config/setToolDialect",
+            "config/getTerminalEnvironment",
+            "config/setTerminalEnvironment",
             "llm/compileChat",
             "streamDiffLines",
             "getDiffLines",

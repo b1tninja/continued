@@ -82,7 +82,8 @@ function withoutUntrustedLoosening(
   return YAML.stringify(config);
 }
 import { loadModelCatalog } from "../providers/modelsFile";
-import { setTerminalEnvironmentSettings } from "../../util/terminalEnvironment";
+import { resolveTerminalSettings } from "../../util/terminalEnvironment";
+import { readUserTerminalSettings } from "../../util/userTerminalSettings";
 import { loadProviderInstances } from "../providers/providersFile";
 import { LocalPlatformClient } from "./LocalPlatformClient";
 import { llmsFromModelConfig } from "./models";
@@ -513,7 +514,14 @@ export async function configYamlToContinueConfig(options: {
   // Tool rules. Kept even when some entries are unreadable: those are skipped
   // and reported, rather than failing the config.
   continueConfig.toolPermissions = config.toolPermissions;
-  setTerminalEnvironmentSettings(config.terminal);
+  // Only the person's own config.yaml may loosen what commands inherit; what
+  // the assistant or a folder sets is held to the default or tighter.
+  localErrors.push(
+    ...resolveTerminalSettings(
+      readUserTerminalSettings(),
+      config.terminal,
+    ).notices.map((message) => ({ fatal: false, message })),
+  );
   localErrors.push(...validateToolPermissions(config.toolPermissions));
 
   // Secrets that no .env file or environment variable provided are still
