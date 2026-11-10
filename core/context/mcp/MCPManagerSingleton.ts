@@ -99,7 +99,15 @@ export class MCPManagerSingleton {
       if (this.connections.has(server.id)) {
         const conn = this.connections.get(server.id);
         if (conn) {
-          // We need to update it. Some attributes may have changed, such as name, faviconUrl, etc.
+          // A folder server must not take the connection of one the user
+          // already has. The user's command, env and URL stay.
+          if (
+            conn.options.configSource !== "workspace" &&
+            server.configSource === "workspace"
+          ) {
+            return;
+          }
+          // Some attributes may have changed, such as name, faviconUrl, etc.
           conn.options = server;
         }
       } else {
