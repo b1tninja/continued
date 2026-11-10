@@ -3,6 +3,7 @@
  * one switch both Bedrock handlers (this package and core/llm/llms) use, so
  * the setting and the parsers exist once. Off unless asked for.
  */
+import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
 import {
   type DialectTool,
   QwenXmlRecovery,
@@ -31,6 +32,19 @@ export function recoverySetting(
   return typeof asked === "string" ? asked : undefined;
 }
 
+/** The dialects asked for: the setting is one name or a comma-separated list. */
+export function recoverySettings(
+  body?: unknown,
+  env?: Record<string, string | undefined>,
+): Set<string> {
+  return new Set(
+    (recoverySetting(body, env) ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+}
+
 /** The recovery stage for this model and setting, or undefined when off. */
 export function createTextToolRecovery(
   model: string,
@@ -38,9 +52,12 @@ export function createTextToolRecovery(
   body?: unknown,
   env?: Record<string, string | undefined>,
 ): TextToolRecovery | undefined {
-  const setting = recoverySetting(body, env);
-  if (setting === "qwen-xml" && /qwen/i.test(model)) {
+  const settings = recoverySettings(body, env);
+  if (settings.has("qwen-xml") && /qwen/i.test(model)) {
     return new QwenXmlRecovery(tools);
+  }
+  if (settings.has("pythonic") && /nova/i.test(model)) {
+    return new PythonicRecovery(tools);
   }
   return undefined;
 }
@@ -53,9 +70,12 @@ export function recoverFromText(
   body?: unknown,
   env?: Record<string, string | undefined>,
 ): { text: string; calls: RecoveredCall[] } {
-  const setting = recoverySetting(body, env);
-  if (setting === "qwen-xml" && /qwen/i.test(model)) {
+  const settings = recoverySettings(body, env);
+  if (settings.has("qwen-xml") && /qwen/i.test(model)) {
     return recoverQwenXmlFromText(text, tools);
+  }
+  if (settings.has("pythonic") && /nova/i.test(model)) {
+    return recoverPythonicFromText(text, tools);
   }
   return { text, calls: [] };
 }

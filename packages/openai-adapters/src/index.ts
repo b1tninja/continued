@@ -305,5 +305,12 @@ export {
   recoverFromText,
   recoveredCallId,
   recoverySetting,
+  recoverySettings,
   type TextToolRecovery,
 } from "./dialects/recovery.js";
+export {
+  PythonicRecovery,
+  recoverPythonicCalls,
+  recoverPythonicFromText,
+  renderPythonicCall,
+} from "./dialects/pythonic.js";
