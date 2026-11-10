@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 
+import { terminalEnvironment } from "core/util/terminalEnvironment.js";
 import dotenv from "dotenv";
 
-import { terminalEnvironment } from "core/util/terminalEnvironment.js";
 import { startupEnv } from "./startupEnv.js";
 
 /**
