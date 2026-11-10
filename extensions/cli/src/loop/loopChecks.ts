@@ -1,4 +1,4 @@
-import { type ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 
 import { getCommandExecutor } from "core/util/commandExecutor.js";
 import { holdCheck, recordCheck } from "core/util/loopMode.js";
@@ -46,6 +46,43 @@ export interface CheckRun {
 }
 
 /**
+ * Stops a check and the processes it started. `exec`'s timeout signals only
+ * the shell, so children such as a test runner keep running. On POSIX the
+ * shell is its own process group (`detached`) and the group is signalled.
+ * On Windows, taskkill /T stops the tree.
+ */
+export function killCheckProcess(
+  child: ChildProcess,
+  platform: NodeJS.Platform = process.platform,
+): void {
+  const pid = child.pid;
+  if (!pid) {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // already gone
+    }
+    return;
+  }
+  if (platform === "win32") {
+    spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
+      windowsHide: true,
+      stdio: "ignore",
+    });
+    return;
+  }
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // already gone
+    }
+  }
+}
+
+/**
  * Runs a command in the workspace and keeps what it printed.
  *
  * It uses the command executor, the same place a Bash call runs: the shell
@@ -68,6 +105,9 @@ export function runCheckCommand(
       child = executor.spawn(command, {
         cwd,
         windowsHide: true,
+        // A new process group on POSIX, so a timeout can signal the command
+        // and the processes it started. Windows uses taskkill /T instead.
+        detached: process.platform !== "win32",
       });
     } catch (error) {
       resolve({
@@ -100,13 +140,13 @@ export function runCheckCommand(
     };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
+      killCheckProcess(child);
     }, LOOP_CHECK_TIMEOUT_MS);
     const take = (into: "out" | "err", chunk: string) => {
       bytes += chunk.length;
       if (bytes > LOOP_CHECK_MAX_BUFFER) {
         overflow = true;
-        child.kill("SIGTERM");
+        killCheckProcess(child);
         return;
       }
       if (into === "out") stdout += chunk;
@@ -118,9 +158,7 @@ export function runCheckCommand(
     child.stdout?.on("data", (chunk: string) => take("out", chunk));
     child.stderr?.on("data", (chunk: string) => take("err", chunk));
     child.on("error", (error) => finish(null, error.message));
-    child.on("close", (code) =>
-      finish(typeof code === "number" ? code : null),
-    );
+    child.on("close", (code) => finish(typeof code === "number" ? code : null));
   });
 }
 

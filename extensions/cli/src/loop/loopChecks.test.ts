@@ -1,3 +1,4 @@
+import { type ChildProcess } from "child_process";
 import { EventEmitter } from "events";
 
 import { getCommandExecutor } from "core/util/commandExecutor.js";
@@ -10,7 +11,11 @@ vi.mock("child_process", async (importOriginal) => {
   return { ...actual, spawn };
 });
 
-import { LOOP_CHECK_TIMEOUT_MS, runCheckCommand } from "./loopChecks.js";
+import {
+  killCheckProcess,
+  LOOP_CHECK_TIMEOUT_MS,
+  runCheckCommand,
+} from "./loopChecks.js";
 
 function fakeChild() {
   const child = new EventEmitter() as EventEmitter & {
@@ -72,19 +77,42 @@ describe("loop check commands use the approved shell", () => {
     });
   });
 
-  it("a command that runs past the limit is stopped", async () => {
+  it("a command that runs past the limit is stopped with its process group", async () => {
     vi.useFakeTimers();
     const child = fakeChild();
-    child.kill.mockImplementation(() => {
-      child.emit("close", null);
-    });
     spawn.mockReturnValue(child);
+    const kill = vi.spyOn(process, "kill").mockImplementation((pid) => {
+      if (pid === -child.pid) child.emit("close", null);
+      return true;
+    });
     const pending = runCheckCommand("sleep 9999");
     await vi.advanceTimersByTimeAsync(LOOP_CHECK_TIMEOUT_MS);
     await expect(pending).resolves.toEqual({
       exitCode: null,
       output: "(stopped after 10 minutes)",
     });
-    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(kill).toHaveBeenCalledWith(-child.pid, "SIGTERM");
+    expect(spawn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ detached: true }),
+    );
+    kill.mockRestore();
+  });
+
+  it("kills the process group, and on Windows the process tree", () => {
+    const child = fakeChild();
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    killCheckProcess(child as unknown as ChildProcess, "linux");
+    expect(kill).toHaveBeenCalledWith(-child.pid, "SIGTERM");
+
+    spawn.mockClear();
+    killCheckProcess(child as unknown as ChildProcess, "win32");
+    expect(spawn).toHaveBeenCalledWith(
+      "taskkill",
+      ["/pid", String(child.pid), "/T", "/F"],
+      expect.objectContaining({ windowsHide: true }),
+    );
+    kill.mockRestore();
   });
 });
