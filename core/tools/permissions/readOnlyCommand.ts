@@ -266,7 +266,11 @@ function gitSectionName(header: string): string {
 }
 
 function gitSectionRunsPrograms(section: string): boolean {
-  return /^(include|includeif|hook|filter|pager)(\.|$)/i.test(section);
+  return /^(hook|filter|pager)(\.|$)/i.test(section);
+}
+
+function isGitIncludeSection(section: string): boolean {
+  return /^(include|includeif)(\.|$)/i.test(section);
 }
 
 function gitKeyRunsPrograms(section: string, line: string): boolean {
@@ -299,6 +303,51 @@ function withoutGitComment(line: string): string {
   }
   return line;
 }
+
+/** `path` values of include and includeIf, in the order they appear. */
+function gitIncludePaths(text: string): string[] {
+  const paths: string[] = [];
+  let including = false;
+  const take = (line: string) => {
+    const m = /^path\s*=\s*(.*)$/i.exec(line.trim());
+    if (!m) return;
+    let value = m[1].trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"') && value.length >= 2) ||
+      (value.startsWith("'") && value.endsWith("'") && value.length >= 2)
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (value) paths.push(value);
+  };
+  for (const raw of text.replace(/\\\r?\n/g, "").split(/\r?\n/)) {
+    const line = withoutGitComment(raw).trim();
+    if (!line || line.startsWith(";") || line.startsWith("#")) continue;
+    const header = /^\[([^\]]+)\](.*)$/.exec(line);
+    if (header) {
+      including = isGitIncludeSection(gitSectionName(header[1]));
+      if (including && header[2].trim()) take(header[2]);
+      continue;
+    }
+    if (including) take(line);
+  }
+  return paths;
+}
+
+/** An include path is relative to the file that names it. `~/` is the home directory. */
+function resolveGitInclude(
+  fromFile: string,
+  spec: string,
+  home: string,
+): string {
+  let p = spec.trim();
+  if (p.startsWith("~/")) p = path.join(home, p.slice(2));
+  else if (p === "~") p = home;
+  if (!path.isAbsolute(p)) p = path.resolve(path.dirname(fromFile), p);
+  return p;
+}
+
+const GIT_CONFIG_READ_LIMIT = 32;
 
 /** True when this config text names a program git would run. */
 function gitConfigRunsPrograms(text: string): boolean {
@@ -413,10 +462,44 @@ function gitIsSafe(opts: ReadOnlyOptions): string | undefined {
     if (up === dir) break;
     dir = up;
   }
-  for (const file of files) {
-    const text = read(file);
-    if (text && gitConfigRunsPrograms(text)) {
-      return `git config (${file}) can run programs (fsmonitor, hooks, filters or similar)`;
+  // Optional files may be absent. An include target is required: if it cannot
+  // be read, or the chain loops, the config was not fully checked.
+  const queue: { file: string; required: boolean }[] = files.map((file) => ({
+    file,
+    required: false,
+  }));
+  const seen = new Set<string>();
+  let reads = 0;
+  while (queue.length > 0) {
+    const item = queue.shift();
+    if (!item) break;
+    const key = item.file.replace(/\\/g, "/");
+    if (seen.has(key)) {
+      if (item.required) {
+        return `git config (${item.file}) can run programs (fsmonitor, hooks, filters or similar)`;
+      }
+      continue;
+    }
+    seen.add(key);
+    reads += 1;
+    if (reads > GIT_CONFIG_READ_LIMIT) {
+      return `git config (${item.file}) can run programs (fsmonitor, hooks, filters or similar)`;
+    }
+    const text = read(item.file);
+    if (!text) {
+      if (item.required) {
+        return `git config (${item.file}) can run programs (fsmonitor, hooks, filters or similar)`;
+      }
+      continue;
+    }
+    if (gitConfigRunsPrograms(text)) {
+      return `git config (${item.file}) can run programs (fsmonitor, hooks, filters or similar)`;
+    }
+    for (const spec of gitIncludePaths(text)) {
+      queue.push({
+        file: resolveGitInclude(item.file, spec, home),
+        required: true,
+      });
     }
   }
   return undefined;

@@ -285,6 +285,50 @@ describe("git", () => {
     expect(seen).toContain("/xdg/git/config");
   });
 
+  it("reads an include target, including one named by includeIf", () => {
+    const included = (file: string, marker: string) => {
+      const seen: string[] = [];
+      const opts: ReadOnlyOptions = {
+        ...CLEAN,
+        env: {},
+        readGitConfig: (f) => {
+          const p = posix(f);
+          seen.push(p);
+          if (p.endsWith(file)) return marker;
+          if (p.endsWith("/included.conf") || p.endsWith("/extra.conf")) {
+            return "[core]\n\tfsmonitor = x\n";
+          }
+          return "";
+        },
+      };
+      expect(vouched("git status", opts)).toBe(false);
+      return seen;
+    };
+    expect(
+      included("/.git/config", "[include]\n\tpath = ../included.conf\n").some(
+        (f) => f.endsWith("/included.conf"),
+      ),
+    ).toBe(true);
+    expect(
+      included(
+        "/.gitconfig",
+        '[includeIf "gitdir:~/"]\n\tpath = ~/extra.conf\n',
+      ).some((f) => f.endsWith("/extra.conf")),
+    ).toBe(true);
+  });
+
+  it("a clean include target still allows a vouched git command", () => {
+    const opts: ReadOnlyOptions = {
+      ...CLEAN,
+      env: {},
+      readGitConfig: (file) =>
+        posix(file).endsWith("/.git/config")
+          ? "[include]\n\tpath = ../clean.conf\n"
+          : "[core]\n\tbare = false\n",
+    };
+    expect(vouched("git status", opts)).toBe(true);
+  });
+
   it("GIT_CONFIG_GLOBAL replaces the home gitconfig", () => {
     const seen: string[] = [];
     const opts: ReadOnlyOptions = {
