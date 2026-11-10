@@ -23,6 +23,12 @@ export class MCPManagerSingleton {
   async setEnabled(serverId: string, enabled: boolean) {
     const conn = this.connections.get(serverId);
     if (conn) {
+      if (enabled && conn.options.projectTrust === "required") {
+        // Enabling from the list is not a trust decision. The folder has to
+        // be trusted, which reloads this server without the hold.
+        conn.status = "disabled";
+        return;
+      }
       if (enabled) {
         conn.status = "not-connected";
         await this.refreshConnection(serverId);
@@ -113,6 +119,9 @@ export class MCPManagerSingleton {
     b: InternalMcpOptions,
   ): boolean {
     if (a.type !== b.type) {
+      return false;
+    }
+    if (a.projectTrust !== b.projectTrust) {
       return false;
     }
     if ("command" in a && "command" in b) {

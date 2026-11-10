@@ -59,6 +59,11 @@ import {
 import { localPathToUri } from "../util/pathToUri";
 
 import { loadJsonMcpConfigs } from "../context/mcp/json/loadJsonMcpConfigs";
+import {
+  gateWorkspaceMcpServers,
+  mcpTrustByDir,
+} from "../context/mcp/workspaceMcpPolicy";
+import { beginTrustCheck } from "./projectTrust";
 import CustomContextProviderClass from "../context/providers/CustomContextProvider";
 import { getBaseToolDefinitions, serializeTool } from "../tools";
 import { resolveRelativePathInDir } from "../util/ideUtils";
@@ -544,7 +549,11 @@ async function intermediateToFinalConfig({
     );
     errors.push(...jsonMcpErrors);
     mcpOptions.push(...mcpServers);
-    mcpManager.setConnections(mcpOptions, false);
+    const workspaceDirs = await ide.getWorkspaceDirs();
+    const isTrusted = await mcpTrustByDir(ide, workspaceDirs, mcpOptions);
+    const gated = gateWorkspaceMcpServers(mcpOptions, workspaceDirs, isTrusted);
+    errors.push(...gated.notices);
+    mcpManager.setConnections(gated.servers, false);
   }
 
   // Handle experimental modelRole config values for apply and edit
@@ -801,6 +810,7 @@ async function loadContinueConfigFromJson(
   llmLogger: ILLMLogger,
   overrideConfigJson: SerializedContinueConfig | undefined,
 ): Promise<ConfigResult<ContinueConfig>> {
+  beginTrustCheck();
   const workspaceConfigs = await getWorkspaceRcConfigs(ide);
   // Serialized config
   let {

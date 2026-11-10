@@ -132,6 +132,15 @@ class MCPConnection {
     );
 
     this.abortController = new AbortController();
+
+    // A folder's server does not start, and does not open a transport, until
+    // that folder is trusted. connectClient checks this again.
+    if (this.options.projectTrust === "required") {
+      this.status = "disabled";
+      this.infos.push(
+        "Defined by this folder, which is not trusted, so this server was not started.",
+      );
+    }
   }
 
   async disconnect(disable = false) {
@@ -156,6 +165,10 @@ class MCPConnection {
   }
 
   async connectClient(forceRefresh: boolean, externalSignal: AbortSignal) {
+    if (this.options.projectTrust === "required") {
+      this.status = "disabled";
+      return;
+    }
     if (this.status === "disabled") {
       return;
     }

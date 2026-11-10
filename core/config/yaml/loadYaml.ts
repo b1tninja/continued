@@ -35,6 +35,11 @@ import { modifyAnyConfigWithSharedConfig } from "../sharedConfig";
 import { convertPromptBlockToSlashCommand } from "../../commands/slash/promptBlockSlashCommand";
 import { slashCommandFromPromptFile } from "../../commands/slash/promptFileSlashCommand";
 import { loadJsonMcpConfigs } from "../../context/mcp/json/loadJsonMcpConfigs";
+import {
+  gateWorkspaceMcpServers,
+  heldMcpServersFromBlock,
+  mcpTrustByDir,
+} from "../../context/mcp/workspaceMcpPolicy";
 import { getBaseToolDefinitions } from "../../tools";
 import { getCleanUriPath } from "../../util/uri";
 import { loadConfigContextProviders } from "../loadContextProviders";
@@ -45,6 +50,14 @@ import {
   stripUntrustedLoosening,
   untrustedLooseningNotice,
 } from "../../tools/permissions/trust";
+import {
+  beginTrustCheck,
+  blockScope,
+  fileIsInsideDir,
+  scopeIsTrusted,
+  TRUST_GATED_BLOCK_SCOPES,
+  untrustedConfigError,
+} from "../projectTrust";
 
 /**
  * A workspace block's YAML with the keys a repository may not set removed,
@@ -86,7 +99,9 @@ async function loadConfigYaml(options: {
   ideSettings: IdeSettings;
   ide: IDE;
   packageIdentifier: PackageIdentifier;
-}): Promise<ConfigResult<AssistantUnrolled>> {
+}): Promise<
+  ConfigResult<AssistantUnrolled> & { heldMcpServers: InternalMcpOptions[] }
+> {
   const { overrideConfigYaml, ideSettings, ide, packageIdentifier } = options;
 
   // Add local .continuous blocks
@@ -95,25 +110,90 @@ async function loadConfigYaml(options: {
   // A block that came with the workspace may tighten (deny, ask) but not
   // loosen: its allow rules and reviewer guidance are dropped with a notice
   // (core/tools/permissions/trust.ts; plans/policy-areas.md, "Settings").
+  // MCP, model and data blocks from the folder are held until that folder is
+  // trusted (core/config/projectTrust.ts). Which of those are enforced is
+  // TRUST_GATED_BLOCK_SCOPES.
+  beginTrustCheck();
   const workspaceDirs = await ide.getWorkspaceDirs();
   const trustNotices: ConfigValidationError[] = [];
-  const localBlockPromises = BLOCK_TYPES.map(async (blockType) => {
-    const localBlocks = await getAllDotContinueDefinitionFiles(
-      ide,
-      { includeGlobal: true, includeWorkspace: true, fileExtType: "yaml" },
-      blockType,
-    );
-    return localBlocks.map((b) => ({
-      uriType: "file" as const,
-      fileUri: b.path,
-      content: workspaceDirs.some((dir) => b.path.startsWith(dir))
-        ? withoutUntrustedLoosening(b.path, b.content, trustNotices)
-        : b.content,
-    }));
-  });
-  const localPackageIdentifiers: PackageIdentifier[] = (
-    await Promise.all(localBlockPromises)
+  const heldMcpServers: InternalMcpOptions[] = [];
+  const loadedBlocks = (
+    await Promise.all(
+      BLOCK_TYPES.map(async (blockType) => {
+        const localBlocks = await getAllDotContinueDefinitionFiles(
+          ide,
+          { includeGlobal: true, includeWorkspace: true, fileExtType: "yaml" },
+          blockType,
+        );
+        return localBlocks.map((b) => ({
+          path: b.path,
+          content: b.content,
+          blockType,
+        }));
+      }),
+    )
   ).flat();
+
+  const keptBlocks: typeof loadedBlocks = [];
+  const gated = new Map<
+    string,
+    {
+      dir: string;
+      scope: (typeof TRUST_GATED_BLOCK_SCOPES)[number];
+      blocks: typeof loadedBlocks;
+    }
+  >();
+  for (const block of loadedBlocks) {
+    const scope = blockScope(block.blockType, block.path, workspaceDirs);
+    if (!scope || !TRUST_GATED_BLOCK_SCOPES.includes(scope.scope)) {
+      keptBlocks.push(block);
+      continue;
+    }
+    const key = `${scope.dir}\0${scope.scope}`;
+    const group = gated.get(key) ?? {
+      dir: scope.dir,
+      scope: scope.scope,
+      blocks: [],
+    };
+    group.blocks.push(block);
+    gated.set(key, group);
+  }
+  for (const group of gated.values()) {
+    const trusted = await scopeIsTrusted(
+      ide,
+      group.dir,
+      group.scope,
+      group.blocks.map((block) => ({
+        path: block.path,
+        content: block.content,
+      })),
+    );
+    if (!trusted) {
+      const notice = untrustedConfigError(
+        group.dir,
+        group.scope,
+        group.blocks.length,
+      );
+      if (notice) trustNotices.push(notice);
+      if (group.scope === "mcp") {
+        for (const block of group.blocks) {
+          heldMcpServers.push(
+            ...heldMcpServersFromBlock(block.path, block.content),
+          );
+        }
+      }
+      continue;
+    }
+    keptBlocks.push(...group.blocks);
+  }
+
+  const localPackageIdentifiers: PackageIdentifier[] = keptBlocks.map((b) => ({
+    uriType: "file" as const,
+    fileUri: b.path,
+    content: workspaceDirs.some((dir) => fileIsInsideDir(b.path, dir))
+      ? withoutUntrustedLoosening(b.path, b.content, trustNotices)
+      : b.content,
+  }));
 
   // Registry client is only used if local blocks are present, but logic same for hub/local assistants
   const getRegistryClient = async () => {
@@ -183,6 +263,7 @@ async function loadConfigYaml(options: {
       errors,
       config: undefined,
       configLoadInterrupted: true,
+      heldMcpServers,
     };
   }
 
@@ -191,6 +272,7 @@ async function loadConfigYaml(options: {
     config,
     errors,
     configLoadInterrupted: false,
+    heldMcpServers,
   };
 }
 
@@ -232,6 +314,8 @@ export async function configYamlToContinueConfig(options: {
   ideInfo: IdeInfo;
   uniqueId: string;
   llmLogger: ILLMLogger;
+  /** Workspace MCP servers held back before secret rendering. */
+  heldMcpServers?: InternalMcpOptions[];
 }): Promise<{ config: ContinueConfig; errors: ConfigValidationError[] }> {
   let { unrolledAssistant, ide, ideInfo, uniqueId, llmLogger } = options;
 
@@ -511,7 +595,14 @@ export async function configYamlToContinueConfig(options: {
   );
   localErrors.push(...jsonMcpErrors);
   mcpOptions.push(...mcpServers);
-  mcpManager.setConnections(mcpOptions, false, { ide });
+  if (options.heldMcpServers?.length) {
+    mcpOptions.push(...options.heldMcpServers);
+  }
+  const workspaceDirs = await ide.getWorkspaceDirs();
+  const isTrusted = await mcpTrustByDir(ide, workspaceDirs, mcpOptions);
+  const gated = gateWorkspaceMcpServers(mcpOptions, workspaceDirs, isTrusted);
+  localErrors.push(...gated.notices);
+  mcpManager.setConnections(gated.servers, false, { ide });
 
   return { config: continueConfig, errors: localErrors };
 }
@@ -558,6 +649,7 @@ export async function loadContinueConfigFromYaml(options: {
       ideInfo,
       uniqueId,
       llmLogger,
+      heldMcpServers: configYamlResult.heldMcpServers,
     });
 
   // Apply shared config
