@@ -70,6 +70,7 @@ function getShellCommand(command: string): { shell: string; args: string[] } {
 
 import { fileURLToPath } from "node:url";
 import { getCommandExecutor } from "../../util/commandExecutor";
+import { terminalEnvironment } from "../../util/terminalEnvironment";
 import { commandLintGate } from "../permissions/commandLint";
 import { missingBinaryGate } from "../permissions/missingBinaryGate";
 import { ToolImpl } from ".";
@@ -124,7 +125,7 @@ function resolveWorkingDirectory(workspaceDirs: string[]): string {
 
 // Add color-supporting environment variables
 const getColorEnv = () => ({
-  ...process.env,
+  ...terminalEnvironment(),
   FORCE_COLOR: "1",
   COLORTERM: "truecolor",
   TERM: "xterm-256color",

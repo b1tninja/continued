@@ -7,6 +7,7 @@ import {
   pickContainerRuntime,
   type ContainerStatus,
 } from "./containerStatus";
+import { terminalEnvironment } from "./terminalEnvironment";
 import { wslStatus, wslUnavailableMessage, type WslDistro } from "./wslStatus";
 import {
   getTerminalShellPreference,
@@ -84,8 +85,13 @@ export function getCommandExecutor(
       shell: shell.executable,
       args: shell.args(command),
     }),
+    // A caller that passes its own `env` owns it; otherwise the host's
+    // secrets are not handed on (terminalEnvironment)
     spawn: (command, options) =>
-      spawn(shell.executable, shell.args(command), options ?? {}),
+      spawn(shell.executable, shell.args(command), {
+        ...options,
+        env: options?.env ?? terminalEnvironment(),
+      }),
     describe: () =>
       wsl
         ? "bash inside WSL, started from the workspace folder"

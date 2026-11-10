@@ -15,6 +15,7 @@ import {
 } from "vitest";
 import { IDE, ToolExtras } from "../..";
 import * as processTerminalStates from "../../util/processTerminalStates";
+import { setTerminalEnvironmentSettings } from "../../util/terminalEnvironment";
 import { runTerminalCommandTool } from "../definitions/runTerminalCommand";
 import { runTerminalCommandImpl } from "./runTerminalCommand";
 
@@ -141,6 +142,29 @@ describe("runTerminalCommandImpl", () => {
     expect(result[0].content).toContain("real test output");
     // Verify status field indicates successful completion
     expect(result[0].status).toBe("Command completed");
+  });
+
+  it("does not pass the host's secrets to a command, unless passEnv names them", async () => {
+    vi.stubEnv("CANARY_API_KEY", "leak-me");
+    vi.stubEnv("CANARY_OTHER_TOKEN", "pass-me");
+    const command = `node -e "console.log('K=' + process.env.CANARY_API_KEY + ' T=' + process.env.CANARY_OTHER_TOKEN + ' P=' + (process.env.PATH ? 'y' : 'n'))"`;
+    try {
+      setTerminalEnvironmentSettings({ passEnv: ["CANARY_OTHER_TOKEN"] });
+      const result = await runTerminalCommandImpl(
+        { command, waitForCompletion: true },
+        createMockExtras(),
+      );
+      expect(result[0].content).toContain("K=undefined T=pass-me P=y");
+      setTerminalEnvironmentSettings({ environment: "inherit" });
+      const inherited = await runTerminalCommandImpl(
+        { command, waitForCompletion: true },
+        createMockExtras(),
+      );
+      expect(inherited[0].content).toContain("K=leak-me T=pass-me P=y");
+    } finally {
+      setTerminalEnvironmentSettings(undefined);
+      vi.unstubAllEnvs();
+    }
   });
 
   it("should stream output when onPartialOutput is provided", async () => {

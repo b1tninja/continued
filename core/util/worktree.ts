@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 
 import { getContinueGlobalPath } from "./paths.js";
+import { terminalEnvironment } from "./terminalEnvironment.js";
 
 /**
  * Git worktrees for Loop mode's parallel items (plans/loop-mode.md, "Next:
@@ -59,7 +60,7 @@ export const defaultShellRunner: ShellRunner = (command, cwd, env) =>
   new Promise((resolve, reject) => {
     exec(
       command,
-      { cwd, env: { ...process.env, ...env }, maxBuffer: MAX_BUFFER },
+      { cwd, env: { ...terminalEnvironment(), ...env }, maxBuffer: MAX_BUFFER },
       (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr?.trim() || error.message));

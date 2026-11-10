@@ -1,0 +1,43 @@
+---
+title: "Command environment"
+---
+
+Commands the agent runs do not inherit secrets from your environment. API keys, tokens, passwords, cloud credentials and agent sockets are removed before a command starts. This applies to terminal commands, loop checks, hook commands, background jobs, and the host variables passed to a stdio MCP server. To turn it off, add this to `config.yaml`:
+
+```yaml title="config.yaml"
+terminal:
+  environment: inherit
+```
+
+In the terminal agent, `CONTINUE_TERMINAL_ENV=inherit` does the same and takes precedence over `config.yaml`.
+
+## Modes
+
+| `terminal.environment` | Result |
+| --- | --- |
+| `scrub` (default) | Everything is passed except names that look like secrets and values that are URLs with credentials. |
+| `inherit` | Everything is passed, as in earlier versions. |
+| `allowlist` | Only basics such as `PATH`, `HOME`, `USERPROFILE`, `TEMP`, `SystemRoot`, `ComSpec`, `PATHEXT`, `LANG` and `TERM`, the WSL variables, and the names in `terminal.allow`. |
+
+`CONTINUE_TERMINAL_ENV` accepts the same three values.
+
+## What is removed
+
+In `scrub` mode these names are removed (matching is case-insensitive on Windows): `*API_KEY`, `*_KEY`, `*TOKEN`, `*SECRET`, `*PASSWORD`, `AWS_*`, `AZURE_*`, `GCP_*`, `CONTINUOUS_*`, `CONTINUE_*`, `ANTHROPIC_*`, `OPENAI_*`, `SSH_AUTH_SOCK`, `DOCKER_HOST`, `DATABASE_URL`, and any variable whose value is a URL containing a user name or password. `PATH`, `HOME` and the other non-secret basics always pass.
+
+## Pass a variable through
+
+List exact names in `terminal.passEnv`. They pass in every mode:
+
+```yaml title="config.yaml"
+terminal:
+  passEnv:
+    - GITHUB_TOKEN
+    - AWS_PROFILE
+```
+
+The agent is told that secrets are not passed and that you can allow a name here, so it can ask you to.
+
+## MCP servers
+
+A stdio MCP server's own `env:` block is your explicit configuration and is passed as written, including keys. Only the variables the host passes implicitly are scrubbed.

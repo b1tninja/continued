@@ -9,6 +9,10 @@ import { commandLintGate } from "core/tools/permissions/commandLint.js";
 import { missingBinaryGate } from "core/tools/permissions/missingBinaryGate.js";
 import { getCommandExecutor } from "core/util/commandExecutor.js";
 import { getTerminalShellPreference } from "core/util/shell.js";
+import {
+  TERMINAL_ENV_NOTICE,
+  terminalEnvironment,
+} from "core/util/terminalEnvironment.js";
 
 import { shellChildEnv } from "../childEnv.js";
 import { backgroundJobService } from "../services/BackgroundJobService.js";
@@ -147,6 +151,7 @@ export const runTerminalCommandTool: Tool = {
   name: "Bash",
   displayName: "Bash",
   description: `Executes a terminal command and returns the output. ${describeShell()}
+${TERMINAL_ENV_NOTICE}
 
 Commands are automatically executed from the current working directory (${process.cwd()}), so there's no need to change directories with 'cd' commands.
 
@@ -223,7 +228,9 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
     const terminalOutput: string = await new Promise((resolve, reject) => {
       // Use same shell logic as core implementation
       const { shell, args } = getShellCommand(command);
-      const child = spawn(shell, args, { env: shellChildEnv() });
+      const child = spawn(shell, args, {
+        env: terminalEnvironment(shellChildEnv()),
+      });
       let stdout = "";
       let stderr = "";
       let timeoutId: NodeJS.Timeout;

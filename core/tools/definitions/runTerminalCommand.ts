@@ -1,4 +1,5 @@
 import os from "os";
+import { TERMINAL_ENV_NOTICE } from "../../util/terminalEnvironment";
 import { Tool } from "../..";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "../builtIn";
 import {
@@ -30,7 +31,7 @@ const RUN_COMMAND_NOTES = `The shell is not stateful and will not remember any p
       When suggesting subsequent shell commands ALWAYS format them in shell command blocks.\
       Do NOT perform actions requiring special/admin privileges.\
       IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed, awk, etc). A command that writes a file (redirection, Set-Content, node -e or python -c calling a write) counts as a file edit: use the edit tools for it, and if an edit was refused, the command is refused too.\
-      ${PLATFORM_INFO}`;
+      ${TERMINAL_ENV_NOTICE}      ${PLATFORM_INFO}`;
 
 export const runTerminalCommandTool: Tool = {
   type: "function",
