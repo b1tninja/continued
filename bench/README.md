@@ -24,6 +24,8 @@ outside the repository.
 | `src/common.mjs`   | Shared helpers: scenario and matrix loading, history parsing, pricing, the `/state` to result mapping.                                                 |
 | `tier0/*.test.ts`  | Tier 0: the compliance expectations against the scripted model and the real serve routes, no provider needed.                                          |
 
+Live capture of raw tool-call replies (real tool list, streaming, passes, Wilson intervals) is a separate script: `plans/live-capture.md`.
+
 ## Running a slice
 
 Build the CLI once (`npm run build` in `extensions/cli`), then from the
