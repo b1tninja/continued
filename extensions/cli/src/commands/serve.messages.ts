@@ -1,3 +1,7 @@
+import {
+  recoveryStatsSnapshot,
+  type RecoveryStatRow,
+} from "@continuedev/openai-adapters";
 import chalk from "chalk";
 import type { Express, Request, Response } from "express";
 
@@ -105,6 +109,12 @@ export interface RunTallySnapshot {
    * under the model's minimum cacheable prompt (so could not be cached).
    */
   promptCache: CacheTallySnapshot;
+  /**
+   * Tool calls models wrote as text, per model and dialect: held, recovered
+   * and released as text (counts only, never an argument). Empty unless
+   * recovery is on.
+   */
+  textToolCalls: RecoveryStatRow[];
   /** Replies the output limit cut off (finish_reason "length"). */
   truncatedReplies: number;
   /** Questions asked with nobody to answer, answered ones included. */
@@ -126,6 +136,7 @@ export function getServeStateSnapshot(
     ...getQueueSnapshot(),
     ...getLoopSnapshot(),
     promptCache: cacheTallySnapshot(),
+    textToolCalls: recoveryStatsSnapshot(),
     truncatedReplies: getTruncatedReplies(),
     // Questions the model asked with nobody to answer (plan turns): answer
     // one with POST /message { answerQuestion: id, answer }

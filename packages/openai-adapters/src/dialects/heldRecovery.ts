@@ -65,6 +65,10 @@ export class HeldBlockRecovery {
     return [];
   }
 
+  isHolding(): boolean {
+    return this.state === "held" && this.buffer !== "";
+  }
+
   end(): RecoveryEvent[] {
     const out: RecoveryEvent[] = [];
     if (this.buffer) {

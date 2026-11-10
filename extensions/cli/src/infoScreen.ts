@@ -1,5 +1,6 @@
 import { execSync } from "child_process";
 
+import { formatRecoveryStats } from "@continuedev/openai-adapters";
 import chalk from "chalk";
 
 import { services } from "./services/index.js";
@@ -103,6 +104,8 @@ function getUsageInfo(): string[] {
       // totals above when the session was resumed.
       const cacheLine = formatCacheTally();
       if (cacheLine) lines.push(`  ${cacheLine}`);
+      const textCalls = formatRecoveryStats();
+      if (textCalls) lines.push(`  ${textCalls}`);
       const cutOff = formatReplyTally();
       if (cutOff) lines.push(`  ${chalk.yellow(cutOff)}`);
     } else {

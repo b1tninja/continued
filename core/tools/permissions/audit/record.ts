@@ -1,3 +1,4 @@
+import { isRecoveredCallId } from "@continuedev/openai-adapters";
 import { clipMasked, hashMasked, maskForAudit, maskText } from "./mask";
 
 /**
@@ -86,6 +87,12 @@ export interface DecisionEvent extends AuditEnvelope {
   jail?: string;
   loopItem?: string;
   modelMain?: string;
+  /**
+   * The call was recovered from text the model wrote (tool-dialects), not sent
+   * as a native tool call. It went through the same policy; a reviewer can
+   * tell the two apart here.
+   */
+  recovered?: true;
 }
 
 export interface OutcomeEvent extends AuditEnvelope {
@@ -148,6 +155,8 @@ export interface DecisionInput {
   jail?: string;
   loopItem?: string;
   modelMain?: string;
+  /** Set for a recovered call; also derived from the call id */
+  recovered?: boolean;
 }
 
 const clean = <T extends object>(o: T): T =>
@@ -158,9 +167,10 @@ const maskLine = (s: string | undefined, max: number): string | undefined =>
 
 export function decisionDraft(input: DecisionInput): AuditDraft {
   const args = maskForAudit(input.args, MAX_ARGS_CHARS);
-  const { args: _raw, ...rest } = input;
+  const { args: _raw, recovered, ...rest } = input;
   return clean({
     ...rest,
+    recovered: recovered || isRecoveredCallId(input.callId) ? true : undefined,
     ev: "decision" as const,
     argsMasked: args.masked,
     argsHash: args.hash,

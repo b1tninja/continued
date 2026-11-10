@@ -318,6 +318,10 @@ export class QwenXmlRecovery {
     }
   }
 
+  isHolding(): boolean {
+    return this.held !== undefined;
+  }
+
   /** The end of the text block: parse what was held, release the rest. */
   end(): RecoveryEvent[] {
     const out: RecoveryEvent[] = [];

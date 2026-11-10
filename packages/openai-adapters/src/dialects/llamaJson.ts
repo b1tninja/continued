@@ -145,6 +145,10 @@ export class LlamaJsonRecovery {
     return [{ type: "text", text: buffer }];
   }
 
+  isHolding(): boolean {
+    return this.held !== undefined;
+  }
+
   end(): RecoveryEvent[] {
     const out: RecoveryEvent[] = [];
     if (this.held !== undefined) {
