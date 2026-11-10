@@ -60,11 +60,7 @@ describe("third-party actions", () => {
         "uses: example/action@0123456789abcdef0123456789abcdef01234567",
       ),
     ).toEqual([]);
-    expect(
-      unpinnedThirdPartyUses("uses: actions/checkout@v7"),
-    ).toEqual([]);
-    expect(
-      unpinnedThirdPartyUses("  # uses: example/action@main"),
-    ).toEqual([]);
+    expect(unpinnedThirdPartyUses("uses: actions/checkout@v7")).toEqual([]);
+    expect(unpinnedThirdPartyUses("  # uses: example/action@main")).toEqual([]);
   });
 });
