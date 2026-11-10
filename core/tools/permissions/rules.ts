@@ -102,6 +102,7 @@ export function mcpNameMatch(pattern: string, toolName: string): boolean {
   return globMatch(pattern, toolName);
 }
 
+import type { ShellKind } from "../../util/shell";
 import { commandCandidateSet } from "./candidates";
 import { effectsOfCommand, isEffect } from "./commandSpecs";
 import {
@@ -214,10 +215,12 @@ function matchesEffectRule(pattern: string, candidates: string[]): boolean {
 export function matchTerminalCommand(
   rules: ParsedRule[],
   command: string,
+  /** The shell that runs it; unknown reads the command under every grammar */
+  shell?: ShellKind,
 ): RuleMatch | undefined {
   const toolRules = rules.filter((r) => r.toolName === "runTerminalCommand");
   const parsed = parseCommand(command);
-  const { list: candidates, truncated } = commandCandidateSet(command);
+  const { list: candidates, truncated } = commandCandidateSet(command, shell);
   // Deny and ask ignore case: `GIT push` is `git push` on Windows, and a
   // protection must not depend on how a command is capitalised.
   // A command too long to expand in full fails closed: any deny or ask rule

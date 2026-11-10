@@ -23,9 +23,13 @@ export interface Scan {
 }
 
 /** True when a candidate string begins with the program and subcommand, ignoring case. */
-function candidateNames(command: string, resolves: string): boolean {
+function candidateNames(
+  command: string,
+  resolves: string,
+  shell: ShellKind,
+): boolean {
   const want = resolves.toLowerCase();
-  return commandCandidates(command).some((c) => {
+  return commandCandidates(command, shell).some((c) => {
     const got = c.trim().toLowerCase();
     return got === want || got.startsWith(want + " ");
   });
@@ -36,12 +40,12 @@ export function scan(kase: VerdictCase, shell: ShellKind): Scan {
     shell,
     ...GIT_CLEAN,
   }).vouched;
-  const hit = protectedCommandHit(kase.command, HOME);
+  const hit = protectedCommandHit(kase.command, HOME, [], undefined, shell);
   return {
     vouched,
     protectsFound: hit ? hit.kind : "none",
     resolvesOk: kase.resolves
-      ? candidateNames(kase.command, kase.resolves)
+      ? candidateNames(kase.command, kase.resolves, shell)
       : undefined,
   };
 }

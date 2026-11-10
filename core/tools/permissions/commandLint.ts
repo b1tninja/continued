@@ -1,5 +1,6 @@
 import type { ShellKind } from "../../util/shell";
 import { isPosixShell } from "../../util/shell";
+import { detectCommandShell, familyOf, mismatchedShell } from "./detectShell";
 import { bashSyntaxProblem } from "./treeSitterBash";
 
 /**
@@ -280,6 +281,111 @@ function lintForeignSyntax(
   }
 }
 
+/** The PowerShell for the Unix utilities a command most often reaches for. */
+const POWERSHELL_FOR: [RegExp, string][] = [
+  [/\bls\s+-[A-Za-z]+/, "Get-ChildItem -Force (-Name for names only)"],
+  [/\brm\s+-[A-Za-z]*[rf]/, "Remove-Item -Recurse -Force <path>"],
+  [/\bcat\s+\S/, "Get-Content <path>"],
+  [/\bgrep\s/, "Select-String -Pattern <text> -Path <path>"],
+  [/\bwhich\s/, "Get-Command <name>"],
+  [/\btouch\s/, "New-Item -ItemType File <path>"],
+  [/\bexport\s+\w+=/, "$env:NAME = 'value'"],
+  [/\bmkdir\s+-p\b/, "New-Item -ItemType Directory -Force <path>"],
+];
+
+/** The cmd for each, written for PowerShell. */
+const POWERSHELL_FOR_CMD: [RegExp, string][] = [
+  [/%(\w+)%/, "$env:NAME instead of %NAME%"],
+  [/\bdir\s+\/[bsa]/i, "Get-ChildItem -Name / -Recurse / -Force"],
+  [/\bif\s+(?:not\s+)?exist\b/i, "if (Test-Path <path>) { ... }"],
+  [/^\s*set\s+"?\w+=/im, "$env:NAME = 'value'"],
+];
+
+/**
+ * Text written for another shell than the one that runs it: bash on a
+ * PowerShell executor and the other way round, from what the text says about
+ * itself (detectShell.ts). Skipped when a specific finding above says it.
+ */
+function lintDialect(
+  command: string,
+  shell: ShellKind,
+  findings: LintFinding[],
+): void {
+  if (findings.some((f) => /^CL00[1-4]$/.test(f.code))) return;
+  const family = familyOf(shell);
+  if (!family) return;
+  const detection = detectCommandShell(command);
+  if (shell === "powershell") {
+    if (
+      /&&|\|\|/.test(command) &&
+      !/['"][^'"]*(?:&&|\|\|)[^'"]*['"]/.test(command)
+    ) {
+      findings.push({
+        code: "CL040",
+        severity: "warn",
+        message:
+          "&& and || chain commands in bash and PowerShell 7, but Windows PowerShell 5.1 reports a syntax error.",
+        advice:
+          "Run the steps with ; , or use `a; if ($?) { b }` when b depends on a succeeding.",
+      });
+    }
+    if (/\d?>\s*\/dev\/null/.test(command)) {
+      findings.push({
+        code: "CL041",
+        severity: "warn",
+        message:
+          "2>/dev/null is a bash redirect; on Windows PowerShell /dev/null is not a path.",
+        advice: "Use 2>$null (or > $null).",
+      });
+    }
+  }
+  if (!mismatchedShell(detection, shell)) return;
+  const wrote = detection.likely[0];
+  const hint = detection.evidence.slice(0, 2).join(", ");
+  if (shell === "powershell" && familyOf(wrote) === "posix") {
+    const fix = POWERSHELL_FOR.filter(([re]) => re.test(command)).map(
+      ([, to]) => to,
+    );
+    findings.push({
+      code: "CL042",
+      severity: "warn",
+      message: `This reads as ${wrote} (${hint}) but the command runs in PowerShell.`,
+      advice: fix.length
+        ? `In PowerShell: ${fix.join("; ")}.`
+        : "Write it in PowerShell, or run it with bash -c if bash is installed.",
+    });
+  } else if (shell === "powershell" && wrote === "cmd") {
+    const fix = POWERSHELL_FOR_CMD.filter(([re]) => re.test(command)).map(
+      ([, to]) => to,
+    );
+    findings.push({
+      code: "CL043",
+      severity: "warn",
+      message: `This reads as cmd (${hint}) but the command runs in PowerShell.`,
+      advice: fix.length
+        ? `In PowerShell: ${fix.join("; ")}.`
+        : "Write it in PowerShell, or start cmd /c explicitly.",
+    });
+  } else if (family === "posix" && familyOf(wrote) !== "posix") {
+    findings.push({
+      code: "CL044",
+      severity: "warn",
+      message: `This reads as ${wrote} (${hint}) but the command runs in ${shell}.`,
+      advice:
+        wrote === "powershell"
+          ? "In bash: use $NAME or export NAME=value instead of $env:NAME, and the Unix tool for each cmdlet (Get-ChildItem is ls, Get-Content is cat, Select-String is grep)."
+          : "Write it for bash, or start cmd /c explicitly.",
+    });
+  } else if (shell === "cmd") {
+    findings.push({
+      code: "CL045",
+      severity: "warn",
+      message: `This reads as ${wrote} (${hint}) but the command runs in cmd.`,
+      advice: "Write it for cmd, or start powershell -Command explicitly.",
+    });
+  }
+}
+
 /**
  * Everything wrong with writing `command` for `shell`. Never throws; an
  * empty list means nothing was found, not that the command is right.
@@ -288,6 +394,7 @@ export function lintCommand(command: string, shell: ShellKind): LintFinding[] {
   const findings: LintFinding[] = [];
   try {
     lintForeignSyntax(command, shell, findings);
+    lintDialect(command, shell, findings);
     if (isPosixShell(shell)) {
       lintHeredocs(command, findings);
       lintInlineWrites(command, findings);

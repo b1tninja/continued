@@ -1,4 +1,5 @@
 import type { ToolPolicy } from "@continuedev/terminal-security";
+import type { ShellKind } from "../../util/shell";
 import type { Loosening } from "./approval";
 import { ProtectedHit, ProtectedKind, protectedReason } from "./protected";
 import {
@@ -59,6 +60,8 @@ export interface DecideInput {
   loosening?: Loosening;
   /** The area is Manual: an allow rule is not consulted and the call asks. */
   manual?: boolean;
+  /** The shell that runs a terminal command, so its text is read in that grammar. */
+  shell?: ShellKind;
 }
 
 export function findRuleMatch(input: DecideInput): RuleMatch | undefined {
@@ -78,6 +81,7 @@ export function findRuleMatch(input: DecideInput): RuleMatch | undefined {
     return matchTerminalCommand(
       named.map((r) => ({ ...r, toolName: "runTerminalCommand" })),
       command,
+      input.shell,
     );
   }
 

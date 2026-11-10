@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { isPosixShell, type ShellKind } from "../../util/shell";
 import { runBashCrossCheck } from "./bashCrossCheck";
+import { detectCommandShell, familyOf } from "./detectShell";
 import { canonicalCmdlet, checkReadCmdlet } from "./powershell";
 import { scanCommand } from "./shellScan";
 
@@ -605,10 +606,35 @@ function unquotedGlobBeforeOptionsEnd(command: string): boolean[] {
   return flags;
 }
 
-/** Does this command only read? See the file comment for what that takes. */
+/**
+ * Does this command only read? See the file comment for what that takes.
+ * When the text reads as another shell's dialect as well (bash text on a
+ * PowerShell executor), it is vouched only if every plausible reading is
+ * read-only: the most restrictive verdict wins (plans/command-shell-dialects.md).
+ */
 export function classifyReadOnly(
   command: string,
-  opts: ReadOnlyOptions = {},
+  opts: ReadOnlyOptions & { noDialectCheck?: boolean } = {},
+): ReadOnlyClaim {
+  const claim = classifyForShell(command, opts);
+  if (!claim.vouched || opts.noDialectCheck || !opts.shell) return claim;
+  const family = familyOf(opts.shell);
+  const seen = new Set([family]);
+  for (const other of detectCommandShell(command).likely) {
+    const f = familyOf(other);
+    if (!f || seen.has(f)) continue;
+    seen.add(f);
+    const again = classifyForShell(command, { ...opts, shell: other });
+    if (!again.vouched) {
+      return no(`the text also reads as ${other}, where ${again.why}`);
+    }
+  }
+  return claim;
+}
+
+function classifyForShell(
+  command: string,
+  opts: ReadOnlyOptions,
 ): ReadOnlyClaim {
   if (typeof command !== "string" || !command.trim()) return no("no command");
   if (command.length > MAX_READ_ONLY_COMMAND_LENGTH) {

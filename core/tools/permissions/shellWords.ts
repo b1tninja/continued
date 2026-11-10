@@ -110,29 +110,12 @@ export function splitRawWords(text: string): string[] {
   return words;
 }
 
-/** The text inside `$(...)`, `<(...)`, `>(...)` and backticks, nested ones included. */
-export function extractSubstitutions(text: string): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if ((c === "$" || c === "<" || c === ">") && text[i + 1] === "(") {
-      let depth = 1;
-      let j = i + 2;
-      for (; j < text.length && depth > 0; j++) {
-        if (text[j] === "(") depth++;
-        else if (text[j] === ")") depth--;
-      }
-      out.push(text.slice(i + 2, depth === 0 ? j - 1 : j));
-    } else if (c === "`") {
-      const end = text.indexOf("`", i + 1);
-      if (end > 0) {
-        out.push(text.slice(i + 1, end));
-        i = end;
-      }
-    }
-  }
-  return out;
-}
+/**
+ * The text inside `$(...)`, `<(...)`, `>(...)` and backticks, nested ones
+ * included, read the way `shell` reads them (see substitutions.ts). With no
+ * shell it is the union of every grammar.
+ */
+export { extractSubstitutions } from "./substitutions";
 
 /** Drop group openers and closers that cling to a word: `(git`, `{`, `push)`, `$(git`. */
 export function stripGrouping(word: string): string {
