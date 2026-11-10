@@ -311,10 +311,11 @@ export async function configYamlToContinueConfig(options: {
 
   const workspaceDirsForData = await ide.getWorkspaceDirs();
   continueConfig.data = config.data?.flatMap((d) => {
+    const sourceFile = (d as { sourceFile?: string }).sourceFile;
     if (
       !workspaceFileDestinationAllowed(
         d.destination,
-        d.sourceFile,
+        sourceFile,
         workspaceDirsForData,
       )
     ) {

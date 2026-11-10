@@ -66,15 +66,19 @@ export interface PendingTrust {
   files: string[];
 }
 
-/** Set from --trust-project-config. Lasts for this process only. */
-let trustForThisRun = false;
+/**
+ * Set from --trust-project-config. Lasts for this process only.
+ * Stored on globalThis so duplicated copies of this module (the package and
+ * the built output) still see the same decision.
+ */
+const RUN_FLAG = Symbol.for("continuous.trustProjectConfigForRun");
 
 export function setProjectConfigTrustedForRun(value: boolean): void {
-  trustForThisRun = value;
+  (globalThis as Record<symbol, boolean>)[RUN_FLAG] = value;
 }
 
 export function isProjectConfigTrustedForRun(): boolean {
-  return trustForThisRun;
+  return (globalThis as Record<symbol, boolean>)[RUN_FLAG] === true;
 }
 
 const pending: PendingTrust[] = [];
@@ -328,7 +332,7 @@ export function decideFromFiles(
   if (files.length === 0) return { trusted: true, fingerprint: "" };
   const fingerprint = fingerprintProjectFiles(projectDir, files);
   const trusted =
-    trustForThisRun ||
+    isProjectConfigTrustedForRun() ||
     isScopeTrusted(projectDir, scope, fingerprint, globalDir);
   if (!trusted) {
     const key = projectKeyFor(projectDir) + "\0" + scope;
@@ -918,7 +922,7 @@ export function inspectProjectConfig(
     if (files.length === 0) continue;
     const fingerprint = fingerprintProjectFiles(projectDir, files);
     const trusted =
-      trustForThisRun ||
+      isProjectConfigTrustedForRun() ||
       isScopeTrusted(projectDir, scope, fingerprint, globalDir);
     statuses.push({
       scope,
