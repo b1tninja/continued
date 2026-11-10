@@ -5,13 +5,13 @@ import "./init.js";
 
 import { Command } from "commander";
 
+import { acp } from "./commands/acp.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
-import { acp } from "./commands/acp.js";
 import { serve } from "./commands/serve.js";
 import {
   handleValidationErrors,
