@@ -458,6 +458,24 @@ export async function applyModelForLoopTurn(
 }
 
 /**
+ * The `name` of the chat model a Loop item's worker runs on: the item's own
+ * (TaskItem.model) when it is configured, else the loop's (`modeModels.loop`
+ * with its fallback), else undefined, and the worker keeps its default.
+ */
+export function loopWorkerModelName(
+  itemModel: string | undefined,
+): string | undefined {
+  try {
+    const { index } = modelService.resolveModelForUse("loop", itemModel);
+    if (index === -1) return undefined;
+    return modelService.getAvailableChatModels()[index]?.name;
+  } catch (error) {
+    logger.error("Could not resolve the worker's model", { itemModel, error });
+    return undefined;
+  }
+}
+
+/**
  * What a Loop item's run records about its model when its to-do names one
  * (TaskItem.model): the model it goes to, and why its own was not used.
  * Undefined for an item that names none.

@@ -24,6 +24,7 @@ import {
   requestLoopStop,
   resumeStoppedLoop,
   setRunningLoopAutonomy,
+  setRunningLoopParallel,
   setRunningLoopStrategy,
 } from "../../loop/loopSession.js";
 import {
@@ -143,6 +144,7 @@ type InboxAction =
   | { kind: "resume" }
   | { kind: "level" }
   | { kind: "strategy" }
+  | { kind: "parallel" }
   | { kind: "stop" }
   | { kind: "control"; control: LoopControlAction }
   | { kind: "close" };
@@ -187,6 +189,8 @@ function actionLabel(action: InboxAction, loop: LoopState): string {
       return `Level: ${LOOP_AUTONOMY[loop.autonomy ?? "auto"].label} (Enter to change)`;
     case "strategy":
       return `Strategy: ${LOOP_STRATEGIES[loopStrategy(loop)].label} (Enter to change)`;
+    case "parallel":
+      return `Parallel waves: ${loop.parallelOn ? "on" : "off"} (Enter to change)`;
     case "stop":
       return "Stop after this item";
     case "control":
@@ -218,6 +222,7 @@ function inboxActions(loop: LoopState): InboxAction[] {
   if (loop.status === "stopped") actions.push({ kind: "resume" });
   actions.push({ kind: "level" });
   actions.push({ kind: "strategy" });
+  actions.push({ kind: "parallel" });
   const controls = loopControlActions(loop, getSessionTaskPlan()).map(
     (control) => ({ kind: "control" as const, control }),
   );
@@ -329,6 +334,17 @@ export const LoopInbox: React.FC<{
           order[(order.indexOf(loopStrategy(loop)) + 1) % order.length];
         setRunningLoopStrategy(next);
         setFeedback(LOOP_STRATEGIES[next].description);
+        return;
+      }
+      case "parallel": {
+        if (!loop) return;
+        const on = !loop.parallelOn;
+        setRunningLoopParallel(on);
+        setFeedback(
+          on
+            ? "Items whose files: do not overlap run at the same time, each in its own worktree, at the levels that do not ask (Auto and above)."
+            : "Items run one at a time.",
+        );
         return;
       }
       case "stop":

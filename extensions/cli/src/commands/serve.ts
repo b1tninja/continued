@@ -8,6 +8,7 @@ import { prependPrompt } from "src/util/promptProcessor.js";
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
 import { setAgentId } from "../index.js";
+import { loopWaveRunning } from "../loop/loopSession.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import {
   getService,
@@ -422,9 +423,14 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     }
   });
 
-  // Check for inactivity and shutdown
+  // Check for inactivity and shutdown. A wave of loop workers counts as
+  // activity: they run beside the server and report back to it.
   inactivityChecker = setInterval(() => {
-    if (!state.isProcessing && Date.now() - state.lastActivity > timeoutMs) {
+    if (
+      !state.isProcessing &&
+      !loopWaveRunning() &&
+      Date.now() - state.lastActivity > timeoutMs
+    ) {
       console.log(
         chalk.yellow(
           `\nShutting down due to ${timeoutSeconds} seconds of inactivity`,
