@@ -63,7 +63,7 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 - **Loop mode** builds a plan's to-dos one at a time, each in a fresh context, with a check that must pass for an item to count as done, an inbox for the model's questions, budgets, and three autonomy levels (Supervised, Auto, Unattended). It runs in the IDE, in the CLI and headless through `cn serve`.
 - **Subagents** from `.continue/agents/` (and Claude Code's `.claude/agents/`), each with its own card, model, tokens and Stop.
 - **Task lists** kept with the session, so compaction does not lose the agent's place, and a queue for messages typed while it works.
-- **A terminal agent**, `continuous`, installable from each release.
+- **A terminal agent**, `continuous`, installable from each release. `continuous acp` runs it as an Agent Client Protocol agent for editors such as Zed and JetBrains IDEs.
 
 **Safety and control**
 
@@ -96,11 +96,11 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 
 ## Where it is heading
 
-The plans live in [`plans/`](plans/); [`plans/ROADMAP.md`](plans/ROADMAP.md) is the index, with a state for every item. Ideas on it now, none shipped:
+The plans live in [`plans/`](plans/); [`plans/ROADMAP.md`](plans/ROADMAP.md) is the index, with a state for every item. Ideas on it now, mostly unshipped (parts of some are built, as noted):
 
-- **Command safety**: a lint that catches broken heredocs and wrong-shell syntax before a command runs (started), classification of commands by what they do (network, write, delete, exec) so rules can say `effect:network`, and a shellcheck-class pass.
-- **Isolation**: run commands in WSL, in a container or a dev container, or inside an OS sandbox, and run whole loops in a jail with the model key kept outside, so autonomy can rest on a guarantee the interface can state.
-- **Staying on track**: stuck detection beyond identical calls, a work log, and guidance drawn from the toolbox; loop budgets by cost, turns, tokens and time, with live meters.
+- **Command safety**: the lint for broken heredocs and wrong-shell syntax has shipped; next are classification of commands by what they do (network, write, delete, exec) so rules can say `effect:network`, and a shellcheck-class pass.
+- **Isolation**: WSL and containers have shipped; next are running commands inside an OS sandbox, and running whole loops in a jail with the model key kept outside, so autonomy can rest on a guarantee the interface can state.
+- **Staying on track**: stuck detection beyond identical calls, a work log, and guidance drawn from the toolbox. Loop budgets by turns, tokens, time and dollars have shipped.
 - **Memory**: ageing old history to disk, windowed scrolling, and a memory panel, so a long session does not run the machine out of memory.
 - **Speaking each model's language**: a translation layer that renders and reads each family's native tool-call format (Qwen's XML, Hermes JSON, Harmony, Kimi and others) instead of forcing one on every model.
 - **Review**: reviewers that start from a clean, cached prefix, isolated from the agent they judge.

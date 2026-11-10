@@ -1,0 +1,32 @@
+---
+title: "History Ageing"
+---
+
+In a long session the oldest tool results (file reads, command output) are most of the history and are rarely needed again. History ageing replaces them with a one-line placeholder, and the model can ask for any of them back. It is experimental, off by default, and runs in the IDE only; the terminal agent does not use it.
+
+Turn it on with `CONTINUE_HISTORY_AGEING=1` (`true` and `on` also work) in the environment that starts the editor. With it unset, requests are unchanged and the recall tool is not offered.
+
+## What is masked
+
+When ageing applies, the oldest tool results are replaced, except:
+
+- the 5 most recent tool results,
+- results shorter than 600 characters,
+- task list results.
+
+A placeholder names the tool and the size and gives a handle:
+
+```text
+[tool result masked: read_file, 18204 chars. Call recall_masked_result with handle mask-1a2b3c4d to read it again]
+```
+
+Only tool results change. Your messages, the model's text, its tool calls and its reasoning are not touched. The model gets the `recall_masked_result` tool, which returns the original text for a handle. The text is kept in memory for the session (at most 500 results or 20 million characters, oldest dropped first), so a handle from a previous run of the editor reads as unavailable.
+
+## When it happens
+
+Changing an old message rewrites the cached prompt prefix from that point on, so ageing works in steps rather than every turn. Results are masked 5 at a time, and only when the history is at least half of the usable context window and one of these is true:
+
+- The cache has expired: the previous request was more than 5 minutes ago, so the next request pays for a full write anyway.
+- The history is at least 90% of the window, where pruning would rebuild the cache anyway.
+
+Between steps the masked set does not change, so the cached prefix holds. On the request where it grows, you pay one cache rebuild, which the cache statistics count as expected rather than as a cache miss. What you get back is a smaller prompt on every request after that. Whether that pays off depends on the model and how often the model needs old output again; a recall costs one tool call, and running the command again is the alternative.
