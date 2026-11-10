@@ -1,17 +1,20 @@
 import type { LoopStrategy } from "core";
 import {
   formatLoopStatus,
+  isLoopPaused,
   LOOP_LIMITS,
   LOOP_MAX_PARALLEL,
   LOOP_STRATEGIES,
   LOOP_STRATEGY_ORDER,
   loopStrategy,
+  openLoopItems,
   standingInstructions,
 } from "core/util/loopMode";
 import { policyLevelLabel } from "core/tools/permissions/policy";
 import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { cancelStream } from "../../redux/thunks/cancelStream";
+import { selectModeEntry } from "../../redux/selectors/selectModeEntry";
 import { LoopPhaseMark } from "../LoopPhaseMark";
 import { LoopControls } from "./LoopControls";
 import {
@@ -21,6 +24,7 @@ import {
   resumeLoopThunk,
   setLoopParallelThunk,
   setLoopStrategyThunk,
+  startFreshThunk,
   stopLoopThunk,
 } from "../../redux/thunks/loop";
 
@@ -33,6 +37,7 @@ export function LoopInbox() {
   const dispatch = useAppDispatch();
   const loop = useAppSelector((s) => s.session.loop);
   const taskPlan = useAppSelector((s) => s.session.taskPlan);
+  const entry = useAppSelector(selectModeEntry);
   const [note, setNote] = useState("");
   const [replanNow, setReplanNow] = useState(false);
   const [standing, setStanding] = useState(false);
@@ -46,6 +51,9 @@ export function LoopInbox() {
     return result.ok ? undefined : result.error;
   };
   const stopped = loop.status === "stopped";
+  const paused = isLoopPaused(loop);
+  const tasksLeft = openLoopItems(loop);
+  const modeLabel = entry.charAt(0).toUpperCase() + entry.slice(1);
   // Parallel waves need a level that does not ask before each edit
   const supervised = (loop.autonomy ?? "auto") === "supervised";
   const waveRunning = !!loop.parallel?.length;
@@ -117,14 +125,32 @@ export function LoopInbox() {
           </label>
           {stopped ? (
             <>
+              {paused && tasksLeft > 0 && entry === "loop" && (
+                <button
+                  type="button"
+                  data-testid="loop-start-fresh"
+                  title="Drop the paused loop and plan again"
+                  className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-description-muted hover:text-foreground"
+                  onClick={() => void dispatch(startFreshThunk())}
+                >
+                  Start fresh
+                </button>
+              )}
               {loop.stopReason !== "done" && (
                 <button
                   type="button"
                   data-testid="loop-resume"
                   className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+                  title={
+                    paused
+                      ? "Budgets restart from now; the next item is told you worked outside the loop"
+                      : "Budgets restart from now"
+                  }
                   onClick={() => void dispatch(resumeLoopThunk())}
                 >
-                  Resume
+                  {paused && tasksLeft > 0
+                    ? `Resume loop (${tasksLeft} task${tasksLeft === 1 ? "" : "s"} left)`
+                    : "Resume"}
                 </button>
               )}
               <button
@@ -167,6 +193,16 @@ export function LoopInbox() {
             </>
           )}
         </div>
+        {paused && (
+          <div
+            data-testid="loop-paused"
+            className="mt-0.5 break-words text-description"
+          >
+            {entry === "loop"
+              ? `Paused: you came back to Loop. ${tasksLeft > 0 ? `Resume it (${tasksLeft} left; budgets restart from now) or start fresh.` : "Nothing is left to run, so the next message plans again."}`
+              : `Paused: you are in ${modeLabel} mode. Choose Loop to resume.`}
+          </div>
+        )}
         {loop.current?.kind === "check" && (
           <div
             data-testid="loop-check-running"

@@ -1,0 +1,32 @@
+---
+title: "Leave and Resume a Loop"
+---
+
+Loop is an entry in the mode picker, not a mode of its own. You can leave it for Chat, Plan or Agent to do a quick task, then come back and pick up where the loop stopped.
+
+## Leave Loop
+
+Picking Chat, Plan or Agent while a loop runs **pauses** the loop. The to-do that is running finishes first, in its own mode, and then the loop stops before the next one. Nothing is thrown away: the to-dos, the plan file, the budgets and what the loop has used so far all stay.
+
+While the loop is paused:
+
+- The loop controls and the status line say `Paused: you are in Agent mode`, and the loop mark reads **Paused**.
+- What you do in Chat, Plan or Agent is ordinary work. It does not complete a to-do, count against a to-do's budget or trigger a command check.
+
+## Return to Loop
+
+Pick Loop again. What follows depends on what is left and on your **Plan edits** level:
+
+| Situation                                              | What happens                                                                                              |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| To-dos are left and Plan edits is Permissive or IDGAF  | The loop resumes at once.                                                                                  |
+| To-dos are left at any other level                     | The loop controls offer **Resume loop (N tasks left)** or **Start fresh**.                                |
+| Nothing is left, or you choose **Start fresh**         | The paused loop is dropped and your next message plans again, as when you first choose Loop.              |
+
+Resuming restarts the loop's budgets from that moment: the time and token limits count from the resume, not from the original start. The first to-do that runs after a resume is told that the loop was paused while you were outside Loop, so files may have changed since the plan was made, and that it should check what is there before relying on it. The note is added to that to-do's message only.
+
+## Sessions
+
+A paused loop is saved with the session. Close the session and open it later, and the loop is still paused; picking Loop offers the same choices.
+
+The terminal agent has no mode picker. Its loop is stopped and resumed from the loop inbox.

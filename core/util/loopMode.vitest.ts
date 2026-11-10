@@ -67,6 +67,9 @@ import {
   restoreLoop,
   settleSteeredAnswers,
   standingInstructions,
+  isLoopPaused,
+  openLoopItems,
+  pauseLoop,
   requestStop,
   resumeLoop,
   startItemRun,
@@ -614,6 +617,60 @@ describe("stop conditions", () => {
       kind: "run",
       itemId: "1",
     });
+  });
+});
+
+describe("leaving Loop pauses the loop", () => {
+  test("with nothing running it pauses at once, keeping items", () => {
+    const loop = pauseLoop(runItem(loopOn(), "1", { outcome: "done" }));
+    expect(loop.status).toBe("stopped");
+    expect(loop.stopReason).toBe("left_loop");
+    expect(isLoopPaused(loop)).toBe(true);
+    expect(status(loop, "1")).toBe("done");
+    expect(openLoopItems(loop)).toBe(PLAN.items.length - 1);
+    expect(formatLoopStatus(loop)).toContain("paused:");
+    expect(formatLoopStatus(loop)).not.toContain("stopped:");
+  });
+
+  test("while an item runs it waits for the item, then pauses", () => {
+    let loop = pauseLoop(startItemRun(loopOn(), "1", 0, T0));
+    expect(loop.status).toBe("running");
+    expect(formatLoopStatus(loop)).toContain("pausing after this step");
+    loop = finishItemRun(loop, { outcome: "done" });
+    expect(decideNext(loop, PLAN, ctx())).toMatchObject({
+      kind: "stop",
+      reason: "left_loop",
+    });
+    loop = stopLoop(loop, "left_loop", "x");
+    expect(loop.leaveRequested).toBeUndefined();
+    expect(loop.stopRequested).toBeUndefined();
+  });
+
+  test("a plain stop is not a pause", () => {
+    expect(isLoopPaused(requestStop(loopOn()))).toBe(false);
+  });
+
+  test("resume restarts budgets and flags the work done outside once", () => {
+    const paused = pauseLoop(loopOn());
+    const resumed = resumeLoop(paused, ctx(500, 99), { workedOutside: true });
+    expect(resumed.status).toBe("running");
+    expect(resumed.stopReason).toBeUndefined();
+    expect(resumed.tokensAtStart).toBe(99);
+    expect(resumed.workedOutside).toBe(true);
+    const item = PLAN.items[0];
+    const base = { item, answers: [], questions: [], attempt: 1 };
+    expect(loopItemPrompt({ ...base, workedOutside: true })).toContain(
+      "paused while the person was outside Loop mode",
+    );
+    expect(loopItemPrompt(base)).not.toContain("paused while");
+  });
+
+  test("a loop with every item done has no open items", () => {
+    let loop = loopOn();
+    for (const i of PLAN.items) {
+      loop = runItem(loop, i.id, { outcome: "done" });
+    }
+    expect(openLoopItems(loop)).toBe(0);
   });
 });
 

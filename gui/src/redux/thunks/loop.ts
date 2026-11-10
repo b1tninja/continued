@@ -26,7 +26,11 @@ import {
   finishParallelRun,
   holdCheck,
   interruptLoop,
+  isLoopPaused,
+  LEFT_LOOP_DETAIL,
   LOOP_LIMITS,
+  openLoopItems,
+  pauseLoop,
   loopItemPrompt,
   loopPlanBlock,
   loopReplanTurnPrompt,
@@ -249,14 +253,31 @@ export const chooseLoopMode = createAsyncThunk<void, undefined, ThunkApiType>(
   async (_, { dispatch, getState }) => {
     dispatch(setModeAfterLoop(undefined));
     dispatch(setLoopRequested(true));
+    const state = getState();
+    // A loop paused by leaving Loop and still holding open items goes on at
+    // once when Plan edits would start a plan by itself (Permissive and
+    // IDGAF); otherwise the inbox offers Resume and Start fresh
+    if (
+      isLoopPaused(state.session.loop) &&
+      openLoopItems(state.session.loop!) > 0 &&
+      planHandoff({
+        policy: selectPolicySettings(state),
+        first: true,
+        added: 0,
+      }).decision === "go"
+    ) {
+      await dispatch(resumeLoopThunk());
+    }
     if (!loopActive(getState())) dispatch(setMode("plan"));
   },
 );
 
 /**
- * Chat, Plan or Agent picked while in Loop: a running loop stops after the
- * running item, and the mode is taken when it stops (setLoop), so the item
- * finishes in its own mode. Otherwise the mode is taken at once.
+ * Chat, Plan or Agent picked while in Loop: a running loop is paused after
+ * the running item (pauseLoop: its items, plan file, budgets and usage stay),
+ * and the mode is taken when it pauses (setLoop), so the item finishes in
+ * its own mode. Otherwise the mode is taken at once. Choosing Loop again
+ * resumes it (chooseLoopMode, resumeLoopThunk).
  */
 export const leaveLoopMode = createAsyncThunk<void, MessageModes, ThunkApiType>(
   "loop/leaveMode",
@@ -264,7 +285,7 @@ export const leaveLoopMode = createAsyncThunk<void, MessageModes, ThunkApiType>(
     dispatch(setLoopRequested(false));
     if (loopActive(getState())) {
       dispatch(setModeAfterLoop(mode));
-      await dispatch(stopLoopThunk());
+      await dispatch(pauseLoopThunk());
       return;
     }
     dispatch(setModeAfterLoop(undefined));
@@ -296,6 +317,25 @@ export const startLoopIfRequested = createAsyncThunk<
   await dispatch(startLoopFromPlan({ planFile }));
   return loopActive(getState());
 });
+
+/** Leaving Loop: stop after the running item, as a pause that can resume. */
+export const pauseLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
+  "loop/pause",
+  async (_, { dispatch, getState }) => {
+    const { loop } = getState().session;
+    if (!loop || loop.status === "stopped") return;
+    if (loop.parallel?.length) {
+      abortLoopWorkers();
+      commitLoop(
+        dispatch,
+        getState,
+        stopLoop(loop, "left_loop", LEFT_LOOP_DETAIL),
+      );
+      return;
+    }
+    commitLoop(dispatch, getState, pauseLoop(loop));
+  },
+);
 
 export const stopLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
   "loop/stop",
@@ -332,11 +372,27 @@ export const resumeLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
     commitLoop(
       dispatch,
       getState,
-      resumeLoop(loop, {
-        now: new Date(),
-        sessionTokens: sessionTokens(getState()),
-      }),
+      resumeLoop(
+        loop,
+        {
+          now: new Date(),
+          sessionTokens: sessionTokens(getState()),
+        },
+        // Paused by leaving Loop: the person may have changed files since
+        { workedOutside: loop.stopReason === "left_loop" },
+      ),
     );
+  },
+);
+
+/** "Start fresh" on a paused loop: drop it; the next message plans again. */
+export const startFreshThunk = createAsyncThunk<void, undefined, ThunkApiType>(
+  "loop/startFresh",
+  async (_, { dispatch, getState }) => {
+    if (!isLoopPaused(getState().session.loop)) return;
+    dispatch(setLoop(undefined));
+    dispatch(setLoopRequested(true));
+    dispatch(setMode("plan"));
   },
 );
 
@@ -546,11 +602,14 @@ async function itemRunPrompt(
     worker,
     // Back inline after a refused patch: the prompt says what happened
     mergeFailed: worker ? undefined : itemState?.mergeFailed,
+    workedOutside: loop.workedOutside,
   });
   loop = markDelivered(
     loop,
     answers.map((a) => a.id),
   );
+  // Said once, on the first item after a resume
+  if (loop.workedOutside) loop = { ...loop, workedOutside: undefined };
   return { prompt, loop };
 }
 

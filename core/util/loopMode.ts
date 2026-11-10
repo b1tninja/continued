@@ -957,7 +957,9 @@ export function decideNext(
     return { kind: "none" };
   }
   if (loop.stopRequested) {
-    return { kind: "stop", reason: "stopped", detail: "You stopped the loop." };
+    return loop.leaveRequested
+      ? { kind: "stop", reason: "left_loop", detail: LEFT_LOOP_DETAIL }
+      : { kind: "stop", reason: "stopped", detail: "You stopped the loop." };
   }
   const overBudget = loopBudgetStop(loop, ctx);
   if (overBudget) {
@@ -1127,16 +1129,26 @@ export function stopLoop(
     parallel: undefined,
     status: "stopped",
     stopRequested: undefined,
+    leaveRequested: undefined,
     waitingSince: undefined,
     stopReason: reason,
     stopDetail: detail,
   };
 }
 
-/** Resumes a stopped or waiting loop; the budgets restart from now. */
-export function resumeLoop(loop: LoopState, ctx: LoopContext): LoopState {
+/**
+ * Resumes a stopped or waiting loop; the budgets restart from now. With
+ * `workedOutside` (the loop was paused by leaving Loop) the next item's
+ * prompt says the workspace may have changed meanwhile.
+ */
+export function resumeLoop(
+  loop: LoopState,
+  ctx: LoopContext,
+  options: { workedOutside?: boolean } = {},
+): LoopState {
   return {
     ...loop,
+    workedOutside: options.workedOutside ? true : loop.workedOutside,
     status: "running",
     stopReason: undefined,
     stopDetail: undefined,
@@ -1984,6 +1996,32 @@ export function requestStop(loop: LoopState): LoopState {
     return stopLoop(loop, "stopped", "You stopped the loop.");
   }
   return { ...loop, stopRequested: true };
+}
+
+export const LEFT_LOOP_DETAIL =
+  "you left Loop mode; its items and budgets are kept.";
+
+/** The loop is paused: stopped because the person left Loop mode. */
+export function isLoopPaused(loop: LoopState | undefined): boolean {
+  return loop?.status === "stopped" && loop.stopReason === "left_loop";
+}
+
+/** Items a resumed loop would still run (neither done nor failed). */
+export function openLoopItems(loop: LoopState): number {
+  return loop.items.filter((i) => i.status !== "done" && i.status !== "failed")
+    .length;
+}
+
+/**
+ * The person switched to Chat, Plan or Agent: like requestStop, but a pause
+ * (stop reason left_loop) that resumeLoop picks up again. The turns the
+ * person runs meanwhile are ordinary turns: nothing is running in the loop.
+ */
+export function pauseLoop(loop: LoopState): LoopState {
+  if (!loop.current && !loop.parallel?.length) {
+    return stopLoop(loop, "left_loop", LEFT_LOOP_DETAIL);
+  }
+  return { ...loop, stopRequested: true, leaveRequested: true };
 }
 
 /** Stop pressed during an item: it goes back to pending and the loop stops. */
@@ -2883,6 +2921,8 @@ export function loopItemPrompt(input: {
   worker?: { worktree?: string; files?: string[] };
   /** An earlier worker run's changes could not be merged (LoopItemState.mergeFailed) */
   mergeFailed?: string;
+  /** The person worked outside the loop while it was paused (LoopState.workedOutside) */
+  workedOutside?: boolean;
 }): string {
   const { item } = input;
   const names = input.toolNames ?? LOOP_TOOL_NAMES;
@@ -2919,6 +2959,11 @@ export function loopItemPrompt(input: {
   if (input.returning) {
     lines.push(
       "An earlier run set this item aside to come back to it. Check what changed before you go on.",
+    );
+  }
+  if (input.workedOutside) {
+    lines.push(
+      "The loop was paused while the person was outside Loop mode, so files may have changed since the plan was made. Check what is there before you rely on it.",
     );
   }
   if (input.item.check) {
@@ -3373,7 +3418,13 @@ export function formatLoopStatus(
   if (waiting) parts.push(`${waiting} waiting on you`);
   if (checking) parts.push(`${checking} checking`);
   if (open) parts.push(`${open} open question${open === 1 ? "" : "s"}`);
-  if (loop.stopRequested) parts.push("stopping after this step");
+  if (loop.stopRequested) {
+    parts.push(
+      loop.leaveRequested
+        ? "pausing after this step"
+        : "stopping after this step",
+    );
+  }
   switch (loop.status) {
     case "replanning":
       parts.push("re-planning");
@@ -3394,7 +3445,11 @@ export function formatLoopStatus(
       break;
     }
     case "stopped":
-      parts.push(`stopped: ${loop.stopDetail ?? loop.stopReason}`);
+      parts.push(
+        loop.stopReason === "left_loop"
+          ? `paused: ${loop.stopDetail ?? LEFT_LOOP_DETAIL}`
+          : `stopped: ${loop.stopDetail ?? loop.stopReason}`,
+      );
       break;
   }
   return parts.join(" · ");

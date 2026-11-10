@@ -600,6 +600,8 @@ export type LoopStopReason =
   | "failures"
   | "error"
   | "stopped"
+  /** The person switched to Chat, Plan or Agent: a pause, resumable */
+  | "left_loop"
   | "replan_failed";
 
 /**
@@ -849,6 +851,13 @@ export interface LoopState {
   reminders?: LoopReminder[];
   /** The person asked to stop once the running item or re-plan ends */
   stopRequested?: boolean;
+  /** The stop asked for is a pause: the person left Loop (pauseLoop) */
+  leaveRequested?: boolean;
+  /**
+   * The person worked outside the loop while it was paused: the next item's
+   * prompt says so once (resumeLoop with workedOutside)
+   */
+  workedOutside?: boolean;
   stopReason?: LoopStopReason;
   /** One line for the person: what stopped it */
   stopDetail?: string;
