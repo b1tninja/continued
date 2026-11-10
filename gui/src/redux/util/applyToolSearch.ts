@@ -1,4 +1,4 @@
-import type { ChatHistoryItem, Tool } from "core";
+import type { ChatHistoryItem, MessageModes, Tool } from "core";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "core/tools/builtIn";
 import { makeSearchToolsTool } from "core/tools/definitions/searchTools";
 import {
@@ -31,7 +31,7 @@ export function applyToolSearch(
   activeTools: Tool[],
   options: {
     setting: "off" | "auto" | undefined;
-    mode: "chat" | "plan" | "agent";
+    mode: MessageModes;
     family?: string;
     history: ChatHistoryItem[];
     budgetTokens?: number;
@@ -45,7 +45,7 @@ export function applyToolSearch(
   );
   const mcp = activeTools.filter((t) => t.group !== BUILT_IN_GROUP_NAME);
   const { tools, engaged } = selectTools({
-    mode: options.mode,
+    mode: options.mode === "background" ? "agent" : options.mode,
     family: options.family,
     coreTools: core,
     mcpTools: mcp,
