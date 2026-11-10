@@ -1,0 +1,42 @@
+---
+title: "cn serve"
+---
+
+`continuous serve` starts the terminal agent as an HTTP server that takes messages, approvals and loop answers. Anything that can reach the port can act as you, so it listens on loopback by default and checks every request.
+
+```bash
+continuous serve --port 8000
+```
+
+| Option                | Default     | Meaning                                                                                  |
+| --------------------- | ----------- | ---------------------------------------------------------------------------------------- |
+| `--port <port>`       | `8000`      | Port to listen on                                                                        |
+| `--host <host>`       | `127.0.0.1` | Interface to listen on                                                                   |
+| `--token <token>`     | none        | Bearer token every request must carry. Also read from `CONTINUOUS_SERVE_TOKEN`          |
+| `--timeout <seconds>` | `300`       | Inactivity timeout                                                                       |
+
+## Access token
+
+On loopback (`127.0.0.1`, `::1`, `localhost`) a token is optional. Without one, requests need no `Authorization` header.
+
+Off loopback, for example `--host 0.0.0.0`, the server does not start without a token of at least 16 characters. Set it in the environment to keep it out of the process list:
+
+```bash
+export CONTINUOUS_SERVE_TOKEN="$(openssl rand -hex 24)"
+continuous serve --host 0.0.0.0
+```
+
+With a token set, a request without `Authorization: Bearer <token>` gets `401`. The terminal agent in remote mode sends `CONTINUOUS_SERVE_TOKEN` when it is set.
+
+## Host and Origin checks
+
+These apply with or without a token, before the token is checked:
+
+- The `Host` header must be the address the server is bound to. On loopback it must be a loopback name or address; anything else gets `421`. This stops a DNS-rebinding page from reaching the server.
+- A request with an `Origin` header gets `403`. Browsers send `Origin`; `curl` and other local clients do not.
+
+A browser page cannot call the server, even on loopback with no token. To call it from a script, send no `Origin` header and a loopback `Host`:
+
+```bash
+curl http://127.0.0.1:8000/state
+```

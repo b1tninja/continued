@@ -11,7 +11,7 @@ On Windows, the agent's terminal commands run in Windows PowerShell by default. 
 }
 ```
 
-`continuous.terminal.wslDistro` is a name from `wsl -l`. Leave it empty to use the default distribution. The setting applies to the next command; no reload is needed. In the terminal agent, set the environment variable instead:
+`continuous.terminal.wslDistro` is a name from `wsl -l`. Leave it empty to use the default distribution. The setting applies to the next command; no reload is needed. Both are machine settings, so only your user settings count: a workspace `settings.json` cannot change where commands run. In the terminal agent, set the environment variable instead:
 
 ```bash
 # PowerShell

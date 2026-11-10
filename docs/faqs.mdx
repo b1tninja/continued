@@ -286,6 +286,8 @@ When Continuous encounters `${{ secrets.X }}`, it searches these sources **in or
 4. **Workspace `.env` file**: `<workspace-root>/.env`
 5. **Process environment variables**: Standard system environment variables
 
+The terminal agent reads the workspace `.env` files only to resolve `${{ secrets.X }}`. It does not copy a workspace `.env` into its own environment, so a `.env` in a cloned folder cannot change `PATH`, `NODE_OPTIONS` or other variables that decide which code runs. `~/.continuous/.env` is still read for the agent's own settings.
+
 <Warning>
 **The VS Code extension cannot read your shell environment variables.** Setting `export OPENAI_API_KEY=...` in your terminal will not make the key available to Continuous running inside your IDE. You must use a `.env` file instead.
 
