@@ -1,5 +1,6 @@
 import * as os from "node:os";
 import { commandCandidateSet } from "./candidates";
+import { fetchAndRunHit } from "./fetchAndRun";
 import { ProtectedHit, ProtectedKind, protectedPathHit } from "./protected";
 import {
   isNetworkPath,
@@ -46,6 +47,10 @@ export function protectedCommandHit(
   /** Directory the command runs in, so a relative path can be recognised. */
   cwd?: string,
 ): ProtectedHit | undefined {
+  // First, so Automatic can refuse it whatever else the command touches
+  if (!skip.includes("fetch-and-run") && fetchAndRunHit(command)) {
+    return { kind: "fetch-and-run", path: "a download that is then run" };
+  }
   const { list, truncated } = commandCandidateSet(command);
   // The cap dropped part of the command. A secret in the missing part would
   // otherwise look safe, so the command asks.

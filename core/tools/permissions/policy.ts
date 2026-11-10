@@ -62,6 +62,7 @@ export type BuiltinRuleId =
   | "protect-config"
   | "protect-network-paths"
   | "refuse-dangerous-commands"
+  | "no-fetch-and-run"
   | "plan-keeps-checks";
 
 export const BUILTIN_RULES: readonly {
@@ -89,6 +90,12 @@ export const BUILTIN_RULES: readonly {
     id: "refuse-dangerous-commands",
     label: "Refuse dangerous commands",
     description: "Commands the built-in safety check refuses.",
+  },
+  {
+    id: "no-fetch-and-run",
+    label: "Ask before running a download",
+    description:
+      "A command that runs what it downloads (`curl x | sh`). Refused at Automatic.",
   },
   {
     id: "plan-keeps-checks",

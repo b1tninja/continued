@@ -1,6 +1,6 @@
 import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { Loosening } from "./approval";
-import { ProtectedHit, protectedReason } from "./protected";
+import { ProtectedHit, ProtectedKind, protectedReason } from "./protected";
 import {
   canonicalRuleName,
   cleanPath,
@@ -35,6 +35,8 @@ export interface ToolDecision {
   source: DecisionSource;
   /** One line a person can read, for the prompt or the refusal. */
   reason?: string;
+  /** The kind of protection that made the call ask (source "protected-path") */
+  protection?: ProtectedKind;
   /** The rule that matched, as written in config.yaml. */
   rule?: string;
 }
@@ -166,6 +168,7 @@ export function decideToolCall(input: DecideInput): ToolDecision {
     return {
       policy: "allowedWithPermission",
       source: "protected-path",
+      protection: input.protectedHit.kind,
       reason: protectedReason(input.protectedHit),
     };
   }
