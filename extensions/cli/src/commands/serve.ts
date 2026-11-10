@@ -52,7 +52,7 @@ interface ServeOptions extends ExtendedCommandOptions {
   port?: string;
   /** Interface to listen on; loopback unless told otherwise */
   host?: string;
-  /** Bearer token every request must carry. Generated and printed when omitted. */
+  /** Bearer token every request must carry. Optional on loopback, required off it. */
   token?: string;
   /** Storage identifier for remote sync */
   id?: string;
@@ -109,14 +109,17 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   const timeoutSeconds = parseInt(options.timeout || "300", 10);
   const timeoutMs = timeoutSeconds * 1000;
   const port = parseInt(options.port || "8000", 10);
-  // Loopback unless told otherwise. Every request carries a token; a short
-  // explicit token is refused off loopback, and a missing one is generated.
+  // Loopback unless told otherwise. A token is optional on loopback; off
+  // loopback one of at least 16 characters is required.
   const host = options.host ?? DEFAULT_SERVE_HOST;
-  const bindingProblem = serveBindingProblem(host, options.token);
+  const bindingProblem = serveBindingProblem(
+    host,
+    resolveServeToken(options.token),
+  );
   if (bindingProblem) {
     throw new Error(bindingProblem);
   }
-  const { token, generated } = resolveServeToken(options.token);
+  const token = resolveServeToken(options.token);
 
   // Environment install script will be deferred until after server startup to avoid blocking
 
@@ -355,11 +358,12 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
 
   const server = app.listen(port, host, async () => {
     console.log(chalk.green(`Server started on http://${host}:${port}`));
-    if (generated) {
-      console.log(chalk.green(`  Access token: ${token}`));
-    }
     console.log(
-      chalk.dim("  Every request needs: Authorization: Bearer <token>"),
+      chalk.dim(
+        token
+          ? "  Every request needs: Authorization: Bearer <token>"
+          : "  No access token: only this computer can reach it. Pass --token to require one",
+      ),
     );
     console.log(chalk.dim("Endpoints:"));
     console.log(chalk.dim("  GET  /state      - Get current agent state"));

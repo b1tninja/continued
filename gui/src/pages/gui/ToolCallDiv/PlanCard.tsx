@@ -1,6 +1,23 @@
 import { ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 import { ToolCallState } from "core";
-import { replanDiff, type ReplanDiffItem } from "core/util/loopMode";
+import {
+  autonomyForPolicy,
+  loopTokensFromUsage,
+  LOOP_AUTONOMY,
+  replanDiff,
+  type ReplanDiffItem,
+} from "core/util/loopMode";
+import {
+  describeRoundUsage,
+  describeTimeUsage,
+  describeTokenUsage,
+  loopUsage,
+} from "core/util/loopUsage";
+import {
+  budgetFromInput,
+  NO_PLAN_BUDGET,
+  type PlanBudgetSetup,
+} from "core/util/planBudget";
 import {
   planCheckSummary,
   validatePlanArgs,
@@ -16,7 +33,9 @@ import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
 import { setMode } from "../../../redux/slices/sessionSlice";
 import { buildPlan } from "../../../redux/thunks/buildPlan";
 import { acceptLoopPlan, startLoopFromPlan } from "../../../redux/thunks/loop";
+import { selectLoopPolicy } from "../../../redux/selectors/selectAutoApproval";
 import { recordPlanAnswer } from "../../../util/planDecisions";
+import { PlanBudgetStep } from "./PlanBudgetStep";
 
 /** The mark of a to-do in a re-plan: what the loop already did with it. */
 function todoMark(text: string, kept: ReplanDiffItem[] | undefined): string {
@@ -64,6 +83,14 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
   const loopStatus = useAppSelector((s) => s.session.loop?.status);
   const loop = useAppSelector((s) => s.session.loop);
   const taskPlan = useAppSelector((s) => s.session.taskPlan);
+  const sessionUsage = useAppSelector((s) => s.session.usage);
+  // The budget step is out of sight until asked for; Skip leaves it at None
+  const planLevel = useAppSelector((s) => selectLoopPolicy(s).plan);
+  const questionsLevel = useAppSelector((s) => selectLoopPolicy(s).questions);
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const [budgetDraft, setBudgetDraft] =
+    useState<PlanBudgetSetup>(NO_PLAN_BUDGET);
+  const [budgetApplied, setBudgetApplied] = useState<PlanBudgetSetup>();
   const isLatestPlanCard = useAppSelector((s) => {
     const later = s.session.history
       .slice(historyIndex + 1)
@@ -152,6 +179,23 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
             <div data-testid="plan-card-replan-reason">
               <span className="text-description">Why you are asked: </span>
               {loop.replanReason}
+            </div>
+          )}
+          {loop && (
+            <div
+              data-testid="plan-card-usage"
+              className="mt-1 text-description"
+              title="What the loop has used, and what is left to divide among the to-dos"
+            >
+              {(() => {
+                const u = loopUsage(loop, {
+                  sessionTokens: sessionUsage
+                    ? loopTokensFromUsage(sessionUsage)
+                    : 0,
+                  now: new Date(),
+                });
+                return `${describeRoundUsage(u.rounds)} · ${describeTokenUsage(u.tokens)} · ${describeTimeUsage(u.time)}`;
+              })()}
             </div>
           )}
           {diff && (
@@ -357,6 +401,33 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
           </span>
         </div>
       )}
+      {showActions && !awaitingLoop && args.ok && budgetOpen && (
+        <PlanBudgetStep
+          items={args.items.map((item) => ({
+            text: String(item.text),
+            budget: budgetFromInput(item.budget),
+          }))}
+          level={planLevel}
+          loopBudget={
+            LOOP_AUTONOMY[
+              autonomyForPolicy({ plan: planLevel, questions: questionsLevel })
+            ].budget
+          }
+          history={(loop?.items ?? []).flatMap((i) =>
+            i.status === "done" && i.usage ? [i.usage] : [],
+          )}
+          value={budgetDraft}
+          onChange={setBudgetDraft}
+          onApply={() => {
+            setBudgetApplied(budgetDraft);
+            setBudgetOpen(false);
+          }}
+          onSkip={() => {
+            setBudgetApplied(undefined);
+            setBudgetOpen(false);
+          }}
+        />
+      )}
       {showActions && !awaitingLoop && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Button
@@ -371,11 +442,35 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
             data-testid="plan-card-build-loop"
             title="Build the to-dos one at a time without driving each step: questions go to an inbox you can answer while it works"
             onClick={() =>
-              void dispatch(startLoopFromPlan({ planFile: fileUri }))
+              void dispatch(
+                startLoopFromPlan({
+                  planFile: fileUri,
+                  ...(budgetApplied ? { budget: budgetApplied } : {}),
+                }),
+              )
             }
           >
             Build in a loop
           </Button>
+          <button
+            type="button"
+            data-testid="plan-card-budget-toggle"
+            aria-expanded={budgetOpen}
+            title="Divide the loop's budget among the to-dos before building"
+            className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+            onClick={() => setBudgetOpen(!budgetOpen)}
+          >
+            {budgetOpen ? "Hide the budget" : "Set a budget…"}
+          </button>
+          {budgetApplied && !budgetOpen && (
+            <span
+              data-testid="plan-card-budget-summary"
+              className="text-2xs text-description-muted"
+            >
+              Budget: {budgetApplied.strategy},{" "}
+              {Math.round(budgetApplied.reserve * 100)}% reserve
+            </span>
+          )}
           <Button
             variant="outline"
             data-testid="plan-card-keep-planning"
