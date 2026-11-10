@@ -115,6 +115,9 @@ async function callToolFromUri(
         { timeout: client.options.timeout },
       );
 
+      // It ran, so it was approved: pin its definition (mcpToolPins.ts)
+      await client.recordToolUse(toolName);
+
       if (response.isError === true) {
         throw new Error(JSON.stringify(response.content));
       }

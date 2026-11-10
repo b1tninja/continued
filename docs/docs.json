@@ -41,6 +41,7 @@
                   "ide-extensions/agent/tool-call-recovery",
                   "ide-extensions/agent/history-ageing",
                   "ide-extensions/agent/audit-trail",
+                  "ide-extensions/agent/mcp-tool-changes",
                   "ide-extensions/agent/terminal-in-wsl",
                   "ide-extensions/agent/terminal-in-container",
                   "ide-extensions/agent/model-setup",

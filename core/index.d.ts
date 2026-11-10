@@ -2026,6 +2026,12 @@ export interface Tool {
     processedArgs?: Record<string, unknown>,
   ) => ToolPolicy;
   mcpMeta?: McpToolMeta;
+  /**
+   * An MCP tool whose definition changed, or that appeared, after the person
+   * approved its server. It asks again at every level but YOLO until a call to
+   * it is approved. `summary` says what changed.
+   */
+  mcpDefinitionChange?: { kind: "changed" | "added"; summary: string };
 }
 
 /**
@@ -2557,6 +2563,14 @@ export interface ExperimentalConfig {
    * fit and a `search_tools` tool for the rest. Default "off" (plans/tool-overhead.md).
    */
   toolSearch?: "off" | "auto";
+
+  /**
+   * Wrap `fetch_url_content` results in a boundary marked with a per-session
+   * token, with a sentence saying the text inside is untrusted. Off by default
+   * because it changes what the model reads. The environment variable
+   * CONTINUOUS_SPOTLIGHT_UNTRUSTED=1 turns it on too.
+   */
+  spotlightUntrusted?: boolean;
 
   /**
    * Show the "Auto" approval option, where a reviewer model decides tool calls

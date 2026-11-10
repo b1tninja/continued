@@ -1,4 +1,6 @@
 import { ToolImpl } from ".";
+import type { ContextItem } from "../..";
+import { createSpotlight, type Spotlight } from "../permissions/spotlight";
 import { getUrlContextItems } from "../../context/providers/URLContextProvider";
 import { getStringArg } from "../parseArgs";
 
@@ -35,5 +37,36 @@ export const fetchUrlContentImpl: ToolImpl = async (args, extras) => {
     });
   }
 
-  return processedItems;
+  return spotlightEnabled(extras.config?.experimental?.spotlightUntrusted)
+    ? spotlightItems(processedItems, url)
+    : processedItems;
 };
+
+/** Off unless the setting or CONTINUOUS_SPOTLIGHT_UNTRUSTED=1 says so. */
+export function spotlightEnabled(setting: boolean | undefined): boolean {
+  return setting === true || process.env.CONTINUOUS_SPOTLIGHT_UNTRUSTED === "1";
+}
+
+let session: Spotlight | undefined;
+
+/**
+ * Put each fetched page between the session's boundary markers, with the
+ * sentence that explains them ahead of the first. Items that are not page
+ * text (the truncation warning) are left as they are.
+ */
+export function spotlightItems(
+  items: ContextItem[],
+  source: string,
+  spotlight: Spotlight = (session ??= createSpotlight()),
+): ContextItem[] {
+  let explained = false;
+  return items.map((item) => {
+    if (item.name === "Truncation warning") return item;
+    const wrapped = spotlight.wrap(item.content, { source });
+    const content = explained
+      ? wrapped
+      : `${spotlight.instruction}\n\n${wrapped}`;
+    explained = true;
+    return { ...item, content };
+  });
+}
