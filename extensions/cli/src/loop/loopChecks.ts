@@ -1,5 +1,6 @@
-import { exec } from "child_process";
+import { type ChildProcess } from "child_process";
 
+import { getCommandExecutor } from "core/util/commandExecutor.js";
 import { holdCheck, recordCheck } from "core/util/loopMode.js";
 
 import {
@@ -30,6 +31,9 @@ import { commitLoop } from "./loopSession.js";
 /** How long a check may run before it counts as failed. */
 export const LOOP_CHECK_TIMEOUT_MS = 10 * 60 * 1000;
 
+/** Same cap `exec` used: past this, the check is stopped. */
+const LOOP_CHECK_MAX_BUFFER = 10 * 1024 * 1024;
+
 export interface LoopCheckStep {
   kind: "check";
   itemId: string;
@@ -41,34 +45,81 @@ export interface CheckRun {
   output: string;
 }
 
-/** Runs a command in the workspace and keeps what it printed. */
+/**
+ * Runs a command in the workspace and keeps what it printed.
+ *
+ * It uses the command executor, the same place a Bash call runs: the shell
+ * the permission check classified, including WSL or a container. `exec` would
+ * use `/bin/sh` (or `cmd.exe` on Windows). An executor that is not available
+ * does not fall back to the host shell.
+ */
 export function runCheckCommand(
   command: string,
   cwd = process.cwd(),
 ): Promise<CheckRun> {
   return new Promise((resolve) => {
-    exec(
-      command,
-      {
+    const executor = getCommandExecutor();
+    if (executor.unavailable) {
+      resolve({ exitCode: null, output: executor.unavailable });
+      return;
+    }
+    let child: ChildProcess;
+    try {
+      child = executor.spawn(command, {
         cwd,
-        timeout: LOOP_CHECK_TIMEOUT_MS,
-        maxBuffer: 10 * 1024 * 1024,
         windowsHide: true,
-      },
-      (error, stdout, stderr) => {
-        const output = [stdout, stderr].filter(Boolean).join("\n").trim();
-        if (!error) {
-          resolve({ exitCode: 0, output });
-          return;
-        }
-        const timedOut = error.killed && error.signal === "SIGTERM";
-        resolve({
-          exitCode: typeof error.code === "number" ? error.code : null,
-          output: timedOut
-            ? `${output}\n(stopped after ${LOOP_CHECK_TIMEOUT_MS / 60000} minutes)`.trim()
-            : output || error.message,
-        });
-      },
+      });
+    } catch (error) {
+      resolve({
+        exitCode: null,
+        output: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    let stdout = "";
+    let stderr = "";
+    let bytes = 0;
+    let overflow = false;
+    let timedOut = false;
+    let settled = false;
+    const finish = (exitCode: number | null, fallback = "") => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+      const note = timedOut
+        ? `(stopped after ${LOOP_CHECK_TIMEOUT_MS / 60000} minutes)`
+        : overflow
+          ? "stdout maxBuffer length exceeded"
+          : "";
+      resolve({
+        exitCode,
+        output: [output, note || fallback].filter(Boolean).join("\n").trim(),
+      });
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, LOOP_CHECK_TIMEOUT_MS);
+    const take = (into: "out" | "err", chunk: string) => {
+      bytes += chunk.length;
+      if (bytes > LOOP_CHECK_MAX_BUFFER) {
+        overflow = true;
+        child.kill("SIGTERM");
+        return;
+      }
+      if (into === "out") stdout += chunk;
+      else stderr += chunk;
+    };
+
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => take("out", chunk));
+    child.stderr?.on("data", (chunk: string) => take("err", chunk));
+    child.on("error", (error) => finish(null, error.message));
+    child.on("close", (code) =>
+      finish(typeof code === "number" ? code : null),
     );
   });
 }
