@@ -229,6 +229,7 @@ export function evaluateToolPolicyWithRules(
       resolvedPath,
       skip: skippedProtections(input.approval),
       cwd: input.cwd,
+      shell: input.shell,
     }) ?? privateUrl;
 
   // The floor: deny rules the person wrote to bind even at YOLO
@@ -246,6 +247,7 @@ export function evaluateToolPolicyWithRules(
       base: basePolicy,
       evaluated,
       rules: floorRules,
+      shell: input.shell,
     });
     if (floorMatch?.decision === "deny") {
       return {
@@ -306,6 +308,7 @@ export function evaluateToolPolicyWithRules(
     protectedHit,
     loosening,
     manual,
+    shell: input.shell,
   });
 
   return {

@@ -1,4 +1,5 @@
 import * as os from "node:os";
+import type { ShellKind } from "../../util/shell";
 import { commandCandidateSet } from "./candidates";
 import { fetchAndRunHit } from "./fetchAndRun";
 import { ProtectedHit, ProtectedKind, protectedPathHit } from "./protected";
@@ -46,12 +47,14 @@ export function protectedCommandHit(
   skip: readonly ProtectedKind[] = [],
   /** Directory the command runs in, so a relative path can be recognised. */
   cwd?: string,
+  /** The shell that runs it; unknown reads the command under every grammar */
+  shell?: ShellKind,
 ): ProtectedHit | undefined {
   // First, so Automatic can refuse it whatever else the command touches
   if (!skip.includes("fetch-and-run") && fetchAndRunHit(command)) {
     return { kind: "fetch-and-run", path: "a download that is then run" };
   }
-  const { list, truncated } = commandCandidateSet(command);
+  const { list, truncated } = commandCandidateSet(command, shell);
   // The cap dropped part of the command. A secret in the missing part would
   // otherwise look safe, so the command asks.
   if (truncated && !skip.includes("secret")) {
@@ -113,6 +116,8 @@ export function findProtected(args: {
   cwd?: string;
   /** Kinds the person switched off (built-in rules by id) */
   skip?: readonly ProtectedKind[];
+  /** The shell that runs a terminal command */
+  shell?: ShellKind;
 }): ProtectedHit | undefined {
   const { toolName, parsedArgs, resolvedPath } = args;
   const home = args.home ?? os.homedir();
@@ -121,7 +126,7 @@ export function findProtected(args: {
   if (toolName === "run_terminal_command") {
     const command = str(parsedArgs.command);
     return command
-      ? protectedCommandHit(command, home, args.skip, args.cwd)
+      ? protectedCommandHit(command, home, args.skip, args.cwd, args.shell)
       : undefined;
   }
 

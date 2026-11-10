@@ -490,6 +490,58 @@ export const VERDICT_CASES: VerdictCase[] = [
     protects: "network",
   }),
   c(CMD, "dir src", "reads", "an ordinary folder", { protects: "none" }),
+
+  // ---- substitutions: what hides in them, and what only looks like one
+  c(POSIX, "echo $(git push)", "writes", "a push hidden in $( )", {
+    resolves: "git push",
+  }),
+  c(POSIX, "echo `git push`", "writes", "a push hidden in backticks", {
+    resolves: "git push",
+  }),
+  c(POSIX, 'echo "$(git push)"', "writes", "a push inside double quotes", {
+    resolves: "git push",
+  }),
+  c(POSIX, "ls <(git push)", "writes", "a push in a process substitution", {
+    resolves: "git push",
+  }),
+  c(POSIX, "echo $(( $(git push) + 1 ))", "writes", "a push in arithmetic", {
+    resolves: "git push",
+  }),
+  c(
+    POSIX,
+    "echo $(cat ~/.ssh/id_rsa)",
+    "unsure",
+    "a private key read inside a substitution",
+    { protects: "secret" },
+  ),
+  c(POSIX, "echo '$(rm -rf x)'", "reads", "single quotes keep it text"),
+  c(POSIX, "echo \\$(rm -rf x)", "reads", "an escaped $ is text"),
+  c(PS, "echo $(git push)", "writes", "a subexpression runs", {
+    resolves: "git push",
+  }),
+  c(PS, 'echo "$(git push)"', "writes", "a subexpression inside a string", {
+    resolves: "git push",
+  }),
+  c(PS, "echo @(git push)", "writes", "an array subexpression", {
+    resolves: "git push",
+  }),
+  c(
+    PS,
+    "Write-Output $(Get-Content $env:USERPROFILE\\.ssh\\id_rsa)",
+    "unsure",
+    "a private key read inside a subexpression",
+    { protects: "secret" },
+  ),
+  c(PS, "echo `$(rm -rf x)", "reads", "a backtick-escaped $ is text"),
+  c(PS, 'Write-Output "a`tb`n"', "reads", "backtick escapes are text"),
+  c(PS, "echo '$(rm -rf x)'", "reads", "single quotes keep it text"),
+  c(CMD, "for /f %i in ('git push') do @echo %i", "writes", "for /f runs it", {
+    resolves: "git push",
+  }),
+  c(["zsh"], "ls *(e:'git push':)", "writes", "a glob qualifier runs code", {
+    resolves: "git push",
+  }),
+  c(["zsh"], "echo ${(e)x}", "unsure", "evaluates a value as code"),
 ];
 
 /** The cases that apply to one shell. */

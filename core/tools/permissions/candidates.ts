@@ -1,12 +1,14 @@
+import type { ShellKind } from "../../util/shell";
 import { parseCommand } from "./command";
+import { detectCommandShell, familyOf } from "./detectShell";
 import { canonicalCmdlet, isPowerShellAlias } from "./powershell";
 import {
   commandName,
   dequote,
-  extractSubstitutions,
   splitRawWords,
   stripGrouping,
 } from "./shellWords";
+import { scanSubstitutions } from "./substitutions";
 
 /**
  * Every string a deny or ask rule should be tried against for a command.
@@ -71,25 +73,42 @@ function nested(
   depth: number,
   out: Set<string>,
   cap: CandidateCap,
+  shell: ShellKind | undefined,
 ): void {
-  const run = (script: string | undefined) => {
-    if (script) addCommand(script, depth + 1, out, cap);
+  // A script handed to a named shell is that shell's; one handed to an
+  // interpreter, awk or eval is read as the current shell reads it
+  const run = (
+    script: string | undefined,
+    as: ShellKind | undefined = shell,
+  ) => {
+    if (script) addCommand(script, depth + 1, out, cap, as);
   };
   if (POSIX_SHELLS.has(name)) {
     const k = tail.findIndex((w) => /^-[a-z]*c[a-z]*$/.test(w));
-    if (k >= 0) run(tail[k + 1]);
+    const kind: ShellKind | undefined =
+      name === "zsh"
+        ? "zsh"
+        : name === "bash"
+          ? "bash"
+          : name === "sh" || name === "dash"
+            ? "sh"
+            : undefined;
+    if (k >= 0) run(tail[k + 1], kind);
   } else if (PS_SHELLS.has(name)) {
     const k = tail.findIndex((w) => /^-(c|command)$/i.test(w));
-    if (k >= 0) run(tail.slice(k + 1).join(" "));
+    if (k >= 0) run(tail.slice(k + 1).join(" "), "powershell");
   } else if (name === "cmd") {
     const k = tail.findIndex((w) => /^\/[ck]$/i.test(w));
-    if (k >= 0) run(tail.slice(k + 1).join(" "));
+    if (k >= 0) run(tail.slice(k + 1).join(" "), "cmd");
   } else if (name === "eval") {
     run(tail.join(" "));
+  } else if (name === "iex" || name === "invoke-expression") {
+    run(tail.join(" "), "powershell");
   } else if (INTERPRETER.test(name)) {
     const k = tail.findIndex((w) => INLINE_FLAGS.has(w.toLowerCase()));
     if (k >= 0 && tail[k + 1]) {
-      for (const lit of quotedLiterals(tail[k + 1])) run(lit);
+      // os.system and the like hand the string to whichever shell is there
+      for (const lit of quotedLiterals(tail[k + 1])) run(lit, undefined);
     }
   } else if (
     name === "awk" ||
@@ -102,7 +121,7 @@ function nested(
       for (const s of [w, ...quotedLiterals(w)]) {
         systemCall.lastIndex = 0;
         let m: RegExpExecArray | null;
-        while ((m = systemCall.exec(s))) run(m[2]);
+        while ((m = systemCall.exec(s))) run(m[2], undefined);
       }
     }
   }
@@ -198,9 +217,20 @@ function addPart(
   depth: number,
   out: Set<string>,
   cap: CandidateCap,
+  shell?: ShellKind,
 ): void {
   if (overCap(out, cap)) return;
   out.add(part);
+  // PowerShell's escape character: g`it is git. `$ and `( stay literal.
+  if (
+    shell !== "bash" &&
+    shell !== "zsh" &&
+    shell !== "sh" &&
+    shell !== "cmd"
+  ) {
+    const plain = part.replace(/`([A-Za-z0-9_./-])/g, "$1");
+    if (plain !== part) addPart(plain, depth, out, cap, shell);
+  }
   const rawWords = splitRawWords(part).map(stripGrouping).filter(Boolean);
   const words = rawWords.map(dequote).filter(Boolean);
   if (words.length === 0) return;
@@ -223,7 +253,9 @@ function addPart(
         out.add([canonicalCmdletName(name), ...tail].join(" "));
       }
       if (name === "git") out.add(["git", ...skipGitOptions(tail)].join(" "));
-      if (depth < MAX_DEPTH) nested(name, tail, depth, out, cap);
+      // zsh's `=git` is the path of git: the command is git
+      if (/^=[a-z]/.test(name)) out.add([name.slice(1), ...tail].join(" "));
+      if (depth < MAX_DEPTH) nested(name, tail, depth, out, cap, shell);
     }
   }
 }
@@ -234,27 +266,31 @@ function addCommand(
   depth: number,
   out: Set<string>,
   cap: CandidateCap,
+  shell?: ShellKind,
 ): void {
   if (overCap(out, cap)) return;
   const parts = parseCommand(command).parts;
   const vars: Record<string, string> = {};
 
   for (const p of parts) {
-    addPart(p, depth, out, cap);
+    addPart(p, depth, out, cap, shell);
     const assign = assignmentOf(p) ?? printfAssignment(p);
     if (assign) vars[assign[0]] = expandKnown(assign[1], vars);
     if (/[$\{]/.test(p)) {
       const expanded = expandKnown(p, vars);
       const text = expanded;
-      if (text !== p) addPart(text, depth, out, cap);
+      if (text !== p) addPart(text, depth, out, cap, shell);
       const braced = expandBraces(text);
-      if (braced && braced !== text) addPart(braced, depth, out, cap);
+      if (braced && braced !== text) addPart(braced, depth, out, cap, shell);
     }
   }
   if (depth >= MAX_DEPTH) return;
 
-  for (const sub of extractSubstitutions(command)) {
-    addCommand(sub, depth + 1, out, cap);
+  const found = scanSubstitutions(command, shell);
+  // Code the text does not show (zsh `${(e)x}`): any rule must fail closed
+  if (found.dynamic.length) cap.truncated = true;
+  for (const sub of found.subs) {
+    addCommand(sub, depth + 1, out, cap, shell);
   }
 
   const names = parts.map((p) =>
@@ -268,7 +304,9 @@ function addCommand(
     );
   if (feedsShell) {
     for (const p of parts) {
-      for (const lit of quotedLiterals(p)) addCommand(lit, depth + 1, out, cap);
+      for (const lit of quotedLiterals(p)) {
+        addCommand(lit, depth + 1, out, cap, "bash");
+      }
     }
   }
   // `echo push | xargs git` runs `git push`.
@@ -284,7 +322,7 @@ function addCommand(
     parts.forEach((q, j) => {
       if (j !== i && (names[j] === "echo" || names[j] === "printf")) {
         const args = splitRawWords(q).slice(1).map(unquoteWord).join(" ");
-        addPart(`${tail} ${args}`.trim(), depth + 1, out, cap);
+        addPart(`${tail} ${args}`.trim(), depth + 1, out, cap, shell);
       }
     });
   });
@@ -300,20 +338,55 @@ export interface CommandCandidateSet {
   truncated: boolean;
 }
 
+/**
+ * The shells to read `command` as. With no shell, or one that is not parsed,
+ * `undefined`: every grammar at once, which is the conservative reading. With
+ * a shell, its own grammar plus any other the text plausibly belongs to
+ * (bash text sent to PowerShell is read both ways), so a command cannot look
+ * safe in one grammar while the real shell reads it as dangerous. Text that
+ * only suggests the shell's own family adds nothing.
+ */
+export function grammarsToRead(
+  command: string,
+  shell?: ShellKind,
+): (ShellKind | undefined)[] {
+  if (!shell || shell === "unknown") return [undefined];
+  const family = familyOf(shell);
+  const { likely } = detectCommandShell(command);
+  const extra: ShellKind[] = [];
+  const seen = new Set([family]);
+  for (const l of likely) {
+    const f = familyOf(l);
+    if (f && !seen.has(f)) {
+      seen.add(f);
+      extra.push(l);
+    }
+  }
+  return [shell, ...extra];
+}
+
 /** Every string a deny or ask rule should be tried against, and whether the cap stopped the expansion. */
-export function commandCandidateSet(command: string): CommandCandidateSet {
+export function commandCandidateSet(
+  command: string,
+  shell?: ShellKind,
+): CommandCandidateSet {
   const out = new Set<string>([command]);
   const cap: CandidateCap = { truncated: false };
-  addCommand(command, 0, out, cap);
+  for (const g of grammarsToRead(command, shell)) {
+    addCommand(command, 0, out, cap, g);
+  }
   return { list: [...out], truncated: cap.truncated };
 }
 
 /** Every string a deny or ask rule should be tried against for a whole command. */
-export function commandCandidates(command: string): string[] {
-  return commandCandidateSet(command).list;
+export function commandCandidates(
+  command: string,
+  shell?: ShellKind,
+): string[] {
+  return commandCandidateSet(command, shell).list;
 }
 
 /** The candidates for one part of a command. */
-export function ruleCandidates(part: string): string[] {
-  return commandCandidates(part);
+export function ruleCandidates(part: string, shell?: ShellKind): string[] {
+  return commandCandidates(part, shell);
 }

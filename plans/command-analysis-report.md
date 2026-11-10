@@ -8,11 +8,11 @@ Each case says what is true of a command in a shell: it **reads**, it **writes**
 
 | Shell | Cases | Reads | Writes | Unsure | Vouched | Vouched share of reads | Unsound |
 | ----- | ----- | ----- | ------ | ------ | ------- | ---------------------- | ------- |
-| bash | 112 | 50 | 43 | 19 | 43 | 86% | 0 |
-| zsh | 117 | 53 | 45 | 19 | 44 | 83% | 0 |
-| sh | 111 | 49 | 43 | 19 | 42 | 86% | 0 |
-| powershell | 111 | 46 | 46 | 19 | 44 | 96% | 0 |
-| cmd | 52 | 15 | 29 | 8 | 9 | 60% | 0 |
+| bash | 120 | 52 | 48 | 20 | 44 | 85% | 0 |
+| zsh | 127 | 55 | 51 | 21 | 45 | 82% | 0 |
+| sh | 119 | 51 | 48 | 20 | 43 | 84% | 0 |
+| powershell | 118 | 49 | 49 | 20 | 45 | 92% | 0 |
+| cmd | 53 | 15 | 30 | 8 | 9 | 60% | 0 |
 
 ## Reads the classifier does not vouch for
 
@@ -27,6 +27,7 @@ The work list for the parsers: each is truly read-only, and the reason is what t
 - `ls $HOME`: "$" is not understood
 - `echo $AWS_SECRET_ACCESS_KEY`: "$" is not understood
 - `printenv`: printenv is not on the read-only list
+- `echo \$(rm -rf x)`: a backslash escape is not understood
 
 ### zsh
 
@@ -39,6 +40,7 @@ The work list for the parsers: each is truly read-only, and the reason is what t
 - `printenv`: printenv is not on the read-only list
 - `ls =ls`: =word expansion (zsh) is not understood
 - `print -l *(.)`: "(" is not understood
+- `echo \$(rm -rf x)`: a backslash escape is not understood
 
 ### sh
 
@@ -49,11 +51,14 @@ The work list for the parsers: each is truly read-only, and the reason is what t
 - `ls $HOME`: "$" is not understood
 - `echo $AWS_SECRET_ACCESS_KEY`: "$" is not understood
 - `printenv`: printenv is not on the read-only list
+- `echo \$(rm -rf x)`: a backslash escape is not understood
 
 ### powershell
 
 - `Get-ChildItem | Where-Object { $_.Length -gt 1 }`: "{" is not understood
 - `Get-Content $env:USERPROFILE\.aws\credentials`: "$" is not understood
+- `echo `$(rm -rf x)`: "`" is not understood
+- `Write-Output "a`tb`n"`: a variable, substitution or escape inside double quotes
 
 ### cmd
 
@@ -66,12 +71,12 @@ The work list for the parsers: each is truly read-only, and the reason is what t
 
 ## The protected-path scan
 
-Cases with an expectation: 39.
+Cases with an expectation: 43.
 
 No disagreements.
 
 ## The text a deny or ask rule is tried against
 
-Cases with an expectation: 70.
+Cases with an expectation: 90.
 
 No disagreements.
