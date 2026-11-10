@@ -30,6 +30,7 @@
     "src/**/*",
     "scripts/measureStuck.ts",
     "scripts/probeWindowsSandbox.ts",
+    "scripts/runEscapeProbes.ts",
     "vitest.setup.ts",
     "vitest.global-dir-setup.ts"
   ]
