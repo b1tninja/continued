@@ -206,9 +206,7 @@ export function evaluateToolPolicyWithRules(
   }
 
   const resolved = processedArgs?.resolvedPath as
-    | ResolvedPath
-    | null
-    | undefined;
+    ResolvedPath | null | undefined;
   const resolvedPath = resolved ? uriToPath(resolved.uri) : undefined;
 
   // Credentials and files that change what runs later always ask, with or
@@ -227,13 +225,10 @@ export function evaluateToolPolicyWithRules(
       : undefined;
   // A tool whose MCP definition changed since approval asks again. Never in
   // the skip list: no setting turns it off, and YOLO alone reaches past it.
-  const changedDefinition =
-    tool.mcpDefinitionChange && basePolicy !== "disabled"
-      ? ({
-          kind: "mcp-definition-changed",
-          path: `${tool.mcpDefinitionChange.kind === "added" ? "new tool" : "changed"}, ${tool.mcpDefinitionChange.summary}`,
-        } satisfies ProtectedHit)
-      : undefined;
+  const changedDefinition = changedDefinitionHit(
+    tool.mcpDefinitionChange,
+    basePolicy,
+  );
   const protectedHit =
     findProtected({
       toolName,
@@ -333,6 +328,17 @@ export function evaluateToolPolicyWithRules(
     ...(decision.protection ? { protection: decision.protection } : {}),
     ...(decision.rule ? { rule: decision.rule } : {}),
     ...(found?.readOnly ? { readOnly: found.readOnly } : {}),
+  };
+}
+
+function changedDefinitionHit(
+  change: { kind: "changed" | "added"; summary: string } | undefined,
+  basePolicy: ToolPolicy,
+): ProtectedHit | undefined {
+  if (!change || basePolicy === "disabled") return undefined;
+  return {
+    kind: "mcp-definition-changed",
+    path: `${change.kind === "added" ? "new tool" : "changed"}, ${change.summary}`,
   };
 }
 

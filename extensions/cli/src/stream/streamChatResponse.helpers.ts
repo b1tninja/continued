@@ -54,16 +54,16 @@ import { recordCacheTally } from "../util/cacheTally.js";
 import { logger } from "../util/logger.js";
 
 import { StreamCallbacks } from "./streamChatResponse.types.js";
-
-/** A tool result with the injection notice in front when it reads like instructions. */
-export function flagToolResult(result: string): string {
-  return typeof result === "string" ? flagToolText(result).text : result;
-}
 import {
   runPostToolUseFailureHooks,
   runPostToolUseHooks,
   runPreToolUseHooks,
 } from "./toolHooks.js";
+
+/** A tool result with the injection notice in front when it reads like instructions. */
+export function flagToolResult(result: string): string {
+  return typeof result === "string" ? flagToolText(result).text : result;
+}
 
 export interface ToolResultWithStatus extends ChatCompletionToolMessageParam {
   status: ToolStatus;
