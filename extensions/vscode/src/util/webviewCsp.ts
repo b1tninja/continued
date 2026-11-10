@@ -87,6 +87,9 @@ function escapeAttr(value: string): string {
     .replace(/</g, "&lt;");
 }
 
+/** Chat panel is not given command links. */
+export const GUI_WEBVIEW_ENABLE_COMMAND_URIS = false;
+
 export function renderWebviewDocument(options: {
   csp: string;
   nonce: string;

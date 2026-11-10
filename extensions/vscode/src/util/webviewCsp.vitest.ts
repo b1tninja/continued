@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  GUI_WEBVIEW_ENABLE_COMMAND_URIS,
   renderWebviewDocument,
   webviewBootstrapScript,
   webviewContentSecurityPolicy,
@@ -78,5 +79,11 @@ describe("renderWebviewDocument", () => {
     });
     expect(script).not.toContain("</script>");
     expect(script).toContain("\\u003c");
+  });
+});
+
+describe("GUI_WEBVIEW_ENABLE_COMMAND_URIS", () => {
+  it("does not enable command links", () => {
+    expect(GUI_WEBVIEW_ENABLE_COMMAND_URIS).toBe(false);
   });
 });

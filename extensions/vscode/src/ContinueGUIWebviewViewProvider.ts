@@ -4,6 +4,7 @@ import { getTheme } from "./util/getTheme";
 import { getExtensionVersion, getvsCodeUriScheme } from "./util/util";
 import { getExtensionUri, getNonce, getUniqueId } from "./util/vscode";
 import {
+  GUI_WEBVIEW_ENABLE_COMMAND_URIS,
   renderWebviewDocument,
   webviewBootstrapScript,
   webviewContentSecurityPolicy,
@@ -103,7 +104,7 @@ export class ContinueGUIWebviewViewProvider
         vscode.Uri.joinPath(extensionUri, "gui"),
         vscode.Uri.joinPath(extensionUri, "assets"),
       ],
-      enableCommandUris: true,
+      enableCommandUris: GUI_WEBVIEW_ENABLE_COMMAND_URIS,
       portMapping: [
         {
           webviewPort: 65433,
