@@ -96,6 +96,12 @@ describe("commands that mention a protected path", () => {
     expect(cmd("echo .env")).toBe("secret");
   });
 
+  it("asks when the candidate cap drops the rest of the command", () => {
+    const pad = Array.from({ length: 900 }, (_, i) => `f${i}`).join(" ");
+    expect(cmd(`ls ${pad}; cat .env`)).toBe("secret");
+    expect(cmd("ls README")).toBeUndefined();
+  });
+
   it("does not treat a git revision as a Windows short name", () => {
     expect(cmd("git diff HEAD~1")).toBeUndefined();
     expect(

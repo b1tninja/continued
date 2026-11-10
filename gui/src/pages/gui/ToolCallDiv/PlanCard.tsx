@@ -18,7 +18,11 @@ import {
   NO_PLAN_BUDGET,
   type PlanBudgetSetup,
 } from "core/util/planBudget";
-import { validatePlanArgs, type PlanDecision } from "core/util/planFile";
+import {
+  planCheckSummary,
+  validatePlanArgs,
+  type PlanDecision,
+} from "core/util/planFile";
 import { useContext, useState } from "react";
 import { QuestionPanelContext } from "../../../components/QuestionPanel";
 import { useMainEditor } from "../../../components/mainInput/TipTapEditor";
@@ -356,9 +360,22 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
                 {todoMark(String(item.text), diff?.kept)}
               </span>{" "}
               {String(item.text)}
+              {typeof item.check === "string" && item.check.trim() && (
+                <div className="pl-5 font-mono text-description-muted">
+                  check: {item.check.trim()}
+                </div>
+              )}
             </li>
           ))}
         </ul>
+      )}
+      {args.ok && planCheckSummary(args.items) && (
+        <div
+          data-testid="plan-card-checks"
+          className="mt-1 text-2xs whitespace-pre-wrap text-description-muted"
+        >
+          {planCheckSummary(args.items)}
+        </div>
       )}
       {loopActive && !awaitingLoop && isLatestPlanCard && (
         <div

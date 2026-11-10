@@ -15,11 +15,17 @@ import {
   createWorktree,
 } from "../commands/review/worktree.js";
 import {
+  getCommandPermissionFlags,
+  getPolicyLevels,
+} from "../permissions/policyLevels.js";
+import type { PermissionMode } from "../permissions/types.js";
+import {
   getServiceSync,
   loopItemModelRecord,
   loopWorkerModelName,
   SERVICE_NAMES,
 } from "../services/index.js";
+import type { ToolPermissionServiceState } from "../services/ToolPermissionService.js";
 import type { ConfigServiceState } from "../services/types.js";
 import {
   getSessionLoop,
@@ -198,11 +204,25 @@ function abortWave(): void {
 }
 
 function workerOptions(): LoopWorkerInput["options"] {
+  let mode: PermissionMode = "normal";
+  try {
+    const permissions = getServiceSync<ToolPermissionServiceState>(
+      SERVICE_NAMES.TOOL_PERMISSIONS,
+    );
+    mode = permissions.value?.currentMode ?? "normal";
+  } catch {
+    // The worker still loads the settings file.
+  }
+  const policy = {
+    mode,
+    ...getCommandPermissionFlags(),
+    levels: getPolicyLevels(),
+  };
   try {
     const config = getServiceSync<ConfigServiceState>(SERVICE_NAMES.CONFIG);
-    return { config: config.value?.configPath };
+    return { config: config.value?.configPath, policy };
   } catch {
-    return {};
+    return { policy };
   }
 }
 
