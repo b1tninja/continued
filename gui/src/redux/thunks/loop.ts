@@ -60,6 +60,7 @@ import {
   stopLoop,
   withLoopPlanBlock,
 } from "core/util/loopMode";
+import { costMarkOf } from "core/util/loopCost";
 import {
   reminderFilePaths,
   reminderPathsDue,
@@ -113,6 +114,10 @@ function doc(text: string) {
     type: "doc",
     content: [{ type: "paragraph", content: [{ type: "text", text }] }],
   };
+}
+
+function sessionCostMark(state: RootState) {
+  return costMarkOf(state.session.usage);
 }
 
 function sessionTokens(state: RootState): number {
@@ -201,6 +206,7 @@ export const startLoopFromPlan = createAsyncThunk<
       ...(title ? { title } : {}),
       now: new Date(),
       sessionTokens: sessionTokens(getState()),
+      costMark: sessionCostMark(getState()),
       // Plans and questions follow the levels chosen for them
       policy: selectLoopPolicy(getState()),
     });
@@ -377,6 +383,7 @@ export const resumeLoopThunk = createAsyncThunk<void, undefined, ThunkApiType>(
         {
           now: new Date(),
           sessionTokens: sessionTokens(getState()),
+          costMark: sessionCostMark(getState()),
         },
         // Paused by leaving Loop: the person may have changed files since
         { workedOutside: loop.stopReason === "left_loop" },
@@ -830,6 +837,7 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
       loop = finishItemRun(loop, loop.current.report, {
         check,
         sessionTokens: sessionTokens(state),
+        costMark: sessionCostMark(state),
         now: new Date(),
       });
       loop = settleSteeredAnswers(loop, delivered);
@@ -940,7 +948,11 @@ export const advanceLoop = createAsyncThunk<void, undefined, ThunkApiType>(
           action.itemId,
           state.session.history.length,
           now,
-          { model: chosen.record, sessionTokens: sessionTokens(getState()) },
+          {
+            model: chosen.record,
+            sessionTokens: sessionTokens(getState()),
+            costMark: sessionCostMark(getState()),
+          },
         );
         // An own model leaves the loop model; the next turn comes back to it
         const leaves =

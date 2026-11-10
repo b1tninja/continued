@@ -6,6 +6,7 @@ import type {
   LoopAutonomy,
   LoopPolicy,
   LoopQuestion,
+  LoopCostMark,
   LoopState,
   LoopStrategy,
   ModelUse,
@@ -35,6 +36,7 @@ import {
   type LoopAnswerInput,
   type LoopControlResult,
 } from "core/util/loopMode.js";
+import { costMarkOf } from "core/util/loopCost.js";
 import { createHistoryItem } from "core/util/messageConversion.js";
 import { useForLoopTurn } from "core/util/modelUse.js";
 
@@ -204,6 +206,14 @@ export function sessionTokens(): number {
 }
 
 /**
+ * The session's per-model totals now, for the loop's cost counter
+ * (core/util/loopCost.ts).
+ */
+export function sessionCostMark(): LoopCostMark | undefined {
+  return costMarkOf(getSessionUsage());
+}
+
+/**
  * The Plan edits and Questions levels a loop follows: the person's levels,
  * with the CLI's `auto` mode (`--auto`) raising Plan edits as it always did.
  */
@@ -320,6 +330,7 @@ export function startLoopFromPlan(
   const loop = createLoop(plan, {
     now,
     sessionTokens: sessionTokens(),
+    costMark: sessionCostMark(),
     policy: cliLoopPolicy(mode),
   });
   pendingSteers.length = 0;
@@ -377,7 +388,13 @@ export function setWaveAbort(abort: (() => void) | undefined): void {
 export function resumeStoppedLoop(now = new Date()): boolean {
   const loop = getSessionLoop();
   if (!loop || loop.status !== "stopped") return false;
-  commitLoop(resumeLoop(loop, { now, sessionTokens: sessionTokens() }));
+  commitLoop(
+    resumeLoop(loop, {
+      now,
+      sessionTokens: sessionTokens(),
+      costMark: sessionCostMark(),
+    }),
+  );
   return true;
 }
 

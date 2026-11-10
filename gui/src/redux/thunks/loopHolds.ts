@@ -24,6 +24,7 @@ import {
   repeatedCallReport,
   repeatedCallResult,
 } from "core/util/loopMode";
+import { costMarkOf } from "core/util/loopCost";
 import { grantKey } from "../slices/blockedCallsSlice";
 import { errorToolCall, updateToolCallOutput } from "../slices/sessionSlice";
 import { AppThunkDispatch, RootState } from "../store";
@@ -81,6 +82,7 @@ export function endRunAtTurnLimit(
       sessionTokens: state.session.usage
         ? loopTokensFromUsage(state.session.usage)
         : 0,
+      costMark: costMarkOf(state.session.usage),
       now: new Date(),
       turns,
     });
@@ -132,6 +134,7 @@ export function addItemBudgetNote(
     sessionTokens: state.session.usage
       ? loopTokensFromUsage(state.session.usage)
       : 0,
+    costMark: costMarkOf(state.session.usage),
     now: new Date(),
     turns: itemTurns(state, current.historyIndex),
     told: current.budgetWarned,

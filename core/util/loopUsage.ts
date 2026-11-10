@@ -1,4 +1,6 @@
-import type { LoopState } from "..";
+import type { LoopCostMark, LoopState } from "..";
+import { formatCostAmount } from "./costOf";
+import { itemCostNow, loopCostUsed } from "./loopCost";
 import { loopTokensUsed } from "./loopMode";
 
 /**
@@ -22,6 +24,12 @@ export interface LoopUsage {
   tokens: LoopLimitUsage;
   /** Milliseconds since the loop started */
   time: LoopLimitUsage;
+  /**
+   * What the loop has cost so far (core/util/loopCost.ts): USD, or "unknown"
+   * when a model in use has no price or nothing was measured. An estimate at
+   * list price.
+   */
+  cost: number | "unknown";
   items: { done: number; total: number };
   /** Item runs started, counting each re-run of an item */
   runs: number;
@@ -32,6 +40,8 @@ export interface LoopUsage {
     status: string;
     tokens?: number;
     ms?: number;
+    /** USD, or "unknown"; missing when the item has not run */
+    cost?: number | "unknown";
   }>;
 }
 
@@ -47,7 +57,12 @@ function limit(used: number, max: number): LoopLimitUsage {
 
 export function loopUsage(
   loop: LoopState,
-  ctx: { sessionTokens: number; now: Date },
+  ctx: {
+    sessionTokens: number;
+    now: Date;
+    /** The session's per-model totals now (costMarkOf) */
+    costMark?: LoopCostMark;
+  },
 ): LoopUsage {
   const skipped = loop.items.filter((i) => i.skipped).length;
   const done = loop.items.filter((i) => i.status === "done").length - skipped;
@@ -62,6 +77,7 @@ export function loopUsage(
       loop.budget.maxTokens,
     ),
     time: limit(elapsed, loop.budget.maxWallMs),
+    cost: loopCostUsed(loop, ctx.costMark).amount,
     items: { done: Math.max(0, done), total: loop.items.length },
     runs: loop.items.reduce((n, i) => n + i.attempts, 0),
     perItem: loop.items.map((i) => ({
@@ -69,6 +85,9 @@ export function loopUsage(
       runs: i.attempts,
       status: i.status,
       ...(i.usage ? { tokens: i.usage.tokens, ms: i.usage.ms } : {}),
+      ...(i.usage || loop.current?.itemId === i.id
+        ? { cost: itemCostNow(loop, i.id, ctx.costMark) }
+        : {}),
     })),
   };
 }
@@ -116,4 +135,9 @@ export function describeTimeUsage(u: LoopLimitUsage): string {
 /** "Round 1 of 3", or "Round 2" when re-planning has no limit. */
 export function describeRoundUsage(u: LoopLimitUsage): string {
   return u.max > 0 ? `Round ${u.used} of ${u.max}` : `Round ${u.used}`;
+}
+
+/** "$1.84", or "cost unknown" for a model with no price. */
+export function describeCostUsage(cost: number | "unknown"): string {
+  return formatCostAmount(cost);
 }

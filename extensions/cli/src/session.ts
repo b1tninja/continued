@@ -12,6 +12,7 @@ import type {
   Usage,
 } from "core/index.js";
 import { totalInputTokens } from "core/llm/utils/cacheStats.js";
+import { addRequestUsage } from "core/llm/utils/sessionUsage.js";
 import historyManager from "core/util/history.js";
 import { restoreLoop } from "core/util/loopMode.js";
 import { v4 as uuidv4 } from "uuid";
@@ -82,6 +83,7 @@ class SessionManager {
       cachedTokens: 0,
       cacheWriteTokens: 0,
     },
+    byModel: {},
   };
 
   private constructor() {}
@@ -217,6 +219,16 @@ class SessionManager {
     if (estimated) {
       this.sessionUsage.costEstimated = true;
     }
+
+    // Per-model totals by kind, for the loop's cost counter. Usage that
+    // names no model (a worker's or a wave's) is kept under "unattributed",
+    // which has no price, so the counter says unknown instead of undercounting
+    this.sessionUsage.byModel = addRequestUsage(
+      { ...this.sessionUsage, totalCost: 0 },
+      provider ?? "unattributed",
+      model ?? "unattributed",
+      usage,
+    ).byModel;
 
     // Accumulate token counts
     const processedInput =

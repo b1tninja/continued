@@ -91,7 +91,7 @@ describe("itemBudgetStatusOf", () => {
     });
   });
 
-  it("has no limit without a budget, and ignores a dollar amount", () => {
+  it("has no limit without a budget, and no dollar limit without a cost (see loopCost.vitest.ts)", () => {
     expect(itemBudgetStatusOf(undefined, use(999, 9e9, 999))).toEqual({
       state: "ok",
     });

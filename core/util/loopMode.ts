@@ -5,6 +5,7 @@ import type {
   LoopBlocker,
   LoopBudget,
   LoopCheckResult,
+  LoopCostMark,
   LoopItemModel,
   LoopItemState,
   LoopItemStatus,
@@ -40,6 +41,8 @@ import {
 } from "./loopReminders.js";
 import { TASK_LIST_BLOCK_CLOSE, TASK_LIST_BLOCK_OPEN } from "./taskPlan.js";
 import { describeBreach } from "./itemBudget";
+import { addCost } from "./costOf";
+import { costSince } from "./loopCost";
 
 /**
  * Loop mode: build a plan item by item without the person driving each step.
@@ -594,6 +597,8 @@ export interface LoopContext {
   now: Date;
   /** Prompt plus completion tokens the session has used so far */
   sessionTokens: number;
+  /** The session's per-model totals now (costMarkOf), for the cost counter */
+  costMark?: LoopCostMark;
 }
 
 const OPEN_STATUSES: LoopItemStatus[] = ["pending", "redo"];
@@ -701,6 +706,8 @@ export function createLoop(
   options: {
     now: Date;
     sessionTokens: number;
+    /** The session's per-model totals now (costMarkOf), for the cost counter */
+    costMark?: LoopCostMark;
     budget?: Partial<LoopBudget>;
     /** Default auto. Superseded by `policy`. */
     autonomy?: LoopAutonomy;
@@ -732,6 +739,7 @@ export function createLoop(
     round: 1,
     startedAt: iso(options.now),
     tokensAtStart: options.sessionTokens,
+    ...(options.costMark ? { costAtStart: options.costMark } : {}),
     budget: {
       ...LOOP_AUTONOMY[autonomy ?? "auto"].budget,
       ...options.budget,
@@ -1154,6 +1162,7 @@ export function resumeLoop(
     stopDetail: undefined,
     startedAt: iso(ctx.now),
     tokensAtStart: ctx.sessionTokens,
+    costAtStart: ctx.costMark,
     noProgressRounds: 0,
     consecutiveFailures: 0,
     waitingSince: undefined,
@@ -1440,6 +1449,8 @@ export function startItemRun(
     model?: LoopItemModel;
     /** The session's token total now, to count what this run uses */
     sessionTokens?: number;
+    /** The session's per-model totals now, to price this run */
+    costMark?: LoopCostMark;
   } = {},
 ): LoopState {
   const state = itemState(loop, itemId);
@@ -1460,6 +1471,7 @@ export function startItemRun(
       ...(options.sessionTokens !== undefined
         ? { tokensAtStart: options.sessionTokens }
         : {}),
+      ...(options.costMark ? { costAtStart: options.costMark } : {}),
     },
   };
 }
@@ -1468,14 +1480,26 @@ export function startItemRun(
 function addItemUsage(
   loop: LoopState,
   itemId: string,
-  add: { tokens?: number; ms?: number },
+  add: { tokens?: number; ms?: number; cost?: number | "unknown" },
 ): LoopState {
   if (add.tokens === undefined && add.ms === undefined) return loop;
   const prev = itemState(loop, itemId)?.usage;
+  // Cost: a measured run adds to what was measured; a run with tokens and no
+  // cost makes a measured total unknown, never silently incomplete
+  let cost = prev?.cost;
+  if (add.cost !== undefined) {
+    cost = addCost(
+      prev?.cost ?? ((prev?.tokens ?? 0) > 0 ? "unknown" : 0),
+      add.cost,
+    );
+  } else if ((add.tokens ?? 0) > 0 && cost !== undefined) {
+    cost = "unknown";
+  }
   return withItem(loop, itemId, {
     usage: {
       tokens: (prev?.tokens ?? 0) + Math.max(0, add.tokens ?? 0),
       ms: (prev?.ms ?? 0) + Math.max(0, add.ms ?? 0),
+      ...(cost !== undefined ? { cost } : {}),
     },
   });
 }
@@ -1727,7 +1751,13 @@ export function finishItemRun(
    * `sessionTokens` and `now` the run's tokens and time are added to the
    * item's usage.
    */
-  options: { check?: string; sessionTokens?: number; now?: Date } = {},
+  options: {
+    check?: string;
+    sessionTokens?: number;
+    now?: Date;
+    /** The session's per-model totals now, to price the run */
+    costMark?: LoopCostMark;
+  } = {},
 ): LoopState {
   const current = loop.current;
   const itemId = current?.itemId;
@@ -1751,6 +1781,9 @@ export function finishItemRun(
         : undefined,
     ms: options.now
       ? options.now.getTime() - new Date(current.startedAt).getTime()
+      : undefined,
+    cost: options.costMark
+      ? costSince(current.costAtStart, options.costMark).amount
       : undefined,
   });
 }

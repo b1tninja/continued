@@ -24,6 +24,8 @@ import {
   maxRoundsForReplan,
   unmetDependencies,
 } from "core/util/loopMode";
+import { formatCostAmount } from "core/util/costOf";
+import { costMarkOf, dollarBudgetNote, itemCostNow } from "core/util/loopCost";
 import {
   describeRoundUsage,
   describeTimeUsage,
@@ -103,7 +105,7 @@ function CheckLine({
   return (
     <div
       data-testid={`loop-check-${task.id}`}
-      className="ml-3 min-w-0 text-2xs text-description-muted"
+      className="text-2xs text-description-muted ml-3 min-w-0"
     >
       <div className="truncate" title={task.check ?? check?.command}>
         check: <code>{task.check ?? check?.command}</code>
@@ -123,7 +125,7 @@ function CheckLine({
       {check?.status === "failed" && check.output && (
         <pre
           data-testid={`loop-check-output-${task.id}`}
-          className="m-0 max-h-16 overflow-auto break-words whitespace-pre-wrap"
+          className="m-0 max-h-16 overflow-auto whitespace-pre-wrap break-words"
         >
           {check.output.trim()}
         </pre>
@@ -138,7 +140,7 @@ function FilesLine({ task }: { task: TaskItem }) {
   return (
     <div
       data-testid={`loop-files-${task.id}`}
-      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
+      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
       title="The files this item changes; items with disjoint files may run at the same time"
     >
       files: <code>{task.files.join(", ")}</code>
@@ -162,7 +164,7 @@ function WorkerLine({
   return (
     <div
       data-testid={`loop-worker-${task.id}`}
-      className="ml-3 flex min-w-0 items-center gap-1 text-2xs text-description-muted"
+      className="text-2xs text-description-muted ml-3 flex min-w-0 items-center gap-1"
     >
       <span className="min-w-0 flex-1 truncate" title={run.worktree}>
         in its own worktree{run.worktree ? `: ${run.worktree}` : ""}
@@ -190,7 +192,7 @@ function ModelLine({ task, model }: { task: TaskItem; model?: LoopItemModel }) {
   return (
     <div
       data-testid={`loop-model-${task.id}`}
-      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
+      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
       title={model?.fallbackReason ?? "The model this item runs with"}
     >
       model: {task.model}
@@ -214,10 +216,13 @@ function ModelLine({ task, model }: { task: TaskItem; model?: LoopItemModel }) {
 function BudgetLine({
   task,
   state,
+  loop,
 }: {
   task: TaskItem;
   state: LoopState["items"][number];
+  loop: LoopState;
 }) {
+  const sessionUsage = useAppSelector((s) => s.session.usage);
   const budget = task.budget;
   if (!budget && !state.overBudget) return null;
   const parts: string[] = [];
@@ -234,10 +239,18 @@ function BudgetLine({
     );
   }
   if (budget?.turns !== undefined) parts.push(`${budget.turns} turns a run`);
+  const cost = itemCostNow(loop, task.id, costMarkOf(sessionUsage));
+  if (budget?.usd !== undefined && typeof cost === "number") {
+    parts.push(
+      `${formatCostAmount(cost)} of ${formatCostAmount(budget.usd)}, ${formatCostAmount(Math.max(0, budget.usd - cost))} left`,
+    );
+  }
+  const costNote = dollarBudgetNote(budget, cost);
+  if (costNote) parts.push(costNote);
   return (
     <div
       data-testid={`loop-budget-${task.id}`}
-      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
+      className="text-2xs text-description-muted ml-3 min-w-0 truncate"
       title="The item's own budget and what is left of it"
     >
       budget: {parts.join(" · ")}
@@ -278,10 +291,10 @@ function UsageMeter({
   return (
     <div
       data-testid={testId}
-      className="flex min-w-0 items-center gap-1 text-description"
+      className="text-description flex min-w-0 items-center gap-1"
     >
       <span className="w-12 shrink-0">{label}</span>
-      <span className="h-1 w-16 shrink-0 overflow-hidden rounded bg-input">
+      <span className="bg-input h-1 w-16 shrink-0 overflow-hidden rounded">
         <span
           className={`block h-full ${tone}`}
           style={{ width: `${Math.round((fraction ?? 0) * 100)}%` }}
@@ -307,6 +320,7 @@ function LoopUsagePanel({ loop }: { loop: LoopState }) {
   }, [loop.status]);
   const u = loopUsage(loop, {
     sessionTokens: sessionUsage ? loopTokensFromUsage(sessionUsage) : 0,
+    costMark: costMarkOf(sessionUsage),
     now,
   });
   return (
@@ -329,6 +343,13 @@ function LoopUsagePanel({ loop }: { loop: LoopState }) {
         fraction={u.time.fraction}
         text={describeTimeUsage(u.time)}
       />
+      <div
+        data-testid="loop-usage-cost"
+        className="text-description-muted"
+        title="An estimate at list price, from the session's usage by model"
+      >
+        Cost: {formatCostAmount(u.cost)}
+      </div>
       <div data-testid="loop-usage-totals" className="text-description-muted">
         {u.items.done}/{u.items.total} done · {u.runs} run
         {u.runs === 1 ? "" : "s"}
@@ -385,7 +406,7 @@ export function LoopControls({
   const replan = loopReplanSetting(loop);
 
   return (
-    <details data-testid="loop-controls" open className="mt-1 text-description">
+    <details data-testid="loop-controls" open className="text-description mt-1">
       <summary className="cursor-pointer">
         Plan and limits · {describeLoopReplan(loop)}
       </summary>
@@ -410,28 +431,32 @@ export function LoopControls({
                   data-testid={`loop-item-${task.id}`}
                   className="flex min-w-0 items-center gap-1"
                 >
-                  <span className="min-w-0 flex-1 truncate text-foreground">
+                  <span className="text-foreground min-w-0 flex-1 truncate">
                     {task.id}. {task.text}
                   </span>
                   {dependency && (
                     <span
                       data-testid={`loop-after-${task.id}`}
-                      className="shrink-0 text-description-muted"
+                      className="text-description-muted shrink-0"
                     >
                       {dependency}
                     </span>
                   )}
-                  <span className="shrink-0 text-description-muted">
+                  <span className="text-description-muted shrink-0">
                     {statusLabel(loop, task.id)}
                   </span>
                   {showUsage && state.attempts > 0 && (
                     <span
                       data-testid={`loop-runs-${task.id}`}
-                      className="shrink-0 text-description-muted"
+                      className="text-description-muted shrink-0"
                     >
                       {state.attempts} run{state.attempts === 1 ? "" : "s"}
                       {state.usage
-                        ? ` · ${formatTokenCount(state.usage.tokens)} tokens · ${formatDuration(state.usage.ms)}`
+                        ? ` · ${formatTokenCount(state.usage.tokens)} tokens${
+                            state.usage.cost !== undefined
+                              ? ` · ${formatCostAmount(state.usage.cost)}`
+                              : ""
+                          } · ${formatDuration(state.usage.ms)}`
                         : ""}
                     </span>
                   )}
@@ -471,7 +496,7 @@ export function LoopControls({
                 )}
                 <CheckLine task={task} check={state.check} />
                 <FilesLine task={task} />
-                <BudgetLine task={task} state={state} />
+                <BudgetLine task={task} state={state} loop={loop} />
                 <ModelLine task={task} model={state.model} />
               </li>
             );
@@ -492,7 +517,7 @@ export function LoopControls({
                   : { kind },
               );
             }}
-            className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+            className="border-border bg-input text-foreground cursor-pointer rounded border border-solid px-1 text-xs"
           >
             <option value="never">never</option>
             <option value="up_to">up to N times</option>
@@ -518,7 +543,7 @@ export function LoopControls({
           data-testid="loop-budget-toggle"
           aria-expanded={budgetOpen}
           title={describeLoopBudget(loop.budget)}
-          className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+          className="text-link shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs hover:underline"
           onClick={() => {
             if (budgetOpen) setDraft(draftOf(loop));
             setBudgetOpen(!budgetOpen);
@@ -565,7 +590,7 @@ export function LoopControls({
                   setLimitPolicyThunk(e.target.value as LimitPolicy),
                 )
               }
-              className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+              className="border-border bg-input text-foreground cursor-pointer rounded border border-solid px-1 text-xs"
             >
               {LIMIT_POLICIES.map((policy) => (
                 <option key={policy} value={policy}>
@@ -603,7 +628,7 @@ export function LoopControls({
         <div
           role="alert"
           data-testid="loop-controls-error"
-          className="mt-0.5 break-words text-error"
+          className="text-error mt-0.5 break-words"
         >
           {error}
         </div>

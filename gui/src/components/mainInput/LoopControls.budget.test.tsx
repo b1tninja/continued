@@ -79,6 +79,74 @@ describe("LoopControls and per-item budgets", () => {
     );
   });
 
+  it("shows an item's cost beside its tokens, and its dollar budget when the cost is known", async () => {
+    const withUsd = {
+      ...PLAN,
+      items: [{ ...PLAN.items[0], budget: { usd: 1 } }, PLAN.items[1]],
+    };
+    const loop: LoopState = createLoop(withUsd, {
+      now: NOW,
+      sessionTokens: 0,
+      costMark: {},
+    });
+    loop.items = loop.items.map((i) =>
+      i.id === "1"
+        ? {
+            ...i,
+            attempts: 1,
+            usage: { tokens: 4_000, ms: 60_000, cost: 0.25 },
+          }
+        : i,
+    );
+    const ideMessenger = new MockIdeMessenger();
+    const store = setupStore({ ideMessenger });
+    await renderWithProviders(<LoopControls loop={loop} taskPlan={withUsd} />, {
+      store,
+      mockIdeMessenger: ideMessenger,
+    });
+    store.dispatch(setLoop(loop));
+    expect(screen.getByTestId("loop-runs-1").textContent).toContain(
+      "4K tokens · $0.25 · 1m",
+    );
+    expect(screen.getByTestId("loop-budget-1").textContent).toContain(
+      "$0.25 of $1.00, $0.75 left",
+    );
+  });
+
+  it("says the dollar budget is not enforced when the cost is unknown", async () => {
+    const withUsd = {
+      ...PLAN,
+      items: [{ ...PLAN.items[0], budget: { usd: 1 } }, PLAN.items[1]],
+    };
+    const loop: LoopState = createLoop(withUsd, {
+      now: NOW,
+      sessionTokens: 0,
+      costMark: {},
+    });
+    loop.items = loop.items.map((i) =>
+      i.id === "1"
+        ? {
+            ...i,
+            attempts: 1,
+            usage: { tokens: 4_000, ms: 60_000, cost: "unknown" as const },
+          }
+        : i,
+    );
+    const ideMessenger = new MockIdeMessenger();
+    const store = setupStore({ ideMessenger });
+    await renderWithProviders(<LoopControls loop={loop} taskPlan={withUsd} />, {
+      store,
+      mockIdeMessenger: ideMessenger,
+    });
+    store.dispatch(setLoop(loop));
+    expect(screen.getByTestId("loop-runs-1").textContent).toContain(
+      "cost unknown",
+    );
+    expect(screen.getByTestId("loop-budget-1").textContent).toContain(
+      "cost unknown for this model; dollar budget not enforced",
+    );
+  });
+
   it("offers the limit policy inside the budget panel, defaulting by level", async () => {
     await render();
     expect(screen.queryByTestId("loop-limit-policy")).toBeNull();

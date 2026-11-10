@@ -66,6 +66,10 @@ export const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
   "claude-opus-5": anthropicPricing(5, 25),
   // Fable and Mythos: $10 / $50, 5m write 1.25x, 1h write 2x. Reads are 0.025x
   // on the 5.1 releases and 0.1x on 5 (pricing page, checked 2026-11-04).
+  // Fable and Mythos 5.2: $8 / $40, reads 0.025x ($0.20), 5m write $10, 1h write
+  // $16 (platform.claude.com/docs/en/about-claude/pricing, read 2026-11-10).
+  "claude-fable-5-2": anthropicPricing(8, 40, 0.025),
+  "claude-mythos-5-2": anthropicPricing(8, 40, 0.025),
   "claude-fable-5-1": anthropicPricing(10, 50, 0.025),
   "claude-fable-5": anthropicPricing(10, 50),
   "claude-mythos-5-1": anthropicPricing(10, 50, 0.025),

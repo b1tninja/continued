@@ -47,6 +47,7 @@ import {
   pendingSteerIds,
   planFileDisplayPath,
   planFilePath,
+  sessionCostMark,
   sessionTokens,
   prepareLoopTurn,
 } from "./loopSession.js";
@@ -168,6 +169,7 @@ function finishRun(
       finishItemRun(loop, loop.current.report, {
         check,
         sessionTokens: sessionTokens(),
+        costMark: sessionCostMark(),
         now: new Date(),
       }),
       delivered,
@@ -279,6 +281,7 @@ export function nextLoopTurn(
         loop = startItemRun(prepared.loop, action.itemId, historyLength, now, {
           model: loopItemModelRecord(item.model),
           sessionTokens: sessionTokens(),
+          costMark: sessionCostMark(),
         });
         enterItemMode();
         commitLoop(loop);

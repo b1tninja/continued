@@ -3,7 +3,7 @@ import {
   itemBudgetNoteDue,
   itemBudgetStatus,
   overBudgetReport,
-  type BudgetKind,
+  type BreachKind,
   type ItemBudgetBreach,
 } from "core/util/itemBudget.js";
 import { loopBudgetStop, stopLoop } from "core/util/loopMode.js";
@@ -14,6 +14,7 @@ import { getSessionLoop, getSessionTaskPlan } from "../session.js";
 import {
   CLI_LOOP_TOOL_NAMES,
   commitLoop,
+  sessionCostMark,
   sessionTokens,
 } from "./loopSession.js";
 
@@ -90,7 +91,7 @@ export function itemRunTurns(loop: LoopState): number {
 function runningItemStatus(
   loop: LoopState,
   now: Date,
-  told?: readonly BudgetKind[],
+  told?: readonly BreachKind[],
 ) {
   const current = loop.current;
   if (!current || current.kind !== "item" || current.report) return undefined;
@@ -98,6 +99,7 @@ function runningItemStatus(
   if (!item?.budget) return undefined;
   return itemBudgetStatus(loop, item, {
     sessionTokens: sessionTokens(),
+    costMark: sessionCostMark(),
     now,
     turns: itemRunTurns(loop),
     told,

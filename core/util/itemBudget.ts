@@ -1,12 +1,14 @@
-import type { LoopState, TaskItem } from "..";
+import type { LoopCostMark, LoopState, TaskItem } from "..";
+import { itemCostNow } from "./loopCost";
 
 /**
  * A to-do's own budget (plans/loop-budgets.md, "Budgets per task"): how much
  * of the loop's turns, tokens and time one item may use. Written in the plan
  * file as `budget: 25 turns, 200K tokens, 20 min, $0.60`.
  *
- * Turns, tokens and minutes are enforced. A dollar amount is parsed and kept
- * but not enforced: the loop has no cost counter yet.
+ * Turns, tokens, minutes and dollars are enforced. A dollar limit is enforced
+ * only while the item's cost is known (core/util/loopCost.ts): for a model
+ * with no price it cannot be, and the host says so (dollarBudgetNote).
  */
 export interface ItemBudget {
   /** Model requests in one run of the item */
@@ -15,11 +17,13 @@ export interface ItemBudget {
   tokens?: number;
   /** Wall time over all the item's runs */
   minutes?: number;
-  /** Carried, not enforced */
+  /** USD over all the item's runs; enforced only when the cost is known */
   usd?: number;
 }
 
 export type BudgetKind = "turns" | "tokens" | "minutes";
+/** A limit that can be breached: the three counted ones and dollars. */
+export type BreachKind = BudgetKind | "usd";
 
 const SCALE: Record<string, number> = { k: 1_000, m: 1_000_000 };
 
@@ -104,17 +108,19 @@ export interface ItemUse {
   turns: number;
   tokens: number;
   ms: number;
+  /** USD so far, or "unknown"; undefined: not measured. Neither is enforced. */
+  usd?: number | "unknown";
 }
 
 export interface ItemBudgetBreach {
-  which: BudgetKind;
+  which: BreachKind;
   used: number;
   limit: number;
 }
 
 export type ItemBudgetStatus =
   | { state: "ok" }
-  | { state: "warn80"; which: BudgetKind; used: number; limit: number }
+  | { state: "warn80"; which: BreachKind; used: number; limit: number }
   | ({ state: "over" } & ItemBudgetBreach);
 
 const WARN_AT = 0.8;
@@ -128,14 +134,16 @@ export function itemBudgetStatusOf(
   budget: ItemBudget | undefined,
   use: ItemUse,
   /** Limits the run was already warned about: they give no further warning */
-  told?: readonly BudgetKind[],
+  told?: readonly BreachKind[],
 ): ItemBudgetStatus {
   if (!budget) return { state: "ok" };
-  const limits: Array<[BudgetKind, number | undefined, number]> = [
+  const limits: Array<[BreachKind, number | undefined, number]> = [
     ["turns", budget.turns, use.turns],
     ["tokens", budget.tokens, use.tokens],
     ["minutes", budget.minutes, use.ms / 60_000],
   ];
+  // A dollar limit counts only a known cost: unknown is never zero
+  if (typeof use.usd === "number") limits.push(["usd", budget.usd, use.usd]);
   let warn: ItemBudgetStatus = { state: "ok" };
   for (const [which, limit, used] of limits) {
     if (limit === undefined) continue;
@@ -160,7 +168,13 @@ export function itemBudgetStatusOf(
 export function itemUseNow(
   loop: LoopState,
   itemId: string,
-  ctx: { sessionTokens: number; now: Date; turns: number },
+  ctx: {
+    sessionTokens: number;
+    now: Date;
+    turns: number;
+    /** The session's per-model totals now (costMarkOf), to price the item */
+    costMark?: LoopCostMark;
+  },
 ): ItemUse {
   const earlier = loop.items.find((i) => i.id === itemId)?.usage;
   const current = loop.current;
@@ -173,6 +187,7 @@ export function itemUseNow(
       (running?.tokensAtStart !== undefined
         ? Math.max(0, ctx.sessionTokens - running.tokensAtStart)
         : 0),
+    ...(ctx.costMark ? { usd: itemCostNow(loop, itemId, ctx.costMark) } : {}),
     ms:
       (earlier?.ms ?? 0) +
       (running
@@ -189,8 +204,9 @@ export function itemBudgetStatus(
     sessionTokens: number;
     now: Date;
     turns: number;
+    costMark?: LoopCostMark;
     /** Limits already warned about in this run (LoopState.current.budgetWarned) */
-    told?: readonly BudgetKind[];
+    told?: readonly BreachKind[];
   },
 ): ItemBudgetStatus {
   return itemBudgetStatusOf(
@@ -202,6 +218,9 @@ export function itemBudgetStatus(
 
 /** "turns" / "tokens" / "minutes" figures as a person reads them. */
 export function describeBreach(b: ItemBudgetBreach): string {
+  if (b.which === "usd") {
+    return `used $${b.used.toFixed(2)} of its $${b.limit.toFixed(2)} cost budget`;
+  }
   const used =
     b.which === "minutes" ? Math.round(b.used * 10) / 10 : Math.round(b.used);
   return `used ${used.toLocaleString("en-US")} of its ${b.limit.toLocaleString("en-US")} ${b.which}`;
@@ -225,9 +244,12 @@ export function overBudgetReport(b: ItemBudgetBreach): {
  * prefix is unchanged. `finishTool` is the host's name for finish_item.
  */
 export function itemBudgetNote(
-  w: { which: BudgetKind; used: number; limit: number },
+  w: { which: BreachKind; used: number; limit: number },
   finishTool = "finish_item",
 ): string {
+  if (w.which === "usd") {
+    return `Note: this item has used 80% of its cost budget ($${w.used.toFixed(2)} of $${w.limit.toFixed(2)}). Finish it, or say what is left and call ${finishTool} with outcome \`later\`.`;
+  }
   const unit = w.which === "minutes" ? "time" : w.which;
   const used =
     w.which === "minutes" ? Math.round(w.used * 10) / 10 : Math.round(w.used);
@@ -242,7 +264,7 @@ export function itemBudgetNote(
 export function itemBudgetNoteDue(
   status: ItemBudgetStatus,
   finishTool?: string,
-): { kind: BudgetKind; note: string } | undefined {
+): { kind: BreachKind; note: string } | undefined {
   if (status.state !== "warn80") return undefined;
   return { kind: status.which, note: itemBudgetNote(status, finishTool) };
 }
