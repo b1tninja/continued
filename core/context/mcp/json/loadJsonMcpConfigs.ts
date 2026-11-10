@@ -3,6 +3,7 @@ import {
   claudeDesktopLikeConfigFileSchema,
   ConfigValidationError,
   convertJsonMcpConfigToYamlMcpConfig,
+  decodeFQSN,
   McpJsonConfig,
   mcpServersJsonSchema,
   RequestOptions,
@@ -20,6 +21,11 @@ import { deduplicateArray } from "../../../util";
 import { getGlobalFolderWithName } from "../../../util/paths";
 import { localPathToUri } from "../../../util/pathToUri";
 import { getUriPathBasename, joinPathsToUri } from "../../../util/uri";
+import { LocalPlatformClient } from "../../../config/yaml/LocalPlatformClient";
+import {
+  isWorkspaceMcpSource,
+  scopeIsTrusted,
+} from "../../../config/projectTrust";
 import { WORKSPACE_DIRS } from "../../../util/workspaceDirs";
 
 /**
@@ -199,9 +205,70 @@ export async function loadJsonMcpConfigs(
       globalRequestOptions,
     );
   });
-  // Parse and convert files
+  await renderJsonMcpSecrets(ide, mcpServers, workspaceDirs);
+
   return {
     mcpServers,
     errors,
   };
+}
+
+const SECRET_TEMPLATE = /\$\{\{\s*secrets\.([A-Za-z0-9_./-]+)\s*\}\}/g;
+
+/** Fill `${{ secrets.NAME }}` left by the JSON-to-YAML env conversion. */
+export async function renderSecretTemplate(
+  value: string,
+  client: LocalPlatformClient,
+): Promise<string> {
+  const names = [...value.matchAll(SECRET_TEMPLATE)].map((match) => match[1]);
+  if (names.length === 0) return value;
+  const results = await client.resolveFQSNs(
+    names.map((name) => {
+      try {
+        return decodeFQSN(name);
+      } catch {
+        return { packageSlugs: [], secretName: name };
+      }
+    }),
+  );
+  let rendered = value;
+  for (const result of results) {
+    if (!result || !("value" in result)) continue;
+    rendered = rendered.replace(
+      new RegExp(
+        `\\$\\{\\{\\s*secrets\\.${result.fqsn.secretName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\}\\}`,
+        "g",
+      ),
+      result.value,
+    );
+  }
+  return rendered;
+}
+
+/**
+ * User MCP JSON files get secret values. A folder file gets them only after
+ * that folder is trusted; until then the template is left for the trust gate
+ * to drop.
+ */
+async function renderJsonMcpSecrets(
+  ide: IDE,
+  servers: InternalMcpOptions[],
+  workspaceDirs: string[],
+): Promise<void> {
+  const client = new LocalPlatformClient(ide);
+  for (const server of servers) {
+    if (!("env" in server) || !server.env) continue;
+    const dir = workspaceDirs.find((candidate) =>
+      isWorkspaceMcpSource(server.sourceFile, [candidate]),
+    );
+    if (dir) {
+      const trusted = await scopeIsTrusted(ide, dir, "mcp");
+      if (!trusted) continue;
+    }
+    const rendered: Record<string, string> = {};
+    for (const [key, value] of Object.entries(server.env)) {
+      rendered[key] = await renderSecretTemplate(value, client);
+    }
+    server.env = rendered;
+  }
 }
