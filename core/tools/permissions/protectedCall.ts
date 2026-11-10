@@ -43,6 +43,8 @@ export function protectedCommandHit(
   home: string = os.homedir(),
   /** Kinds the person switched off (built-in rules by id) */
   skip: readonly ProtectedKind[] = [],
+  /** Directory the command runs in, so a relative path can be recognised. */
+  cwd?: string,
 ): ProtectedHit | undefined {
   const { list, truncated } = commandCandidateSet(command);
   // The cap dropped part of the command. A secret in the missing part would
@@ -58,7 +60,7 @@ export function protectedCommandHit(
   );
   for (const word of pathWords(list)) {
     const hit = pathKinds.length
-      ? protectedPathHit(word, pathKinds, home)
+      ? protectedPathHit(word, pathKinds, home, cwd)
       : undefined;
     if (hit) return hit;
   }
@@ -102,6 +104,8 @@ export function findProtected(args: {
   parsedArgs: Record<string, unknown>;
   resolvedPath?: string;
   home?: string;
+  /** Directory the call runs in. Relative paths are resolved against it. */
+  cwd?: string;
   /** Kinds the person switched off (built-in rules by id) */
   skip?: readonly ProtectedKind[];
 }): ProtectedHit | undefined {
@@ -111,7 +115,9 @@ export function findProtected(args: {
 
   if (toolName === "run_terminal_command") {
     const command = str(parsedArgs.command);
-    return command ? protectedCommandHit(command, home, args.skip) : undefined;
+    return command
+      ? protectedCommandHit(command, home, args.skip, args.cwd)
+      : undefined;
   }
 
   let kinds: ProtectedKind[];
@@ -131,7 +137,7 @@ export function findProtected(args: {
   kinds = kinds.filter((k) => !args.skip?.includes(k));
   if (kinds.length === 0) return undefined;
   return (
-    protectedPathHit(written, kinds, home) ??
-    protectedPathHit(resolvedPath, kinds, home)
+    protectedPathHit(written, kinds, home, args.cwd) ??
+    protectedPathHit(resolvedPath, kinds, home, args.cwd)
   );
 }

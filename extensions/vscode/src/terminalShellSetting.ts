@@ -51,8 +51,11 @@ export function registerTerminalShellSetting(
 
   const apply = () => {
     const config = vscode.workspace.getConfiguration();
-    if (config.get<string>(SHELL) === "wsl") {
-      const distro = (config.get<string>(DISTRO) ?? "").trim();
+    // Machine settings. Only the user value is read, so a workspace
+    // .vscode/settings.json cannot choose where commands run.
+    const shell = config.inspect<string>(SHELL)?.globalValue;
+    if (shell === "wsl") {
+      const distro = (config.inspect<string>(DISTRO)?.globalValue ?? "").trim();
       setTerminalShellPreference(
         distro ? { kind: "wsl", distro } : { kind: "wsl" },
       );

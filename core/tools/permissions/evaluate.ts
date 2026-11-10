@@ -226,6 +226,7 @@ export function evaluateToolPolicyWithRules(
       parsedArgs,
       resolvedPath,
       skip: skippedProtections(input.approval),
+      cwd: input.cwd,
     }) ?? privateUrl;
 
   // The floor: deny rules the person wrote to bind even at YOLO

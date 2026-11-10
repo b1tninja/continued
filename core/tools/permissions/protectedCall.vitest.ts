@@ -69,6 +69,28 @@ describe("commands that mention a protected path", () => {
     });
   });
 
+  it("resolves a relative path against the working directory", () => {
+    const home = "/home/u";
+    const cwd = "/home/u/proj";
+    expect(
+      protectedCommandHit("cat ../.aws/credentials", home, [], cwd),
+    ).toMatchObject({ kind: "secret", path: "~/.aws/credentials" });
+    expect(
+      protectedCommandHit("head -50 ../.config/gh/hosts.yml", home, [], cwd),
+    ).toMatchObject({ kind: "secret" });
+    expect(
+      protectedCommandHit("cat ../.aws/credentials", home),
+    ).toBeUndefined();
+    expect(
+      findProtected({
+        toolName: "read_file",
+        parsedArgs: { filepath: "../.kube/config" },
+        home,
+        cwd,
+      })?.kind,
+    ).toBe("secret");
+  });
+
   it("known false positive: a command that only mentions the path", () => {
     // Same trade as deny rules: a missed secret read is worse than one extra ask.
     expect(cmd("echo .env")).toBe("secret");
@@ -78,6 +100,14 @@ describe("commands that mention a protected path", () => {
     const pad = Array.from({ length: 900 }, (_, i) => `f${i}`).join(" ");
     expect(cmd(`ls ${pad}; cat .env`)).toBe("secret");
     expect(cmd("ls README")).toBeUndefined();
+  });
+
+  it("does not treat a git revision as a Windows short name", () => {
+    expect(cmd("git diff HEAD~1")).toBeUndefined();
+    expect(
+      protectedCommandHit("git diff --stat HEAD~3", HOME, [], "/home/dev/shop"),
+    ).toBeUndefined();
+    expect(cmd("type GITHUB~1\\workflows\\x.yml")).toBe("secret");
   });
 
   it("known gap: a path hidden behind a variable, a glob or cd is not seen", () => {
