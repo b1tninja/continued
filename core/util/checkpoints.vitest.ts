@@ -368,6 +368,40 @@ describe("restore", () => {
     expect(ide.files.get(`${WS}/big.ts`)).toBe("small");
   });
 
+  it("keeps snapshots for files that failed to restore", () => {
+    const cps: TurnCheckpoint[] = [
+      {
+        turnId: "t1",
+        createdAt: 1,
+        files: [
+          { uri: "a", existed: true, content: "a0" },
+          { uri: "b", existed: true, content: "b0" },
+        ],
+      },
+      {
+        turnId: "t2",
+        createdAt: 2,
+        files: [{ uri: "a", existed: true, content: "a1" }],
+      },
+    ];
+    const kept = pruneCheckpointsFrom(
+      cps,
+      ["t1", "t2"],
+      "t1",
+      new Set(["b"]),
+    );
+    expect(kept).toEqual([
+      {
+        turnId: "t1",
+        createdAt: 1,
+        files: [{ uri: "b", existed: true, content: "b0" }],
+      },
+    ]);
+    expect(planRestore(kept, ["t1", "t2"], "t1")).toEqual([
+      { uri: "b", existed: true, content: "b0" },
+    ]);
+  });
+
   it("collects write failures instead of throwing", async () => {
     const ide = makeIde({ [`${WS}/a.ts`]: "v0" });
     const cps = await agentEdit(

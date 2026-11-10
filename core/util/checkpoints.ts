@@ -205,14 +205,29 @@ export function planRestore(
   return [...earliest.values()];
 }
 
-/** Checkpoints that remain valid after restoring to the target turn. */
+/**
+ * Checkpoints that remain valid after restoring to the target turn.
+ * `keepUris` are files that failed to restore: their snapshots stay so the
+ * person can try again. Everything else from the target turn onward is dropped.
+ */
 export function pruneCheckpointsFrom(
   checkpoints: TurnCheckpoint[],
   turnOrder: string[],
   targetTurnId: string,
+  keepUris?: ReadonlySet<string>,
 ): TurnCheckpoint[] {
   const start = firstAffectedIndex(checkpoints, turnOrder, targetTurnId);
-  return start === -1 ? checkpoints : checkpoints.slice(0, start);
+  if (start === -1) {
+    return checkpoints;
+  }
+  if (!keepUris || keepUris.size === 0) {
+    return checkpoints.slice(0, start);
+  }
+  const retained = checkpoints.slice(start).flatMap((turn) => {
+    const files = turn.files.filter((file) => keepUris.has(file.uri));
+    return files.length === 0 ? [] : [{ ...turn, files }];
+  });
+  return [...checkpoints.slice(0, start), ...retained];
 }
 
 export type RestoreAction =
