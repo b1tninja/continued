@@ -103,8 +103,7 @@ export function createWebFetch(requestOptions?: RequestOptions): WebFetch {
 
     for (;;) {
       const lookup = (init as { lookup?: unknown } | undefined)?.lookup as
-        | Parameters<typeof createAgentForUrl>[2]
-        | undefined;
+        Parameters<typeof createAgentForUrl>[2] | undefined;
       const { agent } = await createAgentForUrl(url, requestOptions, lookup);
       const response = await new Promise<Response>((resolve, reject) => {
         if (signal?.aborted) {

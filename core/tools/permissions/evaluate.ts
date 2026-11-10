@@ -89,9 +89,7 @@ export function evaluateToolPolicyWithRules(
   }
 
   const resolved = processedArgs?.resolvedPath as
-    | ResolvedPath
-    | null
-    | undefined;
+    ResolvedPath | null | undefined;
   const resolvedPath = resolved ? uriToPath(resolved.uri) : undefined;
 
   // Credentials and files that change what runs later always ask, with or

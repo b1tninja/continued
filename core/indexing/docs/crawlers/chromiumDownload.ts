@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { inflateRawSync } from "node:zlib";
 
 /**
@@ -205,18 +203,10 @@ export async function downloadVerifiedChromium(
     throw new Error(`Chromium download failed (${response.status})`);
   }
   fs.mkdirSync(installDir, { recursive: true });
-  const tmp = path.join(installDir, `.${build.archiveName}.partial`);
-  try {
-    await pipeline(
-      Readable.fromWeb(response.body as import("stream/web").ReadableStream),
-      fs.createWriteStream(tmp),
-    );
-    unpackVerifiedZip(fs.readFileSync(tmp), build.sha256, installDir);
-  } catch (error) {
-    if (fs.existsSync(tmp)) fs.rmSync(tmp, { force: true });
-    throw error;
-  }
-  fs.rmSync(tmp, { force: true });
+  // Buffer the archive before unpacking. The extension typecheck does not
+  // include Node's Readable.fromWeb, and the checksum is checked on these bytes.
+  const data = Buffer.from(await response.arrayBuffer());
+  unpackVerifiedZip(data, build.sha256, installDir);
   if (!fs.existsSync(executable)) {
     throw new Error("Chromium archive did not contain the expected executable");
   }
