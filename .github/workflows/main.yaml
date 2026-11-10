@@ -326,13 +326,15 @@ jobs:
           # skipped, so a re-run only adds the missing ones.
           for f in vsix-artifacts/*.vsix; do npx --yes @vscode/vsce@4.1.0 publish --oidc --skip-duplicate --packagePath "$f"; done
 
-  # Open VSX has no trusted publishing, so it keeps its token; skipped when the
-  # secret is not set.
+  # Open VSX has no trusted publishing, so it keeps a token. The token is a
+  # secret on the marketplace environment, and the job waits for that
+  # environment's approval. Skipped when the secret is not set.
   publish-openvsx:
     runs-on: ubuntu-latest
     needs:
       - build
-    if: (github.event_name != 'workflow_dispatch' || github.event.inputs.publish_build == 'true') && inputs.republish_run_id == ''
+    if: (github.event_name != 'workflow_dispatch' || github.event.inputs.publish_build == 'true') && inputs.republish_run_id == '' && github.repository == 'b1tninja/continuous'
+    environment: marketplace
     permissions:
       contents: read
     env:
@@ -347,6 +349,5 @@ jobs:
 
       - name: Publish to Open VSX Registry
         if: env.OVSX_PAT != ''
-        continue-on-error: true
         run: |
           for f in vsix-artifacts/*.vsix; do npx --yes ovsx@1.3.0 publish --packagePath "$f"; done
