@@ -66,11 +66,27 @@ describe("LlamaJsonRecovery against the corpus", () => {
     expect(live.filter((r) => r.outcome !== "pass")).toEqual([]);
   });
 
+  it("makes the integer of the Llama 3.3 call that sent a string (Q16, opt-in)", () => {
+    const live = report.results.filter(
+      (r) => r.fixture === "llama33-bedrock-json-integer-as-string",
+    );
+    expect(live.length).toBeGreaterThanOrEqual(3);
+    expect(live.filter((r) => r.outcome !== "pass")).toEqual([]);
+  });
+
   it("leaves the live replies that are not valid calls as text", () => {
     const refused = report.results.filter((r) =>
-      /integer-as-string|wrapped-values/.test(r.fixture),
+      /wrapped-values|^neg-llama-json-/.test(r.fixture),
     );
-    expect(refused.length).toBeGreaterThanOrEqual(6);
+    expect(refused.length).toBeGreaterThanOrEqual(15);
     expect(refused.filter((r) => r.outcome === "fail")).toEqual([]);
+  });
+
+  it("keeps the digits of a string parameter a string", () => {
+    const kept = report.results.filter(
+      (r) => r.fixture === "llama33-json-string-param-keeps-digits",
+    );
+    expect(kept.length).toBeGreaterThanOrEqual(3);
+    expect(kept.filter((r) => r.outcome !== "pass")).toEqual([]);
   });
 });

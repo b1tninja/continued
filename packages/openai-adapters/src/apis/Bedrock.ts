@@ -925,8 +925,9 @@ export class BedrockApi implements BaseLlmApi {
     input: ConverseStreamCommandInput,
     signal: AbortSignal,
     fallbackModelId: string | undefined,
-    model: string,
+    body: ChatCompletionCreateParams,
   ): AsyncGenerator<ChatCompletionChunk> {
+    const model = body.model;
     const response = await this.sendConverse(
       client,
       input,
@@ -948,6 +949,7 @@ export class BedrockApi implements BaseLlmApi {
             model,
             cleaned.content,
             dialectToolsFromConverse(input.toolConfig),
+            body,
           )
         : undefined;
       if (cleaned && found) {
@@ -1133,7 +1135,7 @@ export class BedrockApi implements BaseLlmApi {
           { ...requestBody },
           signal,
           fallbackModelId,
-          body.model,
+          body,
         );
         return;
       }
@@ -1157,7 +1159,7 @@ export class BedrockApi implements BaseLlmApi {
           { ...requestBody },
           signal,
           fallbackModelId,
-          body.model,
+          body,
         );
         return;
       }
@@ -1219,21 +1221,36 @@ export class BedrockApi implements BaseLlmApi {
           else yield chatChunk({ content: event.text, model: body.model, id });
         }
       };
+      // Answer text after the filters above: shown, or given to the recovery
+      // stage when there is one. The filters come first, as cleanReplyText
+      // does before recoverFromText on the whole-message path, so reasoning is
+      // never read as a call or shown as the answer.
+      const answerChunks = function* (
+        content: string,
+      ): Generator<ChatCompletionChunk> {
+        if (!content) return;
+        if (recovery) yield* recoveryChunks(recovery.push(content));
+        else yield chatChunk({ content, model: body.model, id });
+      };
+      const filteredChunks = function* (
+        split: ThinkingSplit,
+      ): Generator<ChatCompletionChunk> {
+        yield* splitChunks({ content: "", reasoning: split.reasoning });
+        yield* answerChunks(split.content);
+      };
       // Each toolUse block gets its own tool_calls index, so a reply with
       // several calls is not merged into one.
       let toolIndex = -1;
 
       for await (const chunk of response.stream) {
-        if (recovery && (chunk.contentBlockStop || chunk.messageStop)) {
-          yield* recoveryChunks(recovery.end());
-        }
-        if (dsmlHold && (chunk.contentBlockStop || chunk.messageStop)) {
-          const text = flushDsmlHold(dsmlHold);
-          dsmlHold = "";
-          if (text) yield chatChunk({ content: text, model: body.model, id });
-        }
-        if (thinkingTags && (chunk.contentBlockStop || chunk.messageStop)) {
-          yield* splitChunks(thinkingTags.flush());
+        if (chunk.contentBlockStop || chunk.messageStop) {
+          if (dsmlHold) {
+            const text = flushDsmlHold(dsmlHold);
+            dsmlHold = "";
+            yield* answerChunks(text);
+          }
+          if (thinkingTags) yield* filteredChunks(thinkingTags.flush());
+          if (recovery) yield* recoveryChunks(recovery.end());
         }
 
         if (chunk.contentBlockDelta?.delta) {
@@ -1247,21 +1264,8 @@ export class BedrockApi implements BaseLlmApi {
               dsmlHold = split.hold;
               text = split.emit;
             }
-            if (recovery) {
-              yield* recoveryChunks(recovery.push(text));
-              continue;
-            }
-            if (thinkingTags) {
-              yield* splitChunks(thinkingTags.push(text));
-              continue;
-            }
-            if (text) {
-              yield chatChunk({
-                content: text,
-                model: body.model,
-                id,
-              });
-            }
+            if (thinkingTags) yield* filteredChunks(thinkingTags.push(text));
+            else yield* answerChunks(text);
             continue;
           }
 

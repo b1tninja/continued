@@ -18,7 +18,7 @@
  * that holds one: double encoding is repaired once). The name is a declared
  * tool and the arguments fit its schema. Anything else stays text.
  */
-import { argumentsFit } from "./schemaCheck.js";
+import { fittedCall } from "./schemaCheck.js";
 import {
   HeldBlockRecovery,
   leadingThink,
@@ -73,8 +73,8 @@ function callFrom(
   if (!tool) return undefined;
   let args = value.arguments;
   if (typeof args === "string") args = parseJson(args);
-  if (!isObject(args) || !argumentsFit(tool, args)) return undefined;
-  return { name: tool.name, arguments: { ...args }, raw };
+  if (!isObject(args)) return undefined;
+  return fittedCall(tool, args, raw);
 }
 
 /** The calls in `text` when all of it is Hermes calls, else undefined. */

@@ -8,6 +8,14 @@ import { fileURLToPath } from "url";
 
 import YAML from "yaml";
 
+// The detector the CLI's leak notice uses (pure, no imports of its own). Node
+// 22.18 or newer runs it as it is; older Nodes need --experimental-strip-types.
+import {
+  ADVISORY_THRESHOLD,
+  classifyToolReply,
+} from "../../core/util/toolDialectDetect.ts";
+import { intervalOnly } from "./wilson.mjs";
+
 export const BENCH_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -173,36 +181,124 @@ const PYTHON_CALL_NAMES = [
   "grep_search",
 ];
 
-/** `Name(key=` at the start of a line: a call with keyword arguments. */
-const PYTHON_CALL = new RegExp(
-  String.raw`^(?:${PYTHON_CALL_NAMES.join("|")})\(\s*[A-Za-z_][A-Za-z0-9_]*\s*=`,
-  "m",
-);
+/**
+ * The text dialects the recovery stage has a parser for, in the order the
+ * adapters try them (packages/openai-adapters/src/dialects/recovery.ts): the
+ * values `--dialect` and CONTINUE_RECOVER_TEXT_TOOL_CALLS take, besides `off`.
+ * A test pins this list to the `toolDialect` config values.
+ */
+export const RECOVERY_DIALECTS = [
+  "qwen-xml",
+  "pythonic",
+  "llama-json",
+  "hermes-json",
+  "glm-xml",
+];
 
 /**
- * Whether a reply wrote a tool call as text: Qwen's `<tool_call>` and
- * `<function=` markup, JSON naming a tool, or a Python-syntax call at the
- * start of a line. A Python call inside a code fence is an example, not a
- * leak.
+ * Whether a `--dialect` value is acceptable: `off`, or a comma-separated list
+ * of recovery dialects, each optionally `force:`-prefixed (applies whatever
+ * the model is called). Returns the normalised value, or throws.
  */
-export function isTextLeak(text) {
-  if (
-    /<tool_?call|<function=|"name"\s*:\s*"(Write|Read|PresentPlan|FinishItem)"/.test(
-      text,
-    )
-  ) {
-    return true;
+export function parseDialectOption(value) {
+  const v = String(value).trim();
+  if (v === "off") return v;
+  const names = v.split(",").map((n) => n.trim());
+  const bad = names.filter(
+    (n) => !RECOVERY_DIALECTS.includes(n.replace(/^force:/, "")),
+  );
+  if (!names.length || bad.length) {
+    throw new Error(
+      `--dialect must be off or a comma-separated list of ${RECOVERY_DIALECTS.join(", ")} (optionally force:<name>); got ${bad.join(", ") || "nothing"}`,
+    );
   }
-  return PYTHON_CALL.test(text.replace(/```[\s\S]*?(```|$)/g, ""));
+  return names.join(",");
 }
 
-/** Assistant replies that wrote a tool call as text instead of making it. */
-export function textLeaks(history) {
+/**
+ * Tool names a model may write as a Python call: the CLI's own, their
+ * snake_case forms (Nova 2 Lite wrote `present_plan(...)` for `PresentPlan`,
+ * plans/ROADMAP.md H13) and the IDE's. Handed to the detector as the offered
+ * tools, which is what lets it trust a call expression.
+ */
+const KNOWN_TOOL_NAMES = [
+  "Write",
+  "Read",
+  "Edit",
+  "Bash",
+  "Grep",
+  "Glob",
+  "PresentPlan",
+  "FinishItem",
+  "present_plan",
+  "finish_item",
+  "read_file",
+  "write_file",
+  "create_new_file",
+  "edit_existing_file",
+  "run_terminal_command",
+  "grep_search",
+];
+
+/** A block that is a markdown indented code block: an example, not a call. */
+const isIndentedBlock = (block) =>
+  block.split("\n").every((l) => !l.trim() || /^(?: {4}|\t)/.test(l));
+
+/**
+ * How a reply wrote a tool call as text, by the detector the CLI's leak
+ * notice uses (core/util/toolDialectDetect.ts classifyToolReply): the dialect
+ * it recognised ("qwen-xml", "pythonic", "llama-json", "glm-xml", "dsml",
+ * "harmony" ...), or undefined when the reply is prose. Code fences and
+ * indented code blocks are examples and never count; a call after a blank
+ * line is found too, because the detector wants a call to be the whole of
+ * what it is given and a reply may say a sentence first.
+ */
+export function leakForm(text, knownTools = KNOWN_TOOL_NAMES) {
+  const body = String(text).replace(/```[\s\S]*?(```|$)/g, "");
+  const blocks = body.split(/\n\s*\n/).filter((b) => !isIndentedBlock(b));
+  for (const candidate of [body, ...blocks]) {
+    if (isIndentedBlock(candidate)) continue;
+    if (!candidate.trim()) continue;
+    const c = classifyToolReply({ content: candidate, knownTools });
+    if (
+      c.dialect !== "native-structured" &&
+      c.dialect !== "prose" &&
+      c.dialect !== "unknown" &&
+      c.confidence >= ADVISORY_THRESHOLD
+    ) {
+      return c.dialect;
+    }
+  }
+  return undefined;
+}
+
+/** Whether a reply wrote a tool call as text (see leakForm). */
+export function isTextLeak(text) {
+  return leakForm(text) !== undefined;
+}
+
+/**
+ * Assistant replies that wrote a tool call as text instead of making it. The
+ * tools the history itself called count as offered, besides the CLI's own.
+ */
+export function textLeakReplies(history) {
+  const called = toolCalls(history).map((tc) => nameOf(tc));
+  const known = [...new Set([...KNOWN_TOOL_NAMES, ...called])];
   return (history ?? [])
     .filter((i) => i.message?.role === "assistant")
     .map((i) => textOf(i.message))
-    .filter(isTextLeak)
-    .map((t) => t.slice(0, 200));
+    .map((text) => ({ text, form: leakForm(text, known) }))
+    .filter((r) => r.form);
+}
+
+/** The first 200 characters of each leaked reply. */
+export function textLeaks(history) {
+  return textLeakReplies(history).map((r) => r.text.slice(0, 200));
+}
+
+/** The dialect each leaked reply was classified as, in order. */
+export function textLeakForms(history) {
+  return textLeakReplies(history).map((r) => r.form);
 }
 
 /**
@@ -235,6 +331,7 @@ export function dialectArms(records) {
         dialect,
         n: 0,
         textLeaks: 0,
+        forms: {},
         runsWithLeak: 0,
         recovered: 0,
         runsWithRecovered: 0,
@@ -243,6 +340,7 @@ export function dialectArms(records) {
     }
     a.n++;
     a.textLeaks += r.textLeaks ?? 0;
+    for (const f of r.textLeakForms ?? []) a.forms[f] = (a.forms[f] ?? 0) + 1;
     a.recovered += r.recovered ?? 0;
     if (r.textLeaks) a.runsWithLeak++;
     if (r.recovered) a.runsWithRecovered++;
@@ -259,11 +357,15 @@ export function dialectArmsLines(records) {
   const arms = dialectArms(records);
   if (!arms.length) return [];
   return [
-    "| Model | Dialect | n (runs) | Leaked replies (runs with a leak) | Recovered calls (runs with one) |",
-    "|---|---|---|---|---|",
+    "| Model | Dialect | n (runs) | Leaked replies (runs with a leak, 95% Wilson interval) | Forms leaked | Recovered calls (runs with one, 95% Wilson interval) |",
+    "|---|---|---|---|---|---|",
     ...arms.map(
       (a) =>
-        `| ${a.modelRow} | ${a.dialect} | ${a.n} | ${a.textLeaks} (${a.runsWithLeak} of ${a.n}) | ${a.recovered} (${a.runsWithRecovered} of ${a.n}) |`,
+        `| ${a.modelRow} | ${a.dialect} | ${a.n} | ${a.textLeaks} (${a.runsWithLeak} of ${a.n}, ${intervalOnly(a.runsWithLeak, a.n)}) | ${
+          Object.entries(a.forms)
+            .map(([f, c]) => `${f} ${c}`)
+            .join(", ") || "none"
+        } | ${a.recovered} (${a.runsWithRecovered} of ${a.n}, ${intervalOnly(a.runsWithRecovered, a.n)}) |`,
     ),
   ];
 }
@@ -450,6 +552,7 @@ export function fillFromState(result, s, row) {
   result.nudges.cli = cliNudges(history);
   result.tools = tally(history);
   result.textLeaks = textLeaks(history);
+  result.textLeakForms = textLeakForms(history);
   result.recovered = recoveredCalls(history);
   result.perTurn = turnsOf(history, result.settings.maxTokens);
   result.truncations =

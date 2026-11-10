@@ -10,7 +10,11 @@
  * enable tools for families the live run proved; they never turn text
  * recovery on by themselves.
  */
-import type { ToolDialectSetting } from "@continuedev/config-yaml";
+import {
+  effectiveRecoverySetting,
+  recoverySettingAsks,
+  type ToolDialectSetting,
+} from "@continuedev/config-yaml";
 import { TOOL_DIALECT_PRESETS } from "./toolDialectPresetTable.js";
 
 /** The text a family writes when no server turns its calls into structured ones. */
@@ -150,10 +154,17 @@ export function describePreset(p: DialectPreset): string {
 /**
  * Whether tools are offered on Bedrock under the preset rule, or undefined
  * when the preset has no measured answer and the older name list decides.
+ * `with-recovery` families get tools when recovery is on for their dialect,
+ * judged from the same inputs recovery reads (`effectiveRecoverySetting`: the
+ * model's `toolDialect`, its extra body properties, and
+ * CONTINUE_RECOVER_TEXT_TOOL_CALLS, which wins), so a bench run that sets only
+ * the variable gets tools too.
  */
 export function presetBedrockTools(
   modelIdOrName: string,
   toolDialect?: ToolDialectSetting,
+  extraBody?: Record<string, unknown>,
+  env?: Record<string, string | undefined>,
 ): boolean | undefined {
   const preset = resolveToolDialectPreset(modelIdOrName);
   switch (preset?.bedrockTools) {
@@ -162,7 +173,13 @@ export function presetBedrockTools(
     case "no":
       return false;
     case "with-recovery":
-      return !!preset.recoverWith && toolDialect === preset.recoverWith;
+      return (
+        !!preset.recoverWith &&
+        recoverySettingAsks(
+          effectiveRecoverySetting(toolDialect, extraBody, env),
+          preset.recoverWith,
+        )
+      );
     default:
       return undefined;
   }

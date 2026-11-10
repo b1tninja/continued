@@ -3,16 +3,16 @@
   "id": "llama33-bedrock-json-integer-as-string",
   "family": "llama-3.x",
   "dialect": "llama-json",
-  "kind": "negative",
+  "kind": "positive",
   "failureMode": "argument-type-mismatch",
   "flag": "observed",
   "provenance": {
     "source": "Observed live on Bedrock Converse 2026-11-10, model us.meta.llama3-3-70b-instruct-v1:0",
     "retrieved": "2026-11-10",
     "reportDate": "2026-11-10",
-    "note": "Valid call shape, but timeout is the string \"10\" where the schema asks for an integer. Strict recovery refuses it and shows the text; recovering with the number 10 is a policy choice."
+    "note": "Valid call shape, but timeout is the string \"10\" where the schema asks for an integer. Recovery (which is opt-in) makes it the integer 10 and notes the repair, because the schema says integer and the string is an exact integer literal (coerceToSchema); ROADMAP Q16 is built behind recovery and the owner may veto, which would flip this back to a negative."
   },
-  "policy": "either",
+  "policy": "should",
   "tools": [
     {
       "name": "read_file",
@@ -168,53 +168,39 @@
       "splitInside": null
     },
     {
-      "label": "random-1-5",
+      "label": "fixed-7",
       "encoding": "utf8",
       "chunks": [
-        "{\"",
-        "type\"",
-        ": \"fu",
-        "ncti",
-        "on\",",
-        " \"n",
-        "am",
-        "e\": ",
-        "\"run_",
-        "c",
-        "omm",
-        "and",
-        "\", \"p",
-        "a",
-        "ram",
-        "ete",
-        "rs",
-        "\":",
-        " {\"co",
-        "mm",
-        "an",
-        "d\": \"",
-        "gr",
-        "ep",
-        " -r",
-        " ",
-        "T",
-        "OD",
-        "O",
-        " src",
-        "\",",
-        " \"",
-        "time",
-        "out",
-        "\"",
-        ": ",
-        "\"10",
-        "\"}}"
+        "{\"type\"",
+        ": \"func",
+        "tion\", ",
+        "\"name\":",
+        " \"run_c",
+        "ommand\"",
+        ", \"para",
+        "meters\"",
+        ": {\"com",
+        "mand\": ",
+        "\"grep -",
+        "r TODO ",
+        "src\", \"",
+        "timeout",
+        "\": \"10\"",
+        "}}"
       ],
       "splitInside": null
     }
   ],
   "expected": {
-    "calls": [],
-    "text": "{\"type\": \"function\", \"name\": \"run_command\", \"parameters\": {\"command\": \"grep -r TODO src\", \"timeout\": \"10\"}}"
+    "calls": [
+      {
+        "name": "run_command",
+        "arguments": {
+          "command": "grep -r TODO src",
+          "timeout": 10
+        }
+      }
+    ],
+    "text": ""
   }
 }

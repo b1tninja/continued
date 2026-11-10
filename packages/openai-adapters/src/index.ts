@@ -301,6 +301,7 @@ export {
   renderQwenXmlCall,
   type DialectTool,
   type RecoveredCall,
+  type RepairNote,
 } from "./dialects/qwenXml.js";
 export {
   LlamaJsonRecovery,

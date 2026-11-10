@@ -173,26 +173,61 @@ interface StreamTextState {
   dsmlHold: string;
   thinkingTags?: ThinkingTagSplitter;
   isNova2: boolean;
+  /**
+   * The recovery stage, when one is asked for. It sits after the filters
+   * above, as cleanReplyText comes before recoverFromText on the whole-message
+   * path, so reasoning is never read as a call or shown as the answer.
+   */
+  recovery?: TextToolRecovery;
+  recovered: RecoveredCall[];
 }
 
-function streamTextState(model: string): StreamTextState {
+function streamTextState(
+  model: string,
+  recovery?: TextToolRecovery,
+): StreamTextState {
   return {
     filterDsml: leaksDsmlMarker(model),
     dsmlHold: "",
     thinkingTags: createThinkingTagSplitter(model),
     isNova2: /nova-2-/i.test(model),
+    recovery,
+    recovered: [],
   };
 }
 
-function thinkingSplitMessages(split: ThinkingSplit): ChatMessage[] {
-  const out: ChatMessage[] = [];
+/** What a recovery stage returned: calls are kept, text is shown. */
+function* recoveryMessages(
+  events: ReturnType<TextToolRecovery["end"]>,
+  state: StreamTextState,
+): Generator<ChatMessage> {
+  for (const event of events) {
+    if (event.type === "call") state.recovered.push(event.call);
+    else yield { role: "assistant", content: event.text };
+  }
+}
+
+/** Filtered answer text: shown, or given to the recovery stage when there is one. */
+function* answerMessages(
+  text: string,
+  state: StreamTextState,
+): Generator<ChatMessage> {
+  if (!text) return;
+  if (state.recovery) {
+    yield* recoveryMessages(state.recovery.push(text), state);
+  } else {
+    yield { role: "assistant", content: text };
+  }
+}
+
+function* thinkingSplitMessages(
+  split: ThinkingSplit,
+  state: StreamTextState,
+): Generator<ChatMessage> {
   if (split.reasoning) {
-    out.push({ role: "thinking", content: split.reasoning });
+    yield { role: "thinking", content: split.reasoning };
   }
-  if (split.content) {
-    out.push({ role: "assistant", content: split.content });
-  }
-  return out;
+  yield* answerMessages(split.content, state);
 }
 
 /** Text held back by the filters, released when a block or the message ends. */
@@ -200,11 +235,12 @@ function* flushHeldText(state: StreamTextState): Generator<ChatMessage> {
   if (state.dsmlHold) {
     const text = flushDsmlHold(state.dsmlHold);
     state.dsmlHold = "";
-    if (text) yield { role: "assistant", content: text };
+    yield* answerMessages(text, state);
   }
   if (state.thinkingTags) {
-    yield* thinkingSplitMessages(state.thinkingTags.flush());
+    yield* thinkingSplitMessages(state.thinkingTags.flush(), state);
   }
+  if (state.recovery) yield* recoveryMessages(state.recovery.end(), state);
 }
 
 /** A call recovered from text, as the tool call message the stream would carry. */
@@ -238,9 +274,9 @@ function* deltaMessages(
       text = split.emit;
     }
     if (state.thinkingTags) {
-      yield* thinkingSplitMessages(state.thinkingTags.push(text));
-    } else if (text) {
-      yield { role: "assistant", content: text };
+      yield* thinkingSplitMessages(state.thinkingTags.push(text), state);
+    } else {
+      yield* answerMessages(text, state);
     }
     return;
   }
@@ -964,7 +1000,6 @@ class Bedrock extends BaseLLM {
       let usage: Usage | undefined;
       let stopReason: string | undefined;
       let latencyMs: number | undefined;
-      const state = streamTextState(options.model);
       // Off unless asked for (the CONTINUE_RECOVER_TEXT_TOOL_CALLS variable or
       // extraBodyProperties.x_continue_recover_text_tool_calls): calls the
       // model wrote as text are held until the reply ends and made only when
@@ -974,16 +1009,8 @@ class Bedrock extends BaseLLM {
         dialectToolsFromConverse(input.toolConfig),
         this._recoveryBody(),
       );
-      const recovered: RecoveredCall[] = [];
+      const state = streamTextState(options.model, recovery);
       let sawToolUse = false;
-      const recoveryMessages = function* (
-        events: ReturnType<TextToolRecovery["end"]>,
-      ): Generator<ChatMessage> {
-        for (const event of events) {
-          if (event.type === "call") recovered.push(event.call);
-          else yield { role: "assistant", content: event.text };
-        }
-      };
       for await (const chunk of response.stream) {
         if (chunk.metadata?.usage) {
           usage = bedrockUsageToUsage(chunk.metadata.usage);
@@ -996,22 +1023,9 @@ class Bedrock extends BaseLLM {
         }
         if (chunk.contentBlockStop || chunk.messageStop) {
           yield* flushHeldText(state);
-          if (recovery) yield* recoveryMessages(recovery.end());
         }
         if (chunk.contentBlockDelta?.delta) {
           const delta = chunk.contentBlockDelta.delta;
-          if (recovery && delta.text) {
-            // The DSML fragment is dropped before recovery sees the text, as
-            // it is on the path without recovery (deltaMessages).
-            let text = delta.text;
-            if (state.filterDsml) {
-              const split = holdBackDsmlMarker(state.dsmlHold + text);
-              state.dsmlHold = split.hold;
-              text = split.emit;
-            }
-            if (text) yield* recoveryMessages(recovery.push(text));
-            continue;
-          }
           yield* deltaMessages(delta, state);
           continue;
         }
@@ -1022,7 +1036,7 @@ class Bedrock extends BaseLLM {
         }
       }
       if (!sawToolUse) {
-        for (const [index, call] of recovered.entries()) {
+        for (const [index, call] of state.recovered.entries()) {
           yield recoveredCallMessage(call, index);
         }
       }
@@ -1202,7 +1216,11 @@ class Bedrock extends BaseLLM {
     // First get tools
     const supportsTools =
       (this.capabilities?.tools ||
-        bedrockSupportsTools(options.model, this.toolDialect)) ??
+        bedrockSupportsTools(
+          options.model,
+          this.toolDialect,
+          this._httpRequestOptions?.extraBodyProperties,
+        )) ??
       false;
 
     let toolConfig: undefined | ToolConfiguration = undefined;

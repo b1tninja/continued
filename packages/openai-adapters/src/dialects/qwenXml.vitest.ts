@@ -253,8 +253,10 @@ describe("qwen-xml recovery: golden cases", () => {
   for (const g of golden) {
     it(g.name, () => {
       const out = recoverQwenXmlFromText(g.text, tools);
-      expect(out.calls.map((c) => ({ ...c, raw: undefined }))).toEqual(
-        g.calls.map((c) => ({ ...c, raw: undefined })),
+      expect(
+        out.calls.map((c) => ({ ...c, raw: undefined, repairs: undefined })),
+      ).toEqual(
+        g.calls.map((c) => ({ ...c, raw: undefined, repairs: undefined })),
       );
       expect(out.text).toBe(g.text_after);
     });

@@ -17,6 +17,8 @@
  * schema and every required one is present. Anything else stays text.
  */
 
+import { coerceString, repairNote } from "./schemaCheck.js";
+
 export interface DialectTool {
   name: string;
   /** JSON schema of the arguments, when known. */
@@ -28,6 +30,23 @@ export interface RecoveredCall {
   arguments: Record<string, unknown>;
   /** The exact source span, for logs. */
   raw: string;
+  /** What was changed to make the call fit its schema; absent when nothing was. */
+  repairs?: RepairNote[];
+}
+
+/**
+ * A string value made into the literal the schema declares (`"10"` to `10`
+ * for an integer): the one repair recovery makes, listed so a bench or a log
+ * can count it. Kept on the recovered call; nothing downstream reads it yet.
+ */
+export interface RepairNote {
+  kind: "string-to-literal";
+  /** The argument name. */
+  argument: string;
+  /** The text the model wrote. */
+  from: string;
+  /** The value the call carries instead. */
+  to: unknown;
 }
 
 export type RecoveryEvent =
@@ -48,40 +67,22 @@ function schemaOf(tool: DialectTool): Schema {
     : {};
 }
 
-/** One value as the tool's schema declares it; undefined when it does not fit. */
-function coerce(value: string, type: string | string[] | undefined): unknown {
+/**
+ * One value as the tool's schema declares it; undefined when it does not fit.
+ * Text is all a Qwen value is, so a string-typed (or untyped) parameter keeps
+ * it as written and any other type goes through the shared `coerceString`
+ * (surrounding whitespace is markup layout here, not part of the literal).
+ */
+function coerce(
+  value: string,
+  type: string | string[] | undefined,
+): { value: unknown; repaired: boolean } | undefined {
   const types = Array.isArray(type) ? type : type ? [type] : [];
   if (types.length === 0 || types.includes("string")) {
-    // A parameter that may be a string is one: no guessing.
-    return value;
+    return { value, repaired: false };
   }
-  const trimmed = value.trim();
-  if (types.includes("integer") || types.includes("number")) {
-    if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) {
-      const n = Number(trimmed);
-      if (types.includes("number") || Number.isInteger(n)) return n;
-    }
-  }
-  if (types.includes("boolean")) {
-    if (trimmed === "true") return true;
-    if (trimmed === "false") return false;
-  }
-  if (types.includes("array") || types.includes("object")) {
-    try {
-      const parsed: unknown = JSON.parse(trimmed);
-      const isArray = Array.isArray(parsed);
-      const isObject = !!parsed && typeof parsed === "object" && !isArray;
-      if (
-        (isArray && types.includes("array")) ||
-        (isObject && types.includes("object"))
-      ) {
-        return parsed;
-      }
-    } catch {
-      // falls through to undefined
-    }
-  }
-  return undefined;
+  const coerced = coerceString(value.trim(), type);
+  return coerced === undefined ? undefined : { value: coerced, repaired: true };
 }
 
 const OPEN_RE = /(?:<tool_call>\s*)?<function=([^>\s]+)>/y;
@@ -151,6 +152,7 @@ function parseCalls(
   const params = (
     pos: number,
     args: Record<string, unknown>,
+    repairs: RepairNote[],
   ): RecoveredCall[] | undefined => {
     if (++budget.steps > STEP_BUDGET) return undefined;
     while (pos < text.length && /\s/.test(text[pos])) pos++;
@@ -168,6 +170,7 @@ function parseCalls(
           name: tool.name,
           arguments: args,
           raw: text.slice(start, end),
+          ...(repairs.length > 0 ? { repairs } : {}),
         },
         ...rest,
       ];
@@ -195,18 +198,22 @@ function parseCalls(
       }
       if (!quotesBalanced(text, valueStart, j)) continue;
       const raw = text.slice(valueStart, j);
-      const value = coerce(
-        raw.endsWith("\n") ? raw.slice(0, -1) : raw,
-        properties?.[key]?.type,
+      const written = raw.endsWith("\n") ? raw.slice(0, -1) : raw;
+      const fit = coerce(written, properties?.[key]?.type);
+      if (fit === undefined) continue;
+      const done = params(
+        after,
+        { ...args, [key]: fit.value },
+        fit.repaired
+          ? [...repairs, repairNote(key, written, fit.value)]
+          : repairs,
       );
-      if (value === undefined) continue;
-      const done = params(after, { ...args, [key]: value });
       if (done) return done;
       if (budget.steps > STEP_BUDGET) return undefined;
     }
     return undefined;
   };
-  return params(open.index + open[0].length, {});
+  return params(open.index + open[0].length, {}, []);
 }
 
 /**

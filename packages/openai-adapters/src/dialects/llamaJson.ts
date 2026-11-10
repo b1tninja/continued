@@ -15,16 +15,13 @@
  * nothing else. An object has exactly `name` and `parameters`, plus an optional
  * `type` that is "function". The name is a tool in the request; `parameters`
  * is an object whose keys the schema declares, whose values have the type the
- * schema asks for (a number sent as a string is refused), and which carries
- * every required key. Anything else stays text.
+ * schema asks for (a string that is the exact literal of an integer, number,
+ * boolean, array or object parameter is made into it, and the call says so in
+ * `repairs`; see coerceString), and which carries every required key.
+ * Anything else stays text.
  */
-import { typeFits } from "./pythonic.js";
 import type { DialectTool, RecoveredCall, RecoveryEvent } from "./qwenXml.js";
-
-type Schema = {
-  properties?: Record<string, { type?: string | string[] } | undefined>;
-  required?: string[];
-};
+import { fittedCall } from "./schemaCheck.js";
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
@@ -47,18 +44,7 @@ function callFromObject(
   if (typeof name !== "string" || !isObject(parameters)) return undefined;
   const tool = tools.find((t) => t.name === name);
   if (!tool) return undefined;
-  const schema: Schema =
-    tool.parameters && typeof tool.parameters === "object"
-      ? (tool.parameters as Schema)
-      : {};
-  for (const [key, arg] of Object.entries(parameters)) {
-    if (schema.properties && !(key in schema.properties)) return undefined;
-    if (!typeFits(arg, schema.properties?.[key]?.type)) return undefined;
-  }
-  for (const key of schema.required ?? []) {
-    if (!(key in parameters)) return undefined;
-  }
-  return { name: tool.name, arguments: { ...parameters }, raw };
+  return fittedCall(tool, parameters, raw);
 }
 
 function parseJson(text: string): unknown {

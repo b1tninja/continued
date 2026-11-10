@@ -6,14 +6,18 @@ import { presetBedrockTools } from "../util/toolDialectPresets.js";
  * Whether Bedrock models get tools. The preset table
  * (util/toolDialectPresets.ts) answers for every family the live run of
  * 2026-11-10 measured, which adds Kimi, GLM, MiniMax and Nemotron 3 (all
- * returned structured calls) and offers Llama 3.x tools only when the model's
- * `toolDialect` is `llama-json` (it writes its calls as JSON text, 0/8
- * structured, so tools without recovery would print raw JSON into the chat).
+ * returned structured calls) and offers Llama 3.x tools only when recovery is
+ * on for `llama-json`: the model's `toolDialect` or
+ * CONTINUE_RECOVER_TEXT_TOOL_CALLS, the variable winning, as for recovery
+ * itself (it writes its calls as JSON text, 0/8 structured, so tools without
+ * recovery would print raw JSON into the chat).
  * Families the preset leaves `unmeasured` keep the older name list.
  */
 export function bedrockSupportsTools(
   model: string,
   toolDialect?: ToolDialectSetting,
+  extraBody?: Record<string, unknown>,
+  env?: Record<string, string | undefined>,
 ): boolean {
   const id = model.toLowerCase();
   if (id.includes("claude-2") || id.includes("claude-instant")) {
@@ -22,7 +26,7 @@ export function bedrockSupportsTools(
   if (/deepseek[.-]r1/.test(id)) {
     return false;
   }
-  const preset = presetBedrockTools(id, toolDialect);
+  const preset = presetBedrockTools(id, toolDialect, extraBody, env);
   if (preset !== undefined) {
     return preset;
   }
@@ -128,8 +132,9 @@ export const PROVIDER_TOOL_SUPPORT: Record<string, (model: string) => boolean> =
       !/embed|rerank|image|whisper|tts|speech/i.test(model),
     // The rule is bedrockSupportsTools above. Checked live on 2026-11-08 (Converse and ConverseStream): Claude, Nova
     // 2 Lite, Nova Pro, Mistral Large 3, Qwen3 and DeepSeek V3.2 return
-    // toolUse blocks. DeepSeek R1 refuses tools outright. Llama 3.3 calls
-    // tools only outside streaming, so it stays off. Llama 4 refuses tools
+    // toolUse blocks. DeepSeek R1 refuses tools outright. Llama 3.3 returned
+    // its calls as text in all 8 live prompts (structured 0 of 8, streaming or
+    // not), so it gets tools only with recovery on for llama-json. Llama 4 refuses tools
     // in ConverseStream too ("This model doesn't support tool use in
     // streaming mode.") but returns a proper toolUse block from Converse, so
     // it stays on and the provider sends its tool requests without streaming
@@ -550,6 +555,7 @@ export function modelSupportsNativeTools(modelDescription: ModelDescription) {
     return bedrockSupportsTools(
       modelDescription.model,
       modelDescription.toolDialect,
+      modelDescription.requestOptions?.extraBodyProperties,
     );
   }
   const providerSupport = PROVIDER_TOOL_SUPPORT[modelDescription.provider];
