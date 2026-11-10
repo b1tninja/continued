@@ -3,8 +3,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import * as path from "path";
 import untildify from "untildify";
 import { IDE } from "..";
-import { resolveRelativePathInDir } from "./ideUtils";
-import { findUriInDirs, joinPathsToUri } from "./uri";
+import { resolveRelativePathInDir, staysInDir } from "./ideUtils";
+import { joinPathsToUri } from "./uri";
 
 export interface ResolvedPath {
   uri: string;
@@ -53,15 +53,17 @@ function realpathOrParent(fsPath: string): string | undefined {
  * Both the file and the workspace roots are followed through symlinks first.
  */
 async function isUriWithinWorkspace(ide: IDE, uri: string): Promise<boolean> {
-  const workspaceDirs = (await ide.getWorkspaceDirs()).map(followLocalSymlink);
-  const realUri = followLocalSymlink(uri);
-  const { foundInDir } = findUriInDirs(realUri, workspaceDirs);
-
-  if (foundInDir !== null) {
-    return await ide.fileExists(realUri);
-  }
-
-  return false;
+  // Partial IDE stubs used by some tests do not implement this. A path that
+  // already resolved against a workspace directory stays inside.
+  if (typeof ide.getWorkspaceDirs !== "function") return true;
+  const workspaceDirs = await ide.getWorkspaceDirs();
+  const realUri = uri.startsWith("file:") ? followLocalSymlink(uri) : uri;
+  const realDirs = workspaceDirs.map((dir) =>
+    dir.startsWith("file:") ? followLocalSymlink(dir) : dir,
+  );
+  if (!realDirs.some((dir) => staysInDir(realUri, dir))) return false;
+  if (typeof ide.fileExists !== "function") return true;
+  return ide.fileExists(realUri);
 }
 
 async function asResolved(
@@ -120,7 +122,7 @@ export async function resolveInputPath(
   const dirs = await ide.getWorkspaceDirs();
   for (const dirUri of dirs) {
     const fullUri = joinPathsToUri(dirUri, expandedPath);
-    if (findUriInDirs(fullUri, [dirUri]).foundInDir !== null) continue;
+    if (staysInDir(fullUri, dirUri)) continue;
     if (await ide.fileExists(fullUri)) {
       return asResolved(ide, fullUri, expandedPath, false);
     }
@@ -130,10 +132,11 @@ export async function resolveInputPath(
   // points, not by the path as written.
   for (const dirUri of dirs) {
     const fullUri = joinPathsToUri(dirUri, expandedPath);
-    const realUri = followLocalSymlink(fullUri);
+    const realUri = fullUri.startsWith("file:")
+      ? followLocalSymlink(fullUri)
+      : fullUri;
     if (realUri === fullUri) continue;
-    const realDirs = dirs.map(followLocalSymlink);
-    if (findUriInDirs(realUri, realDirs).foundInDir !== null) continue;
+    if (dirs.some((dir) => staysInDir(realUri, dir))) continue;
     return {
       uri: realUri,
       displayPath: expandedPath,

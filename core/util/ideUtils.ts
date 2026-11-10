@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import { IDE } from "..";
 
 import {
@@ -6,6 +7,35 @@ import {
   joinPathsToUri,
   pathToUriPathSegment,
 } from "./uri";
+
+/** True for `file://`, `vscode-remote://`, and any other scheme. */
+function hasScheme(value: string): boolean {
+  return /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value);
+}
+
+/** A filesystem path is `parent` or inside it. Used when a caller has no URI. */
+function plainInside(parent: string, child: string): boolean {
+  const rel = path.relative(path.resolve(parent), path.resolve(child));
+  return (
+    rel === "" ||
+    (rel !== ".." &&
+      !rel.startsWith(`..${path.sep}`) &&
+      !rel.startsWith("../") &&
+      !path.isAbsolute(rel))
+  );
+}
+
+/**
+ * Whether `fullUri` stays inside `dirUri`. URI pairs go through the normalized
+ * comparison. Plain paths (some tests and stubs) are compared as filesystem
+ * paths so a missing scheme does not throw.
+ */
+export function staysInDir(fullUri: string, dirUri: string): boolean {
+  if (hasScheme(fullUri) && hasScheme(dirUri)) {
+    return findUriInDirs(fullUri, [dirUri]).foundInDir !== null;
+  }
+  return plainInside(dirUri, fullUri);
+}
 
 /*
   This function takes a relative (to workspace) filepath
@@ -22,7 +52,7 @@ export async function resolveRelativePathInDir(
     const fullUri = joinPathsToUri(dirUri, path);
     // A path that climbs out of this directory is not inside it, even when
     // the file exists. Callers treat a returned URI as contained.
-    if (findUriInDirs(fullUri, [dirUri]).foundInDir === null) continue;
+    if (!staysInDir(fullUri, dirUri)) continue;
     if (await ide.fileExists(fullUri)) {
       return fullUri;
     }
@@ -74,7 +104,7 @@ export async function uniqueOpenFileInWorkspace(
   const hits = (await ide.getOpenFiles()).filter(
     (uri) =>
       uriHasPathSuffix(uri, filepath) &&
-      findUriInDirs(uri, dirs).foundInDir !== null,
+      dirs.some((dir) => staysInDir(uri, dir)),
   );
   return hits.length === 1 ? hits[0] : undefined;
 }
@@ -137,7 +167,7 @@ export async function inferResolvedUriFromRelativePath(
   if (
     activeFile &&
     uriHasPathSuffix(activeFile.path, relativePath) &&
-    findUriInDirs(activeFile.path, dirs).foundInDir
+    dirs.some((dir) => staysInDir(activeFile.path, dir))
   ) {
     return activeFile.path;
   }
