@@ -13,6 +13,11 @@ import { getMarkdownLanguageTagForFile } from "core/util";
 import { VerticalDiffManager } from "../diff/vertical/manager";
 import { VsCodeIde } from "../VsCodeIde";
 import { VsCodeWebviewProtocol } from "../webviewProtocol";
+import {
+  documentChanged,
+  editorMatchesFilepath,
+  type DocumentStamp,
+} from "./applyTarget";
 
 /**
  * Handles applying text/code to files including diff generation and streaming
@@ -36,14 +41,20 @@ export class ApplyManager {
       await this.ensureFileOpen(filepath);
     }
 
-    const { activeTextEditor } = vscode.window;
-    if (!activeTextEditor) {
+    // Resolve the document once. A later read of activeTextEditor can be a
+    // different tab if the person switches during an await.
+    const editor = this.editorFor(filepath);
+    if (!editor) {
       void vscode.window.showErrorMessage("No active editor to apply edits to");
       return;
     }
+    const stamp: DocumentStamp = {
+      uri: editor.document.uri.toString(),
+      version: editor.document.version,
+    };
 
     // Capture the original file content before applying changes
-    const originalFileContent = activeTextEditor.document.getText();
+    const originalFileContent = editor.document.getText();
 
     await this.webviewProtocol.request("updateApplyState", {
       streamId,
@@ -53,7 +64,11 @@ export class ApplyManager {
       toolCallId,
     });
 
-    const hasExistingDocument = !!activeTextEditor.document.getText().trim();
+    if (this.stale(editor, stamp)) {
+      return;
+    }
+
+    const hasExistingDocument = !!originalFileContent.trim();
     if (hasExistingDocument) {
       // Currently `isSearchAndReplace` will always provide a full file rewrite
       // as the contents of `text`, so we can just instantly apply
@@ -63,23 +78,55 @@ export class ApplyManager {
           text,
           streamId,
           toolCallId,
+          editor,
+          stamp.version,
         );
       } else {
         await this.handleExistingDocument(
-          activeTextEditor,
+          editor,
           text,
           streamId,
           toolCallId,
+          stamp,
         );
       }
     } else {
       await this.handleEmptyDocument(
-        activeTextEditor,
+        editor,
         text,
         streamId,
         toolCallId,
       );
     }
+  }
+
+  /** The editor for `filepath`, or the active editor when no path was given. */
+  private editorFor(filepath: string | undefined): vscode.TextEditor | undefined {
+    if (!filepath) {
+      return vscode.window.activeTextEditor;
+    }
+    return vscode.window.visibleTextEditors.find((editor) =>
+      editorMatchesFilepath(
+        { uri: editor.document.uri.toString(), fsPath: editor.document.uri.fsPath },
+        filepath,
+      ),
+    );
+  }
+
+  /** True when the document was edited after `stamp`. Tells the person and skips the apply. */
+  private stale(editor: vscode.TextEditor, stamp: DocumentStamp): boolean {
+    if (
+      !documentChanged(stamp, {
+        uri: editor.document.uri.toString(),
+        version: editor.document.version,
+      })
+    ) {
+      return false;
+    }
+    void vscode.window.showErrorMessage(
+      "The file changed before the edit could be applied.",
+    );
+    return true;
   }
 
   private async ensureFileOpen(filepath: string): Promise<void> {
@@ -118,11 +165,15 @@ export class ApplyManager {
     editor: vscode.TextEditor,
     text: string,
     streamId: string,
-    toolCallId?: string,
+    toolCallId: string | undefined,
+    stamp: DocumentStamp,
   ) {
     const { config } = await this.configHandler.loadConfig();
     if (!config) {
       void vscode.window.showErrorMessage("Config not loaded");
+      return;
+    }
+    if (this.stale(editor, stamp)) {
       return;
     }
 
@@ -163,6 +214,7 @@ export class ApplyManager {
         this.verticalDiffManager,
         toolCallId,
         !this.modelIsTooFastForStreaming(llm.model),
+        stamp,
       );
     }
   }
@@ -213,6 +265,7 @@ export class ApplyManager {
     verticalDiffManager: VerticalDiffManager,
     toolCallId?: string,
     streaming: boolean = true,
+    stamp?: DocumentStamp,
   ) {
     const { config } = await this.configHandler.loadConfig();
     if (!config) {
@@ -241,6 +294,8 @@ export class ApplyManager {
         toolCallId,
         rulesToInclude: undefined, // No rules for apply
         isApply: true,
+        editor,
+        documentVersion: stamp?.version,
       });
     } else {
       // Non-streaming: accumulate LLM output, then apply via Myers diff
@@ -253,6 +308,9 @@ export class ApplyManager {
       );
 
       if (finalContent) {
+        if (stamp && this.stale(editor, stamp)) {
+          return;
+        }
         const diffLinesGenerator = generateLines(
           myersDiff(editor.document.getText(), finalContent),
         );
@@ -262,6 +320,8 @@ export class ApplyManager {
           true, // Apply instantly since we accumulated all content
           streamId,
           toolCallId,
+          editor,
+          stamp?.version,
         );
       }
     }
