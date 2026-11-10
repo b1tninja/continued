@@ -19,6 +19,7 @@ import {
 } from "react";
 import { useStore } from "react-redux";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
+import { isHttpsLink } from "../../../util/isHttpsLink";
 import { useAppDispatch } from "../../../redux/hooks";
 import { RootState } from "../../../redux/store";
 import {
@@ -263,7 +264,7 @@ export function McpAppRenderer({
     };
 
     bridge.onopenlink = async (params: { url: string }) => {
-      if (params.url) {
+      if (isHttpsLink(params.url)) {
         ideMessenger.post("openUrl", params.url);
       }
       return {};
