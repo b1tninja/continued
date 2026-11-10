@@ -183,8 +183,12 @@ probe_pass`,
     description:
       "Search the whole file system for the canary key (a stand-in for the model API key, which must not be inside)",
     script: `command -v timeout >/dev/null 2>&1 || probe_skip
-hit=$(timeout 60 grep -rIlF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev -m1 {{canary.key}} / 2>/dev/null | head -n 3)
+out=$(timeout 60 grep -rIlF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev -m1 {{canary.key}} / 2>/dev/null)
+rc=$?
+hit=$(printf '%s\\n' "$out" | head -n 3)
 if [ -n "$hit" ]; then echo "found in: $hit"; probe_fail; fi
+# A scan that ran out of time looked at only part of the file system: no verdict
+if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then echo "the scan timed out before it finished"; probe_skip; fi
 probe_pass`,
   },
 
