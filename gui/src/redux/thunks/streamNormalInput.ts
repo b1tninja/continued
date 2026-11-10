@@ -193,6 +193,7 @@ export const streamNormalInput = createAsyncThunk<
     const {
       compiledChatMessages,
       didPrune,
+      didAge,
       contextPercentage,
       outputTokensAvailable,
     } = precompiledRes.content;
@@ -292,7 +293,11 @@ export const streamNormalInput = createAsyncThunk<
                     message.usage.promptTokensDetails?.cachedTokens ?? 0,
                   totalInputTokens: total,
                 };
-                const miss = detectCacheMiss({ ...request, pruned: didPrune });
+                const miss = detectCacheMiss({
+                  ...request,
+                  pruned: didPrune,
+                  aged: didAge,
+                });
                 if (miss) {
                   missCauses = miss.causes;
                   dispatch(
@@ -306,7 +311,10 @@ export const streamNormalInput = createAsyncThunk<
                   // Not a fault, but the cache was not read either: a model
                   // switch or a shortened conversation. Recorded so the
                   // session summary can count it as an expected rebuild.
-                  missCauses = expectedRebuildCauses(request);
+                  missCauses = expectedRebuildCauses({
+                    ...request,
+                    aged: didAge,
+                  });
                 }
               }
               // One in-memory record per request, for the session's own

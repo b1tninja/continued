@@ -22,6 +22,7 @@ import { readFileImpl } from "./implementations/readFile";
 import { readFileRangeImpl } from "./implementations/readFileRange";
 import { codeNavigationImpl } from "./implementations/codeNavigation";
 import { readSkillImpl } from "./implementations/readSkill";
+import { recallMaskedResultImpl } from "./implementations/recallMaskedResult";
 import { requestRuleImpl } from "./implementations/requestRule";
 import { runTerminalCommandImpl } from "./implementations/runTerminalCommand";
 import { searchWebImpl } from "./implementations/searchWeb";
@@ -225,6 +226,8 @@ export async function callBuiltInTool(
       return await requestRuleImpl(args, extras);
     case BuiltInToolNames.CodebaseTool:
       return await codebaseToolImpl(args, extras);
+    case BuiltInToolNames.RecallMaskedResult:
+      return await recallMaskedResultImpl(args, extras);
     case BuiltInToolNames.ReadSkill:
       return await readSkillImpl(args, extras);
     case BuiltInToolNames.ViewRepoMap:

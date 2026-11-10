@@ -35,6 +35,12 @@ export const AGEING_PROTECTED_TOOLS: readonly string[] = [
   "Checklist",
 ];
 
+/**
+ * Name of the built-in tool that returns a masked body. The stub text names
+ * it, and core/tools/builtIn.ts must carry the same string (a test checks).
+ */
+export const RECALL_TOOL_NAME = "recall_masked_result";
+
 /** Marks a masked message, in `metadata` and at the start of the stub text. */
 export const AGEING_STUB_PREFIX = "[tool result masked";
 export const AGEING_METADATA_KEY = "maskedResult";
@@ -108,7 +114,7 @@ export function stubText(
   toolName: string | undefined,
   chars: number,
 ): string {
-  return `${AGEING_STUB_PREFIX}: ${toolName ?? "unknown tool"}, ${chars} chars, recall ${handle}]`;
+  return `${AGEING_STUB_PREFIX}: ${toolName ?? "unknown tool"}, ${chars} chars. Call ${RECALL_TOOL_NAME} with handle ${handle} to read it again]`;
 }
 
 /** Tool name for each tool call id, read from the assistant messages. */
@@ -209,4 +215,167 @@ export function unmaskToolResults(
       metadata: Object.keys(rest).length ? rest : undefined,
     };
   });
+}
+
+// ---- the recall store ----
+
+/** Bodies kept for recall in this process. Oldest dropped first. */
+export const AGEING_STORE_MAX_ENTRIES = 500;
+export const AGEING_STORE_MAX_CHARS = 20_000_000;
+
+const recallStore = new Map<string, string>();
+let recallStoreChars = 0;
+
+/** Keep the bodies of freshly masked results so the model can ask for one back. */
+export function rememberMasked(items: readonly MaskedResult[]): void {
+  for (const item of items) {
+    const old = recallStore.get(item.handle);
+    if (old !== undefined) {
+      recallStoreChars -= old.length;
+      recallStore.delete(item.handle);
+    }
+    recallStore.set(item.handle, item.original);
+    recallStoreChars += item.original.length;
+  }
+  for (const key of recallStore.keys()) {
+    if (
+      recallStore.size <= AGEING_STORE_MAX_ENTRIES &&
+      recallStoreChars <= AGEING_STORE_MAX_CHARS
+    ) {
+      break;
+    }
+    recallStoreChars -= recallStore.get(key)!.length;
+    recallStore.delete(key);
+  }
+}
+
+/** The text the recall tool returns for a handle. */
+export function recallMasked(handle: string): string {
+  const body = recallStore.get(handle);
+  if (body !== undefined) return body;
+  return `No stored result for handle ${handle}. It may come from an earlier run of the editor; run the original tool call again if you still need it.`;
+}
+
+export function clearRecallStore(): void {
+  recallStore.clear();
+  recallStoreChars = 0;
+}
+
+// ---- ageing a request (used by compileChatMessages, off by default) ----
+
+/** Environment switch. Anything but "1", "true" or "on" leaves ageing off. */
+export const AGEING_ENV = "CONTINUE_HISTORY_AGEING";
+
+export function historyAgeingEnabled(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  const v = env[AGEING_ENV]?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "on";
+}
+
+/** Results masked per batch step: the masked count only moves in multiples of this. */
+export const AGEING_BATCH_STEP = 5;
+/** Start ageing when the raw history reaches this share of the usable window. */
+export const AGEING_TRIGGER_FRACTION = 0.5;
+/** Above this share, age even with a warm cache: pruning would rebuild it anyway. */
+export const AGEING_FORCE_FRACTION = 0.9;
+/** A request after this long is taken to find the cache cold (the 5 minute lifetime). */
+export const AGEING_CACHE_LIFETIME_MS = 300_000;
+
+export interface AgeingState {
+  /** Identifies the conversation (first user message); a new one resets the rest. */
+  key: string;
+  /** How many of the oldest tool results are masked, a multiple of the batch step. */
+  maskedThrough: number;
+  lastRequestAt?: number;
+}
+
+export function newAgeingState(): AgeingState {
+  return { key: "", maskedThrough: 0 };
+}
+
+export interface AgeRequestOutcome {
+  messages: ChatMessage[];
+  /** True on the request where the masked set grew: the cached prefix is rewritten here. */
+  didAge: boolean;
+  masked: MaskedResult[];
+}
+
+function charsOf(m: ChatMessage): number {
+  if (typeof m.content === "string") return m.content.length;
+  let n = 0;
+  for (const part of m.content)
+    n += part.type === "text" ? part.text.length : 4000;
+  return n;
+}
+
+function conversationKey(messages: ChatMessage[]): string {
+  const first = messages.find((m) => m.role === "user");
+  return first
+    ? fnv1a(
+        typeof first.content === "string"
+          ? first.content
+          : JSON.stringify(first.content),
+      )
+    : "";
+}
+
+/**
+ * Apply ageing to a request. Pure apart from the `state` it updates.
+ *
+ * The masked set is the oldest `state.maskedThrough` tool results, so between
+ * batches the same messages give the same bytes and the cached prefix holds.
+ * The count grows only when the raw history is large (AGEING_TRIGGER_FRACTION
+ * of `availableTokens`) and either the cache has expired (a rebuild is free
+ * then) or the window is nearly full (AGEING_FORCE_FRACTION), and then only in
+ * multiples of AGEING_BATCH_STEP.
+ */
+export function ageRequest(
+  messages: ChatMessage[],
+  args: {
+    state: AgeingState;
+    availableTokens: number;
+    now?: number;
+    options?: MaskOptions;
+  },
+): AgeRequestOutcome {
+  const { state, availableTokens } = args;
+  const now = args.now ?? Date.now();
+  const keepRecent =
+    args.options?.keepRecent ?? AGEING_KEEP_RECENT_TOOL_RESULTS;
+  const key = conversationKey(messages);
+  if (key !== state.key) {
+    state.key = key;
+    state.maskedThrough = 0;
+    state.lastRequestAt = undefined;
+  }
+  const cold =
+    state.lastRequestAt === undefined ||
+    now - state.lastRequestAt > AGEING_CACHE_LIFETIME_MS;
+  state.lastRequestAt = now;
+
+  const toolCount = messages.filter((m) => m.role === "tool").length;
+  const rawTokens = estimateTokens(
+    messages.reduce((s, m) => s + charsOf(m), 0),
+  );
+  let desired = 0;
+  if (rawTokens >= availableTokens * AGEING_TRIGGER_FRACTION) {
+    desired =
+      Math.floor(Math.max(0, toolCount - keepRecent) / AGEING_BATCH_STEP) *
+      AGEING_BATCH_STEP;
+  }
+  const force = rawTokens >= availableTokens * AGEING_FORCE_FRACTION;
+  let didAge = false;
+  if (desired > state.maskedThrough && (cold || force)) {
+    state.maskedThrough = desired;
+    didAge = true;
+  }
+  if (state.maskedThrough === 0) return { messages, didAge: false, masked: [] };
+
+  const outcome = maskOldToolResults(messages, {
+    ...args.options,
+    keepRecent: Math.max(0, toolCount - state.maskedThrough),
+  });
+  rememberMasked(outcome.masked);
+  return { messages: outcome.messages, didAge, masked: outcome.masked };
 }

@@ -390,6 +390,8 @@ export function detectCacheMiss(args: {
   totalInputTokens: number;
   /** The oldest messages were dropped to fit the window, which moves the start. */
   pruned?: boolean;
+  /** History ageing masked more tool results in this request: a planned rebuild. */
+  aged?: boolean;
   /**
    * How long the cache is taken to last, when it is not a cache-control
    * lifetime: a local server's (LOCAL_CACHE_WARM_MS).
@@ -406,6 +408,8 @@ export function detectCacheMiss(args: {
   // A shorter prompt means history was cut or compacted: a new prefix by design.
   if (totalInputTokens < expected - 1000) return undefined;
   if (readTokens >= expected * MISS_READ_SHARE) return undefined;
+  // Ageing rewrote the prefix on purpose; expectedRebuildCauses counts it.
+  if (args.aged) return undefined;
   const causes = keyChanges(before.lastKey, key);
   // A model switch is the user's own doing and is warned about when they make
   // it, so on its own it does not count as a fault worth reporting.
@@ -421,6 +425,8 @@ export function detectCacheMiss(args: {
 
 /** Why an expected rebuild happened, for the session summary. */
 export const MODEL_SWITCH_CAUSE = MODEL_CHANGED;
+export const AGEING_CAUSE =
+  "old tool results were replaced by placeholders (history ageing)";
 export const SHORTER_PROMPT_CAUSE =
   "the conversation was shortened (compaction or truncation)";
 
@@ -436,6 +442,8 @@ export const SHORTER_PROMPT_CAUSE =
  * compaction or a cut. Anything else is left to `detectCacheMiss`.
  */
 export function expectedRebuildCauses(args: {
+  /** History ageing masked more tool results in this request. */
+  aged?: boolean;
   before: PromptCacheSessionState;
   key: PromptCacheKey;
   requestAt: number;
@@ -457,6 +465,8 @@ export function expectedRebuildCauses(args: {
   if (before.lastKey && before.lastKey.model !== key.model) {
     causes.push(MODEL_SWITCH_CAUSE);
   }
-  if (totalInputTokens < expected - 1000) causes.push(SHORTER_PROMPT_CAUSE);
+  if (args.aged) causes.push(AGEING_CAUSE);
+  else if (totalInputTokens < expected - 1000)
+    causes.push(SHORTER_PROMPT_CAUSE);
   return causes.length > 0 ? causes : undefined;
 }
