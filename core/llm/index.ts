@@ -31,6 +31,11 @@ import {
   ToolOverride,
   Usage,
 } from "../index.js";
+import {
+  historyAgeingEnabled,
+  newAgeingState,
+  type AgeingState,
+} from "../util/contextAgeing";
 import { isAbortError } from "../util/isAbortError.js";
 import { isLemonadeInstalled } from "../util/lemonadeHelper.js";
 import { Logger } from "../util/Logger.js";
@@ -1052,6 +1057,13 @@ export abstract class BaseLLM implements ILLM {
     return { role: "assistant" as const, content: completion };
   }
 
+  private _ageingState: AgeingState = newAgeingState();
+
+  /** History ageing for the request build; undefined (off) unless CONTINUE_HISTORY_AGEING is set. */
+  private _ageing(): { state: AgeingState } | undefined {
+    return historyAgeingEnabled() ? { state: this._ageingState } : undefined;
+  }
+
   compileChatMessages(
     message: ChatMessage[],
     options: LLMFullCompletionOptions,
@@ -1066,6 +1078,7 @@ export abstract class BaseLLM implements ILLM {
       maxTokens: completionOptions.maxTokens ?? DEFAULT_MAX_TOKENS,
       supportsImages: this.supportsImages(),
       tools: options.tools,
+      ageing: this._ageing(),
     });
   }
 
@@ -1353,6 +1366,7 @@ export abstract class BaseLLM implements ILLM {
         maxTokens: completionOptions.maxTokens ?? DEFAULT_MAX_TOKENS,
         supportsImages: this.supportsImages(),
         tools: optionsWithOverrides.tools,
+        ageing: this._ageing(),
       });
 
       messages = compiledChatMessages;

@@ -18,6 +18,7 @@ import {
 import { renderChatMessage } from "../util/messageContent.js";
 import { isTaskPlanBlockText } from "../util/taskPlan.js";
 import { AsyncEncoder, LlamaAsyncEncoder } from "./asyncEncoder.js";
+import { ageRequest, type AgeingState } from "../util/contextAgeing.js";
 import { DEFAULT_PRUNING_LENGTH } from "./constants.js";
 import { getAdjustedTokenCountFromModel } from "./getAdjustedTokenCount.js";
 import llamaTokenizer from "./llamaTokenizer.js";
@@ -430,6 +431,7 @@ function compileChatMessages({
   maxTokens,
   supportsImages,
   tools,
+  ageing,
 }: {
   modelName: string;
   msgs: ChatMessage[];
@@ -437,8 +439,14 @@ function compileChatMessages({
   maxTokens: number;
   supportsImages: boolean;
   tools?: Tool[];
+  /**
+   * History ageing (util/contextAgeing.ts). Left out, the request is built
+   * exactly as before. The caller keeps `state` between requests.
+   */
+  ageing?: { state: AgeingState; now?: number };
 }): CompiledMessagesResult {
   let didPrune = false;
+  let didAge = false;
 
   let msgsCopy: ChatMessage[] = msgs.map((m) => ({ ...m }));
 
@@ -472,6 +480,24 @@ function compileChatMessages({
     isTaskPlanBlockText(last.content)
       ? msgsCopy.pop()
       : undefined;
+
+  // Mask old tool results (off unless the caller passes `ageing`). Done before
+  // pruning, so what is counted and pruned is what would be sent.
+  if (ageing) {
+    const available =
+      (knownContextLength ?? DEFAULT_PRUNING_LENGTH) -
+      getTokenCountingBufferSafety(
+        knownContextLength ?? DEFAULT_PRUNING_LENGTH,
+      ) -
+      Math.min(MIN_RESPONSE_TOKENS, maxTokens);
+    const aged = ageRequest(msgsCopy, {
+      state: ageing.state,
+      availableTokens: available,
+      now: ageing.now,
+    });
+    msgsCopy = aged.messages;
+    didAge = aged.didAge;
+  }
 
   // Extract the tool sequence from the end of the message array
   const toolSequence = extractToolSequence(msgsCopy);
@@ -601,6 +627,7 @@ function compileChatMessages({
   return {
     compiledChatMessages: reassembled,
     didPrune,
+    ...(didAge && { didAge: true }),
     contextPercentage,
     outputTokensAvailable: Math.max(
       0,

@@ -24,6 +24,8 @@ export enum BuiltInToolNames {
   FinishItem = "finish_item",
   RemindMe = "remind_me",
   CodeNavigation = "code_navigation",
+  // Only offered when history ageing is on (CONTINUE_HISTORY_AGEING)
+  RecallMaskedResult = "recall_masked_result",
 
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",

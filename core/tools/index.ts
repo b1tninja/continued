@@ -1,5 +1,6 @@
 import { ConfigDependentToolParams, Tool } from "..";
 import { isRecommendedAgentModel } from "../llm/toolSupport";
+import { historyAgeingEnabled } from "../util/contextAgeing";
 import * as toolDefinitions from "./definitions";
 
 // I'm writing these as functions because we've messed up 3 TIMES by pushing to const, causing duplicate tool definitions on subsequent config loads.
@@ -31,6 +32,11 @@ export const getConfigDependentToolDefinitions = async (
   tools.push(await toolDefinitions.subagentTool(params));
 
   tools.push(toolDefinitions.searchWebTool);
+
+  // Off by default: the tool list is part of every request's cached prefix
+  if (historyAgeingEnabled()) {
+    tools.push(toolDefinitions.recallMaskedResultTool);
+  }
 
   if (enableExperimentalTools) {
     tools.push(

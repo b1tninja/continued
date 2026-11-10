@@ -1,6 +1,6 @@
 # Track V research: memory, session history and ageing
 
-Status, 2026-11-10: research plan. Built so far, not wired into any request path: `core/util/contextAgeing.ts` (row VA1, the masking function) and `core/util/cacheReplay.ts` with `npm run replay:ageing` (row V0b, offline half). Nothing else here is built. The replay table on the synthetic session shows only that the harness runs; it is not evidence for any default.
+Status, 2026-11-10: research plan. Built so far (first slice, #453): `core/util/contextAgeing.ts` (row VA1, the masking function) and `core/util/cacheReplay.ts` with `npm run replay:ageing` (row V0b, offline half). Second slice, behind `CONTINUE_HISTORY_AGEING` (off by default): the `recall_masked_result` tool, `ageRequest` wired into `compileChatMessages` (core IDE path only; the CLI has its own compaction and is not wired), and the cache ledger counting an ageing batch as an expected rebuild. Nothing else here is built. The replay table on the synthetic session shows only that the harness runs; it is not evidence for any default.
 
 Date: 2026-11-10. Read-only research against `origin/main` of b1tninja/continuous (fetched today). Web sources are cited with the access date 2026-11-10 unless stated. Anything not read first-hand is in the unverified list at the end.
 

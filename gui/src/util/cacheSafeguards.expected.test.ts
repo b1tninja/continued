@@ -1,6 +1,7 @@
 import type { ChatMessage, ModelDescription } from "core";
 import { describe, expect, it } from "vitest";
 import {
+  AGEING_CAUSE,
   detectCacheMiss,
   expectedRebuildCauses,
   MODEL_CHANGED,
@@ -41,6 +42,18 @@ const request = (extra: object = {}) => ({
   readTokens: 0,
   totalInputTokens: 210_000,
   ...extra,
+});
+
+describe("history ageing", () => {
+  it("is an expected rebuild, not a cache miss", () => {
+    const aged = request({ aged: true });
+    expect(detectCacheMiss(aged)).toBeUndefined();
+    expect(expectedRebuildCauses(aged)).toEqual([AGEING_CAUSE]);
+  });
+
+  it("without the flag the same request is still reported as a miss", () => {
+    expect(detectCacheMiss(request())).toBeDefined();
+  });
 });
 
 describe("expectedRebuildCauses", () => {
