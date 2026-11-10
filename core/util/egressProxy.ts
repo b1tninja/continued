@@ -135,6 +135,20 @@ function parseAuthority(
   return { host: text.slice(0, i), port: Number(text.slice(i + 1)) };
 }
 
+/**
+ * An agent whose connections all go where `dial` says. `createConnection` is
+ * on the runtime object but not in the type declarations, so it is declared
+ * here by overriding it in a subclass.
+ */
+class PinnedAgent extends Agent {
+  constructor(private readonly dial: () => Socket) {
+    super();
+  }
+  createConnection(): Socket {
+    return this.dial();
+  }
+}
+
 export function createEgressProxy(opts: EgressProxyOptions): EgressProxy {
   const resolve = opts.resolve ?? systemResolver;
   const ownAddresses = opts.ownAddresses ?? ownInterfaceAddresses();
@@ -217,8 +231,9 @@ export function createEgressProxy(opts: EgressProxyOptions): EgressProxy {
       }
       // The pinned address, never the name. A per-request agent, because
       // `createConnection` is ignored when `agent: false` supplies its own.
-      const agent = new Agent();
-      agent.createConnection = () => connect(d.address ?? d.host, target.port);
+      const agent = new PinnedAgent(() =>
+        connect(d.address ?? d.host, target.port),
+      );
       const upstream = httpRequest({
         method: req.method,
         path: `${url.pathname}${url.search}`,
