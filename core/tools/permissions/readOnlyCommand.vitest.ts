@@ -51,6 +51,9 @@ describe("commands that only read", () => {
     "git branch --list",
     "git --no-pager log",
     "git stash list",
+    "git stash show",
+    "git grep -n TODO src",
+    "sort -u file.txt",
   ])("vouches %s", (command) => {
     expect(vouched(command)).toBe(true);
   });
@@ -130,6 +133,7 @@ describe("arguments that make a read-only command write or run", () => {
     ["find . -fprint out.txt", "-fprint"],
     ["sort -o out.txt in.txt", "-o"],
     ["sort -o/tmp/x f", "-o"],
+    ["sort -uo out.txt", "-o"],
     ["sort --output=out.txt in.txt", "--output"],
     ["sort --outp=src/index.js f", "--outp"],
     ["sort --compress-prog=sh f", "--compress-prog"],
@@ -327,6 +331,9 @@ describe("git", () => {
     'git grep -O"touch /tmp/x" hello',
     "git grep --open-files-in=less hello",
     "git grep --open-f=less hello",
+    "git grep -nOtouch hello",
+    "git stash show --output=out.txt",
+    "git stash show --outp=out.txt",
     "git shortlog --output=out.txt HEAD",
     "git rev-list --output=out.txt HEAD",
     "git branch -D old",

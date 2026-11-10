@@ -40,27 +40,29 @@ const anyArgs: Check = () => undefined;
 
 /**
  * A rejected flag also covers the forms the program actually accepts: a short
- * option with its value attached (`-Ocmd`) and a long option abbreviated to a
- * unique prefix (`--open-f=cmd`). `--` ends options, so later words are files.
+ * option anywhere in a bundle (`-nOcmd`, `-uo`), a short option with its value
+ * attached, and a long option abbreviated to a unique prefix (`--open-f=cmd`).
+ * `--` ends options, so later words are files.
  */
 const reject =
   (...flags: string[]): Check =>
   (args) => {
+    const shorts = new Set(
+      flags.filter((f) => /^-[^-]$/.test(f)).map((f) => f.slice(1)),
+    );
     for (const a of args) {
       if (a === "--") break;
       const name = a.split("=")[0];
-      for (const f of flags) {
-        const isShort = /^-[^-]$/.test(f);
-        if (name === f) return `argument ${name} is not recognised`;
-        if (isShort && a.startsWith(f) && a.length > f.length) {
-          return `argument ${f} is not recognised`;
+      // `-nOcmd` is `-n` and `-O` with a value, not a single flag named `-nOcmd`.
+      if (name.startsWith("-") && !name.startsWith("--")) {
+        for (const ch of name.slice(1)) {
+          if (shorts.has(ch)) return `argument -${ch} is not recognised`;
         }
-        if (
-          !isShort &&
-          name.startsWith("--") &&
-          name.length > 2 &&
-          f.startsWith(name)
-        ) {
+      }
+      for (const f of flags) {
+        if (/^-[^-]$/.test(f)) continue;
+        if (name === f) return `argument ${name} is not recognised`;
+        if (name.startsWith("--") && name.length > 2 && f.startsWith(name)) {
           return `argument ${name} is not recognised`;
         }
       }
@@ -213,10 +215,15 @@ const GIT_READ: Record<string, Check> = {
     (args.length === 1 && ["-v", "--verbose"].includes(args[0]))
       ? undefined
       : "remote with other arguments can change or contact one",
-  stash: (args) =>
-    args[0] === "list" || args[0] === "show"
-      ? undefined
-      : "only stash list and stash show only read",
+  stash: (args) => {
+    if (args[0] !== "list" && args[0] !== "show") {
+      return "only stash list and stash show only read";
+    }
+    // `stash show` is a diff, so it takes diff's output option
+    return args[0] === "show"
+      ? reject("--output", "-O")(args.slice(1))
+      : undefined;
+  },
 };
 
 /** The global flags git accepts before its subcommand without running anything. */
