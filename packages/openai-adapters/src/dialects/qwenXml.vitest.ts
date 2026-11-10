@@ -64,6 +64,32 @@ interface Golden {
 
 const golden: Golden[] = [
   {
+    name: "a value that contains the closing parameter tag",
+    text: "<function=Write>\n<parameter=filepath>\na\n</parameter>\n<parameter=content>\nthe tag </parameter> ends a value\n</parameter>\n</function>",
+    text_after: "",
+    calls: [
+      {
+        name: "Write",
+        arguments: {
+          filepath: "a",
+          content: "the tag </parameter> ends a value",
+        },
+      },
+    ],
+  },
+  {
+    name: "a value that contains the closing function tag, then a second call",
+    text: "<function=Write>\n<parameter=filepath>\na\n</parameter>\n<parameter=content>\nx </function> y\n</parameter>\n</function>\n<function=Read>\n<parameter=filepath>\nb\n</parameter>\n</function>",
+    text_after: "",
+    calls: [
+      {
+        name: "Write",
+        arguments: { filepath: "a", content: "x </function> y" },
+      },
+      { name: "Read", arguments: { filepath: "b" } },
+    ],
+  },
+  {
     name: "the template's full form",
     text: "<tool_call>\n<function=Write>\n<parameter=filepath>\nsrc/a.ts\n</parameter>\n<parameter=content>\nexport const a = 1;\n</parameter>\n</function>\n</tool_call>",
     text_after: "",
@@ -182,8 +208,8 @@ const negatives: { name: string; text: string }[] = [
     text: "<function=Write>\n<parameter=filepath>\na\n</parameter>\n<parameter=content>\nhalf a fi",
   },
   {
-    name: "a value that contains the closing parameter tag",
-    text: "<function=Write>\n<parameter=filepath>\na\n</parameter>\n<parameter=content>\nthe tag </parameter> ends a value\n</parameter>\n</function>",
+    name: "a bad value is not made valid by folding the next parameter into it",
+    text: "<function=Bash>\n<parameter=command>\nls\n</parameter>\n<parameter=timeout>\nsoon\n</parameter>\n<parameter=background>\ntrue\n</parameter>\n</function>",
   },
   {
     name: "a call in Python syntax (Nova's form, not Qwen's)",

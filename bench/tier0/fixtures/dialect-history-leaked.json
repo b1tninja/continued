@@ -1,0 +1,27 @@
+[
+  {
+    "message": { "role": "user", "content": "Write notes.md" },
+    "toolCallStates": []
+  },
+  {
+    "message": {
+      "role": "assistant",
+      "content": "<tool_call>\n<function=Write>\n<parameter=filepath>\nnotes.md\n</parameter>\n</function>\n</tool_call>"
+    },
+    "toolCallStates": []
+  },
+  {
+    "message": { "role": "user", "content": "Continue." },
+    "toolCallStates": []
+  },
+  {
+    "message": { "role": "assistant", "content": "I wrote the file." },
+    "toolCallStates": [
+      {
+        "toolCallId": "tooluse_AbC123",
+        "toolCall": { "id": "tooluse_AbC123", "function": { "name": "Write" } },
+        "status": "done"
+      }
+    ]
+  }
+]

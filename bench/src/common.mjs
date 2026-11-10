@@ -205,6 +205,69 @@ export function textLeaks(history) {
     .map((t) => t.slice(0, 200));
 }
 
+/**
+ * Tool calls the adapter made from text the model wrote (core/llm/llms/
+ * Bedrock.ts, packages/openai-adapters/src/dialects/recovery.ts): their ids
+ * begin `recovered_`. Only present when CONTINUE_RECOVER_TEXT_TOOL_CALLS was on.
+ */
+export function recoveredCalls(history) {
+  return toolCalls(history).filter((tc) =>
+    String(tc.toolCallId ?? tc.toolCall?.id ?? "").startsWith("recovered_"),
+  ).length;
+}
+
+/**
+ * Leak and recovery counts per arm. An arm is a model row under one dialect
+ * setting; n is its runs. Leaks are replies that still wrote a call as text
+ * (textLeaks), recovered are calls made from such text. Records without a
+ * dialect (older folders) are one arm, "unset".
+ */
+export function dialectArms(records) {
+  const arms = new Map();
+  for (const r of records) {
+    const modelRow = r.modelRow ?? r.model;
+    const dialect = r.dialect ?? "unset";
+    const key = `${modelRow}|${dialect}`;
+    let a = arms.get(key);
+    if (!a) {
+      a = {
+        modelRow,
+        dialect,
+        n: 0,
+        textLeaks: 0,
+        runsWithLeak: 0,
+        recovered: 0,
+        runsWithRecovered: 0,
+      };
+      arms.set(key, a);
+    }
+    a.n++;
+    a.textLeaks += r.textLeaks ?? 0;
+    a.recovered += r.recovered ?? 0;
+    if (r.textLeaks) a.runsWithLeak++;
+    if (r.recovered) a.runsWithRecovered++;
+  }
+  return [...arms.values()].sort(
+    (x, y) =>
+      x.modelRow.localeCompare(y.modelRow) ||
+      x.dialect.localeCompare(y.dialect),
+  );
+}
+
+/** The arms as markdown table lines (empty when there is nothing to compare). */
+export function dialectArmsLines(records) {
+  const arms = dialectArms(records);
+  if (!arms.length) return [];
+  return [
+    "| Model | Dialect | n (runs) | Leaked replies (runs with a leak) | Recovered calls (runs with one) |",
+    "|---|---|---|---|---|",
+    ...arms.map(
+      (a) =>
+        `| ${a.modelRow} | ${a.dialect} | ${a.n} | ${a.textLeaks} (${a.runsWithLeak} of ${a.n}) | ${a.recovered} (${a.runsWithRecovered} of ${a.n}) |`,
+    ),
+  ];
+}
+
 /** The harness's own nudges, recognised by their wording (core/util/turnEnd.ts). */
 const CLI_NUDGES = [
   [/^You named the next step and then stopped/, "act"],
@@ -387,6 +450,7 @@ export function fillFromState(result, s, row) {
   result.nudges.cli = cliNudges(history);
   result.tools = tally(history);
   result.textLeaks = textLeaks(history);
+  result.recovered = recoveredCalls(history);
   result.perTurn = turnsOf(history, result.settings.maxTokens);
   result.truncations =
     s.truncatedReplies ?? result.perTurn.filter((t) => t.atCap).length;

@@ -43,14 +43,11 @@ const qwenXml: CorpusParser = ({ chunks, tools }) => {
 
 /**
  * Wanted recoveries the parser does not make today. Each is a finding, not an
- * accepted behaviour: the parser matches the first closing tag, so a value
- * that contains `</function>` or `</parameter>` makes the whole call stay
- * text. When one is fixed this list must shrink, and the test says so.
+ * accepted behaviour. Empty since the parser began choosing a closing tag by
+ * structure (a value may quote `</function>` or `</parameter>`); when a new
+ * gap is found it goes here and the test says so when it is fixed.
  */
-const KNOWN_SHOULD_GAPS = [
-  "qwen3-coder-literal-close-function-in-value",
-  "qwen3-coder-literal-close-parameter-in-value",
-];
+const KNOWN_SHOULD_GAPS: string[] = [];
 
 describe("QwenXmlRecovery against the corpus", () => {
   let report: ReturnType<typeof runCorpus>;
