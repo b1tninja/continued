@@ -75,6 +75,20 @@ The check also reads the command text to guess which shell it was written for, f
 - A command whose text belongs to another shell than the one running it is checked under both. A rule that refuses a command in one reading refuses it, and a command is treated as read-only only if every reading is.
 - The command is held once with a message that gives the fix in the right dialect, for example `ls -la` on Windows PowerShell becomes `Get-ChildItem -Force`, and `2>/dev/null` becomes `2>$null`. Send the same command again to run it as written.
 
+## Programs that are not installed
+
+A command whose program does not exist is not run. Without this check, the commands before it in a `&&` chain would already have run, and the agent would read a long shell error and often retry the same program. Instead the agent receives a short message that names the program, says where it looked, lists up to three alternatives that are present (for example `python3` for `python`, or `Select-String` for `grep` in PowerShell), gives an install command as text, and states that the command was not run. Nothing is installed for you.
+
+The check stops a command only when it is certain. Every program in a `&&`, `;` or `|` chain is looked up on the `PATH`, then asked of the shell that will run the command, so functions from your profile (`nvm`) and PowerShell cmdlets count as present. It does not stop a command when:
+
+- the program is a shell builtin, a keyword, a PowerShell alias or cmdlet, or a path (`./tool`, `C:\tools\tool.exe`)
+- an earlier part of the command may have created it: `cd`, `source`, `eval`, a `PATH` change, an alias, or an install (`npm i -g`, `pip install`, `apt install`, `brew install`, `cargo install`, `go install`, `curl ... | sh`)
+- the program is guarded or has a fallback: `which x && x`, `command -v x || ...`, `x --version || ...`
+- it is run through `npx`, `npm run`, `bunx`, `pnpm exec`, `uv run`, `poetry run`, `docker run`, `ssh` or `xargs`; `sudo`, `env VAR=1`, `time` and `nohup` are looked through
+- the command contains something the check does not read, such as `$VAR`, `$(...)`, a redirect to a file, a newline or a heredoc
+
+A command that runs in a container is not checked. Results are kept for a minute. Set `CONTINUE_MISSING_BINARY_CHECK=off` to skip this check.
+
 ## Turn it off
 
-Set `CONTINUE_COMMAND_LINT=off` in the environment that starts the editor or the CLI to skip the check.
+Set `CONTINUE_COMMAND_LINT=off` in the environment that starts the editor or the CLI to skip the lint.

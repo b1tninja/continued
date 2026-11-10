@@ -71,6 +71,7 @@ function getShellCommand(command: string): { shell: string; args: string[] } {
 import { fileURLToPath } from "node:url";
 import { getCommandExecutor } from "../../util/commandExecutor";
 import { commandLintGate } from "../permissions/commandLint";
+import { missingBinaryGate } from "../permissions/missingBinaryGate";
 import { ToolImpl } from ".";
 import {
   isProcessBackgrounded,
@@ -146,7 +147,11 @@ const LOCAL_ONLY = ["", "local"];
  */
 function commandBlocked(command: string): string | undefined {
   const executor = getCommandExecutor();
-  return executor.unavailable ?? commandLintGate(command, executor.shell.kind);
+  return (
+    executor.unavailable ??
+    commandLintGate(command, executor.shell.kind) ??
+    missingBinaryGate(command, executor)
+  );
 }
 
 /** The result of a command the lint stopped: nothing ran. */

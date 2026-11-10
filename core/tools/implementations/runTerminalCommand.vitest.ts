@@ -11,6 +11,7 @@ import {
   expect,
   it,
   vi,
+  onTestFinished,
 } from "vitest";
 import { IDE, ToolExtras } from "../..";
 import * as processTerminalStates from "../../util/processTerminalStates";
@@ -275,8 +276,25 @@ describe("runTerminalCommandImpl", () => {
     expect(result[0].status).toBe("Command executed");
   });
 
+  it("does not run a command whose program does not exist", async () => {
+    const result = await runTerminalCommandImpl(
+      { command: "nonexistentcommandxyz", waitForCompletion: true },
+      createMockExtras(),
+    );
+
+    expect(result[0].description).toBe("Command not run");
+    expect(result[0].content).toContain("nonexistentcommandxyz");
+    expect(result[0].content).toContain("The command was not run");
+  });
+
   it("should handle errors when executing invalid commands", async () => {
-    // Use a command that should fail on any platform
+    // With the preflight off the shell runs it and reports its own error
+    const saved = process.env.CONTINUE_MISSING_BINARY_CHECK;
+    process.env.CONTINUE_MISSING_BINARY_CHECK = "off";
+    onTestFinished(() => {
+      if (saved === undefined) delete process.env.CONTINUE_MISSING_BINARY_CHECK;
+      else process.env.CONTINUE_MISSING_BINARY_CHECK = saved;
+    });
     const args = {
       command: "non-existent-command-xyz",
       waitForCompletion: true,
