@@ -292,6 +292,16 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v7
+
+      - name: Check republish run
+        if: inputs.republish_run_id != ''
+        env:
+          REPUBLISH_RUN_ID: ${{ inputs.republish_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/ci/republish-run.js
+
       - uses: actions/download-artifact@v8
         if: inputs.republish_run_id == ''
         with:
