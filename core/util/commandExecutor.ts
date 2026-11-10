@@ -1,10 +1,20 @@
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { spawn } from "node:child_process";
+import { containerArgs } from "./containerArgs";
+import {
+  containerUnavailableMessage,
+  DEFAULT_CONTAINER_IMAGE,
+  pickContainerRuntime,
+  type ContainerStatus,
+} from "./containerStatus";
 import { wslStatus, wslUnavailableMessage, type WslDistro } from "./wslStatus";
 import {
+  getTerminalShellPreference,
+  hostUser,
   resolveShell,
   type ResolvedShell,
   type ShellEnvironment,
+  type TerminalShellPreference,
 } from "./shell";
 
 /**
@@ -20,7 +30,7 @@ import {
  * command (the shell), how to start it, and a sentence saying where it runs.
  */
 export interface CommandExecutor {
-  kind: "local" | "wsl";
+  kind: "local" | "wsl" | "container";
   /**
    * The shell that parses the command. The command lint, the classifiers and
    * the policy engine read it with this shell's grammar, whatever the host is.
@@ -43,8 +53,19 @@ export interface CommandExecutor {
 
 /** The executor for the current settings, or for `opts` when given. */
 export function getCommandExecutor(
-  opts: ShellEnvironment & { wslDistros?: WslDistro[] } = {},
+  opts: ShellEnvironment & {
+    wslDistros?: WslDistro[];
+    /** For tests: the container runtime's status, instead of asking it */
+    containerStatus?: ContainerStatus;
+  } = {},
 ): CommandExecutor {
+  const preference =
+    opts.terminalShell === "default"
+      ? undefined
+      : (opts.terminalShell ?? getTerminalShellPreference(opts.env));
+  if (preference?.kind === "container") {
+    return containerExecutor(preference, opts);
+  }
   const shell = resolveShell(opts);
   const wsl = shell.executable.toLowerCase().endsWith("wsl.exe");
   const unavailable = wsl
@@ -77,4 +98,48 @@ function wslDistroOf(shell: ResolvedShell): string | undefined {
   const args = shell.args("");
   const i = args.indexOf("-d");
   return i >= 0 ? args[i + 1] : undefined;
+}
+
+/**
+ * One `docker run` or `podman run` per command (plans/isolation.md, W2): the
+ * workspace the command starts in is the only thing mounted, there is no
+ * network, no capability, no Docker socket and no host environment, and the
+ * image cannot be changed (see `containerArgs`). Where the runtime is missing
+ * or its daemon is not running the executor is `unavailable`: the command is
+ * not run and never falls back to the host's shell.
+ */
+function containerExecutor(
+  preference: Extract<TerminalShellPreference, { kind: "container" }>,
+  opts: ShellEnvironment & { containerStatus?: ContainerStatus },
+): CommandExecutor {
+  const status =
+    opts.containerStatus ??
+    pickContainerRuntime(preference.runtime, { platform: opts.platform });
+  const runtime =
+    "runtime" in status ? status.runtime : (preference.runtime ?? "docker");
+  const image = preference.image ?? DEFAULT_CONTAINER_IMAGE;
+  const platform = opts.platform ?? process.platform;
+  const run = (command: string, cwd: string) =>
+    containerArgs(command, { runtime, image, cwd, platform, user: hostUser() });
+  const cwdOf = (options?: SpawnOptions) =>
+    typeof options?.cwd === "string" ? options.cwd : process.cwd();
+  return {
+    kind: "container",
+    unavailable: containerUnavailableMessage(status),
+    // The command is bash's inside the container, whatever the host is
+    shell: {
+      kind: "bash",
+      executable: runtime,
+      args: (command) => run(command, process.cwd()),
+      runsProfile: false,
+    },
+    invocation: (command) => ({
+      shell: runtime,
+      args: run(command, process.cwd()),
+    }),
+    spawn: (command, options) =>
+      spawn(runtime, run(command, cwdOf(options)), options ?? {}),
+    describe: () =>
+      `bash in a ${runtime} container (${image}): the workspace folder only, no network, no capabilities, no host secrets`,
+  };
 }
