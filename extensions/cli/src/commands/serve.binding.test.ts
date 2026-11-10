@@ -144,10 +144,10 @@ describe("serve request guards", () => {
 
   async function start(
     boundHost = "127.0.0.1",
-    token: string | undefined = TOKEN,
+    token: string | null = TOKEN,
   ): Promise<number> {
     const app = express();
-    installServeGuards(app, { boundHost, token });
+    installServeGuards(app, { boundHost, token: token ?? undefined });
     app.use(express.json());
     let hits = 0;
     app.post("/exit", (_req, res) => {
@@ -224,7 +224,7 @@ describe("serve request guards", () => {
   });
 
   it("without a token still checks Host and Origin but needs no bearer", async () => {
-    const port = await start("127.0.0.1", undefined);
+    const port = await start("127.0.0.1", null);
     const ok = await request(port, { host: `127.0.0.1:${port}` });
     expect(ok.status).toBe(200);
     const badHost = await request(port, { host: "evil.example" });
