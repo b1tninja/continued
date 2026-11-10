@@ -1,24 +1,31 @@
-import { ConfigHandler } from "core/config/ConfigHandler";
-import { applyCodeBlock } from "core/edit/lazy/applyCodeBlock";
-import { getUriPathBasename } from "core/util/uri";
-import * as vscode from "vscode";
 
 import { ApplyToFilePayload } from "core";
+import { ConfigHandler } from "core/config/ConfigHandler";
 import { myersDiff } from "core/diff/myers";
 import { generateLines } from "core/diff/util";
 import { ApplyAbortManager } from "core/edit/applyAbortManager";
+import { applyCodeBlock } from "core/edit/lazy/applyCodeBlock";
 import { streamDiffLines } from "core/edit/streamDiffLines";
 import { pruneLinesFromBottom, pruneLinesFromTop } from "core/llm/countTokens";
 import { getMarkdownLanguageTagForFile } from "core/util";
+import { getUriPathBasename } from "core/util/uri";
+import * as vscode from "vscode";
+
 import { VerticalDiffManager } from "../diff/vertical/manager";
 import { VsCodeIde } from "../VsCodeIde";
 import { VsCodeWebviewProtocol } from "../webviewProtocol";
-import { assembleAppliedContent } from "./assembleAppliedContent";
+
 import {
   documentChanged,
   editorMatchesFilepath,
   type DocumentStamp,
 } from "./applyTarget";
+import { assembleAppliedContent } from "./assembleAppliedContent";
+import {
+  pendingEditorForFilepath,
+  pendingFilepathForEditor,
+  trackPendingNewFile,
+} from "./pendingNewFile";
 
 /**
  * Handles applying text/code to files including diff generation and streaming
@@ -70,48 +77,50 @@ export class ApplyManager {
     }
 
     const hasExistingDocument = !!originalFileContent.trim();
-    if (hasExistingDocument) {
-      // Currently `isSearchAndReplace` will always provide a full file rewrite
-      // as the contents of `text`, so we can just instantly apply
-      if (isSearchAndReplace) {
-        await this.verticalDiffManager.instantApplyDiff(
-          originalFileContent,
-          text,
-          streamId,
-          toolCallId,
-          editor,
-          stamp.version,
-        );
-      } else {
-        await this.handleExistingDocument(
-          editor,
-          text,
-          streamId,
-          toolCallId,
-          stamp,
-        );
-      }
+    const isNewFile = pendingFilepathForEditor(stamp.uri) !== undefined;
+    if (!hasExistingDocument && !isNewFile) {
+      await this.handleEmptyDocument(editor, text, streamId, toolCallId);
+    } else if (isSearchAndReplace || isNewFile) {
+      // A new file is edited in an untitled document and written only if
+      // the person accepts. Search-and-replace is a full-file rewrite.
+      await this.verticalDiffManager.instantApplyDiff(
+        originalFileContent,
+        text,
+        streamId,
+        toolCallId,
+        editor,
+        stamp.version,
+        isNewFile ? filepath : undefined,
+      );
     } else {
-      await this.handleEmptyDocument(
+      await this.handleExistingDocument(
         editor,
         text,
         streamId,
         toolCallId,
+        stamp,
       );
     }
   }
 
   /** The editor for `filepath`, or the active editor when no path was given. */
-  private editorFor(filepath: string | undefined): vscode.TextEditor | undefined {
+  private editorFor(
+    filepath: string | undefined,
+  ): vscode.TextEditor | undefined {
     if (!filepath) {
       return vscode.window.activeTextEditor;
     }
-    return vscode.window.visibleTextEditors.find((editor) =>
-      editorMatchesFilepath(
-        { uri: editor.document.uri.toString(), fsPath: editor.document.uri.fsPath },
+    const pendingUri = pendingEditorForFilepath(filepath);
+    return vscode.window.visibleTextEditors.find((editor) => {
+      const uri = editor.document.uri.toString();
+      if (pendingUri && uri === pendingUri) {
+        return true;
+      }
+      return editorMatchesFilepath(
+        { uri, fsPath: editor.document.uri.fsPath },
         filepath,
-      ),
-    );
+      );
+    });
   }
 
   /** True when the document was edited after `stamp`. Tells the person and skips the apply. */
@@ -133,8 +142,11 @@ export class ApplyManager {
   private async ensureFileOpen(filepath: string): Promise<void> {
     const fileExists = await this.ide.fileExists(filepath);
     if (!fileExists) {
-      await this.ide.writeFile(filepath, "");
-      await this.ide.openFile(filepath);
+      // Do not create an empty file on disk before the edit is accepted.
+      const doc = await vscode.workspace.openTextDocument({ content: "" });
+      await vscode.window.showTextDocument(doc, { preview: false });
+      trackPendingNewFile(doc.uri.toString(), filepath);
+      return;
     }
     await this.ide.openFile(filepath);
   }

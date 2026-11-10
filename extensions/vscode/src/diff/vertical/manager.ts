@@ -1,22 +1,24 @@
 import { ChatMessage, DiffLine, IDE, ILLM, RuleWithSource } from "core";
+import { myersDiff } from "core/diff/myers";
+import { ApplyAbortManager } from "core/edit/applyAbortManager";
+import { EDIT_MODE_STREAM_ID } from "core/edit/constants";
 import { streamDiffLines } from "core/edit/streamDiffLines";
 import { pruneLinesFromBottom, pruneLinesFromTop } from "core/llm/countTokens";
 import { getMarkdownLanguageTagForFile } from "core/util";
-import { documentChanged } from "../../apply/applyTarget";
+import { stripImages } from "core/util/messageContent";
+import { getLastNPathParts } from "core/util/uri";
 import * as URI from "uri-js";
 import * as vscode from "vscode";
 
+import { documentChanged } from "../../apply/applyTarget";
 import { isFastApplyModel } from "../../apply/utils";
+import { editOutcomeTracker } from "../../extension/EditOutcomeTracker";
 import EditDecorationManager from "../../quickEdit/EditDecorationManager";
 import { handleLLMError } from "../../util/errorHandling";
 import { VsCodeWebviewProtocol } from "../../webviewProtocol";
 
-import { myersDiff } from "core/diff/myers";
-import { ApplyAbortManager } from "core/edit/applyAbortManager";
-import { EDIT_MODE_STREAM_ID } from "core/edit/constants";
-import { stripImages } from "core/util/messageContent";
-import { getLastNPathParts } from "core/util/uri";
-import { editOutcomeTracker } from "../../extension/EditOutcomeTracker";
+
+
 import { VerticalDiffHandler, VerticalDiffHandlerOptions } from "./handler";
 import { getFirstChangedLine } from "./util";
 
@@ -130,6 +132,25 @@ export class VerticalDiffManager {
         lineDelta,
       );
     });
+  }
+
+  /** Same as clearForfileUri, but waits until the editor edits have finished. */
+  async finishDiff(fileUri: string, accept: boolean): Promise<void> {
+    const handler = this.fileUriToHandler.get(fileUri);
+    if (handler) {
+      await handler.clear(accept);
+      this.fileUriToHandler.delete(fileUri);
+    }
+    this.disableDocumentChangeListener();
+    void vscode.commands.executeCommand(
+      "setContext",
+      "continuous.diffVisible",
+      false,
+    );
+    void this.webviewProtocol.request(
+      "focusContinueInputWithoutClear",
+      undefined,
+    );
   }
 
   clearForfileUri(fileUri: string | undefined, accept: boolean) {
@@ -322,6 +343,8 @@ export class VerticalDiffManager {
     toolCallId?: string,
     editor?: vscode.TextEditor,
     documentVersion?: number,
+    /** Path to report when the editor is an untitled stand-in for a new file. */
+    reportedFilepath?: string,
   ) {
     vscode.commands.executeCommand(
       "setContext",
@@ -338,6 +361,7 @@ export class VerticalDiffManager {
     }
 
     const fileUri = target.document.uri.toString();
+    const filepath = reportedFilepath ?? fileUri;
 
     const myersDiffs = myersDiff(oldContent, newContent);
 
@@ -354,7 +378,7 @@ export class VerticalDiffManager {
             status,
             numDiffs,
             fileContent,
-            filepath: fileUri,
+            filepath,
             toolCallId,
           }),
         streamId,
@@ -383,7 +407,7 @@ export class VerticalDiffManager {
       status: "done",
       numDiffs: this.fileUriToCodeLens.get(fileUri)?.length ?? 0,
       fileContent: target.document.getText(),
-      filepath: fileUri,
+      filepath,
       toolCallId,
     });
   }
