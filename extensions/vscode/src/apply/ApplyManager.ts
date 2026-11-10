@@ -13,6 +13,7 @@ import { getMarkdownLanguageTagForFile } from "core/util";
 import { VerticalDiffManager } from "../diff/vertical/manager";
 import { VsCodeIde } from "../VsCodeIde";
 import { VsCodeWebviewProtocol } from "../webviewProtocol";
+import { assembleAppliedContent } from "./assembleAppliedContent";
 import {
   documentChanged,
   editorMatchesFilepath,
@@ -233,28 +234,39 @@ export class ApplyManager {
     editor: vscode.TextEditor,
     range: vscode.Range,
     llm: any,
-  ): { prefix: string; suffix: string; rangeContent: string } {
+  ): {
+    prefix: string;
+    suffix: string;
+    rangeContent: string;
+    fullPrefix: string;
+    fullSuffix: string;
+  } {
     const rangeContent = editor.document.getText(range);
-
-    const prefix = pruneLinesFromTop(
-      editor.document.getText(
-        new vscode.Range(new vscode.Position(0, 0), range.start),
+    const fullPrefix = editor.document.getText(
+      new vscode.Range(new vscode.Position(0, 0), range.start),
+    );
+    const fullSuffix = editor.document.getText(
+      new vscode.Range(
+        range.end,
+        new vscode.Position(editor.document.lineCount, 0),
       ),
+    );
+
+    // The prompt only needs the lines nearest the selection. The file is
+    // rebuilt from fullPrefix and fullSuffix, or the omitted lines show up
+    // as deletions.
+    const prefix = pruneLinesFromTop(
+      fullPrefix,
       llm.contextLength / 4,
       llm.model,
     );
     const suffix = pruneLinesFromBottom(
-      editor.document.getText(
-        new vscode.Range(
-          range.end,
-          new vscode.Position(editor.document.lineCount, 0),
-        ),
-      ),
+      fullSuffix,
       llm.contextLength / 4,
       llm.model,
     );
 
-    return { prefix, suffix, rangeContent };
+    return { prefix, suffix, rangeContent, fullPrefix, fullSuffix };
   }
 
   private async handleNonInstantDiff(
@@ -339,11 +351,8 @@ export class ApplyManager {
     newCode: string,
   ): Promise<string | undefined> {
     const fileUri = editor.document.uri.toString();
-    const { prefix, suffix, rangeContent } = this.calculatePrefixSuffix(
-      editor,
-      range,
-      llm,
-    );
+    const { prefix, suffix, rangeContent, fullPrefix, fullSuffix } =
+      this.calculatePrefixSuffix(editor, range, llm);
 
     const abortManager = ApplyAbortManager.getInstance();
     const abortController = abortManager.get(fileUri);
@@ -380,8 +389,9 @@ export class ApplyManager {
         }
       }
 
-      // Return the complete file content
-      return `${prefix}${streamedLines.join("\n")}${suffix}`;
+      // The model saw the pruned prefix and suffix. The file keeps the
+      // unpruned head and tail so those lines are not deleted.
+      return assembleAppliedContent(fullPrefix, streamedLines, fullSuffix);
     } catch (error) {
       console.error("Error generating applied content:", error);
       return undefined;
