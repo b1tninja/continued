@@ -85,6 +85,8 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "bedrock/testModel",
     "bedrock/probeToolCalls",
     "config/setToolDialect",
+    "config/getTerminalEnvironment",
+    "config/setTerminalEnvironment",
     "llm/compileChat",
     "streamDiffLines",
     "chatDescriber/describe",
