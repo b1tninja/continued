@@ -235,10 +235,72 @@ describe("git", () => {
     '[filter "lfs"]\n\tclean = git-lfs clean\n',
     "[include]\n\tpath = /tmp/more\n",
     '[includeIf "gitdir:~/"]\n\tpath = x\n',
+    "[core]fsmonitor=touch /tmp/x",
+    "[core] fsmonitor = touch /tmp/x",
+    "[core]\n\tpager = less\n",
+    "[pager]\n\tstatus = less\n",
+    '[diff "x"]\n\tcommand = cat\n',
+    '[diff "x"] command = cat\n',
+    "[core]\n\talternateRefsCommand = cat\n",
+    "# fsmonitor is only a comment\n[core]fsmonitor=x\n",
   ])("is not vouched when a config can run programs: %s", (config) => {
     const opts = { ...CLEAN, readGitConfig: () => config };
     expect(vouched("git status", opts)).toBe(false);
     expect(why("git log", opts)).toContain("can run programs");
+  });
+
+  it("a comment that only mentions a dangerous key does not count", () => {
+    expect(
+      vouched("git status", {
+        ...CLEAN,
+        readGitConfig: () =>
+          "# fsmonitor = x\n; pager = less\n[core]\n\tbare = false\n",
+      }),
+    ).toBe(true);
+  });
+
+  it("reads the worktree config, the system file, and the XDG file", () => {
+    const seen: string[] = [];
+    const opts: ReadOnlyOptions = {
+      ...CLEAN,
+      env: { XDG_CONFIG_HOME: "/xdg", GIT_CONFIG_SYSTEM: "/etc/gitconfig" },
+      readGitConfig: (file) => {
+        seen.push(posix(file));
+        return posix(file).endsWith("/.git/config.worktree")
+          ? "[core]fsmonitor=x\n"
+          : "[core]\n\tbare = false\n";
+      },
+    };
+    expect(vouched("git status", opts)).toBe(false);
+    expect(seen.some((f) => f.endsWith("/.git/config.worktree"))).toBe(true);
+    expect(seen).toContain("/etc/gitconfig");
+    expect(seen).toContain("/xdg/git/config");
+  });
+
+  it("GIT_CONFIG_GLOBAL replaces the home gitconfig", () => {
+    const seen: string[] = [];
+    const opts: ReadOnlyOptions = {
+      ...CLEAN,
+      env: { GIT_CONFIG_GLOBAL: "/custom/gitconfig" },
+      readGitConfig: (file) => {
+        seen.push(posix(file));
+        return posix(file) === "/custom/gitconfig"
+          ? "[core]\n\tpager = less\n"
+          : "";
+      },
+    };
+    expect(vouched("git status", opts)).toBe(false);
+    expect(seen).toContain("/custom/gitconfig");
+    expect(seen.some((f) => f.endsWith("/.gitconfig"))).toBe(false);
+  });
+
+  it("a config key supplied by the environment is checked too", () => {
+    const opts: ReadOnlyOptions = {
+      ...CLEAN,
+      env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.fsmonitor" },
+      readGitConfig: () => "[core]\n\tbare = false\n",
+    };
+    expect(why("git status", opts)).toContain("can run programs");
   });
 
   it("checks the user's config as well as the repository's", () => {

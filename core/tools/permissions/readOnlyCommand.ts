@@ -222,9 +222,91 @@ const GIT_READ: Record<string, Check> = {
 /** The global flags git accepts before its subcommand without running anything. */
 const GIT_SAFE_GLOBAL = new Set(["--no-pager", "--no-optional-locks", "-P"]);
 
-/** Config keys under which git can be made to run a program. */
-const GIT_RUNS_THINGS =
-  /^\s*(fsmonitor|hookspath|sshcommand|textconv|external|askpass|editor|gpg\.program|program)\s*=|^\s*\[\s*(include|includeif|hook|filter)\b/im;
+/**
+ * A config key whose value is a program, or a section git runs as a program.
+ * Matched on the parsed key (`core.fsmonitor`, `diff.x.command`), so a
+ * one-line section and a subsection are the same as a key on its own line.
+ */
+const GIT_RUNS_KEY =
+  /(^|\.)(fsmonitor|hookspath|sshcommand|textconv|command|external|askpass|editor|pager|program|alternaterefscommand)$/i;
+
+function gitSectionName(header: string): string {
+  const h = header.trim();
+  const quoted = /^([A-Za-z0-9][A-Za-z0-9-]*)\s+"((?:\\.|[^"\\])*)"\s*$/.exec(
+    h,
+  );
+  if (quoted) {
+    return `${quoted[1].toLowerCase()}.${quoted[2].replace(/\\"/g, '"').toLowerCase()}`;
+  }
+  return h.toLowerCase();
+}
+
+function gitSectionRunsPrograms(section: string): boolean {
+  return /^(include|includeif|hook|filter|pager)(\.|$)/i.test(section);
+}
+
+function gitKeyRunsPrograms(section: string, line: string): boolean {
+  const eq = line.indexOf("=");
+  if (eq <= 0) return false;
+  const name = line.slice(0, eq).trim().toLowerCase();
+  if (!/^[a-z0-9-]+$/.test(name)) return false;
+  const full = section ? `${section}.${name}` : name;
+  return GIT_RUNS_KEY.test(full) || gitSectionRunsPrograms(full);
+}
+
+/** Drop an unquoted `#` comment. `;` only starts a comment at the beginning of a line. */
+function withoutGitComment(line: string): string {
+  let quote: '"' | "'" | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quote) {
+      if (c === "\\" && quote === '"') {
+        i++;
+        continue;
+      }
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      continue;
+    }
+    if (c === "#") return line.slice(0, i);
+  }
+  return line;
+}
+
+/** True when this config text names a program git would run. */
+function gitConfigRunsPrograms(text: string): boolean {
+  let section = "";
+  for (const raw of text.replace(/\\\r?\n/g, "").split(/\r?\n/)) {
+    const line = withoutGitComment(raw).trim();
+    if (!line || line.startsWith(";") || line.startsWith("#")) continue;
+    const header = /^\[([^\]]+)\](.*)$/.exec(line);
+    if (header) {
+      section = gitSectionName(header[1]);
+      if (gitSectionRunsPrograms(section)) return true;
+      const rest = header[2].trim();
+      if (rest && gitKeyRunsPrograms(section, rest)) return true;
+      continue;
+    }
+    if (section && gitSectionRunsPrograms(section)) return true;
+    if (gitKeyRunsPrograms(section, line)) return true;
+  }
+  return false;
+}
+
+function gitEnvRunsPrograms(env: Record<string, string | undefined>): boolean {
+  const n = Number(env.GIT_CONFIG_COUNT);
+  if (!Number.isInteger(n) || n <= 0) return false;
+  for (let i = 0; i < Math.min(n, 64); i++) {
+    const key = env[`GIT_CONFIG_KEY_${i}`];
+    if (!key) continue;
+    const full = key.trim().toLowerCase();
+    if (GIT_RUNS_KEY.test(full) || gitSectionRunsPrograms(full)) return true;
+  }
+  return false;
+}
 
 export interface ReadOnlyOptions {
   /**
@@ -239,6 +321,8 @@ export interface ReadOnlyOptions {
   /** For tests: what a path is, "dir" or "file", or undefined when absent */
   probe?: (file: string) => "dir" | "file" | undefined;
   home?: string;
+  /** For tests: where git looks up config. Absent means the process environment. */
+  env?: Record<string, string | undefined>;
 }
 
 function defaultProbe(file: string): "dir" | "file" | undefined {
@@ -269,15 +353,27 @@ function gitIsSafe(opts: ReadOnlyOptions): string | undefined {
     return "git is not vouched without a folder to check its config in";
   const read = opts.readGitConfig ?? defaultReadGitConfig;
   const home = opts.home ?? os.homedir();
+  const env = opts.env ?? process.env;
+  if (gitEnvRunsPrograms(env)) {
+    return "git config from the environment can run programs (fsmonitor, hooks, filters or similar)";
+  }
   // A file URI's path is "/C:/..." on Windows, which fs does not take
   const cwd = opts.cwd.replace(/^\/([A-Za-z]:)/, "$1");
   const probe = opts.probe ?? defaultProbe;
-  // The repository is the nearest folder up the tree with a .git: the
-  // workspace is often a subfolder of it
-  const files = [
-    path.join(home, ".gitconfig"),
-    path.join(home, ".config", "git", "config"),
-  ];
+  // System, then global, then the repository. GIT_CONFIG_GLOBAL replaces both
+  // ~/.gitconfig and $XDG_CONFIG_HOME/git/config; GIT_CONFIG_SYSTEM replaces
+  // /etc/gitconfig. The repository is the nearest folder up the tree with a
+  // .git: the workspace is often a subfolder of it.
+  const files: string[] = [];
+  if (env.GIT_CONFIG_SYSTEM) files.push(env.GIT_CONFIG_SYSTEM);
+  else files.push("/etc/gitconfig");
+  if (env.GIT_CONFIG_GLOBAL) {
+    files.push(env.GIT_CONFIG_GLOBAL);
+  } else {
+    files.push(path.join(home, ".gitconfig"));
+    const xdg = env.XDG_CONFIG_HOME || path.join(home, ".config");
+    files.push(path.join(xdg, "git", "config"));
+  }
   for (let dir = cwd; ;) {
     const kind = probe(path.join(dir, ".git"));
     if (kind === "file") {
@@ -285,7 +381,8 @@ function gitIsSafe(opts: ReadOnlyOptions): string | undefined {
       return `${dir} is a git worktree or submodule, whose config was not checked`;
     }
     if (kind === "dir") {
-      files.unshift(path.join(dir, ".git", "config"));
+      files.push(path.join(dir, ".git", "config"));
+      files.push(path.join(dir, ".git", "config.worktree"));
       break;
     }
     const up = path.dirname(dir);
@@ -294,7 +391,7 @@ function gitIsSafe(opts: ReadOnlyOptions): string | undefined {
   }
   for (const file of files) {
     const text = read(file);
-    if (text && GIT_RUNS_THINGS.test(text)) {
+    if (text && gitConfigRunsPrograms(text)) {
       return `git config (${file}) can run programs (fsmonitor, hooks, filters or similar)`;
     }
   }
