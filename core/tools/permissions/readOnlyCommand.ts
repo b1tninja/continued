@@ -37,12 +37,33 @@ const no = (why: string): ReadOnlyClaim => ({
 type Check = (args: string[]) => string | undefined;
 
 const anyArgs: Check = () => undefined;
+
+/**
+ * A rejected flag also covers the forms the program actually accepts: a short
+ * option with its value attached (`-Ocmd`) and a long option abbreviated to a
+ * unique prefix (`--open-f=cmd`). `--` ends options, so later words are files.
+ */
 const reject =
   (...flags: string[]): Check =>
   (args) => {
     for (const a of args) {
-      const flag = a.split("=")[0];
-      if (flags.includes(flag)) return `argument ${flag} is not recognised`;
+      if (a === "--") break;
+      const name = a.split("=")[0];
+      for (const f of flags) {
+        const isShort = /^-[^-]$/.test(f);
+        if (name === f) return `argument ${name} is not recognised`;
+        if (isShort && a.startsWith(f) && a.length > f.length) {
+          return `argument ${f} is not recognised`;
+        }
+        if (
+          !isShort &&
+          name.startsWith("--") &&
+          name.length > 2 &&
+          f.startsWith(name)
+        ) {
+          return `argument ${name} is not recognised`;
+        }
+      }
     }
     return undefined;
   };
@@ -152,7 +173,7 @@ const GIT_READ: Record<string, Check> = {
   show: reject("--output", "--ext-diff"),
   blame: anyArgs,
   "rev-parse": anyArgs,
-  "rev-list": anyArgs,
+  "rev-list": reject("--output", "-O"),
   "ls-files": anyArgs,
   "ls-tree": anyArgs,
   "cat-file": (args) =>
@@ -160,7 +181,7 @@ const GIT_READ: Record<string, Check> = {
       ? "cat-file batch and textconv modes are not recognised"
       : undefined,
   describe: anyArgs,
-  shortlog: anyArgs,
+  shortlog: reject("--output", "-O"),
   "merge-base": anyArgs,
   "name-rev": anyArgs,
   "for-each-ref": anyArgs,
