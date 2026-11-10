@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { failures, runCorpus, type CorpusParser } from "./runCorpus";
 
 type RecoveryEvent =
@@ -23,9 +23,8 @@ const QWEN_XML = path.resolve(
   __dirname,
   "../../../../packages/openai-adapters/src/dialects/qwenXml.ts",
 );
-const { QwenXmlRecovery } = (await import(/* @vite-ignore */ QWEN_XML)) as {
-  QwenXmlRecovery: new (tools: unknown[]) => Recovery;
-};
+type RecoveryClass = new (tools: unknown[]) => Recovery;
+let QwenXmlRecovery: RecoveryClass;
 
 /** The Qwen XML recovery, as a corpus parser. */
 const qwenXml: CorpusParser = ({ chunks, tools }) => {
@@ -54,9 +53,17 @@ const KNOWN_SHOULD_GAPS = [
 ];
 
 describe("QwenXmlRecovery against the corpus", () => {
-  const report = runCorpus(qwenXml, {
-    dialects: ["qwen-xml"],
-    negativesFromAllDialects: true,
+  let report: ReturnType<typeof runCorpus>;
+
+  beforeAll(async () => {
+    const loaded = (await import(/* @vite-ignore */ QWEN_XML)) as {
+      QwenXmlRecovery: RecoveryClass;
+    };
+    QwenXmlRecovery = loaded.QwenXmlRecovery;
+    report = runCorpus(qwenXml, {
+      dialects: ["qwen-xml"],
+      negativesFromAllDialects: true,
+    });
   });
 
   it("runs every stream of the qwen-xml fixtures and every negative", () => {
