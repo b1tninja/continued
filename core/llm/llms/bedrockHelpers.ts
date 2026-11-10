@@ -4,6 +4,7 @@ import {
   promptCacheSupportsLifetime,
 } from "@continuedev/llm-info";
 import { resolveCacheParts } from "./anthropicCache.js";
+import { familyRuleFor } from "./bedrockFamilyRules.js";
 import {
   budgetTokensToEffort,
   supportsAdaptiveThinking,
@@ -732,6 +733,9 @@ const REASONING_EFFORT_MODEL = /(^|\.)(qwen\.|deepseek\.v3)/i;
  * - Qwen3 and DeepSeek V3.2: `reasoning_effort` low, medium or high turns
  *   reasoning on; `"none"` turns it off, and is sent only when the config
  *   says `reasoning: false`, never by default. `xhigh` is refused.
+ * - Kimi K3 and K3.1: `reasoning_effort` per the AWS model card (2026-11-10),
+ *   `none` when the config says `reasoning: false`, nothing by default.
+ *   Documented, not probed (bedrockFamilyRules.ts).
  * - DeepSeek R1 reasons always and refuses every additional field; Llama
  *   refuses `thinking` as an extraneous key; Mistral ignores it. Nothing is
  *   sent to them.
@@ -779,6 +783,21 @@ export function bedrockReasoningFields(
         reasoningConfig: { type: "enabled", maxReasoningEffort: effort },
       },
       omitMaxTokens: effort === "high",
+    };
+  }
+  // Families with a documented Converse field (bedrockFamilyRules.ts; Kimi K3
+  // and K3.1 today). Nothing is sent when the config says nothing, so the
+  // model's own default (`max` for Kimi K3) applies.
+  const family = familyRuleFor(modelId)?.converseReasoning;
+  if (family) {
+    if (reasoning === undefined) return none;
+    return {
+      additionalModelRequestFields: {
+        [family.field]: reasoning
+          ? budgetTokensToEffort(budgetTokens)
+          : (family.off ?? "none"),
+      },
+      omitMaxTokens: false,
     };
   }
   if (REASONING_EFFORT_MODEL.test(modelId)) {

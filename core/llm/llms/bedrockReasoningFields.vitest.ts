@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import * as core from "./bedrockHelpers";
+import * as coreRules from "./bedrockFamilyRules";
 
 // Loaded at run time from a path held in a variable, not with a static import,
 // for the reason given in bedrockOneHourCache.vitest.ts.
@@ -11,10 +12,18 @@ const ADAPTER_HELPERS = pathToFileURL(
     "../../../packages/openai-adapters/src/apis/bedrockHelpers.ts",
   ),
 ).href;
+const ADAPTER_RULES = pathToFileURL(
+  resolve(
+    __dirname,
+    "../../../packages/openai-adapters/src/apis/bedrockFamilyRules.ts",
+  ),
+).href;
 let adapter: typeof core;
+let adapterRules: typeof coreRules;
 
 beforeAll(async () => {
   adapter = await import(/* @vite-ignore */ ADAPTER_HELPERS);
+  adapterRules = await import(/* @vite-ignore */ ADAPTER_RULES);
 });
 
 /**
@@ -39,6 +48,14 @@ const MODELS = [
   "us.meta.llama3-3-70b-instruct-v1:0",
   "mistral.mistral-large-3-675b-instruct",
   "openai.gpt-oss-120b-1:0",
+  "us.moonshotai.kimi-k3",
+  "global.moonshotai.kimi-k3.1",
+  "moonshotai.kimi-k2.5",
+  "moonshot.kimi-k2-thinking",
+  "zai.glm-5",
+  "minimax.minimax-m2.5",
+  "nvidia.nemotron-super-3-120b",
+  "us.xai.grok-4.6",
   "",
 ];
 const REASONING = [undefined, false, true] as const;
@@ -296,5 +313,106 @@ describe("holdBackDsmlMarker", () => {
         core.holdBackDsmlMarker(text),
       );
     }
+  });
+});
+
+describe("the unmeasured families (plans/model-families-2026-11.md)", () => {
+  it("keeps the two copies of the family table identical", () => {
+    const flat = (rules: typeof coreRules.FAMILY_RULES) =>
+      rules.map((r) => ({ ...r, match: r.match.source + "/" + r.match.flags }));
+    expect(flat(adapterRules.FAMILY_RULES)).toEqual(
+      flat(coreRules.FAMILY_RULES),
+    );
+  });
+
+  it("gives every entry a status, a read date and an AWS or vendor source URL", () => {
+    for (const r of coreRules.FAMILY_RULES) {
+      expect(["unprobed", "probed"], r.id).toContain(r.status);
+      expect(r.read, r.id).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(r.sources.length, r.id).toBeGreaterThan(0);
+      for (const url of r.sources) expect(url, r.id).toMatch(/^https:\/\//);
+    }
+  });
+
+  it("finds the rule for the Bedrock ids on the account, with and without a geography prefix", () => {
+    const want: Record<string, string> = {
+      "moonshotai.kimi-k3": "kimi-k3",
+      "us.moonshotai.kimi-k3": "kimi-k3",
+      "global.moonshotai.kimi-k3.1": "kimi-k3",
+      "moonshot.kimi-k2-thinking": "kimi-k2-thinking",
+      "moonshotai.kimi-k2-thinking": "kimi-k2-thinking",
+      "moonshotai.kimi-k2.5": "kimi-k2.5",
+      "zai.glm-5": "glm-5",
+      "minimax.minimax-m2.5": "minimax-m2.5",
+      "nvidia.nemotron-super-3-120b": "nemotron-3-super",
+      "us.xai.grok-4.6": "grok-4.6",
+      "xai.grok-4.6": "grok-4.6",
+      "openai.gpt-oss-120b-1:0": "gpt-oss",
+      "openai.gpt-oss-120b": "gpt-oss",
+    };
+    for (const [id, family] of Object.entries(want)) {
+      for (const rules of [coreRules, adapterRules]) {
+        expect(rules.familyRuleFor(id)?.id, id).toBe(family);
+      }
+    }
+    expect(coreRules.familyRuleFor("qwen.qwen3-32b-v1:0")).toBeUndefined();
+    expect(coreRules.familyRuleFor("moonshotai.kimi-k3-vl")).toBeUndefined();
+  });
+
+  it("sends Kimi K3 and K3.1 reasoning_effort only when the config says so, and nothing otherwise", () => {
+    for (const helpers of [core, adapter]) {
+      for (const id of [
+        "us.moonshotai.kimi-k3",
+        "global.moonshotai.kimi-k3.1",
+      ]) {
+        expect(helpers.bedrockReasoningFields(id, undefined, 4096)).toEqual({
+          additionalModelRequestFields: {},
+          omitMaxTokens: false,
+        });
+        expect(
+          helpers.bedrockReasoningFields(id, false, 4096)
+            .additionalModelRequestFields,
+        ).toEqual({ reasoning_effort: "none" });
+        expect(
+          helpers.bedrockReasoningFields(id, true, 1024)
+            .additionalModelRequestFields,
+        ).toEqual({ reasoning_effort: "low" });
+        expect(
+          helpers.bedrockReasoningFields(id, true, 16384)
+            .additionalModelRequestFields,
+        ).toEqual({ reasoning_effort: "high" });
+      }
+    }
+  });
+
+  it("sends nothing to the families whose Converse field no page documents", () => {
+    const unwired = [
+      "moonshotai.kimi-k2.5",
+      "moonshot.kimi-k2-thinking",
+      "zai.glm-5",
+      "minimax.minimax-m2.5",
+      "nvidia.nemotron-super-3-120b",
+      "us.xai.grok-4.6",
+      "openai.gpt-oss-120b-1:0",
+    ];
+    for (const id of unwired) {
+      for (const reasoning of REASONING) {
+        expect(
+          core.bedrockReasoningFields(id, reasoning, 4096)
+            .additionalModelRequestFields,
+          id,
+        ).toEqual({});
+      }
+      expect(
+        coreRules.familyRuleFor(id)?.converseReasoning,
+        id,
+      ).toBeUndefined();
+    }
+  });
+
+  it("marks no entry probed, because nothing here was run", () => {
+    expect(coreRules.FAMILY_RULES.every((r) => r.status === "unprobed")).toBe(
+      true,
+    );
   });
 });

@@ -8,6 +8,7 @@ import {
 } from "@continuedev/llm-info";
 
 import type { CacheTtl } from "./cacheTtl.js";
+import { familyRuleFor } from "./bedrockFamilyRules.js";
 
 // The text-stream filters moved to ../dialects/textFilters.ts; re-exported so
 // existing imports of this file keep working.
@@ -563,6 +564,21 @@ export function bedrockReasoningFields(
         reasoningConfig: { type: "enabled", maxReasoningEffort: effort },
       },
       omitMaxTokens: effort === "high",
+    };
+  }
+  // Families with a documented Converse field (bedrockFamilyRules.ts; Kimi K3
+  // and K3.1 today). Nothing is sent when the config says nothing, so the
+  // model's own default (`max` for Kimi K3) applies.
+  const family = familyRuleFor(modelId)?.converseReasoning;
+  if (family) {
+    if (reasoning === undefined) return none;
+    return {
+      additionalModelRequestFields: {
+        [family.field]: reasoning
+          ? budgetTokensToEffort(budgetTokens)
+          : (family.off ?? "none"),
+      },
+      omitMaxTokens: false,
     };
   }
   if (REASONING_EFFORT_MODEL.test(modelId)) {

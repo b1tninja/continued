@@ -1,0 +1,553 @@
+# Tier 1 shape probes for the families that have not been measured
+# (plans/model-benchmark.md section 4.5, plans/model-families-2026-11.md,
+# roadmap rows I2 and I4). Declarative: nothing here sends a request.
+# `node bench/probe.mjs --family <id> --emit <dir>` writes one request file per
+# probe and a run.sh of `aws` and `curl` commands; the owner runs run.sh, which
+# is the only place money is spent (4 to 15 requests of under 300 tokens per
+# family).
+#
+# `probes` are the shapes every family gets. `families.<id>.variants` are the
+# candidate reasoning fields, each a guess taken from a vendor page (see the
+# family's `sources`), run through the `reasoning-variant` probe so the refusal
+# string or the accepted value is on record. `expect` is what the sources
+# predict, in words; it is compared by eye against the outputs, not scored.
+#
+# Placeholders: {{MODEL}} the row's model id, {{TOOL}} the tool name.
+version: 1
+
+probes:
+  - id: baseline
+    purpose: the route, the key and the id work at all; stopReason and usage fields
+    converse:
+      messages:
+        - role: user
+          content: [{ text: "Reply with the single word: ok" }]
+      inferenceConfig: { maxTokens: 256 }
+    chat:
+      messages: [{ role: user, content: "Reply with the single word: ok" }]
+      max_tokens: 256
+
+  - id: reasoning-variant
+    purpose: one request per family variant; does the field exist, and does reasoning content come back
+    expandVariants: true
+    converse:
+      messages:
+        - role: user
+          content:
+            [{ text: "What is 17 times 23? Answer with the number only." }]
+      inferenceConfig: { maxTokens: 1024 }
+    chat:
+      messages:
+        - role: user
+          content: "What is 17 times 23? Answer with the number only."
+      max_tokens: 1024
+
+  - id: tool-auto
+    purpose: a tool call arrives as a structured toolUse or tool_calls, not as text in the family's dialect
+    converse:
+      messages:
+        - role: user
+          content: [{ text: "Read the file notes.txt." }]
+      inferenceConfig: { maxTokens: 1024 }
+      toolConfig:
+        tools:
+          - toolSpec:
+              name: read_file
+              description: Read a text file.
+              inputSchema:
+                json:
+                  {
+                    type: object,
+                    properties: { path: { type: string } },
+                    required: [path],
+                  }
+        toolChoice: { auto: {} }
+    chat:
+      messages: [{ role: user, content: "Read the file notes.txt." }]
+      max_tokens: 1024
+      tools:
+        - type: function
+          function:
+            name: read_file
+            description: Read a text file.
+            parameters:
+              {
+                type: object,
+                properties: { path: { type: string } },
+                required: [path],
+              }
+      tool_choice: auto
+
+  - id: tool-any
+    purpose: toolChoice any (chat required) is accepted and forces a call
+    base: tool-auto
+    converse: { toolConfig: { toolChoice: { any: {} } } }
+    chat: { tool_choice: required }
+
+  - id: tool-named
+    purpose: toolChoice naming one tool is accepted and forces that tool
+    base: tool-auto
+    converse: { toolConfig: { toolChoice: { tool: { name: read_file } } } }
+    chat: { tool_choice: { type: function, function: { name: read_file } } }
+
+  - id: tool-stream
+    purpose: streaming with tools works (Llama 4 and Qwen3 32B needed the non-streaming route)
+    base: tool-auto
+    converseOnly: true
+    stream: true
+
+  - id: sampling-both
+    purpose: temperature and topP together are accepted
+    base: baseline
+    converse:
+      { inferenceConfig: { maxTokens: 256, temperature: 0.7, topP: 0.9 } }
+    chat: { temperature: 0.7, top_p: 0.9 }
+
+  - id: sampling-temperature
+    purpose: temperature alone, a value other than 1 (fixed-sampling models refuse it)
+    base: baseline
+    converse: { inferenceConfig: { maxTokens: 256, temperature: 0.3 } }
+    chat: { temperature: 0.3 }
+
+  - id: stop-sequences
+    purpose: stopSequences are accepted or refused with the known string
+    base: baseline
+    converse: { inferenceConfig: { maxTokens: 256, stopSequences: ["END"] } }
+    chat: { stop: ["END"] }
+
+  - id: truncation
+    purpose: a small cap with reasoning on; does content come back empty and what is the stopReason
+    converse:
+      messages:
+        - role: user
+          content: [{ text: "Explain step by step why the sky is blue." }]
+      inferenceConfig: { maxTokens: 32 }
+    chat:
+      messages:
+        - role: user
+          content: "Explain step by step why the sky is blue."
+      max_tokens: 32
+
+  - id: replay-reasoning
+    purpose: a second turn that replays the first turn's reasoning block (AWS says Converse fails for Kimi K3 and K3.1)
+    converseOnly: true
+    converse:
+      messages:
+        - role: user
+          content: [{ text: "Pick a number." }]
+        - role: assistant
+          content:
+            - reasoningContent:
+                {
+                  reasoningText:
+                    { text: "The user wants a number. I will say 42." },
+                }
+            - text: "42"
+        - role: user
+          content: [{ text: "Add 1 to it." }]
+      inferenceConfig: { maxTokens: 512 }
+
+# Per family: the matrix row, the route the probes use, the probes to run, the
+# candidate reasoning fields, and what the sources predict.
+families:
+  kimi-k3:
+    row: kimi-k3
+    route: converse
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-moonshot-ai-kimi-k3.html
+      - https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        tool-stream,
+        sampling-both,
+        sampling-temperature,
+        stop-sequences,
+        truncation,
+        replay-reasoning,
+      ]
+    variants:
+      - {
+          id: effort-none,
+          note: "AWS lists none; Moonshot does not",
+          converse:
+            { additionalModelRequestFields: { reasoning_effort: none } },
+        }
+      - {
+          id: effort-low,
+          converse: { additionalModelRequestFields: { reasoning_effort: low } },
+        }
+      - {
+          id: effort-medium,
+          note: "AWS lists medium; Moonshot does not",
+          converse:
+            { additionalModelRequestFields: { reasoning_effort: medium } },
+        }
+      - {
+          id: effort-max,
+          converse: { additionalModelRequestFields: { reasoning_effort: max } },
+        }
+      - {
+          id: effort-minimal,
+          note: "AWS says refused; Converse may not validate",
+          converse:
+            { additionalModelRequestFields: { reasoning_effort: minimal } },
+        }
+    expect: reasoning_effort accepted for none, low, medium, max; minimal accepted silently on Converse; replay-reasoning fails with InternalServerException; toolChoice any disputed by third parties
+
+  kimi-k31:
+    row: kimi-k31
+    route: converse
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-moonshot-ai-kimi-k3-1-highspeed.html
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        sampling-both,
+        replay-reasoning,
+      ]
+    variants:
+      - {
+          id: effort-none,
+          converse:
+            { additionalModelRequestFields: { reasoning_effort: none } },
+        }
+      - {
+          id: effort-low,
+          converse: { additionalModelRequestFields: { reasoning_effort: low } },
+        }
+    expect: same as kimi-k3; Moonshot says always reasons with preserved thinking and not to pass thinking
+
+  kimi-k2-thinking:
+    row: kimi-k2-thinking
+    route: converse
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-moonshot-ai-kimi-k2-thinking.html
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        truncation,
+        replay-reasoning,
+      ]
+    variants:
+      - {
+          id: thinking-disabled,
+          note: "Moonshot K2.5 API field; K2 Thinking always reasons",
+          converse:
+            { additionalModelRequestFields: { thinking: { type: disabled } } },
+        }
+    expect: no switch accepted; reasoning always returned; 16K output cap truncates long thinking
+
+  kimi-k25:
+    row: kimi-k25
+    route: converse
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-moonshot-ai-kimi-k2-5.html
+      - https://huggingface.co/moonshotai/Kimi-K2.5
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        sampling-both,
+        sampling-temperature,
+        truncation,
+      ]
+    variants:
+      - {
+          id: thinking-disabled,
+          note: "Moonshot API field",
+          converse:
+            { additionalModelRequestFields: { thinking: { type: disabled } } },
+        }
+      - {
+          id: template-thinking-false,
+          note: "vLLM and SGLang field",
+          converse:
+            {
+              additionalModelRequestFields:
+                { chat_template_kwargs: { thinking: false } },
+            },
+        }
+      - {
+          id: effort-low,
+          note: "guess from K3",
+          converse: { additionalModelRequestFields: { reasoning_effort: low } },
+        }
+    expect: whichever of these Bedrock accepts is K2.5's missing switch
+
+  grok46:
+    row: grok46
+    route: converse
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-xai-grok-4-6.html
+      - https://docs.x.ai/docs/guides/reasoning
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        tool-stream,
+        sampling-both,
+        sampling-temperature,
+        stop-sequences,
+        truncation,
+      ]
+    variants:
+      - {
+          id: effort-low,
+          converse: { additionalModelRequestFields: { reasoning_effort: low } },
+        }
+      - {
+          id: effort-xhigh,
+          converse:
+            { additionalModelRequestFields: { reasoning_effort: xhigh } },
+        }
+      - {
+          id: reasoning-object,
+          note: "Responses API shape",
+          converse:
+            { additionalModelRequestFields: { reasoning: { effort: low } } },
+        }
+    expect: stop-sequences refused (xAI rejects stop); no way to switch reasoning off; model id must carry the us. or global. prefix
+
+  glm5:
+    row: glm5
+    route: converse
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-zai-glm-5.html
+      - https://docs.z.ai/guides/capabilities/thinking-mode
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        tool-stream,
+        sampling-both,
+        stop-sequences,
+        truncation,
+      ]
+    variants:
+      - {
+          id: thinking-disabled,
+          note: "Z.AI field",
+          converse:
+            { additionalModelRequestFields: { thinking: { type: disabled } } },
+        }
+      - {
+          id: template-enable-thinking-false,
+          note: "serving-stack field",
+          converse:
+            {
+              additionalModelRequestFields:
+                { chat_template_kwargs: { enable_thinking: false } },
+            },
+        }
+    expect: tool calls may arrive as text in the glm-xml dialect (arg_key and arg_value); compare with core/llm/toolDialects/corpus
+
+  minimax-m25:
+    row: minimax-m25
+    route: converse
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-minimax-minimax-m2-5.html
+      - https://platform.minimax.io/docs/api-reference/text-openai-api
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        tool-stream,
+        sampling-both,
+        truncation,
+      ]
+    variants:
+      - {
+          id: reasoning-split,
+          note: "MiniMax API field",
+          converse: { additionalModelRequestFields: { reasoning_split: true } },
+        }
+      - {
+          id: thinking-disabled,
+          note: "documented for M3, not M2.5",
+          converse:
+            { additionalModelRequestFields: { thinking: { type: disabled } } },
+        }
+    expect: truncation at 32 tokens returns empty content; think tags may appear in text; 8K output cap
+
+  nemotron3-super:
+    row: nemotron3-super
+    route: converse
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-nvidia-nemotron-super-3-120b.html
+      - https://docs.vllm.ai/en/stable/api/vllm/parser/nemotron_v3/
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        tool-stream,
+        sampling-both,
+        stop-sequences,
+        truncation,
+      ]
+    variants:
+      - {
+          id: effort-none,
+          note: "AWS card lists none, low, medium, high with no field",
+          converse:
+            { additionalModelRequestFields: { reasoning_effort: none } },
+        }
+      - {
+          id: effort-low,
+          converse: { additionalModelRequestFields: { reasoning_effort: low } },
+        }
+      - {
+          id: template-enable-thinking-false,
+          converse:
+            {
+              additionalModelRequestFields:
+                { chat_template_kwargs: { enable_thinking: false } },
+            },
+        }
+      - {
+          id: template-low-effort,
+          converse:
+            {
+              additionalModelRequestFields:
+                {
+                  chat_template_kwargs:
+                    { enable_thinking: true, low_effort: true },
+                },
+            },
+        }
+    expect: one of these is the card's effort switch; tool calls in the qwen-xml dialect if the server does not parse them
+
+  gpt-oss-120b:
+    row: gpt-oss-120b
+    route: converse
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-oss-120b.html
+      - https://huggingface.co/openai/gpt-oss-120b
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        tool-stream,
+        sampling-both,
+        stop-sequences,
+        truncation,
+      ]
+    variants:
+      - {
+          id: effort-low,
+          converse: { additionalModelRequestFields: { reasoning_effort: low } },
+        }
+      - {
+          id: effort-high,
+          converse:
+            { additionalModelRequestFields: { reasoning_effort: high } },
+        }
+      - {
+          id: effort-none,
+          note: "not in the card's low/medium/high",
+          converse:
+            { additionalModelRequestFields: { reasoning_effort: none } },
+        }
+    expect: stop-sequences refused with the known string; reasoning_effort accepted for low and high
+
+  # The same families over Mantle chat completions, to isolate the route.
+  gpt-oss-120b-mantle:
+    row: gpt-oss-120b-mantle
+    route: chat
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-oss-120b.html
+    read: 2026-11-10
+    probes:
+      [
+        baseline,
+        reasoning-variant,
+        tool-auto,
+        tool-any,
+        tool-named,
+        sampling-both,
+        stop-sequences,
+        truncation,
+      ]
+    variants:
+      - { id: effort-low, chat: { reasoning_effort: low } }
+      - { id: effort-high, chat: { reasoning_effort: high } }
+    expect: path /v1; token parameter learned by the adapter
+
+  glm5-mantle:
+    row: glm5-mantle
+    route: chat
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/models-endpoint-availability.html
+      - https://zenn.dev/akring/articles/5d0a026a8ede07
+    read: 2026-11-10
+    probes: [baseline, reasoning-variant, tool-auto, truncation]
+    variants:
+      - { id: thinking-disabled, chat: { thinking: { type: disabled } } }
+      - {
+          id: template-enable-thinking-false,
+          chat: { chat_template_kwargs: { enable_thinking: false } },
+        }
+    expect: AWS lists Mantle support; the March 2026 third-party test saw no answer
+
+  minimax-m25-mantle:
+    row: minimax-m25-mantle
+    route: chat
+    status: unprobed
+    sources:
+      - https://docs.aws.amazon.com/bedrock/latest/userguide/models-endpoint-availability.html
+      - https://zenn.dev/akring/articles/5d0a026a8ede07
+    read: 2026-11-10
+    probes: [baseline, reasoning-variant, tool-auto, truncation]
+    variants:
+      - { id: reasoning-split, chat: { reasoning_split: true } }
+    expect: same re-test as glm5-mantle

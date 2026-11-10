@@ -236,6 +236,11 @@ function buildConfig(settings, scenario) {
       region: settings.region ?? "us-east-1",
       profile: settings.awsProfile ?? process.env.AWS_PROFILE ?? "default",
     };
+  } else if (settings.provider === "bedrock-mantle") {
+    // The OpenAI-compatible Bedrock endpoint; the key comes from
+    // AWS_BEARER_TOKEN_BEDROCK in the environment, so none is written here.
+    model.env = { region: settings.region ?? "us-east-1" };
+    if (settings.apiBase) model.apiBase = settings.apiBase;
   } else {
     if (settings.apiBase) model.apiBase = settings.apiBase;
     model.apiKey = settings.apiKey ?? "none";

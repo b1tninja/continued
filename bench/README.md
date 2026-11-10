@@ -182,7 +182,7 @@ rest of that survey together, which is what the per-scenario budgets are for.
 ## Cadence
 
 - Tier 0 on every PR (`npx vitest run --dir ../../bench/tier0` from `extensions/cli`).
-- Tier 1 (shape probes, not yet in this folder) when a provider, model or request builder changes, and before a new model id enters `matrix.yaml`.
+- Tier 1 (shape probes; `probe.mjs` and `probes/families.yaml` hold the definitions for the families not yet measured, and send nothing until you run the `run.sh` they write) when a provider, model or request builder changes, and before a new model id enters `matrix.yaml`.
 - Tier 2 on a cheap model (Nova 2 Lite, Qwen3 32B or Strata) nightly or before a release; across the matrix when a prompt or a policy changes.
 - Tier 3 on request.
 
@@ -191,7 +191,7 @@ profile and levels match; the scorecard header prints them.
 
 ## Not in this slice
 
-Tier 1 shape probes, the Anthropic-direct provider adapter, the settings
+Tier 1 shape probes for the families already in the matrix (`probe.mjs` covers the unmeasured ones only), the Anthropic-direct provider adapter, the settings
 sweeps as batch commands (one `--effort` or `--max-tokens` per invocation
 today; a sweep is several invocations under one `--out`), the five-level
 policy areas (recorded, not applied), the plan-quality judge column, the

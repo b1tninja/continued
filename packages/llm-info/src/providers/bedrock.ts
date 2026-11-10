@@ -105,6 +105,57 @@ export const Bedrock: ModelProvider = {
       maxCompletionTokens: 16384,
     },
     {
+      // Model card (read 2026-11-10): 1M context, no output limit stated.
+      // Reached as us., in. or global. profiles; no in-region id.
+      model: "moonshotai.kimi-k3",
+      displayName: "Kimi K3",
+      contextLength: 1000000,
+    },
+    {
+      // Model card (read 2026-11-10): 1M context, no output limit stated.
+      model: "moonshotai.kimi-k3.1",
+      displayName: "Kimi K3.1 Pro Highspeed",
+      contextLength: 1000000,
+    },
+    {
+      // Model card (read 2026-11-10): 256K context, 16K output; Legacy, end
+      // of life 2027-03-30. The bedrock-runtime id has no "ai"; the Mantle id
+      // is moonshotai.kimi-k2-thinking.
+      model: "moonshot.kimi-k2-thinking",
+      displayName: "Kimi K2 Thinking (legacy)",
+      contextLength: 256000,
+      maxCompletionTokens: 16384,
+    },
+    {
+      // Model card (read 2026-11-10): 200K context, 128K output
+      model: "zai.glm-5",
+      displayName: "GLM 5",
+      contextLength: 200000,
+      maxCompletionTokens: 128000,
+    },
+    {
+      // Model card (read 2026-11-10): 196K context, 8K output
+      model: "minimax.minimax-m2.5",
+      displayName: "MiniMax M2.5",
+      contextLength: 196000,
+      maxCompletionTokens: 8192,
+    },
+    {
+      // Model card (read 2026-11-10): 256K context, 32K output
+      model: "nvidia.nemotron-super-3-120b",
+      displayName: "Nemotron 3 Super 120B",
+      contextLength: 256000,
+      maxCompletionTokens: 32768,
+    },
+    {
+      // Model card (read 2026-11-10): 500K context, no output limit stated.
+      // bedrock-runtime answers only us.xai.grok-4.6 and global.xai.grok-4.6;
+      // xai.grok-4.6 is the Mantle id.
+      model: "xai.grok-4.6",
+      displayName: "Grok 4.6",
+      contextLength: 500000,
+    },
+    {
       // Model card: 256K context, 16K output
       model: "qwen.qwen3-coder-next",
       displayName: "Qwen3 Coder Next",
