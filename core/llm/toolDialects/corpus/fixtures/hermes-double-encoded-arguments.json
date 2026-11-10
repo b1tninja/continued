@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "id": "hermes-double-encoded-arguments",
+  "family": "qwen3-hermes",
+  "dialect": "hermes-json",
+  "kind": "positive",
+  "failureMode": "double-encoded-json",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised; the failure class (arguments returned as a JSON string) is described for Llama 3 in the vLLM tool calling docs as read second-hand in plans research, this text is invented, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<tool_call>\n{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Paris\\\"}\"}\n</tool_call>",
+  "markers": ["<tool_call>", "</tool_call>", "<think>", "</think>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>\n{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Paris\\\"}\"}\n</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "\n",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "{",
+        "\\",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\\",
+        "\"",
+        ":",
+        " ",
+        "\\",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\\",
+        "\"",
+        "}",
+        "\"",
+        "}",
+        "\n",
+        "<",
+        "/",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_call>\n{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Paris\\\"}\"}\n</tool_call>"
+      ],
+      "splitInside": "<tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>",
+        "\n{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Paris\\\"}\"}\n",
+        "</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<t",
+        "o",
+        "ol_",
+        "c",
+        "all>\n",
+        "{\"nam",
+        "e\"",
+        ": ",
+        "\"get",
+        "_w",
+        "eathe",
+        "r\"",
+        ", ",
+        "\"arg",
+        "u",
+        "m",
+        "ent",
+        "s\"",
+        ":",
+        " \"{",
+        "\\\"cit",
+        "y",
+        "\\\"",
+        ": \\",
+        "\"Pari",
+        "s",
+        "\\\"}\"}",
+        "\n<",
+        "/tool",
+        "_",
+        "cal",
+        "l>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

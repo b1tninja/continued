@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "id": "glm47-canonical",
+  "family": "glm-4.x",
+  "dialect": "glm-xml",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/zai-org/GLM-4.7/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<tool_call>get_weather<arg_key>city</arg_key><arg_value>Paris</arg_value></tool_call>",
+  "markers": [
+    "<tool_call>",
+    "<arg_key>",
+    "</arg_key>",
+    "<arg_value>",
+    "</arg_value>",
+    "</tool_call>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>get_weather<arg_key>city</arg_key><arg_value>Paris</arg_value></tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "<",
+        "a",
+        "r",
+        "g",
+        "_",
+        "k",
+        "e",
+        "y",
+        ">",
+        "c",
+        "i",
+        "t",
+        "y",
+        "<",
+        "/",
+        "a",
+        "r",
+        "g",
+        "_",
+        "k",
+        "e",
+        "y",
+        ">",
+        "<",
+        "a",
+        "r",
+        "g",
+        "_",
+        "v",
+        "a",
+        "l",
+        "u",
+        "e",
+        ">",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "<",
+        "/",
+        "a",
+        "r",
+        "g",
+        "_",
+        "v",
+        "a",
+        "l",
+        "u",
+        "e",
+        ">",
+        "<",
+        "/",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_call>get_weather<arg_key>city</arg_key><arg_value>Paris</arg_value></tool_call>"
+      ],
+      "splitInside": "<tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>",
+        "get_weather",
+        "<arg_key>",
+        "city",
+        "</arg_key>",
+        "<arg_value>",
+        "Paris",
+        "</arg_value>",
+        "</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<too",
+        "l_cal",
+        "l>",
+        "g",
+        "et",
+        "_w",
+        "eathe",
+        "r<",
+        "arg_",
+        "key>",
+        "city",
+        "</",
+        "ar",
+        "g_ke",
+        "y><ar",
+        "g",
+        "_val",
+        "ue>",
+        "Pari",
+        "s<",
+        "/arg_",
+        "value",
+        ">",
+        "</t",
+        "ool",
+        "_c",
+        "all>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

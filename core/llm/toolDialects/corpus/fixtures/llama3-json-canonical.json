@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "id": "llama3-json-canonical",
+  "family": "llama-3.x",
+  "dialect": "llama-json",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/unsloth/Llama-3.3-70B-Instruct/blob/main/chat_template.jinja, not observed (mirror of the gated Meta repo)",
+    "retrieved": "2026-11-10",
+    "note": "Key is parameters, not arguments."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}",
+  "markers": ["{\"name\""],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"n",
+        "ame\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": "{\"name\""
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"name\"",
+        ": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"nam",
+        "e\": ",
+        "\"",
+        "get_",
+        "we",
+        "a",
+        "th",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " \"pa",
+        "ramet",
+        "er",
+        "s\":",
+        " {\"ci",
+        "ty",
+        "\": ",
+        "\"P",
+        "aris\"",
+        "}}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

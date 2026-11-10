@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "id": "llama3-semicolon-separated-json",
+  "family": "llama-3.x",
+  "dialect": "llama-json",
+  "kind": "positive",
+  "failureMode": "parallel-merged",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised; semicolon-separated JSON for several calls is a convention reported in prompting guides, not read in this pass; text invented",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "either",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}; {\"name\": \"get_time\", \"parameters\": {\"tz\": \"UTC\"}}",
+  "markers": ["{\"name\""],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}; {\"name\": \"get_time\", \"parameters\": {\"tz\": \"UTC\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        ";",
+        " ",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "t",
+        "i",
+        "m",
+        "e",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "t",
+        "z",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "U",
+        "T",
+        "C",
+        "\"",
+        "}",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"n",
+        "ame\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}; {\"name\": \"get_time\", \"parameters\": {\"tz\": \"UTC\"}}"
+      ],
+      "splitInside": "{\"name\""
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"name\"",
+        ": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}; ",
+        "{\"name\"",
+        ": \"get_time\", \"parameters\": {\"tz\": \"UTC\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"n",
+        "ame",
+        "\": \"",
+        "get_",
+        "weath",
+        "er\"",
+        ", \"p",
+        "aram",
+        "e",
+        "ters\"",
+        ": {\"",
+        "c",
+        "i",
+        "ty\": ",
+        "\"Pari",
+        "s\"}}",
+        "; {\"n",
+        "am",
+        "e",
+        "\": \"g",
+        "e",
+        "t",
+        "_ti",
+        "me\",",
+        " \"p",
+        "ara",
+        "me",
+        "ters",
+        "\": ",
+        "{\"t",
+        "z\":",
+        " \"",
+        "UTC",
+        "\"}}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      },
+      {
+        "name": "get_time",
+        "arguments": {
+          "tz": "UTC"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

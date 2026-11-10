@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-prose-mentions-mistral-marker",
+  "family": "mistral",
+  "dialect": "mistral-json",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: written to mention or quote a call without making one (false-positive guard)",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "Mistral prefixes calls with [TOOL_CALLS] and a JSON array.",
+  "markers": ["[TOOL_CALLS]"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["Mistral prefixes calls with [TOOL_CALLS] and a JSON array."],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "M",
+        "i",
+        "s",
+        "t",
+        "r",
+        "a",
+        "l",
+        " ",
+        "p",
+        "r",
+        "e",
+        "f",
+        "i",
+        "x",
+        "e",
+        "s",
+        " ",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        " ",
+        "w",
+        "i",
+        "t",
+        "h",
+        " ",
+        "[",
+        "T",
+        "O",
+        "O",
+        "L",
+        "_",
+        "C",
+        "A",
+        "L",
+        "L",
+        "S",
+        "]",
+        " ",
+        "a",
+        "n",
+        "d",
+        " ",
+        "a",
+        " ",
+        "J",
+        "S",
+        "O",
+        "N",
+        " ",
+        "a",
+        "r",
+        "r",
+        "a",
+        "y",
+        "."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "Mistral prefixes calls with [TOOL_",
+        "CALLS] and a JSON array."
+      ],
+      "splitInside": "[TOOL_CALLS]"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "Mistral prefixes calls with ",
+        "[TOOL_CALLS]",
+        " and a JSON array."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "Mi",
+        "stral",
+        " pref",
+        "ixe",
+        "s",
+        " ca",
+        "lls",
+        " w",
+        "ith ",
+        "[",
+        "T",
+        "O",
+        "OL_C",
+        "ALLS]",
+        " a",
+        "nd a ",
+        "JSO",
+        "N ar",
+        "ray."
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "Mistral prefixes calls with [TOOL_CALLS] and a JSON array."
+  }
+}

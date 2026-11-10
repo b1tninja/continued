@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "id": "harmony-recipient-in-header",
+  "family": "gpt-oss",
+  "dialect": "harmony",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja, not observed (history rendering)",
+    "retrieved": "2026-11-10",
+    "note": "Template places to=functions.NAME before the channel in history; the spacing and constrain token vary, so a parser must tolerate their absence."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<|channel|>commentary to=functions.get_weather<|message|>{\"city\":\"Paris\"}<|call|>",
+  "markers": [
+    "<|channel|>",
+    "<|constrain|>",
+    "<|message|>",
+    "<|call|>",
+    "<|start|>",
+    "<|end|>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|channel|>commentary to=functions.get_weather<|message|>{\"city\":\"Paris\"}<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "c",
+        "h",
+        "a",
+        "n",
+        "n",
+        "e",
+        "l",
+        "|",
+        ">",
+        "c",
+        "o",
+        "m",
+        "m",
+        "e",
+        "n",
+        "t",
+        "a",
+        "r",
+        "y",
+        " ",
+        "t",
+        "o",
+        "=",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "s",
+        ".",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "<",
+        "|",
+        "m",
+        "e",
+        "s",
+        "s",
+        "a",
+        "g",
+        "e",
+        "|",
+        ">",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "<",
+        "|",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|cha",
+        "nnel|>commentary to=functions.get_weather<|message|>{\"city\":\"Paris\"}<|call|>"
+      ],
+      "splitInside": "<|channel|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|channel|>",
+        "commentary to=functions.get_weather",
+        "<|message|>",
+        "{\"city\":\"Paris\"}",
+        "<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|ch",
+        "annel",
+        "|>co",
+        "mment",
+        "ary ",
+        "to=",
+        "func",
+        "tio",
+        "ns",
+        ".get",
+        "_w",
+        "e",
+        "ath",
+        "er<|",
+        "mess",
+        "age",
+        "|>{\"",
+        "cit",
+        "y\":\"P",
+        "aris",
+        "\"",
+        "}<",
+        "|ca",
+        "ll|",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

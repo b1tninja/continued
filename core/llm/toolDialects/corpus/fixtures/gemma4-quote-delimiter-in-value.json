@@ -1,0 +1,225 @@
+{
+  "schemaVersion": 1,
+  "id": "gemma4-quote-delimiter-in-value",
+  "family": "gemma-4",
+  "dialect": "gemma-call",
+  "kind": "positive",
+  "failureMode": "nested-quote-escape",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/google/gemma-4-31B-it/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": "Commas, braces and ordinary quotes inside a delimited string are data."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "write_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"]
+      }
+    }
+  ],
+  "text": "<|tool_call>call:write_file{content:<|\"|>say \"hi\", {x:1}<|\"|>,path:<|\"|>a.txt<|\"|>}<tool_call|>",
+  "markers": ["<|tool_call>", "call:", "<|\"|>", "<tool_call|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call>call:write_file{content:<|\"|>say \"hi\", {x:1}<|\"|>,path:<|\"|>a.txt<|\"|>}<tool_call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "c",
+        "a",
+        "l",
+        "l",
+        ":",
+        "w",
+        "r",
+        "i",
+        "t",
+        "e",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        "{",
+        "c",
+        "o",
+        "n",
+        "t",
+        "e",
+        "n",
+        "t",
+        ":",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "s",
+        "a",
+        "y",
+        " ",
+        "\"",
+        "h",
+        "i",
+        "\"",
+        ",",
+        " ",
+        "{",
+        "x",
+        ":",
+        "1",
+        "}",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        ",",
+        "p",
+        "a",
+        "t",
+        "h",
+        ":",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "a",
+        ".",
+        "t",
+        "x",
+        "t",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "}",
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool",
+        "_call>call:write_file{content:<|\"|>say \"hi\", {x:1}<|\"|>,path:<|\"|>a.txt<|\"|>}<tool_call|>"
+      ],
+      "splitInside": "<|tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call>",
+        "call:",
+        "write_file{content:",
+        "<|\"|>",
+        "say \"hi\", {x:1}",
+        "<|\"|>",
+        ",path:",
+        "<|\"|>",
+        "a.txt",
+        "<|\"|>",
+        "}",
+        "<tool_call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|to",
+        "ol_c",
+        "all>",
+        "call",
+        ":",
+        "writ",
+        "e_fi",
+        "le",
+        "{co",
+        "ntent",
+        ":",
+        "<",
+        "|",
+        "\"|",
+        ">say",
+        " \"",
+        "h",
+        "i\", ",
+        "{",
+        "x",
+        ":1",
+        "}<|\"|",
+        ">,",
+        "path",
+        ":<|\"|",
+        ">a.",
+        "t",
+        "xt<|\"",
+        "|>}<",
+        "tool_",
+        "cal",
+        "l|>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "write_file",
+        "arguments": {
+          "path": "a.txt",
+          "content": "say \"hi\", {x:1}"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

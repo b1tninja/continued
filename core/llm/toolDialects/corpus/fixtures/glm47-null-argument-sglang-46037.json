@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "id": "glm47-null-argument-sglang-46037",
+  "family": "glm-4.x",
+  "dialect": "glm-xml",
+  "kind": "negative",
+  "failureMode": "null-coercion",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "https://github.com/sgl-project/sglang/issues/46037",
+    "retrieved": "2026-11-10",
+    "reportDate": "2026-10-23",
+    "note": "Only the issue title was read (GLM parsers turn JSON null into the string None or null); this text is invented to exercise it. Expected calls is empty because null is invalid for the declared array type; policy either."
+  },
+  "policy": "either",
+  "tools": [
+    {
+      "name": "set_todos",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "todos": {
+            "type": "array"
+          }
+        },
+        "required": ["todos"]
+      }
+    }
+  ],
+  "text": "<tool_call>set_todos<arg_key>todos</arg_key><arg_value>null</arg_value></tool_call>",
+  "markers": [
+    "<tool_call>",
+    "<arg_key>",
+    "</arg_key>",
+    "<arg_value>",
+    "</arg_value>",
+    "</tool_call>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>set_todos<arg_key>todos</arg_key><arg_value>null</arg_value></tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "s",
+        "e",
+        "t",
+        "_",
+        "t",
+        "o",
+        "d",
+        "o",
+        "s",
+        "<",
+        "a",
+        "r",
+        "g",
+        "_",
+        "k",
+        "e",
+        "y",
+        ">",
+        "t",
+        "o",
+        "d",
+        "o",
+        "s",
+        "<",
+        "/",
+        "a",
+        "r",
+        "g",
+        "_",
+        "k",
+        "e",
+        "y",
+        ">",
+        "<",
+        "a",
+        "r",
+        "g",
+        "_",
+        "v",
+        "a",
+        "l",
+        "u",
+        "e",
+        ">",
+        "n",
+        "u",
+        "l",
+        "l",
+        "<",
+        "/",
+        "a",
+        "r",
+        "g",
+        "_",
+        "v",
+        "a",
+        "l",
+        "u",
+        "e",
+        ">",
+        "<",
+        "/",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_call>set_todos<arg_key>todos</arg_key><arg_value>null</arg_value></tool_call>"
+      ],
+      "splitInside": "<tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>",
+        "set_todos",
+        "<arg_key>",
+        "todos",
+        "</arg_key>",
+        "<arg_value>",
+        "null",
+        "</arg_value>",
+        "</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<t",
+        "ool_c",
+        "a",
+        "ll>s",
+        "e",
+        "t_t",
+        "o",
+        "d",
+        "os<ar",
+        "g_key",
+        ">to",
+        "do",
+        "s<",
+        "/a",
+        "rg",
+        "_k",
+        "ey>",
+        "<ar",
+        "g",
+        "_valu",
+        "e>n",
+        "ull</",
+        "a",
+        "rg",
+        "_v",
+        "alue",
+        "></to",
+        "o",
+        "l",
+        "_cal",
+        "l>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<tool_call>set_todos<arg_key>todos</arg_key><arg_value>null</arg_value></tool_call>"
+  }
+}

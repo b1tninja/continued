@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "id": "gemma4-typed-values",
+  "family": "gemma-4",
+  "dialect": "gemma-call",
+  "kind": "positive",
+  "failureMode": "typed-args",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/google/gemma-4-31B-it/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "set_todos",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "todos": {
+            "type": "array"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "final": {
+            "type": "boolean"
+          }
+        },
+        "required": ["todos", "count", "final"]
+      }
+    }
+  ],
+  "text": "<|tool_call>call:set_todos{count:2,final:true,todos:[<|\"|>a<|\"|>,<|\"|>b<|\"|>]}<tool_call|>",
+  "markers": ["<|tool_call>", "call:", "<|\"|>", "<tool_call|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call>call:set_todos{count:2,final:true,todos:[<|\"|>a<|\"|>,<|\"|>b<|\"|>]}<tool_call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "c",
+        "a",
+        "l",
+        "l",
+        ":",
+        "s",
+        "e",
+        "t",
+        "_",
+        "t",
+        "o",
+        "d",
+        "o",
+        "s",
+        "{",
+        "c",
+        "o",
+        "u",
+        "n",
+        "t",
+        ":",
+        "2",
+        ",",
+        "f",
+        "i",
+        "n",
+        "a",
+        "l",
+        ":",
+        "t",
+        "r",
+        "u",
+        "e",
+        ",",
+        "t",
+        "o",
+        "d",
+        "o",
+        "s",
+        ":",
+        "[",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "a",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        ",",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "b",
+        "<",
+        "|",
+        "\"",
+        "|",
+        ">",
+        "]",
+        "}",
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool",
+        "_call>call:set_todos{count:2,final:true,todos:[<|\"|>a<|\"|>,<|\"|>b<|\"|>]}<tool_call|>"
+      ],
+      "splitInside": "<|tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call>",
+        "call:",
+        "set_todos{count:2,final:true,todos:[",
+        "<|\"|>",
+        "a",
+        "<|\"|>",
+        ",",
+        "<|\"|>",
+        "b",
+        "<|\"|>",
+        "]}",
+        "<tool_call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|to",
+        "o",
+        "l_ca",
+        "ll",
+        ">call",
+        ":se",
+        "t",
+        "_",
+        "t",
+        "odos",
+        "{",
+        "cou",
+        "nt:2,",
+        "fina",
+        "l:tru",
+        "e,tod",
+        "o",
+        "s",
+        ":[<|",
+        "\"|>a<",
+        "|\"",
+        "|>",
+        ",<",
+        "|",
+        "\"|>b",
+        "<",
+        "|\"|>]",
+        "}<too",
+        "l_c",
+        "all|",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "set_todos",
+        "arguments": {
+          "todos": ["a", "b"],
+          "count": 2,
+          "final": true
+        }
+      }
+    ],
+    "text": ""
+  }
+}

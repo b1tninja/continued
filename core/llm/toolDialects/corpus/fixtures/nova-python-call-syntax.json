@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "id": "nova-python-call-syntax",
+  "family": "amazon-nova",
+  "dialect": "pythonic-prose",
+  "kind": "positive",
+  "failureMode": "call-as-prose",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "core/llm/prompts/evaluation/harness.vitest.ts line 311 in this repo, a stand-in for the Nova 2 Lite output reported in ROADMAP H13/#361; the original reply was not archived",
+    "retrieved": "2026-11-10",
+    "note": "Nova's documented path is a structured toolUse block; this is the failure where it wrote the call as text. Whether to execute it is a policy choice (plans/tool-call-styles.md says only when exact and unambiguous)."
+  },
+  "policy": "either",
+  "tools": [
+    {
+      "name": "present_plan",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "todos": {
+            "type": "array"
+          }
+        },
+        "required": ["title", "plan", "todos"]
+      }
+    }
+  ],
+  "text": "present_plan(\n  title=\"Add formatDate helper\",\n  plan=\"...\",\n  todos=[\"a\"]\n)",
+  "markers": ["present_plan("],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "present_plan(\n  title=\"Add formatDate helper\",\n  plan=\"...\",\n  todos=[\"a\"]\n)"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "p",
+        "r",
+        "e",
+        "s",
+        "e",
+        "n",
+        "t",
+        "_",
+        "p",
+        "l",
+        "a",
+        "n",
+        "(",
+        "\n",
+        " ",
+        " ",
+        "t",
+        "i",
+        "t",
+        "l",
+        "e",
+        "=",
+        "\"",
+        "A",
+        "d",
+        "d",
+        " ",
+        "f",
+        "o",
+        "r",
+        "m",
+        "a",
+        "t",
+        "D",
+        "a",
+        "t",
+        "e",
+        " ",
+        "h",
+        "e",
+        "l",
+        "p",
+        "e",
+        "r",
+        "\"",
+        ",",
+        "\n",
+        " ",
+        " ",
+        "p",
+        "l",
+        "a",
+        "n",
+        "=",
+        "\"",
+        ".",
+        ".",
+        ".",
+        "\"",
+        ",",
+        "\n",
+        " ",
+        " ",
+        "t",
+        "o",
+        "d",
+        "o",
+        "s",
+        "=",
+        "[",
+        "\"",
+        "a",
+        "\"",
+        "]",
+        "\n",
+        ")"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "presen",
+        "t_plan(\n  title=\"Add formatDate helper\",\n  plan=\"...\",\n  todos=[\"a\"]\n)"
+      ],
+      "splitInside": "present_plan("
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "present_plan(",
+        "\n  title=\"Add formatDate helper\",\n  plan=\"...\",\n  todos=[\"a\"]\n)"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "prese",
+        "nt_p",
+        "la",
+        "n(\n  ",
+        "tit",
+        "l",
+        "e",
+        "=\"Add",
+        " fo",
+        "rm",
+        "a",
+        "tDate",
+        " h",
+        "elp",
+        "er\",\n",
+        " ",
+        " ",
+        "pla",
+        "n=\"",
+        "...",
+        "\",",
+        "\n ",
+        " ",
+        "tod",
+        "o",
+        "s",
+        "=",
+        "[\"a",
+        "\"]\n",
+        ")"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "present_plan",
+        "arguments": {
+          "title": "Add formatDate helper",
+          "plan": "...",
+          "todos": ["a"]
+        }
+      }
+    ],
+    "text": ""
+  }
+}

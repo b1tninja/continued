@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 1,
+  "id": "hermes-literal-close-tag-in-string-vllm-45167",
+  "family": "qwen3-hermes",
+  "dialect": "hermes-json",
+  "kind": "positive",
+  "failureMode": "markup-inside-argument",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "https://github.com/vllm-project/vllm/issues/45167",
+    "retrieved": "2026-11-10",
+    "reportDate": "2026-06-10",
+    "note": "Reporter's reproduction text (edit_file there, write_file here); they show the string round-trips through the Qwen2.5 tokenizer, so a model can emit it. Not captured from a model."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "write_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"]
+      }
+    }
+  ],
+  "text": "<tool_call>\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"n.md\", \"content\": \"예시 태그: </tool_call> 포함 한국어 본문\"}}\n</tool_call>",
+  "markers": ["<tool_call>", "</tool_call>", "<think>", "</think>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"n.md\", \"content\": \"예시 태그: </tool_call> 포함 한국어 본문\"}}\n</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "\n",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "w",
+        "r",
+        "i",
+        "t",
+        "e",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "p",
+        "a",
+        "t",
+        "h",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "n",
+        ".",
+        "m",
+        "d",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "c",
+        "o",
+        "n",
+        "t",
+        "e",
+        "n",
+        "t",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "예",
+        "시",
+        " ",
+        "태",
+        "그",
+        ":",
+        " ",
+        "<",
+        "/",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        " ",
+        "포",
+        "함",
+        " ",
+        "한",
+        "국",
+        "어",
+        " ",
+        "본",
+        "문",
+        "\"",
+        "}",
+        "}",
+        "\n",
+        "<",
+        "/",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_call>\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"n.md\", \"content\": \"예시 태그: </tool_call> 포함 한국어 본문\"}}\n</tool_call>"
+      ],
+      "splitInside": "<tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>",
+        "\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"n.md\", \"content\": \"예시 태그: ",
+        "</tool_call>",
+        " 포함 한국어 본문\"}}\n",
+        "</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_c",
+        "a",
+        "ll",
+        ">\n{",
+        "\"n",
+        "ame\":",
+        " \"w",
+        "rite_",
+        "fi",
+        "le\"",
+        ", ",
+        "\"argu",
+        "ment",
+        "s\": ",
+        "{\"pat",
+        "h",
+        "\": \"",
+        "n",
+        ".md\",",
+        " ",
+        "\"cont",
+        "ent",
+        "\":",
+        " \"예시",
+        " ",
+        "태그: <",
+        "/to",
+        "ol_",
+        "cal",
+        "l>",
+        " 포함",
+        " 한국",
+        "어 본문\"",
+        "}}\n",
+        "</too",
+        "l_cal",
+        "l>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-multibyte-char",
+      "encoding": "base64",
+      "chunks": [
+        "PHRvb2xfY2FsbD4KeyJuYW1lIjogIndyaXRlX2ZpbGUiLCAiYXJndW1lbnRzIjogeyJwYXRoIjogIm4ubWQiLCAiY29udGVudCI6ICLs",
+        "mIjsi5wg7YOc6re4OiA8L3Rvb2xfY2FsbD4g7Y+s7ZWoIO2VnOq1reyWtCDrs7jrrLgifX0KPC90b29sX2NhbGw+"
+      ],
+      "splitInside": "utf8-codepoint"
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "write_file",
+        "arguments": {
+          "path": "n.md",
+          "content": "예시 태그: </tool_call> 포함 한국어 본문"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

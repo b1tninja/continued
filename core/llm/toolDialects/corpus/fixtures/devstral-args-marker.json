@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "id": "devstral-args-marker",
+  "family": "mistral",
+  "dialect": "mistral-args",
+  "kind": "positive",
+  "failureMode": "parallel-merged",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "https://huggingface.co/unsloth/Devstral-Small-2507/blob/main/chat_template.jinja (mirror), not observed",
+    "retrieved": "2026-11-10",
+    "note": "Template writes [TOOL_CALLS]NAME[ARGS]JSON, one marker per call, no ids."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "[TOOL_CALLS]get_weather[ARGS]{\"city\": \"Paris\"}[TOOL_CALLS]get_time[ARGS]{\"tz\": \"UTC\"}",
+  "markers": ["[TOOL_CALLS]", "[ARGS]"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_CALLS]get_weather[ARGS]{\"city\": \"Paris\"}[TOOL_CALLS]get_time[ARGS]{\"tz\": \"UTC\"}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "T",
+        "O",
+        "O",
+        "L",
+        "_",
+        "C",
+        "A",
+        "L",
+        "L",
+        "S",
+        "]",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "[",
+        "A",
+        "R",
+        "G",
+        "S",
+        "]",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "[",
+        "T",
+        "O",
+        "O",
+        "L",
+        "_",
+        "C",
+        "A",
+        "L",
+        "L",
+        "S",
+        "]",
+        "g",
+        "e",
+        "t",
+        "_",
+        "t",
+        "i",
+        "m",
+        "e",
+        "[",
+        "A",
+        "R",
+        "G",
+        "S",
+        "]",
+        "{",
+        "\"",
+        "t",
+        "z",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "U",
+        "T",
+        "C",
+        "\"",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_",
+        "CALLS]get_weather[ARGS]{\"city\": \"Paris\"}[TOOL_CALLS]get_time[ARGS]{\"tz\": \"UTC\"}"
+      ],
+      "splitInside": "[TOOL_CALLS]"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_CALLS]",
+        "get_weather",
+        "[ARGS]",
+        "{\"city\": \"Paris\"}",
+        "[TOOL_CALLS]",
+        "get_time",
+        "[ARGS]",
+        "{\"tz\": \"UTC\"}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOO",
+        "L_CAL",
+        "L",
+        "S]g",
+        "et_w",
+        "eath",
+        "er[",
+        "ARG",
+        "S]{\"",
+        "ci",
+        "ty",
+        "\": \"P",
+        "aris\"",
+        "}",
+        "[TO",
+        "OL_CA",
+        "LLS]g",
+        "et_ti",
+        "me[",
+        "ARGS",
+        "]{\"",
+        "tz",
+        "\":",
+        " \"UT",
+        "C\"}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      },
+      {
+        "name": "get_time",
+        "arguments": {
+          "tz": "UTC"
+        }
+      }
+    ],
+    "text": ""
+  }
+}
