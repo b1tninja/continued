@@ -6,6 +6,7 @@ import { DecisionSource } from "../decide";
 import { uriToPath } from "../names";
 import { EvaluateInput, evaluateToolPolicyWithRules } from "../evaluate";
 import type { ToolPermissions } from "../rules";
+import type { AuditReviewer } from "../audit/record";
 import { ReviewCategory } from "./categories";
 import { ReviewResult } from "./parse";
 import { ReviewEnvironment, ReviewHistory } from "./prompt";
@@ -19,6 +20,8 @@ import { AutoReviewSessions, reviewContextKey } from "./state";
 
 export interface AutoReviewRequest {
   sessionId: string;
+  /** The call's id, for the audit trail */
+  callId?: string;
   toolName: string;
   basePolicy: ToolPolicy;
   parsedArgs: Record<string, unknown>;
@@ -48,6 +51,8 @@ export interface AutoReviewReply {
   cached?: boolean;
   /** The reviewer's reply could not be read, so the call was left for the user. */
   unusable?: boolean;
+  /** Which model answered, how long it took and what it used (for the audit trail) */
+  reviewer?: AuditReviewer;
 }
 
 export interface AutoReviewDeps {
@@ -179,8 +184,18 @@ export async function autoReviewToolCall(
   if (cached) {
     return { ...base, ...cached, by: reviewedBy(cached), cached: true };
   }
+  // The audit wants the model, how long it took and what it used
+  let usage: AuditReviewer["usage"];
+  const startedAt = Date.now();
+  const measured: Pick<ILLM, "chat"> = {
+    chat: async (...args: Parameters<ILLM["chat"]>) => {
+      const reply = await deps.reviewer!.chat(...args);
+      usage = usageOf((reply as { usage?: unknown } | undefined)?.usage);
+      return reply;
+    },
+  };
   const raw = await reviewToolCall(
-    deps.reviewer,
+    measured,
     {
       toolName: req.toolName,
       args: req.parsedArgs,
@@ -198,7 +213,33 @@ export async function autoReviewToolCall(
   state.remember(req.toolName, req.parsedArgs, raw, context);
 
   const result = state.record(raw, limits);
-  return { ...base, ...result, by: reviewedBy(result) };
+  return {
+    ...base,
+    ...result,
+    by: reviewedBy(result),
+    reviewer: {
+      model: (deps.reviewer as { model?: string }).model,
+      latencyMs: Date.now() - startedAt,
+      ...(usage ? { usage } : {}),
+    },
+  };
+}
+
+/** Token counts from whichever shape a provider reports them in. */
+function usageOf(raw: unknown): AuditReviewer["usage"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const u = raw as Record<string, unknown>;
+  const num = (...keys: string[]) => {
+    for (const k of keys) if (typeof u[k] === "number") return u[k] as number;
+    return undefined;
+  };
+  const out = {
+    input: num("promptTokens", "prompt_tokens", "input_tokens"),
+    output: num("completionTokens", "completion_tokens", "output_tokens"),
+    cacheRead: num("cacheReadTokens", "cache_read_input_tokens"),
+    cacheWrite: num("cacheWriteTokens", "cache_creation_input_tokens"),
+  };
+  return Object.values(out).some((v) => v !== undefined) ? out : undefined;
 }
 
 function reviewedBy(result: ReviewResult): "system" | "reviewer" {

@@ -127,7 +127,8 @@ export interface BedrockModelOptionInfo {
 }
 
 export type BedrockListModelsResult =
-  { ok: true; models: BedrockModelOptionInfo[] } | { ok: false; error: string };
+  | { ok: true; models: BedrockModelOptionInfo[] }
+  | { ok: false; error: string };
 
 /**
  * Whether the account lists the `global.` inference profile of a configured
@@ -141,7 +142,8 @@ export type BedrockTestModelResult =
   | { ok: false; error: string };
 
 export type ProfileFileResult =
-  { ok: true; profileId?: string } | { ok: false; error: string };
+  | { ok: true; profileId?: string }
+  | { ok: false; error: string };
 
 export type ToCoreFromIdeOrWebviewProtocol = {
   // Special
@@ -582,6 +584,9 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       processedArgs?: Record<string, unknown>;
       /** Approval mode and switches; absent means Manual. */
       approval?: ApprovalSettings;
+      /** The call and session, so the decision can be written to the audit trail */
+      callId?: string;
+      sessionId?: string;
     },
     {
       policy: ToolPolicy;
@@ -601,6 +606,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    * first; only a call they leave open reaches the reviewer model.
    */
   "tools/autoReview": [AutoReviewRequest, AutoReviewReply];
+  /** The person's answer to a call that asked, for the audit trail */
+  "audit/answer": [{ callId: string; approved: boolean }, void];
   "tools/preprocessArgs": [
     {
       toolName: string;

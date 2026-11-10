@@ -5,7 +5,9 @@ import {
   STUCK_NOTE_MARK,
   stuckNote,
 } from "core/util/stuckNotes.js";
-import { detectStuck } from "core/util/stuckSignals.js";
+import { readAuditSession } from "core/tools/permissions/audit/reader.js";
+import { auditToSteps } from "core/tools/permissions/audit/steps.js";
+import { detectStuck, type StuckStep } from "core/util/stuckSignals.js";
 
 /**
  * L1 of the stuck ladder (plans/stuck-detection.md, S2) for the CLI: after a
@@ -41,10 +43,29 @@ function hasNote(output: { content?: string }[] | undefined): boolean {
   return !!output?.some((o) => o.content?.includes(STUCK_NOTE_MARK));
 }
 
-/** The note to append to the newest result, or undefined. */
+/**
+ * The note to append to the newest result, or undefined. When the history
+ * holds no steps (compacted away, or not kept), `auditSteps` supplies them
+ * from the audit trail (plans/reviewer-audit.md, section 8). The history stays
+ * the first source: with steps in it nothing changes.
+ */
 export function stuckNoteForHistory(
   history: ChatHistoryItem[],
+  auditSteps?: () => StuckStep[],
 ): string | undefined {
   if (!stuckNotesEnabled()) return undefined;
-  return stuckNote(detectStuck(stepsFromHistory(withoutNotes(history))));
+  let steps = stepsFromHistory(withoutNotes(history));
+  if (steps.length === 0 && auditSteps) {
+    try {
+      steps = auditSteps();
+    } catch {
+      // the audit is an optional second source
+    }
+  }
+  return stuckNote(detectStuck(steps));
+}
+
+/** The steps of a session read from the audit trail in `dir`. */
+export function auditStepsOf(dir: string, session: string): StuckStep[] {
+  return auditToSteps(readAuditSession(dir, session));
 }

@@ -8,6 +8,7 @@ import { Command } from "commander";
 import { acp } from "./commands/acp.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
+import { auditCommand } from "./commands/audit.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { projectCommand } from "./commands/project.js";
@@ -412,6 +413,32 @@ program
     await gracefulExit(code);
   });
 
+// Audit subcommand
+program
+  .command("audit [action] [session]")
+  .description(
+    "Read the audit trail of tool call decisions (list, show <session>, prune)",
+  )
+  .option("--json", "Machine-readable output")
+  .option("--session <id>", "Only this session")
+  .option("--decision <d>", "allow, ask, deny or reviewer")
+  .option("--tool <name>", "Only this tool")
+  .option("--since <date>", "From this date (inclusive)")
+  .option("--until <date>", "Up to this date (inclusive)")
+  .option("--limit <n>", "Only the last n calls")
+  .option("--days <n>", "prune: delete files older than this many days")
+  .option("--dry-run", "prune: say what would be deleted")
+  .action(
+    async (
+      action: string | undefined,
+      session: string | undefined,
+      options,
+    ) => {
+      const code = auditCommand(action, session, options);
+      await gracefulExit(code);
+    },
+  );
+
 // Handle unknown commands
 program.on("command:*", () => {
   console.error(`Error: Unknown command '${program.args.join(" ")}'\n`);
@@ -422,8 +449,9 @@ program.on("command:*", () => {
 export async function runCli(): Promise<void> {
   // Handle internal worker subprocess for cn review
   if (process.argv.includes("--internal-review-worker")) {
-    const { runReviewWorker } =
-      await import("./commands/review/reviewWorker.js");
+    const { runReviewWorker } = await import(
+      "./commands/review/reviewWorker.js"
+    );
     await runReviewWorker();
     return;
   }

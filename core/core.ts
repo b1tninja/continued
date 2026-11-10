@@ -20,6 +20,11 @@ import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
 import { resolveShell } from "./util/shell";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
+import { getAuditTrail } from "./tools/permissions/audit/global";
+import {
+  recordPolicyDecision,
+  recordReviewDecision,
+} from "./tools/permissions/audit/hook";
 import {
   readPolicyFile,
   writePolicyFile,
@@ -1775,7 +1780,15 @@ export class Core {
     on(
       "tools/evaluatePolicy",
       async ({
-        data: { toolName, basePolicy, parsedArgs, processedArgs, approval },
+        data: {
+          toolName,
+          basePolicy,
+          parsedArgs,
+          processedArgs,
+          approval,
+          callId,
+          sessionId,
+        },
       }) => {
         const { config } = await this.configHandler.loadConfig();
         if (!config) {
@@ -1785,7 +1798,7 @@ export class Core {
         const tool = config.tools.find((t) => t.function.name === toolName);
         // The folder lets git be vouched as read-only after its config is checked
         const dirs = await this.ide.getWorkspaceDirs();
-        return evaluateToolPolicyWithRules({
+        const result = evaluateToolPolicyWithRules({
           tool,
           toolName,
           basePolicy,
@@ -1797,6 +1810,13 @@ export class Core {
           // The shell terminal commands run in
           shell: resolveShell().kind,
         });
+        recordPolicyDecision(
+          getAuditTrail(),
+          { session: sessionId, callId, toolName, parsedArgs, approval },
+          basePolicy,
+          result,
+        );
+        return result;
       },
     );
 
@@ -1807,7 +1827,7 @@ export class Core {
       }
       const dirs = await this.ide.getWorkspaceDirs();
       const repo = dirs[0] ? await this.ide.getRepoName(dirs[0]) : undefined;
-      return autoReviewToolCall(
+      const reply = await autoReviewToolCall(
         {
           tool: config.tools.find((t) => t.function.name === data.toolName),
           permissions: config.toolPermissions,
@@ -1826,6 +1846,22 @@ export class Core {
         },
         data,
       );
+      recordReviewDecision(
+        getAuditTrail(),
+        {
+          session: data.sessionId,
+          callId: data.callId,
+          toolName: data.toolName,
+          parsedArgs: data.parsedArgs,
+          approval: data.approval,
+        },
+        reply,
+      );
+      return reply;
+    });
+
+    on("audit/answer", async ({ data }) => {
+      getAuditTrail().answer(data.callId, data.approved);
     });
 
     on(
@@ -1922,19 +1958,43 @@ export class Core {
     };
 
     const inWorkspace = workspaceDirs?.length ? workspaceDirs : undefined;
-    const result = await callTool(tool, toolCall, {
-      config,
-      ide: inWorkspace ? ideInWorkspace(this.ide, inWorkspace) : this.ide,
-      workspaceDirs: inWorkspace,
-      llm: config.selectedModelByRole.chat,
-      fetch: (url, init) =>
-        fetchwithRequestOptions(url, init, config.requestOptions),
-      tool,
-      toolCallId: toolCall.id,
-      onPartialOutput,
-      codeBaseIndexer: this.codeBaseIndexer,
+    const trail = getAuditTrail();
+    // A call that reaches here was allowed, or asked and was approved
+    trail.answer(toolCall.id, true);
+    const startedAt = Date.now();
+    let result;
+    try {
+      result = await callTool(tool, toolCall, {
+        config,
+        ide: inWorkspace ? ideInWorkspace(this.ide, inWorkspace) : this.ide,
+        workspaceDirs: inWorkspace,
+        llm: config.selectedModelByRole.chat,
+        fetch: (url, init) =>
+          fetchwithRequestOptions(url, init, config.requestOptions),
+        tool,
+        toolCallId: toolCall.id,
+        onPartialOutput,
+        codeBaseIndexer: this.codeBaseIndexer,
+      });
+    } catch (e) {
+      trail.outcome({
+        callId: toolCall.id,
+        tool: toolCall.function.name,
+        ran: true,
+        exit: 1,
+        durMs: Date.now() - startedAt,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      throw e;
+    }
+    trail.outcome({
+      callId: toolCall.id,
+      tool: toolCall.function.name,
+      ran: true,
+      durMs: Date.now() - startedAt,
+      ...(result.errorMessage ? { exit: 1, error: result.errorMessage } : {}),
+      output: result.contextItems?.map((c) => c.content).join("\n") ?? "",
     });
-
     return result;
   }
 

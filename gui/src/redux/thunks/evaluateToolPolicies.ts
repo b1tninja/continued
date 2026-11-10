@@ -120,6 +120,7 @@ export async function evaluateToolPolicy(
   toolPolicies: ToolPolicies,
   approval?: ApprovalSettings,
   mode?: MessageModes,
+  sessionId?: string,
 ): Promise<EvaluatedPolicy> {
   const result = await evaluateBasePolicy(
     ideMessenger,
@@ -127,6 +128,7 @@ export async function evaluateToolPolicy(
     toolCallState,
     toolPolicies,
     approval,
+    sessionId,
   );
   // Plan mode changes nothing until the plan is accepted, at every level
   // below YOLO
@@ -141,8 +143,14 @@ async function evaluateBasePolicy(
   toolCallState: ToolCallState,
   toolPolicies: ToolPolicies,
   approval?: ApprovalSettings,
+  sessionId?: string,
 ): Promise<EvaluatedPolicy> {
   const toolName = toolCallState.toolCall.function.name;
+  // Core writes the decision to the audit trail when it knows the call
+  const auditIds = {
+    callId: toolCallState.toolCallId,
+    ...(sessionId ? { sessionId } : {}),
+  };
 
   // Edit tools are reviewed as a diff the user accepts or rejects, so they
   // are not asked about up front. They still go through core so a deny rule
@@ -158,6 +166,7 @@ async function evaluateBasePolicy(
         parsedArgs: toolCallState.parsedArgs,
         processedArgs: toolCallState.processedArgs,
         ...(approval ? { approval } : {}),
+        ...auditIds,
       });
       if (result.status === "success") {
         const { policy, source } = result.content;
@@ -195,6 +204,7 @@ async function evaluateBasePolicy(
     parsedArgs: toolCallState.parsedArgs,
     processedArgs: toolCallState.processedArgs,
     ...(approval ? { approval } : {}),
+    ...auditIds,
   });
 
   // Evaluate the policy dynamically
@@ -323,6 +333,7 @@ async function reviewOpenCalls(
       try {
         const res = await ideMessenger.request("tools/autoReview", {
           sessionId: auto.sessionId,
+          callId: r.toolCallState.toolCallId,
           toolName,
           basePolicy,
           parsedArgs: r.toolCallState.parsedArgs,
@@ -420,6 +431,7 @@ export async function evaluateToolPolicies(
   auto?: AutoReviewContext,
   approval?: ApprovalSettings,
   mode?: MessageModes,
+  sessionId?: string,
 ): Promise<EvaluatedPolicy[]> {
   // Check if ALL tool calls are auto-approved using dynamic evaluation
   let policyResults = await Promise.all(
@@ -431,6 +443,7 @@ export async function evaluateToolPolicies(
         toolPolicies,
         approval,
         mode,
+        sessionId,
       ),
     ),
   );

@@ -1,0 +1,66 @@
+---
+title: "Audit Trail"
+---
+
+Continuous writes a local record of each tool call: what was decided, who decided it, and how the call ended. The record is on by default, masked, capped in size and age, and never leaves your machine.
+
+```bash
+continuous audit list --decision deny --since 2026-11-01
+```
+
+## What is recorded
+
+Each call produces a `decision` line when it is decided and an `outcome` line when it finishes, joined by the call id. A call that asks and is then answered has two decisions: the ask, then the person's answer or the reviewer's.
+
+| Field                         | Content                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------ |
+| Decision                      | `allow`, `ask` or `deny`, and who decided: rules, the reviewer model, you, or the system   |
+| Rule and source               | The rule as written in config.yaml, and which check decided (deny rule, protected path, level) |
+| Reason                        | The sentence shown to you or the agent, clipped to 300 characters                          |
+| Reviewer                      | Model, latency, token usage, category and whether the verdict was reused                   |
+| Arguments                     | The masked arguments, clipped to 2,000 characters, with a hash of the masked text and the original length |
+| Outcome                       | Whether it ran, exit status, duration, output size and a hash of the masked output         |
+
+Tool output is not stored, only its size and hash. Assistant text is not stored.
+
+In the IDE, a call is recorded when it is evaluated and when it runs. Edit tools are recorded as allowed unless a rule or protected path stops them; the diff you accept or reject is not part of the audit.
+
+## What is masked
+
+Arguments, reasons and error lines are masked before they are written or hashed. Recognised credentials (API keys, cloud and GitHub tokens, private keys, JWTs, secrets on a command line) become `«masked:kind»`. Masking is best effort: a secret in a shape that is not recognised is written as typed, which is why the files are private to your user (`0600`) and local.
+
+## Where it is stored
+
+```
+<global dir>/audit/<yyyy-mm>/<session>.jsonl
+```
+
+The global directory is `~/.continuous` unless `CONTINUOUS_GLOBAL_DIR` points elsewhere (an existing `~/.continue` is still used). A file that reaches 20 MB continues in `<session>.1.jsonl`. Files older than 30 days are deleted when the IDE or CLI starts. A write that fails (full or read-only disk) is reported once and never stops a tool call.
+
+## Read it
+
+```bash
+continuous audit list [--session <id>] [--decision allow|ask|deny|reviewer] [--tool <name>] [--since <date>] [--until <date>] [--limit <n>] [--json]
+continuous audit show <session> [--json]
+continuous audit prune [--days <n>] [--dry-run]
+```
+
+`--decision ask` matches calls that asked at any point, including those you then approved. `--decision reviewer` matches calls the reviewer model decided. `--json` prints one array: rows for `list`, raw records for `show`.
+
+## Turn it off
+
+In the global `config.yaml`:
+
+```yaml
+audit:
+  enabled: false
+  retentionDays: 30
+```
+
+Or in the environment, which takes precedence:
+
+```bash
+CONTINUE_AUDIT=off
+```
+
+With it off, nothing is written. Existing files stay until they age out or you run `continuous audit prune --days 0`.

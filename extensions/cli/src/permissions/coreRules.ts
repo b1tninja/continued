@@ -144,6 +144,7 @@ export function createReviewer(
   const api = createLlmApi(model, authConfig);
   if (!api) return null;
   return {
+    model: model.model,
     chat: async (
       messages: unknown[],
       signal?: AbortSignal,
@@ -162,13 +163,16 @@ export function createReviewer(
       return {
         role: "assistant",
         content: res.choices?.[0]?.message?.content ?? "",
+        // read by core's reviewer wrapper for the audit trail
+        ...(res.usage ? { usage: res.usage } : {}),
       };
     },
   } as ChatLike;
 }
 
 let cachedReviewer:
-  { assistant: unknown; reviewer: ChatLike | null } | undefined;
+  | { assistant: unknown; reviewer: ChatLike | null }
+  | undefined;
 
 /** One reviewer per loaded assistant, so a client is not built for every call. */
 export function getReviewer(
@@ -191,6 +195,10 @@ export interface CoreVerdict {
   by: "rules" | "reviewer" | "system";
   /** Which check decided, when the rules did. Headless runs keep deny, floor and protected paths. */
   source?: DecisionSource;
+  /** The rule that decided, as written in config.yaml */
+  rule?: string;
+  /** The reviewer's model, latency and usage, when it decided */
+  reviewer?: AutoReviewReply["reviewer"];
 }
 
 export interface CoreRulesInput {
@@ -290,6 +298,16 @@ export async function evaluateWithCoreRules(
       reason: reply.reason,
       by: reply.by,
       source: reply.ruleSource,
+      ...(reply.by === "rules"
+        ? {}
+        : {
+            reviewer: {
+              ...reply.reviewer,
+              ...(reply.category ? { category: reply.category } : {}),
+              ...(reply.cached ? { cached: true } : {}),
+              ...(reply.unusable ? { unusable: true } : {}),
+            },
+          }),
     };
   }
 
@@ -314,6 +332,7 @@ export async function evaluateWithCoreRules(
     reason: result.reason,
     by: "rules",
     source: result.source,
+    ...(result.rule ? { rule: result.rule } : {}),
   };
 }
 
