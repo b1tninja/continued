@@ -43,6 +43,7 @@ export function skippedProtections(
   if (!builtinRuleOn(approval, "protect-secrets")) skip.push("secret");
   if (!builtinRuleOn(approval, "protect-config")) skip.push("config");
   if (!builtinRuleOn(approval, "protect-network-paths")) skip.push("network");
+  if (!builtinRuleOn(approval, "no-fetch-and-run")) skip.push("fetch-and-run");
   return skip;
 }
 

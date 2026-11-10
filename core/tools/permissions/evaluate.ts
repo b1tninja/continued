@@ -15,7 +15,7 @@ import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
-import type { ProtectedHit } from "./protected";
+import type { ProtectedHit, ProtectedKind } from "./protected";
 import type { ToolPermissions } from "./rules";
 
 /**
@@ -121,6 +121,8 @@ export interface ToolPolicyResult {
   source?: DecisionSource;
   /** A sentence a person can read, for the prompt or the refusal. */
   reason?: string;
+  /** What kind of protected call asked (source "protected-path") */
+  protection?: ProtectedKind;
   /** A command the parser vouched as only reading: why it is Context use */
   readOnly?: string;
   /** The rule that decided, as written in config.yaml. */
@@ -311,6 +313,7 @@ export function evaluateToolPolicyWithRules(
     displayValue,
     source: decision.source,
     ...(decision.reason ? { reason: decision.reason } : {}),
+    ...(decision.protection ? { protection: decision.protection } : {}),
     ...(decision.rule ? { rule: decision.rule } : {}),
     ...(found?.readOnly ? { readOnly: found.readOnly } : {}),
   };

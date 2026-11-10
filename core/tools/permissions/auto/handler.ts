@@ -124,6 +124,20 @@ export async function autoReviewToolCall(
   if (evaluated.policy === "allowedWithoutPermission") {
     return settled("allow", "Allowed without review.");
   }
+  if (evaluated.protection === "fetch-and-run") {
+    const area = levelOfCall(req.approval, req.toolName, deps.tool, {
+      parsedArgs: req.parsedArgs,
+      cwd: folderPath(deps.environment.workspaceDirs?.[0]),
+      shell: deps.shell,
+    });
+    // Automatic does not weigh this: running a download is refused outright
+    if (area?.level === "automatic") {
+      return settled(
+        "deny",
+        "This runs what it downloads, which Automatic refuses.",
+      );
+    }
+  }
   if (evaluated.source && FINAL_SOURCES.includes(evaluated.source)) {
     return settled("ask", "Your rules ask before this runs.");
   }
