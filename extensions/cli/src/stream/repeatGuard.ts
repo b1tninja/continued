@@ -1,4 +1,4 @@
-import { loopCallKey } from "core/util/loopMode.js";
+import { callKey } from "core/util/stuckSignals.js";
 
 import { TASK_LIST_TOOL_NAME } from "../tools/taskList.js";
 
@@ -65,7 +65,7 @@ export interface RepeatVerdict {
 }
 
 function repeatKey(call: CallLike): string {
-  return loopCallKey(call.name, call.arguments ?? {});
+  return callKey({ tool: call.name, args: call.arguments });
 }
 
 /**
