@@ -76,6 +76,11 @@ export async function resolveCheckpointTargets(
   return [];
 }
 
+/** UTF-8 size. The IDE truncates reads by bytes, not by UTF-16 code units. */
+export function utf8ByteLength(content: string): number {
+  return new TextEncoder().encode(content).length;
+}
+
 /** Capture the current state of one file. Never throws. */
 export async function snapshotFile(
   ide: IDE,
@@ -95,7 +100,9 @@ export async function snapshotFile(
       return { uri, existed: true, skipped: "too_large" };
     }
     const content = await ide.readFile(uri);
-    if (content.length >= MAX_CHECKPOINT_FILE_BYTES) {
+    // Character length under-counts UTF-8. A file of multi-byte text can be
+    // past the byte cap the IDE truncates at while still looking small here.
+    if (utf8ByteLength(content) >= MAX_CHECKPOINT_FILE_BYTES) {
       return { uri, existed: true, skipped: "too_large" };
     }
     return { uri, existed: true, content };

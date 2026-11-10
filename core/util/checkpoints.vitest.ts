@@ -144,6 +144,17 @@ describe("snapshotFile", () => {
     });
   });
 
+  it("skips multi-byte text that is under the character cap but over the byte cap", async () => {
+    const content = "你".repeat(30_001);
+    const ide = makeIde({ [`${WS}/cjk.ts`]: content });
+    expect(content.length).toBeLessThan(MAX_CHECKPOINT_FILE_BYTES);
+    expect(await snapshotFile(ide, `${WS}/cjk.ts`)).toEqual({
+      uri: `${WS}/cjk.ts`,
+      existed: true,
+      skipped: "too_large",
+    });
+  });
+
   it("does not throw when the IDE fails", async () => {
     const ide = makeIde({ [`${WS}/a.ts`]: "x" });
     ide.readFile = async () => {
