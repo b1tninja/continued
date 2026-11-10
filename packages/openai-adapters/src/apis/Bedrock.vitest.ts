@@ -1603,3 +1603,110 @@ describe("BedrockApi Qwen XML tool calls written as text (recovery, off by defau
     expect(finish(choices)).toEqual(["tool_calls"]);
   });
 });
+
+describe("BedrockApi Python-syntax tool calls written as text (Nova 2 Lite, recovery off by default)", () => {
+  const signal = new AbortController().signal;
+  const MODEL = "us.amazon.nova-2-lite-v1:0";
+  const planTool = {
+    type: "function",
+    function: {
+      name: "present_plan",
+      description: "present the plan",
+      parameters: {
+        type: "object",
+        properties: { title: { type: "string" }, decisions: { type: "array" } },
+        required: ["title"],
+      },
+    },
+  };
+  const leaked = 'present_plan(title="Rename", decisions=[{"q": "a"}])';
+
+  async function run(events: any[], extra: Record<string, unknown> = {}) {
+    class StreamApi extends TestApi {
+      async getClient() {
+        return {
+          send: async () => ({
+            $metadata: { requestId: "req-1" },
+            stream: (async function* () {
+              for (const e of events) yield e;
+            })(),
+          }),
+        } as any;
+      }
+    }
+    const api = new StreamApi({ provider: "bedrock", env: {} } as any);
+    const choices: any[] = [];
+    for await (const c of api.chatCompletionStream(
+      {
+        model: MODEL,
+        messages: [{ role: "user", content: "plan it" }],
+        tools: [planTool],
+        stream: true,
+        ...extra,
+      } as any,
+      signal,
+    )) {
+      choices.push(c.choices[0]);
+    }
+    const live = choices.filter(Boolean);
+    return {
+      content: live.map((c) => c.delta?.content ?? "").join(""),
+      calls: live.flatMap((c) => c.delta?.tool_calls ?? []),
+      finish: live
+        .map((c) => c.finish_reason)
+        .filter(Boolean)
+        .at(-1),
+    };
+  }
+  const text = (t: string) => ({ contentBlockDelta: { delta: { text: t } } });
+  const reply = () => [
+    text("Here is the plan.\n"),
+    text(leaked.slice(0, 9)),
+    text(leaked.slice(9)),
+    { contentBlockStop: {} },
+    { messageStop: { stopReason: "end_turn" } },
+  ];
+
+  it("leaves the text alone when the setting is off", async () => {
+    const r = await run(reply());
+    expect(r.content).toBe("Here is the plan.\n" + leaked);
+    expect(r.calls).toEqual([]);
+  });
+
+  it("makes the call when asked for pythonic", async () => {
+    const r = await run(reply(), {
+      x_continue_recover_text_tool_calls: "pythonic",
+    });
+    expect(r.content).toBe("Here is the plan.\n");
+    expect(r.calls).toHaveLength(1);
+    expect(r.calls[0].function.name).toBe("present_plan");
+    expect(JSON.parse(r.calls[0].function.arguments)).toEqual({
+      title: "Rename",
+      decisions: [{ q: "a" }],
+    });
+    expect(r.finish).toBe("tool_calls");
+  });
+
+  it("does not make a call from prose that mentions one", async () => {
+    const prose = 'Call present_plan(title="x") once you are ready.';
+    const r = await run(
+      [
+        text(prose),
+        { contentBlockStop: {} },
+        { messageStop: { stopReason: "end_turn" } },
+      ],
+      { x_continue_recover_text_tool_calls: "pythonic" },
+    );
+    expect(r.content).toBe(prose);
+    expect(r.calls).toEqual([]);
+  });
+
+  it("is not applied to a model that is not Nova", async () => {
+    // The setting names the family: a Qwen model with `pythonic` is unchanged.
+    const r = await run(reply(), {
+      model: "qwen.qwen3-coder-30b-a3b-v1:0",
+      x_continue_recover_text_tool_calls: "pythonic",
+    });
+    expect(r.calls).toEqual([]);
+  });
+});
