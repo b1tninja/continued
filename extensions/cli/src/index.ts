@@ -5,6 +5,7 @@ import "./init.js";
 
 import { Command } from "commander";
 
+import { acp } from "./commands/acp.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { hooksCommand } from "./commands/hooks.js";
@@ -351,6 +352,17 @@ program
     }
 
     await serve(prompt, mergedOptions);
+  });
+
+// ACP subcommand: the Agent Client Protocol on stdio, for editors that run ACP agents
+program
+  .command("acp")
+  .description(
+    "Run as an Agent Client Protocol agent on stdin and stdout (for Zed, JetBrains and other ACP editors)",
+  )
+  .action(async (options) => {
+    const mergedOptions = mergeParentOptions(program, options);
+    await acp(mergedOptions);
   });
 
 // Checks subcommand
