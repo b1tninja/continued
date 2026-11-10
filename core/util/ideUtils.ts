@@ -1,6 +1,7 @@
 import { IDE } from "..";
 
 import {
+  findUriInDirs,
   joinEncodedUriPathSegmentToUri,
   joinPathsToUri,
   pathToUriPathSegment,
@@ -19,6 +20,9 @@ export async function resolveRelativePathInDir(
   const dirs = dirUriCandidates ?? (await ide.getWorkspaceDirs());
   for (const dirUri of dirs) {
     const fullUri = joinPathsToUri(dirUri, path);
+    // A path that climbs out of this directory is not inside it, even when
+    // the file exists. Callers treat a returned URI as contained.
+    if (findUriInDirs(fullUri, [dirUri]).foundInDir === null) continue;
     if (await ide.fileExists(fullUri)) {
       return fullUri;
     }

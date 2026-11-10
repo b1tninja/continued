@@ -3,7 +3,7 @@ import * as path from "path";
 import untildify from "untildify";
 import { IDE } from "..";
 import { resolveRelativePathInDir } from "./ideUtils";
-import { findUriInDirs } from "./uri";
+import { findUriInDirs, joinPathsToUri } from "./uri";
 
 export interface ResolvedPath {
   uri: string;
@@ -69,15 +69,30 @@ export async function resolveInputPath(
     };
   }
 
-  // Handle relative paths...
+  // Handle relative paths. A file that exists inside a workspace directory
+  // is inside; one that is only reached by climbing out is not.
   const workspaceUri = await resolveRelativePathInDir(expandedPath, ide);
   if (workspaceUri) {
     return {
       uri: workspaceUri,
       displayPath: expandedPath,
       isAbsolute: false,
-      isWithinWorkspace: true,
+      isWithinWorkspace: await isUriWithinWorkspace(ide, workspaceUri),
     };
+  }
+
+  const dirs = await ide.getWorkspaceDirs();
+  for (const dirUri of dirs) {
+    const fullUri = joinPathsToUri(dirUri, expandedPath);
+    if (findUriInDirs(fullUri, [dirUri]).foundInDir !== null) continue;
+    if (await ide.fileExists(fullUri)) {
+      return {
+        uri: fullUri,
+        displayPath: expandedPath,
+        isAbsolute: false,
+        isWithinWorkspace: false,
+      };
+    }
   }
 
   return null;
