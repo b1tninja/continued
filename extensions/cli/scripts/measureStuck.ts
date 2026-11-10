@@ -2,7 +2,7 @@
  * Runs the stuck signals over recorded histories and prints the fire rate of
  * each signal (plans/stuck-detection.md, S1). Changes nothing.
  *
- *   npx tsx scripts/measureStuck.ts [--labels labels.json] [--json] [--segment-by-user] <file|dir>...
+ *   npx tsx --tsconfig scripts/tsconfig.json scripts/measureStuck.ts [--labels labels.json] [--json] [--segment-by-user] <file|dir>...
  *
  * Each file is a saved session (`~/.continue/sessions/*.json`, CLI or IDE), a
  * bare history array, or a bench result with `state.history`; a directory is

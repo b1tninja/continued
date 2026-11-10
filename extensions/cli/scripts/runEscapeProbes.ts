@@ -6,9 +6,9 @@
  * machine you are willing to run a few probe commands on; against `local` the
  * probes find the host open by design.
  *
- *   npx tsx scripts/runEscapeProbes.ts --backend wsl [--distro NAME]
- *   npx tsx scripts/runEscapeProbes.ts --backend container [--runtime docker|podman] [--image ubuntu:24.04]
- *   npx tsx scripts/runEscapeProbes.ts --backend local
+ *   npx tsx --tsconfig scripts/tsconfig.json scripts/runEscapeProbes.ts --backend wsl [--distro NAME]
+ *   npx tsx --tsconfig scripts/tsconfig.json scripts/runEscapeProbes.ts --backend container [--runtime docker|podman] [--image ubuntu:24.04]
+ *   npx tsx --tsconfig scripts/tsconfig.json scripts/runEscapeProbes.ts --backend local
  *
  * Options: `--only id,id` to run some probes, `--json` for machine output,
  * `--no-listener` to skip the canary listener (the network probes that need it
