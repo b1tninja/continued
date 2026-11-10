@@ -19,6 +19,9 @@ on:
     - cron: "23 5 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # A newer push to the same branch/PR supersedes the run in flight; without this
 # the fork's runner pool fills with stale runs and nothing starts.
 concurrency:

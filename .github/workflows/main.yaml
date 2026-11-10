@@ -23,6 +23,9 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+
 # onnxruntime-node's postinstall fetches its CUDA libraries from GitHub releases on Linux. Packaging drops them and nothing here uses a GPU, so don't let that download fail the job.
 env:
   ONNXRUNTIME_NODE_INSTALL_CUDA: skip

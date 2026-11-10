@@ -22,6 +22,9 @@ on:
         required: true
         default: "true"
 
+permissions:
+  contents: read
+
 defaults:
   run:
     working-directory: extensions/intellij
