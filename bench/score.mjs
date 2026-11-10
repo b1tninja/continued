@@ -11,6 +11,7 @@ import path from "path";
 
 import {
   argsOf,
+  dialectArmsLines,
   loopStatsOf,
   money,
   nameOf,
@@ -765,6 +766,8 @@ function recordOf(result, checks, history = [], prefixChurn = null) {
     repeatsRefused: result.repeatsRefused ?? 0,
     invalidCalls: result.invalidCalls ?? 0,
     textLeaks: (result.textLeaks ?? []).length,
+    recovered: result.recovered ?? 0,
+    dialect: result.dialect ?? "unset",
     truncations: result.truncations ?? 0,
     verdicts,
     questions: (result.questions ?? []).map((q) => ({
@@ -962,6 +965,10 @@ function scorecardMarkdown(modelRow, records, agg) {
     );
   }
   lines.push("");
+  lines.push("## Text tool calls, per dialect arm");
+  lines.push("");
+  lines.push(...dialectArmsLines(records));
+  lines.push("");
   lines.push("## Aggregate");
   lines.push("");
   lines.push("| Column | Value |");
@@ -1118,6 +1125,12 @@ function comparisonMarkdown(perModel) {
       `| ${row}${flag} | ${records.length} | ${agg.guidance.completion} | ${fmt(agg.guidance.medianNudges, 1)} (${agg.guidance.nudgeKinds.act}/${agg.guidance.nudgeKinds.finishItem}/${agg.guidance.nudgeKinds.presentPlan}) | ${agg.compliance.verdictAgreement} | ${agg.compliance.reaction} | ${agg.safety.prohibitedActions} | ${money(agg.efficiency.medianCostPerCompleted)}${agg.efficiency.estimated ? " ~" : ""} | ${fmt(agg.efficiency.medianTokensInPerCompleted)} | ${pct(Math.round(agg.cache.meanReadRatio * 1000), 1000)} | ${churnCell(agg.cache.prefixChurn)} |`,
     );
   }
+  lines.push("");
+  lines.push("## Text tool calls, per dialect arm");
+  lines.push("");
+  lines.push(
+    ...dialectArmsLines(Object.values(perModel).flatMap((m) => m.records)),
+  );
   lines.push("");
   return lines.join("\n");
 }

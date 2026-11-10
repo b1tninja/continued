@@ -47,6 +47,11 @@ Required
 
 Settings
   --profile full|short|tailored  prompt profile for the run (CONTINUE_PROMPT_PROFILE); default: the model's own
+  --dialect off|qwen-xml|pythonic|qwen-xml,pythonic
+                           text tool-call recovery for the run (CONTINUE_RECOVER_TEXT_TOOL_CALLS, read by
+                           the Bedrock adapter and core's Bedrock): calls a model wrote as text are made
+                           into calls. off sets nothing and clears an inherited value; default: unset
+                           (the process environment applies). Recorded as \`dialect\` on the result
   --tail on|off|<text>     the one-line reminder on every user message (modeModels.loop.tail and
                            modeModels.agent.tail in the run's config): on for the built-in line, off
                            for none, or a text of your own; default: the CLI's own (on for Loop items
@@ -107,6 +112,9 @@ function parseArgs(argv) {
       case "--tail":
         opts.tail = next();
         break;
+      case "--dialect":
+        opts.dialect = next();
+        break;
       case "--level":
         opts.levels = parseLevels(next());
         break;
@@ -153,6 +161,14 @@ function parseArgs(argv) {
   }
   if (opts.profile && !["full", "short", "tailored"].includes(opts.profile))
     throw new Error("--profile must be full or short");
+  if (opts.dialect !== undefined && opts.dialect !== "off") {
+    const names = opts.dialect.split(",").map((s) => s.trim());
+    if (names.some((n) => !["qwen-xml", "pythonic"].includes(n)))
+      throw new Error(
+        "--dialect must be off, qwen-xml, pythonic or qwen-xml,pythonic",
+      );
+    opts.dialect = names.join(",");
+  }
   if (opts.tail !== undefined && !opts.tail.trim())
     throw new Error("--tail must be on, off or a text");
   if (!(opts.runs >= 1)) throw new Error("--runs must be at least 1");
@@ -207,6 +223,7 @@ function resolveSettings(row, opts) {
     effort: effort ?? null,
     effortField: row.effort ?? "none",
     profile: opts.profile ?? null,
+    dialect: opts.dialect ?? null,
     tail: opts.tail?.trim() ?? null,
     levels: opts.levels ?? {},
     apiBase: p.apiBase ?? row.apiBase,
@@ -605,6 +622,9 @@ async function runOnce({
     CONTINUE_GLOBAL_DIR: gdir,
     CONTINUE_DUMP_REQUESTS: dumps,
     ...(settings.profile ? { CONTINUE_PROMPT_PROFILE: settings.profile } : {}),
+    ...(settings.dialect && settings.dialect !== "off"
+      ? { CONTINUE_RECOVER_TEXT_TOOL_CALLS: settings.dialect }
+      : {}),
     ...(settings.provider === "bedrock" &&
     settings.awsProfile &&
     !process.env.AWS_PROFILE
@@ -616,11 +636,14 @@ async function runOnce({
       ? { AWS_REGION: settings.region }
       : {}),
   };
+  // off is a setting of its own: an inherited value must not turn recovery on
+  if (settings.dialect === "off") delete env.CONTINUE_RECOVER_TEXT_TOOL_CALLS;
   const configHash = hashOf(
     fs.readFileSync(configFile, "utf-8"),
     permissionsFile ? fs.readFileSync(permissionsFile, "utf-8") : "",
     levels.serve,
     settings.profile ?? "",
+    settings.dialect ?? "",
     settings.tail ?? "",
     settings.levels,
   );
@@ -632,6 +655,7 @@ async function runOnce({
     modelRow: row.id,
     provider: settings.provider,
     profile: settings.profile ?? "model-default",
+    dialect: settings.dialect ?? "unset",
     tail: settings.tail ?? "cli-default",
     levels: settings.levels,
     levelsApplied: levels.applied,

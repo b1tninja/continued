@@ -1,0 +1,37 @@
+[
+  {
+    "message": { "role": "user", "content": "Write notes.md" },
+    "toolCallStates": []
+  },
+  {
+    "message": { "role": "assistant", "content": "" },
+    "toolCallStates": [
+      {
+        "toolCallId": "recovered_0_k3j9x2ab",
+        "toolCall": {
+          "id": "recovered_0_k3j9x2ab",
+          "function": { "name": "Write" }
+        },
+        "status": "done"
+      },
+      {
+        "toolCallId": "recovered_1_p0q8w7zz",
+        "toolCall": {
+          "id": "recovered_1_p0q8w7zz",
+          "function": { "name": "Read" }
+        },
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "message": { "role": "assistant", "content": "Done." },
+    "toolCallStates": [
+      {
+        "toolCallId": "tooluse_Zz9",
+        "toolCall": { "id": "tooluse_Zz9", "function": { "name": "Read" } },
+        "status": "done"
+      }
+    ]
+  }
+]

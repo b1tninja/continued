@@ -84,46 +84,129 @@ function coerce(value: string, type: string | string[] | undefined): unknown {
   return undefined;
 }
 
-const FUNCTION_RE =
-  /(?:<tool_call>\s*)?<function=([^>\s]+)>([\s\S]*?)<\/function>(?:\s*<\/tool_call>)?/y;
-const PARAM_RE = /\s*<parameter=([^>\s]+)>\n?([\s\S]*?)\n?<\/parameter>/y;
+const OPEN_RE = /(?:<tool_call>\s*)?<function=([^>\s]+)>/y;
+const PARAM_OPEN_RE = /<parameter=([^>\s]+)>\n?/y;
+const PARAM_CLOSE = "</parameter>";
+const FUNCTION_CLOSE = "</function>";
+const CALL_CLOSE_RE = /\s*<\/tool_call>/y;
+/** Backtracking steps one recovery may take before it gives up (stays text). */
+const STEP_BUDGET = 20000;
 
-/** One call at `at`, or undefined when it is not a complete valid call. */
-function parseOneCall(
+/**
+ * Whether a candidate value, text[from, to), is balanced where it looks like
+ * markup: every `</parameter>` inside it that would close a parameter
+ * structurally closes a `<parameter=` opened inside it. A value that quotes a
+ * whole call is balanced; one that swallowed the next parameter's boundary
+ * (turning an invalid call into a valid one by folding it into a string) is
+ * not.
+ */
+function quotesBalanced(text: string, from: number, to: number): boolean {
+  const re = /<parameter=[^>\s]*>|<\/parameter>/g;
+  const value = text.slice(from, to);
+  let depth = 0;
+  for (let m = re.exec(value); m; m = re.exec(value)) {
+    if (m[0] !== PARAM_CLOSE) {
+      depth++;
+      continue;
+    }
+    let k = from + m.index + PARAM_CLOSE.length;
+    while (k < text.length && /\s/.test(text[k])) k++;
+    const structural =
+      text.startsWith("<parameter=", k) || text.startsWith(FUNCTION_CLOSE, k);
+    if (structural && --depth < 0) return false;
+  }
+  return true;
+}
+
+/**
+ * Parse `text` from `at` as calls and whitespace to its end, or undefined.
+ *
+ * A value may itself contain the closing tags (a file that quotes `</function>`),
+ * so the first closing tag is not taken on trust: a `</parameter>` closes a
+ * value only when whitespace and then `<parameter=` or `</function>` follow,
+ * and a `</function>` closes a call only when what follows parses as the rest
+ * of the reply. Candidate closers are tried nearest first and one that leaves
+ * a schema-invalid value (an undeclared or repeated key, a value that does not
+ * fit its type) is passed over for a later one, so the reading that yields a
+ * valid call wins and two calls are never merged into one: every call must
+ * still be closed by its own `</function>` and the whole reply must parse.
+ */
+function parseCalls(
   text: string,
   at: number,
   tools: DialectTool[],
-): { call: RecoveredCall; end: number } | undefined {
-  FUNCTION_RE.lastIndex = at;
-  const m = FUNCTION_RE.exec(text);
-  if (!m) return undefined;
-  const tool = tools.find((t) => t.name === m[1]);
+  budget: { steps: number },
+): RecoveredCall[] | undefined {
+  while (at < text.length && /\s/.test(text[at])) at++;
+  if (at >= text.length) return [];
+  OPEN_RE.lastIndex = at;
+  const open = OPEN_RE.exec(text);
+  if (!open) return undefined;
+  const tool = tools.find((t) => t.name === open[1]);
   if (!tool) return undefined;
   const schema = schemaOf(tool);
   const properties = schema.properties;
-  const args: Record<string, unknown> = {};
-  const body = m[2];
-  let pos = 0;
-  for (;;) {
-    PARAM_RE.lastIndex = pos;
-    const p = PARAM_RE.exec(body);
-    if (!p) break;
-    pos = PARAM_RE.lastIndex;
+  const start = at;
+
+  const params = (
+    pos: number,
+    args: Record<string, unknown>,
+  ): RecoveredCall[] | undefined => {
+    if (++budget.steps > STEP_BUDGET) return undefined;
+    while (pos < text.length && /\s/.test(text[pos])) pos++;
+    if (text.startsWith(FUNCTION_CLOSE, pos)) {
+      for (const key of schema.required ?? []) {
+        if (!(key in args)) return undefined;
+      }
+      let end = pos + FUNCTION_CLOSE.length;
+      CALL_CLOSE_RE.lastIndex = end;
+      if (CALL_CLOSE_RE.exec(text)) end = CALL_CLOSE_RE.lastIndex;
+      const rest = parseCalls(text, end, tools, budget);
+      if (!rest) return undefined;
+      return [
+        {
+          name: tool.name,
+          arguments: args,
+          raw: text.slice(start, end),
+        },
+        ...rest,
+      ];
+    }
+    PARAM_OPEN_RE.lastIndex = pos;
+    const p = PARAM_OPEN_RE.exec(text);
+    if (!p) return undefined;
     const key = p[1];
     if (key in args) return undefined; // a repeated key is ambiguous
     if (properties && !(key in properties)) return undefined;
-    const value = coerce(p[2], properties?.[key]?.type);
-    if (value === undefined) return undefined;
-    args[key] = value;
-  }
-  if (body.slice(pos).trim() !== "") return undefined; // leftover text
-  for (const key of schema.required ?? []) {
-    if (!(key in args)) return undefined;
-  }
-  return {
-    call: { name: tool.name, arguments: args, raw: m[0] },
-    end: at + m[0].length,
+    const valueStart = PARAM_OPEN_RE.lastIndex;
+    for (
+      let j = text.indexOf(PARAM_CLOSE, valueStart);
+      j !== -1;
+      j = text.indexOf(PARAM_CLOSE, j + 1)
+    ) {
+      const after = j + PARAM_CLOSE.length;
+      let k = after;
+      while (k < text.length && /\s/.test(text[k])) k++;
+      if (
+        !text.startsWith("<parameter=", k) &&
+        !text.startsWith(FUNCTION_CLOSE, k)
+      ) {
+        continue; // quoted text, not the end of the value
+      }
+      if (!quotesBalanced(text, valueStart, j)) continue;
+      const raw = text.slice(valueStart, j);
+      const value = coerce(
+        raw.endsWith("\n") ? raw.slice(0, -1) : raw,
+        properties?.[key]?.type,
+      );
+      if (value === undefined) continue;
+      const done = params(after, { ...args, [key]: value });
+      if (done) return done;
+      if (budget.steps > STEP_BUDGET) return undefined;
+    }
+    return undefined;
   };
+  return params(open.index + open[0].length, {});
 }
 
 /**
@@ -135,17 +218,8 @@ export function recoverQwenXmlCalls(
   text: string,
   tools: DialectTool[],
 ): RecoveredCall[] | undefined {
-  const calls: RecoveredCall[] = [];
-  let at = 0;
-  for (;;) {
-    while (at < text.length && /\s/.test(text[at])) at++;
-    if (at >= text.length) break;
-    const one = parseOneCall(text, at, tools);
-    if (!one) return undefined;
-    calls.push(one.call);
-    at = one.end;
-  }
-  return calls.length > 0 ? calls : undefined;
+  const calls = parseCalls(text, 0, tools, { steps: 0 });
+  return calls && calls.length > 0 ? calls : undefined;
 }
 
 /** A call as the Qwen3-Coder template writes it. */
