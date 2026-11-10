@@ -43,6 +43,8 @@ import {
   bedrockSamplingParams,
   bedrockToolsNeedNonStreaming,
   bedrockUsageToCompletionUsage,
+  cleanReplyText,
+  createThinkingTagSplitter,
   crossRegionFallbackModelId,
   effortToBudgetTokens,
   fillMissingToolResults,
@@ -54,8 +56,6 @@ import {
   leaksDsmlMarker,
   normalizeToolUseIds,
   ThinkingSplit,
-  ThinkingTagSplitter,
-  writesThinkingTags,
 } from "./bedrockHelpers.js";
 import type { RecoveredCall } from "../dialects/qwenXml.js";
 import {
@@ -936,18 +936,31 @@ export class BedrockApi implements BaseLlmApi {
     let toolIndex = -1;
     const recovered: RecoveredCall[] = [];
     for (const block of response.output?.message?.content ?? []) {
-      const found = block.text
+      // The same filters the stream applies: DeepSeek's DSML fragment is
+      // dropped and reasoning tags are lifted out of the answer.
+      const cleaned = block.text
+        ? cleanReplyText(model, block.text)
+        : undefined;
+      const found = cleaned
         ? recoverFromText(
             model,
-            block.text,
+            cleaned.content,
             dialectToolsFromConverse(input.toolConfig),
           )
         : undefined;
-      if (block.text && found && found.calls.length > 0) {
+      if (cleaned && found) {
+        if (cleaned.reasoning) {
+          yield chatChunkFromDelta({
+            model,
+            id,
+            delta: {
+              role: "assistant",
+              reasoning_content: cleaned.reasoning,
+            } as ReasoningDelta,
+          });
+        }
         recovered.push(...found.calls);
         if (found.text) yield chatChunk({ content: found.text, model, id });
-      } else if (block.text) {
-        yield chatChunk({ content: block.text, model, id });
       } else if (block.reasoningContent) {
         const reasoningDelta = reasoningDeltaFor(
           {
@@ -1163,9 +1176,7 @@ export class BedrockApi implements BaseLlmApi {
       // Nova Pro, Lite and Micro write their reasoning as <thinking> tags in
       // the text; the splitter lifts it into reasoning_content, holding back
       // a fragment that could still become a tag (see ThinkingTagSplitter).
-      const thinkingTags = writesThinkingTags(body.model)
-        ? new ThinkingTagSplitter()
-        : undefined;
+      const thinkingTags = createThinkingTagSplitter(body.model);
       const splitChunks = (split: ThinkingSplit): ChatCompletionChunk[] => {
         const chunks: ChatCompletionChunk[] = [];
         if (split.reasoning) {

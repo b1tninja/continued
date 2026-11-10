@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "id": "deepseek-v32-bedrock-dsml-fragment",
+  "family": "deepseek-v3.2",
+  "dialect": "dsml",
+  "kind": "negative",
+  "failureMode": "special-token-leak",
+  "flag": "observed",
+  "provenance": {
+    "source": "Observed live on Bedrock Converse 2026-11-10, model deepseek.v3.2",
+    "retrieved": "2026-11-10",
+    "reportDate": "2026-11-10",
+    "note": "The text block before the structured toolUse block ends with the unclosed DSML marker; the call itself arrived as toolUse. A text parser makes no call; the Bedrock handlers drop the fragment from the visible text."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "run_command",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "timeout": {
+            "type": "integer"
+          }
+        },
+        "required": ["command"]
+      }
+    }
+  ],
+  "text": "I'll read the src/main.ts file for you.\n\n<｜DSML｜function_calls",
+  "markers": ["<｜DSML｜function_calls"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "I'll read the src/main.ts file for you.\n\n<｜DSML｜function_calls"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "I",
+        "'",
+        "l",
+        "l",
+        " ",
+        "r",
+        "e",
+        "a",
+        "d",
+        " ",
+        "t",
+        "h",
+        "e",
+        " ",
+        "s",
+        "r",
+        "c",
+        "/",
+        "m",
+        "a",
+        "i",
+        "n",
+        ".",
+        "t",
+        "s",
+        " ",
+        "f",
+        "i",
+        "l",
+        "e",
+        " ",
+        "f",
+        "o",
+        "r",
+        " ",
+        "y",
+        "o",
+        "u",
+        ".",
+        "\n",
+        "\n",
+        "<",
+        "｜",
+        "D",
+        "S",
+        "M",
+        "L",
+        "｜",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "I'll read the src/main.ts file for you.\n\n<｜DSML｜fun",
+        "ction_calls"
+      ],
+      "splitInside": "<｜DSML｜function_calls"
+    },
+    {
+      "label": "inside-multibyte-char",
+      "encoding": "base64",
+      "chunks": [
+        "SSdsbCByZWFkIHRoZSBzcmMvbWFpbi50cyBmaWxlIGZvciB5b3UuCgo87w==",
+        "vZxEU01M772cZnVuY3Rpb25fY2FsbHM="
+      ],
+      "splitInside": "utf8-codepoint"
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "I'll ",
+        "re",
+        "a",
+        "d ",
+        "the ",
+        "src",
+        "/ma",
+        "in",
+        ".ts f",
+        "il",
+        "e ",
+        "f",
+        "or ",
+        "yo",
+        "u",
+        ".",
+        "\n\n<｜",
+        "DSML",
+        "｜func",
+        "t",
+        "ion",
+        "_call",
+        "s"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "I'll read the src/main.ts file for you.\n\n<｜DSML｜function_calls"
+  }
+}

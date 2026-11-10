@@ -280,10 +280,13 @@ export { OPENROUTER_HEADERS } from "./apis/OpenRouter.js";
 export { extractBase64FromDataUrl, parseDataUrl } from "./util/url.js";
 export { fillMissingToolResults } from "./apis/bedrockHelpers.js";
 export {
+  cleanReplyText,
+  createThinkingTagSplitter,
   DEEPSEEK_DSML_MARKER,
   flushDsmlHold,
   holdBackDsmlMarker,
   leaksDsmlMarker,
+  stripDsmlMarker,
   ThinkingTagSplitter,
   type ThinkingSplit,
   writesThinkingTags,
@@ -299,6 +302,12 @@ export {
   type DialectTool,
   type RecoveredCall,
 } from "./dialects/qwenXml.js";
+export {
+  LlamaJsonRecovery,
+  recoverLlamaJsonCalls,
+  recoverLlamaJsonFromText,
+  renderLlamaJsonCall,
+} from "./dialects/llamaJson.js";
 export {
   createTextToolRecovery,
   dialectToolsFromConverse,

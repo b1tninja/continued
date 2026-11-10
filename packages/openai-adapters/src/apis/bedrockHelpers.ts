@@ -13,10 +13,13 @@ import { familyRuleFor } from "./bedrockFamilyRules.js";
 // The text-stream filters moved to ../dialects/textFilters.ts; re-exported so
 // existing imports of this file keep working.
 export {
+  cleanReplyText,
+  createThinkingTagSplitter,
   DEEPSEEK_DSML_MARKER,
   flushDsmlHold,
   holdBackDsmlMarker,
   leaksDsmlMarker,
+  stripDsmlMarker,
   ThinkingTagSplitter,
   type ThinkingSplit,
   writesThinkingTags,

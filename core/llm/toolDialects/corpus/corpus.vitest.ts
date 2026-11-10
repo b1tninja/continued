@@ -31,7 +31,9 @@ describe("the tool dialect corpus", () => {
       expect(f.provenance.source.length, f.id).toBeGreaterThan(0);
       expect(f.provenance.retrieved, f.id).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       if (f.flag === "observed") {
-        expect(f.provenance.source, f.id).toMatch(/^https:\/\//);
+        expect(f.provenance.source, f.id).toMatch(
+          /^https:\/\/|^Observed live on .+ \d{4}-\d{2}-\d{2}, model \S+/,
+        );
         expect(f.provenance.reportDate, f.id).toBeTruthy();
       }
     }
@@ -81,6 +83,17 @@ describe("the tool dialect corpus", () => {
     }
   });
 
+  it("holds first-party observed fixtures from live runs, with the model id", () => {
+    const live = loadCorpus().filter((f) =>
+      f.provenance.source.startsWith("Observed live on Bedrock Converse"),
+    );
+    expect(live.length).toBeGreaterThanOrEqual(7);
+    for (const f of live) {
+      expect(f.flag, f.id).toBe("observed");
+      expect(f.provenance.source, f.id).toMatch(/, model \S+$/);
+    }
+  });
+
   it("decodes every stream back to the text, partial characters included", () => {
     for (const f of loadCorpus()) {
       for (const s of f.streams) {
@@ -98,6 +111,22 @@ describe("the tool dialect corpus", () => {
       bad({
         flag: "observed",
         provenance: { ...good.provenance, source: "synthesised from x" },
+      }),
+    ).not.toEqual([]);
+    expect(
+      bad({
+        flag: "observed",
+        provenance: {
+          ...good.provenance,
+          source: "Observed live on Bedrock Converse 2026-11-10, model x.y",
+          reportDate: "2026-11-10",
+        },
+      }),
+    ).toEqual([]);
+    expect(
+      bad({
+        flag: "observed",
+        provenance: { ...good.provenance, source: "Observed live somewhere" },
       }),
     ).not.toEqual([]);
     expect(bad({ flag: "maybe" })).not.toEqual([]);

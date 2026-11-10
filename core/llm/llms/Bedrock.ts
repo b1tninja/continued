@@ -77,6 +77,8 @@ import {
   bedrockToolsNeedNonStreaming,
   bedrockUsageToUsage,
   buildModelCatalog,
+  cleanReplyText,
+  createThinkingTagSplitter,
   crossRegionFallbackModelId,
   flushDsmlHold,
   getBedrockErrorHint,
@@ -93,7 +95,6 @@ import {
   normalizeToolUseIds,
   ThinkingSplit,
   ThinkingTagSplitter,
-  writesThinkingTags,
 } from "./bedrockHelpers.js";
 
 /** The use-case lookup is advisory, so listing never waits on it for long. */
@@ -171,9 +172,7 @@ function streamTextState(model: string): StreamTextState {
   return {
     filterDsml: leaksDsmlMarker(model),
     dsmlHold: "",
-    thinkingTags: writesThinkingTags(model)
-      ? new ThinkingTagSplitter()
-      : undefined,
+    thinkingTags: createThinkingTagSplitter(model),
     isNova2: /nova-2-/i.test(model),
   };
 }
@@ -928,7 +927,15 @@ class Bedrock extends BaseLLM {
         if (chunk.contentBlockDelta?.delta) {
           const delta = chunk.contentBlockDelta.delta;
           if (recovery && delta.text) {
-            yield* recoveryMessages(recovery.push(delta.text));
+            // The DSML fragment is dropped before recovery sees the text, as
+            // it is on the path without recovery (deltaMessages).
+            let text = delta.text;
+            if (state.filterDsml) {
+              const split = holdBackDsmlMarker(state.dsmlHold + text);
+              state.dsmlHold = split.hold;
+              text = split.emit;
+            }
+            if (text) yield* recoveryMessages(recovery.push(text));
             continue;
           }
           yield* deltaMessages(delta, state);
@@ -987,15 +994,23 @@ class Bedrock extends BaseLLM {
     const recovered: RecoveredCall[] = [];
     let sawToolUse = false;
     for (const block of response.output?.message?.content ?? []) {
-      const found = block.text
+      // The same filters the stream applies: DeepSeek's DSML fragment is
+      // dropped and reasoning tags are lifted out of the answer.
+      const cleaned = block.text
+        ? cleanReplyText(input.modelId ?? "", block.text)
+        : undefined;
+      const found = cleaned
         ? recoverFromText(
             input.modelId ?? "",
-            block.text,
+            cleaned.content,
             dialectToolsFromConverse(input.toolConfig),
             this._httpRequestOptions?.extraBodyProperties,
           )
         : undefined;
-      if (block.text && found) {
+      if (cleaned && found) {
+        if (cleaned.reasoning) {
+          yield { role: "thinking", content: cleaned.reasoning };
+        }
         recovered.push(...found.calls);
         if (found.text) yield { role: "assistant", content: found.text };
       } else if (block.reasoningContent) {
