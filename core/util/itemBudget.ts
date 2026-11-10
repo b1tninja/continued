@@ -127,6 +127,8 @@ const WARN_AT = 0.8;
 export function itemBudgetStatusOf(
   budget: ItemBudget | undefined,
   use: ItemUse,
+  /** Limits the run was already warned about: they give no further warning */
+  told?: readonly BudgetKind[],
 ): ItemBudgetStatus {
   if (!budget) return { state: "ok" };
   const limits: Array<[BudgetKind, number | undefined, number]> = [
@@ -138,7 +140,11 @@ export function itemBudgetStatusOf(
   for (const [which, limit, used] of limits) {
     if (limit === undefined) continue;
     if (used >= limit) return { state: "over", which, used, limit };
-    if (warn.state === "ok" && used >= limit * WARN_AT) {
+    if (
+      warn.state === "ok" &&
+      !told?.includes(which) &&
+      used >= limit * WARN_AT
+    ) {
       warn = { state: "warn80", which, used, limit };
     }
   }
@@ -179,9 +185,19 @@ export function itemUseNow(
 export function itemBudgetStatus(
   loop: LoopState,
   item: { id: string; budget?: TaskItem["budget"] },
-  ctx: { sessionTokens: number; now: Date; turns: number },
+  ctx: {
+    sessionTokens: number;
+    now: Date;
+    turns: number;
+    /** Limits already warned about in this run (LoopState.current.budgetWarned) */
+    told?: readonly BudgetKind[];
+  },
 ): ItemBudgetStatus {
-  return itemBudgetStatusOf(item.budget, itemUseNow(loop, item.id, ctx));
+  return itemBudgetStatusOf(
+    item.budget,
+    itemUseNow(loop, item.id, ctx),
+    ctx.told,
+  );
 }
 
 /** "turns" / "tokens" / "minutes" figures as a person reads them. */
@@ -200,4 +216,33 @@ export function overBudgetReport(b: ItemBudgetBreach): {
     outcome: "stuck",
     summary: `Over budget: the item ${describeBreach(b)}. What it did is kept.`,
   };
+}
+
+/**
+ * The one-line note for an item that has used 80% of a limit, so the agent
+ * can wrap up (plans/loop-budgets.md, "When an item's budget runs out").
+ * Hosts append it to a tool result, never the system prompt, so the cached
+ * prefix is unchanged. `finishTool` is the host's name for finish_item.
+ */
+export function itemBudgetNote(
+  w: { which: BudgetKind; used: number; limit: number },
+  finishTool = "finish_item",
+): string {
+  const unit = w.which === "minutes" ? "time" : w.which;
+  const used =
+    w.which === "minutes" ? Math.round(w.used * 10) / 10 : Math.round(w.used);
+  return `Note: this item has used 80% of its ${unit} (${used.toLocaleString("en-US")} of ${w.limit.toLocaleString("en-US")}). Finish it, or say what is left and call ${finishTool} with outcome \`later\`.`;
+}
+
+/**
+ * The note due now: undefined unless the status is a warning (the status was
+ * asked with the limits the run was told of, so each limit warns once per
+ * run). The caller records `kind` in LoopState.current.budgetWarned.
+ */
+export function itemBudgetNoteDue(
+  status: ItemBudgetStatus,
+  finishTool?: string,
+): { kind: BudgetKind; note: string } | undefined {
+  if (status.state !== "warn80") return undefined;
+  return { kind: status.which, note: itemBudgetNote(status, finishTool) };
 }

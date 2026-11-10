@@ -11,7 +11,10 @@ import {
 import type { ChatCompletionTool } from "openai/resources.mjs";
 
 import { pruneLastMessage } from "../compaction.js";
-import { stopLoopItemOverBudget } from "../loop/loopBudget.js";
+import {
+  endItemRunOverBudget,
+  stopLoopItemOverBudget,
+} from "../loop/loopBudget.js";
 import {
   consumeLoopTurnEnd,
   loopRequestHistory,
@@ -636,6 +639,11 @@ export async function streamChatResponse(
     // Checking here stops an item that has already spent them from making
     // another request.
     if (stopLoopItemOverBudget()) {
+      break;
+    }
+    // An item's own turn, token or time limit ends its run here, between two
+    // requests, with its work kept (the driver goes on to the next item)
+    if (endItemRunOverBudget()) {
       break;
     }
 

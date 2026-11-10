@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatItemBudget,
   itemBudgetStatus,
+  itemBudgetNoteDue,
   itemBudgetStatusOf,
   overBudgetReport,
   parseItemBudget,
@@ -212,5 +213,64 @@ describe("a run over its item budget", () => {
       T0,
     );
     expect(loop.items[0].overBudget).toBeUndefined();
+  });
+});
+
+describe("the 80% note", () => {
+  const warn = itemBudgetStatusOf(
+    { turns: 10 },
+    { turns: 8, tokens: 0, ms: 0 },
+  );
+
+  it("names the limit, the figures and the way to wrap up", () => {
+    const due = itemBudgetNoteDue(warn);
+    expect(due?.kind).toBe("turns");
+    expect(due?.note).toBe(
+      "Note: this item has used 80% of its turns (8 of 10). Finish it, or say what is left and call finish_item with outcome `later`.",
+    );
+  });
+
+  it("uses the host's name for the finish tool", () => {
+    expect(itemBudgetNoteDue(warn, "FinishItem")?.note).toContain(
+      "call FinishItem with",
+    );
+  });
+
+  it("says time for minutes, with a rounded figure", () => {
+    const status = itemBudgetStatusOf(
+      { minutes: 20 },
+      { turns: 0, tokens: 0, ms: 16.25 * 60_000 },
+    );
+    expect(itemBudgetNoteDue(status)?.note).toContain(
+      "80% of its time (16.3 of 20)",
+    );
+  });
+
+  it("warns once per limit: a limit already told is skipped, the next one warns", () => {
+    const budget = { turns: 10, tokens: 1000 };
+    const use = { turns: 8, tokens: 800, ms: 0 };
+    expect(itemBudgetNoteDue(itemBudgetStatusOf(budget, use))?.kind).toBe(
+      "turns",
+    );
+    expect(
+      itemBudgetNoteDue(itemBudgetStatusOf(budget, use, ["turns"]))?.kind,
+    ).toBe("tokens");
+    expect(
+      itemBudgetNoteDue(itemBudgetStatusOf(budget, use, ["turns", "tokens"])),
+    ).toBeUndefined();
+  });
+
+  it("is not given below 80%, and a limit passed is a breach, not a note", () => {
+    const ok = itemBudgetStatusOf(
+      { turns: 10 },
+      { turns: 7, tokens: 0, ms: 0 },
+    );
+    const over = itemBudgetStatusOf(
+      { turns: 10 },
+      { turns: 10, tokens: 0, ms: 0 },
+    );
+    expect(itemBudgetNoteDue(ok)).toBeUndefined();
+    expect(itemBudgetNoteDue(over)).toBeUndefined();
+    expect(over.state).toBe("over");
   });
 });
