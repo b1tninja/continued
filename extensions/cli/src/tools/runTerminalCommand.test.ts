@@ -165,10 +165,30 @@ describe("runTerminalCommandTool", () => {
   describe("basic error handling", () => {
     it("should handle non-existent commands", async () => {
       const command = "definitely-not-a-real-command-xyz123";
+      // The shell's own error path: the missing-program check would stop the
+      // command before it runs, so it is switched off here.
+      const before = process.env.CONTINUE_MISSING_BINARY_CHECK;
+      process.env.CONTINUE_MISSING_BINARY_CHECK = "off";
+      try {
+        await expect(runTerminalCommandTool.run({ command })).rejects.toMatch(
+          /Error \(exit code|Command timed out|not found|not recognized/,
+        );
+      } finally {
+        if (before === undefined) {
+          delete process.env.CONTINUE_MISSING_BINARY_CHECK;
+        } else {
+          process.env.CONTINUE_MISSING_BINARY_CHECK = before;
+        }
+      }
+    });
 
-      await expect(runTerminalCommandTool.run({ command })).rejects.toMatch(
-        /Error \(exit code|Command timed out|not found|not recognized/,
-      );
+    it("does not run a command whose program is not installed", async () => {
+      const result = await runTerminalCommandTool.run({
+        command: "nonexistentcommandxyz123",
+      });
+      expect(result).toContain("Command not run");
+      expect(result).toContain("nonexistentcommandxyz123");
+      expect(result).toContain("was not run");
     });
   });
 
