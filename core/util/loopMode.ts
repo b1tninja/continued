@@ -1436,6 +1436,7 @@ export function startItemRun(
       attempts: (state?.attempts ?? 0) + 1,
       setAside: undefined,
       model: options.model,
+      overBudget: undefined,
     }),
     status: "running",
     current: {
@@ -1706,11 +1707,19 @@ export function finishItemRun(
   const current = loop.current;
   const itemId = current?.itemId;
   if (!current || !itemId || current.kind !== "item") return loop;
-  const finished = {
+  const finished: LoopState = {
     ...finishRunOf(loop, itemId, report, options, unreportedRun(loop)),
     current: undefined,
   };
-  return addItemUsage(finished, itemId, {
+  // Over its own budget: failed, but not a failure of the loop's
+  const over = current.overBudget;
+  const recorded = over
+    ? {
+        ...withItem(finished, itemId, { overBudget: over }),
+        consecutiveFailures: loop.consecutiveFailures ?? 0,
+      }
+    : finished;
+  return addItemUsage(recorded, itemId, {
     tokens:
       options.sessionTokens !== undefined && current.tokensAtStart !== undefined
         ? options.sessionTokens - current.tokensAtStart
