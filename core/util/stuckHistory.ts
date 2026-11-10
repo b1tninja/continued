@@ -132,6 +132,29 @@ class FileTracker {
   }
 }
 
+const SHELL_TOOLS = new Set([
+  "run_terminal_command",
+  "bash",
+  "shell",
+  "powershell",
+  "terminal",
+]);
+
+/** Commands that write: redirects, the shells' write verbs, git operations that change the tree. */
+const SHELL_WRITE =
+  /(?:^|[\s;|&(])(?:set-content|add-content|out-file|new-item|remove-item|copy-item|move-item|rename-item|rm|mv|cp|mkdir|touch|tee|sed\s+-i|git\s+(?:apply|checkout|restore|add|commit|mv|rm|stash)|npm\s+(?:install|i)|pip\s+install)\b|>>?\s*[^\s&>|]/i;
+
+/**
+ * Whether a shell command writes to disk, by its text. A heuristic, and the
+ * reason is that a script written and run through the shell is otherwise
+ * invisible to "since the last file change". Redirects to the null device
+ * are not writes.
+ */
+export function shellWrites(command: string): boolean {
+  const text = command.replace(/\d?>>?\s*(?:\$null|\/dev\/null|nul)\b/gi, " ");
+  return SHELL_WRITE.test(text);
+}
+
 function readsOf(tool: string, args: Record<string, unknown>): string[] {
   if (!READ_TOOLS.has(tool.toLowerCase())) return [];
   const p = pathOf(args);
@@ -162,7 +185,18 @@ function makeCall(
   failed: boolean,
 ): StuckCall {
   const call: StuckCall = { tool, args, result, error: failed };
-  const changed = failed ? [] : tracker.changes(tool, args);
+  let changed = failed ? [] : tracker.changes(tool, args);
+  const command = args.command ?? args.cmd;
+  if (
+    !failed &&
+    changed.length === 0 &&
+    SHELL_TOOLS.has(tool.toLowerCase()) &&
+    typeof command === "string" &&
+    shellWrites(command)
+  ) {
+    // The file is unknown; the command and its output stand for the new state
+    changed = [{ path: "(shell)", hash: hashText(`${command} :: ${result}`) }];
+  }
   if (changed.length > 0) call.changed = changed;
   const read = failed ? [] : readsOf(tool, args);
   if (read.length > 0) call.read = read;
@@ -287,4 +321,21 @@ export function historyOfSessionJson(
   return h?.every((i) => i && typeof i === "object" && "message" in i)
     ? h
     : undefined;
+}
+
+/**
+ * A history cut into the stretches after each person's message: the scope
+ * OpenHands gives its stuck detector, and the right one for a loop session,
+ * which receives one user message per item and per answered question. Items
+ * before the first user message (a system preamble) join the first stretch.
+ */
+export function segmentAtUserMessages(
+  history: ChatHistoryItem[],
+): ChatHistoryItem[][] {
+  const out: ChatHistoryItem[][] = [];
+  for (const item of history) {
+    if (item.message.role === "user" || out.length === 0) out.push([item]);
+    else out[out.length - 1].push(item);
+  }
+  return out;
 }

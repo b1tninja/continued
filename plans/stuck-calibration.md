@@ -91,7 +91,17 @@ For S1 to meet the plan's bar it needs, per model, at least 20 healthy and 10 st
 
 ### 2.7 A blind spot found with a fixture, not the data
 
-The commonest way a coding agent is stuck is: edit, run the test, the same failure, edit again. The scripted decoy history (the S3 scenario, section 6) does exactly that, 8 distinct edits to one file each followed by the same failing `npm test`. `detectStuck` reports `none` throughout: every signal about repeats counts only since the last file change, so each edit resets it, `ping-pong` keys include the changed hash, and no file returns to an earlier hash. This is the "Non-Progressive Iteration" of the taxonomy in section 4, the largest failure class in that study, and the eight signals do not see it. `persistentFailure` in `stuckExperiment.ts` (same masked error from the same program, 3 or more times across at least 2 edits) catches it at the third failure. It is not added to `stuckSignals.ts`: its false-positive rate is unmeasured (the error mask turns numbers into `#`, so "expected 5, got 4" and "expected 5, got 3" count as one error even when the edits are moving toward a fix). The experiment uses it as its trigger; whether it joins the signals is a row for S1 once labelled runs exist.
+The commonest way a coding agent is stuck is: edit, run the test, the same failure, edit again. The scripted decoy history (the S3 scenario, section 6) does exactly that, 8 distinct edits to one file each followed by the same failing `npm test`. `detectStuck` reports `none` throughout: every signal about repeats counts only since the last file change, so each edit resets it, `ping-pong` keys include the changed hash, and no file returns to an earlier hash. This is the "Non-Progressive Iteration" of the taxonomy in section 4, the largest failure class in that study, and the eight signals do not see it. `persistentFailure` in `stuckExperiment.ts` (same masked error from the same program, 3 or more times across at least 2 edits) catches it at the third failure. It was first kept in `stuckExperiment.ts` and is now the `persistent-failure` signal in `stuckSignals.ts` (section 2.8).
+
+### 2.8 What the fixes did (same day)
+
+Three changes followed from sections 2.3 and 2.7, each tested on the labelled corpus (which grew by five small synthetic histories; no session text is in the repository):
+
+- `no-progress` counts a new successful command output as progress (a call that is not a file read and whose result was not seen before), and `stuckHistory.ts` reads a shell command that writes (a redirect, `Set-Content`, `sed -i`, a git change, and so on) as a file change.
+- `repeated-block`: the same refusal or hold (a result that says the call needs approval, was not run, was refused or denied) coming back, counted over the whole history, note at 3 and stuck at 5.
+- `persistent-failure`: the same program failing with the same masked error across at least two edits, note at 4 and stuck at 6 (3 failures of a build before its fix is held healthy by the corpus).
+
+On the recorded session the share of healthy-phase prefixes at `stuck` fell from 205 of 591 to 9 of 591, and the spiral is still caught at its onset. The measurement window is also available as `measureStuck.ts --segment-by-user`. The cost is on the proxy-labelled item segments: of the 7 segments followed by "failed" or "ended without reporting", detection fell from 6 to 1, and those segments carry no repeated error, block or edit loop; whether they were stuck is not known. Labelled runs (section 2.6) are still the way to settle that.
 
 ## 3. What others do
 

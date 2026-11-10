@@ -50,7 +50,9 @@ export type StuckSignalKind =
   | "edit-revert"
   | "no-progress"
   | "monologue"
-  | "retry-after-fail";
+  | "retry-after-fail"
+  | "repeated-block"
+  | "persistent-failure";
 
 export type StuckLevel = "none" | "note" | "stuck";
 
@@ -95,6 +97,21 @@ export const STUCK_THRESHOLDS = {
   monologue: { note: 2, stuck: 3 },
   /** failed attempts of the same program since the last file change */
   retryAfterFail: { note: 3, stuck: 4 },
+  /**
+   * calls refused or held for approval, with the same masked message. A block
+   * is not cleared by editing a file, so the count is over the whole history
+   * (the host cuts the history at the person's last message). One recorded
+   * session retried the same held call more than 70 times; 5 is early enough
+   * to matter and above the few a loop legitimately holds.
+   */
+  repeatedBlock: { note: 3, stuck: 5 },
+  /**
+   * failures of the same program with the same masked error, counting across
+   * file changes (the edit, run, same-failure loop that every other repeat
+   * count resets on). Above the 3 that a build gets wrong before the fix
+   * lands, which the corpus holds as healthy.
+   */
+  persistentFailure: { note: 4, stuck: 6 },
 } as const satisfies Record<string, Threshold>;
 
 /** Word overlap at which two messages restate each other. */
@@ -262,6 +279,9 @@ function repeats(epoch: Flat[], out: StuckSignal[]): void {
     );
   }
 
+  // Calls refused or held, again and again: see repeatedBlock
+  // (handled over the whole history in detectStuck)
+
   // The same program tried again and again, each time failing
   const program = programKey(last.call);
   const attempts = epoch.filter((f) => programKey(f.call) === program);
@@ -335,6 +355,9 @@ function noProgress(steps: StuckStep[], out: StuckSignal[]): void {
   // The last result of each call: the same call answering differently (a job
   // that moves from queued to running) is the world changing, not a loop
   const lastResult = new Map<string, string>();
+  // An observation not seen before is something learned, whatever the call:
+  // a new command with new output is progress even if no file changed
+  const seenObservations = new Set<string>();
   let run = 0;
   for (const step of steps) {
     let progress = false;
@@ -345,6 +368,13 @@ function noProgress(steps: StuckStep[], out: StuckSignal[]): void {
       if (lastResult.has(key) && lastResult.get(key) !== result)
         progress = true;
       lastResult.set(key, result);
+      if (!call.error && result.length > 0 && !call.read?.length) {
+        const observation = `${call.tool} :: ${result}`;
+        if (!seenObservations.has(observation)) {
+          seenObservations.add(observation);
+          progress = true;
+        }
+      }
       for (const r of call.read ?? []) {
         if (!seenReads.has(r)) {
           seenReads.add(r);
@@ -412,10 +442,71 @@ function monologue(steps: StuckStep[], out: StuckSignal[]): void {
   );
 }
 
+/** What a refusal or a hold says, in the results of the CLI and the IDE. */
+const BLOCK_PATTERN =
+  /needs? (?:the person'?s )?approval|was not run|not allowed|permission denied|\brefused\b|is blocked|blocked by|denied by|held as question|do not (?:retry|try)/i;
+
+/** A call that was refused or held rather than run and failed. */
+export function isBlocked(call: StuckCall): boolean {
+  const result = (call.result ?? "").trim();
+  if (!result) return false;
+  // A short message, or a call the host marked failed: a file that merely
+  // contains the word "refused" is long and is not an error
+  return (
+    (call.error === true || result.length <= 400) && BLOCK_PATTERN.test(result)
+  );
+}
+
+/** The same refusal or hold coming back, whatever the call. */
+function repeatedBlock(flat: Flat[], out: StuckSignal[]): void {
+  const last = flat.at(-1);
+  if (!last || !isBlocked(last.call)) return;
+  const sig = errorSignature(last.call.result);
+  const same = flat.filter(
+    (f) => isBlocked(f.call) && errorSignature(f.call.result) === sig,
+  );
+  add(out, "repeated-block", same.length, sig, STUCK_THRESHOLDS.repeatedBlock);
+}
+
+/**
+ * The same failure after several different edits: the same program failing
+ * with the same masked error, counted across file changes. Needs at least two
+ * edits between the first and the last failure, or it is one failing build
+ * and its fix.
+ */
+function persistentFailure(flat: Flat[], out: StuckSignal[]): void {
+  const last = flat.at(-1);
+  if (!last?.call.error || isBlocked(last.call)) return;
+  const program = programKey(last.call);
+  const sig = errorSignature(last.call.result);
+  let count = 0;
+  let first = -1;
+  flat.forEach((f, i) => {
+    if (
+      f.call.error &&
+      !isBlocked(f.call) &&
+      programKey(f.call) === program &&
+      errorSignature(f.call.result) === sig
+    ) {
+      count++;
+      if (first < 0) first = i;
+    }
+  });
+  const edits = flat.slice(first).filter((f) => f.call.changed?.length).length;
+  if (edits < 2) return;
+  add(
+    out,
+    "persistent-failure",
+    count,
+    `${program}: ${sig} (across ${edits} edits)`,
+    STUCK_THRESHOLDS.persistentFailure,
+  );
+}
+
 /**
  * Reads the end of a history. Signals about repeats count only since the last
- * file change; ping-pong, edit-revert, no-progress and monologue look at the
- * whole run. Cheap: one pass per signal over the calls.
+ * file change; ping-pong, edit-revert, no-progress, monologue, repeated-block
+ * and persistent-failure look at the whole run. Cheap: one pass per signal over the calls.
  */
 export function detectStuck(steps: StuckStep[]): StuckReport {
   const signals: StuckSignal[] = [];
@@ -426,6 +517,8 @@ export function detectStuck(steps: StuckStep[]): StuckReport {
     signals,
   );
   pingPong(flat, signals);
+  repeatedBlock(flat, signals);
+  persistentFailure(flat, signals);
   editRevert(steps, signals);
   noProgress(steps, signals);
   monologue(steps, signals);

@@ -6,10 +6,8 @@ import {
   buildCheckIn,
   CHECK_IN_GUIDANCE,
   CheckInGate,
-  experimentReport,
   fisherOneSided,
   HEALTHY_CONTROL_SCENARIOS,
-  persistentFailure,
   scoreExperiment,
   STUCK_EXPERIMENT,
   STUCK_SCENARIO,
@@ -65,21 +63,28 @@ function decoyHistory(edits: number): StuckStep[] {
 }
 
 describe("the decoy history", () => {
-  it("is invisible to the shipped signals: every edit resets the repeat counts", () => {
-    // The measured blind spot (plans/stuck-calibration.md): 8 edits, 8 identical failures
-    expect(detectStuck(decoyHistory(8)).level).toBe("none");
+  const level = (n: number) => detectStuck(decoyHistory(n));
+  const kind = (n: number) =>
+    level(n).signals.find((s) => s.kind === "persistent-failure");
+
+  it("was invisible to the repeat signals: every edit resets their counts", () => {
+    // The blind spot found in plans/stuck-calibration.md: 8 edits, 8 identical failures
+    const others = level(8).signals.filter(
+      (s) => s.kind !== "persistent-failure",
+    );
+    expect(others).toEqual([]);
   });
 
-  it("is caught by the persistent-failure trigger at the third failure across two edits", () => {
-    expect(persistentFailure(decoyHistory(2))).toBeUndefined();
-    const at3 = persistentFailure(decoyHistory(3));
-    expect(at3?.count).toBe(3);
-    expect(at3?.edits).toBeGreaterThanOrEqual(2);
-    expect(experimentReport(decoyHistory(3)).level).toBe("stuck");
+  it("is caught by persistent-failure: a note at the fourth failure, stuck at the sixth", () => {
+    expect(kind(3)).toBeUndefined();
+    expect(kind(4)?.level).toBe("note");
+    expect(kind(5)?.level).toBe("note");
+    expect(kind(6)?.level).toBe("stuck");
+    expect(level(6).level).toBe("stuck");
   });
 
   it("stays quiet when the failure changes with the edits, or the fix lands", () => {
-    const moving = decoyHistory(4).map((s, i) =>
+    const moving = decoyHistory(6).map((s, i) =>
       s.calls[0].error
         ? {
             calls: [
@@ -91,9 +96,9 @@ describe("the decoy history", () => {
           }
         : s,
     );
-    expect(persistentFailure(moving)).toBeUndefined();
+    expect(detectStuck(moving).signals).toEqual([]);
 
-    const fixed = decoyHistory(1);
+    const fixed = decoyHistory(5);
     fixed.push({
       calls: [
         {
@@ -109,18 +114,18 @@ describe("the decoy history", () => {
         },
       ],
     });
-    expect(experimentReport(fixed).level).toBe("none");
+    expect(detectStuck(fixed).level).toBe("none");
   });
 });
 
 describe("the check-in", () => {
   it("carries the log, what repeated and one guidance line, and asks for a change", () => {
-    const steps = decoyHistory(3);
-    const text = buildCheckIn(steps, experimentReport(steps));
+    const steps = decoyHistory(6);
+    const text = buildCheckIn(steps, detectStuck(steps));
     expect(text).toContain("What has been tried:");
     expect(text).toContain("edit src/config.js");
-    expect(text).toContain("across");
-    expect(text).toContain(CHECK_IN_GUIDANCE["repeat-error"].line);
+    expect(text).toContain("across 5 edits");
+    expect(text).toContain(CHECK_IN_GUIDANCE["persistent-failure"].line);
     expect(text).toMatch(/Change your approach/);
   });
 
@@ -139,7 +144,7 @@ describe("the check-in", () => {
 
   it("fires once per episode and re-arms after quiet steps", () => {
     const gate = new CheckInGate();
-    const stuck = experimentReport(decoyHistory(3));
+    const stuck = detectStuck(decoyHistory(6));
     const none = detectStuck([]);
     expect(gate.due(stuck)).toBe(true);
     expect(gate.due(stuck)).toBe(false);

@@ -1,8 +1,5 @@
 import { buildWorkLog, formatWorkLog } from "./workLog";
 import {
-  detectStuck,
-  errorSignature,
-  type StuckCall,
   type StuckReport,
   type StuckSignalKind,
   type StuckStep,
@@ -88,6 +85,14 @@ export const CHECK_IN_GUIDANCE: Record<
     card: "restate-the-problem",
     line: "You are restating the same plan without acting. Name the next concrete step and do it.",
   },
+  "repeated-block": {
+    card: "where-stuck",
+    line: "These calls were refused or held for the person; trying again will get the same answer. Do not retry them: continue with work that needs no approval, or say what you are waiting for and stop.",
+  },
+  "persistent-failure": {
+    card: "reproduce-first",
+    line: "The same failure has survived several different edits, so the edits are not touching its cause. Reproduce it in the smallest form and find which file the failing code actually uses before editing again.",
+  },
   "repeat-call": {
     card: "what-did-you-verify",
     line: "The last result of this call is above. What would be different now? If nothing, do not repeat it.",
@@ -97,74 +102,6 @@ export const CHECK_IN_GUIDANCE: Record<
     line: "These calls differ only in spelling. The result will be the same; look for the assumption they share.",
   },
 };
-
-/**
- * The same failure after several different edits: a test that fails with the
- * same masked error whatever the agent changes. The shipped signals reset
- * their repeat counts at every file change (a rebuilt build that passes after
- * a fix is progress), so an edit, run, same-error loop is invisible to all
- * eight of them: measured on a scripted decoy history, 8 edits and 8 identical
- * failures report `none`. This experimental trigger counts across edits. It
- * lives here, not in stuckSignals.ts, until S1 has labelled data for it.
- */
-export function persistentFailure(
-  steps: StuckStep[],
-  minFailures = 3,
-  minEdits = 2,
-): { count: number; edits: number; key: string } | undefined {
-  const calls = steps.flatMap((s) => s.calls);
-  const last = calls.at(-1);
-  if (!last?.error) return undefined;
-  const programOf = (c: StuckCall): string => {
-    const command = c.args?.command ?? c.args?.cmd;
-    return typeof command === "string"
-      ? `${c.tool} ${command.trim().split(/\s+/).slice(0, 2).join(" ")}`
-      : c.tool;
-  };
-  const program = programOf(last);
-  const sig = errorSignature(last.result);
-  let count = 0;
-  let edits = 0;
-  let first = -1;
-  calls.forEach((c, i) => {
-    if (
-      c.error &&
-      errorSignature(c.result) === sig &&
-      programOf(c) === program
-    ) {
-      count++;
-      if (first < 0) first = i;
-    }
-  });
-  if (first >= 0) {
-    edits = calls.slice(first).filter((c) => c.changed?.length).length;
-  }
-  return count >= minFailures && edits >= minEdits
-    ? { count, edits, key: `${program}: ${sig}` }
-    : undefined;
-}
-
-/**
- * The report the experiment's treatment arm triggers on: the shipped signals,
- * plus `persistentFailure` reported as a `stuck` repeat-error.
- */
-export function experimentReport(steps: StuckStep[]): StuckReport {
-  const base = detectStuck(steps);
-  const persistent = persistentFailure(steps);
-  if (!persistent) return base;
-  return {
-    signals: [
-      ...base.signals,
-      {
-        kind: "repeat-error",
-        level: "stuck",
-        count: persistent.count,
-        key: `${persistent.key} (across ${persistent.edits} edits)`,
-      },
-    ],
-    level: "stuck",
-  };
-}
 
 /** The signal the check-in is built around: the first `stuck` one, else the first. */
 export function leadSignal(report: StuckReport) {

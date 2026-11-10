@@ -31,6 +31,8 @@ export const SIGNAL_KINDS: StuckSignalKind[] = [
   "no-progress",
   "monologue",
   "retry-after-fail",
+  "repeated-block",
+  "persistent-failure",
 ];
 
 /** The plan's bar: a signal that fires on more than this share of healthy runs is dropped or tightened. */
