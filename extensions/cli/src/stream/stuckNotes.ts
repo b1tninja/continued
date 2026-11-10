@@ -1,11 +1,11 @@
 import type { ChatHistoryItem } from "core/index.js";
 import { stepsFromHistory } from "core/util/stuckHistory.js";
-import { detectStuck } from "core/util/stuckSignals.js";
 import {
   stripStuckNote,
   STUCK_NOTE_MARK,
   stuckNote,
 } from "core/util/stuckNotes.js";
+import { detectStuck } from "core/util/stuckSignals.js";
 
 /**
  * L1 of the stuck ladder (plans/stuck-detection.md, S2) for the CLI: after a
