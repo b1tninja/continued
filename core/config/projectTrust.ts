@@ -47,7 +47,7 @@ export const PROJECT_CONFIG_SCOPES = [
 export type ProjectConfigScope = (typeof PROJECT_CONFIG_SCOPES)[number];
 
 /** Block types whose workspace files are held until that scope is trusted. */
-export const TRUST_GATED_BLOCK_SCOPES: ProjectConfigScope[] = ["mcp"];
+export const TRUST_GATED_BLOCK_SCOPES: ProjectConfigScope[] = ["mcp", "models"];
 
 export interface ScopeFile {
   path: string;

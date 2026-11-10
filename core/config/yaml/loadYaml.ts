@@ -37,7 +37,6 @@ import { slashCommandFromPromptFile } from "../../commands/slash/promptFileSlash
 import { loadJsonMcpConfigs } from "../../context/mcp/json/loadJsonMcpConfigs";
 import {
   gateWorkspaceMcpServers,
-  heldMcpServersFromBlock,
   mcpTrustByDir,
 } from "../../context/mcp/workspaceMcpPolicy";
 import { getBaseToolDefinitions } from "../../tools";
@@ -50,14 +49,11 @@ import {
   stripUntrustedLoosening,
   untrustedLooseningNotice,
 } from "../../tools/permissions/trust";
+import { beginTrustCheck, fileIsInsideDir } from "../projectTrust";
 import {
-  beginTrustCheck,
-  blockScope,
-  fileIsInsideDir,
-  scopeIsTrusted,
-  TRUST_GATED_BLOCK_SCOPES,
-  untrustedConfigError,
-} from "../projectTrust";
+  preferUserOwnedBlocks,
+  selectWorkspaceBlocks,
+} from "../workspaceBlocks";
 
 /**
  * A workspace block's YAML with the keys a repository may not set removed,
@@ -115,8 +111,6 @@ async function loadConfigYaml(options: {
   // TRUST_GATED_BLOCK_SCOPES.
   beginTrustCheck();
   const workspaceDirs = await ide.getWorkspaceDirs();
-  const trustNotices: ConfigValidationError[] = [];
-  const heldMcpServers: InternalMcpOptions[] = [];
   const loadedBlocks = (
     await Promise.all(
       BLOCK_TYPES.map(async (blockType) => {
@@ -133,59 +127,11 @@ async function loadConfigYaml(options: {
       }),
     )
   ).flat();
-
-  const keptBlocks: typeof loadedBlocks = [];
-  const gated = new Map<
-    string,
-    {
-      dir: string;
-      scope: (typeof TRUST_GATED_BLOCK_SCOPES)[number];
-      blocks: typeof loadedBlocks;
-    }
-  >();
-  for (const block of loadedBlocks) {
-    const scope = blockScope(block.blockType, block.path, workspaceDirs);
-    if (!scope || !TRUST_GATED_BLOCK_SCOPES.includes(scope.scope)) {
-      keptBlocks.push(block);
-      continue;
-    }
-    const key = `${scope.dir}\0${scope.scope}`;
-    const group = gated.get(key) ?? {
-      dir: scope.dir,
-      scope: scope.scope,
-      blocks: [],
-    };
-    group.blocks.push(block);
-    gated.set(key, group);
-  }
-  for (const group of gated.values()) {
-    const trusted = await scopeIsTrusted(
-      ide,
-      group.dir,
-      group.scope,
-      group.blocks.map((block) => ({
-        path: block.path,
-        content: block.content,
-      })),
-    );
-    if (!trusted) {
-      const notice = untrustedConfigError(
-        group.dir,
-        group.scope,
-        group.blocks.length,
-      );
-      if (notice) trustNotices.push(notice);
-      if (group.scope === "mcp") {
-        for (const block of group.blocks) {
-          heldMcpServers.push(
-            ...heldMcpServersFromBlock(block.path, block.content),
-          );
-        }
-      }
-      continue;
-    }
-    keptBlocks.push(...group.blocks);
-  }
+  const {
+    kept: keptBlocks,
+    heldMcpServers,
+    notices: trustNotices,
+  } = await selectWorkspaceBlocks(ide, loadedBlocks, workspaceDirs);
 
   const localPackageIdentifiers: PackageIdentifier[] = keptBlocks.map((b) => ({
     uriType: "file" as const,
@@ -230,7 +176,10 @@ async function loadConfigYaml(options: {
         errors.push(...unrolledLocal.errors);
       }
       if (unrolledLocal.config) {
-        config = mergeUnrolledAssistants(config, unrolledLocal.config);
+        config = mergeUnrolledAssistants(
+          config,
+          preferUserOwnedBlocks(config, unrolledLocal.config),
+        );
       }
     }
   } else {
