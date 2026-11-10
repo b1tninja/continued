@@ -19,6 +19,11 @@ import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { uriToPath } from "./tools/permissions/names";
 import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
 import { resolveShell } from "./util/shell";
+import {
+  credentialUrlNames,
+  getTerminalEnvironmentStatus,
+} from "./util/terminalEnvironment";
+import { saveUserTerminalSettings } from "./util/userTerminalSettings";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import { getAuditTrail } from "./tools/permissions/audit/global";
@@ -735,6 +740,27 @@ export class Core {
       if (saved) {
         await this.configHandler.reloadConfig(
           "Tool dialect changed (config/setToolDialect message)",
+        );
+      }
+      return { saved };
+    });
+
+    on("config/getTerminalEnvironment", async () => ({
+      ...getTerminalEnvironmentStatus(),
+      hostEnvNames: Object.keys(process.env).sort(),
+      credentialUrlNames: credentialUrlNames(),
+    }));
+
+    on("config/setTerminalEnvironment", async (msg) => {
+      const update: Parameters<typeof saveUserTerminalSettings>[0] = {};
+      if ("environment" in msg.data) {
+        update.environment = msg.data.environment ?? undefined;
+      }
+      if (msg.data.passEnv) update.passEnv = msg.data.passEnv;
+      const saved = saveUserTerminalSettings(update);
+      if (saved) {
+        await this.configHandler.reloadConfig(
+          "Terminal environment changed (config/setTerminalEnvironment message)",
         );
       }
       return { saved };
