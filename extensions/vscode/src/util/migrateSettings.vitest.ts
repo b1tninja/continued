@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 const { update, inspect } = vi.hoisted(() => ({
-  update: vi.fn(async () => {}),
-  inspect: vi.fn(),
+  update: vi.fn(async (_key: string, _value: unknown, _target: number) => {}),
+  inspect: vi.fn((_key: string) => ({
+    globalValue: undefined as unknown,
+    workspaceValue: undefined as unknown,
+  })),
 }));
 
 vi.mock("vscode", () => ({
