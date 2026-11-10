@@ -1,0 +1,17 @@
+{
+  // Used only by `npx tsx --tsconfig scripts/tsconfig.json scripts/<name>.ts`.
+  // The CLI resolves `core/*` to a built copy of core (node_modules/core), and
+  // that build is often missing newer files or points at another checkout, so
+  // a script died with "Cannot find module .../core/util/<file>.js". Mapping
+  // `core/*` to the source tree makes a script run against this checkout's
+  // core with no build.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "core/*": ["../../../core/*"]
+    },
+    "noEmit": true
+  },
+  "include": ["./*.ts"]
+}
