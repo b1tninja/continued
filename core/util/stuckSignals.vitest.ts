@@ -50,6 +50,8 @@ interface Case {
 }
 
 const FAIL = "FAIL: 3 tests failed";
+const HELD =
+  "This call needs the person's approval, so it was not run. It is held as question q1 in their inbox.";
 
 const CORPUS: Case[] = [
   // ----- stuck
@@ -157,6 +159,24 @@ const CORPUS: Case[] = [
     ],
   },
 
+  {
+    name: "five different calls, each refused for approval",
+    label: "stuck",
+    expect: ["repeated-block"],
+    steps: ["ls /a", "ls /b", "cat /c", "ls /d", "cat /e"].map((c) =>
+      step(bash(c, HELD, true)),
+    ),
+  },
+  {
+    name: "the same failing test after six different edits",
+    label: "stuck",
+    expect: ["persistent-failure"],
+    steps: [1, 2, 3, 4, 5, 6].flatMap((n) => [
+      step(edit("config.js", `h${n}`)),
+      step(bash("npm test", "AssertionError: limit is 3, expected 5", true)),
+    ]),
+  },
+
   // ----- healthy: repeating while the work changes, or not repeating
   {
     name: "a build re-run after each edit until it passes",
@@ -245,6 +265,36 @@ const CORPUS: Case[] = [
       step(bash("npm test", "fail four", true)),
     ],
   },
+  {
+    name: "six different commands, each with new output, no file edited",
+    label: "healthy",
+    steps: [
+      "git status",
+      "node --version",
+      "npm ls --depth=0",
+      "node scripts/probe.js",
+      "node scripts/probe.js --verbose",
+      "git log --oneline",
+    ].map((c, i) => step(bash(c, `output number ${i}`))),
+  },
+  {
+    name: "two calls held for approval, then other work",
+    label: "healthy",
+    steps: [
+      step(bash("ls /a", HELD, true)),
+      step(bash("ls /b", HELD, true)),
+      step(read("a.ts")),
+      step(edit("a.ts", "h1")),
+    ],
+  },
+  {
+    name: "four failures of the same test with a different message each time",
+    label: "healthy",
+    steps: ["one", "two", "three", "four"].flatMap((m, i) => [
+      step(edit("a.ts", `h${i}`)),
+      step(bash("npm test", `AssertionError: ${m} is wrong`, true)),
+    ]),
+  },
 ];
 
 describe("the corpus", () => {
@@ -277,6 +327,8 @@ describe("the corpus", () => {
       "no-progress",
       "monologue",
       "retry-after-fail",
+      "repeated-block",
+      "persistent-failure",
     ] as const) {
       expect(covered.has(kind), kind).toBe(true);
     }

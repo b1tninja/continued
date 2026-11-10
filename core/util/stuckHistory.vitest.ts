@@ -5,6 +5,8 @@ import {
   hashText,
   historyOfSessionJson,
   looksLikeError,
+  segmentAtUserMessages,
+  shellWrites,
   stepsFromCliHistory,
   stepsFromGuiHistory,
   stepsFromHistory,
@@ -292,5 +294,69 @@ describe("measurement", () => {
     expect(text).toContain("| repeat-error |");
     expect(text).toContain("| overall |");
     expect(text).toContain("Thresholds:");
+  });
+});
+
+describe("shell writes", () => {
+  it("reads a redirect, a write verb or a git change as a write", () => {
+    for (const c of [
+      "echo hi > out.txt",
+      "python gen.py >> log.txt",
+      "Set-Content -Path a.txt -Value x",
+      "sed -i s/a/b/ f.ts",
+      "git checkout -- a.ts",
+      "cd d; New-Item -ItemType File x.py",
+    ]) {
+      expect(shellWrites(c), c).toBe(true);
+    }
+  });
+
+  it("does not read a redirect to the null device, stderr to stdout or a plain read", () => {
+    for (const c of [
+      "python x.py *> $null",
+      "node a.js 2>&1",
+      "npm test 2> /dev/null",
+      "git status",
+      "ls -la",
+      "grep -n foo src/a.ts",
+    ]) {
+      expect(shellWrites(c), c).toBe(false);
+    }
+  });
+
+  it("makes a shell write a file change, so repeat counts restart after it", () => {
+    const steps = stepsFromCliHistory([
+      ...cliTurn([
+        {
+          name: "run_terminal_command",
+          args: { command: "echo x > a.txt" },
+          result: "done",
+        },
+      ]),
+      ...cliTurn([
+        { name: "run_terminal_command", args: { command: "ls" }, result: "a" },
+      ]),
+    ]);
+    expect(steps[0].calls[0].changed?.length).toBe(1);
+    expect(steps[1].calls[0].changed).toBeUndefined();
+  });
+});
+
+describe("segmentAtUserMessages", () => {
+  it("starts a stretch at each user message and keeps what precedes the first", () => {
+    const user = (t: string): ChatHistoryItem => ({
+      message: { role: "user", content: t },
+      contextItems: [],
+    });
+    const turn = cliTurn([
+      { name: "read_file", args: { filepath: "a" }, result: "x" },
+    ]);
+    const parts = segmentAtUserMessages([
+      ...turn,
+      user("one"),
+      ...turn,
+      user("two"),
+    ]);
+    expect(parts.map((p) => p.length)).toEqual([2, 3, 1]);
   });
 });
