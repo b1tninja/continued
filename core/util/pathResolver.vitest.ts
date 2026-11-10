@@ -58,4 +58,33 @@ describe("resolveInputPath workspace boundary", () => {
     );
     expect(await resolveInputPath(ide, "missing.txt")).toBeNull();
   });
+
+  it("follows a symlink to the file it names", async () => {
+    const parent = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "cn-link-")),
+    );
+    roots.push(parent);
+    const workspace = path.join(parent, "proj");
+    const outside = path.join(parent, "secret.txt");
+    const inside = path.join(workspace, "inside.txt");
+    fs.mkdirSync(workspace);
+    fs.writeFileSync(inside, "in");
+    fs.writeFileSync(outside, "out");
+    fs.symlinkSync(outside, path.join(workspace, "notes"));
+    fs.symlinkSync(inside, path.join(workspace, "alias"));
+    fs.symlinkSync(parent, path.join(workspace, "outdir"));
+    const ide = ideFor(workspace);
+
+    const escaped = await resolveInputPath(ide, "notes");
+    expect(escaped?.isWithinWorkspace).toBe(false);
+    expect(fileURLToPath(escaped!.uri)).toBe(outside);
+
+    const stayed = await resolveInputPath(ide, "alias");
+    expect(stayed?.isWithinWorkspace).toBe(true);
+    expect(fileURLToPath(stayed!.uri)).toBe(inside);
+
+    const created = await resolveInputPath(ide, "outdir/new.txt");
+    expect(created?.isWithinWorkspace).toBe(false);
+    expect(fileURLToPath(created!.uri)).toBe(path.join(parent, "new.txt"));
+  });
 });
