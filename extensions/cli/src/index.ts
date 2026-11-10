@@ -9,6 +9,7 @@ import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
+import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
 import { serve } from "./commands/serve.js";
 import {
@@ -198,6 +199,10 @@ addCommonOptions(program)
     "--trust-project-hooks",
     "Run this project's hooks for this session without asking (see `continuous hooks`)",
   )
+  .option(
+    "--trust-project-config",
+    "Use this project's Continuous configuration for this session without asking (see `continuous project`)",
+  )
   .action(async (prompt, options) => {
     // Handle piped input - detect it early and decide on mode
     let stdinInput = null;
@@ -321,12 +326,12 @@ program
   .option("--port <port>", "Port to run the server on (default: 8000)", "8000")
   .option(
     "--host <host>",
-    "Interface to listen on (default: 127.0.0.1). Anything but loopback needs --token",
+    "Interface to listen on (default: 127.0.0.1). Off loopback, an explicit token must be at least 16 characters",
     "127.0.0.1",
   )
   .option(
     "--token <token>",
-    "Bearer token every request must carry (at least 16 characters); required when --host is not loopback",
+    "Bearer token every request must carry. If omitted, one is generated and printed",
   )
   .option(
     "--id <storageId>",
@@ -369,6 +374,18 @@ program
   .option("--verbose", "Enable verbose logging")
   .action(async (options) => {
     await review(options);
+  });
+
+// Project configuration trust
+program
+  .command("project [action]")
+  .description(
+    "Show, trust or revoke this project's Continuous configuration (list, trust, revoke)",
+  )
+  .option("-y, --yes", "Trust without asking, for scripts")
+  .action(async (action: string | undefined, options) => {
+    const code = await projectCommand(action, { yes: options.yes });
+    await gracefulExit(code);
   });
 
 // Hooks subcommand

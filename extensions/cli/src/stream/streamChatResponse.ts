@@ -8,10 +8,10 @@ import {
   TURN_NUDGE_LIMIT,
   TURN_NUDGE_TOTAL,
 } from "core/util/turnEnd.js";
-import * as dotenv from "dotenv";
 import type { ChatCompletionTool } from "openai/resources.mjs";
 
 import { pruneLastMessage } from "../compaction.js";
+import { stopLoopItemOverBudget } from "../loop/loopBudget.js";
 import {
   consumeLoopTurnEnd,
   loopRequestHistory,
@@ -55,8 +55,6 @@ import {
 } from "./streamChatResponse.helpers.js";
 import { StreamCallbacks } from "./streamChatResponse.types.js";
 import { taskListBlockForRequest } from "./taskListBlock.js";
-
-dotenv.config();
 
 function updateFinalResponse(
   content: string,
@@ -576,6 +574,12 @@ export interface StreamChatResponseOptions {
    * subagent's prompt and no tail, whatever the parent turn is doing.
    */
   use?: ModelUse;
+  /**
+   * Called after each model request, once that request's usage is on the
+   * session. A loop worker uses it to report usage to the parent before the
+   * next request, so the budget can stop the wave during the item.
+   */
+  onRequest?: () => void;
 }
 
 /**
@@ -599,7 +603,7 @@ async function turnTextsForRequest(
 }
 
 // Main function that handles the conversation loop
-// eslint-disable-next-line max-params
+// eslint-disable-next-line max-params, max-statements
 export async function streamChatResponse(
   chatHistory: ChatHistoryItem[],
   model: ModelConfig,
@@ -628,6 +632,13 @@ export async function streamChatResponse(
   resetTurnGuards(isCompacting);
 
   while (true) {
+    // Token and time budgets are also checked between items (decideNext).
+    // Checking here stops an item that has already spent them from making
+    // another request.
+    if (stopLoopItemOverBudget()) {
+      break;
+    }
+
     // If ChatHistoryService is available, refresh local chatHistory view
     chatHistory = refreshChatHistoryFromService(chatHistory, isCompacting);
     logger.debug("Starting conversation iteration");
@@ -684,8 +695,16 @@ export async function streamChatResponse(
         turnTail,
       }).finally(() => callbacks?.onModelStreaming?.(false));
 
+    options.onRequest?.();
+
     if (abortController?.signal.aborted) {
       return finalResponse || content || fullResponse;
+    }
+
+    // The request that crossed the budget is counted above. Stop before its
+    // tools, and before another request.
+    if (stopLoopItemOverBudget()) {
+      break;
     }
 
     fullResponse += content;

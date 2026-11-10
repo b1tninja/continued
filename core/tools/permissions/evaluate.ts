@@ -8,12 +8,111 @@ import {
   levelOfCall,
   skippedProtections,
 } from "./approval";
+import { hasUnsafeShellConstruct } from "./command";
 import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
 import type { ShellKind } from "../../util/shell";
+import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
+import type { ProtectedHit } from "./protected";
 import type { ToolPermissions } from "./rules";
+
+/**
+ * Brace expansion, `$IFS`, or a variable where the command name is. The safety
+ * floor never sees the command that will actually run, so the text is refused
+ * when that floor is on.
+ */
+function floorMustRefuse(command: string): boolean {
+  if (unquotedBraceWithComma(command)) return true;
+  if (/\$\{?IFS\b/.test(command)) return true;
+  return variableInCommandPosition(command);
+}
+
+/** A level must not run a command the floor could not see through. */
+function hidesTheCommand(command: string): boolean {
+  return floorMustRefuse(command) || hasUnsafeShellConstruct(command);
+}
+
+function unquotedBraceWithComma(command: string): boolean {
+  let quote: "'" | '"' | null = null;
+  let body = "";
+  let open = false;
+  const flush = () => {
+    open = false;
+    body = "";
+  };
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (quote) {
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      quote = c;
+      flush();
+      continue;
+    }
+    if (c === "\\") {
+      i++;
+      flush();
+      continue;
+    }
+    if (c === "{") {
+      open = true;
+      body = "";
+      continue;
+    }
+    if (c === "}" && open) {
+      if (body.includes(",")) return true;
+      flush();
+      continue;
+    }
+    if (open) body += c;
+  }
+  return false;
+}
+
+/** The first word of a simple command, after assignments, is `$name` or `${name}`. */
+function variableInCommandPosition(command: string): boolean {
+  let quote: "'" | '"' | null = null;
+  let cur = "";
+  const segments: string[] = [];
+  const flush = () => {
+    const t = cur.trim();
+    if (t) segments.push(t);
+    cur = "";
+  };
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    const next = command[i + 1];
+    if (quote) {
+      cur += c;
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      quote = c;
+      cur += c;
+      continue;
+    }
+    if (c === "\n" || c === ";" || c === "|" || (c === "&" && next === "&")) {
+      flush();
+      if (c === "&" || (c === "|" && (next === "|" || next === "&"))) i++;
+      continue;
+    }
+    cur += c;
+  }
+  flush();
+  for (const segment of segments) {
+    const words = segment.split(/\s+/).filter(Boolean);
+    let i = 0;
+    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i++;
+    const word = words[i];
+    if (word && /^\$[{A-Za-z_]/.test(word)) return true;
+  }
+  return false;
+}
 
 export interface ToolPolicyResult {
   policy: ToolPolicy;
@@ -76,14 +175,31 @@ export function evaluateToolPolicyWithRules(
   let evaluated = tool.evaluateToolCallPolicy
     ? tool.evaluateToolCallPolicy(basePolicy, parsedArgs, processedArgs)
     : basePolicy;
+  const commandText =
+    toolName === "run_terminal_command" &&
+    typeof parsedArgs.command === "string"
+      ? parsedArgs.command
+      : undefined;
+  const floorOn = builtinRuleOn(input.approval, "refuse-dangerous-commands");
   // The person switched off the safety check's refusals: such a command asks
   if (
     evaluated === "disabled" &&
     basePolicy !== "disabled" &&
-    toolName === "run_terminal_command" &&
-    !builtinRuleOn(input.approval, "refuse-dangerous-commands")
+    commandText !== undefined &&
+    !floorOn
   ) {
     evaluated = "allowedWithPermission";
+  }
+  // Obfuscation the floor cannot see through is the same as a refusal: a level
+  // must not turn it into a run.
+  if (
+    commandText !== undefined &&
+    floorOn &&
+    basePolicy !== "disabled" &&
+    evaluated !== "disabled" &&
+    floorMustRefuse(commandText)
+  ) {
+    evaluated = "disabled";
   }
 
   const resolved = processedArgs?.resolvedPath as
@@ -93,12 +209,24 @@ export function evaluateToolPolicyWithRules(
   // Credentials and files that change what runs later always ask, with or
   // without rules, so this runs for every user and not only those with rules.
   // It only ever tightens: a call that is already refused stays refused.
-  const protectedHit = findProtected({
-    toolName,
-    parsedArgs,
-    resolvedPath,
-    skip: skippedProtections(input.approval),
-  });
+  // A private or local URL always asks. Permissive (Hands-off) and an allow
+  // rule can loosen the tool's own "ask", so this is a protection, like a
+  // protected path. YOLO still reaches past it.
+  const privateUrl =
+    toolName === "fetch_url_content" &&
+    isPrivateFetchTarget(parsedArgs.url, processedArgs)
+      ? ({
+          kind: "private-url",
+          path: fetchHost(parsedArgs.url),
+        } satisfies ProtectedHit)
+      : undefined;
+  const protectedHit =
+    findProtected({
+      toolName,
+      parsedArgs,
+      resolvedPath,
+      skip: skippedProtections(input.approval),
+    }) ?? privateUrl;
 
   // The floor: deny rules the person wrote to bind even at YOLO
   const floorRules = parsePermissions({ deny: input.approval?.floor });
@@ -130,10 +258,14 @@ export function evaluateToolPolicyWithRules(
   const rules = parsePermissions(input.permissions);
   const call = { parsedArgs, cwd: input.cwd, shell: input.shell };
   const found = levelOfCall(input.approval, toolName, tool, call);
-  // YOLO reaches past a refusal, a rule and a protected path; Permissive acts
-  // only on a call that would otherwise ask
-  const loosening =
-    found?.level === "yolo" || evaluated === "allowedWithPermission"
+  // A hidden command is not loosened at any level, YOLO included. Otherwise
+  // YOLO reaches past a refusal, a rule and a protected path, and Permissive
+  // acts only on a call that would otherwise ask.
+  const hidden =
+    commandText !== undefined && floorOn && hidesTheCommand(commandText);
+  const loosening = hidden
+    ? undefined
+    : found?.level === "yolo" || evaluated === "allowedWithPermission"
       ? approvalLoosening({
           approval: input.approval,
           tool,
@@ -181,4 +313,13 @@ export function evaluateToolPolicyWithRules(
     ...(decision.rule ? { rule: decision.rule } : {}),
     ...(found?.readOnly ? { readOnly: found.readOnly } : {}),
   };
+}
+
+function fetchHost(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  try {
+    return new URL(raw).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    return raw;
+  }
 }

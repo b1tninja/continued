@@ -67,7 +67,7 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 
 **Safety and control**
 
-- **Tool permissions**: `toolPermissions` rules (allow, ask, deny) with **Always allow**, approval modes, five policy areas with levels, protected paths that always ask, and a floor deny list that even YOLO cannot pass. Deny and ask rules read a command the way the shell will, so quoting tricks and wrappers do not hide it.
+- **Tool permissions**: `toolPermissions` rules (allow, ask, deny) with **Always allow**, approval modes, five policy areas with levels, and protected paths that always ask. A floor deny rule you write blocks a command it matches, including when that area is set to YOLO. Rules are checked against several readings of a command (quotes removed, common wrappers skipped). That check stops after 800 readings, so a longer command is not fully covered. The built-in dangerous-command check refuses some commands and asks for others; Hands-off (Permissive) runs a call that would otherwise only ask.
 - **An optional reviewer model** that approves or refuses calls in Auto mode, judging a fenced digest and never the tool output (in the code on `main`; measurement on a real model is still open).
 - **Checkpoints** for agent file edits, with **Restore to here**.
 - **Your config stays yours**: no telemetry, and config files get their own schemas and in-editor problems.
@@ -91,6 +91,7 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 | 2.6.1   | Policy areas wired through the IDE, CLI and loops, command analysis, a Loops panel, and the toolbox drawer of problem-solving prompts                                   |
 | 2.8     | The command lint, `effect:` rules for commands, an editable task list with real checkboxes and drag-to-reorder, and new documentation pages                             |
 | 2.8.1   | Run the agent's terminal commands in WSL, and parallel waves of loop items in the terminal agent                                                                        |
+| 2.8.2   | A two-phase infinity as the Loop mark and the logo, and narrower policy chips with a glyph and colour for each level                                                    |
 
 ## Where it is heading
 
