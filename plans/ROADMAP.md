@@ -478,13 +478,18 @@ Plan: [`loop-budgets.md`](./loop-budgets.md). Builds on Loop mode, the usage led
 
 Problem: a loop stops on a budget, and today the budgets are rounds, tokens and time (the rest are not in the UI). There is no cost budget, nothing shows which limit will fire first, and a limit stops the loop without warning.
 
-| PR  | Scope                                                                                                                                                | Depends on | State       |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
-| T0  | `maxCostUsd` and a per-loop cost total from the ledger in core; the stop names the budget and figures; unpriced models cannot take a cost budget     | none       | Not started |
-| T1  | The control in the IDE: cost, turns, tokens and time rows with live meters, an 80% note, stop or ask at the limit, editable while running            | T0         | Not started |
-| T2  | Presets (Frugal, Balanced, Thorough, Unlimited) mapped to the autonomy levels, savable; per-item turn and cost-share limits                          | T1         | Not started |
-| T3  | The CLI and `cn serve`: `--max-cost`, `--max-turns`, `--max-tokens`, `--max-minutes`, the `/state` fields, the report naming the budget that stopped | T0         | Not started |
-| T4  | Budgets shared across parallel workers (Track N), a settings page for defaults, docs                                                                 | T2, N0     | Not started |
+| PR  | Scope                                                                                                                                                 | Depends on | State       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
+| T0  | `maxCostUsd` and a per-loop cost total from the ledger in core; the stop names the budget and figures; unpriced models cannot take a cost budget      | none       | Not started |
+| T1  | The control in the IDE: cost, turns, tokens and time rows with live meters, an 80% note, stop or ask at the limit, editable while running             | T0         | Not started |
+| T2  | Presets (Frugal, Balanced, Thorough, Unlimited) mapped to the autonomy levels, savable; per-item turn and cost-share limits                           | T1         | Not started |
+| T3  | The CLI and `cn serve`: `--max-cost`, `--max-turns`, `--max-tokens`, `--max-minutes`, the `/state` fields, the report naming the budget that stopped  | T0         | Not started |
+| T4  | Budgets shared across parallel workers (Track N), a settings page for defaults, docs                                                                  | T2, N0     | Not started |
+| T5  | Item budgets in core: cost, turns, tokens and time on a to-do, a `budget:` line in the plan file, the 80% note, and the outcome `over_budget`         | T0         | Not started |
+| T6  | Division strategies for the loop's budget (equal, weighted by `size:`, fair share of what is left, reserve)                                           | T5         | Not started |
+| T7  | A budget step on the plan card when entering the loop: strategy, a number per to-do, a proposal from past runs, set according to the Plan edits level | T1, T6     | Not started |
+| T8  | At an item's limit, by policy: suggest, force or review (a reviewer reads the work log and stuck signals; one extension from the reserve)             | T5, S3     | Not started |
+| T9  | Per-item meters in the loop strip, the plan list and the CLI                                                                                          | T5         | Not started |
 
 ### Track U: reviewer isolation and a cached review prefix
 
