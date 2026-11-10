@@ -12,6 +12,9 @@ const CREDENTIAL_HEADERS = [
   "cookie2",
   "proxy-authorization",
   "www-authenticate",
+  "x-api-key",
+  "api-key",
+  "x-goog-api-key",
 ];
 const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
 
