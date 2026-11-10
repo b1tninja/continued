@@ -93,6 +93,75 @@ describe("tool dialect presets", () => {
     expect(id("meta-llama/llama-3.1-70b-instruct")).toBe("llama-3.1-3.2");
   });
 
+  // Ids as catalogs spell them. Qwen3-Next is the Hermes JSON template (read
+  // 2026-11-10); Coder and Coder-Next are the qwen-xml ones.
+  const QWEN: [string, string][] = [
+    // Bedrock
+    ["qwen.qwen3-coder-30b-a3b-v1:0", "qwen3-coder"],
+    ["qwen.qwen3-coder-480b-a35b-v1:0", "qwen3-coder"],
+    ["qwen.qwen3-coder-next", "qwen3-coder"],
+    ["qwen.qwen3-next-80b-a3b", "qwen3"],
+    ["qwen.qwen3-32b-v1:0", "qwen3"],
+    ["qwen.qwen3-235b-a22b-2507-v1:0", "qwen3"],
+    ["qwen.qwen3-vl-235b-a22b", "qwen3"],
+    // Ollama
+    ["qwen3-coder:30b", "qwen3-coder"],
+    ["qwen3-coder-next:latest", "qwen3-coder"],
+    ["qwen3-next:80b", "qwen3"],
+    ["qwen3:8b", "qwen3"],
+    ["qwen2.5-coder:7b", "qwen3"],
+    // Hugging Face
+    ["Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8", "qwen3-coder"],
+    ["Qwen/Qwen3-Coder-Next", "qwen3-coder"],
+    ["Qwen/Qwen3-Next-80B-A3B-Instruct", "qwen3"],
+    ["Qwen/Qwen3-Next-80B-A3B-Thinking", "qwen3"],
+    ["Qwen/Qwen3-30B-A3B", "qwen3"],
+    // OpenRouter
+    ["qwen/qwen3-coder", "qwen3-coder"],
+    ["qwen/qwen3-coder:free", "qwen3-coder"],
+    ["qwen/qwen3-coder-flash", "qwen3-coder"],
+    ["qwen/qwen3-next-80b-a3b-instruct", "qwen3"],
+    ["qwen/qwen3-235b-a22b-2507", "qwen3"],
+  ];
+  it.each(QWEN)("%s resolves to %s", (id, preset) => {
+    expect(resolveToolDialectPreset(id)?.id).toBe(preset);
+  });
+
+  it("gives Qwen3-Next the Hermes JSON dialect, not Qwen3-Coder's", () => {
+    const p = resolveToolDialectPreset("qwen.qwen3-next-80b-a3b");
+    expect(p?.textDialect).toBe("hermes-json");
+    expect(p?.recoverWith).toBe("hermes-json");
+  });
+
+  it("marks only rows the live run measured as proved", () => {
+    for (const p of TOOL_DIALECT_PRESETS) {
+      expect(p.toolsEvidence === "proved", p.id).toBe(!!p.measured);
+      if (p.bedrockTools === "unmeasured") {
+        expect(p.toolsEvidence, p.id).toBe("unmeasured");
+      } else {
+        expect(p.toolsEvidence, p.id).not.toBe("unmeasured");
+      }
+    }
+    const inferred = TOOL_DIALECT_PRESETS.filter(
+      (p) => p.toolsEvidence === "inferred",
+    ).map((p) => p.id);
+    expect(inferred.sort()).toEqual([
+      "claude",
+      "deepseek-v3",
+      "glm-4.5-4.6",
+      "llama-3.1-3.2",
+    ]);
+  });
+
+  it("only gives thinkingInText to rows that name thinkingTags", () => {
+    for (const p of TOOL_DIALECT_PRESETS) {
+      if (p.thinkingInText) expect(p.thinkingTags, p.id).toBeDefined();
+    }
+    expect(
+      TOOL_DIALECT_PRESETS.filter((p) => p.thinkingInText).map((p) => p.id),
+    ).toEqual(["kimi-k2-thinking", "nova"]);
+  });
+
   it("tells the Nemotron generations apart", () => {
     const id = (name: string) => resolveToolDialectPreset(name)?.id;
     expect(id("nvidia/Llama-3_3-Nemotron-Super-49B-v1_5")).toBe(

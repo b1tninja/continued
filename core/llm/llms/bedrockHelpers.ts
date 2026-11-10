@@ -3,6 +3,7 @@ import {
   promptCacheFields,
   promptCacheSupportsLifetime,
 } from "@continuedev/llm-info";
+import { resolveToolDialectPreset } from "../../util/toolDialectPresets.js";
 import { resolveCacheParts } from "./anthropicCache.js";
 import {
   familyRuleFor,
@@ -624,13 +625,11 @@ export interface ThinkingTags {
  * the text of a reply to a tool result (seen live 2026-11-10).
  */
 export function thinkingTagsFor(modelId: string): ThinkingTags | undefined {
-  if (/nova-(pro|lite|micro|premier)/i.test(modelId)) {
-    return { open: "<thinking>", close: "</thinking>" };
-  }
-  if (/kimi-k2-thinking/i.test(modelId)) {
-    return { open: "<think>", close: "</think>" };
-  }
-  return undefined;
+  const preset = resolveToolDialectPreset(modelId);
+  if (!preset?.thinkingTags || !preset.thinkingInText) return undefined;
+  if (!preset.thinkingInText.test(modelId.toLowerCase())) return undefined;
+  const [open, close] = preset.thinkingTags;
+  return { open, close };
 }
 
 export function writesThinkingTags(modelId: string): boolean {

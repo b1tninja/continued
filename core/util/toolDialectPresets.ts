@@ -44,6 +44,8 @@ export type ToolsOnBedrock =
   /** not measured: the older name list in toolSupport.ts decides */
   | "unmeasured";
 
+export type ToolsEvidence = "proved" | "inferred" | "unmeasured";
+
 export type ParserBasis =
   /** read on the vendor's model card or deployment guide */
   | "model-card"
@@ -82,6 +84,12 @@ export interface DialectPreset {
   /** Tested against the lower-cased id: Bedrock ids, Ollama/HF names, OpenRouter slugs. */
   match: RegExp[];
   bedrockTools: ToolsOnBedrock;
+  /**
+   * What `bedrockTools` rests on: `proved` (the live run measured the family;
+   * `measured` is set), `inferred` (a yes/no/with-recovery by analogy with a
+   * sibling, not measured), or `unmeasured` (no answer, the name list decides).
+   */
+  toolsEvidence: ToolsEvidence;
   nativeOnConverse: NativeOnConverse;
   /** What the live Bedrock run saw, when it measured the family. */
   measured?: string;
@@ -95,6 +103,14 @@ export interface DialectPreset {
   recoverWith?: ToolDialectSetting;
   /** Reasoning tag pair to strip from visible text. */
   thinkingTags?: [open: string, close: string];
+  /**
+   * Ids where a live run saw `thinkingTags` written into the visible text, so
+   * the stream filters lift them out. `thinkingTags` alone is the family's
+   * convention and strips nothing. Read by `thinkingTagsFor` in
+   * bedrockHelpers.ts; the adapters copy of textFilters.ts mirrors it and a
+   * corpus test pins the two.
+   */
+  thinkingInText?: RegExp;
   /** Set only where verified; omitted otherwise. */
   serverParser?: ServerParser;
   source: string[];

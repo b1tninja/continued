@@ -132,4 +132,57 @@ describe("the DSML and thinking-tag filters on replies observed live", () => {
       ).toBe(fixture.text);
     }
   });
+
+  it("strips thinking tags for the same ids in both copies, as before the preset read", async () => {
+    // The regexes the filters hardcoded before they read the preset row.
+    const legacy = (id: string) =>
+      /nova-(pro|lite|micro|premier)/i.test(id)
+        ? "<thinking>"
+        : /kimi-k2-thinking/i.test(id)
+          ? "<think>"
+          : undefined;
+    const ids = [
+      "amazon.nova-pro-v1:0",
+      "us.amazon.nova-lite-v1:0",
+      "amazon.nova-micro-v1:0",
+      "amazon.nova-premier-v1:0",
+      "us.amazon.nova-2-lite-v1:0",
+      "amazon.nova-2-pro-preview",
+      "moonshot.kimi-k2-thinking",
+      "moonshotai/kimi-k2-thinking",
+      "moonshot.kimi-k2.5",
+      "moonshotai/kimi-k2-instruct",
+      "moonshot.kimi-k3",
+      "qwen.qwen3-32b-v1:0",
+      "zai.glm-4.7",
+      "minimax.minimax-m2",
+      "deepseek.v3.2",
+      "nvidia.nemotron-super-3-120b",
+      "meta.llama3-3-70b-instruct-v1:0",
+      "anthropic.claude-sonnet-4",
+    ];
+    const text = "<thinking>a</thinking>x<think>b</think>y";
+    for (const id of ids) {
+      for (const [name, f] of await copies()) {
+        const shown = f.cleanReplyText(id, text);
+        const want = legacy(id);
+        if (want === "<thinking>") {
+          expect(shown, `${name}/${id}`).toEqual({
+            content: "x<think>b</think>y",
+            reasoning: "a",
+          });
+        } else if (want === "<think>") {
+          expect(shown, `${name}/${id}`).toEqual({
+            content: "<thinking>a</thinking>xy",
+            reasoning: "b",
+          });
+        } else {
+          expect(shown, `${name}/${id}`).toEqual({
+            content: text,
+            reasoning: "",
+          });
+        }
+      }
+    }
+  });
 });
