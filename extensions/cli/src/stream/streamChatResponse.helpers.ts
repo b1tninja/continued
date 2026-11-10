@@ -4,6 +4,7 @@
 import type { ToolStatus, Usage } from "core/index.js";
 import { totalInputTokens } from "core/llm/utils/cacheStats.js";
 import { calculateRequestCost } from "core/llm/utils/calculateRequestCost.js";
+import { flagToolText } from "core/tools/permissions/injection.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { ChatCompletionToolMessageParam } from "openai/resources/chat/completions.mjs";
 
@@ -53,6 +54,11 @@ import { recordCacheTally } from "../util/cacheTally.js";
 import { logger } from "../util/logger.js";
 
 import { StreamCallbacks } from "./streamChatResponse.types.js";
+
+/** A tool result with the injection notice in front when it reads like instructions. */
+export function flagToolResult(result: string): string {
+  return typeof result === "string" ? flagToolText(result).text : result;
+}
 import {
   runPostToolUseFailureHooks,
   runPostToolUseHooks,
@@ -931,9 +937,11 @@ export async function executeStreamedToolCalls(
               abortSignal,
               onToolPermissionRequest: callbacks?.onToolPermissionRequest,
             });
+            // Output that reads like instructions to the agent gets the same
+            // notice the IDE puts in front of it (plans/prompt-injection.md P5).
             const toolResult = await runPostToolUseHooks(
               approvedCall,
-              rawResult,
+              flagToolResult(rawResult),
             );
             recordCliOutcome(approvedCall, {
               ran: true,

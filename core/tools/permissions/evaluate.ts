@@ -138,6 +138,7 @@ export interface EvaluateInput {
         | "uri"
         | "evaluateToolCallPolicy"
         | "readonly"
+        | "mcpDefinitionChange"
       >
     | undefined;
   toolName: string;
@@ -205,7 +206,9 @@ export function evaluateToolPolicyWithRules(
   }
 
   const resolved = processedArgs?.resolvedPath as
-    ResolvedPath | null | undefined;
+    | ResolvedPath
+    | null
+    | undefined;
   const resolvedPath = resolved ? uriToPath(resolved.uri) : undefined;
 
   // Credentials and files that change what runs later always ask, with or
@@ -222,6 +225,15 @@ export function evaluateToolPolicyWithRules(
           path: fetchHost(parsedArgs.url),
         } satisfies ProtectedHit)
       : undefined;
+  // A tool whose MCP definition changed since approval asks again. Never in
+  // the skip list: no setting turns it off, and YOLO alone reaches past it.
+  const changedDefinition =
+    tool.mcpDefinitionChange && basePolicy !== "disabled"
+      ? ({
+          kind: "mcp-definition-changed",
+          path: `${tool.mcpDefinitionChange.kind === "added" ? "new tool" : "changed"}, ${tool.mcpDefinitionChange.summary}`,
+        } satisfies ProtectedHit)
+      : undefined;
   const protectedHit =
     findProtected({
       toolName,
@@ -230,7 +242,9 @@ export function evaluateToolPolicyWithRules(
       skip: skippedProtections(input.approval),
       cwd: input.cwd,
       shell: input.shell,
-    }) ?? privateUrl;
+    }) ??
+    privateUrl ??
+    changedDefinition;
 
   // The floor: deny rules the person wrote to bind even at YOLO
   const floorRules = parsePermissions({ deny: input.approval?.floor });

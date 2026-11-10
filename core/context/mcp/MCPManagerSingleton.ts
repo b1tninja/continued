@@ -20,6 +20,11 @@ export class MCPManagerSingleton {
     return MCPManagerSingleton.instance;
   }
 
+  /** A server changed its tool list or a pin was updated: reload the tools. */
+  private watchTools(connection: MCPConnection) {
+    connection.onToolsChanged = () => this.onConnectionsRefreshed?.();
+  }
+
   async setEnabled(serverId: string, enabled: boolean) {
     const conn = this.connections.get(serverId);
     if (conn) {
@@ -47,6 +52,7 @@ export class MCPManagerSingleton {
       return this.connections.get(id)!;
     } else {
       const connection = new MCPConnection(options);
+      this.watchTools(connection);
       this.connections.set(id, connection);
       return connection;
     }
@@ -112,7 +118,9 @@ export class MCPManagerSingleton {
         }
       } else {
         refresh = true;
-        this.connections.set(server.id, new MCPConnection(server, extras));
+        const created = new MCPConnection(server, extras);
+        this.watchTools(created);
+        this.connections.set(server.id, created);
       }
     });
 

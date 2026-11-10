@@ -1,6 +1,7 @@
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { homedir } from "os";
 import { fileURLToPath } from "url";
 
@@ -47,6 +48,12 @@ import {
   createSignedInOauthProvider,
   getOauthCallbackUrl,
 } from "./MCPOauth";
+import {
+  evaluatePins,
+  getToolPinStore,
+  pinKey,
+  recordApproval,
+} from "./mcpToolPins";
 import { oauthScopeForMcpServer } from "./workspaceMcpPolicy";
 
 const DEFAULT_MCP_TIMEOUT = 20_000; // 20 seconds
@@ -106,6 +113,17 @@ class MCPConnection {
   public infos: string[] = [];
   public prompts: MCPPrompt[] = [];
   public tools: MCPTool[] = [];
+  /**
+   * Tools whose definition changed (or that appeared) since the person
+   * approved this server. They ask again, at every level but YOLO. Empty for a
+   * server seen for the first time: the normal approval flow handles that.
+   */
+  public changedTools: Map<
+    string,
+    { kind: "changed" | "added"; summary: string }
+  > = new Map();
+  /** Told when the tool list or its pin state changed after connect. */
+  public onToolsChanged?: () => void;
   public resources: MCPResource[] = [];
   public resourceTemplates: MCPResourceTemplate[] = [];
   private transport: Transport;
@@ -134,6 +152,29 @@ class MCPConnection {
 
     this.abortController = new AbortController();
 
+    // `tools/list_changed`: fetch the list again and compare it with the pins,
+    // so a definition swapped in mid-session is held to the same rule as one
+    // seen at connect.
+    this.client.setNotificationHandler(
+      ToolListChangedNotificationSchema,
+      async () => {
+        if (this.status !== "connected") return;
+        try {
+          const { tools } = await this.client.listTools(
+            {},
+            { signal: this.abortController.signal },
+          );
+          this.tools = tools;
+          await this.refreshPins();
+          this.onToolsChanged?.();
+        } catch (e) {
+          this.errors.push(
+            `Error reloading tools for MCP Server ${this.options.name}: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      },
+    );
+
     // A folder's server does not start, and does not open a transport, until
     // that folder is trusted. connectClient checks this again.
     if (this.options.projectTrust === "required") {
@@ -149,6 +190,46 @@ class MCPConnection {
     await this.client.close();
     await this.transport.close();
     this.status = disable ? "disabled" : "not-connected";
+  }
+
+  /** Compare the current tools with the pins and set `changedTools`. */
+  async refreshPins(): Promise<void> {
+    try {
+      const { flagged } = await evaluatePins(
+        pinKey(this.options),
+        this.tools,
+        getToolPinStore(),
+      );
+      this.changedTools = flagged;
+    } catch (e) {
+      // The comparison failed (file system error): no new information.
+      this.errors.push(
+        `Could not check the saved tool definitions for MCP Server ${this.options.name}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
+  /**
+   * A call to this tool ran, so it was approved (or the person runs at YOLO).
+   * Pins it: a `new` server is pinned whole, a changed server only has this
+   * tool's new definition accepted. Reloads the tool flags if that changed
+   * anything.
+   */
+  async recordToolUse(toolName: string): Promise<void> {
+    try {
+      const changed = await recordApproval(
+        pinKey(this.options),
+        this.tools,
+        getToolPinStore(),
+        toolName,
+      );
+      if (!changed) return;
+      const before = this.changedTools.size;
+      await this.refreshPins();
+      if (this.changedTools.size !== before) this.onToolsChanged?.();
+    } catch (e) {
+      console.error("Could not save the MCP tool pin", e);
+    }
   }
 
   getStatus(): MCPServerStatus {
@@ -188,6 +269,7 @@ class MCPConnection {
 
     this.status = "connecting";
     this.tools = [];
+    this.changedTools = new Map();
     this.prompts = [];
     this.resources = [];
     this.resourceTemplates = [];
@@ -392,6 +474,7 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
                     { signal: timeoutController.signal },
                   );
                   this.tools = tools;
+                  await this.refreshPins();
                 } catch (e) {
                   let errorMessage = `Error loading tools for MCP Server ${this.options.name}`;
                   if (e instanceof Error) {

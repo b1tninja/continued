@@ -225,6 +225,7 @@ export default async function doLoadConfig(options: {
     });
     if (server.status === "connected") {
       const workspaceDirs = await ide.getWorkspaceDirs();
+      const connection = mcpManager.getConnection(server.id);
       const serverTools: Tool[] = server.tools.map((tool) => ({
         displayTitle: server.name + " " + tool.name,
         function: {
@@ -244,6 +245,9 @@ export default async function doLoadConfig(options: {
         group: server.name,
         originalFunctionName: tool.name,
         mcpMeta: tool._meta,
+        ...(connection?.changedTools.get(tool.name) && {
+          mcpDefinitionChange: connection.changedTools.get(tool.name),
+        }),
       }));
       newConfig.tools.push(...serverTools);
 

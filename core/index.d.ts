@@ -101,8 +101,7 @@ type RequiredLLMOptions =
   | "completionOptions";
 
 export interface ILLM
-  extends
-    Omit<LLMOptions, RequiredLLMOptions>,
+  extends Omit<LLMOptions, RequiredLLMOptions>,
     Required<Pick<LLMOptions, RequiredLLMOptions>> {
   get providerName(): string;
   get underlyingProviderName(): string;
@@ -199,7 +198,10 @@ export interface ModelInstaller {
 
 export type ContextProviderType = "normal" | "query" | "submenu";
 export type ContextIndexingType =
-  "chunk" | "embeddings" | "fullTextSearch" | "codeSnippets";
+  | "chunk"
+  | "embeddings"
+  | "fullTextSearch"
+  | "codeSnippets";
 
 export interface ContextProviderDescription {
   title: ContextProviderName;
@@ -397,7 +399,13 @@ export interface Session {
  * has not passed yet; the loop runs it next (decideNext's "check" action).
  */
 export type LoopItemStatus =
-  "pending" | "running" | "checking" | "done" | "waiting" | "redo" | "failed";
+  | "pending"
+  | "running"
+  | "checking"
+  | "done"
+  | "waiting"
+  | "redo"
+  | "failed";
 
 /**
  * One item of a parallel wave (L4): a run with a fresh context in its own
@@ -655,7 +663,11 @@ export type LoopAutonomy = "supervised" | "auto" | "unattended" | "idgaf";
  * - dependency: other work must be done first (`needs` names it).
  */
 export type LoopBlocker =
-  "answer" | "observe" | "plan" | "environment" | "dependency";
+  | "answer"
+  | "observe"
+  | "plan"
+  | "environment"
+  | "dependency";
 
 /**
  * The two policy areas a loop reads while it runs (plans/policy-areas.md):
@@ -903,7 +915,11 @@ export interface SessionQueuedMessage {
 }
 
 export type TaskStatus =
-  "pending" | "in_progress" | "completed" | "cancelled" | "blocked";
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "cancelled"
+  | "blocked";
 
 export interface TaskItem {
   /** Stable across updates, so a person's edit and a model update meet */
@@ -1025,7 +1041,11 @@ export interface CompletionOptions extends BaseCompletionOptions {
 }
 
 export type ChatMessageRole =
-  "user" | "assistant" | "thinking" | "system" | "tool";
+  | "user"
+  | "assistant"
+  | "thinking"
+  | "system"
+  | "tool";
 
 export type TextMessagePart = {
   type: "text";
@@ -2019,6 +2039,12 @@ export interface Tool {
     processedArgs?: Record<string, unknown>,
   ) => ToolPolicy;
   mcpMeta?: McpToolMeta;
+  /**
+   * An MCP tool whose definition changed, or that appeared, after the person
+   * approved its server. It asks again at every level but YOLO until a call to
+   * it is approved. `summary` says what changed.
+   */
+  mcpDefinitionChange?: { kind: "changed" | "added"; summary: string };
 }
 
 /**
@@ -2210,7 +2236,10 @@ export interface StreamableHTTPOptions {
 }
 
 export type TransportOptions =
-  StdioOptions | WebSocketOptions | SSEOptions | StreamableHTTPOptions;
+  | StdioOptions
+  | WebSocketOptions
+  | SSEOptions
+  | StreamableHTTPOptions;
 
 export type MCPConnectionStatus =
   | "disabled"
@@ -2399,7 +2428,8 @@ interface StreamDiffLinesOptionsApply extends StreamDiffLinesOptionsBase {
 }
 
 type StreamDiffLinesPayload =
-  StreamDiffLinesOptionsApply | StreamDiffLinesOptionsEdit;
+  | StreamDiffLinesOptionsApply
+  | StreamDiffLinesOptionsEdit;
 
 export interface HighlightedCodePayload {
   rangeInFileWithContents: RangeInFileWithContents;
@@ -2550,6 +2580,14 @@ export interface ExperimentalConfig {
    * fit and a `search_tools` tool for the rest. Default "off" (plans/tool-overhead.md).
    */
   toolSearch?: "off" | "auto";
+
+  /**
+   * Wrap `fetch_url_content` results in a boundary marked with a per-session
+   * token, with a sentence saying the text inside is untrusted. Off by default
+   * because it changes what the model reads. The environment variable
+   * CONTINUOUS_SPOTLIGHT_UNTRUSTED=1 turns it on too.
+   */
+  spotlightUntrusted?: boolean;
 
   /**
    * Show the "Auto" approval option, where a reviewer model decides tool calls
@@ -2704,7 +2742,9 @@ export interface Config {
   embeddingsProvider?: EmbeddingsProviderDescription | ILLM;
   /** The model that Continuous will use for tab autocompletions. */
   tabAutocompleteModel?:
-    CustomLLM | JSONModelDescription | (CustomLLM | JSONModelDescription)[];
+    | CustomLLM
+    | JSONModelDescription
+    | (CustomLLM | JSONModelDescription)[];
   /** Options for tab autocomplete */
   tabAutocompleteOptions?: Partial<TabAutocompleteOptions>;
   /** UI styles customization */
@@ -2766,7 +2806,13 @@ export type RulesByModeConfig = Partial<
  * Loop re-plans, the Auto reviewer and subagents (see core/util/modelUse.ts).
  */
 export type ModelUse =
-  "chat" | "agent" | "plan" | "loop" | "replan" | "reviewer" | "subagent";
+  | "chat"
+  | "agent"
+  | "plan"
+  | "loop"
+  | "replan"
+  | "reviewer"
+  | "subagent";
 
 /** Which model does what, from `modeModels:` in config.yaml. */
 export type ModeModelsConfig = Partial<Record<ModelUse, ModeModelSetting>>;

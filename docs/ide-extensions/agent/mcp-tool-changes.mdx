@@ -1,0 +1,49 @@
+---
+title: "MCP Tool Changes"
+---
+
+Continuous records what each MCP server told the model about its tools (names, descriptions, parameter schemas, annotations) and asks again when that changes. A server that shows a harmless description when you approve it and a different one later is the "rug pull" attack; this check catches that change. It does not see a change in what the server does, only in what it says it does.
+
+## What triggers it
+
+| State       | Meaning                                                                  | Behavior                                                               |
+| ----------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `new`       | First time this server is seen                                           | The normal approval flow. The tools are recorded after the first call. |
+| `unchanged` | Definitions match what was recorded                                      | The normal approval flow.                                              |
+| `changed`   | A tool's description or schema differs, or a tool was added, since then | That tool asks before every level except YOLO.                         |
+
+The check runs when the server connects and again on every `tools/list_changed` notification, so a change made mid-session is held the same way.
+
+## What you see
+
+The approval prompt and the decision chip say why it is asking:
+
+```
+This MCP tool's definition changed since you approved it (changed, search
+(description 40 to 200 characters)), so it asks again. Approving this call
+accepts the new definition.
+```
+
+The summary names the tool and what changed: the description (with its old and new length), the parameters, or the title and annotations. Added and removed tools are listed too.
+
+This is a protection like a protected path. Hands-off, Automatic, and an allow rule do not loosen it, and the auto-approval reviewer does not decide it. YOLO still passes it, as your explicit choice.
+
+## Approve the change
+
+Approving a call to a changed tool records that tool's new definition. Other changed tools on the same server keep asking until you approve a call to each. A server seen for the first time is recorded as a whole after its first successful call.
+
+## Where approvals are stored
+
+Approvals are in `mcp-tool-pins.json` in the global config folder (`~/.continuous`, or `CONTINUOUS_GLOBAL_DIR`). Each entry is keyed by the server name and a hash of how it is reached (command, arguments, environment, working folder, URL). A renamed server, or one with the same name and a different command, starts as `new` and does not inherit earlier approvals.
+
+If the file cannot be parsed, it is renamed to `mcp-tool-pins.json.corrupt-<time>` and every server starts as `new`. Delete the file to forget all approvals.
+
+## Spotlighting fetched pages
+
+Separately, `fetch_url_content` can wrap fetched pages in a boundary carrying a per-session random token, with a sentence telling the model the text inside is untrusted. It is off by default because it changes what the model reads. Turn it on with `experimental.spotlightUntrusted: true` in a JSON config, or by setting `CONTINUOUS_SPOTLIGHT_UNTRUSTED=1`.
+
+Output from any tool that reads like instructions to the agent also gets a short notice in front of it, in the CLI as in the IDE. The text is otherwise unchanged. This is a hint, not a guarantee.
+
+## Limits
+
+The CLI manages its own MCP connections and does not yet record or check tool definitions. A server that is malicious when first approved is recorded as it is.

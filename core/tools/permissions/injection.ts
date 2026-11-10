@@ -184,6 +184,18 @@ export function isFlaggedOutput(text: string | undefined): boolean {
 }
 
 /**
+ * The same notice for a tool result that is one string, as the CLI keeps it.
+ * Text that does not match, or that already carries the notice, is returned
+ * as it was.
+ */
+export function flagToolText(text: string): { text: string; flagged: boolean } {
+  if (isFlaggedOutput(text)) return { text, flagged: false };
+  const matches = detectInstructionLikeText(text);
+  if (matches.length === 0) return { text, flagged: false };
+  return { text: injectionNotice(matches) + text, flagged: true };
+}
+
+/**
  * Put the notice in front of any output item that looks like it carries
  * instructions. Items that do not match, and items already flagged, are
  * returned as they were.
