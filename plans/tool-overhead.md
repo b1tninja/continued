@@ -12,13 +12,13 @@ Every request carries the tool list. It costs input tokens on every call, it sit
 
 IDE, tokens (repo tokenizer / chars/4):
 
-| mode | built-in only | + 5 MCP | + 20 MCP | + 60 MCP |
-| --- | ---: | ---: | ---: | ---: |
-| chat | 0 | 0 | 0 | 0 |
-| plan (12 tools) | 2,620 / 2,671 | 3,243 | 5,042 | 8,761 |
-| agent (14 tools) | 2,701 / 2,852 | 3,324 | 5,123 | 8,842 |
-| agent + task list (15) | 3,156 | 3,779 | 5,578 | 9,297 |
-| loop item (17) | 4,017 | 4,640 | 6,439 | 10,158 |
+| mode                   | built-in only | + 5 MCP | + 20 MCP | + 60 MCP |
+| ---------------------- | ------------: | ------: | -------: | -------: |
+| chat                   |             0 |       0 |        0 |        0 |
+| plan (12 tools)        | 2,620 / 2,671 |   3,243 |    5,042 |    8,761 |
+| agent (14 tools)       | 2,701 / 2,852 |   3,324 |    5,123 |    8,842 |
+| agent + task list (15) |         3,156 |   3,779 |    5,578 |    9,297 |
+| loop item (17)         |         4,017 |   4,640 |    6,439 |   10,158 |
 
 CLI: plan 3,229 (11 tools), agent 2,047 (10 tools); with 60 MCP tools, 9,370 and 8,188.
 

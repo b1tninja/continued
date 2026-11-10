@@ -17,7 +17,7 @@ export { recallMaskedResultTool } from "./recallMaskedResult";
 export { presentPlanTool } from "./presentPlan";
 export { requestRuleTool } from "./requestRule";
 export { runTerminalCommandTool } from "./runTerminalCommand";
-export { searchToolsTool, makeSearchToolsTool } from "./searchTools";
+export { searchToolsTool } from "./searchTools";
 export { searchWebTool } from "./searchWeb";
 export { singleFindAndReplaceTool } from "./singleFindAndReplace";
 export { taskListTool } from "./taskList";
