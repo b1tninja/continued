@@ -1,7 +1,8 @@
 import { AssistantUnrolled, ModelConfig } from "@continuedev/config-yaml";
 import type { LoopItemModel, ModelUse } from "core/index.js";
 import { modeModelFor, modelForLoopItem } from "core/util/modelUse.js";
-import { setTerminalEnvironmentSettings } from "core/util/terminalEnvironment.js";
+import { resolveTerminalSettings } from "core/util/terminalEnvironment.js";
+import { readUserTerminalSettings } from "core/util/userTerminalSettings.js";
 
 import { AuthConfig, getModelName } from "../auth/workos.js";
 import { createLlmApi, getLlmApi } from "../config.js";
@@ -55,7 +56,13 @@ export class ModelService
     });
 
     this.assistant = assistant;
-    setTerminalEnvironmentSettings(assistant.terminal);
+    // Only the person's own config.yaml may loosen what commands inherit.
+    for (const notice of resolveTerminalSettings(
+      readUserTerminalSettings(),
+      assistant.terminal,
+    ).notices) {
+      logger.warn(notice);
+    }
     this.authConfig = authConfig;
     this.availableModels = (assistant.models?.filter(
       (model) =>

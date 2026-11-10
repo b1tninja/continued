@@ -11,6 +11,10 @@ import {
   AutocompleteInput,
   RecentlyEditedRange,
 } from "../autocomplete/util/types";
+import type {
+  TerminalEnvironmentMode,
+  TerminalEnvironmentStatus,
+} from "../util/terminalEnvironment";
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type {
@@ -223,6 +227,25 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    */
   "config/setToolDialect": [
     { title: string; toolDialect: ToolDialectSetting },
+    { saved: boolean },
+  ];
+  /**
+   * The effective policy for the environment commands inherit, where it comes
+   * from, and the NAMES (never values) of the variables in this process.
+   */
+  "config/getTerminalEnvironment": [
+    undefined,
+    TerminalEnvironmentStatus & {
+      hostEnvNames: string[];
+      credentialUrlNames: string[];
+    },
+  ];
+  /**
+   * Write `terminal.environment` / `passEnv` to the user's own config.yaml
+   * (comments kept). `null` removes a field.
+   */
+  "config/setTerminalEnvironment": [
+    { environment?: TerminalEnvironmentMode | null; passEnv?: string[] },
     { saved: boolean },
   ];
   /**
