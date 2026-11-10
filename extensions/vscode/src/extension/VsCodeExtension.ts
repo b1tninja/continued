@@ -60,6 +60,7 @@ import {
 } from "../util/editLoggingUtils";
 import type { VsCodeWebviewProtocol } from "../webviewProtocol";
 import { registerVsCodeAi } from "../ai/registerVsCodeAi";
+import { registerTerminalShellSetting } from "../terminalShellSetting";
 import { registerConfigLanguageSupport } from "../lang-server/configLanguageSupport";
 
 export class VsCodeExtension {
@@ -288,6 +289,9 @@ export class VsCodeExtension {
 
     // Offer Continuous's models and MCP servers to VS Code's own chat/agents.
     registerVsCodeAi(context, this.configHandler);
+
+    // Where terminal commands run (the host shell or WSL)
+    registerTerminalShellSetting(context);
 
     this.verticalDiffManager = new VerticalDiffManager(
       this.sidebar.webviewProtocol,

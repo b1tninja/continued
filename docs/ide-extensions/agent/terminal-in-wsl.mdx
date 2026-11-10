@@ -1,0 +1,35 @@
+---
+title: "Commands in WSL"
+---
+
+On Windows, the agent's terminal commands run in Windows PowerShell by default. To run them in bash inside a WSL distribution instead, set `continuous.terminal.shell` to `wsl`:
+
+```json title="settings.json"
+{
+  "continuous.terminal.shell": "wsl",
+  "continuous.terminal.wslDistro": "Ubuntu-22.04"
+}
+```
+
+`continuous.terminal.wslDistro` is a name from `wsl -l`. Leave it empty to use the default distribution. The setting applies to the next command; no reload is needed. In the terminal agent, set the environment variable instead:
+
+```bash
+# PowerShell
+$env:CONTINUOUS_TERMINAL_SHELL = "wsl:Ubuntu-22.04"   # or "wsl" for the default distribution
+continuous
+```
+
+## What changes
+
+- **The shell.** Commands run in `bash` as a login shell, through `wsl.exe`. The agent is told this, so it writes `a && b` and Linux paths instead of PowerShell syntax. The [command checks](/ide-extensions/agent/command-checks), rules and `effect:` classification read the command as bash too.
+- **The directory.** A command starts in the workspace folder. A Windows drive appears as `/mnt/c`, `/mnt/d` and so on; a workspace inside the distribution (`\\wsl.localhost\Ubuntu\home\you\project`) appears as its Linux path.
+- **The command text.** The command reaches bash exactly as written, including quoted heredocs, `$`, backslashes and non-ASCII text. `wsl.exe` does not pass a command line through unchanged, so Continuous sends the command encoded and decodes it inside the distribution. Standard input, `exit` codes and `cd` behave as in `bash -c`.
+
+## Limits
+
+- A command longer than about 24,000 characters fails to start, because a Windows command line is limited to about 32,000 characters. Write large files with the edit tool instead.
+- A workspace in one distribution while `continuous.terminal.wslDistro` names another starts the command in a directory that does not exist there; name the distribution that holds the project.
+- The setting applies to the agent's terminal tool only. VS Code's own terminal keeps its profile.
+- This is where commands run, not isolation. A WSL distribution can read and write your Windows drives under `/mnt`, and commands run with your access.
+- Files the agent edits with the edit tools are still edited on the Windows side. A project that lives in the Windows file system is slow to use from WSL; a project inside the distribution is not.
+- In a VS Code window attached to WSL (Remote WSL), commands already run in the distribution and this setting is not needed.
