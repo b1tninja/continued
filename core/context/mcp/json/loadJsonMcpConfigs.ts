@@ -35,14 +35,16 @@ export async function loadJsonMcpConfigs(
 }> {
   const errors: ConfigValidationError[] = [];
 
-  // Get dirs
+  // Get dirs. The user's global folder is read first, then each workspace,
+  // so a shared name keeps the user's server. Within a folder, paths are
+  // sorted so the result does not depend on which read finishes first.
   const workspaceDirs = await ide.getWorkspaceDirs();
-  const mcpDirs = workspaceDirs.flatMap((dir) =>
+  const workspaceMcpDirs = workspaceDirs.flatMap((dir) =>
     WORKSPACE_DIRS.map((name) => joinPathsToUri(dir, name, "mcpServers")),
   );
-  if (includeGlobal) {
-    mcpDirs.push(localPathToUri(getGlobalFolderWithName("mcpServers")));
-  }
+  const globalMcpDir = includeGlobal
+    ? localPathToUri(getGlobalFolderWithName("mcpServers"))
+    : undefined;
 
   // Get json files and their contents
   const overrideDefaultIgnores = ignore()
@@ -55,39 +57,38 @@ export async function loadJsonMcpConfigs(
 
   const jsonFiles: { uri: string; content: string }[] = [];
 
-  await Promise.all(
-    mcpDirs.map(async (dir) => {
-      const exists = await ide.fileExists(dir);
-      if (!exists) {
-        return;
-      }
-      try {
-        const uris = await walkDir(dir, ide, {
+  const readDir = async (dir: string) => {
+    const exists = await ide.fileExists(dir);
+    if (!exists) return;
+    try {
+      const uris = (
+        await walkDir(dir, ide, {
           overrideDefaultIgnores,
           source: "get mcp json files",
-        });
-        const jsonUris = uris.filter((uri) => uri.endsWith(".json"));
-        await Promise.all(
-          jsonUris.map(async (uri) => {
-            try {
-              const content = await ide.readFile(uri);
-              jsonFiles.push({ uri, content });
-            } catch (e) {
-              errors.push({
-                fatal: false,
-                message: `Failed to read MCP server JSON file at ${uri}: ${e instanceof Error ? e.message : String(e)}`,
-              });
-            }
-          }),
-        );
-      } catch (e) {
-        errors.push({
-          fatal: false,
-          message: `Failed to check for MCP JSON files in ${dir}: ${e instanceof Error ? e.message : String(e)}`,
-        });
+        })
+      )
+        .filter((uri) => uri.endsWith(".json"))
+        .sort();
+      for (const uri of uris) {
+        try {
+          jsonFiles.push({ uri, content: await ide.readFile(uri) });
+        } catch (e) {
+          errors.push({
+            fatal: false,
+            message: `Failed to read MCP server JSON file at ${uri}: ${e instanceof Error ? e.message : String(e)}`,
+          });
+        }
       }
-    }),
-  );
+    } catch (e) {
+      errors.push({
+        fatal: false,
+        message: `Failed to check for MCP JSON files in ${dir}: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
+  };
+
+  if (globalMcpDir) await readDir(globalMcpDir);
+  for (const dir of workspaceMcpDirs) await readDir(dir);
 
   const validJsonConfigs: {
     name: string;
