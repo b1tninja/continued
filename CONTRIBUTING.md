@@ -182,6 +182,12 @@ workflow in [main.yaml](./.github/workflows/main.yaml), which will build and rel
 extension. Any hotfixes can be made by creating a feature branch from the tag for the release in question. This workflow
 is well explained by <http://releaseflow.org>.
 
+### Merging PRs
+
+`main` is meant to be protected by one required check, `merge-gate` (owner enables it, see the doc), and PRs that touch shared files are merged
+one at a time with "Update branch" in between. See [docs/ci-merge-gate.md](./docs/ci-merge-gate.md)
+and `node scripts/ci/merge-ready.mjs <pr numbers>` (read-only) for the order.
+
 ### What makes a good PR?
 
 To keep the Continue codebase clean and maintainable, we expect the following from our own team and all contributors:
