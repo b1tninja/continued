@@ -56,6 +56,16 @@ export interface ApprovalTrace {
   held?: boolean;
 }
 
+let answeredWithoutAuth = false;
+
+/**
+ * cn serve --no-auth: an approval that came in over an unauthenticated
+ * request is recorded as the system's, never as the person's.
+ */
+export function setApprovalsAnsweredWithoutAuth(value: boolean): void {
+  answeredWithoutAuth = value;
+}
+
 export function recordCliDecision(
   call: { id: string; name: string; arguments: Record<string, unknown> },
   trace: ApprovalTrace,
@@ -83,7 +93,13 @@ export function recordCliDecision(
         policy: "ask",
         reason: v?.reason ?? "The call needs approval.",
       });
-      if (trace.askedPerson) trail.answer(call.id, result.approved);
+      if (trace.askedPerson) {
+        trail.answer(
+          call.id,
+          result.approved,
+          answeredWithoutAuth ? "system" : "person",
+        );
+      }
       return;
     }
     trail.decision({

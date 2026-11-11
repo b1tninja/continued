@@ -4,6 +4,7 @@ import {
 } from "@continuedev/openai-adapters";
 import chalk from "chalk";
 import { maskArgsForDisplay } from "core/tools/permissions/displayMask.js";
+import { scrubDeep } from "core/util/secretScan/index.js";
 import type { Express, Request, Response } from "express";
 
 import {
@@ -130,12 +131,15 @@ export function getServeStateSnapshot(
   return {
     // Masked: a supervisor reads this, and a pending approval carries the
     // call's arguments (plans/ROADMAP.md X10, "no secrets on a supervisor surface").
-    ...maskArgsForDisplay(
-      getCompleteStateSnapshot(
-        state.session,
-        state.isProcessing,
-        messageQueue.getQueueLength(),
-        state.pendingPermission,
+    // The display masker first, then the shared secret scanner over what is left.
+    ...scrubDeep(
+      maskArgsForDisplay(
+        getCompleteStateSnapshot(
+          state.session,
+          state.isProcessing,
+          messageQueue.getQueueLength(),
+          state.pendingPermission,
+        ),
       ),
     ),
     ...getQueueSnapshot(),

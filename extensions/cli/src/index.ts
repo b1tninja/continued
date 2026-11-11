@@ -337,12 +337,17 @@ program
   .option("--port <port>", "Port to run the server on (default: 8000)", "8000")
   .option(
     "--host <host>",
-    "Interface to listen on (default: 127.0.0.1). Off loopback, --token is required and must be at least 16 characters",
+    "Interface to listen on (default: 127.0.0.1). Anything else listens beyond this computer",
     "127.0.0.1",
   )
   .option(
     "--token <token>",
-    "Require this bearer token on every request (also read from CONTINUOUS_SERVE_TOKEN). Optional on loopback",
+    "Bearer token every request must carry, at least 16 characters (also read from CONTINUOUS_SERVE_TOKEN). Generated and printed once when omitted",
+  )
+  .option("--no-auth", "Run with no access token. Only allowed on loopback")
+  .option(
+    "--allow-origin <origin...>",
+    "A browser origin that may call the server, exactly (http://localhost:3000). Default: none",
   )
   .option(
     "--id <storageId>",
