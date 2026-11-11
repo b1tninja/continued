@@ -12,6 +12,19 @@ The flow has three steps, and nothing is written until you confirm the last one.
 2. **Models.** Tick the models to use. Models already in your `config.yaml` start ticked. The list can be refreshed from the provider with the entered credentials.
 3. **Review.** Lists the models to add and remove, and where the key goes. Removing models needs a separate confirmation, and removed models are also taken out of the `modeModels` lists.
 
+## Test connection
+
+For OpenAI, Ollama, llama.cpp, LM Studio, llamafile, vLLM, text-gen-webui, Msty, OpenRouter, DeepSeek, Groq, Together, Mistral and any provider with an API base, the credentials step has **Test connection**. It lists the models the endpoint serves (`GET <api base>/models`), asks Ollama (`/api/show`) or llama.cpp (`/props`) whether the server parses this model's tool calls itself, and, when a model is chosen, sends one request offering a made-up tool and says how the model answered: `Tool use: ...` with the result, or `Tool use: could not tell (...)`. The tool is never run, the key is sent only as a bearer header and is never shown, and a failure shows `Could not connect` with the endpoint's error. Amazon Bedrock has its own form; see [Amazon Bedrock](/customize/model-providers/top-level/bedrock).
+
+The same check runs from a terminal:
+
+```bash
+continuous test-connection --provider ollama --model qwen3-coder
+continuous test-connection --provider openai --api-key-env OPENAI_API_KEY --model gpt-4.1
+```
+
+`--provider` is required. `--api-base <url>` overrides the provider's default endpoint (a provider with no default needs it), `--api-key-env <name>` names the environment variable that holds the key, `--model <id>` adds the tool-call probe, and `--json` prints the result as JSON. Exit code 0 means connected, 1 means the connection failed and 2 means a missing `--provider` or an unset key variable.
+
 One provider connection (a provider plus its API base, region or profile) has one key, and every model you tick for it refers to that key. Editing the API base, region or profile of an existing connection changes that connection in place: its models keep their names and settings. If another connection already uses the new endpoint, the save is refused.
 
 Saving edits the selected config's YAML file and keeps your comments and key order. It is unavailable when the selected config is not a local YAML file (for example, if you only have a `config.json`). To share one key between several configs, use [provider accounts](/customize/providers) instead.

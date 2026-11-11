@@ -433,12 +433,12 @@ The snake*case tool name also works as a rule name, for example `read_file(**/.e
 
 **Where the rules apply.** The same checks run wherever a tool call can start, not only in the chat.
 
-- **Headless runs** (`continuous -p`) allow Bash and any tool with no entry of its own, since nobody is there to ask. A deny rule, a floor deny rule and a protected path still hold, and a call that would have asked is refused.
+- **Headless runs** (`continuous -p`) allow Bash and any tool with no entry of its own, since nobody is there to ask. A deny rule, an always-on rule and a protected path still hold, and a call that would have asked is refused.
 - **Loop workers** in the terminal agent (parallel to-dos) load the same settings, flags and policy levels as the session that started them, and never switch to Auto mode. A worker cannot ask, so a call that would ask is refused.
 - **MCP app tool calls** (a tool an MCP app's panel calls itself) go through the same check as a call the model made, and wait for you when it asks. A turn an app starts is labeled with the app's name in the chat and in the text sent to the model.
-- **Agents window** tool calls go through deny rules, floor rules and protected paths; a call that asks is confirmed with you or not run.
+- **Agents window** tool calls go through deny rules, always-on rules and protected paths; a call that asks is confirmed with you or not run.
 - **Fetching a URL** that is private or local, including a name that resolves to such an address, always asks. Hands-off and an allow rule do not skip it; YOLO does.
-- **A command too long to read in full** (rules check up to 800 readings of it) counts as a match for deny, ask, effect and protected-path checks, including a floor rule at YOLO.
+- **A command too long to read in full** (rules check up to 800 readings of it) counts as a match for deny, ask, effect and protected-path checks, including an always-on rule at YOLO.
 - **`/cmd`** runs the command it generates only when the terminal tool's policy allows it without asking; otherwise the command is shown and not run.
 
 **Patterns.** In file and directory rules, `*` matches within one folder and `**` matches across folders (`**/.env` matches `.env` and `a/b/.env`). Paths are compared with forward slashes, so one rule works on Windows and macOS. A file rule is matched against both the path the model wrote and the full path it resolves to. In command rules, `*` matches anything, including `/`.

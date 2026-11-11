@@ -35,7 +35,7 @@ Your own setting may do whatever you ask.
 
 ## What reads the facts today
 
-Only the info line of **Test connection** for Bedrock, for example `Provider facts: Bedrock Converse: ... (declared, read 2026-11-10)`. Nothing changes what is sent, which models get tools, or when recovery runs. Declared facts can be out of date; check the date.
+The info line of **Test connection** for Bedrock, for example `Provider facts: Bedrock Converse: ... (declared, read 2026-11-10)`, and one opt-in request change. With `CONTINUE_SURFACE_FACTS=1` (or `true`) in the environment, a request to the Anthropic Messages surface that names a tool (a forced tool choice) is sent without the name, which the API reads as `auto`, when the facts for that model generation say a named choice is refused (the Claude 5.5 generation answers HTTP 400) and the fact is declared or measured, never derived. With the variable unset nothing is read and every request is unchanged. Nothing else changes which models get tools or when recovery runs. Declared facts can be out of date; check the date.
 
 ## Changing the data
 
