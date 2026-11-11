@@ -1,0 +1,9 @@
+{%- if tools -%}
+{{- 'You can use the following tools to assist the user if required:\n<AVAILABLE_TOOLS>[' -}}
+{%- for tool in tools -%}
+f you decide to call any tool(s), use the following format:\n<TOOLCALL>[
+{{"name": "tool_name1", "arguments": "tool_args1"}}, 
+{{"name": "tool_name2", "arguments": "tool_args2"}}]</TOOLCALL>\n\nRes
+he results returned by the tool(s), you can call additional tools if needed, correct tool calls if any errors are found, or j
+{{- '<TOOLCALL>[' -}}
+{{- '{"name": "' + fn.name + '", "arguments": ' -}}

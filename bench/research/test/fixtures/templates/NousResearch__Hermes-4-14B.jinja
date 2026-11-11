@@ -1,0 +1,5 @@
+{%- if tools %}\n    
+query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>" }}\n    
+{%- for tool in tools %}\n        
+{{- "\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": \"<function-name>\", \"arguments\": <args-json-
+{{- '\n<tool_call>\n{"name": "' }}\n            

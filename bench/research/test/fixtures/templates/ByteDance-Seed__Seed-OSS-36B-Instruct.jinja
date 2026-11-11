@@ -1,0 +1,11 @@
+{%- if not tools is defined or tools is none %}\n
+{%- set tools = [] %}\n
+{%- if tools is iterable and tools | length > 0 %}\n
+{{"Tool List:\nYou are authorized to use the following tools (described in JSON Schema format). Before performing any ta ... call them based on the descriptions and parameters of these tools."}}\n
+{{ tools | tojson(ensure_ascii=False) }}\n
+{%- for item in tools if item.type == "function" %}\n\n\nFunction:\ndef 
+{%- if tools is iterable and tools | length > 0 %}\n\n
+{{"工具调用请遵循如下格式:\n<seed:tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>value_1</parameter>\n<parameter=example_parameter_2>This is the value for the second paramet
+{%- if system_message is defined or tools is iterable and tools | length > 0 %}\n
+{{ "\n" + toolcall_begin_token + "\n<function=" + tool_call.name + ">\n" }}\n
+{{ "<parameter=" + arg_name + ">" }}\n

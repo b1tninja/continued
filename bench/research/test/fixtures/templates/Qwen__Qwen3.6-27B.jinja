@@ -1,0 +1,9 @@
+{%- if tools and tools is iterable and tools is not mapping %}\n    
+"# Tools\n\nYou have access to the following functions:\n\n<tools>" }}\n    
+{%- for tool in tools %}\n        
+{{- "\n</tools>" }}\n    
+ction ONLY reply in the following format with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\nThis is the value for the second param ... - Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags\n- Required parameters MUST be specifi
+{{- '\n\n<tool_call>\n<function=' + tool_call.name + '>\n' }}\n                    
+{{- '<tool_call>\n<function=' + tool_call.name + '>\n' }}\n                    
+{{- '\n<tool_call>\n<function=' + tool_call.name + '>\n' }}\n                
+{{- '<parameter=' + args_name + '>\n' }}\n                        

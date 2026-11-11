@@ -1,0 +1,6 @@
+{%- if tools is none -%}
+{{- 'You do not currently have access to any functions. <functions></functions><|im_end|>\n' -}}
+ags. Do not make assumptions about what values to plug into functions.' -}}
+{{- tools | tojson -}}
+{%- if tools is not none -%}
+{{- tools | tojson -}}

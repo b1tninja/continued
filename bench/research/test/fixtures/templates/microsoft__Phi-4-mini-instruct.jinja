@@ -1,0 +1,2 @@
+{% if message['role'] == 'system' and 'tools' in message and message['tools'] is not none %}
+'role'] + '|>' + message['content'] + '<|tool|>' + message['tools'] + '<|/tool|>' + '<|end|>' }}

@@ -1,0 +1,7 @@
+{%- set toolcall_begin_token   = ns_token ~ '<tool_call>'         -%}\n
+{%- if tools -%}\n    
+{{- '\n\n' ~ '# Tools' ~ '\n' ~ 'You may call one or more tools to assist with the user query.\nHere are the tools available in JSONSchema format:' ~ '\n' }}\n    
+{{- '\n' ~ '<tools>' ~ '\n' }}\n    
+{{- render_tool_namespace("functions", tools) }}\n    
+{{- '</tools>' ~ '\n\n' }}\n    
+{{- 'To call tools, wrap all invocations in a single ' ~ toolcall_begin_token 
