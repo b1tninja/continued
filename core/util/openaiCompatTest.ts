@@ -70,7 +70,17 @@ const DEFAULT_BASES: Record<string, string> = {
   vllm: "http://127.0.0.1:8000/v1",
   "text-gen-webui": "http://127.0.0.1:5000/v1",
   msty: "http://127.0.0.1:10000/v1",
+  openrouter: "https://openrouter.ai/api/v1",
+  deepseek: "https://api.deepseek.com",
+  groq: "https://api.groq.com/openai/v1",
+  together: "https://api.together.xyz/v1",
+  mistral: "https://api.mistral.ai/v1",
 };
+
+/** Providers this tester knows a default endpoint for; any other needs an apiBase. */
+export function hasOpenAICompatDefault(provider: string): boolean {
+  return Object.hasOwn(DEFAULT_BASES, provider);
+}
 
 /** The OpenAI-compatible base URL (ends in /v1 for the local servers), no trailing slash. */
 export function openAICompatBase(
