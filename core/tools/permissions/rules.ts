@@ -276,7 +276,7 @@ export function matchTerminalCommand(
 
   // Allow only what is fully understood.
   if (
-    hasUnsafeShellConstruct(command) ||
+    hasUnsafeShellConstruct(command, shell) ||
     parsed.unparsable ||
     parsed.hasFileRedirect ||
     parsed.parts.length === 0
