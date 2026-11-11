@@ -9,7 +9,6 @@
 import path from "node:path";
 
 import type { Command } from "commander";
-
 import {
   auditDir,
   auditSettings,
