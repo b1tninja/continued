@@ -25,6 +25,7 @@ export type {
   KnownValueMatcher,
   RuleAllowlist,
   ScanOptions,
+  SecretAction,
   SecretConfidence,
   SecretFinding,
   SecretProfile,

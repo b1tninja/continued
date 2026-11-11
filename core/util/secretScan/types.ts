@@ -12,6 +12,12 @@
  * `outbound`: precision first (prompts and tool results sent to a provider). */
 export type SecretProfile = "at-rest" | "outbound";
 
+/**
+ * What a caller does with a finding: `redact` replaces the value with its
+ * placeholder, `warn` tells the person and sends the text as it is.
+ */
+export type SecretAction = "redact" | "warn";
+
 export type SecretConfidence = "high" | "medium" | "low";
 
 /**
@@ -47,8 +53,19 @@ export interface SecretRule {
   /** Lowercase strings; the rule runs only when the text contains one of them. */
   keywords?: readonly string[];
   allowlist?: RuleAllowlist;
-  /** A structural check after the regex and the entropy gate. */
-  validate?: (value: string) => boolean;
+  /**
+   * A structural check after the regex and the entropy gate. `context` is the
+   * text of the match before the value (the name and delimiter), for rules
+   * that decide by name and shape together.
+   */
+  validate?: (value: string, context: string) => boolean;
+  /**
+   * Findings of this rule under the outbound profile carry this action. The
+   * default is `redact`; `warn` reports the value and leaves it in the text.
+   */
+  outboundAction?: SecretAction;
+  /** Files (by path) where the rule does not run: tests, fixtures, examples. */
+  skipPaths?: readonly RegExp[];
   /** Where the rule came from (a gitleaks rule id, or `own`). */
   origin: string;
 }
@@ -63,6 +80,8 @@ export interface SecretFinding {
   /** Offset after the last character of the secret value. */
   end: number;
   confidence: SecretConfidence;
+  /** `redact` for most findings; `warn` for a rule that is warn-only in this profile. */
+  action: SecretAction;
   /** First 8 hex digits of SHA-256(salt + value). Same value, same salt, same fingerprint. */
   fingerprint: string;
 }
@@ -76,6 +95,8 @@ export interface ScanOptions {
   known?: KnownValueMatcher;
   /** Rules to use instead of `DEFAULT_RULES`. */
   rules?: readonly SecretRule[];
+  /** Path of the file being scanned, for rules that skip test and fixture paths. */
+  path?: string;
   /** Skip lines that contain this marker. Default `secretscan:allow`; "" disables it. */
   allowMarker?: string;
 }

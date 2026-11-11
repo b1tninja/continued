@@ -190,8 +190,16 @@ export function secretCases(seed = 1): SecretCase[] {
     ),
     mk("jwt", j(header, ".", payload, ".", rnd(B64URL, 43)), false),
     mk(
-      "connection-string-password",
+      "url-credential",
       rnd(ALNUM, 18),
+      true,
+      (v) => `DATABASE=postgres://app:${v}@db.internal:5432/main`,
+    ),
+    // Too short for url-credential (8 or more characters): only the broad
+    // at-rest rule sees it.
+    mk(
+      "connection-string-password",
+      rnd(ALNUM, 6),
       false,
       (v) => `DATABASE=postgres://app:${v}@db.internal:5432/main`,
     ),
@@ -250,9 +258,61 @@ export function benignCorpus(seed = 7): string[] {
     `commit ${rnd(LOWER_HEX, 40)}\nAuthor: A Person <a@example.com>`,
     `Use sk-... for the key and ghp_... for the token.`,
     `key=value&token=&page=2`,
+    ...falsePositiveShapes(rnd, uuid),
   ];
   for (let i = 0; i < 30; i++) {
     out.push(`id=${uuid()} sha=${rnd(LOWER_HEX, 40)} blob=${rnd(B64, 120)}`);
   }
   return out;
+}
+
+/**
+ * One line for each false-positive category of the X11 measurement
+ * (`env-secret-assignment` was 71 percent false by value), built from random
+ * pieces so no line is a real value. Each line has a secret-like name next to
+ * a value that is not a secret. `at-rest` must report none of them.
+ */
+export function falsePositiveShapes(
+  rnd: (alphabet: string, n: number) => string,
+  uuid: () => string,
+): string[] {
+  const word = () => rnd("abcdefghijklmnopqrstuvwxyz", 9);
+  const bs = String.fromCharCode(92);
+  return [
+    // code expression or call as the value
+    `const apiKey=load${word()}Key(config.${word()});`,
+    `token = self.${word()}.get_token().value()`,
+    `password=prompt${word()}(options.${word()}Field)`,
+    `client_secret=${word()}::from_env(&${word()})?`,
+    // dotted identifier and member access
+    `secret_name=config.secrets.${word()}.${word()}`,
+    `access_token_field=request.headers[0].${word()}`,
+    // grep and stack-trace output: file:line:
+    `auth_token_file=src/${word()}/auth.ts:${rnd("123456789", 2)}:`,
+    `tokenizer.${word()}.py:${rnd("123456789", 3)}:`,
+    // paths
+    `PRIVATE_KEY_PATH=/etc/ssl/${word()}/server.key`,
+    `ssh_key_file=${word()}/certs/${word()}.pem`,
+    `api_key_dir=C:${bs}Users${bs}${word()}${bs}keys`,
+    // URLs without userinfo
+    `AUTH_TOKEN_URL=https://auth.${word()}.org/oauth/token`,
+    // versions and ids
+    `TOKEN_VERSION=v${rnd("123456789", 1)}.${rnd("0123456789", 2)}.${rnd("0123456789", 1)}-rc${rnd("123456789", 1)}`,
+    `api_key_id=${uuid()}`,
+    `secret_id: ${uuid()}`,
+    // digests in a digest context
+    `cache_key=${rnd("0123456789abcdef", 40)}`,
+    `checksum_token=${rnd("0123456789abcdef", 64)}`,
+    // references to other variables
+    `PASSWORD=${bs}${"$"}{${word().toUpperCase()}_PASS}`,
+    `secret=%(${word()}_secret)s`,
+    `db_password=$(cat /run/secrets/${word()})`,
+    // short, low-entropy, word-like values
+    `ACCESS_KEY=default${word()}`,
+    `auth_token=${rnd("ab", 12)}`,
+    `API_KEY_NAME=${word()}Key1`,
+    `token_type=bearer_${word()}_header`,
+    // a query fragment cut at the ampersand
+    `auth_key=${word()}&format=json&page=2`,
+  ];
 }

@@ -93,6 +93,7 @@ describe("a finding never holds the value", () => {
     const c = cases[0];
     const [f] = scanText(c.wrap(c.value), "outbound", { salt: SALT });
     expect(Object.keys(f).sort()).toEqual([
+      "action",
       "class",
       "confidence",
       "end",
