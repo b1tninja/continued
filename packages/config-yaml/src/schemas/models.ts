@@ -249,6 +249,7 @@ export const TOOL_DIALECT_VALUES = [
   "llama-json",
   "hermes-json",
   "glm-xml",
+  "toolcall-json",
   "granite-tokens",
   "lfm-tokens",
   "hy3-tags",

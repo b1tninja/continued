@@ -25,6 +25,14 @@ export type TextDialect =
   | "pythonic" // [name(arg=1)] or name(arg=1)
   | "llama-json" // {"name":..,"parameters":{..}}
   | "toolcall-json" // <TOOLCALL>[{"name":..,"arguments":..}]</TOOLCALL>
+  | "granite-tokens" // Granite 3.x: <|tool_call|>[{"name":..,"arguments":..}]
+  | "lfm-tokens" // LFM2: <|tool_call_start|>[name(arg=..)]<|tool_call_end|>
+  | "hy3-tags" // Hy3: <tool_calls:opensource><tool_call:opensource>NAME<tool_sep:opensource>..
+  | "solar-tokens" // Solar Open: <|tool_call:begin|>ID<|tool_call:name|>NAME<|tool_call:args|>{..}<|tool_call:end|>
+  | "longcat-json" // LongCat: <longcat_tool_call>{"name":..,"arguments":..}</longcat_tool_call>
+  | "olmo-function-calls" // Olmo 3: <function_calls>name(arg=..)</function_calls>
+  | "seed-xml" // Seed-OSS: <seed:tool_call><function=NAME><parameter=KEY>..
+  | "cohere-action" // Command A: <|START_ACTION|>[{"tool_name":..,"parameters":..}]<|END_ACTION|>
   | "harmony" // gpt-oss: <|channel|>commentary to=functions.NAME ...
   | "kimi-tokens" // <|tool_call_begin|>functions.NAME:IDX<|tool_call_argument_begin|>
   | "minimax-xml" // <minimax:tool_call><invoke name=..>

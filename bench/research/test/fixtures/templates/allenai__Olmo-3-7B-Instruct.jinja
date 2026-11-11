@@ -1,6 +1,8 @@
 {%- if tools is none -%}
 {{- 'You do not currently have access to any functions. <functions></functions><|im_end|>\n' -}}
-ags. Do not make assumptions about what values to plug into functions.' -}}
+ssist with the user query. Output any function calls within <function_calls></function_calls> XML tags. Do not make assumptions about what values to plug into functions.' -}}
 {{- tools | tojson -}}
 {%- if tools is not none -%}
 {{- tools | tojson -}}
+{{- '<function_calls>' + message['function_calls'] + '</function_calls>' -}}
+{{- '<function_calls>' -}}

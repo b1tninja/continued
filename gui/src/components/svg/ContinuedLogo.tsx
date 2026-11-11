@@ -1,4 +1,6 @@
 import { vscForeground } from "..";
+import { LOOP_DOT_COLOR, LOOP_GRADIENT_STOPS } from "./loopGradient";
+import { LOOP_PATH } from "./LoopIcon";
 
 interface ContinuedLogoProps {
   /** Height in pixels; the width follows (mark plus wordmark). */
@@ -6,8 +8,8 @@ interface ContinuedLogoProps {
 }
 
 /**
- * The Continuous mark (brand-src/mark.svg: an endless loop with a dot
- * travelling along it) with the "Continuous" wordmark in the editor's foreground colour.
+ * The Continuous mark (brand-src/mark.svg: an endless loop in the brand
+ * gradient with a dot travelling along it) with the "Continuous" wordmark in the editor's foreground colour.
  */
 export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
   return (
@@ -21,8 +23,24 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
     >
       <defs>
         <linearGradient id="continuous-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6366F1" />
-          <stop offset="1" stopColor="#312E81" />
+          <stop offset="0" stopColor="#312E81" />
+          <stop offset="1" stopColor="#1E1B4B" />
+        </linearGradient>
+        <linearGradient
+          id="continuous-loop"
+          gradientUnits="userSpaceOnUse"
+          x1="100"
+          y1="0"
+          x2="412"
+          y2="0"
+        >
+          {LOOP_GRADIENT_STOPS.map((stop, i) => (
+            <stop
+              key={stop}
+              offset={i / (LOOP_GRADIENT_STOPS.length - 1)}
+              stopColor={stop}
+            />
+          ))}
         </linearGradient>
       </defs>
       <rect
@@ -34,14 +52,14 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
         fill="url(#continuous-bg)"
       />
       <path
-        d="M256 256 C300 172 412 172 412 256 C412 340 300 340 256 256 C212 172 100 172 100 256 C100 340 212 340 256 256 Z"
+        d={LOOP_PATH}
         fill="none"
-        stroke="#EEF2FF"
+        stroke="url(#continuous-loop)"
         strokeWidth="44"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="350.5" cy="193" r="32" fill="#A5F3FC" />
+      <circle cx="350.5" cy="193" r="32" fill={LOOP_DOT_COLOR} />
       <text
         x="560"
         y="330"

@@ -1,0 +1,14 @@
+{%- set tools = custom_tools %}\n
+{%- if not tools is defined %}\n    
+{%- set tools = none %}\n
+{%- if builtin_tools is defined or tools is not none %}\n    
+{%- if tools is not none and not tools_in_user_message %}\n    
+{{- "You have access to the following functions. To call a function, please respond with JSON for a function
+{{- 'Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}.' }}\n    
+{%- for t in tools %}\n        
+{%- if tools_in_user_message and not tools is none %}\n    \n    
+{{- raise_exception("Cannot put tools in the first user message when there's no first user messag
+{{- 'Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}.' }}\n    
+{%- for t in tools %}\n        
+{{- '{"name": "' + tool_call.name + '", ' }}\n            
+{{- '"parameters": ' }}\n            

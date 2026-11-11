@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-toolcall-json-prose-around",
+  "family": "nemotron-toolcall",
+  "dialect": "toolcall-json",
+  "kind": "negative",
+  "failureMode": "prose-around-call",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: a valid block with prose around it",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "I will check.\n<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>\nDone.",
+  "markers": ["<TOOLCALL>", "</TOOLCALL>", "<think>", "</think>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "I will check.\n<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>\nDone."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "I",
+        " ",
+        "w",
+        "i",
+        "l",
+        "l",
+        " ",
+        "c",
+        "h",
+        "e",
+        "c",
+        "k",
+        ".",
+        "\n",
+        "<",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">",
+        "[",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        "]",
+        "<",
+        "/",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">",
+        "\n",
+        "D",
+        "o",
+        "n",
+        "e",
+        "."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "I will check.\n<TO",
+        "OLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>\nDone."
+      ],
+      "splitInside": "<TOOLCALL>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "I will check.\n",
+        "<TOOLCALL>",
+        "[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]",
+        "</TOOLCALL>",
+        "\nDone."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "I w",
+        "ill c",
+        "h",
+        "eck",
+        ".\n<T",
+        "O",
+        "OLCA",
+        "LL>",
+        "[{\"na",
+        "m",
+        "e\": ",
+        "\"g",
+        "et_w",
+        "e",
+        "ath",
+        "e",
+        "r",
+        "\", \"",
+        "arg",
+        "ume",
+        "n",
+        "ts\":",
+        " {",
+        "\"city",
+        "\":",
+        " \"Pa",
+        "ri",
+        "s\"}}]",
+        "</TOO",
+        "LC",
+        "ALL",
+        ">\nDon",
+        "e."
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "I will check.\n<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>\nDone."
+  }
+}

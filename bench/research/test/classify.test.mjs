@@ -5,14 +5,17 @@ import { excerpt, reduce } from "../lib/excerpt.mjs";
 import { labels, template } from "./helpers.mjs";
 
 test("a known form with the tools list rendered is decided", () => {
-  const r = classify("{% if tools %}x{% endif %}<function=a><parameter=b>");
+  const r = classify(
+    "{% if tools %}x{% endif %}<tool_call>\n<function=a><parameter=b>",
+  );
   assert.equal(r.outcome, "decided");
   assert.equal(r.dialect, "qwen-xml");
   assert.equal(r.toolsRendered, true);
 });
 
 test("hermes-json is dropped only when a specific rule also matched", () => {
-  const wrapped = '{{ tools }} <tool_call> "name" <function= <parameter=';
+  const wrapped =
+    '{{ tools }} <tool_call> "name" <tool_call>\n<function= <parameter=';
   assert.equal(classify(wrapped).dialect, "qwen-xml");
   assert.equal(
     classify('{{ tools }} <tool_call> "name"').dialect,
@@ -27,7 +30,7 @@ test("a rule needs ALL its markers", () => {
 test("no template, unknown form, and two forms are undecided, never guessed", () => {
   assert.equal(classify(null).reason, "no-template");
   assert.equal(classify("").outcome, "undecided");
-  const unknown = classify("{{ tools }} <|tool_call|>[{}]");
+  const unknown = classify("{{ tools }} <|unheard_of|>[{}]");
   assert.equal(unknown.outcome, "undecided");
   assert.equal(unknown.reason, "tools-rendered-no-known-marker");
   const both = classify("{{ tools }} [TOOL_CALLS] <TOOLCALL>");
@@ -88,23 +91,37 @@ test("dev set (31 samples were used to write the rules; this is a fit, not a val
   assert.ok(s.decided >= 15);
 });
 
-test("hold-out set: templates the rules were not written on", () => {
-  const set = labels().holdout;
-  const s = score(set);
-  // Measured on the first run, before any rule was touched. The one known
-  // error is Seed-OSS: <seed:tool_call> wraps the Qwen inner form, which the
-  // qwen-xml rule accepts. If a rule change fixes it, update this test and the README.
-  assert.deepEqual(s.wrong, [
-    "ByteDance-Seed/Seed-OSS-36B-Instruct: said qwen-xml, truth novel",
+test("first hold-out set (21): measured before the rules were touched, now a fit", () => {
+  // First run, before any rule changed: 14 of 15 decided verdicts right; the
+  // one error was Seed-OSS (<seed:tool_call> wraps the Qwen inner form and the
+  // qwen-xml rule accepted it). The wrapper check and five forms ruled from
+  // this set fix that, so these 21 are no longer a validation. The README
+  // keeps the first-run numbers.
+  const s = score(labels().holdout);
+  assert.deepEqual(s.wrong, []);
+  assert.equal(s.decided, 20);
+  assert.equal(s.correct, 20);
+  assert.equal(s.undecided, 1);
+  assert.equal(s.undecidedNovel, 1);
+});
+
+test("fresh hold-out (20 repos not used before): precision and the two known misses", () => {
+  // Labels were written by hand before the classifier ran on these. The two
+  // misses are known forms the rules do not see: SmolLM3 writes "name" with
+  // escaped quotes and Falcon-H1 with single quotes, so the hermes-json rule's
+  // literal "name" is absent. They stay undecided, not guessed.
+  const s = score(labels().fresh);
+  assert.deepEqual(s.wrong.sort(), [
+    "HuggingFaceTB/SmolLM3-3B: undecided but truth hermes-json",
+    "tiiuae/Falcon-H1-7B-Instruct: undecided but truth hermes-json",
   ]);
-  assert.equal(s.decided, 15);
-  assert.equal(s.correct, 14);
-  assert.equal(s.undecided, 6);
-  assert.equal(s.undecidedNovel, 6);
-  const fresh = Object.fromEntries(
-    Object.entries(set).filter(([, l]) => !l.sameFamilyAsDev),
-  );
-  const f = score(fresh);
-  assert.equal(f.decided, 12);
-  assert.equal(f.correct, 11);
+  assert.equal(s.decided, 16);
+  assert.equal(s.correct, 16);
+  assert.equal(s.undecided, 4);
+  assert.equal(s.undecidedNovel, 2);
+});
+
+test("Seed-OSS is its own form, not qwen-xml", () => {
+  const r = classify(template("ByteDance-Seed__Seed-OSS-36B-Instruct.jinja"));
+  assert.equal(r.dialect, "seed-xml");
 });

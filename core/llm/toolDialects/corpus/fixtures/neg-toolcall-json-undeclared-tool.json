@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-toolcall-json-undeclared-tool",
+  "family": "nemotron-toolcall",
+  "dialect": "toolcall-json",
+  "kind": "negative",
+  "failureMode": "unknown-tool",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: a call to a tool that was not offered",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "<TOOLCALL>[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>",
+  "markers": ["<TOOLCALL>", "</TOOLCALL>", "<think>", "</think>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<TOOLCALL>[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">",
+        "[",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "d",
+        "e",
+        "l",
+        "e",
+        "t",
+        "e",
+        "_",
+        "e",
+        "v",
+        "e",
+        "r",
+        "y",
+        "t",
+        "h",
+        "i",
+        "n",
+        "g",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        "]",
+        "<",
+        "/",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<TO",
+        "OLCALL>[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>"
+      ],
+      "splitInside": "<TOOLCALL>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<TOOLCALL>",
+        "[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]",
+        "</TOOLCALL>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<TO",
+        "O",
+        "LCAL",
+        "L",
+        ">[{\"n",
+        "ame",
+        "\":",
+        " \"de",
+        "lete",
+        "_ever",
+        "yth",
+        "ing\",",
+        " \"",
+        "argum",
+        "ent",
+        "s\": {",
+        "\"cit",
+        "y\": ",
+        "\"Pa",
+        "ris\"}",
+        "}]",
+        "</",
+        "TOOL",
+        "C",
+        "ALL>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<TOOLCALL>[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>"
+  }
+}

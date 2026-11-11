@@ -17,6 +17,8 @@ const CALLS: Record<string, string> = {
     '<tool_call>{"name": "Read", "arguments": {"filepath": "a.txt"}}</tool_call>',
   "glm-xml":
     "<tool_call>Read<arg_key>filepath</arg_key><arg_value>a.txt</arg_value></tool_call>",
+  "toolcall-json":
+    '<TOOLCALL>[{"name": "Read", "arguments": {"filepath": "a.txt"}}]</TOOLCALL>',
   "granite-tokens":
     '<|tool_call|>[{"name": "Read", "arguments": {"filepath": "a.txt"}}]',
   "lfm-tokens": "<|tool_call_start|>[Read(filepath='a.txt')]<|tool_call_end|>",

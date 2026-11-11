@@ -1,3 +1,4 @@
+import { NOVEL_FORMS } from "./classify.mjs";
 import { resolveRow } from "./table.mjs";
 
 /**
@@ -37,6 +38,17 @@ export function compare(rows, dataset) {
         kind: "undecided",
         detail: rec.template.reason,
       });
+    } else if (
+      NOVEL_FORMS.has(rec.template.dialect) &&
+      row.textDialect === "none"
+    ) {
+      // A form no TextDialect value names, against a row that admits it has no
+      // dialect: consistent, but not agreement and not proof.
+      findings.push({
+        ...base,
+        kind: "novel",
+        detail: `template writes ${rec.template.dialect}; row ${row.id} records no dialect`,
+      });
     } else if (rec.template.dialect === row.textDialect) {
       findings.push({ ...base, kind: "agree", detail: rec.template.dialect });
     } else {
@@ -64,6 +76,7 @@ export function summarise({ findings, uncovered }) {
     agree: n("agree"),
     disagree: n("disagree"),
     undecided: n("undecided"),
+    novel: n("novel"),
     unresolved: n("unresolved"),
     unavailable: n("unavailable"),
     uncovered: uncovered.length,
@@ -74,7 +87,10 @@ export function summarise({ findings, uncovered }) {
 export function exitCode(result, { strict = false } = {}) {
   const s = summarise(result);
   if (s.disagree > 0) return 1;
-  if (strict && (s.undecided > 0 || s.unavailable > 0 || s.unresolved > 0)) {
+  if (
+    strict &&
+    (s.undecided > 0 || s.novel > 0 || s.unavailable > 0 || s.unresolved > 0)
+  ) {
     return 1;
   }
   return 0;
@@ -92,7 +108,7 @@ export function formatCheck(result, { strict = false } = {}) {
     lines.push(`${"UNCOVERED".padEnd(11)} row ${u.row}  (${u.kind})`);
   const s = summarise(result);
   lines.push(
-    `agree ${s.agree}, disagree ${s.disagree}, undecided ${s.undecided}, unresolved ${s.unresolved}, unavailable ${s.unavailable}, rows uncovered ${s.uncovered}` +
+    `agree ${s.agree}, disagree ${s.disagree}, undecided ${s.undecided}, novel ${s.novel}, unresolved ${s.unresolved}, unavailable ${s.unavailable}, rows uncovered ${s.uncovered}` +
       (strict ? " (strict)" : ""),
   );
   return lines.join("\n");

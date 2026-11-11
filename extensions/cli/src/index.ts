@@ -13,6 +13,7 @@ import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
+import { sandboxCommand } from "./commands/sandbox.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
 import {
@@ -422,6 +423,24 @@ program
   )
   .action(async (action: string | undefined) => {
     const code = terminalEnvCommand(action);
+    await gracefulExit(code);
+  });
+
+// Sandbox status subcommand
+program
+  .command("sandbox [action]")
+  .description(
+    "Show whether the srt sandbox runtime could run here and the policy it would get; a status probe, nothing is sandboxed (status)",
+  )
+  .option("--json", "Machine-readable output")
+  .option("--model-host <host>", "The model host the network allowlist names")
+  .option("--workspace <dir>", "The workspace the policy preview is for")
+  .action(async (action: string | undefined, options) => {
+    const code = sandboxCommand(action, {
+      json: options.json,
+      modelHost: options.modelHost,
+      workspace: options.workspace,
+    });
     await gracefulExit(code);
   });
 

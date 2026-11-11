@@ -1,31 +1,116 @@
 [
-  { "repo": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16" },
-  { "repo": "nvidia/NVIDIA-Nemotron-Nano-9B-v2" },
-  { "repo": "nvidia/Llama-3_3-Nemotron-Super-49B-v1_5" },
-  { "repo": "Qwen/Qwen3-Coder-30B-A3B-Instruct" },
-  { "repo": "Qwen/Qwen3-Next-80B-A3B-Instruct" },
-  { "repo": "Qwen/Qwen3-30B-A3B" },
-  { "repo": "Qwen/Qwen3.5-27B" },
-  { "repo": "Qwen/Qwen3.6-27B" },
-  { "repo": "NousResearch/Hermes-3-Llama-3.1-8B" },
-  { "repo": "zai-org/GLM-5" },
-  { "repo": "zai-org/GLM-4.7" },
-  { "repo": "zai-org/GLM-4.5" },
-  { "repo": "moonshotai/Kimi-K2-Thinking" },
-  { "repo": "moonshotai/Kimi-K2-Instruct" },
-  { "repo": "moonshotai/Kimi-K3" },
-  { "repo": "MiniMaxAI/MiniMax-M2" },
-  { "repo": "MiniMaxAI/MiniMax-M3" },
-  { "repo": "deepseek-ai/DeepSeek-R1" },
-  { "repo": "deepseek-ai/DeepSeek-V3.1" },
-  { "repo": "deepseek-ai/DeepSeek-V3.2" },
-  { "repo": "openai/gpt-oss-20b" },
-  { "repo": "google/gemma-4-31B-it" },
-  { "repo": "google/gemma-3-27b-it" },
-  { "repo": "meta-llama/Llama-4-Scout-17B-16E-Instruct" },
-  { "repo": "meta-llama/Llama-3.3-70B-Instruct" },
-  { "repo": "meta-llama/Llama-3.1-8B-Instruct" },
-  { "repo": "mistralai/Mistral-7B-Instruct-v0.3" },
-  { "repo": "mistralai/Mistral-Small-3.2-24B-Instruct-2506" },
-  { "repo": "mistralai/Devstral-Small-2507" }
+  {
+    "repo": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16"
+  },
+  {
+    "repo": "nvidia/NVIDIA-Nemotron-Nano-9B-v2"
+  },
+  {
+    "repo": "nvidia/Llama-3_3-Nemotron-Super-49B-v1_5"
+  },
+  {
+    "repo": "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+  },
+  {
+    "repo": "Qwen/Qwen3-Next-80B-A3B-Instruct"
+  },
+  {
+    "repo": "Qwen/Qwen3-30B-A3B"
+  },
+  {
+    "repo": "Qwen/Qwen3.5-27B"
+  },
+  {
+    "repo": "Qwen/Qwen3.6-27B"
+  },
+  {
+    "repo": "NousResearch/Hermes-3-Llama-3.1-8B"
+  },
+  {
+    "repo": "zai-org/GLM-5"
+  },
+  {
+    "repo": "zai-org/GLM-4.7"
+  },
+  {
+    "repo": "zai-org/GLM-4.5"
+  },
+  {
+    "repo": "moonshotai/Kimi-K2-Thinking"
+  },
+  {
+    "repo": "moonshotai/Kimi-K2-Instruct"
+  },
+  {
+    "repo": "moonshotai/Kimi-K3"
+  },
+  {
+    "repo": "MiniMaxAI/MiniMax-M2"
+  },
+  {
+    "repo": "MiniMaxAI/MiniMax-M3"
+  },
+  {
+    "repo": "deepseek-ai/DeepSeek-R1"
+  },
+  {
+    "repo": "deepseek-ai/DeepSeek-V3.1"
+  },
+  {
+    "repo": "deepseek-ai/DeepSeek-V3.2"
+  },
+  {
+    "repo": "openai/gpt-oss-20b"
+  },
+  {
+    "repo": "google/gemma-4-31B-it"
+  },
+  {
+    "repo": "google/gemma-3-27b-it"
+  },
+  {
+    "repo": "meta-llama/Llama-4-Scout-17B-16E-Instruct"
+  },
+  {
+    "repo": "meta-llama/Llama-3.3-70B-Instruct"
+  },
+  {
+    "repo": "meta-llama/Llama-3.1-8B-Instruct"
+  },
+  {
+    "repo": "mistralai/Mistral-7B-Instruct-v0.3"
+  },
+  {
+    "repo": "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
+  },
+  {
+    "repo": "mistralai/Devstral-Small-2507"
+  },
+  {
+    "repo": "Qwen/Qwen3.8-27B"
+  },
+  {
+    "repo": "ibm-granite/granite-4.2-8b"
+  },
+  {
+    "repo": "ibm-granite/granite-4.0-h-small"
+  },
+  {
+    "repo": "XiaomiMiMo/MiMo-V2.5"
+  },
+  {
+    "repo": "XiaomiMiMo/MiMo-7B-RL"
+  },
+  {
+    "repo": "stepfun-ai/Step-3.7-Flash"
+  },
+  {
+    "repo": "LiquidAI/LFM2.5-24B-A2B"
+  },
+  {
+    "repo": "tencent/Hy3"
+  },
+  {
+    "repo": "deepseek-ai/DeepSeek-V4-Flash"
+  }
 ]
