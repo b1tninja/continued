@@ -86,10 +86,10 @@ matched, because Qwen-XML and GLM-XML are wrapped in the same tag.
 
 The rules were written while reading 31 templates (the "dev" set in
 `test/fixtures/labels.json`). That 31 of 31 is a fit, not a validation. The
-hold-out set is 21 templates from repos that were not used to write the rules,
-whose truth label (the call form the vendor's template writes) I read by hand
-before comparing it with the classifier. Measured once, before any rule was
-touched:
+first hold-out set is 21 templates from repos that were not used to write the
+rules, whose truth label (the call form the vendor's template writes) I read by
+hand before comparing it with the classifier. Measured once, before any rule
+was touched:
 
 | Outcome                                      | Count |
 | -------------------------------------------- | ----: |
@@ -100,23 +100,55 @@ touched:
 | of which truly a form with no rule (correct) |     6 |
 | Known form wrongly left undecided            |     0 |
 
-Precision of the decided verdicts is 14 of 15 (93%). Three hold-out repos are
-the same family as a dev repo (Qwen2.5, DeepSeek V3.1 Terminus, MiniMax M2.5);
-without them it is 11 of 12. Of the 15 decided verdicts, 5 are `none`
-(templates with no tool support), which is the easy case; among the 10
-templates that write a call form it is 9 of 10. This is a small sample and the
-interval is wide: do not read 93% as a rate.
+Precision of the decided verdicts was 14 of 15 (93%). The wrong one was
+ByteDance Seed-OSS: its template writes
+`<seed:tool_call><function=...><parameter=...>`, and the `qwen-xml` rule
+accepted the inner markup without checking the wrapper. The six undecided were
+IBM Granite 3.3 (`<|tool_call|>`), Liquid LFM2 (`<|tool_call_start|>[f(...)]`),
+Phi-4-mini, OLMo 3 (`<function_calls>`), Meituan LongCat
+(`<longcat_tool_call>`) and Upstage Solar Open (`<|tool_call:begin|>`).
 
-The wrong one is ByteDance Seed-OSS: its template writes
-`<seed:tool_call><function=...><parameter=...>`, and the `qwen-xml` rule accepts
-the inner markup without checking the wrapper. The six undecided are IBM
-Granite 3.3 (`<|tool_call|>`), Liquid LFM2 (`<|tool_call_start|>[f(...)]`),
-Phi-4-mini, OLMo 3 (`<function_calls>`), Meituan LongCat (`<longcat_tool_call>`)
-and Upstage Solar Open (`<|tool_call:begin|>`). The hold-out test pins these
-numbers, so a rule change that moves them has to update this section.
+### Second round: wrapper check, five classifier-only forms, a fresh hold-out
 
-Four hold-out candidates were gated or unavailable (Cohere Command R7B and
-Command A, Google Gemma 3n, Salesforce xLAM) and are not in the count.
+Changes (2026-11-10): the `qwen-xml` rule now also requires the plain
+`<tool_call>` tag to open `<function=` (allowing jinja quoting and the escaped
+newline between them), so Seed-OSS is its own verdict `seed-xml`. Five forms
+from the first hold-out get a rule each, as classifier verdicts only:
+`granite-tokens` (`<|tool_call|>`), `lfm-tokens` (`<|tool_call_start|>`),
+`longcat-json` (`<longcat_tool_call>`), `solar-tokens` (`<|tool_call:begin|>`)
+and `olmo-function-calls` (`<function_calls>`). None is a preset dialect and no
+parser exists for any: `check` reports such a verdict against a row that
+records `none` as `novel` (neither agree nor disagree, exit 1 under `--strict`),
+and against any other row as a disagreement. Phi-4-mini stays undecided.
+
+The first 21 are now a fit (20 of 20 decided are right, 1 undecided), because
+five rules were written from them. The honest number is the fresh set: 20 repos
+that were not read when the rules were written, labelled by hand from the full
+templates before the classifier ran on them (`fresh` in `labels.json`):
+
+| Outcome                                      | Count |
+| -------------------------------------------- | ----: |
+| Decided                                      |    16 |
+| of which correct                             |    16 |
+| of which wrong                               |     0 |
+| Undecided                                    |     4 |
+| of which truly a form with no rule (correct) |     2 |
+| Known form wrongly left undecided            |     2 |
+
+Precision of the decided verdicts is 16 of 16, but read it with its limits:
+four of the 16 are `none` (templates with no tool support, the easy case); one
+(Granite 3.2) is the form the Granite 3.3 rule was written from, so it is not
+independent; the sample is small and the interval wide, so 100% is not a rate.
+Recall is the weaker side: SmolLM3 (`"name"` written with escaped quotes) and
+Falcon-H1 (single-quoted `'name'`) write the Hermes form, but the hermes-json
+rule wants a literal `"name"`, so both stay undecided. Undecided and correctly
+so: Google FunctionGemma (`<start_function_call>call:NAME{...}`) and Liquid
+LFM2-1.2B-Tool, whose template renders the tool list but contains no call
+writer. The numbers are pinned by `test/classify.test.mjs`.
+
+Candidates not used: THUDM/GLM-4-32B-0414 (401). Four earlier candidates were
+gated or unavailable (Cohere Command R7B and Command A, Google Gemma 3n,
+Salesforce xLAM).
 
 ## What it cannot answer
 
@@ -128,8 +160,8 @@ Command A, Google Gemma 3n, Salesforce xLAM) and are not in the count.
 - Anything about closed models (Claude, GPT, Gemini, Grok, Nova): those rows are
   listed as `no-public-template`, never inferred.
 - Families without a Hub template: Mistral and Devstral repos use
-  `mistral_common`, Kimi K3 and DeepSeek V3.2 ship Python encoders. They are
-  `undecided: no-template`.
+  `mistral_common`, Kimi K3 and DeepSeek V3.2 and V4 ship Python encoders. They
+  are `undecided: no-template`; the tool does not fetch the encoders.
 - Server-parser names, sampling defaults and system-prompt advice: not in slice 1.
 
 ## Rate limits and politeness
