@@ -49,6 +49,7 @@ import {
   recordPolicyDecision,
   recordReviewDecision,
 } from "./tools/permissions/audit/hook";
+import { registerAuditOverview } from "./tools/permissions/audit/overviewHandler";
 import {
   readPolicyFile,
   writePolicyFile,
@@ -681,6 +682,18 @@ export class Core {
       );
       if (report.userFile) report.userFile.undoable = undoAvailable();
       return report;
+    });
+
+    registerAuditOverview(on as never, {
+      sources: async () =>
+        readRuleSources({
+          merged: (await this.configHandler.loadConfig()).config
+            ?.toolPermissions,
+        }),
+      cwd: async () => {
+        const dirs = await this.ide.getWorkspaceDirs();
+        return dirs[0] ? uriToPath(dirs[0]) : undefined;
+      },
     });
 
     registerRuleEditorHandlers(on as never, {
