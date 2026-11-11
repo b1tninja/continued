@@ -23,6 +23,7 @@ import {
   setTaskPlan,
 } from "@gui/redux/slices/sessionSlice";
 import type { setupStore } from "@gui/redux/store";
+import { AUDIT_FIXTURES } from "./auditFixtures";
 
 export type Store = ReturnType<typeof setupStore>;
 export interface FixtureContext {
@@ -559,5 +560,7 @@ Object.assign(FIXTURES, {
     store.dispatch(newSession());
   },
 });
+
+Object.assign(FIXTURES, AUDIT_FIXTURES);
 
 export const FIXTURE_NAMES = Object.keys(FIXTURES);

@@ -42,7 +42,7 @@ export function AuditRow({
           {call.summary}
         </code>
       </div>
-      <div className="mt-1 flex flex-wrap gap-1">
+      <div className="mt-1 flex flex-wrap items-start gap-1">
         <button
           type="button"
           onClick={onOpen}
