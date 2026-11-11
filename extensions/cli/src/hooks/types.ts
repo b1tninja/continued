@@ -51,6 +51,12 @@ interface HookHandlerBase {
    * on other events only log the failure.
    */
   onError?: "block" | "allow";
+  /**
+   * Where the hook came from. Set by the loader on handlers from a project
+   * settings file, never read from a file. A project hook can deny or ask but
+   * its `allow` is ignored: only the user's own hooks may approve a call.
+   */
+  origin?: "project";
 }
 
 /** Command hook handler — runs a shell command */
@@ -385,6 +391,8 @@ export interface HookExecutionResult {
   failed?: boolean;
   /** Why the hook failed, for the log and for the model */
   failureReason?: string;
+  /** Set when the hook came from the project's settings (see `origin`) */
+  fromProject?: boolean;
 }
 
 /**
@@ -406,6 +414,8 @@ export interface HookEventResult {
   updatedInput?: Record<string, unknown>;
   /** For PermissionRequest: the decision */
   permissionRequestDecision?: PermissionRequestHookOutput["decision"];
+  /** A project hook said "allow" and it was ignored (see `origin`) */
+  projectAllowIgnored?: boolean;
   /** All individual hook results */
   results: HookExecutionResult[];
 }
