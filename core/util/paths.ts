@@ -12,6 +12,7 @@ import dotenv from "dotenv";
 import { IdeType, SerializedContinueConfig } from "../";
 import { defaultConfig } from "../config/default";
 import Types from "../config/types";
+import { GLOBAL_DIR_NAME, LEGACY_GLOBAL_DIR_NAME } from "./productPaths";
 import { editYamlText } from "./yamlEdit";
 
 // The CLI sets this before importing core so a working-directory .env is not
@@ -30,9 +31,7 @@ export function setConfigFilePermissions(filePath: string): void {
   }
 }
 
-/** The global folder's name in the home directory, and its name before 2.4.2. */
-export const GLOBAL_DIR_NAME = ".continuous";
-export const LEGACY_GLOBAL_DIR_NAME = ".continue";
+export { GLOBAL_DIR_NAME, LEGACY_GLOBAL_DIR_NAME };
 
 /**
  * What a first start copies from ~/.continue: everything but what is rebuilt

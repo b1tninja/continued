@@ -89,6 +89,29 @@ function rewriteHome(p: string, home: string): string {
 }
 
 /**
+ * Spellings of one file that Windows treats alike: a file URI, the long-path
+ * and device prefixes (`//?/` and `//./`, and `//?/UNC/host/share` for
+ * `//host/share`), and the admin share `//localhost/C$/x`, which is `C:/x`.
+ * Slashes are already forward.
+ */
+function stripNamespacePrefixes(path: string): string {
+  let p = path;
+  if (/^file:\/\//i.test(p)) {
+    p = p.replace(/^file:\/\/(localhost)?/i, "");
+    try {
+      p = decodeURIComponent(p);
+    } catch {
+      // Not valid percent-encoding: judge it as written.
+    }
+  }
+  p = p.replace(/^\/\/[?.]\/UNC\//i, "//").replace(/^\/\/[?.]\//, "");
+  return p.replace(
+    /^\/\/(?:localhost|127\.0\.0\.1)\/([a-zA-Z])\$(?=\/|$)/i,
+    (_, drive: string) => `${drive}:`,
+  );
+}
+
+/**
  * Make a path comparable: forward slashes, `~` for the home dir, `.` and `..`
  * folded. Relative paths are resolved against `cwd` (the workspace, for a
  * tool call) before that, so a path that climbs out is still recognisable.
@@ -100,6 +123,7 @@ export function normalizeProtectedPath(
 ): string {
   let p = raw.trim().replace(/\\/g, "/");
   if (!p) return "";
+  p = stripNamespacePrefixes(p);
   // A file URI's path is `/C:/Users/...`; drop the slash so it compares as a drive path.
   p = p.replace(/^\/([a-zA-Z]:\/)/, "$1");
   p = p.replace(
