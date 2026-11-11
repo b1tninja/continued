@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/HuggingFaceTB/SmolLM3-3B/blob/main/chat_template.jinja (xml_tool_string), not observed",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": ""
   },
