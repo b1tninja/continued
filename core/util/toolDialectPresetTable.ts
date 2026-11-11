@@ -455,6 +455,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     nativeOnConverse: "none",
     measured: "Bedrock refuses tools outright (2026-11-08)",
     textDialect: "deepseek-tokens",
+    recoverWith: "deepseek-r1",
     promptStyle: {
       style: "codeblock",
       evidence:
@@ -472,7 +473,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     ],
     readOn: READ,
     unverified: [
-      "whether R1 emits its history format reliably was not established",
+      "whether R1 emits its history format reliably was not established; the deepseek-r1 recovery is strict and opt-in, so a model that does not write it is left alone",
     ],
   },
   {
@@ -532,6 +533,35 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     readOn: READ,
     unverified: [
       "undecided by the template classifier: the repository has no Jinja template and ships encoding/encoding_dsv32.py, which the research tool does not fetch",
+    ],
+  },
+  {
+    id: "deepseek-v3-0324",
+    label: "DeepSeek V3-0324 (R1 fenced tool-call layout)",
+    match: [/deepseek[-._ ]?(?:chat[-._ ]?)?v?3[-._ ]?0324/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "deepseek-tokens",
+    recoverWith: "deepseek-r1",
+    promptStyle: {
+      style: "native",
+      evidence:
+        "vLLM's tool_chat_template_deepseekv3.jinja tells the model to write the fenced layout; not measured, so native until measured",
+    },
+    thinkingTags: THINK,
+    serverParser: {
+      vllm: "deepseek_v3",
+      basis: "vllm-docs",
+      note: "deepseek_v3 for V3-0324 with tool_chat_template_deepseekv3.jinja (docs)",
+    },
+    source: [
+      VLLM_DOCS,
+      "https://huggingface.co/deepseek-ai/DeepSeek-V3-0324/raw/main/tokenizer_config.json",
+    ],
+    readOn: READ,
+    unverified: [
+      "whether V3-0324 emits the fenced layout unprompted was not established; V3.1 and later use other layouts (the deepseek-v3 row)",
     ],
   },
   {

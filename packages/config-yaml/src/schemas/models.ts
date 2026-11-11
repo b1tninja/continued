@@ -253,6 +253,7 @@ export const TOOL_DIALECT_VALUES = [
   "mistral",
   "dsml",
   "deepseek-v31",
+  "deepseek-r1",
   "kimi-tokens",
   "kimi-xtml",
   "minimax-xml",

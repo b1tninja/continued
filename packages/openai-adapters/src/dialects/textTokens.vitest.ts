@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  recoverDeepseekR1FromText,
+  renderDeepseekR1Calls,
+} from "./deepseekR1.js";
+import {
   recoverDeepseekV31FromText,
   renderDeepseekV31Call,
 } from "./deepseekV31.js";
@@ -79,6 +83,11 @@ const forms: [string, string, (t: string) => { text: string; calls: any[] }][] =
       renderDeepseekV31Call(call),
       (t) => recoverDeepseekV31FromText(t, tools),
     ],
+    [
+      "deepseek-r1",
+      renderDeepseekR1Calls([call]),
+      (t) => recoverDeepseekR1FromText(t, tools),
+    ],
   ];
 
 describe.each(forms)("%s round trip", (_name, text, recover) => {
@@ -125,6 +134,7 @@ function recoverStage(name: string, chunks: string[]) {
     dsml: "dsml",
     "dsml v4": "dsml",
     "deepseek-v31": "deepseek-v31",
+    "deepseek-r1": "deepseek-r1",
   }[name]!;
   const model = "local-model";
   const env = { CONTINUE_RECOVER_TEXT_TOOL_CALLS: `force:${setting}` };

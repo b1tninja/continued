@@ -9,6 +9,7 @@ export type Dialect =
   | "hermes-json" // <tool_call>{"name":..,"arguments":{..}}</tool_call>
   | "glm-xml" // <tool_call>NAME<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>
   | "dsml" // DeepSeek V3.2 fullwidth-bar function_calls / invoke / parameter
+  | "deepseek-r1" // <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>NAME + a ```json fence + <｜tool▁call▁end｜>
   | "deepseek-v31" // <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>NAME<｜tool▁sep｜>{json}<｜tool▁call▁end｜>
   | "kimi-tokens" // <|tool_call_begin|>functions.NAME:IDX<|tool_call_argument_begin|>{json}
   | "harmony" // <|channel|>commentary to=functions.NAME <|constrain|>json<|message|>{json}<|call|>
@@ -90,6 +91,13 @@ const FINGERPRINTS: Fingerprint[] = [
       `<[${BAR}|]DSML[${BAR}|](?:function_calls|tool_calls|invoke)`,
     ),
     label: "DSML marker",
+  },
+  {
+    dialect: "deepseek-r1",
+    strong: new RegExp(
+      `<[${BAR}|]tool▁call▁begin[${BAR}|]>function<[${BAR}|]tool▁sep[${BAR}|]>`,
+    ),
+    label: "DeepSeek R1 fenced tool-call tokens",
   },
   {
     dialect: "deepseek-v31",

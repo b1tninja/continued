@@ -17,6 +17,7 @@
  * schema and every required one is present. Anything else stays text.
  */
 
+import { FenceTracker } from "./fenceTracker.js";
 import { hasProseBefore } from "./heldRecovery.js";
 import { coerceString, repairNote } from "./schemaCheck.js";
 
@@ -307,17 +308,6 @@ function trailingMarkerPrefix(text: string): number {
 }
 
 /**
- * Whether a marker at `at` in `text` begins a call rather than quoting one:
- * not right after a backtick, and not inside a code fence.
- */
-function startsCall(text: string, at: number): boolean {
-  if (at > 0 && text[at - 1] === "`") return false;
-  const before = text.slice(0, at);
-  const fences = before.split("```").length - 1;
-  return fences % 2 === 0;
-}
-
-/**
  * Stream-safe recovery for one text block. `push` takes each text delta and
  * returns what can be shown now. Once a marker that begins a call is seen,
  * everything from it on is held until `end`, where it is either parsed as
@@ -327,7 +317,10 @@ function startsCall(text: string, at: number): boolean {
  * leaks. Chunk boundaries do not change the result.
  */
 export class QwenXmlRecovery {
-  private shown = ""; // text already released, for fence and backtick checks
+  private shown = ""; // text already released, for the prose check at the end
+  // Fence parity and the last character of what was released, kept as a
+  // running count so a marker quoted thousands of times stays linear.
+  private readonly fences = new FenceTracker();
   private pending = ""; // possible start of a marker, or text not yet judged
   private held: string | undefined; // from the first call marker on
 
@@ -336,6 +329,7 @@ export class QwenXmlRecovery {
   private release(out: RecoveryEvent[], text: string): void {
     if (!text) return;
     this.shown += text;
+    this.fences.add(text);
     out.push({ type: "text", text });
   }
 
@@ -345,32 +339,42 @@ export class QwenXmlRecovery {
       this.held += chunk;
       return out;
     }
-    let buffer = this.pending + chunk;
+    const buffer = this.pending + chunk;
     this.pending = "";
+    // Where each marker next occurs at or after `from`, searched again only
+    // once `from` passes it, so a marker that never occurs is searched for once
+    // and not at every quoted marker of another kind.
+    let from = 0;
+    const next = MARKERS.map((marker) => buffer.indexOf(marker));
     for (;;) {
       let at = -1;
       let markerLength = 0;
-      for (const marker of MARKERS) {
-        const i = buffer.indexOf(marker);
-        if (i !== -1 && (at === -1 || i < at)) {
-          at = i;
+      MARKERS.forEach((marker, k) => {
+        if (next[k] !== -1 && next[k] < from) {
+          next[k] = buffer.indexOf(marker, from);
+        }
+        if (next[k] !== -1 && (at === -1 || next[k] < at)) {
+          at = next[k];
           markerLength = marker.length;
         }
-      }
+      });
       if (at === -1) {
-        const keep = trailingMarkerPrefix(buffer);
-        this.pending = keep ? buffer.slice(-keep) : "";
-        this.release(out, keep ? buffer.slice(0, -keep) : buffer);
+        const rest = buffer.slice(from);
+        const keep = trailingMarkerPrefix(rest);
+        this.pending = keep ? rest.slice(-keep) : "";
+        this.release(out, keep ? rest.slice(0, -keep) : rest);
         return out;
       }
-      if (startsCall(this.shown + buffer, this.shown.length + at)) {
-        this.release(out, buffer.slice(0, at));
+      // The text before the marker is released either way; then the marker
+      // begins a call unless it follows a backtick or sits inside a fence.
+      this.release(out, buffer.slice(from, at));
+      if (!this.fences.endsWithTick && !this.fences.inFence) {
         this.held = buffer.slice(at);
         return out;
       }
       // Quoted, not a call: it is text; look for the next marker after it.
-      this.release(out, buffer.slice(0, at + markerLength));
-      buffer = buffer.slice(at + markerLength);
+      this.release(out, buffer.slice(at, at + markerLength));
+      from = at + markerLength;
     }
   }
 

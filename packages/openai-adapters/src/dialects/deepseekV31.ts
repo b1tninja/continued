@@ -12,8 +12,8 @@
  * tool calls renders `<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>` + name +
  * `<｜tool▁sep｜>` + arguments (the JSON string) + `<｜tool▁call▁end｜>`, the
  * next calls without the first token, then `<｜tool▁calls▁end｜>`. This is not
- * the R1 layout (`function<｜tool▁sep｜>NAME` and a json code fence), which is
- * not built: its template was not read. V3.2 and later use DSML (`dsml`).
+ * the R1 / V3-0324 layout (`function<｜tool▁sep｜>NAME` and a json code fence),
+ * which is `deepseek-r1`. V3.2 and later use DSML (`dsml`).
  *
  * Opt-in; for a self-hosted server that returns the tokens as content.
  *

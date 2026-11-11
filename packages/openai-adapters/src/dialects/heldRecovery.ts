@@ -64,6 +64,9 @@ export class HeldBlockRecovery {
   private buffer = "";
   private state: "undecided" | "held" | "passthrough" = "undecided";
   private capped = false;
+  // How much of the buffer is known to be blank, so a reply streamed as many
+  // tiny whitespace chunks does not re-trim the whole buffer on each one.
+  private blank = 0;
 
   constructor(
     private readonly tools: DialectTool[],
@@ -75,9 +78,17 @@ export class HeldBlockRecovery {
   ) {}
 
   push(chunk: string): RecoveryEvent[] {
+    const allBlank = this.blank === this.buffer.length;
     this.buffer += chunk;
     if (this.state === "undecided") {
-      const s = this.buffer.trimStart();
+      if (allBlank) {
+        // Only the new chunk can extend the blank lead; looking at the whole
+        // buffer would flatten it on every chunk.
+        let i = 0;
+        while (i < chunk.length && /\s/.test(chunk[i])) i++;
+        this.blank += i;
+      }
+      const s = this.buffer.slice(this.blank);
       if (s === "") return [];
       if (this.starts.some((m) => s.startsWith(m))) this.state = "held";
       else if (this.starts.some((m) => m.startsWith(s))) return [];
@@ -122,6 +133,7 @@ export class HeldBlockRecovery {
       }
     }
     this.buffer = "";
+    this.blank = 0;
     this.state = "undecided";
     return out;
   }

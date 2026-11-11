@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { recoverGlmXmlFromText } from "./glmXml.js";
+import { recoverDeepseekR1FromText } from "./deepseekR1.js";
 import { recoverDeepseekV31FromText } from "./deepseekV31.js";
 import { recoverDsmlFromText } from "./dsml.js";
 import { recoverHarmonyFromText } from "./harmony.js";
@@ -169,6 +170,15 @@ const dialects: [string, (timeout: string) => string, (t: string) => any][] = [
     (t) =>
       `<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>run_command<｜tool▁sep｜>{"command": "10", "timeout": "${t}"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>`,
     (t) => recoverDeepseekV31FromText(t, tools),
+  ],
+  [
+    "deepseek-r1",
+    (t) =>
+      `<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>run_command
+\`\`\`json
+{"command": "10", "timeout": "${t}"}
+\`\`\`<｜tool▁call▁end｜><｜tool▁calls▁end｜>`,
+    (t) => recoverDeepseekR1FromText(t, tools),
   ],
   [
     "kimi-tokens",
