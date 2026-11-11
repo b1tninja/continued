@@ -13,7 +13,15 @@ import { ConfigHeader } from "../components/ConfigHeader";
 type Status = TerminalEnvironmentStatus & {
   hostEnvNames: string[];
   credentialUrlNames: string[];
+  platform?: NodeJS.Platform;
 };
+
+/** The host's platform, else a guess from the browser; never `process`. */
+function platformOf(status: Status): NodeJS.Platform {
+  if (status.platform) return status.platform;
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  return /windows/i.test(ua) ? "win32" : /mac/i.test(ua) ? "darwin" : "linux";
+}
 
 const OPTIONS: {
   mode: TerminalEnvironmentMode;
@@ -96,10 +104,15 @@ export function TerminalEnvironmentControl() {
     const env: Record<string, string> = {};
     for (const n of status.hostEnvNames)
       env[n] = status.credentialUrlNames.includes(n) ? "x://u:p@h" : "";
-    return previewTerminalEnvironment(env, draftMode, {
-      passEnv,
-      allow: status.allow,
-    });
+    return previewTerminalEnvironment(
+      env,
+      draftMode,
+      {
+        passEnv,
+        allow: status.allow,
+      },
+      platformOf(status),
+    );
   }, [status, draftMode, passEnv]);
 
   const save = async (next: {
