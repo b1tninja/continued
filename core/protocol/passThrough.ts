@@ -113,6 +113,8 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "tools/evaluatePolicy",
     "policy/load",
     "policy/save",
+    "policy/rules",
+    "policy/test",
     "tools/autoReview",
     "audit/answer",
     "tools/preprocessArgs",

@@ -46,6 +46,10 @@ import { getAllDotContinueDefinitionFiles } from "../loadLocalAssistants";
 import { unrollLocalYamlBlocks } from "./loadLocalYamlBlocks";
 import * as YAML from "yaml";
 import {
+  clearFolderRules,
+  recordFolderRules,
+} from "../../tools/permissions/folderRules";
+import {
   stripUntrustedLoosening,
   untrustedLooseningNotice,
 } from "../../tools/permissions/trust";
@@ -72,6 +76,7 @@ function withoutUntrustedLoosening(
   } catch {
     return content;
   }
+  recordFolderRules(path, parsed);
   const { config, removed } = stripUntrustedLoosening(parsed);
   if (removed.length === 0) return content;
   notices.push({
@@ -135,6 +140,7 @@ async function loadConfigYaml(options: {
     heldMcpServers,
     notices: trustNotices,
   } = await selectWorkspaceBlocks(ide, loadedBlocks, workspaceDirs);
+  clearFolderRules();
 
   const localPackageIdentifiers: PackageIdentifier[] = keptBlocks.map((b) => ({
     uriType: "file" as const,
