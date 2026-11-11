@@ -74,7 +74,9 @@ async function defaultCreateClient(reviewer: string | undefined) {
   const state = await getService<
     import("../services/types.js").ModelServiceState
   >(SERVICE_NAMES.MODEL);
-  if (!state?.assistant || !state.authConfig) return null;
+  // authConfig is null for a person who has not signed in; the model client
+  // does not use it, so a local config.yaml is enough.
+  if (!state?.assistant) return null;
   const assistant =
     reviewer && reviewer !== "reviewer"
       ? ({
@@ -83,7 +85,10 @@ async function defaultCreateClient(reviewer: string | undefined) {
         } as typeof state.assistant)
       : state.assistant;
   const model = reviewerModel(assistant);
-  const client = createReviewer(assistant, state.authConfig);
+  const client = createReviewer(
+    assistant,
+    state.authConfig as Parameters<typeof createReviewer>[1],
+  );
   if (!client || !model) return null;
   return { client, model: model.name ?? model.model };
 }
