@@ -23,6 +23,7 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   mistral: "mistral",
   dsml: "dsml",
   "deepseek-v31": "deepseek-v31",
+  "deepseek-r1": "deepseek-r1",
   "kimi-tokens": "kimi-tokens",
   "kimi-xtml": "kimi-xtml",
   "minimax-xml": "minimax-xml",

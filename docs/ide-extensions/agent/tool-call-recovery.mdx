@@ -26,6 +26,7 @@ Set the variable in the environment that starts the editor or the CLI. It takes 
 | `mistral`            | Mistral's `[TOOL_CALLS]` forms: `[TOOL_CALLS] [{"name": "...", "arguments": {...}}]` and `[TOOL_CALLS]NAME[ARGS]{...}` | `mistral`, `mixtral`, `devstral`, `magistral` |
 | `dsml`               | DeepSeek V3.2 and V4 DSML: `<｜DSML｜function_calls>` (V4: `<｜DSML｜tool_calls>`) with `<｜DSML｜invoke name="...">` and `<｜DSML｜parameter name="..." string="true\|false">` | `deepseek` |
 | `deepseek-v31`       | DeepSeek V3.1's tokens: `<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>NAME<｜tool▁sep｜>{...}<｜tool▁call▁end｜><｜tool▁calls▁end｜>` | `deepseek` |
+| `deepseek-r1`        | The fenced layout of DeepSeek R1 and V3-0324: `<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>NAME`, a `json` code fence holding the arguments, then `<｜tool▁call▁end｜><｜tool▁calls▁end｜>` | `deepseek` |
 | `granite-tokens` | IBM Granite 3.x: `<|tool_call|>[{"name": "...", "arguments": {...}}]` | `granite` |
 | `lfm-tokens` | Liquid LFM2: `<|tool_call_start|>[name(arg=...)]<|tool_call_end|>` | `lfm`, `liquid` |
 | `hy3-tags` | Tencent Hy3: `<tool_calls:opensource><tool_call:opensource>NAME<tool_sep:opensource>` and suffixed `<arg_key>` / `<arg_value>` tags | `hy3` |
@@ -73,6 +74,7 @@ models:
 | `mistral`     | Recover Mistral `[TOOL_CALLS]` calls for this model, whatever its id is.                |
 | `dsml`        | Recover DeepSeek V3.2 and V4 DSML calls for this model, whatever its id is.             |
 | `deepseek-v31` | Recover DeepSeek V3.1 token calls for this model, whatever its id is.                  |
+| `deepseek-r1` | Recover DeepSeek R1 and V3-0324 fenced token calls for this model, whatever its id is. |
 | `granite-tokens` | Recover Granite 3.x `<|tool_call|>` JSON-list calls for this model, whatever its id is. |
 | `lfm-tokens` | Recover LFM2 token-wrapped Python-list calls for this model, whatever its id is. |
 | `hy3-tags` | Recover Hy3 tag calls for this model, whatever its id is. |
@@ -121,7 +123,8 @@ The Kimi and MiniMax parsers are for self-hosted servers (vLLM, SGLang, llama.cp
 - For `harmony`, the reply is nothing but Harmony messages. A call has the commentary channel, the recipient `functions.NAME` (in the role or the channel part of the header), an optional `<|constrain|>json` (or a bare `json`), one JSON object as the body, and ends with `<|call|>`. An analysis message (the model's reasoning) before it is dropped, and a commentary message with no recipient (a preamble) is prose, so the reply stays text. A `final` message, another recipient such as `browser.search` or `python`, another constrain type, a body that is not a JSON object, or a missing `<|call|>` leaves the reply as text.
 - For `mistral`, the reply is nothing but one layout: `[TOOL_CALLS]` followed by a JSON array of objects with exactly `name`, `arguments` (an object) and an optional string `id` (Mistral 7B v0.3 and similar), or one or more `[TOOL_CALLS]NAME[ARGS]{...}` calls, with an optional `[CALL_ID]id` after the name (Mistral Small, Devstral, Magistral). Mixing the layouts, prose around the calls, or any bad call leaves the reply as text.
 - For `dsml`, the reply is nothing but one `<｜DSML｜function_calls>` (V3.2) or `<｜DSML｜tool_calls>` (V4) block of invokes laid out as DeepSeek's reference parser requires, with the closing tag of the same name. A `string="true"` parameter is the text as written; a `string="false"` parameter must be JSON. A repeated or undeclared parameter, a missing close tag, or prose before the block leaves the reply as text (DeepSeek's reference parser tolerates prose before the block; this one does not, so that a quoted example is never run). DeepSeek V3.2 on Bedrock leaves an unclosed `<｜DSML｜function_calls` at the end of its text before a structured call; that fragment is never a call and is dropped from the visible text, as before.
-- For `deepseek-v31`, the reply is nothing but one `<｜tool▁calls▁begin｜>` block of `<｜tool▁call▁begin｜>NAME<｜tool▁sep｜>{JSON}<｜tool▁call▁end｜>` calls and the end token. The R1 layout (a `json` code fence after the separator) and V3-0324's template were not read and are not recovered.
+- For `deepseek-v31`, the reply is nothing but one `<｜tool▁calls▁begin｜>` block of `<｜tool▁call▁begin｜>NAME<｜tool▁sep｜>{JSON}<｜tool▁call▁end｜>` calls and the end token. R1 and V3-0324 write a different layout, recovered by `deepseek-r1`.
+- For `deepseek-r1`, the reply is nothing but one `<｜tool▁calls▁begin｜>` block of `<｜tool▁call▁begin｜>function<｜tool▁sep｜>NAME`, a newline, a `json` code fence holding one JSON object, a newline and the closing fence, then `<｜tool▁call▁end｜>`, ending with `<｜tool▁calls▁end｜>` (an end-of-sentence token after it is allowed). This is the layout the R1 and V3-0324 chat templates write for a call in the history and that vLLM's `tool_chat_template_deepseekr1.jinja` asks R1 to write; the original R1 was not trained for tools, so a model that writes something else is simply left alone.
 - The `harmony`, `mistral`, `dsml` and `deepseek-v31` parsers were built from the vendors' chat templates, encoders and reference tokenizer code (named in each source file), and checked on synthesised fixtures; only the DeepSeek V3.2 fragment above was seen live. gpt-oss, Mistral and DeepSeek V3.2 return structured calls on Bedrock Converse today, so these parsers matter for a self-hosted server (vLLM, llama.cpp, Ollama, LM Studio) that returns the raw tokens in the reply. Recovery stays off unless you ask for it.
 
 Anything else stays text, exactly as the model wrote it. While a reply streams, text that might be the start of a call is held back until the reply ends, so a recovered call never shows as text first; with recovery on, replies from a matching model can appear later than without it.
@@ -164,7 +167,8 @@ The preset never turns recovery on. To recover a family's text calls, set `toolD
 | gpt-oss                                   | Harmony channels and `to=functions.NAME` | `harmony`               |
 | Mistral, Devstral, Magistral              | `[TOOL_CALLS]` JSON array, or `[TOOL_CALLS]NAME[ARGS]{...}` | `mistral` |
 | DeepSeek V3.2, V4                         | DSML `function_calls` / `tool_calls` block | `dsml`                |
-| DeepSeek V3, V3.1                         | `<｜tool▁calls▁begin｜>` tokens          | `deepseek-v31`           |
+| DeepSeek V3.1                             | `<｜tool▁calls▁begin｜>` tokens          | `deepseek-v31`           |
+| DeepSeek R1, V3-0324                      | `<｜tool▁calls▁begin｜>` tokens with a `json` code fence | `deepseek-r1` |
 | Granite 3.x | `<|tool_call|>` JSON list | `granite-tokens` |
 | Granite 4.0, SmolLM3 | `<tool_call>` JSON, as Hermes | `hermes-json` |
 | Granite 4.2 | `<tool_call><function=...>` XML | `qwen-xml` |

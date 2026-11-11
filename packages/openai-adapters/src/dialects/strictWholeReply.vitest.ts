@@ -29,6 +29,8 @@ const CALLS: Record<string, string> = {
   dsml: '<｜DSML｜function_calls>\n<｜DSML｜invoke name="Read">\n<｜DSML｜parameter name="filepath" string="true">a.txt</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>',
   "deepseek-v31":
     '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>Read<｜tool▁sep｜>{"filepath": "a.txt"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+  "deepseek-r1":
+    '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>Read\n```json\n{"filepath": "a.txt"}\n```<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
   "toolcall-json":
     '<TOOLCALL>[{"name": "Read", "arguments": {"filepath": "a.txt"}}]</TOOLCALL>',
 };

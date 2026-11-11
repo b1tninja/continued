@@ -5,6 +5,7 @@
  */
 import { MAX_HELD_CHARS } from "./heldRecovery.js";
 import { recordRecovery } from "./recoveryStats.js";
+import { DeepseekR1Recovery } from "./deepseekR1.js";
 import { DeepseekV31Recovery } from "./deepseekV31.js";
 import { DsmlRecovery } from "./dsml.js";
 import { GlmXmlRecovery, recoverGlmXmlFromText } from "./glmXml.js";
@@ -277,6 +278,9 @@ function chooseOtherRecovery(
   }
   if (wants(settings, "deepseek-v31", model, /deepseek/i)) {
     return { dialect: "deepseek-v31", stage: new DeepseekV31Recovery(tools) };
+  }
+  if (wants(settings, "deepseek-r1", model, /deepseek/i)) {
+    return { dialect: "deepseek-r1", stage: new DeepseekR1Recovery(tools) };
   }
   return undefined;
 }

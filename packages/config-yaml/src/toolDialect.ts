@@ -27,6 +27,7 @@ export function recoveryValueFor(
     case "mistral":
     case "dsml":
     case "deepseek-v31":
+    case "deepseek-r1":
     case "kimi-tokens":
     case "kimi-xtml":
     case "minimax-xml":

@@ -29,6 +29,7 @@ describe("detectToolDialectLeak", () => {
       ["deepseek-v32-dsml-canonical", "dsml"],
       ["deepseek-v4-dsml-tool-calls-block", "dsml"],
       ["deepseek-v31-canonical", "deepseek-v31"],
+      ["deepseek-r1-canonical", "deepseek-r1"],
     ] as const) {
       expect(detectToolDialectLeak({ content: text(id) }), id).toEqual({
         dialect,
@@ -166,6 +167,7 @@ describe("isLeakedToolCall", () => {
       "devstral-args-marker",
       "harmony-commentary-call",
       "deepseek-v31-canonical",
+      "deepseek-r1-canonical",
       "llama3-python-tag-builtin",
       "granite-canonical",
       "lfm-canonical",
@@ -242,6 +244,8 @@ describe("isLeakedToolCall", () => {
       ["deepseek-v32-dsml-canonical", (t) => t.slice(0, t.length - 20)],
       ["deepseek-v31-canonical", (t) => `Sure. ${t}`],
       ["deepseek-v31-canonical", (t) => t.slice(0, t.length - 30)],
+      ["deepseek-r1-canonical", (t) => `Sure. ${t}`],
+      ["deepseek-r1-canonical", (t) => t.slice(0, t.length - 30)],
     ];
     for (const [id, make] of declined) {
       const content = make(text(id));

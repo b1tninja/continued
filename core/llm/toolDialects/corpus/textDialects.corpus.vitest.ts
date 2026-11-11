@@ -45,6 +45,11 @@ const DIALECTS: {
     dialects: ["deepseek-v31"],
   },
   {
+    file: "deepseekR1.ts",
+    className: "DeepseekR1Recovery",
+    dialects: ["deepseek-r1"],
+  },
+  {
     file: "pythonic.ts",
     className: "PythonicRecovery",
     dialects: ["pythonic"],

@@ -232,9 +232,23 @@ describe("tool dialect presets", () => {
   );
 
   it("does not recover a form no parser exists for, and says so", () => {
-    for (const id of ["deepseek-r1", "gemma-4"]) {
+    for (const id of ["gemma-4"]) {
       const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
       expect(p?.recoverWith, id).toBeUndefined();
+    }
+  });
+
+  it("recovers R1 and V3-0324 with the fenced-layout parser, and V3.1 with its own", () => {
+    for (const [id, row, dialect] of [
+      ["deepseek.r1-v1:0", "deepseek-r1", "deepseek-r1"],
+      ["deepseek-ai/DeepSeek-R1-0528", "deepseek-r1", "deepseek-r1"],
+      ["deepseek-ai/DeepSeek-V3-0324", "deepseek-v3-0324", "deepseek-r1"],
+      ["deepseek/deepseek-chat-v3-0324", "deepseek-v3-0324", "deepseek-r1"],
+      ["deepseek-ai/DeepSeek-V3.1", "deepseek-v3", "deepseek-v31"],
+    ] as const) {
+      const p = resolveToolDialectPreset(id);
+      expect(p?.id, id).toBe(row);
+      expect(p?.recoverWith, id).toBe(dialect);
     }
   });
 
@@ -370,6 +384,7 @@ describe("tool dialect presets", () => {
       "mistral",
       "dsml",
       "deepseek-v31",
+      "deepseek-r1",
       "toolcall-json",
       "kimi-tokens",
       "kimi-xtml",
