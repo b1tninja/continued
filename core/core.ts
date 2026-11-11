@@ -749,6 +749,7 @@ export class Core {
       ...getTerminalEnvironmentStatus(),
       hostEnvNames: Object.keys(process.env).sort(),
       credentialUrlNames: credentialUrlNames(),
+      platform: process.platform,
     }));
 
     on("config/setTerminalEnvironment", async (msg) => {
