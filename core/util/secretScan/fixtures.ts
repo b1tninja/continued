@@ -258,7 +258,6 @@ export function benignCorpus(seed = 7): string[] {
     `commit ${rnd(LOWER_HEX, 40)}\nAuthor: A Person <a@example.com>`,
     `Use sk-... for the key and ghp_... for the token.`,
     `key=value&token=&page=2`,
-    ...falsePositiveShapes(rnd, uuid),
   ];
   for (let i = 0; i < 30; i++) {
     out.push(`id=${uuid()} sha=${rnd(LOWER_HEX, 40)} blob=${rnd(B64, 120)}`);
@@ -318,4 +317,17 @@ export function falsePositiveShapes(
     // a query fragment cut at the ampersand
     `auth_key=${word()}&format=json&page=2`,
   ];
+}
+
+/**
+ * `benignCorpus` plus the X11a false-positive shapes. Kept apart because the
+ * audit masker's own legacy passes (`core/tools/permissions/audit/mask.ts`)
+ * still mask some of these lines, and its tests pin the shorter corpus.
+ */
+export function scannerBenignCorpus(seed = 7): string[] {
+  const r = seeded(seed + 1);
+  const rnd = (alphabet: string, n: number) => randomFrom(r, alphabet, n);
+  const uuid = () =>
+    `${rnd(LOWER_HEX, 8)}-${rnd(LOWER_HEX, 4)}-4${rnd(LOWER_HEX, 3)}-a${rnd(LOWER_HEX, 3)}-${rnd(LOWER_HEX, 12)}`;
+  return [...benignCorpus(seed), ...falsePositiveShapes(rnd, uuid)];
 }
