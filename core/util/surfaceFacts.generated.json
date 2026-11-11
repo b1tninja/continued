@@ -25,6 +25,13 @@
           "source": "core/llm/llms/bedrockHelpers.ts",
           "readOn": "2026-11-10",
           "note": "Streaming tool input is used for every family not listed in bedrockToolsNeedNonStreaming; derived from that code path, not from a measured run."
+        },
+        "schemaOutput": {
+          "value": "per-model",
+          "level": "declared",
+          "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/structured-output.html",
+          "readOn": "2026-11-11",
+          "note": "Converse outputConfig.textFormat json_schema; which models support it is on each model card, not read; first use of a schema compiles a grammar (about 90 s), every object needs additionalProperties false"
         }
       }
     },
@@ -486,6 +493,13 @@
           "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
           "readOn": "2026-11-10",
           "note": "strict: true on a tool gives schema-valid inputs."
+        },
+        "schemaOutput": {
+          "value": "json-schema",
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/build-with-claude/structured-outputs",
+          "readOn": "2026-11-11",
+          "note": "output_config.format type json_schema; schema subset (no recursion, no numeric or length constraints), first use compiles a grammar; listed for Claude 4.5 and later"
         }
       }
     },
@@ -514,6 +528,13 @@
           "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
           "readOn": "2026-11-10",
           "note": "Opus 5.5, Sonnet 5.5, Claude Fable 5.1/5.2 and Mythos 5.1/5.2: any and tool return HTTP 400 whatever the thinking setting; use auto with strict."
+        },
+        "schemaOutput": {
+          "value": "json-schema",
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/build-with-claude/structured-outputs",
+          "readOn": "2026-11-11",
+          "note": "the documented replacement when forced tool use is rejected (strict tools on auto is the other)"
         }
       }
     },
@@ -568,6 +589,13 @@
           "source": "https://docs.ollama.com/api/openai-compatibility",
           "readOn": "2026-11-10",
           "note": "The page lists tools (function calling) as supported on /v1; whether a model's template parses its calls is per model (toolDialectMetadata hintFromOllamaShow)."
+        },
+        "schemaOutput": {
+          "value": "json-schema",
+          "level": "declared",
+          "source": "https://docs.ollama.com/capabilities/structured-outputs",
+          "readOn": "2026-11-11",
+          "note": "format accepts \"json\" or a JSON schema, and response_format on /v1; the page says nothing about format together with tools; not offered on Ollama cloud"
         }
       }
     },
@@ -601,6 +629,20 @@
           "source": "https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md",
           "readOn": "2026-11-10",
           "note": "Second-hand: the report says the generated parser embeds reasoning markup so a thinking model can reason, then call. Not read on the primary page."
+        },
+        "schemaOutput": {
+          "value": "json-schema",
+          "level": "declared",
+          "source": "https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md",
+          "readOn": "2026-11-11",
+          "note": "response_format and json_schema are converted to a grammar; unsupported schema features are skipped silently (grammars README)"
+        },
+        "grammar": {
+          "value": "gbnf",
+          "level": "declared",
+          "source": "https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md",
+          "readOn": "2026-11-11",
+          "note": "grammar field on /completion and /v1/chat/completions; GBNF, see https://raw.githubusercontent.com/ggml-org/llama.cpp/master/grammars/README.md"
         }
       }
     },
@@ -635,6 +677,27 @@
           "source": "https://docs.vllm.ai/en/latest/features/reasoning_outputs/",
           "readOn": "2026-11-10",
           "note": "Second-hand: the field was reasoning_content in earlier releases and is now reasoning; check the server's version."
+        },
+        "schemaOutput": {
+          "value": "json-schema",
+          "level": "declared",
+          "source": "https://docs.vllm.ai/en/latest/features/structured_outputs.html",
+          "readOn": "2026-11-11",
+          "note": "response_format json_schema or extra_body structured_outputs; backends xgrammar or guidance"
+        },
+        "grammar": {
+          "value": "grammar",
+          "level": "declared",
+          "source": "https://docs.vllm.ai/en/latest/features/structured_outputs.html",
+          "readOn": "2026-11-11",
+          "note": "structured_outputs grammar, regex and choice kinds; guided_* fields were removed in v0.12.0"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "declared",
+          "source": "https://docs.vllm.ai/en/latest/features/tool_calling.html",
+          "readOn": "2026-11-11",
+          "note": "named and required tool choice are constrained with structured outputs and need a tool parser; \"a validly-parsable function call, not a high-quality one\"; official-format Mistral models are excepted"
         }
       }
     },
@@ -720,6 +783,20 @@
           "source": "https://platform.openai.com/docs/guides/function-calling",
           "readOn": "2026-11-10",
           "note": "strict: true on a function; the request is rejected if the schema does not qualify."
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "declared",
+          "source": "https://developers.openai.com/api/docs/guides/function-calling",
+          "readOn": "2026-11-11",
+          "note": "tool_choice required, a named function, or allowed_tools; none behaves as if no tools were passed"
+        },
+        "schemaOutput": {
+          "value": "json-schema",
+          "level": "declared",
+          "source": "https://developers.openai.com/api/docs/guides/structured-outputs",
+          "readOn": "2026-11-11",
+          "note": "text.format json_schema with strict true; a refusal may not follow the schema; Chat Completions response_format was not read"
         }
       }
     },
