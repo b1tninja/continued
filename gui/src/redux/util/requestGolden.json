@@ -6,5 +6,6 @@
   "ide-agent-nova": "fe7a2cf323501ceaa25a41d925c606795e2611752e309e830460c063adf889d2",
   "ide-loop-item": "dab32c3ab8530cb0dc80a8a64c5b68cfa794895d1a6a7993facfa17b3c127826",
   "ide-agent-scoped-rule": "adb8992860a1bb727f32c388d429d0a4be7f379fd22f9026b9464170744574df",
+  "ide-agent-scoped-first": "adb8992860a1bb727f32c388d429d0a4be7f379fd22f9026b9464170744574df",
   "ide-compacted": "a57789f22fdacd2c7536c0ca9fa01a828b3cb9d6a59f1691985fe0e79662640d"
 }

@@ -27,6 +27,10 @@
     "tools.builtin@agent": "25a1d7345667",
     "turn.agent@full": "85ef5288de58"
   },
+  "ide-agent-scoped-first": {
+    "tools.builtin@agent": "25a1d7345667",
+    "turn.agent@full": "85ef5288de58"
+  },
   "ide-compacted": {
     "tools.builtin@agent": "25a1d7345667",
     "turn.agent@full": "85ef5288de58"

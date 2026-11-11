@@ -94,6 +94,28 @@ One more the manifest found that the plan did not list: a subagent's own prompt 
 - Manifest tests (`describeChatRequest.test.ts`, `promptSegments.test.ts`, `core/llm/promptSegments.vitest.ts`): canonical order, token budgets, static-hash goldens (`segmentGolden.json`, `promptSegmentGolden.json`), prefix stability for a changed task list, a new message, a tail, a different day, a compaction request, and negative controls (a volatile segment first, a format segment beside native tools, a timestamp in a static segment, a shuffled tool list).
 - Scenarios covered: IDE agent, plan, prompted tools (Qwen3-Coder), Nova (same request as agent; no tool cache point is an adapter matter), loop item, compaction, scoped rule; CLI agent, plan, subagent, compaction, resume. Not covered: provider placement of cache points (the next slice, with `prefixStability.test.ts`).
 
+## Slice 2: the cache-order test and the first prefix moves (C62, C64)
+
+`cacheOrderViolations(manifest, provider)` in `core/llm/promptSegments.ts` is asserted over every IDE and CLI scenario for every provider in `CACHE_BREAKPOINTS`. It reports a stable (static or session) segment in front of which sits a turn or request segment, and any per-request segment in front of a breakpoint. A session tool list (MCP) in front of a static system message is not a violation: the API fixes the region order.
+
+Where the adapters put cache breakpoints, from `core/llm/llms/anthropicCache.ts`, `Anthropic.ts` and `Bedrock.ts`:
+
+| Provider       | Breakpoints (each caches everything in front of it)                                                         |
+| -------------- | ----------------------------------------------------------------------------------------------------------- |
+| Anthropic      | after the last tool, after the system message, on the last block of each of the last two user messages      |
+| Bedrock Claude | the same: a cachePoint after the tools, after the system text, in the last two user messages                |
+| Bedrock Nova   | no tool point; system and the last two user messages (after the last text block, never beside a toolResult) |
+
+The task list block is the last text of the last user message and sits after the message breakpoint (the tail region).
+
+Volatile segments in the manifests today: `task-list` (request), `tail.turn`, `history` (turn); in front of a breakpoint only `rules.scoped:*` and `summary.compaction` (IDE, system region, turn), recorded as BASELINE offenders until C67 and C68 move them.
+
+Moves made, each proven order-only:
+
+- C64: the CLI sorts MCP tools by name after the built-ins, with the IDE's rule, through one `stableToolOrder` in `core/tools/stableToolOrder.ts`; `CONTINUE_STABLE_TOOL_ORDER=0` keeps the connection order.
+- Rules that always apply are placed before file rules in the IDE system message (a scoped rule listed first in the config no longer sits in front of a global one). The scenario `ide-agent-scoped-first` builds the same system message as `ide-agent-scoped-rule`, byte for byte.
+- The CLI subagent's own prompt is classified `session`, not `static`: it differs per subagent while the rules before it are shared, so it belongs after them. No request byte changes; the known inversion is gone.
+
 ## Prior art (read 2026-11-10)
 
 - Anthropic prompt caching, https://platform.claude.com/docs/en/build-with-claude/prompt-caching (in `plans/prompt-segment-plan.md` section 13): order tools, system, messages; changing tools invalidates everything.

@@ -378,16 +378,25 @@ export const getSystemMessageWithRules = ({
       appliedRules.push(rule);
     }
   }
+  // Rules that always apply come first, rules a file matched after them, each
+  // group in the order they first matched. The system message is cached as a
+  // prefix, so what changes least goes first: a scoped rule that matched
+  // before a global one in the config must not put a rule that can come and
+  // go ahead of rules that never do (C62). Only the order changes.
+  const ordered = [
+    ...appliedRules.filter(isGlobalRule),
+    ...appliedRules.filter((r) => !isGlobalRule(r)),
+  ];
   let systemMessage = baseSystemMessage ?? "";
 
-  for (const rule of appliedRules) {
+  for (const rule of ordered) {
     if (systemMessage) {
       systemMessage += "\n\n";
     }
     systemMessage += rule.rule;
   }
 
-  const ruleMetadata = appliedRules.map(({ rule, ...rest }) => rest);
+  const ruleMetadata = ordered.map(({ rule, ...rest }) => rest);
 
   return {
     systemMessage,
