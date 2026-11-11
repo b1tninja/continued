@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { scanText } from "../../../util/secretScan";
 import { looksSecret } from "../secretCommands";
 
 /**
@@ -7,6 +8,11 @@ import { looksSecret } from "../secretCommands";
  * this module recognised as a credential. It is best effort: a secret in a
  * shape nobody listed passes through, and the audit file is local and private
  * for that reason.
+ *
+ * Two layers: the hand-written passes below know the shapes of commands
+ * (flags, headers, assignments, URL userinfo). Then the shared rule set
+ * (`core/util/secretScan`, the at-rest profile) runs over what is left, so a
+ * provider key or a contextual match that no pass below listed is masked too.
  *
  * A masked value becomes `«masked:<kind>»`, so a reader still sees what kind
  * of thing was there. Masking is idempotent: running it again on its own
@@ -139,7 +145,24 @@ export function maskText(text: string): MaskResult {
     return `${lead}${name}=${mark("secret-query")}`;
   });
 
+  out = maskWithRuleSet(out, seen);
+
   return { text: out, kinds };
+}
+
+/** Mask what the shared at-rest rule set finds in text the passes above left. */
+function maskWithRuleSet(text: string, seen: (kind: string) => void): string {
+  const findings = scanText(text, "at-rest");
+  let out = "";
+  let at = 0;
+  for (const f of findings) {
+    // Never mask a mask: the passes above already did their part.
+    if (text.slice(f.start, f.end).includes("«")) continue;
+    out += text.slice(at, f.start) + mark(f.kind);
+    at = f.end;
+    seen(f.kind);
+  }
+  return out + text.slice(at);
 }
 
 /**
