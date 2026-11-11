@@ -253,6 +253,7 @@ export const TOOL_DIALECT_VALUES = [
   "kimi-xtml",
   "minimax-xml",
   "minimax-ns-xml",
+  "toolcall-json",
   "off",
 ] as const;
 export const toolDialectSchema = z.enum(TOOL_DIALECT_VALUES, {

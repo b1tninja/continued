@@ -27,6 +27,7 @@ export function recoveryValueFor(
     case "kimi-xtml":
     case "minimax-xml":
     case "minimax-ns-xml":
+    case "toolcall-json":
       return `force:${toolDialect}`;
     case "native":
     case "off":

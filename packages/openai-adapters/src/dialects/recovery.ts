@@ -12,6 +12,7 @@ import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
 import { MinimaxNsRecovery } from "./minimaxNs.js";
 import { MinimaxXmlRecovery } from "./minimaxXml.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
+import { ToolcallJsonRecovery } from "./toolcallJson.js";
 import {
   type DialectTool,
   QwenXmlRecovery,
@@ -137,6 +138,9 @@ function chooseRecovery(
   }
   if (wants(settings, "minimax-ns-xml", model, /minimax/i)) {
     return { dialect: "minimax-ns-xml", stage: new MinimaxNsRecovery(tools) };
+  }
+  if (wants(settings, "toolcall-json", model, /nemotron/i)) {
+    return { dialect: "toolcall-json", stage: new ToolcallJsonRecovery(tools) };
   }
   return undefined;
 }

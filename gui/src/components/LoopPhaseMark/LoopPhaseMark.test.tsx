@@ -30,33 +30,33 @@ async function setup() {
       store.dispatch(setLoop(loop));
     });
   const phase = () => screen.getByTestId("loop-phase").dataset.phase;
-  /** Which lobe of the figure eight is lit: planning, building, or both. */
-  const lit = () => screen.getByRole("img").getAttribute("data-lit");
-  const lobeOpacity = (half: "planning" | "building") =>
-    screen.getByTestId(`loop-phase-${half}`).style.opacity;
-  return { store, set, phase, lit, lobeOpacity };
+  /** Which lobe the dot is on: left (planning), right (building) or none yet. */
+  const lit = () => screen.getByTestId("loop-phase").dataset.lit;
+  const dotSide = () =>
+    screen.getByTestId("loop-icon-dot").getAttribute("data-side");
+  return { store, set, phase, lit, dotSide };
 }
 
 describe("LoopPhaseMark", () => {
-  it("is at rest with both lobes lit with no loop, and planning once Loop is chosen", async () => {
-    const { store, phase, lit } = await setup();
+  it("is at rest with no loop, and planning once Loop is chosen", async () => {
+    const { store, phase, lit, dotSide } = await setup();
     expect(phase()).toBe("idle");
-    expect(lit()).toBe("both");
+    expect(lit()).toBe("none");
+    expect(dotSide()).toBe("right");
     await act(async () => {
       store.dispatch(setLoopRequested(true));
     });
     expect(phase()).toBe("planning");
-    expect(lit()).toBe("planning");
+    expect(lit()).toBe("left");
+    expect(dotSide()).toBe("left");
   });
 
-  it("lights the planning lobe for a planning turn and the building lobe for a building turn", async () => {
-    const { set, phase, lit, lobeOpacity } = await setup();
+  it("puts the dot on the left lobe for planning and the right for building", async () => {
+    const { set, phase, dotSide } = await setup();
     const running = startItemRun(base(), "1", 0, T0);
     await set(running);
     expect(phase()).toBe("building");
-    expect(lit()).toBe("building");
-    expect(lobeOpacity("building")).toBe("1");
-    expect(lobeOpacity("planning")).toBe("0.35");
+    expect(dotSide()).toBe("right");
 
     await set({
       ...running,
@@ -64,24 +64,15 @@ describe("LoopPhaseMark", () => {
       status: "replanning",
     } as LoopState);
     expect(phase()).toBe("planning");
-    expect(lit()).toBe("planning");
-    expect(lobeOpacity("planning")).toBe("1");
-    expect(lobeOpacity("building")).toBe("0.35");
+    expect(dotSide()).toBe("left");
     expect(screen.getByTestId("loop-phase").textContent).toContain("Planning");
   });
 
-  it("each lobe holds a dot of the other's colour", async () => {
+  it("is one infinity: a single stroke, not two halves", async () => {
     await setup();
-    const dot = (half: "planning" | "building") =>
-      screen.getByTestId(`loop-phase-${half}`).querySelector("circle")!;
-    const stroke = (half: "planning" | "building") =>
-      screen.getByTestId(`loop-phase-${half}`).querySelector("path")!;
-    expect(dot("planning").getAttribute("fill")).toBe(
-      stroke("building").getAttribute("stroke"),
-    );
-    expect(dot("building").getAttribute("fill")).toBe(
-      stroke("planning").getAttribute("stroke"),
-    );
+    const svg = screen.getByRole("img");
+    expect(svg.querySelectorAll("path")).toHaveLength(1);
+    expect(svg.querySelectorAll("circle")).toHaveLength(1);
   });
 
   it("a plan waiting for the person is still planning", async () => {
@@ -90,18 +81,18 @@ describe("LoopPhaseMark", () => {
     expect(phase()).toBe("planning");
   });
 
-  it("waiting and stopped keep the lobe it was on, dimmed", async () => {
+  it("waiting and stopped keep the side it was on, dimmed", async () => {
     const { set, phase, lit } = await setup();
     await set(startItemRun(base(), "1", 0, T0));
-    expect(lit()).toBe("building");
+    expect(lit()).toBe("right");
     await set({ ...base(), status: "waiting" });
     expect(phase()).toBe("waiting");
-    expect(lit()).toBe("building");
+    expect(lit()).toBe("right");
     await set({ ...base(), status: "stopped" });
     expect(phase()).toBe("stopped");
-    expect(lit()).toBe("building");
-    expect(screen.getByRole("img").getAttribute("style")).toContain(
-      "opacity: 0.55",
-    );
+    expect(lit()).toBe("right");
+    expect(
+      screen.getByRole("img").parentElement!.getAttribute("style"),
+    ).toContain("opacity: 0.55");
   });
 });

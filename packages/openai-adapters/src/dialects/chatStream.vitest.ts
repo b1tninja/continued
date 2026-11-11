@@ -15,6 +15,7 @@ const DIALECTS = [
   "kimi-xtml",
   "minimax-xml",
   "minimax-ns-xml",
+  "toolcall-json",
 ];
 const FIXTURES = path.resolve(
   __dirname,

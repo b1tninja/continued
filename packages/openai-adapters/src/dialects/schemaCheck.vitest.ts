@@ -9,6 +9,7 @@ import { recoverMinimaxXmlFromText } from "./minimaxXml.js";
 import { recoverPythonicFromText } from "./pythonic.js";
 import { type DialectTool, recoverQwenXmlFromText } from "./qwenXml.js";
 import { coerceString, coerceToSchema } from "./schemaCheck.js";
+import { recoverToolcallJsonFromText } from "./toolcallJson.js";
 
 describe("coerceString", () => {
   it.each([
@@ -167,6 +168,12 @@ const dialects: [string, (timeout: string) => string, (t: string) => any][] = [
 ]<]minimax[>[<invoke name="run_command">]<]minimax[>[<command>10]<]minimax[>[</command>]<]minimax[>[<timeout>${t}]<]minimax[>[</timeout>]<]minimax[>[</invoke>
 ]<]minimax[>[</tool_call>`,
     (t) => recoverMinimaxNsFromText(t, tools),
+  ],
+  [
+    "toolcall-json",
+    (t) =>
+      `<TOOLCALL>[{"name": "run_command", "arguments": {"command": "10", "timeout": "${t}"}}]</TOOLCALL>`,
+    (t) => recoverToolcallJsonFromText(t, tools),
   ],
 ];
 

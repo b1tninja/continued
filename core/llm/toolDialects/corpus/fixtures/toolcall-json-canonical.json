@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "id": "toolcall-json-canonical",
+  "family": "nemotron-toolcall",
+  "dialect": "toolcall-json",
+  "kind": "positive",
+  "failureMode": "canonical",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from the Nano-9B-v2 chat template https://huggingface.co/nvidia/NVIDIA-Nemotron-Nano-9B-v2/raw/main/tokenizer_config.json, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>",
+  "markers": ["<TOOLCALL>", "</TOOLCALL>", "<think>", "</think>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">",
+        "[",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        "]",
+        "<",
+        "/",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<TO",
+        "OLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>"
+      ],
+      "splitInside": "<TOOLCALL>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<TOOLCALL>",
+        "[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]",
+        "</TOOLCALL>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<T",
+        "O",
+        "OLC",
+        "ALL",
+        ">[{\"",
+        "n",
+        "am",
+        "e\": ",
+        "\"g",
+        "et_w",
+        "eath",
+        "er\", ",
+        "\"",
+        "ar",
+        "gu",
+        "men",
+        "ts\":",
+        " {\"",
+        "city",
+        "\":",
+        " \"",
+        "Par",
+        "is\"",
+        "}",
+        "}]",
+        "<",
+        "/T",
+        "OO",
+        "LCAL",
+        "L>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}
