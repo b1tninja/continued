@@ -1,0 +1,17 @@
+{
+  "default_generation_settings": {
+    "n_ctx": 4096,
+    "params": {
+      "temperature": 0.8,
+      "top_k": 40
+    }
+  },
+  "total_slots": 1,
+  "model_path": "/models/Qwen3-8B-Q4_K_M.gguf",
+  "chat_template": "{%- if tools %}<tools>\n</tools>\nFor each function call, return a json object within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>{%- endif %}",
+  "chat_template_caps": {},
+  "modalities": {
+    "vision": false
+  },
+  "build_info": "b0-synthetic"
+}

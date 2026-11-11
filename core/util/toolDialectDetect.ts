@@ -129,7 +129,7 @@ const FINGERPRINTS: Fingerprint[] = [
   {
     dialect: "harmony",
     strong: new RegExp(
-      String.raw`to=functions\.${NAME}\s*(?:<\|constrain\|>|<\|message\|>)|<\|channel\|>commentary\s+to=`,
+      String.raw`to=functions\.${NAME}\s*(?:<\|constrain\|>|<\|message\|>|<\|channel\|>)|<\|channel\|>commentary\s+to=`,
     ),
     weak: /<\|call\|>|<\|channel\|>(?:analysis|commentary|final)/,
     label: "Harmony channel/recipient",

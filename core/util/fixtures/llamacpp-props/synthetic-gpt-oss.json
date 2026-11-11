@@ -1,0 +1,17 @@
+{
+  "default_generation_settings": {
+    "n_ctx": 4096,
+    "params": {
+      "temperature": 0.8,
+      "top_k": 40
+    }
+  },
+  "total_slots": 1,
+  "model_path": "/models/gpt-oss-20b-mxfp4.gguf",
+  "chat_template": "{{- '<|start|>assistant<|channel|>commentary to=functions.' + tool_call.name + '<|constrain|>json<|message|>' }}{{- '<|call|>' }}",
+  "chat_template_caps": {},
+  "modalities": {
+    "vision": false
+  },
+  "build_info": "b0-synthetic"
+}
