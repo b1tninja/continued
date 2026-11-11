@@ -155,10 +155,11 @@ describe("what each kind of name does at each level", () => {
   it("only the person's own lists change the names", () => {
     const base = run("PATH=/usr/bin git status", "bash", "yolo");
     expect(base.policy).toBe(ASK);
+    // PATH is dangerous by default: an allow entry cannot lower it
     const allowed = run("PATH=/usr/bin git status", "bash", "yolo", {
       envNames: { allow: ["PATH"] },
     });
-    expect(allowed.policy).toBe(RUN);
+    expect(allowed.policy).toBe(ASK);
     const asked = run("FOO=bar npm test", "bash", "yolo", {
       envNames: { ask: ["FOO"] },
     });
