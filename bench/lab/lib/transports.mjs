@@ -21,6 +21,7 @@ import {
   toOllamaTools,
 } from "./ollama.mjs";
 import { renderToolsPrompt } from "./prompts.mjs";
+import { readChatFormat } from "./server.mjs";
 
 export const APIS = [
   "ollama-chat",
@@ -226,6 +227,32 @@ export function openaiUsage(usage, timings) {
   };
 }
 
+/** Prometheus text exposition: `llamacpp:name value` lines to {name: number}. */
+export function parseMetrics(text) {
+  const out = {};
+  for (const line of String(text).split("\n")) {
+    const m = /^llamacpp:([A-Za-z0-9_]+)\s+(\S+)\s*$/.exec(line);
+    if (m && Number.isFinite(Number(m[2]))) out[m[1]] = Number(m[2]);
+  }
+  return out;
+}
+
+/**
+ * GET /slots as the lab keeps it: every scalar field of each slot, the
+ * `next_token` block, and none of `params` (sampling settings, large and
+ * constant). The cache state is whatever the build reports; none is assumed.
+ */
+export function slimSlots(json) {
+  if (!Array.isArray(json)) return undefined;
+  return json.map((sl) => {
+    const o = {};
+    for (const [k, v] of Object.entries(sl ?? {}))
+      if (k === "next_token" && v && typeof v === "object") o[k] = v;
+      else if (k !== "params" && (v == null || typeof v !== "object")) o[k] = v;
+    return o;
+  });
+}
+
 const errText = (e) =>
   typeof e === "string" ? e : (e?.message ?? JSON.stringify(e));
 
@@ -305,12 +332,16 @@ export class Engine extends OllamaClient {
   constructor({
     api = "ollama-chat",
     ollamaUrl = "http://127.0.0.1:11434",
+    sidecar = {},
+    serverLog,
     ...rest
   } = {}) {
     super(rest);
     if (!APIS.includes(api))
       throw new LabError("refused", `unknown --api ${api}`);
     this.api = api;
+    this.sidecar = sidecar; // { slots, metrics } booleans: poll after each request
+    this.serverLog = serverLog; // llama-server log file, for the Chat format: line
     this.ollamaOrigin = assertLoopback(ollamaUrl, rest.allowRemote);
   }
 
@@ -347,7 +378,21 @@ export class Engine extends OllamaClient {
   async describe(model) {
     if (isLlamaApi(this.api)) {
       const props = await this.get("/props");
+      let chatFormat = readChatFormat(this.serverLog);
+      let chatFormatSource = chatFormat ? "log" : undefined;
+      if (!chatFormat) {
+        // no log to read (a server the lab did not start): /slots may name it
+        const sl = await this.get("/slots");
+        const cf = Array.isArray(sl) ? sl[0]?.chat_format : undefined;
+        if (typeof cf === "string") {
+          chatFormat = cf;
+          chatFormatSource = "slots";
+        }
+      }
       return {
+        chatFormat,
+        chatFormatSource,
+        chatTemplateChars: props?.chat_template?.length,
         engine: "llama-server",
         api: this.api,
         build: props?.build_info,
@@ -372,6 +417,33 @@ export class Engine extends OllamaClient {
       renderer: show?.renderer,
       quant: show?.details?.quantization_level,
     };
+  }
+
+  /** One poll of the sidecar endpoints; never throws, never blocks a result. */
+  async pollSidecar() {
+    const want = this.sidecar ?? {};
+    if (!isLlamaApi(this.api) || (!want.slots && !want.metrics)) return;
+    const out = {};
+    const text = async (p) => {
+      const res = await this.fetch(this.origin + p, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.text();
+    };
+    if (want.slots)
+      try {
+        out.slots = slimSlots(JSON.parse(await text("/slots")));
+      } catch (e) {
+        out.slotsError = String(e.message ?? e);
+      }
+    if (want.metrics)
+      try {
+        out.metrics = parseMetrics(await text("/metrics"));
+      } catch (e) {
+        out.metricsError = String(e.message ?? e);
+      }
+    return out;
   }
 
   async roundtrip(pathname, body, { timeoutMs, stream, sse, take }) {
@@ -505,6 +577,8 @@ export class Engine extends OllamaClient {
       out.toolCalls = acc.list.filter(Boolean);
       out.usage = openaiUsage(acc.usage, acc.timings);
     }
+    const side = await this.pollSidecar();
+    if (side) out.sidecar = side;
     out.usage.wallMs = t.wallMs;
     if (t.ttftMs != null) out.usage.ttftMs = t.ttftMs;
     return out;

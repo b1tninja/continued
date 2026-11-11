@@ -82,7 +82,7 @@ test("with the product beside it, the adapter exports parsers, detector, table a
   ]);
   assert.equal(typeof p.detect.classifyToolReply, "function");
   assert.ok(p.presets.table.length > 10);
-  assert.equal(p.presets.resolve("qwen3.6:27b").id, "qwen3");
+  assert.equal(p.presets.resolve("qwen3.6:27b").id, "qwen3.5-3.8");
   assert.equal(p.presets.resolve("glm-ocr:latest"), undefined);
   assert.equal(typeof p.reviewer.parseReviewerReply, "function");
   assert.equal(typeof p.fixtures.buildFixture, "function");

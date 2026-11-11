@@ -50,16 +50,18 @@ Expected time for step 4: loading a 17 GB model takes tens of seconds, then each
 
 ## Commands
 
-| command                     | what it does                                                                                                                                                                                                                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inventory`                 | Machine facts (nvidia-smi VRAM, RAM, models directory and its free disk, what is loaded), then every installed model: size, quantisation, family, context, `tools` capability, the preset row it matches and that row's `promptStyle`, and whether it is safe under the limits. |
-| `plan --suite S --models M` | Cases x models x passes, how many remain after earlier results, and estimated minutes. `--warmup` sends one tiny request per model to measure tokens a second.                                                                                                                  |
-| `run --run`                 | Runs the plan. Appends one JSON line per finished case.                                                                                                                                                                                                                         |
-| `report`                    | Markdown: per model and per arm and case group, valid-call rate with a Wilson 95% interval, outcome counts, false calls, median tokens, latency and tokens a second, plus which recovery parsers read the text replies. `--suite`, `--file`, `--out`.                           |
-| `diff <before> <after>`     | Two result files, per arm: both rates, the change, whether the intervals are disjoint, and the cases that flipped. For before and after a prompt change.                                                                                                                        |
-| `suggest`                   | Writes `profiles/<model>.json` (see below).                                                                                                                                                                                                                                     |
-| `fixtures --suite S`        | Writes observed corpus fixtures from raw replies to `results/fixtures/` (see below). `--only-leaks`.                                                                                                                                                                            |
-| `snapshot-tools`            | Regenerates the real agent tool list from the product's install (needs `core` dependencies installed) into `results/agent-tools.snapshot.json`; copy it to `fixtures/agent-tools.json` to adopt it.                                                                             |
+| command                       | what it does                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory`                   | Machine facts (nvidia-smi VRAM, RAM, models directory and its free disk, what is loaded), then every installed model: size, quantisation, family, context, `tools` capability, the preset row it matches and that row's `promptStyle`, and whether it is safe under the limits.                                                                                                                                                         |
+| `plan --suite S --models M`   | Cases x models x passes, how many remain after earlier results, and estimated minutes. `--warmup` sends one tiny request per model to measure tokens a second.                                                                                                                                                                                                                                                                          |
+| `run --run`                   | Runs the plan. Appends one JSON line per finished case.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `report`                      | Markdown: per model and per arm and case group, valid-call rate with a Wilson 95% interval, outcome counts, false calls, median tokens, latency and tokens a second, plus which recovery parsers read the text replies. `--suite`, `--file`, `--out`.                                                                                                                                                                                   |
+| `diff <before> <after>`       | Two result files, per arm: both rates, the change, whether the intervals are disjoint, and the cases that flipped. For before and after a prompt change.                                                                                                                                                                                                                                                                                |
+| `compare <A> <B>`             | Two result sets (files or folders) paired by suite, arm, case id and pass index: both valid-call rates with Wilson intervals on the pairs, the 2x2 table, McNemar's exact two-sided test on the discordant pairs, a paired bootstrap interval for the difference, and the cases that flipped. Under 25 pairs the verdict reads `NOT ENOUGH PAIRS` and claims nothing. `--model-a`/`--model-b` pick one model when a side holds several. |
+| `replay --dumps PATH [--run]` | Sends recorded request dumps through the cache path and reports cached and evaluated tokens per request (see "Request-dump replay"). Dry without `--run`.                                                                                                                                                                                                                                                                               |
+| `suggest`                     | Writes `profiles/<model>.json` (see below).                                                                                                                                                                                                                                                                                                                                                                                             |
+| `fixtures --suite S`          | Writes observed corpus fixtures from raw replies to `results/fixtures/` (see below). `--only-leaks`.                                                                                                                                                                                                                                                                                                                                    |
+| `snapshot-tools`              | Regenerates the real agent tool list from the product's install (needs `core` dependencies installed) into `results/agent-tools.snapshot.json`; copy it to `fixtures/agent-tools.json` to adopt it.                                                                                                                                                                                                                                     |
 
 `--models` takes names, `smallest-safe` or `all-safe`. `--passes N` repeats each case; use at least 3 to 5 for any claim, intervals are wide below that. `--limit N` takes the first N cases (stratified by class for the reviewer suite). `--num-ctx` sets the context (default 8192, 16384 for `leaks`).
 
@@ -120,7 +122,7 @@ node bench/lab/lab.mjs server status --log-dir M:\ai\lab\logs
 node bench/lab/lab.mjs server stop   --log-dir M:\ai\lab\logs      # kills a server a crashed lab left behind
 ```
 
-or let one run own it: `run --run --api openai-chat --gguf FILE --serve ...` starts the server, runs, and stops it. The flags it starts with: `-m FILE --host 127.0.0.1 --port 8080 --jinja -ngl 99 -c 16384 -np 1 -a <alias> --no-webui`, plus on request `--chat-template NAME`, `--chat-template-file FILE`, `--cache-reuse N`, `--reasoning-format F`, and anything else through `--server-arg` (but not `--host`, `--port`, `-m`, `--no-jinja`). `--exe` defaults to `M:\ai\llama.cpp\b12206\llama-server.exe`. Guards, all before anything starts:
+or let one run own it: `run --run --api openai-chat --gguf FILE --serve ...` starts the server, runs, and stops it. The flags it starts with: `-m FILE --host 127.0.0.1 --port 8080 --jinja -ngl 99 -c 16384 -np 1 -a <alias> --no-webui`, plus on request `--chat-template NAME`, `--chat-template-file FILE`, `--cache-reuse N`, `--reasoning-format F`, `--metrics`, `--slots`, and anything else through `--server-arg` (but not `--host`, `--port`, `-m`, `--no-jinja`). `--exe` defaults to `M:\ai\llama.cpp\b12206\llama-server.exe`. Guards, all before anything starts:
 
 - one server at a time: it refuses when its pid file names a live process or when anything already answers `/health` on the port;
 - it refuses while Ollama has a model loaded (`/api/ps`);
@@ -133,9 +135,41 @@ Then it waits for `GET /health` to return 200 (503 means still loading) and give
 
 `--suite cache` sends ordered sequences, not single cases, and records the engine's own counters per request (14 requests per model): `same-prefix` (the identical request three times, then the same prefix with a new last user message), `volatile-first-vs-last` (a changing timestamp at the start of the system text against at the end), `tool-reorder` (the same tools, then reversed, then the original order). A per-run nonce opens every system text, so a rerun never finds the previous run warm and never hides the reuse inside a sequence. `report` prints one table per sequence with `cached`, `evaluated`, `evaluated vs cold`, prompt milliseconds and, for streamed runs (`--streams true`), time to first token. Compare rows inside one table, never across engines: they count tokens differently. Start with `-np 1` and no `--cache-reuse`, then repeat with `--cache-reuse 256` to see what KV shifting adds.
 
+### Comparing engines: `compare`
+
+```sh
+node bench/lab/lab.mjs compare M:i\lab
+esults-llama M:i\lab
+esults-ollama --model-a gpt-oss-20b-mxfp4 --model-b gpt-oss:20b --out M:i\lab\compare.md --allow-root M:i\lab
+```
+
+Each case is one paired binary outcome (valid call or not), so the test is McNemar's exact test on the pairs where the arms disagree: with `b` pairs only A got right and `c` only B, the smaller count is Binomial(b + c, 1/2) under no difference, and the two-sided p is twice its lower tail (capped at 1). Pairs where both succeed or both fail carry no information about which arm is better and are only counted. The report also gives a paired bootstrap 95% interval for the rate difference (2000 resamples of whole pairs, fixed seed, so a rerun prints the same numbers) and lists every flipped case. Errors, cases present on one side only and duplicate keys are counted and left out. The verdict is `NOT ENOUGH PAIRS` below 25 pairs (the sample-size section of `bench/README.md`: about 25 runs per arm for a 0.3 difference); at 25 or more it says A is better, B is better, or no detectable difference (which is not evidence of equality). Token and cache counters are not compared: engines count differently.
+
+### What an engine record holds (`engine`)
+
+Every record carries an `engine` block read when the model was first used. llama-server: `build` (`/props` `build_info`), `slots` (`total_slots`), `modelPath`, `nCtx`, `chatTemplateSha` (first 16 hex of the SHA-256 of `/props` `chat_template`, so two runs with the same template hash used the same Jinja text) and `chatTemplateChars`, `chatFormat` (the last `Chat format:` line of the server log, from the log the helper writes, or from `--server-log FILE` for a server the lab did not start; failing both, `chat_format` from `/slots` if the build reports it) and `chatFormatSource` (`log` or `slots`). Ollama: `version`, `templateSha` (of `/api/show` `template`), `parser`, `renderer`, `quant`. `thinkProbe: "accepted"` is present when `--think` was probed (below). A field the engine does not report is absent, never guessed.
+
+### The `--think` probe
+
+When `--think` is anything but `default` (or unset), the first contact with each model is one tiny request (8 tokens, temperature 0) with that setting, before any case. An engine that refuses it (Ollama rejects `think` for a model without the `thinking` capability) stops the run at once: the log and the summary carry the engine's own message, nothing is recorded for that model, and the exit code is 1. Without the probe those models fail every case, are recorded as errors and trip the three-failure breaker with the message buried in the records. The probe costs one request of the budget. `llamacpp-raw` has no think setting and skips it.
+
+### Slot and metrics sidecar (llama-server)
+
+`--metrics` starts the server with `--metrics` (off by default in b12206) and `--slots` with `--slots` (on by default in b12206; `--help` of that build says so); on a server the lab did not start the same flags only turn on the polling. After every request the lab does `GET /slots` and `GET /metrics` and stores `sidecar` in the record, next to `usage.cachedTokens` (`cache_n`): per slot every scalar field plus `next_token` (not `params`), and every `llamacpp:*` metric as a number (`prompt_tokens_total`, `n_tokens_max`, `requests_processing` and so on). A failed poll is recorded as `slotsError` or `metricsError` and never fails the request. What a slot reports about its cache depends on the build: read the first real record before trusting a field.
+
+### Request-dump replay
+
+```sh
+node bench/lab/lab.mjs replay --api openai-chat --gguf FILE --serve --slots --metrics --run --out M:i\lab
+esults ...
+node bench/lab/lab.mjs replay --dumps bench/tier0/fixtures/dumps --models qwen3.6:27b --api ollama-chat --run ...
+```
+
+Default `--dumps` is `bench/tier0/fixtures/dumps` (three synthetic sets, 11 requests: `churn`, `extends`, `system-field`) when it exists. A folder with `request-*.json` is one sequence; a folder of folders is one sequence per sub-folder; a `.jsonl` file is one request per line (a request body, or `{"request": body}` as the prompt-segment dump of PR #554 `CONTINUE_PROMPT_SEGMENTS` is expected to be; other fields of the line are kept in `source`). Bodies are OpenAI-style: `messages`, optional `tools`, optional top-level `system`. Requests run in order through the cache path, with a run nonce at the head of the first system message so a rerun does not meet the last run's warm cache. Records go to `results/replay.jsonl` (`suite: "replay"`, `kind: "cache"`) and `report` prints them with the other cache tables, plus the lab's own `first changed char` offset against the previous request. Replay does not send the dump's `model`, `stream` or `max_tokens`: the lab's own sampling (16 tokens, temperature 0) applies.
+
 ### The first three runs
 
-PowerShell, from a checkout of `main`, one engine and one model at a time, nothing pulled or created, output on M:. Time and VRAM figures are estimates.
+PowerShell, from a checkout of `main`, one engine and one model at a time, nothing pulled or created, output on M:. Time and VRAM figures are estimates. **These three runs have not been done: each needs the owner's approval (GPU time), and `compare` needs both halves before it can say anything.**
 
 ```powershell
 $env:TEMP="M:\ai\tmp"; $env:TMP="M:\ai\tmp"; New-Item -ItemType Directory -Force M:\ai\tmp, M:\ai\lab\logs, M:\ai\lab\results | Out-Null
@@ -195,7 +229,7 @@ Every section degrades to `null` with a line in `product.missing`, so the lab st
 ```
 adapter.mjs   the one module that touches the product
 lab.mjs       the CLI
-lib/          ollama client, transports, server helper, cache suite, guards, suites, classify, run, report, diff, suggest, fixtures, inventory, stats, paths, prompts
+lib/          ollama client, transports, server helper, cache suite, compare, think probe, replay, guards, suites, classify, run, report, diff, suggest, fixtures, inventory, stats, paths, prompts
 suites/       dialect-probe, prompt-variants, reviewer, leaks, cache (data)
 fixtures/     frozen agent tool list
 samples/      small committed examples (from the fake server)

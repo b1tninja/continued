@@ -12,6 +12,7 @@ import {
 } from "./results.mjs";
 import { expandSuite } from "./suites.mjs";
 import { median } from "./stats.mjs";
+import { probeThink, thinkRefusal } from "./probe.mjs";
 
 const DEFAULT_TPS = 20;
 const DEFAULT_LOAD_S = 30;
@@ -189,6 +190,7 @@ function recordFor({
     })),
     score: score ?? null,
     usage: u,
+    sidecar: reply?.sidecar,
     tps:
       u.outputTokens && u.evalMs
         ? (u.outputTokens * 1000) / u.evalMs
@@ -307,7 +309,29 @@ export async function runSuite({
       agentTools,
     });
     const done = doneKeys(readRecords(file), { retryErrors: opts.retryErrors });
-    const engine = await client.describe?.(m.name).catch(() => undefined);
+    let engine = await client.describe?.(m.name).catch(() => undefined);
+    const probe = await probeThink({
+      client,
+      model: m.name,
+      cfg,
+      budget,
+      signal,
+    }).catch((e) =>
+      e.kind === "aborted" ? { aborted: true } : Promise.reject(e),
+    );
+    if (probe.aborted) {
+      summary.stopped = "interrupted";
+      await client.unload(m.name);
+      break;
+    }
+    if (probe.ok === false) {
+      summary.stopped = thinkRefusal(m.name, probe);
+      summary.thinkRefused = { model: m.name, message: probe.message };
+      log(`REFUSED ${summary.stopped}`);
+      await client.unload(m.name);
+      break;
+    }
+    if (probe.ok) engine = { ...engine, thinkProbe: "accepted" };
     const t0 = Date.now();
     let consecutiveErrors = 0;
     log(`== ${m.name}: ${cases.length} cases x ${passes} pass(es)`);
