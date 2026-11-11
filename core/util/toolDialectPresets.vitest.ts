@@ -3,11 +3,7 @@ import {
   withToolDialect,
   type ToolDialectSetting,
 } from "@continuedev/config-yaml";
-import {
-  createTextToolRecovery,
-  LlamaJsonRecovery,
-  recoverySetting,
-} from "@continuedev/openai-adapters";
+import { recoverFromText, recoverySetting } from "@continuedev/openai-adapters";
 import { describe, expect, it } from "vitest";
 import { bedrockSupportsTools } from "../llm/toolSupport.js";
 import { TOOL_DIALECT_PRESETS } from "./toolDialectPresetTable.js";
@@ -413,8 +409,16 @@ describe("Bedrock tool support from the presets", () => {
       ];
       for (const [toolDialect, extra, env] of cases) {
         const body = withToolDialect(extra, toolDialect, env);
-        const recovery = createTextToolRecovery(llama33, [], body, env);
-        expect(recovery instanceof LlamaJsonRecovery).toBe(
+        // The stage is wrapped by the counter, so ask what it does with a
+        // llama-json call rather than for its class.
+        const { calls } = recoverFromText(
+          llama33,
+          '{"type": "function", "name": "t", "parameters": {}}',
+          [{ name: "t", parameters: { type: "object", properties: {} } }],
+          body,
+          env,
+        );
+        expect(calls.length === 1).toBe(
           bedrockSupportsTools(llama33, toolDialect, extra, env),
         );
         expect(effectiveRecoverySetting(toolDialect, extra, env)).toBe(
