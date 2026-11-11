@@ -192,7 +192,7 @@ export function removeCommand(
   if (!decision) {
     const perms = readUserConfigFile(configFileOf(options)).permissions;
     const where = (["deny", "ask", "allow"] as RuleDecision[]).filter((d) =>
-      (perms?.[d] ?? []).some((r) => r.trim() === rule),
+      (perms?.[d] ?? ([] as string[])).some((r: string) => r.trim() === rule),
     );
     if (where.length > 1) {
       io.err(
