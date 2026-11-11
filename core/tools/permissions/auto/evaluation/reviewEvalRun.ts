@@ -304,7 +304,7 @@ async function runOnce(
   dataset: ReviewDataset,
   config: ReviewerConfig,
   opts: RunOptions = {},
-): Promise<RunResult> {
+): Promise<CaseOutcome[]> {
   const { cases } = dataset;
   const outcomes: CaseOutcome[] = new Array(cases.length);
   let next = 0;
