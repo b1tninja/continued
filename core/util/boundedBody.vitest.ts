@@ -10,8 +10,8 @@ const stream = (chunks: Uint8Array[], hang = false) =>
     pull(controller) {
       const next = chunks.shift();
       if (next) controller.enqueue(next);
-      else if (!hang) controller.close();
-      else return new Promise(() => undefined);
+      else if (hang) return new Promise(() => undefined);
+      else controller.close();
     },
   });
 
