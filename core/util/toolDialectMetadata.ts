@@ -30,12 +30,17 @@ export interface MetadataHint {
 export const NAME_HINT_CONFIDENCE = 0.7;
 
 /**
- * Model name to family. Qwen3-Coder is checked before other Qwen3 names
- * because the two write different markup. Llama is left out on purpose: one
- * name covers JSON, function-tag and pythonic forms by version and server.
+ * Model name to family. Qwen3-Coder and Qwen3.5 and later are checked before
+ * other Qwen3 names because they write different markup (the Coder XML; the
+ * Qwen3 and Qwen3-Next templates write Hermes JSON, read 2026-11-10). Llama is
+ * left out on purpose: one name covers JSON, function-tag and pythonic forms
+ * by version and server.
  */
 const NAME_RULES: [RegExp, Dialect][] = [
-  [/qwen3[-._ ]?coder|coder[-._ ]?next|qwen3[-._ ]?next/i, "qwen-xml"],
+  [
+    /qwen[-._ ]?3[-._ ]?coder|coder[-._ ]?next|qwen[-._ ]?3\.[5-9]/i,
+    "qwen-xml",
+  ],
   [/qwen[-._ ]?3|qwen[-._ ]?2[.-]?5|qwq|hermes/i, "hermes-json"],
   [/glm[-._ ]?4/i, "glm-xml"],
   [/kimi[-._ ]?k2/i, "kimi-tokens"],
