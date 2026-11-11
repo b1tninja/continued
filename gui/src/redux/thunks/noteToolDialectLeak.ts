@@ -3,6 +3,8 @@ import {
   detectToolDialectLeak,
   providerRecoversText,
 } from "core/util/toolDialectLeak";
+import { ollamaBaseFor } from "core/util/ollamaShowHint";
+import type { IIdeMessenger } from "../../context/IdeMessenger";
 import { selectSelectedChatModel } from "../slices/configSlice";
 import { noteToolDialectLeak } from "../slices/sessionSlice";
 import type { AppDispatch, RootState } from "../store";
@@ -12,10 +14,11 @@ import type { AppDispatch, RootState } from "../store";
  * code fence) and recovery is not set for it, record it so the notice shows
  * once. Warns only; nothing is changed here.
  */
-export function checkToolDialectLeak(
+export async function checkToolDialectLeak(
   state: RootState,
   dispatch: AppDispatch,
-): void {
+  ideMessenger?: IIdeMessenger,
+): Promise<void> {
   const model = selectSelectedChatModel(state);
   if (!model || !providerRecoversText(model.provider)) return;
   const last = state.session.history.at(-1)?.message;
@@ -29,9 +32,19 @@ export function checkToolDialectLeak(
     })),
     current: model.toolDialect,
   });
-  if (leak) {
-    dispatch(
-      noteToolDialectLeak({ model: model.title, dialect: leak.dialect }),
-    );
+  if (!leak) return;
+  // An Ollama server that parses this model's calls itself: not a leak.
+  if (ollamaBaseFor(model.provider, model.apiBase) && ideMessenger) {
+    try {
+      const res = await ideMessenger.request("ollama/showHint", {
+        provider: model.provider,
+        apiBase: model.apiBase,
+        model: model.model,
+      });
+      if (res.status === "success" && res.content.serverParses) return;
+    } catch {
+      // no hint: the notice stays
+    }
   }
+  dispatch(noteToolDialectLeak({ model: model.title, dialect: leak.dialect }));
 }

@@ -512,7 +512,7 @@ export async function processStreamingResponse(
     }
 
     noteTruncation(finishReason, { requestId, outputTokens }, callbacks);
-    hintToolDialectLeak({
+    void hintToolDialectLeak({
       model,
       content: aiResponse,
       toolCalls: Array.from(toolCallsMap.values()),

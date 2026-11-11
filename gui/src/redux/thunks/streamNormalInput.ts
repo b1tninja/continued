@@ -375,7 +375,9 @@ export const streamNormalInput = createAsyncThunk<
       }
       if (getState().session.recoveryHold) dispatch(setRecoveryHold(false));
 
-      if (next.done) checkToolDialectLeak(getState(), dispatch);
+      if (next.done) {
+        void checkToolDialectLeak(getState(), dispatch, extra.ideMessenger);
+      }
 
       // Attach prompt log and end thinking for reasoning models
       if (next.done && next.value) {

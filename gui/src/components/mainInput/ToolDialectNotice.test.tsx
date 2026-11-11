@@ -52,7 +52,11 @@ async function setup(reply: string, m = model("bedrock")) {
   });
   const check = () =>
     act(async () => {
-      checkToolDialectLeak(store.getState(), store.dispatch);
+      await checkToolDialectLeak(
+        store.getState(),
+        store.dispatch,
+        ideMessenger,
+      );
     });
   return { store, check, setToolDialect };
 }

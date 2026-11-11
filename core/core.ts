@@ -14,6 +14,7 @@ import { ConfigHandler } from "./config/ConfigHandler";
 import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveToolDialect } from "./config/yaml/saveToolDialect";
+import { getOllamaShowHint } from "./util/ollamaShowHint";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { uriToPath } from "./tools/permissions/names";
@@ -784,6 +785,11 @@ export class Core {
         };
       }
     });
+
+    // Cached per model per process; no hint (an empty object) on any failure.
+    on("ollama/showHint", async (msg) => ({
+      ...(await getOllamaShowHint(msg.data)),
+    }));
 
     on("config/setToolDialect", async (msg) => {
       const saved = saveToolDialect(msg.data.title, msg.data.toolDialect);

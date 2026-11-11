@@ -5,6 +5,8 @@ import {
   providerRecoversText,
 } from "core/util/toolDialectLeak.js";
 
+import { getOllamaShowHint } from "core/util/ollamaShowHint.js";
+
 import type { StreamCallbacks } from "./streamChatResponse.types.js";
 
 const hinted = new Set<string>();
@@ -19,13 +21,15 @@ export function resetToolDialectHints(): void {
  * tool call written as text (outside a code fence) and `toolDialect` is not
  * set. Never turns recovery on by itself.
  */
-export function hintToolDialectLeak(args: {
+export async function hintToolDialectLeak(args: {
   model: ModelConfig;
   content: string;
   toolCalls: { id?: string; name: string; argumentsStr?: string }[];
   callbacks: StreamCallbacks | undefined;
   print?: (line: string) => void;
-}): void {
+  /** Test seam: the Ollama /api/show fetch. */
+  fetchFn?: Parameters<typeof getOllamaShowHint>[0]["fetchFn"];
+}): Promise<void> {
   const { model } = args;
   if (!providerRecoversText(model.provider, "cli") || hinted.has(model.name))
     return;
@@ -39,6 +43,14 @@ export function hintToolDialectLeak(args: {
     current: model.toolDialect,
   });
   if (!leak) return;
+  // Ollama may already parse this model's calls: then the text is not a leak.
+  const show = await getOllamaShowHint({
+    provider: model.provider,
+    apiBase: model.apiBase,
+    model: model.model,
+    fetchFn: args.fetchFn,
+  });
+  if (show?.serverParses) return;
   hinted.add(model.name);
   const line = leakHintText(model.name, leak.dialect);
   if (args.callbacks?.onStatusMessage) args.callbacks.onStatusMessage(line);
