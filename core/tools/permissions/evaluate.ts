@@ -387,13 +387,16 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
 }
 
 function changedDefinitionHit(
-  change: { kind: "changed" | "added"; summary: string } | undefined,
+  change: { kind: "changed" | "added" | "launch"; summary: string } | undefined,
   basePolicy: ToolPolicy,
 ): ProtectedHit | undefined {
   if (!change || basePolicy === "disabled") return undefined;
   return {
     kind: "mcp-definition-changed",
-    path: `${change.kind === "added" ? "new tool" : "changed"}, ${change.summary}`,
+    path:
+      change.kind === "launch"
+        ? change.summary
+        : `${change.kind === "added" ? "new tool" : "changed"}, ${change.summary}`,
   };
 }
 

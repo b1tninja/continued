@@ -9,6 +9,8 @@ import MCPConnection from "./MCPConnection";
 import {
   FileToolPinStore,
   evaluatePins,
+  launchSpec,
+  legacyPinKey,
   pinKey,
   recordApproval,
   setToolPinStore,
@@ -44,20 +46,30 @@ const server = (over: Partial<InternalStdioMcpOptions> = {}) =>
     ...over,
   }) as InternalStdioMcpOptions;
 
-describe("pinKey", () => {
+describe("pinKey and launchSpec", () => {
   it("does not carry over to a renamed server", () => {
     expect(pinKey(server())).not.toBe(pinKey(server({ name: "docs2" })));
   });
-  it("does not carry over to another command under the same name", () => {
-    expect(pinKey(server())).not.toBe(
-      pinKey(server({ args: ["evil-docs-mcp"] })),
+  it("keeps the same identity when the launch changes, and notices the change", () => {
+    expect(pinKey(server())).toBe(pinKey(server({ args: ["evil-docs-mcp"] })));
+    const base = launchSpec(server());
+    expect(launchSpec(server({ args: ["evil-docs-mcp"] })).hash).not.toBe(
+      base.hash,
     );
-    expect(pinKey(server())).not.toBe(pinKey(server({ env: { A: "1" } })));
+    expect(launchSpec(server({ command: "node" })).hash).not.toBe(base.hash);
+    expect(launchSpec(server({ env: { A: "1" } })).hash).not.toBe(base.hash);
   });
   it("is stable for the same definition and ignores the generated id", () => {
     expect(pinKey(server())).toBe(pinKey(server({ id: "other" })));
+    expect(launchSpec(server()).hash).toBe(
+      launchSpec(server({ id: "other" })).hash,
+    );
   });
-  it("never contains the secrets it hashes", () => {
+  it("covers env variable names, never their values", () => {
+    const a = launchSpec(server({ env: { TOKEN: "hunter2" } }));
+    const b = launchSpec(server({ env: { TOKEN: "rotated" } }));
+    expect(a.hash).toBe(b.hash);
+    expect(JSON.stringify(a)).not.toContain("hunter2");
     expect(pinKey(server({ env: { TOKEN: "hunter2" } }))).not.toContain(
       "hunter2",
     );
@@ -214,19 +226,74 @@ describe("MCPConnection pins", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
-  it("a server with the same name but another command starts as new", async () => {
+  it("a changed launch definition flags every tool of the server", async () => {
     const store = new MemoryToolPinStore();
     setToolPinStore(store);
+    const a = connection();
+    a.tools = [tool("search"), tool("other")];
+    await a.recordToolUse("search");
+
+    const b = new MCPConnection(server({ args: ["evil-docs-mcp"] }));
+    b.tools = [tool("search"), tool("other")];
+    await b.refreshPins();
+    expect([...b.changedTools.keys()].sort()).toEqual(["other", "search"]);
+    expect(b.changedTools.get("search")?.kind).toBe("launch");
+    expect(b.changedTools.get("search")?.summary).toContain("arguments");
+    // arguments are never shown
+    expect(b.changedTools.get("search")?.summary).not.toContain("evil");
+  });
+
+  it("an approved call accepts the new launch definition and says so", async () => {
+    setToolPinStore(new MemoryToolPinStore());
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const a = connection();
     a.tools = [tool("search")];
     await a.recordToolUse("search");
 
-    const b = new MCPConnection(server({ args: ["other"] }));
-    b.tools = [tool("search", "different")];
+    const b = new MCPConnection(server({ command: "node" }));
+    b.tools = [tool("search")];
+    await b.refreshPins();
+    expect(b.changedTools.size).toBe(1);
+    await b.recordToolUse("search");
+    expect(b.changedTools.size).toBe(0);
+    expect(b.infos.join(" ")).toContain("changed definition (command)");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("a rotated secret in env is not a launch change", async () => {
+    setToolPinStore(new MemoryToolPinStore());
+    const a = new MCPConnection(server({ env: { TOKEN: "one" } }));
+    a.tools = [tool("search")];
+    await a.recordToolUse("search");
+    const b = new MCPConnection(server({ env: { TOKEN: "two" } }));
+    b.tools = [tool("search")];
     await b.refreshPins();
     expect(b.changedTools.size).toBe(0);
-    expect(
-      (await evaluatePins(pinKey(b.options), b.tools, store)).report.status,
-    ).toBe("new");
+  });
+
+  it("the first approval says which tools it pinned", async () => {
+    setToolPinStore(new MemoryToolPinStore());
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const a = connection();
+    a.tools = [tool("search"), tool("delete_all")];
+    await a.recordToolUse("search");
+    expect(a.infos.join(" ")).toContain("search, delete_all");
+    warn.mockRestore();
+  });
+
+  it("carries an approval made under the old key to the new one", async () => {
+    const store = new MemoryToolPinStore();
+    setToolPinStore(store);
+    const a = connection();
+    await store.set({
+      serverId: legacyPinKey(a.options),
+      tools: {},
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    } as never);
+    a.tools = [tool("search")];
+    await a.refreshPins();
+    const moved = (await store.get(pinKey(a.options))) as any;
+    expect(moved?.launch?.hash).toBe(launchSpec(a.options).hash);
   });
 });
