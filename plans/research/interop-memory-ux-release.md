@@ -117,7 +117,7 @@ Not verified: Cursor's memory feature, Mem0 retention and export, Letta archival
 
 Sources: https://code.visualstudio.com/api/extension-guides/webview (fetched 2026-11-11): webviews get `vscode-light`, `vscode-dark`, `vscode-high-contrast` body classes, `--vscode-*` colour variables, `vscode-using-screen-reader` and `vscode-reduce-motion` classes; the guide says to always test in high-contrast mode.
 
-Checklist (to be completed against the code in the next revision; items marked V are verified from the tree, T are to verify):
+Checklist (status T is superseded by the verified findings in section 4.1 below the table; WCAG 2.2 criteria from https://www.w3.org/TR/WCAG22/, fetched 2026-11-11: new in 2.2 are 2.4.11 Focus Not Obscured (Minimum, AA), 2.5.7 Dragging Movements (AA), 2.5.8 Target Size (Minimum, AA), 3.2.6 Consistent Help (A), 3.3.7 Redundant Entry (A), 3.3.8 Accessible Authentication (Minimum, AA)):
 
 | #   | Item                                                                                                                                          | Status                     |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
@@ -129,6 +129,22 @@ Checklist (to be completed against the code in the next revision; items marked V
 | 6   | Named controls, roving tabindex toolbars                                                                                                      | UX2 built, UX4 planned     |
 | 7   | Loading, empty and error states with retry                                                                                                    | UX8, UX13 planned          |
 | 8   | Live region for streaming and approval requests                                                                                               | T                          |
+
+### 4.1 Gaps verified from the code (grep on origin/main 0d4fe36f3, `gui/src`)
+
+| Finding                                                                                                                                                                                                                                              | Evidence                                                           | Maps to              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------- |
+| No handling of the VS Code body classes `vscode-reduce-motion`, `vscode-using-screen-reader` or `vscode-high-contrast`; only the OS media query `prefers-reduced-motion` is used (`index.css:117`, `GradientBorder.tsx:66`). No `forced-colors` rule | grep for the three class names and `forced-colors` returns nothing | new row UX-TBD2      |
+| The chat stream has no live region: `aria-live` appears only in the Permissions states (`PermissionsStates.tsx`, `PermissionsSection.tsx`, `RuleChangeForm.tsx`, `RuleTester.tsx`); `StepContainer.tsx` and `ThinkingIndicator.tsx` have none        | grep `aria-live`                                                   | new row UX-TBD3      |
+| The tool-approval toolbar (`PendingToolCallToolbar.tsx`) has no `role`, no `aria-label` and no live announcement when an approval appears; its only `aria-` use is `aria-hidden` on icons                                                            | grep of the file                                                   | UX-TBD3; extends UX6 |
+| Errors do use `role="alert"` in 9 places (loop controls, inbox, question panel, provider setup, Bedrock tester, policy controls)                                                                                                                     | grep `role="alert"`                                                | good; keep           |
+| Permissions editor handles Escape and returns focus to "Add a rule" (`RuleChangeForm.tsx:140`, test in `PermissionsEditor.test.tsx:250`); Permissions loading uses `role="status"` with `aria-busy`                                                  | read                                                               | good                 |
+| Permissions files carry few `aria-label`s (`PermissionsSection` 8, `EditableRules` 5, `RuleTester` 1, `Locks` 1) and `badges.tsx` none: chips that carry state by colour need a text name                                                            | `grep -c aria-label`                                               | UX3 follow-up        |
+| Whether an approval can be answered by keyboard alone, and focus order inside the approval toolbar, was not determined from reading; needs the axe and keyboard test below                                                                           | not verified                                                       | E5                   |
+
+### 4.2 axe-core on the screenshot harness
+
+The harness (`bench/screenshots/src/shoot.mjs`) already drives Chromium through `playwright-core@1.64.0` (`bench/screenshots/package.json`), opens each state and waits for `window.__shotReady`. `@axe-core/playwright` (https://github.com/dequelabs/axe-core-npm/blob/develop/packages/playwright/README.md, fetched 2026-11-11) takes a Playwright `page`, so the integration is one call after `__shotReady` and before `page.screenshot`: `new AxeBuilder({ page }).withTags(["wcag2a","wcag2aa"]).analyze()`, write `violations` per state into `manifest.json`, fail on a baseline diff rather than on zero (so the first run records today's debt). Details to settle in the experiment: the package declares `playwright` as its peer and the harness vendors `playwright-core` (check compatibility); the README examples show `wcag2a` and `wcag2aa` only, so check that a `wcag22aa` tag exists in the pinned axe-core before relying on 2.2 rules; the target-size rule and colour contrast on the three themes in `harness/themes.ts` need a run per theme. Pin the versions exactly, as `supply-chain.md` requires for `playwright-core`.
 
 ## 5. Release engineering (d)
 
@@ -152,14 +168,14 @@ Checklist (to be completed against the code in the next revision; items marked V
 
 ### 5.3 Review of current workflows
 
-| Finding                                                                                                                                     | Evidence                           | Severity                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------ |
-| `main` unprotected, so `merge-gate` gates nothing                                                                                           | `branches/main` `protected: false` | high, owner decision (CI16)                                  |
-| Most third-party actions pinned by tag (`actions/checkout@v7`, `setup-node@v7`, `upload-artifact@v7`, `download-artifact@v8`), a few by SHA | workflow grep                      | medium; `sha_pinning_required: false`                        |
-| `npx --yes @vscode/vsce@4.1.0` and `ovsx@1.3.0` install their dependency trees unlocked at publish time inside a job with `id-token: write` | `main.yaml`, `preview.yaml`        | medium: pin through a lockfile or a checked-in devDependency |
-| No attestation, no SBOM                                                                                                                     | grep found none                    | medium                                                       |
-| Open VSX uses a long-lived token (secret on the `marketplace` environment, approval gate)                                                   | `main.yaml`                        | low, no alternative exists                                   |
-| Dependabot weekly across 16 npm directories, ignore rules documented; no `github-actions` ecosystem entry in the part read                  | `dependabot.yml`                   | medium; verify the rest of the file                          |
+| Finding                                                                                                                                                                       | Evidence                           | Severity                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
+| `main` unprotected, so `merge-gate` gates nothing                                                                                                                             | `branches/main` `protected: false` | high, owner decision (CI16)                                         |
+| Most third-party actions pinned by tag (`actions/checkout@v7`, `setup-node@v7`, `upload-artifact@v7`, `download-artifact@v8`), a few by SHA                                   | workflow grep                      | medium; `sha_pinning_required: false`                               |
+| `npx --yes @vscode/vsce@4.1.0` and `ovsx@1.3.0` install their dependency trees unlocked at publish time inside a job with `id-token: write`                                   | `main.yaml`, `preview.yaml`        | medium: pin through a lockfile or a checked-in devDependency        |
+| No attestation, no SBOM                                                                                                                                                       | grep found none                    | medium                                                              |
+| Open VSX uses a long-lived token (secret on the `marketplace` environment, approval gate)                                                                                     | `main.yaml`                        | low, no alternative exists                                          |
+| Dependabot weekly across 16 npm directories plus github-actions, cargo, gradle, docker and pip ecosystems; no `cooldown` setting, so a release is proposed the day it appears | `dependabot.yml`                   | low to medium; a cooldown delays fresh (possibly hijacked) releases |
 
 ## 6. Recommended setup (documented, NOT run)
 
@@ -184,27 +200,29 @@ Keep `enforce_admins: false` while the runner queue is slow so the owner can bre
 
 ## 7. Ranked recommendations
 
-| Rank | Recommendation                                                                                 | Effort | Risk                              | Owner decision |
-| ---- | ---------------------------------------------------------------------------------------------- | ------ | --------------------------------- | -------------- |
-| 1    | Apply branch protection with `merge-gate` (CI16)                                               | S      | stuck check blocks merges         | yes            |
-| 2    | Pin actions by SHA and publish tools through a lockfile; Dependabot `github-actions` ecosystem | S      | low                               | no             |
-| 3    | Attest VSIX and CLI bundle with `actions/attest`, verify in release checklist (CI5)            | M      | free-plan availability unverified | no             |
-| 4    | MCP client: `server/discover` fallback, `input_required` retry, CIMD and `iss` check           | M      | spec just landed                  | no             |
-| 5    | ACP: `session/list` and resume on per-session history (needs V4)                               | M      | depends on V4                     | no             |
-| 6    | Opt-in memory notes with scrub on write and `/memory`                                          | M      | privacy                           | yes            |
-| 7    | axe-core in the screenshot harness (UX13)                                                      | S      | low                               | no             |
-| 8    | Skill validator in CI, `.agents/skills` discovery                                              | S      | low                               | no             |
+| Rank | Recommendation                                                                                                                  | Effort | Risk                              | Owner decision |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------- | ------ | --------------------------------- | -------------- |
+| 1    | Apply branch protection with `merge-gate` (CI16)                                                                                | S      | stuck check blocks merges         | yes            |
+| 2    | Pin actions by SHA and publish tools through a lockfile; Dependabot `cooldown` (the github-actions ecosystem is already listed) | S      | low                               | no             |
+| 3    | Attest VSIX and CLI bundle with `actions/attest`, verify in release checklist (CI5)                                             | M      | free-plan availability unverified | no             |
+| 4    | MCP client: `server/discover` fallback, `input_required` retry, CIMD and `iss` check                                            | M      | spec just landed                  | no             |
+| 5    | ACP: `session/list` and resume on per-session history (needs V4)                                                                | M      | depends on V4                     | no             |
+| 6    | Opt-in memory notes with scrub on write and `/memory`                                                                           | M      | privacy                           | yes            |
+| 7    | axe-core in the screenshot harness (UX13)                                                                                       | S      | low                               | no             |
+| 8    | Skill validator in CI, `.agents/skills` discovery                                                                               | S      | low                               | no             |
 
 ## 8. Proposed ROADMAP rows (ids TBD)
 
-| ID      | Scope                                                                                                                       | Size | State    |
-| ------- | --------------------------------------------------------------------------------------------------------------------------- | ---- | -------- |
-| CI-TBD1 | Pin third-party actions by SHA, add the `github-actions` ecosystem to Dependabot, install `vsce` and `ovsx` from a lockfile | S    | Proposed |
-| CI-TBD2 | `actions/attest` for the VSIX files and the CLI bundle, an SBOM, `gh attestation verify` step in the release checklist      | M    | Proposed |
-| O-TBD1  | MCP 2026-07-28 client: `server/discover`, per-request `_meta`, `input_required` retry, tasks extension read                 | M    | Proposed |
-| O-TBD2  | ACP `session/list` and resume; advertise `loadSession` once V4 lands                                                        | M    | Proposed |
-| V-TBD1  | Opt-in repository notes: scrub on write, 200 line and 25 KB load budget, `/memory`, export as zip                           | M    | Proposed |
-| UX-TBD1 | axe-core over the screenshot states (extends UX13)                                                                          | S    | Proposed |
+| ID      | Scope                                                                                                                                                                                           | Size | State    |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | -------- |
+| CI-TBD1 | Pin third-party actions by SHA, add a Dependabot `cooldown` (the github-actions ecosystem is already listed; Dependabot then keeps SHA pins current), install `vsce` and `ovsx` from a lockfile | S    | Proposed |
+| CI-TBD2 | `actions/attest` for the VSIX files and the CLI bundle, an SBOM, `gh attestation verify` step in the release checklist                                                                          | M    | Proposed |
+| O-TBD1  | MCP 2026-07-28 client: `server/discover`, per-request `_meta`, `input_required` retry, tasks extension read                                                                                     | M    | Proposed |
+| O-TBD2  | ACP `session/list` and resume; advertise `loadSession` once V4 lands                                                                                                                            | M    | Proposed |
+| V-TBD1  | Opt-in repository notes: scrub on write, 200 line and 25 KB load budget, `/memory`, export as zip                                                                                               | M    | Proposed |
+| UX-TBD2 | Honour `vscode-reduce-motion`, `vscode-using-screen-reader`, `vscode-high-contrast` and `forced-colors` in the GUI                                                                              | S    | Proposed |
+| UX-TBD3 | A polite live region for streamed replies and an announced, named tool-approval toolbar (role, label, focus on appearance)                                                                      | M    | Proposed |
+| UX-TBD1 | axe-core over the screenshot states (extends UX13)                                                                                                                                              | S    | Proposed |
 
 ## 9. Experiments for later (none run)
 
@@ -222,4 +240,4 @@ Keep `enforce_admins: false` while the runner queue is slow so the owner can bre
 - Merge queue availability for user-owned repositories (earlier note says org-only; the GitHub page fetched does not say).
 - Whether publisher-side VSIX signing exists in any `vsce` release.
 - Per-tool Agent Skills support outside Claude Code.
-- axe-core and WCAG 2.2 pages were not yet fetched; section 4 is a checklist from the VS Code guide, to be completed.
+- The `cooldown` option and Dependabot SHA-pin updating were stated from the file read and general knowledge of Dependabot, not from a fetched page; confirm at https://docs.github.com/en/code-security/dependabot before relying on them. The `wcag22aa` axe tag is unchecked.
