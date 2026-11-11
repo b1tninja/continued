@@ -1,22 +1,15 @@
 import { canonicalRuleName } from "./names";
 import { parseRule, globMatch, type RuleDecision } from "./rules";
+import { CONFIRM_PHRASE, DECISION_WORDS } from "./ruleWords";
 
 /**
  * What the rule editor says about a rule before it is saved (plans/rule-editor.md,
  * slice 2). Pure: no files, no home directory lookup (the caller passes it), so
  * the Permissions page, the CLI and the tests all get the same answer.
  *
- * Words: Never is `deny`, Ask is `ask` and Always is `allow`. The files keep
- * the old names; only what a person reads changes (DECISION_WORDS).
+ * Words: Never is `deny`, Ask is `ask` and Always is `allow` (ruleWords.ts).
  */
-export const DECISION_WORDS: Record<RuleDecision, string> = {
-  deny: "Never",
-  ask: "Ask",
-  allow: "Always",
-};
-
-/** What a person types to confirm a rule that allows everything, in either place. */
-export const CONFIRM_PHRASE = "allow everything";
+export { CONFIRM_PHRASE, DECISION_WORDS };
 
 /** Where a rule change came from, for the audit trail. */
 export type ChangeSource = "permissions-page" | "cli" | "always-allow-button";
