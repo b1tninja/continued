@@ -41,6 +41,7 @@ import {
   undoAvailable,
 } from "./tools/permissions/ruleEditorHandlers";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
+import { IdeShadow } from "./tools/permissions/auto/shadowIde";
 import { getAuditTrail } from "./tools/permissions/audit/global";
 import {
   recordPolicyDecision,
@@ -206,6 +207,7 @@ export class Core {
   private docsService: DocsService;
   private globalContext = new GlobalContext();
   private autoReviewSessions = new AutoReviewSessions();
+  private shadowIde = new IdeShadow();
   llmLogger = new LLMLogger();
 
   private messageAbortControllers = new Map<string, AbortController>();
@@ -750,11 +752,13 @@ export class Core {
         },
         reply,
       );
+      this.shadowIde.afterAutoReview(data.callId, reply.by);
       return reply;
     });
 
     on("audit/answer", async ({ data }) => {
       getAuditTrail().answer(data.callId, data.approved);
+      void this.shadowIde.answered(data.callId, data.approved);
     });
   }
 
@@ -1977,6 +1981,7 @@ export class Core {
           callId,
           sessionId,
           agent,
+          history,
         },
       }) => {
         const { config } = await this.configHandler.loadConfig();
@@ -2013,6 +2018,19 @@ export class Core {
           { session: sessionId, callId, toolName, parsedArgs, approval, agent },
           basePolicy,
           result,
+        );
+        // Shadow mode (off unless the person's config turns it on): beside the decision, never in it
+        void this.shadowIde.afterPolicy(
+          { session: sessionId, callId, toolName, parsedArgs, history, agent },
+          basePolicy,
+          result,
+          () => ({
+            reviewer: config.selectedModelByRole.reviewer,
+            environment: { workspaceDirs: dirs, os: process.platform },
+            reasoning: reasoningOptionsForEffort(
+              config.modeModels?.reviewer?.reasoningEffort,
+            ),
+          }),
         );
         return result;
       },
@@ -2117,6 +2135,7 @@ export class Core {
     const trail = getAuditTrail();
     // A call that reaches here was allowed, or asked and was approved
     trail.answer(toolCall.id, true);
+    void this.shadowIde.answered(toolCall.id, true);
     const startedAt = Date.now();
     let result;
     try {
