@@ -15,7 +15,9 @@ import type { MockIdeMessenger } from "@gui/context/MockIdeMessenger";
 import {
   newSession,
   setLoop,
+  noteToolDialectLeak,
   setMode,
+  setRecoveryHold,
   setTaskPlan,
 } from "@gui/redux/slices/sessionSlice";
 import type { setupStore } from "@gui/redux/store";
@@ -228,6 +230,26 @@ export const FIXTURES: Record<string, Fixture> = {
           assistant("All of them pass."),
         ]),
       ),
+    );
+  },
+  /** A reply held back while the app checks it for a tool request */
+  held: ({ store }) => {
+    store.dispatch(
+      newSession(
+        session([user("Why does the parseConfig test fail?"), assistant("")]),
+      ),
+    );
+    store.dispatch({ type: "session/setActive" });
+    store.dispatch(setRecoveryHold(true));
+  },
+  /** A model wrote a tool request as plain text: the notice above the input */
+  dialect: ({ store }) => {
+    store.dispatch(newSession());
+    store.dispatch(
+      noteToolDialectLeak({
+        model: "Claude Sonnet",
+        dialect: "qwen-xml",
+      } as never),
     );
   },
   /** Loop mode: the plan card, the per-item budgets and the loop controls */

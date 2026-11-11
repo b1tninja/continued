@@ -19,6 +19,14 @@ export const VIEWS = {
     fixture: "tool-call-done",
     note: "the same command after it ran",
   },
+  held: {
+    fixture: "held",
+    note: "a reply held back while it is checked for a tool request",
+  },
+  dialect: {
+    fixture: "dialect",
+    note: "the notice that a model wrote a tool request as plain text",
+  },
   loop: {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",
