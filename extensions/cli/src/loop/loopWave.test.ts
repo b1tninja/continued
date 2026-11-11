@@ -2,6 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+import { agentRegistry } from "core/agents/registry.js";
 import type { LoopState } from "core/index.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -104,6 +105,7 @@ describe("Loop mode's parallel waves in the CLI", () => {
     resetPolicyLevels();
     updateSessionLoop(undefined);
     resetLoopMemory();
+    agentRegistry.reset();
     created.length = 0;
     applied.length = 0;
     removed.length = 0;
@@ -279,6 +281,42 @@ describe("Loop mode's parallel waves in the CLI", () => {
     expect(loopNow().parallel).toBeUndefined();
     await until(() => removed.includes("/wt/2"), "removed includes wt 2");
     expect(loopWakeDelay(loopNow())).toBeUndefined();
+  });
+
+  it("shows each worker in the agent map and ends it as done, failed or stopped", async () => {
+    const SECRET = "AKIAIOSFODNN7CANARY0";
+    await planWith([
+      { text: "A", files: ["a.ts"] },
+      { text: "B", files: ["b.ts"] },
+    ]);
+    await startNextWave();
+    const workersNow = () =>
+      agentRegistry.list().filter((n) => n.kind === "loop-worker");
+    expect(workersNow().map((n) => [n.role, n.state])).toEqual([
+      ["item 1", "running"],
+      ["item 2", "running"],
+    ]);
+    const main = agentRegistry.list().find((n) => n.kind === "main");
+    expect(workersNow().every((n) => n.parentId === main?.id)).toBe(true);
+    expect(workersNow()[0].workspace).toEqual({ kind: "worktree", name: "1" });
+
+    workers.get("1")!.end(
+      output({
+        report: { outcome: "done", summary: `parsed ${SECRET}` },
+        patch: `diff ${SECRET}`,
+      }),
+    );
+    await until(() => status("1") === "done", "status 1     done");
+    workers.get("2")!.end(output({ error: `exit ${SECRET}` }));
+    await until(() => status("2") === "pending", "status 2     pending");
+
+    const ended = workersNow();
+    expect(ended.map((n) => n.state)).toEqual(["done", "failed"]);
+    expect(ended[0]).toMatchObject({
+      returnedLength: `parsed ${SECRET}`.length,
+      tokens: { input: 100, output: 20 },
+    });
+    expect(JSON.stringify(agentRegistry.list())).not.toContain(SECRET);
   });
 
   it("without the switch, or under Supervised, items run one at a time as before", async () => {

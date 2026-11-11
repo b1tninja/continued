@@ -1,3 +1,4 @@
+import { agentRegistry } from "core/agents/registry.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fireSubagentStart, fireSubagentStop } from "../hooks/fireHook.js";
@@ -572,5 +573,69 @@ describe("executeSubAgent: context budget", () => {
     expect(budgeted.model.defaultCompletionOptions.contextLength).toBe(524_288);
     expect(isCompacting).toBe(false);
     expect(options).toEqual({ persistSession: false, use: "subagent" });
+  });
+});
+
+describe("executeSubAgent: agent map", () => {
+  const SECRET = "AKIAIOSFODNN7CANARY0";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    agentRegistry.reset();
+    (serviceContainer as any).values.set(PERMISSIONS, parentPermissions);
+    vi.mocked(fireSubagentStart).mockReset().mockResolvedValue(NOOP_HOOK);
+    vi.mocked(fireSubagentStop).mockReset().mockResolvedValue(NOOP_HOOK);
+  });
+
+  it("registers the run under the session, shows a fixed activity phrase and ends it done", async () => {
+    let during: any;
+    mockStream(async (_history, callbacks) => {
+      callbacks.onToolStart?.("Bash", { command: `curl -H "x: ${SECRET}"` });
+      during = agentRegistry.list().find((n) => n.kind === "subagent");
+      callbacks.onContent?.("all done");
+    });
+
+    await run("look");
+
+    expect(during).toMatchObject({
+      role: "explorer",
+      state: "running",
+      activity: "running a command",
+    });
+    const nodes = agentRegistry.list();
+    const main = nodes.find((n) => n.kind === "main");
+    const sub = nodes.find((n) => n.kind === "subagent");
+    expect(main).toBeDefined();
+    expect(sub).toMatchObject({
+      parentId: main?.id,
+      state: "done",
+      returnedLength: "all done".length,
+    });
+    expect(sub?.id).toMatch(/^agent-/);
+    expect(JSON.stringify(nodes)).not.toContain(SECRET);
+  });
+
+  it("shows a queued run as blocked on a slot and a refused one as failed", async () => {
+    mockStream(async () => {
+      throw new Error(`boom ${SECRET}`);
+    });
+    const first = run("a");
+    const second = run("b");
+    expect(
+      agentRegistry.list().filter((n) => n.blockedOn?.kind === "slot").length,
+    ).toBeGreaterThan(0);
+    await Promise.all([first, second]);
+    const subs = agentRegistry.list().filter((n) => n.kind === "subagent");
+    expect(subs.map((n) => n.state)).toEqual(["failed", "failed"]);
+    expect(JSON.stringify(subs)).not.toContain(SECRET);
+  });
+
+  it("ends a run cancelled before it started as stopped", async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+    await run("x", { abortController });
+    expect(agentRegistry.list().find((n) => n.kind === "subagent")?.state).toBe(
+      "stopped",
+    );
   });
 });
