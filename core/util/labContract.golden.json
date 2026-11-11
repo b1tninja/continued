@@ -1,0 +1,184 @@
+{
+  "contractVersion": 1,
+  "wilson": [
+    {
+      "k": 0,
+      "n": 0,
+      "rate": {
+        "k": 0,
+        "n": 0,
+        "rate": 0,
+        "lo": 0,
+        "hi": 1
+      },
+      "text": "0/0 = n/a"
+    },
+    {
+      "k": 0,
+      "n": 3,
+      "rate": {
+        "k": 0,
+        "n": 3,
+        "rate": 0,
+        "lo": 5.551115123125783e-17,
+        "hi": 0.5614970317550454
+      },
+      "text": "0/3 = 0% [0%, 56%]"
+    },
+    {
+      "k": 3,
+      "n": 3,
+      "rate": {
+        "k": 3,
+        "n": 3,
+        "rate": 1,
+        "lo": 0.4385029682449546,
+        "hi": 1
+      },
+      "text": "3/3 = 100% [44%, 100%]"
+    },
+    {
+      "k": 2,
+      "n": 8,
+      "rate": {
+        "k": 2,
+        "n": 8,
+        "rate": 0.25,
+        "lo": 0.071479212752109,
+        "hi": 0.5907245696898311
+      },
+      "text": "2/8 = 25% [7%, 59%]"
+    },
+    {
+      "k": 1,
+      "n": 2,
+      "rate": {
+        "k": 1,
+        "n": 2,
+        "rate": 0.5,
+        "lo": 0.09453120573423074,
+        "hi": 0.9054687942657693
+      },
+      "text": "1/2 = 50% [9%, 91%]"
+    },
+    {
+      "k": 24,
+      "n": 96,
+      "rate": {
+        "k": 24,
+        "n": 96,
+        "rate": 0.25,
+        "lo": 0.17413968368934074,
+        "hi": 0.3450981102394971
+      },
+      "text": "24/96 = 25% [17%, 35%]"
+    },
+    {
+      "k": 7,
+      "n": 25,
+      "rate": {
+        "k": 7,
+        "n": 25,
+        "rate": 0.28,
+        "lo": 0.14283853850956563,
+        "hi": 0.47576605190361576
+      },
+      "text": "7/25 = 28% [14%, 48%]"
+    }
+  ],
+  "slug": [
+    {
+      "input": "Qwen3-Coder:30b",
+      "output": "qwen3-coder-30b"
+    },
+    {
+      "input": "us.meta.llama3-3-70b-instruct-v1:0",
+      "output": "us-meta-llama3-3-70b-instruct-v1-0"
+    },
+    {
+      "input": "  --A  B--",
+      "output": "a-b"
+    },
+    {
+      "input": "",
+      "output": ""
+    }
+  ],
+  "fixtureId": [
+    {
+      "input": {
+        "model": "qwen3-coder:30b",
+        "transport": "openai",
+        "streamed": true,
+        "temperature": 0,
+        "pass": 2,
+        "promptId": "read"
+      },
+      "output": "live-qwen3-coder-30b-openai-stream-t0-p2-read"
+    },
+    {
+      "input": {
+        "model": "us.meta.llama3-3-70b-instruct-v1:0",
+        "transport": "bedrock",
+        "streamed": false,
+        "temperature": "default",
+        "pass": 1,
+        "promptId": "run-1"
+      },
+      "output": "live-us-meta-llama3-3-70b-instruct-v1-0-bedrock-whole-tdefault-p1-run-1"
+    }
+  ],
+  "validateProbeResult": [
+    {
+      "input": {
+        "model": "m",
+        "outcome": "leak",
+        "dialect": "hermes-json",
+        "k": 1,
+        "n": 3
+      },
+      "problems": []
+    },
+    {
+      "input": {
+        "model": "",
+        "outcome": "leak",
+        "dialect": "x",
+        "k": 1,
+        "n": 3
+      },
+      "problems": ["model must be a non-empty string"]
+    },
+    {
+      "input": {
+        "model": "m",
+        "outcome": "bogus",
+        "dialect": "x",
+        "k": 4,
+        "n": 3
+      },
+      "problems": [
+        "outcome must be one of structured, leak, refused, error",
+        "k must not exceed n"
+      ]
+    },
+    {
+      "input": [],
+      "problems": ["not an object"]
+    },
+    {
+      "input": {
+        "model": "m",
+        "outcome": "error",
+        "dialect": 5,
+        "k": -1,
+        "n": 1.5
+      },
+      "problems": [
+        "dialect must be a string",
+        "k must be a non-negative integer",
+        "n must be a non-negative integer"
+      ]
+    }
+  ]
+}

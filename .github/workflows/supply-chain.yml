@@ -60,3 +60,7 @@ jobs:
           node --test scripts/ci/check-notice.test.mjs scripts/ci/backfill-fixture-licence.test.mjs
       - name: Process-guard scripts (merge-tree matrix, worktree hygiene, stash guard, checkpoint)
         run: node --test scripts/ci/combine.test.mjs scripts/ci/check-stash.test.mjs scripts/ci/worktree-hygiene.test.mjs "scripts/agents/*.test.mjs"
+      - name: Lab boundary (the product never imports bench/; contract, result schema, governor)
+        run: |
+          node scripts/ci/check-bench-boundary.mjs
+          node --test scripts/ci/check-bench-boundary.test.mjs bench/lab/test/contract.test.mjs
