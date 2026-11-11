@@ -232,23 +232,23 @@ The bench already records invalid calls, `textLeaks`, completion, requests per a
 
 ## 9. Build rows
 
-Numbered after the existing Q13. Dependencies use roadmap ids.
+Numbered after the existing Q26 (these rows were Q14 to Q24 until ROADMAP took Q14 to Q26 for other work). Dependencies on Q1 to Q26 are roadmap ids.
 
 | Row | Slice                                                                                                                                              | Depends  | Exit                                                                                    |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| Q14 | Re-score existing bench histories with the failure split (parsed, recoverable leak, unrecoverable, wrong args), full-reply capture in `textLeaks`  | Q10      | table per model and run; decides Q16                                                    |
-| Q15 | `ToolDialect` types and `identity` in `packages/openai-adapters`; core imports it; no behaviour change                                             | Q11      | existing tool tests green byte-for-byte                                                 |
-| Q16 | Move DSML hold-back and `ThinkingTagSplitter` behind the interface as `dsml` and a shared combinator; delete the second copy                       | Q15      | old tests pass in the new home; one copy remains                                        |
-| Q17 | Fuzzed-split harness and negative corpus, as a reusable test helper                                                                                | Q15      | runs against Q16 parsers                                                                |
-| Q18 | `qwen-xml` parser with `parseComplete`, stream parser and `repairArguments`; corpus from bench histories                                           | Q14, Q17 | passes corpus, round trip, splits, negatives                                            |
-| Q19 | Recover path in the Bedrock stream handler behind `--dialect recover`, plus runner flag and scorer columns                                         | Q18      | bench result at n=5 per section 7; ship only on a win (this is Q5)                      |
-| Q20 | CLI `repairArguments` hook replacing per-delta `JSON.parse` fallthrough; `ToolCallCollector` likewise                                              | Q15      | rejected calls surface a specific error; a case where today args are rejected now parse |
-| Q21 | `pythonic` recovery for Nova 2 Lite, gated per section 4                                                                                           | Q17, Q19 | zero false calls on negatives; leaks fall                                               |
-| Q22 | Render path (`renderTools`, `renderToolCall`) for `qwen-xml`, tested for byte stability under the cache simulator (`plans/prompt-caching-sim.mjs`) | Q18      | zero prefix churn; render arm measured                                                  |
-| Q23 | `hermes-json` and `kimi-tokens` with id normalisation (Q13)                                                                                        | Q19      | only if a leak or id failure is logged                                                  |
-| Q24 | Decide whether `SystemMessageToolCodeblocksFramework` becomes a dialect and the CLI gets that path                                                 | Q22      | decision note                                                                           |
+| Q27 | Re-score existing bench histories with the failure split (parsed, recoverable leak, unrecoverable, wrong args), full-reply capture in `textLeaks`  | Q10      | table per model and run; decides Q29                                                    |
+| Q28 | `ToolDialect` types and `identity` in `packages/openai-adapters`; core imports it; no behaviour change                                             | Q11      | existing tool tests green byte-for-byte                                                 |
+| Q29 | Move DSML hold-back and `ThinkingTagSplitter` behind the interface as `dsml` and a shared combinator; delete the second copy                       | Q28      | old tests pass in the new home; one copy remains                                        |
+| Q30 | Fuzzed-split harness and negative corpus, as a reusable test helper                                                                                | Q28      | runs against Q29 parsers                                                                |
+| Q31 | `qwen-xml` parser with `parseComplete`, stream parser and `repairArguments`; corpus from bench histories                                           | Q27, Q30 | passes corpus, round trip, splits, negatives                                            |
+| Q32 | Recover path in the Bedrock stream handler behind `--dialect recover`, plus runner flag and scorer columns                                         | Q31      | bench result at n=5 per section 7; ship only on a win (this is Q5)                      |
+| Q33 | CLI `repairArguments` hook replacing per-delta `JSON.parse` fallthrough; `ToolCallCollector` likewise                                              | Q28      | rejected calls surface a specific error; a case where today args are rejected now parse |
+| Q34 | `pythonic` recovery for Nova 2 Lite, gated per section 4                                                                                           | Q30, Q32 | zero false calls on negatives; leaks fall                                               |
+| Q35 | Render path (`renderTools`, `renderToolCall`) for `qwen-xml`, tested for byte stability under the cache simulator (`plans/prompt-caching-sim.mjs`) | Q31      | zero prefix churn; render arm measured                                                  |
+| Q36 | `hermes-json` and `kimi-tokens` with id normalisation (Q13)                                                                                        | Q32      | only if a leak or id failure is logged                                                  |
+| Q37 | Decide whether `SystemMessageToolCodeblocksFramework` becomes a dialect and the CLI gets that path                                                 | Q35      | decision note                                                                           |
 
-Q14 to Q16 are mergeable in any order after Q15 and change nothing observable. Q19 is the first row that can change what the user sees.
+Q27 to Q29 are mergeable in any order after Q28 and change nothing observable. Q32 is the first row that can change what the user sees.
 
 ## 10. Decisions this doc asks the owner for
 

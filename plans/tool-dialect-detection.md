@@ -100,7 +100,7 @@ Built, pure and unwired, in `core/util`: `classifyToolReply`, `dialectFromChatTe
 
 1. Is a probe in the add-model "Test connection" acceptable (one extra call, a made-up tool)?
 2. Config key name and values for the manual override (`toolDialect`), and whether it belongs beside `promptProfile`.
-3. Should a live leak flip an endpoint to recover automatically, or only warn until Q19 is measured?
+3. Should a live leak flip an endpoint to recover automatically, or only warn until Q32 is measured?
 
 ## 9. Unverified
 
