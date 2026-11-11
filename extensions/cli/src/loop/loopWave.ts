@@ -1,4 +1,6 @@
 import { execSync, fork } from "child_process";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 
 import type { LoopReminder, LoopState, TaskItem, Usage } from "core/index.js";
 import {
@@ -11,6 +13,7 @@ import {
   stopLoop,
 } from "core/util/loopMode.js";
 
+import { emitAgent, ensureMainAgent, tokensOf } from "../agents/feed.js";
 import {
   cleanupWorktree,
   createWorktree,
@@ -200,6 +203,50 @@ export function resetLoopWaveDeps(): void {
 /** The running wave's workers, by item, so Stop now can end them. */
 const controllers = new Map<string, AbortController>();
 
+/** The agent map's id for each running worker, by item. */
+const workerAgents = new Map<string, string>();
+
+function spawnWorkerAgent(
+  itemId: string,
+  worktree: string,
+  model: string | undefined,
+): void {
+  const parent = ensureMainAgent();
+  const id = `worker-${randomUUID()}`;
+  workerAgents.set(itemId, id);
+  emitAgent({
+    type: "spawned",
+    id,
+    parentId: parent,
+    rootId: parent,
+    kind: "loop-worker",
+    role: `item ${itemId}`,
+    mode: "loop",
+    model,
+    workspace: { kind: "worktree", name: path.basename(worktree) },
+    at: Date.now(),
+  });
+}
+
+/** The worker's end for the agent map: its tokens, then how it ended. */
+function endWorkerAgent(
+  itemId: string,
+  output: LoopWorkerOutput,
+  stopped: boolean,
+): void {
+  const id = workerAgents.get(itemId);
+  if (!id) return;
+  workerAgents.delete(itemId);
+  emitAgent({ type: "usage", id, tokens: tokensOf(output.usage) });
+  emitAgent({
+    type: "ended",
+    id,
+    state: output.error ? (stopped ? "stopped" : "failed") : "done",
+    returnedLength: output.report?.summary?.length,
+    at: Date.now(),
+  });
+}
+
 function abortWave(): void {
   for (const controller of controllers.values()) controller.abort();
 }
@@ -302,6 +349,7 @@ export async function startWave(
   for (const entry of started) {
     const controller = new AbortController();
     controllers.set(entry.item.id, controller);
+    spawnWorkerAgent(entry.item.id, entry.worktree, entry.input.model);
     void runOne(entry, controller.signal).finally(() => {
       controllers.delete(entry.item.id);
       if (controllers.size === 0) setWaveAbort(undefined);
@@ -331,6 +379,10 @@ function stopWaveIfOverBudget(): void {
   });
   if (!stop) return;
   commitLoop(stopLoop(loop, stop.reason, stop.detail));
+  for (const id of workerAgents.values()) {
+    emitAgent({ type: "ended", id, state: "over-budget", at: Date.now() });
+  }
+  workerAgents.clear();
   abortWave();
 }
 
@@ -346,6 +398,9 @@ export function recordWorkerUsage(itemId: string, reported: Usage): boolean {
     reported,
   );
   reportedUsage.set(itemId, reported);
+  const agentId = workerAgents.get(itemId);
+  if (agentId)
+    emitAgent({ type: "usage", id: agentId, tokens: tokensOf(reported) });
   if (usageToCount(delta)) trackSessionUsage(0, delta);
   stopWaveIfOverBudget();
   return !!getSessionLoop()?.parallel?.some((run) => run.itemId === itemId);
@@ -363,6 +418,7 @@ async function runOne(
       error instanceof Error ? error.message : String(error),
     );
   }
+  endWorkerAgent(entry.item.id, output, signal.aborted);
   try {
     await settleRun(entry, output);
   } catch (error) {

@@ -25,6 +25,7 @@ import { CacheMissNotice } from "../../components/mainInput/CacheMissNotice";
 import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
 import { ToolDialectNotice } from "../../components/mainInput/ToolDialectNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
+import { AgentsList } from "../../components/BackgroundMode/AgentsList";
 import { LoopInbox } from "../../components/mainInput/LoopInbox";
 import {
   QuestionPanel,
@@ -569,6 +570,7 @@ export function Chat() {
         {/* A loop shows its own plan in its panel */}
         {!hasLoop && <TaskListPanel />}
         <LoopInbox />
+        <AgentsList />
         <QuestionPanel />
         <QueuedMessages
           onSendNow={sendNowOrSteer}

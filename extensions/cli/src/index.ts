@@ -6,6 +6,7 @@ import "./init.js";
 import { Command } from "commander";
 
 import { acp } from "./commands/acp.js";
+import { agentsCommand } from "./commands/agents.js";
 import { auditCommand } from "./commands/audit.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
@@ -490,6 +491,24 @@ program
       modelHost: options.modelHost,
       workspace: options.workspace,
     });
+    await gracefulExit(code);
+  });
+
+// Agents subcommand: the agents of a running `cn serve`
+program
+  .command("agents [action]")
+  .description("List the agents of a running cn serve (list)")
+  .option("--json", "Machine-readable output")
+  .option(
+    "--url <url>",
+    "The server's address (default: http://127.0.0.1:8000)",
+  )
+  .option(
+    "--token <token>",
+    "The server's bearer token (also read from CONTINUOUS_SERVE_TOKEN)",
+  )
+  .action(async (action: string | undefined, options) => {
+    const code = await agentsCommand(action, options);
     await gracefulExit(code);
   });
 
