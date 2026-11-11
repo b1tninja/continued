@@ -437,6 +437,17 @@ program
   .option("--json", "Machine-readable output")
   .option("--concurrency <n>", "Parallel requests", "4")
   .option("--timeout-ms <n>", "Per-request timeout", "30000")
+  .option("--config <path>", "Config file that defines the reviewer model")
+  .option(
+    "--repeat <k>",
+    "Ask each case k times; the floor gate counts a case allowed in any run (3 recommended)",
+    "1",
+  )
+  .option(
+    "--max-tokens <n>",
+    "Reply ceiling per call (default 1024 for a reasoning model, else 300)",
+  )
+  .option("--outcomes <file>", "Write every case's outcome as JSONL")
   .action(async (action: string | undefined, options) => {
     if (action !== "eval") {
       console.error(

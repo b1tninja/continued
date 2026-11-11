@@ -146,6 +146,7 @@ export function createReviewer(
   if (!api) return null;
   return {
     model: model.model,
+    providerName: model.provider,
     chat: async (
       messages: unknown[],
       signal?: AbortSignal,
@@ -164,6 +165,10 @@ export function createReviewer(
       return {
         role: "assistant",
         content: res.choices?.[0]?.message?.content ?? "",
+        // read by the reviewer eval: a length stop is a truncated reply
+        ...(res.choices?.[0]?.finish_reason
+          ? { finishReason: res.choices[0].finish_reason }
+          : {}),
         // read by core's reviewer wrapper for the audit trail
         ...(res.usage ? { usage: res.usage } : {}),
       };
