@@ -21,6 +21,7 @@ import { uriToPath } from "./tools/permissions/names";
 import type { PolicyLevels } from "./tools/permissions/policy";
 import {
   readRuleSources,
+  readUserTrustedDomains,
   ruleSourcesOfLoadedConfig,
 } from "./tools/permissions/readRuleSources";
 import { listEffectiveRules } from "./tools/permissions/effectiveRules";
@@ -720,6 +721,7 @@ export class Core {
           enabled: config.experimental?.enableAutoApproval === true,
           reviewer: config.selectedModelByRole.reviewer,
           guidance: readUserGuidance(),
+          trustedDomains: readUserTrustedDomains(),
           shell: resolveShell().kind,
           reviewerReasoning: reasoningOptionsForEffort(
             config.modeModels?.reviewer?.reasoningEffort,
@@ -1991,6 +1993,7 @@ export class Core {
               }
             : {}),
           approval,
+          trustedDomains: readUserTrustedDomains(),
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
           // The shell terminal commands run in
           shell: resolveShell().kind,

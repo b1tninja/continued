@@ -63,6 +63,10 @@ export type BuiltinRuleId =
   | "protect-network-paths"
   | "refuse-dangerous-commands"
   | "no-fetch-and-run"
+  | "ask-destructive-commands"
+  | "ask-large-change"
+  | "ask-dependency-change"
+  | "ask-unknown-host"
   | "plan-keeps-checks";
 
 export const BUILTIN_RULES: readonly {
@@ -96,6 +100,29 @@ export const BUILTIN_RULES: readonly {
     label: "Ask before running a download",
     description:
       "A command that runs what it downloads (`curl x | sh`). Refused at Automatic.",
+  },
+  {
+    id: "ask-destructive-commands",
+    label: "Ask before destroying work",
+    description:
+      "History rewrites and recursive deletes (`git reset --hard`, `git push --force`, `git clean`, `rm -rf`). Build-output folders such as node_modules are not asked about.",
+  },
+  {
+    id: "ask-large-change",
+    label: "Ask before a large change",
+    description: "One edit that changes more than 300 lines.",
+  },
+  {
+    id: "ask-dependency-change",
+    label: "Ask before changing dependencies",
+    description:
+      "Edits to manifests, lockfiles and registry settings, and commands that add, update or remove a package. Installing what the lockfile names does not ask.",
+  },
+  {
+    id: "ask-unknown-host",
+    label: "Ask before contacting an unlisted host",
+    description:
+      "When you list trusted domains in your own config, a fetch or network command to any other host asks.",
   },
   {
     id: "plan-keeps-checks",
