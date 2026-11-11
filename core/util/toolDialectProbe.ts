@@ -31,6 +31,8 @@ export interface ToolDialectProbeResult {
   label: string;
   /** The model-family preset's one-liner (toolDialectPresets.ts), when the model has one. */
   preset?: string;
+  /** The server parses this model's calls itself; no recovery is suggested. */
+  serverParses?: boolean;
 }
 
 /** The wizard's result line for a support verdict. */
@@ -90,6 +92,7 @@ function refusedTools(error: unknown): boolean {
 export async function probeToolDialect(
   send: (request: ProbeRequest) => Promise<ToolReply>,
   model?: string,
+  options: { serverParses?: boolean } = {},
 ): Promise<ToolDialectProbeResult> {
   let support: ToolCallSupport;
   try {
@@ -97,10 +100,13 @@ export async function probeToolDialect(
   } catch (e) {
     support = refusedTools(e) ? { kind: "none" } : { kind: "unknown" };
   }
-  const preset = resolveToolDialectPreset(model);
+  const preset = options.serverParses
+    ? undefined
+    : resolveToolDialectPreset(model);
   return {
     support,
     label: labelFor(support),
+    ...(options.serverParses ? { serverParses: true } : {}),
     ...(preset ? { preset: describePreset(preset) } : {}),
   };
 }
