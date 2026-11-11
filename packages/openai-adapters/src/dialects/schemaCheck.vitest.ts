@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { recoverGlmXmlFromText } from "./glmXml.js";
 import { recoverHermesJsonFromText } from "./hermesJson.js";
+import { recoverKimiTokensFromText } from "./kimiTokens.js";
+import { recoverKimiXtmlFromText } from "./kimiXtml.js";
 import { recoverLlamaJsonFromText } from "./llamaJson.js";
+import { recoverMinimaxNsFromText } from "./minimaxNs.js";
+import { recoverMinimaxXmlFromText } from "./minimaxXml.js";
 import { recoverPythonicFromText } from "./pythonic.js";
 import { type DialectTool, recoverQwenXmlFromText } from "./qwenXml.js";
 import { coerceString, coerceToSchema } from "./schemaCheck.js";
@@ -135,6 +139,37 @@ const dialects: [string, (timeout: string) => string, (t: string) => any][] = [
     (t) => recoverGlmXmlFromText(t, tools),
   ],
   [
+    "kimi-tokens",
+    (t) =>
+      `<|tool_calls_section_begin|><|tool_call_begin|>functions.run_command:0<|tool_call_argument_begin|>{"command": "10", "timeout": "${t}"}<|tool_call_end|><|tool_calls_section_end|>`,
+    (t) => recoverKimiTokensFromText(t, tools),
+  ],
+  [
+    "kimi-xtml",
+    (t) =>
+      `<|open|>tools<|sep|><|open|>call tool="run_command" index="1"<|sep|><|open|>argument key="command" type="string"<|sep|>10<|close|>argument<|sep|><|open|>argument key="timeout" type="string"<|sep|>${t}<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|>`,
+    (t) => recoverKimiXtmlFromText(t, tools),
+  ],
+  [
+    "minimax-xml",
+    (t) =>
+      `<minimax:tool_call>
+<invoke name="run_command">
+<parameter name="command">10</parameter>
+<parameter name="timeout">${t}</parameter>
+</invoke>
+</minimax:tool_call>`,
+    (t) => recoverMinimaxXmlFromText(t, tools),
+  ],
+  [
+    "minimax-ns-xml",
+    (t) =>
+      `]<]minimax[>[<tool_call>
+]<]minimax[>[<invoke name="run_command">]<]minimax[>[<command>10]<]minimax[>[</command>]<]minimax[>[<timeout>${t}]<]minimax[>[</timeout>]<]minimax[>[</invoke>
+]<]minimax[>[</tool_call>`,
+    (t) => recoverMinimaxNsFromText(t, tools),
+  ],
+  [
     "toolcall-json",
     (t) =>
       `<TOOLCALL>[{"name": "run_command", "arguments": {"command": "10", "timeout": "${t}"}}]</TOOLCALL>`,
@@ -147,7 +182,11 @@ const dialects: [string, (timeout: string) => string, (t: string) => any][] = [
  * declared type, which is its own encoding rather than a repair: `10` is the
  * integer with no note, and `1e3` is JSON for 1000.
  */
-const glmReadsJson = (name: string) => name === "glm-xml";
+const glmReadsJson = (name: string) =>
+  name === "glm-xml" || name === "minimax-xml" || name === "minimax-ns-xml";
+/** The ones that parse a value as JSON, so `1e3` is the number 1000. */
+const readsExponent = (name: string) =>
+  name === "glm-xml" || name === "minimax-xml";
 
 describe.each(dialects)(
   "%s: a number written as a string",
@@ -166,7 +205,7 @@ describe.each(dialects)(
       ]);
     });
 
-    it.each(["10abc", "", "ten", ...(glmReadsJson(name) ? [] : ["1e3"])])(
+    it.each(["10abc", "", "ten", ...(readsExponent(name) ? [] : ["1e3"])])(
       "leaves a call whose integer is %j as text",
       (bad) => {
         const text = render(bad);

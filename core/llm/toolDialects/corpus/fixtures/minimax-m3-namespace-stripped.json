@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "id": "minimax-m3-namespace-stripped",
+  "family": "minimax-m3",
+  "dialect": "minimax-ns-xml",
+  "kind": "negative",
+  "failureMode": "special-token-stripped",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from the MiniMax-M3 chat template https://huggingface.co/MiniMaxAI/MiniMax-M3/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": "With the namespace token stripped the shape is plain tags that other dialects share; it is not recovered."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<tool_call>\n<invoke name=\"get_weather\"><city>Paris</city></invoke>\n</tool_call>",
+  "markers": ["]<]minimax[>[", "<mm:think>", "</mm:think>", "<tool_call>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>\n<invoke name=\"get_weather\"><city>Paris</city></invoke>\n</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "\n",
+        "<",
+        "i",
+        "n",
+        "v",
+        "o",
+        "k",
+        "e",
+        " ",
+        "n",
+        "a",
+        "m",
+        "e",
+        "=",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ">",
+        "<",
+        "c",
+        "i",
+        "t",
+        "y",
+        ">",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "<",
+        "/",
+        "c",
+        "i",
+        "t",
+        "y",
+        ">",
+        "<",
+        "/",
+        "i",
+        "n",
+        "v",
+        "o",
+        "k",
+        "e",
+        ">",
+        "\n",
+        "<",
+        "/",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_call>\n<invoke name=\"get_weather\"><city>Paris</city></invoke>\n</tool_call>"
+      ],
+      "splitInside": "<tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool_call>",
+        "\n<invoke name=\"get_weather\"><city>Paris</city></invoke>\n</tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<tool",
+        "_cal",
+        "l",
+        ">",
+        "\n<",
+        "inv",
+        "ok",
+        "e ",
+        "na",
+        "me",
+        "=\"ge",
+        "t_we",
+        "ath",
+        "er\">",
+        "<ci",
+        "ty>P",
+        "ar",
+        "is</c",
+        "i",
+        "ty><",
+        "/i",
+        "nvoke",
+        ">",
+        "\n<",
+        "/too",
+        "l_",
+        "c",
+        "all>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<tool_call>\n<invoke name=\"get_weather\"><city>Paris</city></invoke>\n</tool_call>"
+  }
+}

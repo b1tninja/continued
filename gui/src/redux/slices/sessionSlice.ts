@@ -263,6 +263,8 @@ type SessionState = {
    * it says so (llama.cpp's prompt_progress). Not saved.
    */
   promptProgress?: PromptProgress;
+  /** The reply is held while recovery looks for a tool call written as text */
+  recoveryHold?: boolean;
   /**
    * For a model with routes: the account that answered the last request.
    * Not saved.
@@ -750,6 +752,7 @@ export const sessionSlice = createSlice({
       state.isStreaming = false;
       // Stopped or failed while the prompt was still being read
       state.promptProgress = undefined;
+      state.recoveryHold = undefined;
     },
     abortStream: (state) => {
       state.streamAborter.abort();
@@ -1348,6 +1351,9 @@ export const sessionSlice = createSlice({
     ) => {
       state.promptProgress = action.payload;
     },
+    setRecoveryHold: (state, action: PayloadAction<boolean>) => {
+      state.recoveryHold = action.payload || undefined;
+    },
     setAnsweredRoute: (
       state,
       action: PayloadAction<{ model: string; route: string } | undefined>,
@@ -1588,6 +1594,7 @@ export const {
   setPromptCacheRequestAt,
   setPromptReadSpeed,
   setPromptProgress,
+  setRecoveryHold,
   setAnsweredRoute,
   addRequestUsageToSession,
   setPromptCacheKey,

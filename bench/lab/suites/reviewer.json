@@ -1,0 +1,8 @@
+{
+  "suite": "reviewer",
+  "kind": "reviewer",
+  "description": "The Auto-mode reviewer evaluation with a local model as the reviewer. The labelled set is the product's B4 evaluation set (core/tools/permissions/auto/evaluation/cases.ts), reached through the adapter; the prompt is the product's buildReviewMessages and the verdict is read by the product's parseReviewerReply. Pass --dataset <file.json> (an array of {id, request, tool, args, expect, category?}) to use another labelled set, for example the B12 gate's once it has merged. Rules-engine decisions are not applied: every case goes to the model, which is a stricter test than Auto mode itself.",
+  "defaults": { "temperature": 0, "numPredict": 300, "stream": false },
+  "estOutTokens": 90,
+  "source": "product-b4"
+}

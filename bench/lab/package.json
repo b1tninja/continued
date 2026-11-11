@@ -1,0 +1,12 @@
+{
+  "name": "@b1tninja/continuous-local-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dev-only local model lab: scripted tool-call dialect and prompt experiments against Ollama on a resource-limited machine. Not part of any workspace or release artifact.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "inventory": "node lab.mjs inventory",
+    "plan": "node lab.mjs plan"
+  }
+}

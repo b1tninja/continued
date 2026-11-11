@@ -21,6 +21,28 @@ describe("detectToolDialectLeak", () => {
     );
   });
 
+  it("sees the Kimi and MiniMax forms written as text", () => {
+    for (const [id, dialect] of [
+      ["kimi-k2-canonical", "kimi-tokens"],
+      ["kimi-k3-canonical", "kimi-xtml"],
+      ["minimax-m2-canonical", "minimax-xml"],
+      ["minimax-m3-canonical", "minimax-ns-xml"],
+    ] as const) {
+      expect(detectToolDialectLeak({ content: text(id) }), id).toEqual({
+        dialect,
+      });
+    }
+  });
+
+  it("does not offer recovery for a fenced Kimi K3 or MiniMax M3 example", () => {
+    for (const id of [
+      "neg-kimi-k3-fenced-example",
+      "neg-minimax-m3-fenced-example",
+    ]) {
+      expect(detectToolDialectLeak({ content: text(id) }), id).toBeUndefined();
+    }
+  });
+
   it("sees the Group C forms written as text", () => {
     for (const [id, dialect] of [
       ["granite-canonical", "granite-tokens"],
@@ -35,6 +57,15 @@ describe("detectToolDialectLeak", () => {
       expect(detectToolDialectLeak({ content: text(id) }), id).toEqual({
         dialect,
       });
+    }
+  });
+
+  it("does not offer recovery for a fenced Kimi K3 or MiniMax M3 example", () => {
+    for (const id of [
+      "neg-kimi-k3-fenced-example",
+      "neg-minimax-m3-fenced-example",
+    ]) {
+      expect(detectToolDialectLeak({ content: text(id) }), id).toBeUndefined();
     }
   });
 

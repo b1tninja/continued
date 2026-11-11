@@ -19,6 +19,10 @@ describe("toolDialect schema", () => {
     "llama-json",
     "hermes-json",
     "glm-xml",
+    "kimi-tokens",
+    "kimi-xtml",
+    "minimax-xml",
+    "minimax-ns-xml",
     "toolcall-json",
     "granite-tokens",
     "lfm-tokens",
@@ -41,7 +45,7 @@ describe("toolDialect schema", () => {
     const r = modelSchema.safeParse({ ...base, toolDialect: "xml" });
     expect(r.success).toBe(false);
     expect(JSON.stringify(r.error?.issues)).toContain(
-      "toolDialect must be one of: auto, native, qwen-xml, pythonic, llama-json, hermes-json, glm-xml, toolcall-json, granite-tokens, lfm-tokens, hy3-tags, solar-tokens, longcat-json, olmo-function-calls, seed-xml, cohere-action, off",
+      "toolDialect must be one of: auto, native, qwen-xml, pythonic, llama-json, hermes-json, glm-xml, kimi-tokens, kimi-xtml, minimax-xml, minimax-ns-xml, toolcall-json, granite-tokens, lfm-tokens, hy3-tags, solar-tokens, longcat-json, olmo-function-calls, seed-xml, cohere-action, off",
     );
   });
 });

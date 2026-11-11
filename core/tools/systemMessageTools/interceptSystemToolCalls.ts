@@ -21,15 +21,22 @@ import {
  * message has no text: the final usage chunk and progress updates have none.
  */
 function messageMeta(message: ChatMessage): ChatMessage | undefined {
-  const { usage, route, routeProvider, routeModel, promptProgress } =
-    message as ChatMessage & {
-      usage?: unknown;
-      route?: string;
-      routeProvider?: string;
-      routeModel?: string;
-      promptProgress?: unknown;
-    };
-  if (!usage && !promptProgress) return undefined;
+  const {
+    usage,
+    route,
+    routeProvider,
+    routeModel,
+    promptProgress,
+    recoveryHold,
+  } = message as ChatMessage & {
+    usage?: unknown;
+    route?: string;
+    routeProvider?: string;
+    routeModel?: string;
+    promptProgress?: unknown;
+    recoveryHold?: unknown;
+  };
+  if (!usage && !promptProgress && !recoveryHold) return undefined;
   return {
     role: "assistant",
     content: "",
@@ -38,6 +45,7 @@ function messageMeta(message: ChatMessage): ChatMessage | undefined {
     ...(routeProvider ? { routeProvider } : {}),
     ...(routeModel ? { routeModel } : {}),
     ...(promptProgress ? { promptProgress } : {}),
+    ...(recoveryHold ? { recoveryHold } : {}),
   } as ChatMessage;
 }
 
@@ -49,6 +57,7 @@ function withoutMeta(message: AssistantChatMessage): AssistantChatMessage {
     routeProvider: _routeProvider,
     routeModel: _routeModel,
     promptProgress: _promptProgress,
+    recoveryHold: _recoveryHold,
     ...rest
   } = message;
   return rest;

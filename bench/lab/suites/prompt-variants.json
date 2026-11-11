@@ -1,0 +1,93 @@
+{
+  "suite": "prompt-variants",
+  "kind": "prompt-variants",
+  "description": "The same three tasks under different system-prompt styles, to see which style a model follows. Scored by call validity, schema validity, false calls, tokens and latency. Replace the variant list with --variants <file.json> (an array of {id, system, delivery?}); {{TOOL_NAMES}}, {{TOOL_LIST}} and {{TOOLS_JSON}} are filled in.",
+  "defaults": { "temperature": 0, "numPredict": 400, "stream": false },
+  "estOutTokens": 80,
+  "deliveries": ["native"],
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read a text file from the workspace.",
+      "parameters": {
+        "type": "object",
+        "properties": { "path": { "type": "string" } },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "run_terminal_command",
+      "description": "Run a shell command and return its output.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" },
+          "waitForCompletion": { "type": "boolean" }
+        },
+        "required": ["command"]
+      }
+    },
+    {
+      "name": "file_glob_search",
+      "description": "Find files by glob pattern.",
+      "parameters": {
+        "type": "object",
+        "properties": { "pattern": { "type": "string" } },
+        "required": ["pattern"]
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "read",
+      "group": "read",
+      "user": "Read src/main.ts and tell me what it exports.",
+      "expect": { "tool": "read_file", "args": { "path": "src/main.ts" } }
+    },
+    {
+      "id": "run",
+      "group": "run",
+      "user": "Run `grep -r TODO src` and show me the matches.",
+      "expect": {
+        "tool": "run_terminal_command",
+        "args": { "command": "grep -r TODO src" }
+      }
+    },
+    {
+      "id": "no-tool",
+      "group": "no-tool",
+      "user": "What does the acronym HTTP stand for? Answer in one line.",
+      "expect": { "none": true }
+    }
+  ],
+  "variants": [
+    {
+      "id": "terse",
+      "system": "Use the provided tools."
+    },
+    {
+      "id": "verbose",
+      "system": "You are an expert software engineering assistant embedded in a developer's workspace. You have a set of tools that let you inspect and change the project. Whenever the user's request depends on information that lives in the project, you should use the appropriate tool rather than guessing, and you should pass exactly the arguments the user mentioned. When the request can be answered from general knowledge, answer directly and do not call a tool. Available tools: {{TOOL_NAMES}}."
+    },
+    {
+      "id": "example-laden",
+      "system": "You are a coding agent. Examples of how you behave:\nUser: Open config.json\nAssistant: [calls read_file with path=config.json]\nUser: Run ls -la\nAssistant: [calls run_terminal_command with command=ls -la]\nUser: What is 2+2?\nAssistant: 4\nTools: {{TOOL_NAMES}}."
+    },
+    {
+      "id": "xml-tagged",
+      "system": "<role>Coding agent.</role>\n<rules>\n<rule>Call a tool when the task needs the project or the shell.</rule>\n<rule>Answer plainly, with no tool, when it does not.</rule>\n</rules>\n<tools>\n{{TOOL_LIST}}\n</tools>"
+    },
+    {
+      "id": "json-schema-first",
+      "system": "Tool schemas (JSON):\n{{TOOLS_JSON}}\n\nWhen a task needs a tool, produce a call whose arguments validate against the schema. Otherwise answer in prose."
+    },
+    {
+      "id": "announce-then-call",
+      "system": "You are a coding agent. When a task needs a tool, first say in one short sentence what you are about to do, then call the tool. Tools: {{TOOL_NAMES}}."
+    },
+    {
+      "id": "call-only",
+      "system": "You are a coding agent. When a task needs a tool, reply with the tool call only: no sentence before it and none after it. Tools: {{TOOL_NAMES}}."
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+// The named views the tool can draw. A view is a fixture of
+// harness/fixtures.ts (the state the real app is put into) plus a short note.
+// Keep this list in step with FIXTURES there; test/views.test.mjs checks it.
+export const VIEWS = {
+  chat: {
+    fixture: "idle",
+    note: "a new, empty chat with the input and its toolbar",
+  },
+  conversation: {
+    fixture: "conversation",
+    note: "a finished exchange with markdown and a code block",
+  },
+  streaming: { fixture: "streaming", note: "a reply that is still arriving" },
+  "tool-call": {
+    fixture: "tool-call",
+    note: "a terminal command card waiting for approval",
+  },
+  "tool-call-done": {
+    fixture: "tool-call-done",
+    note: "the same command after it ran",
+  },
+  loop: {
+    fixture: "loop",
+    note: "Loop mode: the plan card, per-item budgets and loop controls",
+  },
+  "settings-tools": {
+    fixture: "settings-tools",
+    note: "Settings, Tools tab, with Commands and secrets",
+  },
+};
+
+export const VIEW_NAMES = Object.keys(VIEWS);
+
+export const DEFAULTS = {
+  widths: [300, 800],
+  themes: ["dark", "light"],
+  height: 700,
+};
+
+/** "a,b" or "a" or "all" to a list of known view names; throws on an unknown one. */
+export function parseViews(value) {
+  if (!value || value === "all") return [...VIEW_NAMES];
+  const names = value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const n of names) {
+    if (!VIEWS[n]) {
+      throw new Error(`Unknown view "${n}". Known: ${VIEW_NAMES.join(", ")}`);
+    }
+  }
+  return names;
+}
+
+/** "300,800" to [300, 800]; each must be a whole number from 200 to 3000. */
+export function parseWidths(value) {
+  if (!value) return [...DEFAULTS.widths];
+  return value.split(",").map((s) => {
+    const n = Number(s.trim());
+    if (!Number.isInteger(n) || n < 200 || n > 3000) {
+      throw new Error(`Bad width "${s}": a whole number from 200 to 3000`);
+    }
+    return n;
+  });
+}
+
+/** "dark,light" or "both" to a list of themes. */
+export function parseThemes(value) {
+  if (!value || value === "both") return [...DEFAULTS.themes];
+  return value.split(",").map((s) => {
+    const t = s.trim();
+    if (t !== "dark" && t !== "light") {
+      throw new Error(`Bad theme "${s}": dark or light`);
+    }
+    return t;
+  });
+}
+
+/** The file name of one picture. */
+export function shotName(view, width, theme) {
+  return `${view}-${width}-${theme}.png`;
+}
+
+/** The full list of pictures for a request, in a stable order. */
+export function planJobs({ views, widths, themes, height }) {
+  const jobs = [];
+  for (const view of views) {
+    for (const width of widths) {
+      for (const theme of themes) {
+        jobs.push({
+          view,
+          fixture: VIEWS[view].fixture,
+          width,
+          height,
+          theme,
+          name: shotName(view, width, theme),
+        });
+      }
+    }
+  }
+  return jobs;
+}

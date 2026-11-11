@@ -399,9 +399,22 @@ export function usageFromCompletionUsage(raw: unknown): Usage | undefined {
  * streams do, especially at the reasoning-to-answer boundary). Reasoning is
  * its own message, first; text and tool calls share one assistant message.
  */
+/**
+ * The field the adapters' recovery stage sets on the empty chunk that says a
+ * reply is held (RECOVERY_HOLD_FIELD in packages/openai-adapters, which core
+ * does not import for this; a test pins the two equal).
+ */
+export const RECOVERY_HOLD_FIELD = "x_continue_recovery_hold";
+
 export function messagesFromChatCompletionChunk(
   chunk: ChatCompletionChunk,
 ): ChatMessage[] {
+  const hold = (chunk as unknown as Record<string, unknown>)?.[
+    RECOVERY_HOLD_FIELD
+  ];
+  if (hold === "start" || hold === "end") {
+    return [{ role: "assistant", content: "", recoveryHold: hold }];
+  }
   const messages = chatMessagesFromChunk(chunk);
   // The last chunk of a stream (stream_options.include_usage) carries the
   // token counts, usually with no choices. Without this they were dropped.

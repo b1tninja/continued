@@ -36,6 +36,8 @@ export type TextDialect =
   | "harmony" // gpt-oss: <|channel|>commentary to=functions.NAME ...
   | "kimi-tokens" // <|tool_call_begin|>functions.NAME:IDX<|tool_call_argument_begin|>
   | "minimax-xml" // <minimax:tool_call><invoke name=..>
+  | "minimax-ns-xml" // MiniMax-M3: ]<]minimax[>[<tool_call> and namespaced tags
+  | "kimi-xtml" // Kimi K3: <|open|>tools<|sep|><|open|>call tool=..
   | "dsml" // DeepSeek V3.2 full-width-bar DSML
   | "deepseek-tokens" // DeepSeek V3/V3.1/R1 tool-call tokens
   | "mistral" // [TOOL_CALLS]...

@@ -9,6 +9,7 @@ import {
   copyPayload,
   detectVpn,
   escapeXml,
+  parseMapArg,
   parseSandboxIds,
   pollResult,
   vpnVerdict,
@@ -177,5 +178,28 @@ describe("pollResult", () => {
     );
     expect(r.status).toBe("timeout");
     expect(r.waitedMs).toBe(0);
+  });
+});
+
+describe("parseMapArg", () => {
+  it("maps a host directory read-only to a drive path", () => {
+    expect(parseMapArg("C:\\Users\\me\\pw=C:\\pw")).toEqual({
+      host: "C:\\Users\\me\\pw",
+      sandbox: "C:\\pw",
+      readOnly: true,
+    });
+  });
+
+  it("splits at the last = and trims a trailing slash", () => {
+    expect(parseMapArg("D:\\a=b\\c=C:\\x\\")).toMatchObject({
+      host: "D:\\a=b\\c",
+      sandbox: "C:\\x",
+    });
+  });
+
+  it("refuses a missing target and the runner's own folders", () => {
+    expect(() => parseMapArg("C:\\only")).toThrow(/--map takes/);
+    expect(() => parseMapArg("C:\\a=C:\\payload")).toThrow(/runner owns/);
+    expect(() => parseMapArg("C:\\a=C:\\Out\\sub")).toThrow(/runner owns/);
   });
 });

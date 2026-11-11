@@ -1,0 +1,65 @@
+{
+  "suite": "leaks",
+  "kind": "leaks",
+  "description": "The R4/R6-style leak census: the agent's eight common prompts sent with 2, 14, 60 or all 21 of the real agent tools, at chosen temperatures, streaming and not. A leak is a tool call written as text instead of returned as a structured call. The tool list is the real one from core (frozen in fixtures/agent-tools.json, regenerate with `lab.mjs snapshot-tools`); the 60-tool set pads it with plain synthetic tools. The default grid is small; --full-grid runs every combination.",
+  "system": "You are a coding agent working in a repository. When a task needs a tool, call the tool; do not describe the call in prose.",
+  "defaults": {
+    "temperature": 0,
+    "numPredict": 400,
+    "numCtx": 16384,
+    "stream": false
+  },
+  "estOutTokens": 80,
+  "defaultGrid": {
+    "toolCounts": [2, 14],
+    "temperatures": [0],
+    "streams": [false]
+  },
+  "fullGrid": {
+    "toolCounts": [2, 14, 60, "agent"],
+    "temperatures": [0, 0.7],
+    "streams": [false, true]
+  },
+  "prompts": [
+    {
+      "id": "read",
+      "expectTool": "read_file",
+      "text": "Read the file src/main.ts and tell me what it exports."
+    },
+    {
+      "id": "run",
+      "expectTool": "run_terminal_command",
+      "text": "Run `grep -r TODO src` and show me the matches."
+    },
+    {
+      "id": "run-timeout",
+      "expectTool": "run_terminal_command",
+      "text": "Run the test suite with `npm test`; it is slow, so let it wait for completion."
+    },
+    {
+      "id": "glob",
+      "expectTool": "file_glob_search",
+      "text": "Find every TypeScript test file under packages/."
+    },
+    {
+      "id": "list",
+      "expectTool": "ls",
+      "text": "List the files in the docs directory, recursively."
+    },
+    {
+      "id": "create",
+      "expectTool": "create_new_file",
+      "text": "Create notes/todo.md containing a three-item checklist about releasing v1.2."
+    },
+    {
+      "id": "plan",
+      "expectTool": "present_plan",
+      "text": "Plan a refactor of the login module into three steps, then present the plan for approval."
+    },
+    {
+      "id": "fetch",
+      "expectTool": "fetch_url_content",
+      "text": "Fetch https://example.com/changelog and summarise the latest entry."
+    }
+  ]
+}

@@ -157,6 +157,14 @@ describe("dialectFromChatTemplate", () => {
       "hermes-json",
     );
   });
+  test("minimax m2 and m3 templates", () => {
+    expect(
+      dialectFromChatTemplate("'<minimax:tool_call>' invoke")?.dialect,
+    ).toBe("minimax-xml");
+    expect(
+      dialectFromChatTemplate("ns_token ~ ']<]minimax[>[<tool_call>'")?.dialect,
+    ).toBe("minimax-ns-xml");
+  });
   test("nothing", () => {
     expect(dialectFromChatTemplate("{{ messages }}")).toBeUndefined();
     expect(dialectFromChatTemplate(null)).toBeUndefined();

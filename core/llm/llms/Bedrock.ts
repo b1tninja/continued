@@ -205,6 +205,10 @@ function* recoveryMessages(
     if (event.type === "call") state.recovered.push(event.call);
     else yield { role: "assistant", content: event.text };
   }
+  // Say when text starts being held and when it is judged, so the screen can
+  // show that the reply is being read rather than stalled.
+  const phase = state.recovery?.takeHoldSignal?.();
+  if (phase) yield { role: "assistant", content: "", recoveryHold: phase };
 }
 
 /** Filtered answer text: shown, or given to the recovery stage when there is one. */

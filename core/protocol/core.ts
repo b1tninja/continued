@@ -238,6 +238,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     TerminalEnvironmentStatus & {
       hostEnvNames: string[];
       credentialUrlNames: string[];
+      /** The host's process.platform; a webview has no `process`. */
+      platform?: NodeJS.Platform;
     },
   ];
   /**
