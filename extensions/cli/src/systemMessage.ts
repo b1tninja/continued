@@ -15,6 +15,7 @@ import { AGENT_FILES, rulesDirs } from "./instructionFiles.js";
 import { PermissionMode } from "./permissions/types.js";
 import { serviceContainer } from "./services/ServiceContainer.js";
 import { ConfigServiceState, SERVICE_NAMES } from "./services/types.js";
+import { SYSTEM_MARKERS } from "./systemMessageMarkers.js";
 
 /**
  * Check if current directory is a git repository
@@ -210,12 +211,12 @@ export async function constructSystemMessage(
   // use's prompt choice, else the model's prompt profile, picks the short
   // text for small models (Qwen) or a prompt block of the person's own.
   if (mode === "plan") {
-    systemMessage += `\n<context name="planMode">\n${planTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
+    systemMessage += `${SYSTEM_MARKERS.plan}${planTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
   } else {
-    systemMessage += `\n<context name="agentMode">\n${actTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
+    systemMessage += `${SYSTEM_MARKERS.agent}${actTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
     // Check if commit signature is disabled via environment variable
     if (!process.env.CONTINUE_CLI_DISABLE_COMMIT_SIGNATURE) {
-      systemMessage += `\n<context name="commitSignature">When creating commits using any CLI or tool, include the following in the commit message:
+      systemMessage += `${SYSTEM_MARKERS.commit}When creating commits using any CLI or tool, include the following in the commit message:
 Generated with [Continue](https://continue.dev)
 
 Co-Authored-By: Continue <noreply@continue.dev>
@@ -225,16 +226,12 @@ Co-Authored-By: Continue <noreply@continue.dev>
 
   // In headless mode, add instructions to be concise and only provide final answers
   if (headless) {
-    systemMessage += `
-
-IMPORTANT: You are running in headless mode. Provide ONLY your final answer to the user's question. Do not include explanations, reasoning, or additional commentary unless specifically requested. Be direct and concise.`;
+    systemMessage += `${SYSTEM_MARKERS.headless} Provide ONLY your final answer to the user's question. Do not include explanations, reasoning, or additional commentary unless specifically requested. Be direct and concise.`;
   }
 
   // Add JSON formatting instructions if format is json
   if (format === "json") {
-    systemMessage += `
-
-IMPORTANT: You are operating in JSON output mode. Your final response MUST be valid JSON that can be parsed by JSON.parse(). The JSON should contain properties relevant to answer the user's question. You don't need to include any general "response" or "answer" field. Do not include any text before or after the JSON - the entire response must be parseable JSON.
+    systemMessage += `${SYSTEM_MARKERS.json} Your final response MUST be valid JSON that can be parsed by JSON.parse(). The JSON should contain properties relevant to answer the user's question. You don't need to include any general "response" or "answer" field. Do not include any text before or after the JSON - the entire response must be parseable JSON.
 
 Example response format:
 {
@@ -244,7 +241,7 @@ Example response format:
 
   // Add rules section if we have any rules or agent content
   if (agentContent || processedRules.length > 0) {
-    systemMessage += '\n\n<context name="userRules">';
+    systemMessage += SYSTEM_MARKERS.rules;
 
     if (agentContent) {
       systemMessage += `\n${agentContent}`;

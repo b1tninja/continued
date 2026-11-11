@@ -1,0 +1,8 @@
+{
+  "cli-agent": "f37181a0b5ae7cc6f375368ca768144219aaeef586a1874c7ab197694cb430d4",
+  "cli-agent-plain": "32da71502d771eea31cee87b544fad67b0816c1bf6335838c6d87a9e01640313",
+  "cli-plan": "4e375bdde31dd84806f0a5118ccd1c2822667effee273db4cfc37450590d1a8e",
+  "cli-subagent": "f5caa8b929df8992d2e267e70758701b181a923e1acc78e92e5fc161b130f692",
+  "cli-compaction": "d9a05cce3e30f69442cbfdef7071c29bf2a0a58eaa9320f05e1f315ffde33736",
+  "cli-resume": "bd1d2b13986ac4645a95c8fcc171b392c0ccdff6831ce92c82d453f5e2ae9fb4"
+}

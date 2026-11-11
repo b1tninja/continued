@@ -30,6 +30,9 @@ import { toolCallStateToContextItems } from "../../pages/gui/ToolCallDiv/utils";
 // Helper function to render context items and append status information
 // Helper function to render context items and append status information
 
+/** Starts the conversation summary appended to the system message. */
+export const SUMMARY_MARKER = "\n\nPrevious conversation summary:";
+
 interface MessageWithContextItems {
   ctxItems: ContextItemWithId[];
   message: ChatMessage;
@@ -219,7 +222,7 @@ export function constructMessages(
   let finalSystemMessage = systemMessage;
   if (summaryContent) {
     finalSystemMessage = systemMessage
-      ? `${systemMessage}\n\nPrevious conversation summary:\n\n ${summaryContent}`
+      ? `${systemMessage}${SUMMARY_MARKER}\n\n ${summaryContent}`
       : `Previous conversation summary:\n\n ${summaryContent}`;
   }
 

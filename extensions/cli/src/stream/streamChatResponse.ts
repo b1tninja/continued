@@ -49,6 +49,7 @@ import {
 import { resetRefusalCount } from "./refusalCap.js";
 import { resetRepeatGuard } from "./repeatGuard.js";
 import { buildChatRequestBody } from "./requestBody.js";
+import { dumpPromptSegments } from "./segmentDump.js";
 import { injectSteeringMessage } from "./steering.js";
 import {
   handleAutoContinuation,
@@ -425,6 +426,14 @@ export async function processStreamingResponse(
     taskListBlock,
     isCompacting,
     turnTail,
+  });
+  dumpPromptSegments({
+    body: requestBody,
+    systemMessage,
+    tools,
+    taskListBlock,
+    turnTail,
+    isCompacting,
   });
   const requestStartTime = Date.now();
 

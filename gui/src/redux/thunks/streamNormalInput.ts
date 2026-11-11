@@ -50,6 +50,7 @@ import {
 import { totalInputTokens } from "core/llm/utils/cacheStats";
 import { ThunkApiType } from "../store";
 import { buildChatRequest } from "../util/buildChatRequest";
+import { dumpPromptSegments } from "../util/promptSegmentDump";
 
 import { interceptSystemToolCalls } from "core/tools/systemMessageTools/interceptSystemToolCalls";
 
@@ -113,6 +114,7 @@ export const streamNormalInput = createAsyncThunk<
       appliedRuleIndex,
       systemToolsFramework,
     } = buildChatRequest(state);
+    dumpPromptSegments(state);
     let completionOptions: LLMFullCompletionOptions = builtOptions;
 
     // Prompt caching: the toolbar choice for this model, or when there is none
