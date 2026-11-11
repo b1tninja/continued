@@ -42,6 +42,8 @@ export async function hintToolDialectLeak(args: {
     current: model.toolDialect,
   });
   if (!leak) return;
+  // Claimed before the await so two replies in flight print once.
+  hinted.add(model.name);
   // Ollama may already parse this model's calls: then the text is not a leak.
   const show = await getOllamaShowHint({
     provider: model.provider,
@@ -49,8 +51,10 @@ export async function hintToolDialectLeak(args: {
     model: model.model,
     fetchFn: args.fetchFn,
   });
-  if (show?.serverParses) return;
-  hinted.add(model.name);
+  if (show?.serverParses) {
+    hinted.delete(model.name);
+    return;
+  }
   const line = leakHintText(model.name, leak.dialect);
   if (args.callbacks?.onStatusMessage) args.callbacks.onStatusMessage(line);
   else (args.print ?? ((l) => console.error(l)))(line);

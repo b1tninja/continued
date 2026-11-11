@@ -26,6 +26,7 @@ import { GLOBAL_DIR_NAME } from "core/util/paths.js";
 import { env } from "../env.js";
 import { logger } from "../util/logger.js";
 
+import { findWorkspaceScripts, scriptFingerprint } from "./hookScripts.js";
 import type { HookHandler, HooksConfig } from "./types.js";
 
 const TRUST_FILE = "trusted-hooks.json";
@@ -122,10 +123,23 @@ export interface ProjectHookFile {
   disableAllHooks?: boolean;
 }
 
+function commandsOf(hooks: HooksConfig): string[] {
+  const commands: string[] = [];
+  for (const groups of Object.values(hooks)) {
+    for (const group of groups ?? []) {
+      for (const handler of group.hooks) {
+        if (handler.type === "command") commands.push(handler.command);
+      }
+    }
+  }
+  return commands;
+}
+
 /**
  * A hash of what would run: each file's path (relative to the project, so the
- * clone can move) and its hooks. Any change to a command, matcher, timeout or
- * `onError` produces a different value.
+ * clone can move) and its hooks, plus the content of each workspace script a
+ * command runs (see hookScripts.ts). Any change to a command, matcher, timeout
+ * or `onError`, or to such a script, produces a different value.
  */
 export function fingerprintProjectHooks(
   cwd: string,
@@ -139,15 +153,30 @@ export function fingerprintProjectHooks(
       disableAllHooks: !!file.disableAllHooks,
     });
     hash.update(`${relative}\0${content}\0`);
+    // A command that runs a script in the workspace is trusted together with
+    // that script's content. Nothing is added for a command that runs none, so
+    // a record made before this existed stays valid for those.
+    for (const command of commandsOf(file.hooks)) {
+      const scripts = scriptFingerprint(command, cwd);
+      if (scripts) hash.update(`script\0${command}\0${scripts}\0`);
+    }
   }
   return hash.digest("hex");
 }
 
 /** A one-line description of a handler, for showing what would run. */
-function describeHandlerForTrust(handler: HookHandler): string {
+function describeHandlerForTrust(handler: HookHandler, cwd?: string): string {
   switch (handler.type) {
-    case "command":
-      return `command: ${handler.command}`;
+    case "command": {
+      const scripts = cwd
+        ? findWorkspaceScripts(handler.command, cwd).map((f) =>
+            path.relative(realPath(cwd), f).split(path.sep).join("/"),
+          )
+        : [];
+      return scripts.length
+        ? `command: ${handler.command} (runs ${scripts.join(", ")}; its content is part of what you trust)`
+        : `command: ${handler.command}`;
+    }
     case "http":
       return `http: ${handler.url}`;
     default: {
@@ -158,7 +187,10 @@ function describeHandlerForTrust(handler: HookHandler): string {
 }
 
 /** Every handler in the files, as `[event] description` lines. */
-export function listProjectHandlers(files: ProjectHookFile[]): string[] {
+export function listProjectHandlers(
+  files: ProjectHookFile[],
+  cwd?: string,
+): string[] {
   const lines: string[] = [];
   for (const file of files) {
     if (file.disableAllHooks) {
@@ -167,7 +199,7 @@ export function listProjectHandlers(files: ProjectHookFile[]): string[] {
     for (const [event, groups] of Object.entries(file.hooks)) {
       for (const group of groups ?? []) {
         for (const handler of group.hooks) {
-          lines.push(`[${event}] ${describeHandlerForTrust(handler)}`);
+          lines.push(`[${event}] ${describeHandlerForTrust(handler, cwd)}`);
         }
       }
     }

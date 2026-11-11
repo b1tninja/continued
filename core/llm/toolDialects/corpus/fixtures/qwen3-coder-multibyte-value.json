@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct/blob/main/chat_template.jinja, not observed",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": ""
   },

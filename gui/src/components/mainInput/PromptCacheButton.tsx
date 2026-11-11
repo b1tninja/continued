@@ -32,7 +32,6 @@ import {
 } from "../../util/promptCacheCountdown";
 import { ToolTip } from "../gui/Tooltip";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
-import HoverItem from "./InputToolbar/HoverItem";
 
 const CHOICES: (PromptCacheSetting | "config")[] = [
   "auto",
@@ -52,7 +51,7 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 /**
  * A ring that drains as the cache entry ages; `fraction` 1 is full. Drawn at
- * the size of the other toolbar icons (12px).
+ * the size of the other toolbar icons (16px).
  */
 function CountdownRing({
   fraction,
@@ -64,7 +63,7 @@ function CountdownRing({
   return (
     <svg
       viewBox="0 0 12 12"
-      className={`h-3 w-3 flex-none -rotate-90 ${warn ? "text-warning" : "brightness-200"}`}
+      className={`h-4 w-4 flex-none -rotate-90 ${warn ? "text-warning" : "brightness-200"}`}
       data-testid="prompt-cache-ring"
       aria-hidden="true"
     >
@@ -111,9 +110,10 @@ function tooltipText(
  * the cache is warm it shows a ring that drains toward expiry, with the time
  * left beside it when there is room. Otherwise it is the database icon, filled
  * when requests carry cache breakpoints and outlined when they do not. Shown
- * only for models whose provider honours it.
+ * only for models whose provider honours it. `inMenu`: a labelled row in the
+ * toolbar's overflow menu.
  */
-export function PromptCacheButton() {
+export function PromptCacheButton({ inMenu = false }: { inMenu?: boolean }) {
   const dispatch = useAppDispatch();
   const model = useAppSelector(selectSelectedChatModel);
   // What was picked in the menu, and what is in force (the default applies
@@ -204,27 +204,30 @@ export function PromptCacheButton() {
           <ListboxButton
             data-testid="prompt-cache-button"
             aria-label="Prompt cache"
-            className="m-0 flex-none border-none bg-transparent p-0 text-description hover:brightness-150"
+            className={`m-0 flex min-h-6 flex-none cursor-pointer items-center border-none bg-transparent p-0 text-description hover:brightness-150 ${inMenu ? "w-full px-2 text-left" : "min-w-6 justify-center"}`}
           >
-            <HoverItem as="span" className="flex items-center gap-1">
+            <span className="flex items-center gap-2">
               {showRing ? (
                 <>
                   <CountdownRing fraction={fraction} warn={warn} />
                   {!isStreaming && (
                     <span
                       data-testid="prompt-cache-countdown"
-                      className={`hidden text-[10px] tabular-nums xs:inline ${warn ? "text-warning" : ""}`}
+                      className={`${inMenu ? "" : "hidden xs:inline"} text-[10px] tabular-nums ${warn ? "text-warning" : ""}`}
                     >
                       {formatCountdown(msLeft)}
                     </span>
                   )}
                 </>
               ) : status.on ? (
-                <CircleStackIconSolid className="h-3 w-3 opacity-60" />
+                <CircleStackIconSolid className="h-4 w-4 opacity-60" />
               ) : (
-                <CircleStackIconOutline className="h-3 w-3" />
+                <CircleStackIconOutline className="h-4 w-4" />
               )}
-            </HoverItem>
+              {inMenu && (
+                <span className="text-xs text-foreground">Prompt cache</span>
+              )}
+            </span>
           </ListboxButton>
         </ToolTip>
         <ListboxOptions className="max-w-72 min-w-48">

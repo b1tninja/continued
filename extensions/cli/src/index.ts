@@ -460,11 +460,11 @@ program
     await gracefulExit(code);
   });
 
-// Permissions subcommand (read-only)
+// Permissions subcommand
 program
   .command("permissions [action] [args...]")
   .description(
-    "List every permission rule with its source and state, or test a call against them (list, test <tool> <arg...>)",
+    "List every permission rule with its source and state, or test a call against them (list, test <tool> <arg...>, add <never|ask|always> <rule>, remove <rule>, adopt <rule> --from <file>)",
   )
   .option("--json", "Machine-readable output")
   .option(
@@ -478,6 +478,15 @@ program
     (value: string, previous: string[] = []) => [...previous, value],
   )
   .option("--output <text>", "test: text a tool returned, to check the notice")
+  .option("--decision <list>", "remove, adopt: never, ask or always")
+  .option("--from <file>", "adopt: the workspace or assistant file")
+  .option("--yes", "remove: confirm removing a Never or loosening a rule")
+  .option(
+    "--yes-allow-everything",
+    "add, adopt: confirm a rule that allows everything or a broad wildcard",
+  )
+  .option("--dry-run", "add, remove, adopt: show the change, write nothing")
+  .option("--probe <text>", "add, adopt: a sample call to show what changes")
   .action(
     async (action: string | undefined, args: string[] | undefined, options) => {
       const code = permissionsCommand(action, args ?? [], options);

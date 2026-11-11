@@ -31,6 +31,8 @@ export interface LoopIconProps {
   /** Which lobe the dot sits on. Right is the logo's. */
   dot?: LoopIconSide;
   title?: string;
+  /** Test id of the svg (its dot adds "-dot"); a second mark on a page needs its own. */
+  testId?: string;
 }
 
 /**
@@ -44,6 +46,7 @@ export function LoopIcon({
   color,
   dot = "right",
   title,
+  testId = "loop-icon",
 }: LoopIconProps) {
   // useId() contains colons, which are not safe in url(#...)
   const id = `loop-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -61,7 +64,7 @@ export function LoopIcon({
       role={title ? "img" : undefined}
       aria-label={title}
       aria-hidden={title ? undefined : true}
-      data-testid="loop-icon"
+      data-testid={testId}
     >
       {gradient && (
         <defs>
@@ -88,7 +91,7 @@ export function LoopIcon({
       />
       {gradient && (
         <circle
-          data-testid="loop-icon-dot"
+          data-testid={`${testId}-dot`}
           data-side={dot}
           {...DOT_AT[dot]}
           r={strokeWidth * 0.6}

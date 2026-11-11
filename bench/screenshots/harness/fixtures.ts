@@ -9,13 +9,17 @@ import type {
   TaskPlan,
   ToolCallState,
 } from "core";
+import { listEffectiveRules } from "core/tools/permissions/effectiveRules";
+import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { parsePolicyFile } from "core/tools/permissions/settingsFile";
 import { createLoop, enterWait } from "core/util/loopMode";
 import type { MockIdeMessenger } from "@gui/context/MockIdeMessenger";
 import {
   newSession,
   setLoop,
+  noteToolDialectLeak,
   setMode,
+  setRecoveryHold,
   setTaskPlan,
 } from "@gui/redux/slices/sessionSlice";
 import type { setupStore } from "@gui/redux/store";
@@ -178,6 +182,80 @@ function loopState(): LoopState {
   return enterWait(loop, new Date());
 }
 
+/** Set a controlled input's value the way typing does, so React sees it. */
+function typeInto(el: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set;
+  setter?.call(el, value);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** The Permissions page with the add-rule form open on a rule that allows every command. */
+const permissionsEditor: Fixture = async ({ messenger, navigate }) => {
+  const report = {
+    ...listEffectiveRules({
+      levels: DEFAULT_POLICY_LEVELS,
+      floor: ["runTerminalCommand(rm -rf /*)"],
+      user: {
+        deny: ["runTerminalCommand(terraform apply*)"],
+        ask: ["runTerminalCommand(git push*)"],
+        allow: ["runTerminalCommand(npm test*)"],
+      },
+      folder: [
+        {
+          file: "C:/work/app/.continue/rules.yaml",
+          permissions: { allow: ["runTerminalCommand(make build*)"] },
+        },
+      ],
+    }),
+    userFile: { path: "config.yaml", state: "ok" as const, hash: "h1" },
+  };
+  Object.assign(messenger.responses, {
+    "policy/rules": report,
+    "config/addToolRule": {
+      result: "preview",
+      analysis: {
+        valid: true,
+        rule: "runTerminalCommand(*)",
+        broad: true,
+        broadReason: "It matches every command.",
+        friction: "typed",
+        loosens: true,
+        warnings: [],
+      },
+      diff: [
+        { kind: "same", text: "toolPermissions:" },
+        { kind: "add", text: "  allow:" },
+        { kind: "add", text: "    - runTerminalCommand(*)" },
+      ],
+      verdict: {
+        probe: "rm notes.txt",
+        before: { decision: "ask", reason: "level" },
+        after: { decision: "allow", reason: "rule" },
+      },
+    },
+  });
+  navigate("/config?tab=permissions");
+  await wait(600);
+  const add = document.querySelector<HTMLButtonElement>(
+    "button[aria-label='Add a rule']",
+  );
+  add?.click();
+  await wait(100);
+  const input = document.querySelector<HTMLInputElement>(
+    "form[data-testid=rule-form] input.font-mono",
+  );
+  if (input) typeInto(input, "runTerminalCommand(*)");
+  await wait(700);
+  document
+    .querySelector("[data-testid=rule-form]")
+    ?.scrollIntoView({ block: "start" });
+};
+
 export const FIXTURES: Record<string, Fixture> = {
   /** A new, empty chat */
   idle: ({ store }) => {
@@ -230,6 +308,44 @@ export const FIXTURES: Record<string, Fixture> = {
       ),
     );
   },
+  /** A reply held back while the app checks it for a tool request */
+  held: ({ store }) => {
+    store.dispatch(
+      newSession(
+        session([user("Why does the parseConfig test fail?"), assistant("")]),
+      ),
+    );
+    store.dispatch({ type: "session/setActive" });
+    store.dispatch(setRecoveryHold(true));
+  },
+  /** A model wrote a tool request as plain text: the notice above the input */
+  dialect: ({ store }) => {
+    store.dispatch(newSession());
+    store.dispatch(
+      noteToolDialectLeak({
+        model: "Claude Sonnet",
+        dialect: "qwen-xml",
+      } as never),
+    );
+  },
+  /** The "+" menu at the left of the prompt, open */
+  "attach-open": async ({ store }) => {
+    store.dispatch(newSession());
+    await new Promise((r) => setTimeout(r, 800));
+    (
+      document.querySelector("[data-testid=attach-menu-button]") as HTMLElement
+    )?.click();
+  },
+  /** The "..." menu under the prompt, open */
+  "overflow-open": async ({ store }) => {
+    store.dispatch(newSession());
+    await new Promise((r) => setTimeout(r, 800));
+    (
+      document.querySelector(
+        "[data-testid=input-overflow-button]",
+      ) as HTMLElement
+    )?.click();
+  },
   /** Loop mode: the plan card, the per-item budgets and the loop controls */
   loop: ({ store }) => {
     store.dispatch(newSession(session([], "Fix parseConfig")));
@@ -237,6 +353,7 @@ export const FIXTURES: Record<string, Fixture> = {
     store.dispatch(setTaskPlan(PLAN));
     store.dispatch(setLoop(loopState()));
   },
+  "permissions-editor": permissionsEditor,
   /** The Settings page, Tools tab, with "Commands and secrets" */
   "settings-tools": async ({ navigate }) => {
     navigate("/config?tab=tools");

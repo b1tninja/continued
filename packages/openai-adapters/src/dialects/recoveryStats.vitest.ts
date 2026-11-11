@@ -65,3 +65,45 @@ describe("recovery counters", () => {
     expect(isRecoveredCallId(undefined)).toBe(false);
   });
 });
+
+describe("recovery containment", () => {
+  it("fails open to text and counts a recovery error when a stage throws", () => {
+    const stage = createTextToolRecovery("qwen3", tools, {}, env)!;
+    const inner = (stage as unknown as { inner: { end(): never } }).inner;
+    inner.end = () => {
+      throw new Error("boom");
+    };
+    const events = [...stage.push("<function=Read>\n<param"), ...stage.end()];
+    expect(events.map((e) => (e.type === "text" ? e.text : "")).join("")).toBe(
+      "<function=Read>\n<param",
+    );
+    expect(recoveryStatsSnapshot()[0]).toMatchObject({ recoveryErrors: 1 });
+    expect(stage.push("more")).toEqual([{ type: "text", text: "more" }]);
+  });
+
+  it("releases a held block past the cap as text and stops holding", () => {
+    for (const dialect of ["qwen-xml", "hermes-json"]) {
+      resetRecoveryStats();
+      const e = { CONTINUE_RECOVER_TEXT_TOOL_CALLS: dialect };
+      const start =
+        dialect === "qwen-xml" ? "<function=Read>\n" : "<tool_call>";
+      const stage = createTextToolRecovery("qwen3", tools, {}, e)!;
+      const chunk = "x".repeat(1 << 18);
+      let text = "";
+      for (let i = 0; i < 6; i++) {
+        for (const ev of stage.push((i === 0 ? start : "") + chunk)) {
+          if (ev.type === "text") text += ev.text;
+        }
+      }
+      expect(stage.isHolding?.()).toBe(false);
+      for (const ev of stage.end()) if (ev.type === "text") text += ev.text;
+      expect(text).toBe(start + chunk.repeat(6));
+      expect(recoveryStatsSnapshot()[0]).toMatchObject({
+        held: 1,
+        recovered: 0,
+        releasedAsText: 1,
+        releasedAtCap: 1,
+      });
+    }
+  });
+});

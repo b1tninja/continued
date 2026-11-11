@@ -1,6 +1,16 @@
 import { decodeFQSN, getTemplateVariables } from "@continuedev/config-yaml";
 import { type AssistantConfig } from "@continuedev/sdk";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { announcePins } from "core/context/mcp/mcpPinNotices.js";
+import {
+  adoptLegacyPin,
+  evaluatePins,
+  getToolPinStore,
+  launchSpec,
+  pinKey,
+  recordApproval,
+  type ApprovalEvents,
+} from "core/context/mcp/mcpToolPins.js";
 
 import { getErrorString } from "../util/error.js";
 import { logger } from "../util/logger.js";
@@ -22,6 +32,11 @@ import {
 
 interface ServerConnection extends MCPConnectionInfo {
   client: Client | null;
+  /** Tools that must ask again: a changed definition, or a changed launch definition */
+  pinChanges?: Map<
+    string,
+    { kind: "changed" | "added" | "launch"; summary: string }
+  >;
 }
 
 export const EMPTY_MCP_STATE: MCPServiceState = {
@@ -182,6 +197,71 @@ export class MCPService
     return await operation();
   }
 
+  /** The pin options of a connection: its config as the core pin code reads it. */
+  private pinOptions(connection: ServerConnection) {
+    return connection.config as never;
+  }
+
+  /** Compare a server's tools and launch definition with what was approved. */
+  public async refreshPins(connection: ServerConnection): Promise<void> {
+    try {
+      const options = this.pinOptions(connection);
+      const store = getToolPinStore();
+      await adoptLegacyPin(options, store);
+      const { flagged } = await evaluatePins(
+        pinKey(options),
+        connection.tools as never,
+        store,
+        launchSpec(options),
+      );
+      connection.pinChanges = flagged;
+    } catch (error) {
+      logger.warn("Could not check the saved MCP pins", {
+        name: connection.config?.name,
+        error: getErrorString(error),
+      });
+    }
+  }
+
+  /**
+   * A call ran, so it was approved (or the person runs at YOLO): pin it. The
+   * first call to a server pins all of its tools, and a changed launch
+   * definition is accepted here; both are announced.
+   */
+  public async recordPins(
+    connection: ServerConnection,
+    toolName: string,
+  ): Promise<void> {
+    try {
+      const options = this.pinOptions(connection);
+      const events: ApprovalEvents = {};
+      await adoptLegacyPin(options, getToolPinStore());
+      const changed = await recordApproval(
+        pinKey(options),
+        connection.tools as never,
+        getToolPinStore(),
+        toolName,
+        new Date(),
+        launchSpec(options),
+        events,
+      );
+      if (!changed) return;
+      announcePins(connection.config.name, events, connection.warnings, (m) =>
+        logger.warn(m),
+      );
+      await this.refreshPins(connection);
+    } catch (error) {
+      logger.warn("Could not save the MCP pin", {
+        error: getErrorString(error),
+      });
+    }
+  }
+
+  /** What the policy needs to know before it lets a call to this tool run. */
+  public getPinChange(serverName: string, toolName: string) {
+    return this.connections.get(serverName)?.pinChanges?.get(toolName);
+  }
+
   /**
    * Run a tool by name
    */
@@ -196,10 +276,12 @@ export class MCPService
             if (!conn?.client) {
               throw new Error(`Client for ${serverName} not available`);
             }
-            return await conn.client.callTool({
+            const result = await conn.client.callTool({
               name,
               arguments: args,
             });
+            await this.recordPins(conn, name);
+            return result;
           });
         }
       }
@@ -323,6 +405,7 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
           });
         }
       }
+      await this.refreshPins(connection);
     } catch (error) {
       const errorMessage = getErrorString(error);
       connection.status = "error";

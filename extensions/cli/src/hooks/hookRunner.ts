@@ -411,9 +411,10 @@ export async function runHooks(
   const results = await Promise.all(
     syncHandlers.map((handler) => executeHandler(handler, input, cwd)),
   );
-  results.forEach((result, i) =>
-    applyFailurePolicy(syncHandlers[i], result, eventName),
-  );
+  results.forEach((result, i) => {
+    if (syncHandlers[i].origin === "project") result.fromProject = true;
+    applyFailurePolicy(syncHandlers[i], result, eventName);
+  });
 
   // Aggregate results
   return aggregateResults(results, eventName);
@@ -467,8 +468,18 @@ function mergePreToolUse(
   specific: PreToolUseHookOutput,
   outputReason: string | undefined,
   decisionRank: number,
+  fromProject: boolean,
 ): number {
-  const decision = specific.permissionDecision;
+  let decision = specific.permissionDecision;
+  if (decision === "allow" && fromProject) {
+    // A repository can supply this hook, so its approval is worth nothing: it
+    // may deny or ask for more, never turn an "ask" into an "allow".
+    decision = undefined;
+    eventResult.projectAllowIgnored = true;
+    logger.warn(
+      'A project hook answered "allow" for a tool call; ignored, because only your own hooks can approve a call.',
+    );
+  }
   let rank = decisionRank;
   if (decision && DECISION_RANK[decision] > rank) {
     rank = DECISION_RANK[decision];
@@ -543,12 +554,16 @@ function aggregateResults(
           specific,
           output.reason,
           decisionRank,
+          !!result.fromProject,
         );
         break;
 
       case "PermissionRequest":
-        // A deny is never replaced by a later allow.
-        if (eventResult.permissionRequestDecision?.behavior !== "deny") {
+        // A deny is never replaced by a later allow, and a project hook's
+        // allow is ignored (see mergePreToolUse).
+        if (specific.decision.behavior === "allow" && result.fromProject) {
+          eventResult.projectAllowIgnored = true;
+        } else if (eventResult.permissionRequestDecision?.behavior !== "deny") {
           eventResult.permissionRequestDecision = specific.decision;
         }
         if (specific.decision.behavior === "deny") {

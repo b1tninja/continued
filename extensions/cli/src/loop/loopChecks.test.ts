@@ -2,6 +2,7 @@ import { type ChildProcess } from "child_process";
 import { EventEmitter } from "events";
 
 import { getCommandExecutor } from "core/util/commandExecutor.js";
+import { withRealExitCode } from "core/util/shell.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const spawn = vi.hoisted(() => vi.fn());
@@ -51,7 +52,10 @@ describe("loop check commands use the approved shell", () => {
     child.emit("close", 0);
     await expect(pending).resolves.toEqual({ exitCode: 0, output: "hello" });
 
-    const started = getCommandExecutor().invocation("echo hello");
+    const executor = getCommandExecutor();
+    const started = executor.invocation(
+      withRealExitCode("echo hello", executor.shell.kind),
+    );
     expect(spawn).toHaveBeenCalledTimes(1);
     expect(spawn).toHaveBeenCalledWith(
       started.shell,
@@ -120,6 +124,7 @@ describe("loop check commands use the approved shell", () => {
   });
 
   it("kills the process group, and on Windows the process tree", () => {
+    vi.useFakeTimers();
     const child = fakeChild();
     const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
     killCheckProcess(child as unknown as ChildProcess, "linux");

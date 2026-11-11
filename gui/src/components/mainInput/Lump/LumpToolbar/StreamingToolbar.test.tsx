@@ -49,13 +49,13 @@ describe("StreamingToolbar", () => {
     expect(screen.queryByTestId("prompt-progress")).toBeNull();
   });
 
-  it("says the reply is being read while it is held for tool call recovery, and clears when the hold ends", async () => {
+  it("says the reply is being checked while it is held for tool call recovery, and clears when the hold ends", async () => {
     const store = await setup();
     await act(async () => {
       store.dispatch(setRecoveryHold(true));
     });
     expect(screen.getByTestId("recovery-hold").textContent).toContain(
-      "Reading the model's reply",
+      "Checking the reply for a tool request",
     );
     expect(screen.queryByText("Generating")).toBeNull();
 

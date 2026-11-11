@@ -9,6 +9,7 @@ import {
   auditDir,
   auditSettings,
 } from "core/tools/permissions/audit/global.js";
+import { maskText } from "core/tools/permissions/audit/mask.js";
 import {
   callRows,
   DECISION_FILTERS,
@@ -36,7 +37,9 @@ export interface AuditCommandOptions {
 }
 
 function out(line = ""): void {
-  process.stdout.write(`${line}\n`);
+  // The files are masked when written; this covers a record written by
+  // anything else, or before masking knew a shape.
+  process.stdout.write(`${maskText(line).text}\n`);
 }
 
 function err(line: string): void {

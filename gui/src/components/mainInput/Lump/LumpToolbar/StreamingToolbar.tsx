@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useAppSelector } from "../../../../redux/hooks";
 import { getAltKeyLabel, getMetaKeyLabel, isJetBrains } from "../../../../util";
 import {
@@ -5,6 +6,27 @@ import {
   RECOVERY_HOLD_TEXT,
 } from "../../../../util/promptProgress";
 import { GeneratingIndicator } from "./GeneratingIndicator";
+
+/** Seconds since `active` became true; 0 while it is false. */
+function useElapsedSeconds(active: boolean): number {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setSeconds(0);
+      return;
+    }
+    const start = Date.now();
+    const id = setInterval(
+      () => setSeconds(Math.floor((Date.now() - start) / 1000)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, [active]);
+  return seconds;
+}
+
+/** Until then a hold looks like any short pause. */
+const SHOW_SECONDS_AFTER = 10;
 
 interface StreamingToolbarProps {
   onStop: () => void;
@@ -20,6 +42,7 @@ export function StreamingToolbar({
   const progress = useAppSelector((state) => state.session.promptProgress);
   // While the reply is held for tool call recovery nothing else would show
   const held = useAppSelector((state) => state.session.recoveryHold);
+  const heldSeconds = useElapsedSeconds(!!held);
 
   return (
     <div className="flex w-full items-center justify-between">
@@ -29,20 +52,28 @@ export function StreamingToolbar({
           testId="prompt-progress"
         />
       ) : held ? (
-        <GeneratingIndicator text={RECOVERY_HOLD_TEXT} testId="recovery-hold" />
+        <GeneratingIndicator
+          text={
+            heldSeconds >= SHOW_SECONDS_AFTER
+              ? `${RECOVERY_HOLD_TEXT} (${heldSeconds} s)`
+              : RECOVERY_HOLD_TEXT
+          }
+          testId="recovery-hold"
+        />
       ) : (
         <GeneratingIndicator />
       )}
-      <div
+      <button
+        type="button"
         onClick={onStop}
-        className="cursor-pointer px-1.5 py-0.5 text-2xs hover:brightness-125"
+        className="min-h-6 cursor-pointer border-none bg-transparent px-1.5 py-0.5 text-2xs hover:brightness-125"
       >
         <span className="text-description">{displayText}</span>
         {/* JetBrains overrides cmd+backspace, so we have to use another shortcut */}
         <span className="ml-1 text-description-muted opacity-75">
           {jetbrains ? getAltKeyLabel() : getMetaKeyLabel()}⌫
         </span>
-      </div>
+      </button>
     </div>
   );
 }

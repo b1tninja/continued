@@ -10,6 +10,7 @@ import { walkDir } from "../indexing/walkDir";
 import { RULES_MARKDOWN_FILENAME } from "../llm/rules/constants";
 import { getGlobalFolderWithName } from "../util/paths";
 import { localPathToUri } from "../util/pathToUri";
+import { type LoadedDirName } from "../util/productPaths";
 import { getUriPathBasename, joinPathsToUri } from "../util/uri";
 import { SYSTEM_PROMPT_DOT_FILE } from "./getWorkspaceContinueRuleDotFiles";
 import { SUPPORTED_AGENT_FILES } from "./markdown";
@@ -111,7 +112,7 @@ export function getDotContinueSubDirs(
   ide: IDE,
   options: LoadAssistantFilesOptions,
   workspaceDirs: string[],
-  subDirName: string,
+  subDirName: LoadedDirName,
 ): string[] {
   let fullDirs: string[] = [];
 
@@ -137,7 +138,7 @@ export function getDotContinueSubDirs(
 export async function getAllDotContinueDefinitionFiles(
   ide: IDE,
   options: LoadAssistantFilesOptions,
-  subDirName: string,
+  subDirName: LoadedDirName,
 ): Promise<{ path: string; content: string }[]> {
   const workspaceDirs = await ide.getWorkspaceDirs();
 

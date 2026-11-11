@@ -16,9 +16,9 @@ import {
 import type { PolicyLevel } from "core/tools/permissions/policy";
 
 const BUTTON =
-  "shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input disabled:cursor-default disabled:opacity-50";
+  "shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-2 py-1 text-xs text-foreground hover:bg-input disabled:cursor-default disabled:opacity-50";
 const FIELD =
-  "w-16 rounded border border-solid border-border bg-input px-1 text-xs text-foreground";
+  "w-16 rounded border border-solid border-border bg-input px-1 py-1 text-xs text-foreground";
 
 const STRATEGIES: Array<[SplitStrategy, string, string]> = [
   ["none", "None", "No budget per to-do except any budget: line in the plan"],
@@ -136,14 +136,11 @@ export function PlanBudgetStep({
           ? "With no limit there is nothing to divide; budget lines and your own numbers still apply."
           : ""}
       </div>
-      <div
-        data-testid="plan-budget-authority"
-        className="text-description-muted"
-      >
+      <div data-testid="plan-budget-authority" className="text-description">
         {AUTHORITY_TEXT[authority]}
       </div>
       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
-        <label className="flex shrink-0 items-center gap-0.5">
+        <label className="flex shrink-0 items-center gap-0.5 py-1">
           Divide
           <select
             data-testid="plan-budget-strategy"
@@ -159,7 +156,7 @@ export function PlanBudgetStep({
                     : value.reserve,
               })
             }
-            className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+            className="cursor-pointer rounded border border-solid border-border bg-input px-1 py-1 text-xs text-foreground"
           >
             {STRATEGIES.map(([strategy, label]) => (
               <option key={strategy} value={strategy}>
@@ -169,7 +166,7 @@ export function PlanBudgetStep({
           </select>
         </label>
         <label
-          className="flex shrink-0 items-center gap-0.5"
+          className="flex shrink-0 items-center gap-0.5 py-1"
           title="Held back for extensions, re-plans and a final check"
         >
           Reserve %
@@ -211,10 +208,7 @@ export function PlanBudgetStep({
           Use the proposal
         </button>
       </div>
-      <div
-        data-testid="plan-budget-proposal"
-        className="text-description-muted"
-      >
+      <div data-testid="plan-budget-proposal" className="text-description">
         {proposal.note}
       </div>
       {result.reserve.tokens || result.reserve.minutes ? (
@@ -246,7 +240,7 @@ export function PlanBudgetStep({
               data-testid={`plan-budget-item-${id}`}
               className="py-0.5"
             >
-              <div className="break-words text-foreground">
+              <div className="break-words text-foreground" title={item.text}>
                 {id}. {item.text}
               </div>
               <div className="flex min-w-0 flex-wrap items-center gap-1 text-description">
@@ -260,7 +254,7 @@ export function PlanBudgetStep({
                         sizes: { ...value.sizes, [id]: e.target.value },
                       })
                     }
-                    className="rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+                    className="rounded border border-solid border-border bg-input px-1 py-1 text-xs text-foreground"
                   >
                     <option value="S">S</option>
                     <option value="M">M</option>
@@ -274,7 +268,7 @@ export function PlanBudgetStep({
                     ["turns", "turns"],
                   ] as const
                 ).map(([kind, unit]) => (
-                  <label key={kind} className="flex items-center gap-0.5">
+                  <label key={kind} className="flex items-center gap-0.5 py-1">
                     <input
                       type="number"
                       min={0}
@@ -290,7 +284,7 @@ export function PlanBudgetStep({
                 ))}
                 {item.budget && (
                   <span
-                    className="text-description-muted"
+                    className="text-description"
                     title="The planner's budget line"
                   >
                     planner: {formatItemBudget(item.budget)}

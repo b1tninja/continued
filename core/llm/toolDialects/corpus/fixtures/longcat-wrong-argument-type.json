@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/meituan-longcat/LongCat-Flash-Chat/blob/main/tokenizer_config.json and vLLM longcat_tool_parser.py, not observed",
+    "license": "mit",
     "retrieved": "2026-11-10",
     "note": ""
   },

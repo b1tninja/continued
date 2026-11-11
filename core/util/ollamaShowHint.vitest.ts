@@ -104,4 +104,27 @@ describe("getOllamaShowHint", () => {
     ).toBeUndefined();
     expect(fetchFn).not.toHaveBeenCalled();
   });
+
+  test("a failure is asked again after 60 s; a success is kept", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchFn = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("down"))
+        .mockResolvedValue({ ok: true, json: async () => qwen36 });
+      expect(await getOllamaShowHint({ ...ollama, fetchFn })).toBeUndefined();
+      vi.advanceTimersByTime(59_000);
+      expect(await getOllamaShowHint({ ...ollama, fetchFn })).toBeUndefined();
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(2_000);
+      expect(
+        (await getOllamaShowHint({ ...ollama, fetchFn }))?.serverParses,
+      ).toBe(true);
+      vi.advanceTimersByTime(10 * 60_000);
+      await getOllamaShowHint({ ...ollama, fetchFn });
+      expect(fetchFn).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { scanText } from "../../../util/secretScan";
+import { sha256Hex } from "../../../util/secretScan/sha256";
 import { looksSecret } from "../secretCommands";
 
 /**
@@ -7,6 +8,11 @@ import { looksSecret } from "../secretCommands";
  * this module recognised as a credential. It is best effort: a secret in a
  * shape nobody listed passes through, and the audit file is local and private
  * for that reason.
+ *
+ * Two layers: the hand-written passes below know the shapes of commands
+ * (flags, headers, assignments, URL userinfo). Then the shared rule set
+ * (`core/util/secretScan`, the at-rest profile) runs over what is left, so a
+ * provider key or a contextual match that no pass below listed is masked too.
  *
  * A masked value becomes `«masked:<kind>»`, so a reader still sees what kind
  * of thing was there. Masking is idempotent: running it again on its own
@@ -139,7 +145,24 @@ export function maskText(text: string): MaskResult {
     return `${lead}${name}=${mark("secret-query")}`;
   });
 
+  out = maskWithRuleSet(out, seen);
+
   return { text: out, kinds };
+}
+
+/** Mask what the shared at-rest rule set finds in text the passes above left. */
+function maskWithRuleSet(text: string, seen: (kind: string) => void): string {
+  const findings = scanText(text, "at-rest");
+  let out = "";
+  let at = 0;
+  for (const f of findings) {
+    // Never mask a mask: the passes above already did their part.
+    if (text.slice(f.start, f.end).includes("«")) continue;
+    out += text.slice(at, f.start) + mark(f.kind);
+    at = f.end;
+    seen(f.kind);
+  }
+  return out + text.slice(at);
 }
 
 /**
@@ -157,7 +180,7 @@ export function clipMasked(text: string, max: number): string {
 
 /** SHA-256 of masked text. Never hash the raw text: a hash of a low-entropy secret can be guessed. */
 export function hashMasked(masked: string): string {
-  return createHash("sha256").update(masked, "utf8").digest("hex");
+  return sha256Hex(masked);
 }
 
 /** Mask, then clip, then hash the masked full text: what a call's arguments become in a record. */
@@ -174,9 +197,24 @@ export function maskForAudit(
   };
 }
 
+/** Masked strings by input, so a history polled over and over is scanned once. */
+const DEEP_CACHE = new Map<string, string>();
+const DEEP_CACHE_MAX = 4000;
+
+function maskCached(text: string): string {
+  const hit = DEEP_CACHE.get(text);
+  if (hit !== undefined) return hit;
+  const out = maskText(text).text;
+  if (text.length <= 20000) {
+    if (DEEP_CACHE.size >= DEEP_CACHE_MAX) DEEP_CACHE.clear();
+    DEEP_CACHE.set(text, out);
+  }
+  return out;
+}
+
 /** Mask every string in a JSON-like value (a second pass the writer applies). */
 export function maskDeep<T>(value: T): T {
-  if (typeof value === "string") return maskText(value).text as unknown as T;
+  if (typeof value === "string") return maskCached(value) as unknown as T;
   if (Array.isArray(value))
     return value.map((v) => maskDeep(v)) as unknown as T;
   if (value && typeof value === "object") {

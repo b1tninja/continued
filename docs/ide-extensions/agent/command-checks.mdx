@@ -24,10 +24,10 @@ The check looks at the command text and the shell that will run it (PowerShell o
 | CL030 | once   | A long `python -c`, `node -e`, `perl -e` or `pwsh -Command` script in double quotes using `$`, a backtick or `\"` |
 | CL040 | once   | `&&` or `\|\|` in PowerShell, where Windows PowerShell 5.1 reports a syntax error                                 |
 | CL041 | once   | `2>/dev/null` in PowerShell, which wants `2>$null`                                                                |
-| CL042 | once   | Text that reads as bash (`ls -la`, `rm -rf`, `touch`, `sudo`) in PowerShell, with the PowerShell equivalent                |
+| CL042 | once   | Text that reads as bash (`ls -la`, `rm -rf`, `touch`, `sudo`) in PowerShell, with the PowerShell equivalent       |
 | CL043 | once   | Text that reads as cmd (`%NAME%`, `if exist`, `dir /b`) in PowerShell                                             |
-| CL044 | once   | Text that reads as PowerShell or cmd in bash or zsh |
-| CL045 | once   | Text that reads as another shell in cmd |
+| CL044 | once   | Text that reads as PowerShell or cmd in bash or zsh                                                               |
+| CL045 | once   | Text that reads as another shell in cmd                                                                           |
 
 CL042 to CL045 are skipped when a more specific finding from CL001 to CL004 already applies, and when the shell is not known. A heredoc that only feeds a command (`python - <<'PY'`), a here-string (`<<<`) and a `<<` inside a quoted string are not flagged.
 
@@ -63,6 +63,22 @@ The command asks at every level, including Permissive, and an allow rule does no
 A download alone does not match, nor does a download that is only read: `curl -s https://example.com/a.json | jq .` and `curl -o a.txt https://example.com/a.txt && cat a.txt` run as usual. A script that downloads and runs inside itself, or a file renamed between the two steps, is not seen.
 
 Turn the rule off under built-in rules in the policy settings (`no-fetch-and-run`).
+
+## A variable where the program is
+
+A rule that names a program (`git push*`, `rm *`) cannot apply to a command whose program is only known when the shell runs it. When the program is taken from a variable, the command asks at every level, including Permissive, and an allow rule does not change that. At Automatic it asks you instead of going to the reviewer model, and YOLO does not skip it. A deny rule still refuses whatever it can see in the rest of the command.
+
+What counts depends on the shell:
+
+| Shell         | Asks                                                                                                                         | Does not ask                                                                                                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| bash, zsh, sh | `$cmd args`, `${prog} args`, `"$cmd" args`, `"$@"`, `A=1 $cmd`, `$HOME/bin/tool`, and the same after `do`, `then`, `;`, `\|` | `echo $x`, `export A=$x`, `git commit -m "$msg"`, `for f in $list`, `$(( $a + 1 ))`, text in single quotes or a here-document                                                 |
+| PowerShell    | `& $exe`, `. $script`, `& "$dir\tool.exe"`, `& (expression)`, `. (Join-Path ...)`                                            | `$env:NAME = 'x'`, `$x = ...`, `$_.Name`, `foreach ($f in $files) { git add $f }`, `Set-Location $dir`, `& 'C:\tools\tool.exe' $arg`, `. .\script.ps1`, `@args`, here-strings |
+| cmd           | nothing: `$` is an ordinary character                                                                                        |                                                                                                                                                                               |
+
+In PowerShell a statement that starts with `$` is an expression or an assignment, never a command, so only the call operators `&` and `.` can run a program that a variable names. When the shell is not known, both readings are used.
+
+Brace expansion (`{git,push}`) and `$IFS` in bash, zsh and sh are still refused, because they build a program name out of pieces the check cannot read. PowerShell and cmd have neither, so a script block such as `{ $_.Id -in 1,2 }` is not refused there. Turn the check off with the built-in rule `refuse-dangerous-commands`.
 
 ## Shell dialects
 

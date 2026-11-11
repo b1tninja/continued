@@ -1,0 +1,15 @@
+---
+title: "Project Hooks and Trust"
+---
+
+Hooks are commands the CLI runs around tool calls. Hooks in your own settings (`~/.claude/settings.json`, `~/.continuous/settings.json`) always run. Hooks that come with a repository (`.claude`, `.continue` or `.continuous` `settings.json` and `settings.local.json` in the project) run only after you trust them with `continuous hooks`, or for one run with `--trust-project-hooks`.
+
+## What trust covers
+
+Trust is recorded in `trusted-hooks.json` in the global config folder, with a fingerprint of the project's hook definitions. Any change to a command, matcher, timeout or `onError` asks again.
+
+When a command runs a script inside the workspace, the fingerprint also includes the content of that script, so editing `scripts/pre.sh` after you trusted `./scripts/pre.sh` asks again. The script is looked for in the program and the first few words after it, in each part of a `&&`, `||`, `;` or `|` chain: `./x.sh`, `bash x.sh`, `node x.js`, `python x.py`, `pwsh -File x.ps1`, `npx tsx x.ts`, with `$CLAUDE_PROJECT_DIR` expanded. `continuous hooks` lists the script files it found. This is best effort: files that a script imports or sources, scripts outside the workspace and paths built at run time are not covered.
+
+## A project hook cannot approve a call
+
+A hook from a project settings file can block a call or ask you to confirm it, but an `allow` answer from it is ignored (a notice is logged). Only hooks in your own settings can turn a call the CLI would ask about into an allowed one. Deny rules, the floor and protected paths apply after any hook either way. If you relied on a project hook to skip questions, move that hook to your own settings.

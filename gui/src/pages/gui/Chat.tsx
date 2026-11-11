@@ -560,12 +560,13 @@ export function Chat() {
               {index === history.length - 1 && <InlineErrorMessage />}
             </div>
           ))}
+        {/* Inside the scroll area, so it does not push the input down */}
+        <ToolDialectNotice />
       </StepsDiv>
       <div className={"relative shrink-0"}>
         <CacheMissNotice />
         <ColdCacheNotice />
         <CachingOffNotice />
-        <ToolDialectNotice />
         <LargeMessageNotice />
         {/* A loop shows its own plan in its panel */}
         {!hasLoop && <TaskListPanel />}

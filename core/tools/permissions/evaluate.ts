@@ -8,6 +8,7 @@ import {
   levelOfCall,
   skippedProtections,
 } from "./approval";
+import { hiddenCommandName } from "./commandName";
 import { hasUnsafeShellConstruct } from "./command";
 import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
 import type { ShellKind } from "../../util/shell";
@@ -20,19 +21,35 @@ import type { ProtectedHit, ProtectedKind } from "./protected";
 import type { RuleSource, ToolPermissions } from "./rules";
 
 /**
- * Brace expansion, `$IFS`, or a variable where the command name is. The safety
- * floor never sees the command that will actually run, so the text is refused
- * when that floor is on.
+ * Brace expansion or `$IFS`: the safety floor never sees the command that will
+ * actually run, so the text is refused when that floor is on. PowerShell and
+ * cmd have neither (`{ $_.a, $_.b }` is a script block there, `$IFS` an
+ * ordinary variable), so they are not refused for it.
+ *
+ * A variable where the command name is does not refuse: it asks, at every
+ * level (hiddenCommandName).
  */
-function floorMustRefuse(command: string): boolean {
+export function floorMustRefuse(
+  command: string | undefined,
+  shell?: ShellKind,
+): boolean {
+  if (command === undefined) return false;
+  if (shell === "powershell" || shell === "cmd") return false;
   if (unquotedBraceWithComma(command)) return true;
-  if (/\$\{?IFS\b/.test(command)) return true;
-  return variableInCommandPosition(command);
+  return /\$\{?IFS\b/.test(command);
 }
 
 /** A level must not run a command the floor could not see through. */
-function hidesTheCommand(command: string): boolean {
-  return floorMustRefuse(command) || hasUnsafeShellConstruct(command);
+function hidesTheCommand(
+  command: string | undefined,
+  shell?: ShellKind,
+): boolean {
+  if (command === undefined) return false;
+  return (
+    floorMustRefuse(command, shell) ||
+    hasUnsafeShellConstruct(command) ||
+    hiddenCommandName(command, shell) !== undefined
+  );
 }
 
 function unquotedBraceWithComma(command: string): boolean {
@@ -70,47 +87,6 @@ function unquotedBraceWithComma(command: string): boolean {
       continue;
     }
     if (open) body += c;
-  }
-  return false;
-}
-
-/** The first word of a simple command, after assignments, is `$name` or `${name}`. */
-function variableInCommandPosition(command: string): boolean {
-  let quote: "'" | '"' | null = null;
-  let cur = "";
-  const segments: string[] = [];
-  const flush = () => {
-    const t = cur.trim();
-    if (t) segments.push(t);
-    cur = "";
-  };
-  for (let i = 0; i < command.length; i++) {
-    const c = command[i];
-    const next = command[i + 1];
-    if (quote) {
-      cur += c;
-      if (c === quote) quote = null;
-      continue;
-    }
-    if (c === "'" || c === '"') {
-      quote = c;
-      cur += c;
-      continue;
-    }
-    if (c === "\n" || c === ";" || c === "|" || (c === "&" && next === "&")) {
-      flush();
-      if (c === "&" || (c === "|" && (next === "|" || next === "&"))) i++;
-      continue;
-    }
-    cur += c;
-  }
-  flush();
-  for (const segment of segments) {
-    const words = segment.split(/\s+/).filter(Boolean);
-    let i = 0;
-    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i++;
-    const word = words[i];
-    if (word && /^\$[{A-Za-z_]/.test(word)) return true;
   }
   return false;
 }
@@ -202,7 +178,8 @@ function lockPolicyFiles(
     cwd: input.cwd,
     shell: input.shell,
   })?.level;
-  const refuse = level === "automatic" || level === "yolo";
+  // A scan that gave up cannot say the call is a write: it asks, never refuses.
+  const refuse = (level === "automatic" || level === "yolo") && !hit.capped;
   if (!refuse && result.policy === "allowedWithPermission") return result;
   return {
     ...result,
@@ -247,11 +224,10 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   // Obfuscation the floor cannot see through is the same as a refusal: a level
   // must not turn it into a run.
   if (
-    commandText !== undefined &&
     floorOn &&
     basePolicy !== "disabled" &&
     evaluated !== "disabled" &&
-    floorMustRefuse(commandText)
+    floorMustRefuse(commandText, input.shell)
   ) {
     evaluated = "disabled";
   }
@@ -280,6 +256,9 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     tool.mcpDefinitionChange,
     basePolicy,
   );
+  const hiddenName = floorOn
+    ? hiddenNameHit(commandText, input.shell)
+    : undefined;
   const protectedHit =
     findProtected({
       toolName,
@@ -290,7 +269,8 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
       shell: input.shell,
     }) ??
     privateUrl ??
-    changedDefinition;
+    changedDefinition ??
+    hiddenName;
 
   // The floor: deny rules the person wrote to bind even at YOLO
   const floorRules = parsePermissions({ deny: input.approval?.floor }, "floor");
@@ -330,8 +310,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   // A hidden command is not loosened at any level, YOLO included. Otherwise
   // YOLO reaches past a refusal, a rule and a protected path, and Permissive
   // acts only on a call that would otherwise ask.
-  const hidden =
-    commandText !== undefined && floorOn && hidesTheCommand(commandText);
+  const hidden = floorOn && hidesTheCommand(commandText, input.shell);
   const loosening = hidden
     ? undefined
     : found?.level === "yolo" || evaluated === "allowedWithPermission"
@@ -386,14 +365,27 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   };
 }
 
+/** A command whose program is a variable asks, whatever else is said about it. */
+function hiddenNameHit(
+  command: string | undefined,
+  shell: ShellKind | undefined,
+): ProtectedHit | undefined {
+  const why =
+    command === undefined ? undefined : hiddenCommandName(command, shell);
+  return why ? { kind: "hidden-command", path: why } : undefined;
+}
+
 function changedDefinitionHit(
-  change: { kind: "changed" | "added"; summary: string } | undefined,
+  change: { kind: "changed" | "added" | "launch"; summary: string } | undefined,
   basePolicy: ToolPolicy,
 ): ProtectedHit | undefined {
   if (!change || basePolicy === "disabled") return undefined;
   return {
     kind: "mcp-definition-changed",
-    path: `${change.kind === "added" ? "new tool" : "changed"}, ${change.summary}`,
+    path:
+      change.kind === "launch"
+        ? change.summary
+        : `${change.kind === "added" ? "new tool" : "changed"}, ${change.summary}`,
   };
 }
 

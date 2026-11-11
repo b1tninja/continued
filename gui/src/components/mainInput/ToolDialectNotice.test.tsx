@@ -71,7 +71,7 @@ describe("ToolDialectNotice", () => {
     const { check, store } = await setup(leaked);
     await check();
     expect(screen.getByTestId("tool-dialect-notice").textContent).toContain(
-      "This model wrote a tool call as text (looks like qwen-xml). Turn on recovery for this model?",
+      "This model typed a tool request as plain text, so it did not run. Let Continue read that format for this model?",
     );
     // dismissed, then seen again: not shown a second time
     await act(async () => {

@@ -12,13 +12,21 @@ import dotenv from "dotenv";
 import { IdeType, SerializedContinueConfig } from "../";
 import { defaultConfig } from "../config/default";
 import Types from "../config/types";
+import {
+  GLOBAL_DIR_NAME,
+  LEGACY_GLOBAL_DIR_NAME,
+  loadedFile,
+  type LoadedDirName,
+  type StatePathName,
+} from "./productPaths";
 import { editYamlText } from "./yamlEdit";
 
-// The CLI sets this before importing core so a working-directory .env is not
-// copied into the process. Secrets are read with dotenv.parse instead.
-if (process.env.CONTINUOUS_IGNORE_CWD_ENV !== "1") {
-  dotenv.config();
-}
+// A working-directory .env is never copied into this process. The core can be
+// started with a workspace as its cwd (an editor launched from a project
+// folder), and a repository file must not choose the global directory, the
+// terminal environment mode, the shell or the audit setting (the CLI refuses
+// it too, #425). Secrets come from the global folder's own .env through
+// getContinueDotEnv, which parses without touching process.env.
 
 export function setConfigFilePermissions(filePath: string): void {
   try {
@@ -30,9 +38,7 @@ export function setConfigFilePermissions(filePath: string): void {
   }
 }
 
-/** The global folder's name in the home directory, and its name before 2.4.2. */
-export const GLOBAL_DIR_NAME = ".continuous";
-export const LEGACY_GLOBAL_DIR_NAME = ".continue";
+export { GLOBAL_DIR_NAME, LEGACY_GLOBAL_DIR_NAME };
 
 /**
  * What a first start copies from ~/.continue: everything but what is rebuilt
@@ -206,10 +212,16 @@ export function getContinueUtilsPath(): string {
 }
 
 export function getGlobalContinueIgnorePath(): string {
-  const ignorePath = path.join(getContinueGlobalPath(), ".continuousignore");
+  const ignorePath = path.join(
+    getContinueGlobalPath(),
+    loadedFile(".continuousignore"),
+  );
   if (!fs.existsSync(ignorePath)) {
     // A folder copied from ~/.continue has the file under its old name
-    const legacy = path.join(getContinueGlobalPath(), ".continueignore");
+    const legacy = path.join(
+      getContinueGlobalPath(),
+      loadedFile(".continueignore"),
+    );
     fs.writeFileSync(
       ignorePath,
       fs.existsSync(legacy) ? fs.readFileSync(legacy) : "",
@@ -254,7 +266,7 @@ export function getGlobalContextFilePath(): string {
 }
 
 export function getSharedConfigFilePath(): string {
-  return path.join(getContinueGlobalPath(), "sharedConfig.json");
+  return path.join(getContinueGlobalPath(), loadedFile("sharedConfig.json"));
 }
 
 export function getSessionFilePath(sessionId: string): string {
@@ -270,12 +282,12 @@ export function getSessionsListPath(): string {
 }
 
 export function getConfigJsonPath(): string {
-  const p = path.join(getContinueGlobalPath(), "config.json");
+  const p = path.join(getContinueGlobalPath(), loadedFile("config.json"));
   return p;
 }
 
 export function getConfigYamlPath(ideType?: IdeType): string {
-  const p = path.join(getContinueGlobalPath(), "config.yaml");
+  const p = path.join(getContinueGlobalPath(), loadedFile("config.yaml"));
   const exists = fs.existsSync(p);
   const isEmpty = exists && fs.readFileSync(p, "utf8").trim() === "";
   const needsCreation = !exists && !fs.existsSync(getConfigJsonPath());
@@ -296,7 +308,7 @@ export function getPrimaryConfigFilePath(): string {
 }
 
 export function getConfigTsPath(): string {
-  const p = path.join(getContinueGlobalPath(), "config.ts");
+  const p = path.join(getContinueGlobalPath(), loadedFile("config.ts"));
   if (!fs.existsSync(p)) {
     fs.writeFileSync(p, DEFAULT_CONFIG_TS_CONTENTS);
   }
@@ -468,19 +480,34 @@ export function getEditableConfigYamlPath(): string | undefined {
 /** Where an edit goes: the selected config (default) or the main config. */
 export type ConfigEditTarget = "selected" | "main";
 
+/** What an edit of a config file did. A failed edit never throws and never passes as a success. */
+export type ConfigEditResult =
+  | { ok: true; changed: boolean }
+  | { ok: false; error: string; cause?: unknown };
+
 function editConfigYaml(
   callback: (config: ConfigYaml) => ConfigYaml,
   configPath: string,
-): void {
-  const source = fs.readFileSync(configPath, "utf8");
+): ConfigEditResult {
+  let source: string;
+  try {
+    source = fs.readFileSync(configPath, "utf8");
+  } catch (e) {
+    const error = `Could not read ${path.basename(configPath)}: ${errorText(e)}`;
+    console.warn(error);
+    return { ok: false, error, cause: e };
+  }
   // Edit the parsed document so comments and key order survive. The old
   // parse -> stringify round trip dropped every comment on each GUI save.
   const { text, error } = editYamlText<ConfigYaml>(source, callback);
   if (error) {
     console.warn(`Not editing ${path.basename(configPath)}: ${error}`);
-    return;
+    return {
+      ok: false,
+      error: `Not editing ${path.basename(configPath)}: ${error}`,
+    };
   }
-  if (text === undefined) return; // nothing changed, skip the write
+  if (text === undefined) return { ok: true, changed: false }; // nothing changed, skip the write
 
   // Keep one copy from before the first GUI edit, for users who version the file.
   // Only for files in ~/.continuous: a .bak next to a workspace config would
@@ -496,7 +523,48 @@ function editConfigYaml(
       console.warn(`Could not write ${backupPath}:`, e);
     }
   }
-  writeFileAtomically(configPath, text);
+  try {
+    writeFileAtomically(configPath, text);
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Could not write ${path.basename(configPath)}: ${errorText(e)}`,
+      cause: e,
+    };
+  }
+  return { ok: true, changed: true };
+}
+
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * Edit one config.yaml and say whether it worked, for callers that must not
+ * claim a save that did not happen (the Permissions page, `continuous
+ * permissions`). The file must exist.
+ */
+export function editConfigYamlFile(
+  file: string,
+  callback: (config: ConfigYaml) => ConfigYaml,
+): ConfigEditResult {
+  return editConfigYaml(callback, file);
+}
+
+/** Put back the exact text of a config file (undo). Never throws. */
+export function restoreConfigFileText(
+  file: string,
+  text: string,
+): ConfigEditResult {
+  try {
+    writeFileAtomically(file, text);
+    return { ok: true, changed: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Could not write ${path.basename(file)}: ${errorText(e)}`,
+    };
+  }
 }
 
 /**
@@ -535,24 +603,35 @@ function writeFileAtomically(filePath: string, text: string): void {
   setConfigFilePermissions(target);
 }
 
+/**
+ * Edit the config file. Returns what happened so a caller that must not claim
+ * a save that failed can say so; the callers that did not look still work.
+ * `undefined` means there was no YAML file to edit.
+ */
 export function editConfigFile(
   configJsonCallback: (
     config: SerializedContinueConfig,
   ) => SerializedContinueConfig,
   configYamlCallback: (config: ConfigYaml) => ConfigYaml,
   target: ConfigEditTarget = "selected",
-): void {
+): ConfigEditResult | undefined {
+  const done = (r: ConfigEditResult): ConfigEditResult => {
+    // A file that cannot be read or written throws, as it always did; the
+    // result carries the same failure for callers that ask for it instead
+    if (!r.ok && r.cause !== undefined) throw r.cause;
+    return r;
+  };
   if (target === "selected" && selectedConfigFile !== undefined) {
     const file = getEditableConfigYamlPath();
-    if (file) editConfigYaml(configYamlCallback, file);
-    return;
+    return file ? done(editConfigYaml(configYamlCallback, file)) : undefined;
   }
   const yamlPath = getConfigYamlPath();
   if (fs.existsSync(yamlPath)) {
-    editConfigYaml(configYamlCallback, yamlPath);
+    return done(editConfigYaml(configYamlCallback, yamlPath));
   } else if (fs.existsSync(getConfigJsonPath())) {
     editConfigJson(configJsonCallback);
   }
+  return undefined;
 }
 
 function getMigrationsFolderPath(): string {
@@ -641,7 +720,7 @@ export function getConfigJsPathForRemote(
 }
 
 export function getContinueDotEnv(): { [key: string]: string } {
-  const filepath = path.join(getContinueGlobalPath(), ".env");
+  const filepath = path.join(getContinueGlobalPath(), loadedFile(".env"));
   if (fs.existsSync(filepath)) {
     return dotenv.parse(fs.readFileSync(filepath));
   }
@@ -664,7 +743,9 @@ export function getPromptLogsPath(): string {
   return path.join(getLogsDirPath(), "prompt.log");
 }
 
-export function getGlobalFolderWithName(name: string): string {
+export function getGlobalFolderWithName(
+  name: LoadedDirName | StatePathName,
+): string {
   return path.join(getContinueGlobalPath(), name);
 }
 

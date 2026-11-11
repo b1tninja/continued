@@ -16,6 +16,8 @@ export interface OllamaShowHint {
 
 export const OLLAMA_DEFAULT_BASE = "http://127.0.0.1:11434";
 export const OLLAMA_SHOW_TIMEOUT_MS = 2000;
+/** A failed or timed-out lookup is not asked again for this long; a success is kept for the process. */
+export const OLLAMA_SHOW_RETRY_MS = 60_000;
 
 /** The Ollama root for a configured base URL (an OpenAI-compatible one ends in /v1), or undefined when it is not Ollama's. */
 export function ollamaBaseFor(
@@ -44,7 +46,10 @@ type FetchLike = (
   },
 ) => Promise<{ ok: boolean; json(): Promise<unknown> }>;
 
-const cache = new Map<string, Promise<OllamaShowHint | undefined>>();
+const cache = new Map<
+  string,
+  { hint: Promise<OllamaShowHint | undefined>; failedAt?: number }
+>();
 
 /** Forget cached hints (tests). */
 export function resetOllamaShowCache(): void {
@@ -62,12 +67,25 @@ export function getOllamaShowHint(args: {
   const base = ollamaBaseFor(args.provider, args.apiBase);
   if (!base || !args.model) return Promise.resolve(undefined);
   const key = `${base}\n${args.model}`;
-  let hit = cache.get(key);
-  if (!hit) {
-    hit = fetchHint(base, args);
-    cache.set(key, hit);
+  const hit = cache.get(key);
+  if (
+    hit &&
+    (hit.failedAt === undefined ||
+      Date.now() - hit.failedAt < OLLAMA_SHOW_RETRY_MS)
+  ) {
+    return hit.hint;
   }
-  return hit;
+  const entry: {
+    hint: Promise<OllamaShowHint | undefined>;
+    failedAt?: number;
+  } = {
+    hint: fetchHint(base, args),
+  };
+  void entry.hint.then((h) => {
+    if (!h) entry.failedAt = Date.now();
+  });
+  cache.set(key, entry);
+  return entry.hint;
 }
 
 async function fetchHint(

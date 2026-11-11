@@ -20,6 +20,7 @@
  * is re-run after each edit, or a test that fails until the fix lands, starts
  * from zero each time.
  */
+import { maskText } from "../tools/permissions/audit/mask";
 
 export interface StuckCall {
   /** The tool's name */
@@ -187,8 +188,8 @@ export function nearKey(call: Pick<StuckCall, "tool" | "args">): string {
 export function errorSignature(text: string | undefined): string {
   const first =
     (text ?? "").split(/\r?\n/).find((l) => l.trim().length > 0) ?? "";
-  return first
-    .toLowerCase()
+  return maskText(first)
+    .text.toLowerCase()
     .replace(/(?:[a-z]:)?[\\/][\w@.\-\\/]+/g, "<path>")
     .replace(
       /\b[\w-]+\.(?:ts|tsx|js|jsx|py|rs|go|java|md|json|ya?ml)\b/g,

@@ -124,4 +124,19 @@ describe("CLI tool dialect hint", () => {
     });
     expect(print).toHaveBeenCalledTimes(2);
   });
+
+  it("prints once when two leaks for one Ollama model are in flight", async () => {
+    resetOllamaShowCache();
+    const print = vi.fn();
+    const args = {
+      model: ollama(),
+      content: leaked,
+      toolCalls: [],
+      callbacks: undefined,
+      print,
+      fetchFn: show(qwenEmbedding),
+    };
+    await Promise.all([hintToolDialectLeak(args), hintToolDialectLeak(args)]);
+    expect(print).toHaveBeenCalledTimes(1);
+  });
 });

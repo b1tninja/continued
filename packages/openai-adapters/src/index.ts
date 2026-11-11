@@ -1,4 +1,3 @@
-import dotenv from "dotenv";
 import { z } from "zod";
 import { AiSdkApi } from "./apis/AiSdk.js";
 import { AnthropicApi } from "./apis/Anthropic.js";
@@ -27,11 +26,8 @@ import { BaseLlmApi } from "./apis/base.js";
 import { LLMConfig, OpenAIConfigSchema } from "./types.js";
 import { appendPathToUrlIfNotPresent } from "./util/appendPathToUrl.js";
 
-// dotenv 17+ logs "injected env" on every config() call unless quiet.
-// The CLI sets CONTINUOUS_IGNORE_CWD_ENV so a project .env is not applied.
-if (process.env.CONTINUOUS_IGNORE_CWD_ENV !== "1") {
-  dotenv.config({ quiet: true });
-}
+// A working-directory .env is not loaded here: it could set proxy, base URL or
+// key variables for every request from a repository (see core/util/paths.ts).
 
 function openAICompatible(
   apiBase: string,

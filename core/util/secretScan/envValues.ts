@@ -1,10 +1,12 @@
 /**
  * The secret values in an environment, picked by the names
- * `scrubEnvironment` already treats as secret (its 36 patterns). Pure: it
+ * `scrubEnvironment` treats as secret (`SECRET_NAME_PATTERNS`, one list). Pure: it
  * reads the `env` it is given. The returned array holds values, so it is for
  * `knownValueMatcher` and nothing else: do not log it, store it or send it.
  */
-import { scrubEnvironment, urlHasCredentials } from "../scrubEnvironment";
+import { urlHasCredentials } from "../scrubEnvironment";
+
+import { isSecretName } from "./secretNames";
 
 /** Names that match a secret pattern but whose value is a setting, not a secret. */
 const SETTING_NAME =
@@ -26,16 +28,15 @@ export function plausibleSecretValue(value: string): boolean {
 export function secretValuesFromEnv(
   env: Readonly<Record<string, string | undefined>>,
 ): string[] {
-  const clean: Record<string, string> = {};
-  for (const [k, v] of Object.entries(env))
-    if (typeof v === "string") clean[k] = v;
-  const { removed } = scrubEnvironment(clean);
   const out: string[] = [];
-  for (const name of removed) {
-    const value = clean[name];
-    if (value && !SETTING_NAME.test(name) && plausibleSecretValue(value)) {
-      out.push(value);
+  for (const [name, value] of Object.entries(env)) {
+    // A name on the list, or a URL carrying credentials under any name: the
+    // two reasons `scrubEnvironment` removes a variable.
+    const secretByName = isSecretName(name);
+    if (!value || SETTING_NAME.test(name) || !plausibleSecretValue(value)) {
+      continue;
     }
+    if (secretByName || urlHasCredentials(value)) out.push(value);
   }
   return out;
 }

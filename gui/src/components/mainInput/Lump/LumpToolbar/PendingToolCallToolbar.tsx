@@ -38,10 +38,10 @@ export function PendingToolCallToolbar() {
 
   return (
     <div className="flex w-full flex-col pb-0.5">
-      <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
-        <span className="text-2xs text-description-muted">
-          Sending a message rejects{" "}
-          {pendingToolCalls.length > 1 ? "these" : "this"}.
+      <div className="flex flex-wrap items-center justify-between gap-x-2 px-1 pb-0.5">
+        <span className="min-w-0 basis-full text-2xs text-description xs:basis-auto">
+          Sending a new message cancels{" "}
+          {pendingToolCalls.length > 1 ? "these commands" : "this command"}.
         </span>
         {pendingToolCalls.length > 1 && (
           <Button
@@ -60,9 +60,9 @@ export function PendingToolCallToolbar() {
       {pendingToolCalls.map((toolCall, index) => (
         <div
           key={toolCall.toolCallId}
-          className="flex items-center gap-2 rounded-sm border border-input bg-input"
+          className="flex flex-wrap items-center gap-x-2 rounded-sm border border-input bg-input"
         >
-          <span className="flex-1 truncate text-xs text-description italic">
+          <span className="min-w-0 flex-1 basis-24 truncate text-xs text-description italic">
             {toolCall.tool?.displayTitle ?? toolCall.toolCall.function.name}
           </span>
           {toolCall.policyNote && (
@@ -75,7 +75,7 @@ export function PendingToolCallToolbar() {
             </span>
           )}
 
-          <div className="flex items-center gap-1">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-1">
             {!isJetBrains() && (
               <AlwaysAllowButton
                 toolCallId={toolCall.toolCallId}
@@ -86,7 +86,8 @@ export function PendingToolCallToolbar() {
             <Button
               variant="ghost"
               size="sm"
-              className="my-1 font-medium text-description-muted"
+              className="my-0.5 min-h-6 font-medium text-description"
+              title="Reject this command"
               onClick={() => handleReject(toolCall.toolCallId)}
               data-testid={generateToolCallButtonTestId(
                 "reject",
@@ -95,7 +96,7 @@ export function PendingToolCallToolbar() {
             >
               {/* JetBrains overrides cmd+backspace, so we have to use another shortcut */}
               {index === 0 && (
-                <span className="mr-1 text-2xs">
+                <span className="mr-1 shrink-0 text-2xs" aria-hidden="true">
                   {jetbrains ? getAltKeyLabel() : getMetaKeyLabel()}⌫
                 </span>
               )}
@@ -105,7 +106,8 @@ export function PendingToolCallToolbar() {
             <Button
               variant="primary"
               size="sm"
-              className="my-1 font-medium"
+              className="my-0.5 min-h-6 font-medium"
+              title="Run this command"
               onClick={() => handleAccept(toolCall.toolCallId)}
               data-testid={generateToolCallButtonTestId(
                 "accept",
@@ -113,7 +115,9 @@ export function PendingToolCallToolbar() {
               )}
             >
               {index === 0 && (
-                <span className="mr-1 text-2xs">{getMetaKeyLabel()}⏎</span>
+                <span className="mr-1 shrink-0 text-2xs" aria-hidden="true">
+                  {getMetaKeyLabel()}⏎
+                </span>
               )}
               <span>Accept</span>
             </Button>
