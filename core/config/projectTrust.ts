@@ -42,6 +42,7 @@ export const PROJECT_CONFIG_SCOPES = [
   "catalog",
   "data",
   "rc",
+  "worktree",
 ] as const;
 
 export type ProjectConfigScope = (typeof PROJECT_CONFIG_SCOPES)[number];
@@ -358,6 +359,7 @@ const SCOPE_NOUN: Record<ProjectConfigScope, string> = {
   catalog: "model catalog file",
   data: "data destination file",
   rc: "config override",
+  worktree: "worktree setup file",
 };
 
 export function untrustedScopeMessage(
@@ -400,6 +402,7 @@ const LAYOUT: Record<ProjectConfigScope, ScopeLayout> = {
   catalog: { files: ["models.yaml"] },
   data: { dirs: ["data"], extensions: [".yaml", ".yml"] },
   rc: { rootRc: true },
+  worktree: { files: ["worktrees.json"] },
 };
 
 function hasExtension(name: string, extensions: string[]): boolean {
@@ -869,6 +872,22 @@ function summarizeRc(file: string, content: string): string[] {
   ];
 }
 
+function summarizeWorktree(file: string, content: string): string[] {
+  const base = path.basename(uriToFsPath(file) ?? file);
+  const raw = parseLoose(content);
+  if (!raw || typeof raw !== "object") return [`${base} (could not be read)`];
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!key.startsWith("setup-worktree")) continue;
+    for (const command of Array.isArray(value) ? value : [value]) {
+      if (typeof command === "string" && command.trim()) {
+        lines.push(clip(`${key}: ${command}`));
+      }
+    }
+  }
+  return lines.length > 0 ? lines : [`${base}: no setup commands`];
+}
+
 /** What a file would do, without secret values. */
 export function summarizeScopeFile(
   scope: ProjectConfigScope,
@@ -888,6 +907,8 @@ export function summarizeScopeFile(
         return summarizeData(file.content);
       case "rc":
         return summarizeRc(file.path, file.content);
+      case "worktree":
+        return summarizeWorktree(file.path, file.content);
       default:
         return [];
     }

@@ -17,7 +17,7 @@ the CLI publishes an explicit `files` list. It is wired into no workflow.
 
 ```sh
 cd gui && npm ci                      # the harness is built with gui's vite and plugins
-cd ../bench/screenshots && npm install --ignore-scripts   # playwright-core 1.64.0 (pinned), 14 MB
+cd ../bench/screenshots && npm ci --ignore-scripts        # playwright-core 1.64.0 (pinned, lockfile), 14 MB
 ```
 
 `playwright-core` has no install script that downloads a browser. If you have
