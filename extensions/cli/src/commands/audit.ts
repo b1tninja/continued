@@ -1,5 +1,5 @@
 /**
- * `continuous audit list|show <session>|inbox|prune`: read the audit trail the
+ * `continuous audit list|show <session>|inbox|suggest|prune`: read the audit trail the
  * permission path writes (plans/reviewer-audit.md, P12d). The files are
  * `<global dir>/audit/<yyyy-mm>/<session>.jsonl`; this only reads them, and
  * `prune` deletes whole files past the retention.
@@ -27,6 +27,7 @@ import {
 import type { DecisionEvent } from "core/tools/permissions/audit/record.js";
 
 import { auditShadowAction } from "./auditShadow.js";
+import { auditSuggestCommand } from "./auditSuggest.js";
 
 export interface AuditCommandOptions {
   json?: boolean;
@@ -41,6 +42,12 @@ export interface AuditCommandOptions {
   /** Where the audit files are; defaults to the global directory */
   dir?: string;
   limit?: string | number;
+  /** suggest */
+  min?: string | number;
+  maxAgeDays?: string | number;
+  maxMb?: string | number;
+  maxRows?: string | number;
+  verbose?: boolean;
   /** shadow: only this reviewer model */
   model?: string;
 }
@@ -233,11 +240,13 @@ export function auditCommand(
       return inboxAction(dir, options);
     case "prune":
       return pruneAction(dir, options);
+    case "suggest":
+      return auditSuggestCommand(options);
     case "shadow":
       return auditShadowAction(dir, options, out, err);
     default:
       err(
-        `Unknown audit action '${action}'. Use list, show, inbox, shadow or prune.`,
+        `Unknown audit action '${action}'. Use list, show, inbox, suggest, shadow or prune.`,
       );
       return 2;
   }

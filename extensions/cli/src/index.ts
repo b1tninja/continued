@@ -8,6 +8,7 @@ import { Command } from "commander";
 import { acp } from "./commands/acp.js";
 import { agentsCommand } from "./commands/agents.js";
 import { auditCommand } from "./commands/audit.js";
+import { addAuditSuggestOptions } from "./commands/auditSuggest.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { registerCleanCommand } from "./commands/clean.js";
@@ -512,32 +513,32 @@ program
   });
 
 // Audit subcommand
-program
-  .command("audit [action] [session]")
-  .description(
-    "Read the audit trail of tool call decisions (list, show <session>, inbox, shadow, prune)",
-  )
-  .option("--json", "Machine-readable output")
-  .option("--session <id>", "Only this session")
-  .option("--decision <d>", "allow, ask, deny or reviewer")
-  .option("--tool <name>", "Only this tool")
-  .option("--agent <who>", "Only this agent (role, id or kind)")
-  .option("--since <date>", "From this date (inclusive)")
-  .option("--until <date>", "Up to this date (inclusive)")
-  .option("--limit <n>", "Only the last n calls (shadow: disagreements shown)")
-  .option("--model <name>", "shadow: only this reviewer model")
-  .option("--days <n>", "prune: delete files older than this many days")
-  .option("--dry-run", "prune: say what would be deleted")
-  .action(
-    async (
-      action: string | undefined,
-      session: string | undefined,
-      options,
-    ) => {
-      const code = auditCommand(action, session, options);
-      await gracefulExit(code);
-    },
-  );
+addAuditSuggestOptions(
+  program
+    .command("audit [action] [session]")
+    .description(
+      "Read the audit trail of tool call decisions (list, show <session>, inbox, suggest, shadow, prune)",
+    )
+    .option("--json", "Machine-readable output")
+    .option("--session <id>", "Only this session")
+    .option("--decision <d>", "allow, ask, deny or reviewer")
+    .option("--tool <name>", "Only this tool")
+    .option("--agent <who>", "Only this agent (role, id or kind)")
+    .option("--since <date>", "From this date (inclusive)")
+    .option("--until <date>", "Up to this date (inclusive)")
+    .option(
+      "--limit <n>",
+      "Only the last n calls (shadow: disagreements shown)",
+    )
+    .option("--model <name>", "shadow: only this reviewer model")
+    .option("--days <n>", "prune: delete files older than this many days")
+    .option("--dry-run", "prune: say what would be deleted"),
+).action(
+  async (action: string | undefined, session: string | undefined, options) => {
+    const code = auditCommand(action, session, options);
+    await gracefulExit(code);
+  },
+);
 
 // Test connection for an OpenAI-compatible endpoint
 program
