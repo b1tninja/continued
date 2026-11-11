@@ -79,7 +79,7 @@ const RULES: Rule[] = [
   },
   {
     id: "forged-markers",
-    re: /\[\[\s*\/?\s*USER-(?:GUIDANCE|MESSAGES)\s*\]\]|<<<\s*(?:EARLIER-)?(?:TOOL-CALLS?|ENVIRONMENT)\b|\b(?:EARLIER-)?(?:TOOL-CALLS?|ENVIRONMENT)\s+END\b|<\s*\/?\s*(?:EARLIER-)?TOOL-CALLS?\s*>|\bEND\s+[0-9a-f]{6,}\s*>>>|\bTool\s+call\s+to\s+review\s*:|\bReply\s+with\s+the\s+JSON\s+object\b|^\s*tool\s*:\s*\w+\s*\r?\n\s*arguments\s*:/im,
+    re: /\[\[\s*\/?\s*USER-(?:GUIDANCE|MESSAGES)\s*\]\]|<<<\s*(?:EARLIER-)?(?:TOOL-CALLS?|ENVIRONMENT)\b|\b(?:EARLIER-)?(?:TOOL-CALLS?|ENVIRONMENT)\s+END\b|<\s*\/?\s*(?:EARLIER-)?TOOL-CALLS?\s*>|\bEND\s+[0-9a-f]{6,}\s*>>>|\bTool\s+call\s+to\s+review\s*:|\bReply\s+with\s+the\s+JSON\s+object\b|(?:^|["'`])\s*tool\s*:\s*\w+\s*\r?\n\s*arguments\s*:/im,
   },
   {
     id: "forged-verdict",
