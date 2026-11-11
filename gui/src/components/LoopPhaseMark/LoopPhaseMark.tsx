@@ -57,6 +57,7 @@ export function LoopPhaseMark({
           className={className ?? "h-3 w-[21px]"}
           dot={last.current}
           title={`Loop: ${text}`}
+          testId={testId === "loop-phase" ? undefined : `${testId}-icon`}
         />
       </span>
       {label && <span>{text}</span>}

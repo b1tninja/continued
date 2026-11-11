@@ -25,7 +25,7 @@ import {
   type PolicyArea,
   type PolicyLevel,
 } from "core/tools/permissions/policy";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import {
   REVIEWABLE_AREAS,
@@ -308,6 +308,7 @@ export function PresetSelect({
  */
 export function PolicyControls() {
   const [expanded, setExpanded] = useState(false);
+  const areasId = useId();
   return (
     <div
       className="flex flex-row flex-wrap items-center gap-1"
@@ -320,7 +321,7 @@ export function PolicyControls() {
         data-roving=""
         aria-label={expanded ? "Hide policy areas" : "Show policy areas"}
         aria-expanded={expanded}
-        aria-controls="policy-areas"
+        aria-controls={areasId}
         title="Set each area on its own"
         onClick={() => setExpanded((open) => !open)}
         className="hover:bg-list-item-hover flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-description lg:hidden"
@@ -331,7 +332,7 @@ export function PolicyControls() {
         />
       </button>
       <div
-        id="policy-areas"
+        id={areasId}
         className={`${expanded ? "flex" : "hidden"} flex-row items-center gap-1 lg:flex`}
       >
         {POLICY_AREAS.map((area) => (
