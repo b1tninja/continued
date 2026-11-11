@@ -36,6 +36,7 @@ import {
 } from "./util/terminalEnvironment";
 import { saveUserTerminalSettings } from "./util/userTerminalSettings";
 import { readUserGuidance } from "./util/userGuidance";
+import { registerShadowSettingsHandlers } from "./tools/permissions/audit/shadowSettingsHandlers";
 import {
   confirmInIde,
   registerRuleEditorHandlers,
@@ -693,6 +694,10 @@ export class Core {
         await this.configHandler.reloadConfig(reason);
       },
       confirmLoosening: (text) => confirmInIde(this.ide, text),
+    });
+
+    registerShadowSettingsHandlers(on as never, {
+      confirm: (text) => confirmInIde(this.ide, text),
     });
 
     on("policy/test", async ({ data }) => {
