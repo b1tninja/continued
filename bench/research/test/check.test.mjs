@@ -164,3 +164,28 @@ test("CLI: fetch offline with an empty cache is exit 2 and sends nothing", () =>
   assert.equal(r.status, 2);
   assert.match(r.stderr, /offline and not cached/);
 });
+
+test("a novel form against a row that records no dialect is 'novel', not agree or disagree", () => {
+  const rows = [
+    { id: "lfm", textDialect: "none", match: [/lfm/], sources: [] },
+    { id: "q", textDialect: "hermes-json", match: [/qq/], sources: [] },
+  ];
+  const rec = (repo, dialect) => ({
+    repo,
+    status: "ok",
+    template: { outcome: "decided", dialect, reason: "x" },
+  });
+  const res = compare(rows, {
+    repos: {
+      a: rec("LiquidAI/LFM2", "lfm-tokens"),
+      b: rec("qq/x", "lfm-tokens"),
+    },
+  });
+  assert.equal(res.findings.find((f) => f.row === "lfm").kind, "novel");
+  assert.equal(res.findings.find((f) => f.row === "q").kind, "disagree");
+  assert.equal(exitCode({ findings: [res.findings[0]], uncovered: [] }), 0);
+  assert.equal(
+    exitCode({ findings: [res.findings[0]], uncovered: [] }, { strict: true }),
+    1,
+  );
+});
