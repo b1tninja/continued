@@ -17,6 +17,39 @@ export const RULES = {
   "llama-json": ['"parameters"', "Respond in the format {"],
   pythonic: ["[func_name1("],
   "hermes-json": ["<tool_call>", '"name"'],
+  // Classifier-only verdicts (see NOVEL_FORMS): forms the hold-out found that
+  // no preset dialect names. They say which form the template writes and
+  // nothing else; no parser exists for any of them.
+  "seed-xml": ["<seed:tool_call>", "<function=", "<parameter="],
+  "granite-tokens": ["<|tool_call|>"],
+  "lfm-tokens": ["<|tool_call_start|>"],
+  "longcat-json": ["<longcat_tool_call>"],
+  "solar-tokens": ["<|tool_call:begin|>"],
+  "olmo-function-calls": ["<function_calls>"],
+};
+
+/**
+ * Verdicts that are not values of the preset table's TextDialect. A repo whose
+ * template gets one of these is "novel" in `check`, never "agree".
+ */
+export const NOVEL_FORMS = new Set([
+  "seed-xml",
+  "granite-tokens",
+  "lfm-tokens",
+  "longcat-json",
+  "solar-tokens",
+  "olmo-function-calls",
+]);
+
+/**
+ * Extra patterns a rule needs besides its literals. The Qwen-XML rule accepts
+ * `<function=` only when the plain `<tool_call>` tag opens it (allowing the
+ * jinja quoting and the escaped newline between them): ByteDance Seed-OSS
+ * writes the same inner markup inside `<seed:tool_call>`, which is a different
+ * wrapper and so a different form.
+ */
+const REQUIRES = {
+  "qwen-xml": [/<tool_call>(?:\\n|\s|["'+~]|\{\{-?|-?\}\})*<function=/],
 };
 
 // `<tool_call>` also wraps the qwen-xml and glm-xml forms, so the generic
@@ -48,7 +81,11 @@ export function classify(text) {
   const body = stripComments(text);
   const toolsRendered = /\btools\b/.test(body);
   let hits = Object.entries(RULES)
-    .filter(([, req]) => req.every((s) => body.includes(s)))
+    .filter(
+      ([d, req]) =>
+        req.every((s) => body.includes(s)) &&
+        (REQUIRES[d] ?? []).every((re) => re.test(body)),
+    )
     .map(([d]) => d);
   if (hits.length > 1 && hits.includes(GENERIC)) {
     hits = hits.filter((d) => d !== GENERIC);

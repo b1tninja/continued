@@ -60,7 +60,7 @@ const WORD = Array.from({ length: 6 }, (_, row) =>
   [..."CONTINUOUS"].map((letter) => GLYPHS[letter][row]).join(""),
 );
 
-type Rgb = [number, number, number];
+export type Rgb = [number, number, number];
 
 /** The wordmark: cyan into the mark's indigo and on to violet. */
 const WORD_GRADIENT: Rgb[] = [
@@ -69,14 +69,19 @@ const WORD_GRADIENT: Rgb[] = [
   [0x63, 0x66, 0xf1],
   [0xa7, 0x8b, 0xfa],
 ];
-/** The loop: the mark's indigo, so the cyan dot stands out on it. */
-const LOOP_GRADIENT: Rgb[] = [
+/**
+ * The loop: the mark's indigo, so the cyan dot stands out on it. The GUI paints
+ * its Loop icon with these same stops (gui/src/components/svg/loopGradient.ts);
+ * the test here fails if they drift.
+ */
+export const LOOP_GRADIENT: Rgb[] = [
   [0x63, 0x66, 0xf1],
   [0x81, 0x8c, 0xf8],
   [0xa7, 0x8b, 0xfa],
 ];
 /** Made when drawn, not at import, so modules that only import this stay cheap. */
-const dot = (s: string) => chalk.hex("#67E8F9").bold(s);
+export const LOOP_DOT_HEX = "#67E8F9";
+const dot = (s: string) => chalk.hex(LOOP_DOT_HEX).bold(s);
 
 function colourAt(stops: Rgb[], t: number): string {
   const scaled = Math.min(Math.max(t, 0), 1) * (stops.length - 1);

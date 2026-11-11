@@ -8,6 +8,7 @@ import { GlmXmlRecovery, recoverGlmXmlFromText } from "./glmXml.js";
 import { HermesJsonRecovery, recoverHermesJsonFromText } from "./hermesJson.js";
 import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
+import { ToolcallJsonRecovery } from "./toolcallJson.js";
 import {
   type DialectTool,
   QwenXmlRecovery,
@@ -144,6 +145,9 @@ function chooseRecovery(
   }
   if (wants(settings, "glm-xml", model, /glm/i)) {
     return { dialect: "glm-xml", stage: new GlmXmlRecovery(tools) };
+  }
+  if (wants(settings, "toolcall-json", model, /nemotron/i)) {
+    return { dialect: "toolcall-json", stage: new ToolcallJsonRecovery(tools) };
   }
   return undefined;
 }

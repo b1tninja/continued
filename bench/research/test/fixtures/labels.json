@@ -1,5 +1,5 @@
 {
-  "note": "truth = the call form the vendor template writes, read by a person; 'novel' = a form the classifier has no rule for; 'none' = no tool support in the template. Dev samples were used to write the rules; hold-out samples were not.",
+  "note": "truth = the call form the vendor template writes, read by a person; 'novel' = a form the classifier has no rule for; 'none' = no tool support in the template. Dev samples were used to write the rules; hold-out samples were not. Truth labels for 'fresh' were written by hand from the full templates on 2026-11-10, before the classifier was run on them; 'novel' there means a form the classifier has no rule for. Granite 3.2 is labelled granite-tokens (same form as 3.3, the rule's source), the only fresh label that follows a rule written from the hold-out.",
   "dev": {
     "Qwen/Qwen3-Coder-30B-A3B-Instruct": {
       "truth": "qwen-xml",
@@ -109,7 +109,7 @@
   },
   "holdout": {
     "ibm-granite/granite-3.3-8b-instruct": {
-      "truth": "novel",
+      "truth": "granite-tokens",
       "sameFamilyAsDev": false,
       "file": "ibm-granite__granite-3.3-8b-instruct.jinja",
       "license": "apache-2.0"
@@ -133,7 +133,7 @@
       "license": "apache-2.0"
     },
     "LiquidAI/LFM2-8B-A1B": {
-      "truth": "novel",
+      "truth": "lfm-tokens",
       "sameFamilyAsDev": false,
       "file": "LiquidAI__LFM2-8B-A1B.jinja",
       "license": "other"
@@ -151,7 +151,7 @@
       "license": "mit"
     },
     "ByteDance-Seed/Seed-OSS-36B-Instruct": {
-      "truth": "novel",
+      "truth": "seed-xml",
       "sameFamilyAsDev": false,
       "file": "ByteDance-Seed__Seed-OSS-36B-Instruct.jinja",
       "license": "apache-2.0"
@@ -169,7 +169,7 @@
       "license": "mit"
     },
     "allenai/Olmo-3-7B-Instruct": {
-      "truth": "novel",
+      "truth": "olmo-function-calls",
       "sameFamilyAsDev": false,
       "file": "allenai__Olmo-3-7B-Instruct.jinja",
       "license": "apache-2.0"
@@ -193,7 +193,7 @@
       "license": "apache-2.0"
     },
     "meituan-longcat/LongCat-Flash-Chat": {
-      "truth": "novel",
+      "truth": "longcat-json",
       "sameFamilyAsDev": false,
       "file": "meituan-longcat__LongCat-Flash-Chat.jinja",
       "license": "mit"
@@ -211,7 +211,7 @@
       "license": "apache-2.0"
     },
     "upstage/Solar-Open-100B": {
-      "truth": "novel",
+      "truth": "solar-tokens",
       "sameFamilyAsDev": false,
       "file": "upstage__Solar-Open-100B.jinja",
       "license": "other"
@@ -233,6 +233,108 @@
       "sameFamilyAsDev": true,
       "file": "MiniMaxAI__MiniMax-M2.5.jinja",
       "license": "other"
+    }
+  },
+  "fresh": {
+    "Qwen/Qwen3-4B-Instruct-2507": {
+      "truth": "hermes-json",
+      "file": "Qwen__Qwen3-4B-Instruct-2507.jinja",
+      "license": "apache-2.0"
+    },
+    "Qwen/Qwen2.5-Coder-32B-Instruct": {
+      "truth": "hermes-json",
+      "file": "Qwen__Qwen2.5-Coder-32B-Instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "Qwen/QwQ-32B": {
+      "truth": "hermes-json",
+      "file": "Qwen__QwQ-32B.jinja",
+      "license": "apache-2.0"
+    },
+    "NousResearch/Hermes-2-Pro-Llama-3-8B": {
+      "truth": "hermes-json",
+      "file": "NousResearch__Hermes-2-Pro-Llama-3-8B.jinja",
+      "license": "llama3"
+    },
+    "HuggingFaceTB/SmolLM3-3B": {
+      "truth": "hermes-json",
+      "file": "HuggingFaceTB__SmolLM3-3B.jinja",
+      "license": "apache-2.0"
+    },
+    "tiiuae/Falcon-H1-7B-Instruct": {
+      "truth": "hermes-json",
+      "file": "tiiuae__Falcon-H1-7B-Instruct.jinja",
+      "license": "other"
+    },
+    "ai21labs/AI21-Jamba-Reasoning-3B": {
+      "truth": "hermes-json",
+      "file": "ai21labs__AI21-Jamba-Reasoning-3B.jinja",
+      "license": "apache-2.0"
+    },
+    "mistralai/Mistral-Nemo-Instruct-2407": {
+      "truth": "mistral",
+      "file": "mistralai__Mistral-Nemo-Instruct-2407.jinja",
+      "license": "apache-2.0"
+    },
+    "mistralai/Ministral-8B-Instruct-2410": {
+      "truth": "mistral",
+      "file": "mistralai__Ministral-8B-Instruct-2410.jinja",
+      "license": "other"
+    },
+    "unsloth/Llama-3.3-70B-Instruct": {
+      "truth": "llama-json",
+      "file": "unsloth__Llama-3.3-70B-Instruct.jinja",
+      "license": "llama3.3"
+    },
+    "unsloth/Llama-4-Scout-17B-16E-Instruct": {
+      "truth": "pythonic",
+      "file": "unsloth__Llama-4-Scout-17B-16E-Instruct.jinja",
+      "license": "other"
+    },
+    "Qwen/Qwen3-Coder-480B-A35B-Instruct": {
+      "truth": "qwen-xml",
+      "file": "Qwen__Qwen3-Coder-480B-A35B-Instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "zai-org/GLM-4.6": {
+      "truth": "glm-xml",
+      "file": "zai-org__GLM-4.6.jinja",
+      "license": "mit"
+    },
+    "ibm-granite/granite-3.2-8b-instruct": {
+      "truth": "granite-tokens",
+      "file": "ibm-granite__granite-3.2-8b-instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "google/functiongemma-270m-it": {
+      "truth": "novel",
+      "file": "google__functiongemma-270m-it.jinja",
+      "license": "gemma"
+    },
+    "LiquidAI/LFM2-1.2B-Tool": {
+      "truth": "novel",
+      "file": "LiquidAI__LFM2-1.2B-Tool.jinja",
+      "license": "other"
+    },
+    "internlm/internlm2_5-7b-chat": {
+      "truth": "none",
+      "file": "internlm__internlm2_5-7b-chat.jinja",
+      "license": "other"
+    },
+    "microsoft/Phi-3.5-mini-instruct": {
+      "truth": "none",
+      "file": "microsoft__Phi-3.5-mini-instruct.jinja",
+      "license": "mit"
+    },
+    "rednote-hilab/dots.llm1.inst": {
+      "truth": "none",
+      "file": "rednote-hilab__dots.llm1.inst.jinja",
+      "license": "mit"
+    },
+    "01-ai/Yi-1.5-9B-Chat": {
+      "truth": "none",
+      "file": "01-ai__Yi-1.5-9B-Chat.jinja",
+      "license": "apache-2.0"
     }
   }
 }

@@ -59,8 +59,8 @@ const LIVE: [
   ["mistral.devstral-2-123b", "mistral", "all", "yes", "mistral"],
   ["mistral.mistral-large-3-675b-instruct", "mistral", "all", "yes", "mistral"],
   ["moonshotai.kimi-k2.5", "kimi-k2", "all", "yes", "kimi-tokens"],
-  ["moonshotai.kimi-k3", "kimi-k3", "all", "yes", "kimi-tokens"],
-  ["moonshotai.kimi-k3.1", "kimi-k3", "all", "yes", "kimi-tokens"],
+  ["moonshotai.kimi-k3", "kimi-k3", "all", "yes", "none"],
+  ["moonshotai.kimi-k3.1", "kimi-k3", "all", "yes", "none"],
   ["minimax.minimax-m2", "minimax-m2", "all", "yes", "minimax-xml"],
   ["minimax.minimax-m2.5", "minimax-m2", "all", "yes", "minimax-xml"],
   ["nvidia.nemotron-super-3-120b", "nemotron-3", "all", "yes", "qwen-xml"],
@@ -69,8 +69,8 @@ const LIVE: [
   ["qwen.qwen3-coder-next", "qwen3-coder", "most", "yes", "qwen-xml"],
   ["openai.gpt-oss-20b-1:0", "gpt-oss", "all", "yes", "harmony"],
   ["openai.gpt-oss-120b-1:0", "gpt-oss", "all", "yes", "harmony"],
-  ["qwen3.8-flash", "qwen3", "all", "yes", "hermes-json"],
-  ["qwen3.6:35b", "qwen3", "all", "yes", "hermes-json"],
+  ["qwen3.8-flash", "qwen3.5-3.8", "all", "yes", "qwen-xml"],
+  ["qwen3.6:35b", "qwen3.5-3.8", "all", "yes", "qwen-xml"],
   ["deepseek.r1-v1:0", "deepseek-r1", "none", "no", "deepseek-tokens"],
 ];
 
@@ -133,6 +133,125 @@ describe("tool dialect presets", () => {
     expect(resolveToolDialectPreset(id)?.id).toBe(preset);
   });
 
+  // Qwen3.5, 3.6 and 3.8 templates write the Qwen3-Coder XML (read 2026-11-10).
+  const QWEN35: [string, string][] = [
+    // Bedrock-style, Ollama tags, Hugging Face repos, OpenRouter slugs
+    ["qwen3.8-flash", "qwen3.5-3.8"],
+    ["qwen3.6:35b", "qwen3.5-3.8"],
+    ["qwen3.5:27b", "qwen3.5-3.8"],
+    ["qwen3.5:9b-q4_K_M", "qwen3.5-3.8"],
+    ["Qwen/Qwen3.5-27B", "qwen3.5-3.8"],
+    ["Qwen/Qwen3.6-35B-A3B", "qwen3.5-3.8"],
+    ["Qwen/Qwen3.8-27B", "qwen3.5-3.8"],
+    ["qwen/qwen3.5-397b-a17b", "qwen3.5-3.8"],
+    ["qwen/qwen3.6-plus", "qwen3.5-3.8"],
+    ["qwen/qwen3.8-flash", "qwen3.5-3.8"],
+    // Not them: Qwen3 is Hermes JSON, and Qwen3-8B must not read as 3.8
+    ["qwen3:8b", "qwen3"],
+    ["qwen3:30b-a3b", "qwen3"],
+    ["qwen.qwen3-235b-a22b-2507-v1:0", "qwen3"],
+    ["qwen3-vl:8b", "qwen3"],
+    ["Qwen/Qwen3-Next-80B-A3B-Instruct", "qwen3"],
+  ];
+  it.each(QWEN35)("%s resolves to %s", (id, preset) => {
+    expect(resolveToolDialectPreset(id)?.id).toBe(preset);
+  });
+
+  it("gives Qwen3.5 and later the Coder XML and the qwen3_coder parser, not Hermes JSON", () => {
+    for (const id of ["qwen3.6:35b", "Qwen/Qwen3.5-27B", "qwen3.8-flash"]) {
+      const p = resolveToolDialectPreset(id);
+      expect(p?.textDialect, id).toBe("qwen-xml");
+      expect(p?.recoverWith, id).toBe("qwen-xml");
+      expect(p?.serverParser, id).toMatchObject({
+        vllm: "qwen3_coder",
+        basis: "model-card",
+      });
+    }
+  });
+
+  // Rows added from the 2026-11-10 template reads. A form no TextDialect value
+  // names is `none`, with the form written in promptStyle.evidence.
+  const FAMILIES: [string, string, TextDialect][] = [
+    // Kimi K3 (XTML) and MiniMax M3 (namespaced invoke) are not K2 and M2
+    ["moonshotai.kimi-k3", "kimi-k3", "none"],
+    ["moonshotai/Kimi-K3", "kimi-k3", "none"],
+    ["moonshotai/kimi-k3.1", "kimi-k3", "none"],
+    ["moonshotai/kimi-k2.5", "kimi-k2", "kimi-tokens"],
+    ["MiniMaxAI/MiniMax-M3", "minimax-m3", "none"],
+    ["minimax/minimax-m3", "minimax-m3", "none"],
+    ["minimax.minimax-m2.5", "minimax-m2", "minimax-xml"],
+    ["minimax/minimax-m2.7", "minimax-m2", "minimax-xml"],
+    // GLM-5 is sourced
+    ["zai-org/GLM-5", "glm-5", "glm-xml"],
+    ["z-ai/glm-5.1", "glm-5", "glm-xml"],
+    // DeepSeek V4 writes the tool_calls block, V3.2 function_calls
+    ["deepseek-ai/DeepSeek-V4-Flash", "deepseek-v4", "dsml"],
+    ["deepseek/deepseek-v4-pro", "deepseek-v4", "dsml"],
+    ["deepseek.v3.2", "deepseek-v3.2", "dsml"],
+    ["deepseek-ai/DeepSeek-V3.2", "deepseek-v3.2", "dsml"],
+    // IBM Granite 4.2 is the Coder XML, 4.0 is Hermes JSON
+    ["ibm-granite/granite-4.2-8b", "granite-4.2", "qwen-xml"],
+    ["ibm-granite/granite-4.0-h-small", "granite-4", "hermes-json"],
+    ["granite4:tiny-h", "granite-4", "hermes-json"],
+    ["granite4.2:8b", "granite-4.2", "qwen-xml"],
+    // Xiaomi MiMo
+    ["XiaomiMiMo/MiMo-V2.5", "mimo-v2", "qwen-xml"],
+    ["xiaomi/mimo-v2.6-flash", "mimo-v2", "qwen-xml"],
+    ["XiaomiMiMo/MiMo-7B-RL", "mimo", "hermes-json"],
+    // StepFun
+    ["stepfun-ai/Step-3.5-Flash", "step-3.5-3.7", "qwen-xml"],
+    ["stepfun/step-3.7-flash", "step-3.5-3.7", "qwen-xml"],
+    // Liquid LFM
+    ["LiquidAI/LFM2.5-24B-A2B", "liquid-lfm", "none"],
+    ["liquid/lfm-2.5-2.6b:free", "liquid-lfm", "none"],
+    ["lfm2:8b", "liquid-lfm", "none"],
+    // Tencent Hy3
+    ["tencent/Hy3", "hy3", "none"],
+    ["tencent/hy3-preview", "hy3", "none"],
+  ];
+  it.each(FAMILIES)(
+    "%s resolves to %s with text dialect %s",
+    (id, row, text) => {
+      const p = resolveToolDialectPreset(id);
+      expect(p?.id).toBe(row);
+      expect(p?.textDialect).toBe(text);
+    },
+  );
+
+  it("does not recover a form no parser exists for, and says so", () => {
+    for (const id of [
+      "kimi-k3",
+      "minimax-m3",
+      "deepseek-v4",
+      "liquid-lfm",
+      "hy3",
+    ]) {
+      const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
+      expect(p?.recoverWith, id).toBeUndefined();
+    }
+    for (const id of ["kimi-k3", "minimax-m3", "liquid-lfm", "hy3"]) {
+      const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
+      expect(p?.promptStyle.evidence, id).toMatch(/not yet recoverable/);
+    }
+  });
+
+  it("records GLM-5 as sourced, with the glm47 parser from its card", () => {
+    const p = resolveToolDialectPreset("zai.glm-5");
+    expect(p?.serverParser).toMatchObject({
+      vllm: "glm47",
+      basis: "model-card",
+    });
+    expect(p?.promptStyle.evidence).not.toMatch(/assumed/i);
+    expect(p?.unverified?.join(" ") ?? "").not.toMatch(/assumed/i);
+  });
+
+  it("leaves Mistral and DeepSeek V3.2 undecided upstream and says why", () => {
+    const mistral = resolveToolDialectPreset("mistral.devstral-2-123b");
+    expect(mistral?.unverified?.join(" ")).toMatch(/mistral-common/);
+    const ds = resolveToolDialectPreset("deepseek.v3.2");
+    expect(ds?.unverified?.join(" ")).toMatch(/no Jinja template/);
+  });
+
   it("gives Qwen3-Next the Hermes JSON dialect, not Qwen3-Coder's", () => {
     const p = resolveToolDialectPreset("qwen.qwen3-next-80b-a3b");
     expect(p?.textDialect).toBe("hermes-json");
@@ -156,6 +275,7 @@ describe("tool dialect presets", () => {
       "deepseek-v3",
       "glm-4.5-4.6",
       "llama-3.1-3.2",
+      "minimax-m3",
     ]);
   });
 
@@ -180,6 +300,9 @@ describe("tool dialect presets", () => {
 
   it("does not match unrelated names", () => {
     expect(resolveToolDialectPreset("innovator-7b")).toBeUndefined();
+    expect(resolveToolDialectPreset("mimosa-7b")).toBeUndefined();
+    expect(resolveToolDialectPreset("stepper-3b")).toBeUndefined();
+    expect(resolveToolDialectPreset("granite-3.3-8b-instruct")).toBeUndefined();
     expect(resolveToolDialectPreset("")).toBeUndefined();
     expect(resolveToolDialectPreset(undefined)).toBeUndefined();
   });
@@ -231,6 +354,7 @@ describe("tool dialect presets", () => {
     for (const id of [
       "kimi-k3",
       "minimax-m2",
+      "minimax-m3",
       "deepseek-v3.2",
       "gpt-oss",
       "nemotron-h",
