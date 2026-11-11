@@ -76,6 +76,8 @@ export interface EffectiveRule {
   ignoredCause?: IgnoredCause;
   /** Cannot be changed from the rule list: floor rules and built-ins */
   locked: boolean;
+  /** Set when `locked`: the sentence that says why and where it is changed */
+  lockedReason?: string;
   /** Things that are wrong with an effective rule (never matches, unknown tool) */
   warnings: string[];
 }
@@ -116,7 +118,21 @@ export interface QuestionSettings {
   agentDecides: QuestionType[];
 }
 
+/** The state of the person's own config.yaml, which is where rules are written. */
+export interface UserFileState {
+  path: string;
+  state: "ok" | "missing" | "broken";
+  /** Why it is broken; never shown as "no rules" */
+  error?: string;
+  /** SHA-256 of its text, for the editor's compare before writing */
+  hash?: string;
+  /** This session made a change that Undo can put back */
+  undoable?: boolean;
+}
+
 export interface EffectiveRulesReport {
+  /** The file rules are written to, and whether it can be read */
+  userFile?: UserFileState;
   areas: Record<PolicyArea, AreaReport>;
   /** Every rule, in the same order as the areas, then the ones with no area */
   rules: EffectiveRule[];
@@ -142,6 +158,8 @@ export interface PolicyInput {
 export interface RuleSourcesInput extends PolicyInput {
   /** `toolPermissions` of the person's own config.yaml */
   user?: ToolPermissions;
+  /** What state that file is in */
+  userFile?: UserFileState;
   /** `toolPermissions` that came from an assistant or hub configuration */
   assistant?: ToolPermissions;
   /** `toolPermissions` of files that came with the workspace, as written */
@@ -161,6 +179,9 @@ export interface RuleSourcesInput extends PolicyInput {
 
 const DECISION_ORDER =
   "A call is weighed by decision, not by position: floor, then deny, then protected paths, then ask, then allow, then the area's level. Where a rule sits in a list does not matter.";
+
+export const FLOOR_LOCK_REASON =
+  "A floor rule in your permissions.yaml. It binds at every level, YOLO included, so it is changed only by editing that file.";
 
 export const FOLDER_ALLOW_REASON =
   "It came with the workspace. A repository can add deny and ask rules but not allow rules; move it to your own config.yaml to use it.";
@@ -341,6 +362,7 @@ function toRule(
     source: p.source,
     ...(p.file ? { file: p.file } : {}),
     locked: p.locked,
+    ...(p.locked ? { lockedReason: FLOOR_LOCK_REASON } : {}),
   };
   const parsed = parseRule(p.raw, p.decision);
   if (!parsed) {
@@ -473,6 +495,7 @@ export function listEffectiveRules(
     unscoped,
     decisionOrder: DECISION_ORDER,
     notices: input.notices ?? [],
+    ...(input.userFile ? { userFile: input.userFile } : {}),
   };
 }
 

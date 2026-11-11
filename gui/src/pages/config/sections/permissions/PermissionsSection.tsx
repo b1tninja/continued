@@ -12,9 +12,12 @@ import {
 import type { ToolCallTestResult } from "core/tools/permissions/testToolCall";
 import { useContext, useEffect, useState } from "react";
 import Alert from "../../../../components/gui/Alert";
+import { Button } from "../../../../components/ui";
 import { IdeMessengerContext } from "../../../../context/IdeMessenger";
 import { useAppSelector } from "../../../../redux/hooks";
 import { ConfigHeader } from "../../components/ConfigHeader";
+import { EditableRules, type EditorEnv } from "./EditableRules";
+import { LocksSection } from "./Locks";
 import { BuiltinList, RuleList } from "./RuleList";
 import { RuleTester } from "./RuleTester";
 
@@ -85,9 +88,11 @@ function QuestionSettings({ area }: { area: AreaReport }) {
 function AreaPanel({
   area,
   report,
+  env,
 }: {
   area: PolicyArea;
   report: EffectiveRulesReport;
+  env: EditorEnv;
 }) {
   const levels = useAppSelector((s) => s.ui.policyLevels);
   const [result, setResult] = useState<ToolCallTestResult | undefined>();
@@ -119,16 +124,31 @@ function AreaPanel({
           {report.decisionOrder}
         </p>
       )}
+      {hasRules && <LocksSection />}
       <BuiltinList builtins={a.builtins} />
       {hasRules && (
         <>
-          <section aria-label="Rules" data-testid="rules">
-            <h5 className="my-1 text-xs font-semibold">Rules</h5>
-            <RuleList
+          {report.userFile?.state === "broken" ? (
+            <section aria-label="Rules" data-testid="rules">
+              <h5 className="my-1 text-xs font-semibold">Rules</h5>
+              <p className="my-1 text-xs text-error" role="alert">
+                Your own rules cannot be shown because config.yaml cannot be
+                read. This is not an empty list. Editing is off until the file
+                is fixed.
+              </p>
+              <RuleList
+                rules={a.rules}
+                highlight={result?.matchedRules.map((m) => m.raw)}
+              />
+            </section>
+          ) : (
+            <EditableRules
+              area={area}
               rules={a.rules}
               highlight={result?.matchedRules.map((m) => m.raw)}
+              env={env}
             />
-          </section>
+          )}
           <RuleTester area={area} levels={levels} onResult={setResult} />
         </>
       )}
@@ -137,9 +157,11 @@ function AreaPanel({
 }
 
 /**
- * Settings > Permissions (read-only, slice 1): every rule in effect by area,
- * with its source and whether it is obeyed, and a tester that runs the real
- * check. Rules are edited in config.yaml for now; nothing here writes.
+ * Settings > Permissions: every rule in effect by area, with its source and
+ * whether it is obeyed, a tester that runs the real check, and the controls to
+ * add, change, remove and adopt rules in your own config.yaml. Only the core
+ * dialect is written; a config.yaml that cannot be read turns editing off
+ * instead of showing an empty list.
  * The Reviewer tab joins the area tabs here later.
  */
 export function PermissionsSection() {
@@ -148,6 +170,10 @@ export function PermissionsSection() {
   const [report, setReport] = useState<EffectiveRulesReport | undefined>();
   const [error, setError] = useState(false);
   const [active, setActive] = useState<PolicyArea>("tools");
+  const [reloads, setReloads] = useState(0);
+  const [status, setStatus] = useState<
+    { text: string; error?: boolean } | undefined
+  >();
 
   useEffect(() => {
     let cancelled = false;
@@ -163,13 +189,42 @@ export function PermissionsSection() {
     return () => {
       cancelled = true;
     };
-  }, [ideMessenger, levels]);
+  }, [ideMessenger, levels, reloads]);
+
+  const userFile = report?.userFile;
+  const env: EditorEnv = {
+    editable: !userFile || userFile.state === "ok",
+    baseHash: userFile?.hash,
+    onChanged: (text) => {
+      setStatus({ text });
+      setReloads((n) => n + 1);
+    },
+  };
+
+  const undo = async () => {
+    const res = await ideMessenger.request("config/undoToolRule", {
+      source: "permissions-page",
+    });
+    if (res.status !== "success") {
+      setStatus({ text: "Could not undo. Nothing was changed.", error: true });
+      return;
+    }
+    const r = res.content;
+    setStatus({
+      text:
+        r.result === "undone"
+          ? "Put config.yaml back as it was before your last change."
+          : (r.error ?? "Could not undo."),
+      error: r.result !== "undone",
+    });
+    setReloads((n) => n + 1);
+  };
 
   return (
     <section className="mb-4 min-w-0" data-testid="permissions-page">
       <ConfigHeader
         title="Permissions"
-        subtext="Every rule that decides what the agent may read, run and change, where it came from, and whether it applies. Read-only: edit rules in config.yaml."
+        subtext="Every rule that decides what the agent may read, run and change, where it came from, and whether it applies. You can add, change and remove your own rules here; they are saved to your config.yaml."
         showAddButton={false}
         className="mb-2"
       />
@@ -177,6 +232,46 @@ export function PermissionsSection() {
         <Alert type="error" size="sm">
           <span className="text-2xs">The rules could not be read.</span>
         </Alert>
+      )}
+      {userFile?.state === "broken" && (
+        <div className="mb-2">
+          <Alert type="error" size="sm">
+            <span className="text-2xs" data-testid="config-broken">
+              Your config.yaml cannot be read: {userFile.error} Your rules are
+              not shown, and editing is off so nothing is written over the file.
+              Fix the file, then reload.
+            </span>
+          </Alert>
+        </div>
+      )}
+      {userFile?.state === "missing" && (
+        <div className="mb-2">
+          <Alert type="warning" size="sm">
+            <span className="text-2xs" data-testid="config-missing">
+              There is no config.yaml, so rules cannot be saved here.
+            </span>
+          </Alert>
+        </div>
+      )}
+      <div role="status" aria-live="polite" data-testid="change-status">
+        {status && (
+          <p
+            className={`my-1 text-xs ${status.error ? "text-error" : "text-success"}`}
+          >
+            {status.text}
+          </p>
+        )}
+      </div>
+      {userFile?.undoable && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void undo()}
+          aria-label="Undo the last rule change"
+          data-testid="undo-rule-change"
+        >
+          Undo last change
+        </Button>
       )}
       {report?.notices.map((n) => (
         <div className="mb-2" key={n}>
@@ -214,7 +309,9 @@ export function PermissionsSection() {
           </button>
         ))}
       </div>
-      {report && <AreaPanel key={active} area={active} report={report} />}
+      {report && (
+        <AreaPanel key={active} area={active} report={report} env={env} />
+      )}
       {report && report.unscoped.length > 0 && (
         <section aria-label="Rules with no area" className="mt-3">
           <h5 className="my-1 text-xs font-semibold">Rules with no area</h5>

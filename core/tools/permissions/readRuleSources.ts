@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as YAML from "yaml";
 import { getContinueGlobalPath } from "../../util/paths";
-import { recordedFolderRules } from "./folderRules";
+import { recordedAssistantAllows, recordedFolderRules } from "./folderRules";
 import type { RuleSourcesInput } from "./effectiveRules";
 import { type PolicyLevels } from "./policy";
 import { readPolicyFile } from "./settingsFile";
@@ -27,18 +28,95 @@ export function sanitizeToolPermissions(
   return Object.keys(out).length ? out : undefined;
 }
 
+/** SHA-256 of a file's text: what the editor compares to see that nobody changed it since. */
+export function hashText(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+export interface UserConfigFile {
+  path: string;
+  /**
+   * `ok`: read, with or without rules. `missing`: no file. `broken`: it is
+   * there but cannot be read as rules; never the same as "no rules".
+   */
+  state: "ok" | "missing" | "broken";
+  error?: string;
+  text?: string;
+  hash?: string;
+  permissions?: ToolPermissions;
+}
+
+const LIST_KEYS = ["allow", "ask", "deny"] as const;
+
+/**
+ * Read the person's own config.yaml and say what state it is in. A file that
+ * does not parse, or whose `toolPermissions` is not a mapping of lists of
+ * strings, is `broken` with the reason: the editor must not show it as having
+ * no rules and then write over it.
+ */
+export function readUserConfigFile(
+  file = path.join(getContinueGlobalPath(), "config.yaml"),
+): UserConfigFile {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return { path: file, state: "missing" };
+    return {
+      path: file,
+      state: "broken",
+      error: `config.yaml could not be read: ${e?.message ?? e}`,
+    };
+  }
+  const base = { path: file, text, hash: hashText(text) };
+  const doc = YAML.parseDocument(text.replace(/^﻿/, ""));
+  if (doc.errors.length > 0) {
+    return {
+      ...base,
+      state: "broken",
+      error: `config.yaml cannot be parsed: ${doc.errors[0].message}`,
+    };
+  }
+  const root = doc.toJS();
+  if (root === null || root === undefined) return { ...base, state: "ok" };
+  if (typeof root !== "object" || Array.isArray(root)) {
+    return {
+      ...base,
+      state: "broken",
+      error: "config.yaml is not a mapping at the top level.",
+    };
+  }
+  const raw = (root as any).toolPermissions;
+  if (raw === undefined || raw === null) return { ...base, state: "ok" };
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      ...base,
+      state: "broken",
+      error: "toolPermissions in config.yaml is not a mapping.",
+    };
+  }
+  for (const key of LIST_KEYS) {
+    const list = raw[key];
+    if (
+      list !== undefined &&
+      list !== null &&
+      (!Array.isArray(list) || list.some((v) => typeof v !== "string"))
+    ) {
+      return {
+        ...base,
+        state: "broken",
+        error: `toolPermissions.${key} in config.yaml must be a list of text entries.`,
+      };
+    }
+  }
+  return { ...base, state: "ok", permissions: sanitizeToolPermissions(raw) };
+}
+
 /** The person's own `toolPermissions`, read directly from their config.yaml. */
 export function readUserToolPermissions(
   file = path.join(getContinueGlobalPath(), "config.yaml"),
 ): ToolPermissions | undefined {
-  try {
-    if (!fs.existsSync(file)) return undefined;
-    return sanitizeToolPermissions(
-      (YAML.parse(fs.readFileSync(file, "utf8")) as any)?.toolPermissions,
-    );
-  } catch {
-    return undefined;
-  }
+  return readUserConfigFile(file).permissions;
 }
 
 /** What the CLI keeps in permissions.yaml beside the shared policy keys. */
@@ -144,9 +222,10 @@ export function readRuleSources(
   options: ReadRuleSourcesOptions = {},
 ): RuleSourcesInput {
   const global = getContinueGlobalPath();
-  const user = readUserToolPermissions(
+  const userFile = readUserConfigFile(
     options.configFile ?? path.join(global, "config.yaml"),
   );
+  const user = userFile.permissions;
   const permissionsFile =
     options.permissionsFile ?? path.join(global, "permissions.yaml");
   const { settings, notices } = readPolicyFile(permissionsFile);
@@ -156,9 +235,26 @@ export function readRuleSources(
     user,
     folder,
   ).assistant;
+  // Allow rules the loader dropped (an assistant's), shown as ignored
+  const droppedAllow = recordedAssistantAllows();
+  const assistantWithDropped: ToolPermissions | undefined = droppedAllow.length
+    ? {
+        ...assistant,
+        allow: [...(assistant?.allow ?? []), ...droppedAllow],
+      }
+    : assistant;
   return {
     user,
-    assistant,
+    userFile: {
+      path: userFile.path,
+      state: userFile.state,
+      ...(userFile.error ? { error: userFile.error } : {}),
+      ...(userFile.hash ? { hash: userFile.hash } : {}),
+    },
+    // The loader removes an assistant's allow rules, so one that is listed
+    // here is shown as ignored, whatever the evaluator would do with it
+    assistantAllow: "ignored",
+    assistant: assistantWithDropped,
     folder,
     cliFile: readCliLists(permissionsFile),
     floor: settings.floor,

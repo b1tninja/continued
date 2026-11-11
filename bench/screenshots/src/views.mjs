@@ -39,6 +39,10 @@ export const VIEWS = {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",
   },
+  "permissions-editor": {
+    fixture: "permissions-editor",
+    note: "Settings, Permissions, with the add-rule form open on a rule that allows every command",
+  },
   "settings-tools": {
     fixture: "settings-tools",
     note: "Settings, Tools tab, with Commands and secrets",

@@ -45,6 +45,7 @@ import type {
 } from "../config/providerSetup";
 import type { DecisionSource as ToolDecisionSource } from "../tools/permissions/decide";
 import type { ApprovalSettings } from "../tools/permissions/approval";
+import type { RuleEditRequest } from "../tools/permissions/ruleEditorHandlers";
 import { GlobalContextModelSelections } from "../util/GlobalContext";
 
 import {
@@ -258,12 +259,35 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    */
   "config/setRulesByMode": [RulesByModeInput, { saved: boolean }];
   /**
-   * Add one rule to `toolPermissions` in the global config.yaml (comments
-   * kept). "no-config" means the selected config is not a local YAML file.
+   * Change the person's own rules in the global config.yaml (comments kept,
+   * only the core dialect written). Every answer is a named result; nothing is
+   * written on a dry run, on a broken file, or when the file changed since
+   * `baseHash`. `add` is also what "Always allow" sends.
    */
   "config/addToolRule": [
-    { decision: "allow" | "ask" | "deny"; rule: string },
-    { result: "added" | "exists" | "no-config" | "invalid" },
+    RuleEditRequest,
+    import("../tools/permissions/ruleEditor").ToolRuleEditResponse,
+  ];
+  "config/updateToolRule": [
+    RuleEditRequest,
+    import("../tools/permissions/ruleEditor").ToolRuleEditResponse,
+  ];
+  "config/removeToolRule": [
+    RuleEditRequest,
+    import("../tools/permissions/ruleEditor").ToolRuleEditResponse,
+  ];
+  /** Copy a rule from an assistant or workspace file into the person's own */
+  "config/adoptToolRule": [
+    RuleEditRequest,
+    import("../tools/permissions/ruleEditor").ToolRuleEditResponse,
+  ];
+  /** Put back the file as it was before this session's last rule change, if it is unchanged since */
+  "config/undoToolRule": [
+    (
+      | { source?: import("../tools/permissions/ruleAnalysis").ChangeSource }
+      | undefined
+    ),
+    import("../tools/permissions/ruleEditor").UndoResponse,
   ];
   /**
    * The narrowest allow rule for a pending tool call, or why there is none.
@@ -500,6 +524,10 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "bedrock/testModel": [
     BedrockConnectionParams & { model: string },
     BedrockTestModelResult,
+  ];
+  "ollama/showHint": [
+    { provider?: string; apiBase?: string; model: string },
+    { serverParses?: boolean; toolsAdvertised?: boolean },
   ];
   "bedrock/probeToolCalls": [
     BedrockConnectionParams & { model: string },

@@ -584,13 +584,21 @@ export function isInvalidModelIdentifierError(e: unknown): boolean {
 
 /**
  * Models whose tool calls must go through Converse rather than
- * ConverseStream (checked live 2026-11-08):
+ * ConverseStream. Measured live (2026-11-08 and bsf-2026-11-10, n=8 per cell):
  *
- * - Llama 4 Maverick and Scout refuse every ConverseStream request that
- *   carries tools with "This model doesn't support tool use in streaming
- *   mode."; the same request to Converse returns a proper toolUse block.
- * - Qwen3 32B streams tool input with its opening fragment missing, so the
- *   arguments never parse; Converse returned complete input every time.
+ * - Llama 3.1 70B, Llama 3.3 70B, Llama 4 Scout, Mistral Large 2 (2407) and
+ *   Pixtral Large refuse every ConverseStream request that carries tools with
+ *   "This model doesn't support tool use in streaming mode." (8 of 8 each);
+ *   Llama 4 Maverick was measured 2026-11-08. The same request to Converse
+ *   returns a proper toolUse block.
+ * - Documented only, not measured: Llama 3.1 8B, Mistral Large 2402 and Writer
+ *   Palmyra X4 and X5 are on the same list on AWS's "Client-side tool use"
+ *   page (https://docs.aws.amazon.com/bedrock/latest/userguide/tool-use-client-side.html,
+ *   read 2026-11-10). Mistral Large 3 streams tools cleanly and is not listed.
+ * - Qwen3 32B streams tool input with its opening `{` missing about half the
+ *   time (4 of 8), so the arguments do not parse; Converse returned complete
+ *   input every time. Qwen3 Coder 30B truncated to `{` once in 8 and is not
+ *   listed here: the parse check in the stream handler covers it.
  *
  * Requests without tools stream as usual. There are two copies, this one and
  * packages/openai-adapters/src/apis/bedrockHelpers.ts (see
@@ -598,11 +606,112 @@ export function isInvalidModelIdentifierError(e: unknown): boolean {
  */
 const NON_STREAMING_TOOL_MODELS: RegExp[] = [
   /(^|\.)meta\.llama4-/i,
+  // Measured: 70B. Documented only: 8B.
+  /(^|\.)meta\.llama3-1-/i,
+  // Measured: 70B.
+  /(^|\.)meta\.llama3-3-/i,
+  // Measured: 2407. Documented only: 2402. Not mistral-large-3.
+  /(^|\.)mistral\.mistral-large-24\d\d($|[-:])/i,
+  // Measured.
+  /(^|\.)mistral\.pixtral-large/i,
+  // Documented only.
+  /(^|\.)writer\.palmyra-x[45]($|[-:])/i,
+  // Measured: half of the requests.
   /(^|\.)qwen\.qwen3-32b($|[-:])/i,
 ];
 
 export function bedrockToolsNeedNonStreaming(modelId: string): boolean {
   return NON_STREAMING_TOOL_MODELS.some((m) => m.test(modelId));
+}
+
+/**
+ * Whether the input a toolUse block streamed is JSON. Qwen3 32B opened its
+ * input with `path": "src/main.ts"}` (the `{"` missing, 4 of 8 requests) and
+ * Qwen3 Coder 30B ended it at `{` (1 of 8), measured 2026-11-10. An empty
+ * input is a tool without arguments.
+ */
+export function toolInputParses(input: string): boolean {
+  if (input.trim() === "") return true;
+  try {
+    JSON.parse(input);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Families whose tool-argument deltas are passed on as they arrive, without
+ * the hold-and-parse check of `ToolInputGate`. The list is deliberately short:
+ * first-party Claude and Nova only. Every other model is held and checked,
+ * because 8 of 8 clean streams (bsf-2026-11-10) do not prove a model streams
+ * cleanly, and AWS re:Post
+ * (https://repost.aws/questions/QUdavvWt4aS-Km2zK71OFUSA) and AgentCore SDK
+ * issue 425 report corrupted streamed tool input for gpt-oss, which measured
+ * clean here. Holding costs only delayed argument deltas. A follow-up
+ * measurement at n>=30 per family decides who can be promoted to this list.
+ * Two copies, as `bedrockToolsNeedNonStreaming`.
+ */
+const CLEAN_TOOL_STREAM_MODELS: RegExp[] = [
+  /(^|\.)anthropic\.claude/i,
+  /(^|\.)amazon\.nova/i,
+];
+
+export function bedrockStreamsToolInputCleanly(modelId: string): boolean {
+  return CLEAN_TOOL_STREAM_MODELS.some((m) => m.test(modelId));
+}
+
+/**
+ * Holds one streamed toolUse block (its start and input fragments) until the
+ * block ends, so its input can be checked before any of it reaches the caller,
+ * who runs the tool only once the reply is over. `close` says what to do with
+ * a block whose input does not parse: retry the turn through Converse when
+ * nothing irreversible has gone out (no text or reasoning, no earlier tool
+ * call), so no call can run twice; otherwise release the block as streamed.
+ * The caller remembers the model either way. A gate made with `hold` false
+ * (see `bedrockStreamsToolInputCleanly`) passes everything through, so those
+ * models keep progressive tool-argument deltas. Two copies, as
+ * `bedrockToolsNeedNonStreaming`.
+ */
+export class ToolInputGate<T> {
+  constructor(private readonly hold: boolean) {}
+
+  private held: { parts: T[]; input: string } | undefined;
+  private released = false;
+  private output = false;
+
+  get holding(): boolean {
+    return this.held !== undefined;
+  }
+
+  /** Text or reasoning went to the caller (or may have), so a retry would repeat it. */
+  noteOutput(): void {
+    this.output = true;
+  }
+
+  /** What to yield now: the block's start, unless the gate is holding it. */
+  open(part: T): T[] {
+    if (!this.hold) return [part];
+    this.held = { parts: [part], input: "" };
+    return [];
+  }
+
+  add(part: T, fragment: string | undefined): void {
+    if (!this.held) return;
+    this.held.parts.push(part);
+    this.held.input += fragment ?? "";
+  }
+
+  close(): { parts: T[]; broken: boolean; retry: boolean } {
+    const held = this.held;
+    this.held = undefined;
+    if (!held) return { parts: [], broken: false, retry: false };
+    const broken = !toolInputParses(held.input);
+    const retry = broken && !this.output && !this.released;
+    if (retry) return { parts: [], broken, retry };
+    this.released = true;
+    return { parts: held.parts, broken, retry };
+  }
 }
 
 /** Bedrock's refusal of tools in ConverseStream, for a retry through Converse. */

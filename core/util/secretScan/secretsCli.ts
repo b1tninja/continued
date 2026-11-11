@@ -7,6 +7,15 @@
  * file, line, column and fingerprint; it never prints a value or a line.
  */
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+
+import {
+  formatHistorySummary,
+  HISTORY_MAX_BYTES,
+  historyRoots,
+  looseFiles,
+} from "./historyScan";
 
 import { machineMatcher } from "./machineSecrets";
 import {
@@ -32,6 +41,12 @@ export interface SecretsScanOptions {
   known?: boolean;
   /** Home directory for the known-values search; default the real one. */
   home?: string;
+  /** Scan this product's own stores (sessions, dev_data, logs). */
+  history?: boolean;
+  /** With `history`: also read ~/.claude/projects transcripts, read-only. */
+  includeClaudeCode?: boolean;
+  /** The global folder `history` scans. Set by the caller. */
+  globalDir?: string;
 }
 
 export interface Io {
@@ -70,6 +85,26 @@ export function runSecretsScan(
     return EXIT_USAGE;
   }
   let inputs = [...paths];
+  if (options.history) {
+    if (!options.globalDir) {
+      io.err("--history needs the global folder.");
+      return EXIT_USAGE;
+    }
+    inputs.push(
+      ...historyRoots({
+        globalDir: options.globalDir,
+        includeClaudeCode: options.includeClaudeCode,
+        home: options.home ?? os.homedir(),
+      }).filter((p) => fs.existsSync(p)),
+    );
+    if (!inputs.length) {
+      io.out("History: no stores found, nothing to scan.");
+      return EXIT_CLEAN;
+    }
+  } else if (options.includeClaudeCode) {
+    io.err("--include-claude-code only applies with --history.");
+    return EXIT_USAGE;
+  }
   if (options.staged) {
     try {
       inputs = [...inputs, ...stagedFiles()];
@@ -98,6 +133,7 @@ export function runSecretsScan(
     salt: options.salt,
     known: machine?.matcher,
     allowFingerprints: allow,
+    maxBytes: options.history ? HISTORY_MAX_BYTES : undefined,
   });
   if (options.json) {
     io.out(
@@ -114,6 +150,10 @@ export function runSecretsScan(
     );
   } else {
     io.out(formatReport(report));
+    if (options.history) {
+      for (const l of formatHistorySummary(report, looseFiles(files)))
+        io.out(l);
+    }
   }
   return report.findings.length ? EXIT_FINDINGS : EXIT_CLEAN;
 }

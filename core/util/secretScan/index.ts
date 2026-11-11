@@ -33,3 +33,4 @@ export type {
   SecretRule,
   SecretRuleClass,
 } from "./types";
+export { scrubDeep, scrubForDisk } from "./scrubForDisk";

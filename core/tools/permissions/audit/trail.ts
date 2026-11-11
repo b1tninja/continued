@@ -1,10 +1,12 @@
 import {
   decisionDraft,
   outcomeDraft,
+  policyDraft,
   turnDraft,
   type AuditPolicy,
   type DecisionInput,
   type OutcomeInput,
+  type PolicyInput,
 } from "./record";
 import { pruneAudit, type PruneResult } from "./reader";
 import { AuditWriter, DEFAULT_MAX_FILE_BYTES } from "./writer";
@@ -177,6 +179,23 @@ export class AuditTrail {
       const result = this.writer.write(turnDraft(input));
       if (!result.ok) this.fail(result.error);
     });
+  }
+
+  /**
+   * A change to the person's rules. Returns false when it could not be
+   * written, so the caller can say so; the change itself is not undone.
+   */
+  policy(input: PolicyInput): boolean {
+    if (!this.enabled) return true;
+    let ok = true;
+    this.guard(() => {
+      const result = this.writer.write(policyDraft(input));
+      if (!result.ok) {
+        ok = false;
+        this.fail(result.error);
+      }
+    });
+    return ok;
   }
 
   /** Delete files past the retention. Never throws. */

@@ -110,7 +110,7 @@ describe("PermissionsSection", () => {
   it("marks a workspace allow rule ignored, with the reason", async () => {
     await setup();
     const row = screen.getByLabelText(
-      /Allow rule runTerminalCommand\(curl\*\), from Workspace, ignored/,
+      /Always rule runTerminalCommand\(curl\*\), from Workspace, ignored/,
     );
     expect(row.textContent).toContain("Ignored");
     expect(row.textContent).toContain("came with the workspace");

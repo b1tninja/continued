@@ -92,6 +92,12 @@ In the Bedrock add-model form, **Test connection** also sends one request with a
 
 Many Ollama models (for example `qwen3.6`) are served through a renderer and parser: `/api/show` reports `parser: qwen3.5` and a template of just `{{ .Prompt }}`, so there is no tool markup in the template to read. The model-metadata lookup reads the `parser` name first (then the template, then the model name) and maps the parser names it has verified in Ollama's source to a dialect. Because Ollama itself turns the call into a structured one for these models, the hint is marked `serverParses`: the live notice and the recovery suggestion are not shown for that endpoint, and Test connection leaves out the preset line. A parser name that is not in the verified table maps to nothing and falls back to the model name.
 
+The notice is wired to this lookup. For a model on Ollama (provider `ollama`, or an OpenAI-compatible provider whose base URL is on port 11434), Continue asks `/api/show` once per model per process (2 second timeout; any failure means no hint and the notice behaves as before, and a failed lookup is retried after about a minute while a success is kept for the process) and does not show the live notice or the CLI hint when the parser is one of the verified ones. If `/api/show` lists capabilities without `tools`, a tool-call probe reports "not supported" without sending a request.
+
+A model counts as Ollama when its provider is `ollama` or when its base URL is on port 11434; Continue does not check that the server on that port is Ollama.
+
+Models that have only a chat template (no `parser`), such as one with a Hermes-style `<tool_call>` template, are left unmarked: Ollama may well parse those calls itself, but that has not been measured, so the notice still appears for them if a call is written as text.
+
 ## Live notice
 
 When a Bedrock model writes a recoverable tool call as text in a reply (not inside a code fence) and `toolDialect` is not set, the IDE shows one dismissible notice per model per session: "This model wrote a tool call as text (looks like qwen-xml). Turn on recovery for this model?" **Turn on recovery** sets `toolDialect` for that model in `config.yaml`. Nothing is turned on until you click it. The CLI prints a one-line hint once per session instead, naming the key to set.

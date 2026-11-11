@@ -8,6 +8,10 @@ import { EvaluateInput, evaluateToolPolicyWithRules } from "../evaluate";
 import type { ToolPermissions } from "../rules";
 import type { AuditReviewer } from "../audit/record";
 import { ReviewCategory } from "./categories";
+import {
+  addressedReason,
+  findReviewerAddressedText,
+} from "./reviewerAddressed";
 import { ReviewResult } from "./parse";
 import { assembleGuidance, guidanceHash, type GuidanceInput } from "./guidance";
 import {
@@ -56,6 +60,11 @@ export interface AutoReviewReply {
   cached?: boolean;
   /** The reviewer's reply could not be read, so the call was left for the user. */
   unusable?: boolean;
+  /**
+   * YOLO only: the call carries text addressed to the reviewer. YOLO runs it
+   * anyway; the notice is for the person to see.
+   */
+  notice?: string;
   /** Which model answered, how long it took and what it used (for the audit trail) */
   reviewer?: AuditReviewer;
 }
@@ -138,7 +147,14 @@ export async function autoReviewToolCall(
     return settled("deny", "Refused by a rule or the safety check.");
   }
   if (evaluated.policy === "allowedWithoutPermission") {
-    return settled("allow", "Allowed without review.");
+    const allowed = settled("allow", "Allowed without review.");
+    if (evaluated.source === "yolo") {
+      const hits = findReviewerAddressedText(req.parsedArgs);
+      if (hits.length > 0) {
+        return { ...allowed, notice: addressedReason(hits) };
+      }
+    }
+    return allowed;
   }
   if (evaluated.protection === "fetch-and-run") {
     const area = levelOfCall(req.approval, req.toolName, deps.tool, {
@@ -175,6 +191,19 @@ export async function autoReviewToolCall(
     ...result,
     by: "system",
   });
+  // Text addressed to the reviewer is an attack, never evidence of safety:
+  // settled here, before the model is asked, so its allow cannot be used.
+  const addressed = findReviewerAddressedText(req.parsedArgs);
+  if (addressed.length > 0) {
+    return {
+      ...system({
+        decision: req.headless ? "deny" : "ask",
+        category: "reviewer-addressed-text",
+        reason: addressedReason(addressed),
+      }),
+      reviewer: { promptVersion: "reviewer-addressed-text" },
+    };
+  }
   if (!deps.enabled) {
     return system(unavailable("Auto approval is turned off.", false));
   }
@@ -278,6 +307,7 @@ function usageOf(raw: unknown): AuditReviewer["usage"] | undefined {
 
 function reviewedBy(result: ReviewResult): "system" | "reviewer" {
   return result.category === "reviewer-unavailable" ||
+    result.category === "reviewer-addressed-text" ||
     result.category === "denial-limit"
     ? "system"
     : "reviewer";
