@@ -215,6 +215,14 @@ export function BedrockConnectionTester({
               Known format for this model family: {toolCalls.preset}
             </span>
           )}
+          {toolCalls.ok && toolCalls.facts && (
+            <span
+              className="block text-xs opacity-80"
+              data-testid="tool-calls-facts"
+            >
+              {toolCalls.facts}
+            </span>
+          )}
         </Alert>
       )}
 

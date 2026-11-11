@@ -30,7 +30,7 @@ function safeParseArray<T>(
 function writeAtomic(file: string, contents: string): void {
   const tmp = `${file}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(tmp, contents);
+    fs.writeFileSync(tmp, contents, { mode: 0o600 });
     fs.renameSync(tmp, file);
   } catch (error) {
     try {

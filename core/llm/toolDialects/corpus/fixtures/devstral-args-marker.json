@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "https://huggingface.co/unsloth/Devstral-Small-2507/blob/main/chat_template.jinja (mirror), not observed",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": "Template writes [TOOL_CALLS]NAME[ARGS]JSON, one marker per call, no ids."
   },

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   AreaReport,
   EffectiveRule,
@@ -13,12 +14,20 @@ import {
 
 const ORDER: RuleDecision[] = ["deny", "ask", "allow"];
 
+/** What a row can carry beyond the rule: buttons beside it, and a form or note below it. */
+export interface RowExtra {
+  actions?: ReactNode;
+  below?: ReactNode;
+}
+
 export function RuleRow({
   rule,
   highlighted,
+  extra,
 }: {
   rule: EffectiveRule;
   highlighted?: boolean;
+  extra?: RowExtra;
 }) {
   return (
     <li
@@ -57,6 +66,14 @@ export function RuleRow({
           From {rule.file}
         </div>
       )}
+      {rule.locked && rule.lockedReason && (
+        <div
+          className="text-2xs text-description-muted"
+          data-testid="locked-reason"
+        >
+          {rule.lockedReason}
+        </div>
+      )}
       {rule.areaNote && (
         <div className="text-2xs text-description-muted">{rule.areaNote}</div>
       )}
@@ -70,6 +87,10 @@ export function RuleRow({
           {w}
         </div>
       ))}
+      {extra?.actions && (
+        <div className="mt-1 flex flex-wrap gap-1">{extra.actions}</div>
+      )}
+      {extra?.below && <div className="mt-1">{extra.below}</div>}
     </li>
   );
 }
@@ -78,15 +99,19 @@ export function RuleRow({
 export function RuleList({
   rules,
   highlight,
+  extraFor,
+  emptyText,
 }: {
   rules: EffectiveRule[];
   highlight?: string[];
+  extraFor?: (rule: EffectiveRule) => RowExtra | undefined;
+  emptyText?: string;
 }) {
   if (rules.length === 0) {
     return (
       <p className="my-1 text-xs text-description" data-testid="no-rules">
-        No rules here. Calls are decided by the built-in protections and the
-        level above.
+        {emptyText ??
+          "No rules here. Calls are decided by the built-in protections and the level above."}
       </p>
     );
   }
@@ -110,6 +135,7 @@ export function RuleList({
                   key={r.id}
                   rule={r}
                   highlighted={highlight?.includes(r.raw)}
+                  extra={extraFor?.(r)}
                 />
               ))}
             </ul>

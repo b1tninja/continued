@@ -143,7 +143,8 @@ describe("Bedrock: replies observed live on 2026-11-10", () => {
           { messageStop: { stopReason: "end_turn" } },
         ]),
       );
-      const r = await run("meta.llama3-1-70b-instruct-v1:0");
+      // Llama 3.2: Llama 3.1 and 3.3 tools go through Converse, not the stream
+      const r = await run("meta.llama3-2-90b-instruct-v1:0");
       expect(r.content).toBe("");
       expect(r.calls.map((c) => c.function.name)).toEqual(["read_file"]);
     });

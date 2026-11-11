@@ -1,3 +1,4 @@
+import { maskText } from "../tools/permissions/audit/mask";
 import {
   detectStuck,
   errorSignature,
@@ -50,7 +51,7 @@ export function shortCall(call: StuckCall): string {
     a.pattern ??
     a.url;
   return typeof target === "string"
-    ? `${call.tool} ${clip(target)}`
+    ? `${call.tool} ${clip(maskText(target).text)}`
     : call.tool;
 }
 
@@ -96,7 +97,7 @@ export function buildWorkLog(
       calls.length > 0
         ? calls.join("; ")
         : step.text
-          ? `said: ${clip(step.text)}`
+          ? `said: ${clip(maskText(step.text).text)}`
           : "no calls",
     ];
     if (error) parts.push(`failed: ${error}`);

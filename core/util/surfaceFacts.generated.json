@@ -1,0 +1,1610 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "imported by pull request with its evidence; see docs/reference/surface-facts.mdx",
+  "rows": [
+    {
+      "id": "bedrock-converse",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "declared",
+          "source": "https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ToolChoice.html",
+          "readOn": "2026-11-10",
+          "note": "Converse toolChoice takes auto, any and tool. The page gives no per-model table; support varies by model, and the live run found ConverseStream refuses tools for some families."
+        },
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "derived",
+          "source": "core/llm/llms/bedrockHelpers.ts",
+          "readOn": "2026-11-10",
+          "note": "Streaming tool input is used for every family not listed in bedrockToolsNeedNonStreaming; derived from that code path, not from a measured run."
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-llama-3.3",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "llama-3.3",
+      "facts": {
+        "toolsHonoured": {
+          "value": false,
+          "level": "measured",
+          "source": "plans/live-tool-call-findings.md",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "live-bedrock-converse-2026-11-10",
+          "clientPath": "core/llm/llms/Bedrock.ts Converse, non-streaming, temperature 0, two tools declared",
+          "note": "8 of 8 replies carried the call as text (JSON), none as toolUse"
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": false,
+            "named": false
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException: This model doesn't support the toolConfig.toolChoice.any field. Remove toolConfig.toolChoice.any and try again | This model doesn't support the toolConfig.toolChoice.tool field. Remove toolConfig.toolChoice.tool and try aga"
+        },
+        "toolForce": {
+          "value": "rejected",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 0 toolUse, 0 text, 8 rejected. Named tool on the same prompt: 0 toolUse of the named tool, 0 text, 8 rejected. any on a tool-needing prompt: 0 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-llama-4",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "llama-4",
+      "facts": {
+        "toolsHonoured": {
+          "value": true,
+          "level": "measured",
+          "source": "plans/live-tool-call-findings.md",
+          "readOn": "2026-11-10",
+          "k": 6,
+          "n": 8,
+          "runId": "live-bedrock-converse-2026-11-10",
+          "clientPath": "core/llm/llms/Bedrock.ts Converse, non-streaming, temperature 0, two tools declared",
+          "note": "6 of 8 structured, 2 of 8 leaked text"
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": false,
+            "named": false
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException: This model doesn't support the toolConfig.toolChoice.any field. Remove toolConfig.toolChoice.any and try again | This model doesn't support the toolConfig.toolChoice.tool field. Remove toolConfig.toolChoice.tool and try aga"
+        },
+        "toolForce": {
+          "value": "rejected",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 0 toolUse, 0 text, 8 rejected. Named tool on the same prompt: 0 toolUse of the named tool, 0 text, 8 rejected. any on a tool-needing prompt: 0 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-deepseek-v3.2",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "deepseek-v3.2",
+      "facts": {
+        "toolsHonoured": {
+          "value": true,
+          "level": "measured",
+          "source": "plans/live-tool-call-findings.md",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "live-bedrock-converse-2026-11-10",
+          "clientPath": "core/llm/llms/Bedrock.ts Converse, non-streaming, temperature 0, two tools declared",
+          "note": "structured every time; the text also ended with a DSML fragment"
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-kimi-k2-thinking",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "kimi-k2-thinking",
+      "facts": {
+        "toolsHonoured": {
+          "value": true,
+          "level": "measured",
+          "source": "plans/live-tool-call-findings.md",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "live-bedrock-converse-2026-11-10",
+          "clientPath": "core/llm/llms/Bedrock.ts Converse, non-streaming, temperature 0, two tools declared"
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-qwen3-coder",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "qwen3-coder",
+      "facts": {
+        "toolsHonoured": {
+          "value": true,
+          "level": "measured",
+          "source": "plans/live-tool-call-findings.md",
+          "readOn": "2026-11-10",
+          "k": 7,
+          "n": 8,
+          "runId": "live-bedrock-converse-2026-11-10",
+          "clientPath": "core/llm/llms/Bedrock.ts Converse, non-streaming, temperature 0, two tools declared",
+          "note": "Qwen3-Coder 30B: 7 of 8 structured, 1 leaked"
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-gemma-3",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "gemma-3",
+      "facts": {
+        "toolsHonoured": {
+          "value": false,
+          "level": "measured",
+          "source": "plans/live-tool-call-findings.md",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "live-bedrock-converse-2026-11-10",
+          "clientPath": "core/llm/llms/Bedrock.ts Converse, non-streaming, temperature 0, two tools declared",
+          "note": "Gemma 3 27B: no native tools, 0 of 8 structured"
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-glm-4.7",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "glm-4.7",
+      "facts": {
+        "toolsHonoured": {
+          "value": true,
+          "level": "measured",
+          "source": "plans/live-tool-call-findings.md",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "live-bedrock-converse-2026-11-10",
+          "clientPath": "core/llm/llms/Bedrock.ts Converse, non-streaming, temperature 0, two tools declared"
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-gpt-oss",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "gpt-oss",
+      "facts": {
+        "toolsHonoured": {
+          "value": true,
+          "level": "measured",
+          "source": "plans/live-tool-call-findings.md",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "live-bedrock-converse-2026-11-10",
+          "clientPath": "core/llm/llms/Bedrock.ts Converse, non-streaming, temperature 0, two tools declared",
+          "note": "gpt-oss 20B and 120B"
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 64,
+          "n": 64,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "ignored",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 16,
+          "n": 16,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 0 toolUse, 16 text, 0 rejected. Named tool on the same prompt: 0 toolUse of the named tool, 16 text, 0 rejected. any on a tool-needing prompt: 16 of 16 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-nova",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "nova",
+      "facts": {
+        "toolsHonoured": {
+          "value": true,
+          "level": "measured",
+          "source": "plans/live-tool-call-findings.md",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "live-bedrock-converse-2026-11-10",
+          "clientPath": "core/llm/llms/Bedrock.ts Converse, non-streaming, temperature 0, two tools declared",
+          "note": "Nova Pro and 2 Lite"
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-llama-4",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "llama-4",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "refused",
+          "level": "declared",
+          "source": "core/llm/llms/bedrockHelpers.ts (bedrockToolsNeedNonStreaming); the service's own error text: \"This model doesn't support tool use in streaming mode.\"",
+          "readOn": "2026-11-08",
+          "note": "Checked live 2026-11-08 for Llama 4 Maverick and Scout; the same request to Converse returned toolUse. One refusal message, so declared by the service, not a k of n measurement."
+        }
+      }
+    },
+    {
+      "id": "anthropic-messages",
+      "provider": "anthropic",
+      "engine": "*",
+      "api": "messages",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true,
+            "none": true
+          },
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "auto, any, tool and none; any and tool prefill the turn and skip thinking on models that accept them."
+        },
+        "toolForceThinking": {
+          "value": "skipped",
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10"
+        },
+        "toolStrictArgs": {
+          "value": "provider-strict",
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "strict: true on a tool gives schema-valid inputs."
+        }
+      }
+    },
+    {
+      "id": "anthropic-messages-claude-5.5",
+      "provider": "anthropic",
+      "engine": "*",
+      "api": "messages",
+      "modelFamily": "claude-5.5-generation",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": false,
+            "named": false,
+            "none": true
+          },
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "Opus 5.5, Sonnet 5.5, Claude Fable 5.1/5.2 and Mythos 5.1/5.2: any and tool return HTTP 400 whatever the thinking setting; use auto with strict."
+        },
+        "toolForce": {
+          "value": "rejected",
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "Opus 5.5, Sonnet 5.5, Claude Fable 5.1/5.2 and Mythos 5.1/5.2: any and tool return HTTP 400 whatever the thinking setting; use auto with strict."
+        }
+      }
+    },
+    {
+      "id": "bedrock-invoke-claude-5.5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "invoke",
+      "modelFamily": "claude-5.5-generation",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": false,
+            "named": false,
+            "none": true
+          },
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "Opus 5.5, Sonnet 5.5, Claude Fable 5.1/5.2 and Mythos 5.1/5.2: any and tool return HTTP 400 whatever the thinking setting; use auto with strict."
+        },
+        "toolForce": {
+          "value": "rejected",
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "Opus 5.5, Sonnet 5.5, Claude Fable 5.1/5.2 and Mythos 5.1/5.2: any and tool return HTTP 400 whatever the thinking setting; use auto with strict."
+        }
+      }
+    },
+    {
+      "id": "ollama-openai-chat",
+      "provider": "ollama",
+      "engine": "ollama",
+      "api": "openai-chat",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "required": false,
+            "named": false,
+            "none": false
+          },
+          "level": "declared",
+          "source": "https://docs.ollama.com/api/openai-compatibility",
+          "readOn": "2026-11-10",
+          "note": "The /v1 compatibility page lists tool_choice as not supported. The native /api/chat route documents no tool_choice either, so it has no row."
+        },
+        "toolsHonoured": {
+          "value": true,
+          "level": "declared",
+          "source": "https://docs.ollama.com/api/openai-compatibility",
+          "readOn": "2026-11-10",
+          "note": "The page lists tools (function calling) as supported on /v1; whether a model's template parses its calls is per model (toolDialectMetadata hintFromOllamaShow)."
+        }
+      }
+    },
+    {
+      "id": "llamacpp-server",
+      "provider": "llamacpp",
+      "engine": "llamacpp",
+      "api": "openai-chat",
+      "facts": {
+        "serverParses": {
+          "value": "flag:--jinja",
+          "level": "declared",
+          "source": "https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md",
+          "readOn": "2026-11-10",
+          "note": "Calls are parsed through the model's Jinja template: pass --jinja (default in newer builds). A template with no matching handler falls to a generic format the docs call less efficient and less reliable."
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "none": true
+          },
+          "level": "declared",
+          "source": "https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md",
+          "readOn": "2026-11-10",
+          "note": "auto uses a lazy grammar that engages only once the model starts a call in its own marker, so a call written in another form is not constrained; required forces a call by grammar. Read as a summary; caveats in the grammar-vs-recovery report. Named-tool choice not read."
+        },
+        "toolForceThinking": {
+          "value": "kept",
+          "level": "derived",
+          "source": "https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md",
+          "readOn": "2026-11-10",
+          "note": "Second-hand: the report says the generated parser embeds reasoning markup so a thinking model can reason, then call. Not read on the primary page."
+        }
+      }
+    },
+    {
+      "id": "vllm-openai-chat",
+      "provider": "vllm",
+      "engine": "vllm",
+      "api": "openai-chat",
+      "facts": {
+        "serverParses": {
+          "value": "flag:--tool-call-parser",
+          "level": "declared",
+          "source": "https://docs.vllm.ai/en/latest/features/tool_calling/",
+          "readOn": "2026-11-10",
+          "note": "Auto tool choice needs --enable-auto-tool-choice and a --tool-call-parser matched to the family; without a parser, required and named requests return 400."
+        },
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true,
+            "none": true
+          },
+          "level": "declared",
+          "source": "https://docs.vllm.ai/en/latest/features/tool_calling/",
+          "readOn": "2026-11-10",
+          "note": "required and named use constrained (structured-output) decoding; auto parses raw text, so malformed arguments can occur."
+        },
+        "reasoningField": {
+          "value": "reasoning",
+          "level": "declared",
+          "source": "https://docs.vllm.ai/en/latest/features/reasoning_outputs/",
+          "readOn": "2026-11-10",
+          "note": "Second-hand: the field was reasoning_content in earlier releases and is now reasoning; check the server's version."
+        }
+      }
+    },
+    {
+      "id": "openrouter-chat",
+      "provider": "openrouter",
+      "engine": "*",
+      "api": "openai-chat",
+      "facts": {
+        "toolsHonoured": {
+          "value": "per-endpoint",
+          "level": "declared",
+          "source": "https://openrouter.ai/docs/guides/routing/provider-selection",
+          "readOn": "2026-11-10",
+          "note": "Each upstream endpoint lists its own supported_parameters (live at /api/v1/models/{id}/endpoints); provider.require_parameters decides whether an unsupported parameter is ignored or the route refused."
+        }
+      }
+    },
+    {
+      "id": "openrouter-chat-gpt-oss",
+      "provider": "openrouter",
+      "engine": "*",
+      "api": "openai-chat",
+      "modelFamily": "gpt-oss",
+      "facts": {
+        "toolsHonoured": {
+          "value": "per-endpoint",
+          "level": "declared",
+          "source": "https://openrouter.ai/api/v1/models/openai%2Fgpt-oss-120b/endpoints",
+          "readOn": "2026-11-10",
+          "note": "Catalog read 2026-11-10: the Amazon Bedrock, Google, DigitalOcean and SiliconFlow endpoints for gpt-oss-120b omit tools from supported_parameters; others list it. Declared by the router, not verified by a call."
+        }
+      }
+    },
+    {
+      "id": "openai-openai-chat",
+      "provider": "openai",
+      "engine": "*",
+      "api": "openai-chat",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true,
+            "none": true
+          },
+          "level": "declared",
+          "source": "https://platform.openai.com/docs/guides/function-calling",
+          "readOn": "2026-11-10",
+          "note": "auto, required, a named function and none (read as a summary)."
+        },
+        "toolStrictArgs": {
+          "value": "provider-strict",
+          "level": "declared",
+          "source": "https://platform.openai.com/docs/guides/function-calling",
+          "readOn": "2026-11-10",
+          "note": "strict: true on a function; the request is rejected if the schema does not qualify."
+        }
+      }
+    },
+    {
+      "id": "openai-responses",
+      "provider": "openai",
+      "engine": "*",
+      "api": "responses",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true,
+            "none": true
+          },
+          "level": "declared",
+          "source": "https://platform.openai.com/docs/guides/function-calling",
+          "readOn": "2026-11-10",
+          "note": "auto, required, a named function and none (read as a summary)."
+        },
+        "toolStrictArgs": {
+          "value": "provider-strict",
+          "level": "declared",
+          "source": "https://platform.openai.com/docs/guides/function-calling",
+          "readOn": "2026-11-10",
+          "note": "strict: true on a function; the request is rejected if the schema does not qualify."
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-claude-5.5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "claude-5.5-generation",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": false,
+            "named": false,
+            "none": true
+          },
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "Opus 5.5, Sonnet 5.5, Claude Fable 5.1/5.2 and Mythos 5.1/5.2: any and tool return HTTP 400 whatever the thinking setting; use auto with strict. Anthropic lists Amazon Bedrock among the platforms the restriction applies to; not tried through Converse by us."
+        },
+        "toolForce": {
+          "value": "rejected",
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "Opus 5.5, Sonnet 5.5, Claude Fable 5.1/5.2 and Mythos 5.1/5.2: any and tool return HTTP 400 whatever the thinking setting; use auto with strict. Anthropic lists Amazon Bedrock among the platforms the restriction applies to; not tried through Converse by us."
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-nova",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "nova",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-claude-haiku-4.5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "claude-haiku-4.5",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-claude-haiku-4.5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "claude-haiku-4.5",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-llama-3.1",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "llama-3.1",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "refused",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "every ConverseStream request with tools refused: \"This model doesn't support tool use in streaming mode.\""
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-llama-3.1",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "llama-3.1",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": false,
+            "named": false
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException: This model doesn't support the toolConfig.toolChoice.any field. Remove toolConfig.toolChoice.any and try again | This model doesn't support the toolConfig.toolChoice.tool field. Remove toolConfig.toolChoice.tool and try aga"
+        },
+        "toolForce": {
+          "value": "rejected",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 0 toolUse, 0 text, 8 rejected. Named tool on the same prompt: 0 toolUse of the named tool, 0 text, 8 rejected. any on a tool-needing prompt: 0 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-llama-3.3",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "llama-3.3",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "refused",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "every ConverseStream request with tools refused: \"This model doesn't support tool use in streaming mode.\""
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-qwen3-32b",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "qwen3-32b",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "broken",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 4,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "4 of 8 streams carried tool input that does not parse as JSON (opening fragment missing); 4 parsed"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-qwen3-32b",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "qwen3-32b",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-qwen3-coder",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "qwen3-coder",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 7,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "7 of 8 streams joined into valid JSON tool input; 1 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-deepseek-v3.2",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "deepseek-v3.2",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-kimi-k2.5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "kimi-k2.5",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-kimi-k2.5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "kimi-k2.5",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-kimi-k2-thinking",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "kimi-k2-thinking",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-glm-4.7",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "glm-4.7",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-glm-5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "glm-5",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-glm-5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "glm-5",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-minimax-m2",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "minimax-m2",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 5,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "5 of 8 streams joined into valid JSON tool input; 0 broken fragments; 3 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-minimax-m2",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "minimax-m2",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-minimax-m2.5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "minimax-m2.5",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-minimax-m2.5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "minimax-m2.5",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-gpt-oss",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "gpt-oss",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 16,
+          "n": 16,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "16 of 16 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-kimi-k3",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "kimi-k3",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-kimi-k3",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "kimi-k3",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-mistral-large-3",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "mistral-large-3",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-mistral-large-3",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "mistral-large-3",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-devstral-2",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "devstral-2",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-devstral-2",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "devstral-2",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-nemotron-nano-3",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "nemotron-nano-3",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "incremental",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "8 of 8 streams joined into valid JSON tool input; 0 broken fragments; 0 answered in text without a tool call"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-nemotron-nano-3",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "nemotron-nano-3",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": true
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 8 toolUse of the named tool, 0 text, 0 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-mistral-large-2",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "mistral-large-2",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "refused",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "every ConverseStream request with tools refused: \"This model doesn't support tool use in streaming mode.\""
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-mistral-large-2",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "mistral-large-2",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": false
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException: This model doesn't support the toolConfig.toolChoice.tool field. Remove toolConfig.toolChoice.tool and try aga"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 0 toolUse of the named tool, 0 text, 8 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-stream-pixtral-large",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse-stream",
+      "modelFamily": "pixtral-large",
+      "facts": {
+        "streamingToolArgs": {
+          "value": "refused",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "every ConverseStream request with tools refused: \"This model doesn't support tool use in streaming mode.\""
+        }
+      }
+    },
+    {
+      "id": "bedrock-converse-pixtral-large",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "pixtral-large",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": true,
+            "named": false
+          },
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 32,
+          "n": 32,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "accepted = HTTP 200; rejected = ValidationException: This model doesn't support the toolConfig.toolChoice.tool field. Remove toolConfig.toolChoice.tool and try aga"
+        },
+        "toolForce": {
+          "value": "honoured",
+          "level": "measured",
+          "source": "bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
+          "readOn": "2026-11-10",
+          "k": 8,
+          "n": 8,
+          "runId": "bsf-2026-11-10",
+          "clientPath": "AWS SDK v3 Converse/ConverseStream, one read_file tool, maxTokens 200 (800 for MiniMax M2 stream/auto/any rows), temperature 0 (omitted for Kimi K3), us-east-1 (us-west-2 for Llama 3.1 70B and Mistral Large 2407)",
+          "note": "toolChoice any on the prompt 'Say hello.': 8 toolUse, 0 text, 0 rejected. Named tool on the same prompt: 0 toolUse of the named tool, 0 text, 8 rejected. any on a tool-needing prompt: 8 of 8 toolUse"
+        }
+      }
+    }
+  ]
+}

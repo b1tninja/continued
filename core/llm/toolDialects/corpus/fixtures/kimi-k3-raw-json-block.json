@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from encoding_k3.py https://huggingface.co/moonshotai/Kimi-K3/blob/main/encoding_k3.py, not observed",
+    "license": "other",
     "retrieved": "2026-11-10",
     "note": "The encoder writes unparseable arguments as a raw json block; it is not recovered."
   },

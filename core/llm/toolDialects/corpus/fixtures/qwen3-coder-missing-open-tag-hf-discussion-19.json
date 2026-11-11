@@ -8,6 +8,7 @@
   "flag": "observed",
   "provenance": {
     "source": "https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct/discussions/19",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "reportDate": "2025-08-18",
     "note": "Pasted by the reporter (vLLM, Qwen3-Coder-30B-A3B-Instruct-FP8, qwen3_coder parser). Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 1 call(s) and the text \"I will use the knowledge_search_agent tool to retrieve a list of all documents in your knowledge base.\\n\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."

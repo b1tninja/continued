@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from https://huggingface.co/unsloth/Llama-3.3-70B-Instruct/blob/main/chat_template.jinja, not observed",
+    "license": "llama3.3",
     "retrieved": "2026-11-10",
     "note": ""
   },

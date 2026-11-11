@@ -77,6 +77,10 @@ export const VIEWS = {
     fixture: "bedrock-fail",
     note: "Bedrock Test connection, failure",
   },
+  "permissions-editor": {
+    fixture: "permissions-editor",
+    note: "Settings, Permissions, with the add-rule form open on a rule that allows every command",
+  },
   "settings-tools": {
     fixture: "settings-tools",
     note: "Settings, Tools tab, with Commands and secrets",

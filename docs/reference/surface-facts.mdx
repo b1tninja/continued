@@ -1,0 +1,42 @@
+---
+title: "Provider facts and the evidence floor"
+description: How Continuous records what a provider, engine and API surface does with tool calls, and what each kind of evidence is allowed to change
+keywords: [tool calling, provider, engine, tool_choice, evidence, presets]
+---
+
+Tool calling depends on four layers: the model, the provider that hosts it, the engine that serves it and the API surface the request goes through. The family table (`core/util/toolDialectPresetTable.ts`) records what a model family's template says. The surface facts file (`core/util/surfaceFacts.generated.json`) records what a surface does, with its source and date.
+
+## Facts
+
+Each fact is resolved on its own, so a provider that is known to lack `tool_choice` does not hide what is known about the model family. A fact has a value and:
+
+- a **level**: `declared` (a vendor page or the service's own error text), `measured` (our own run, with `k` of `n` observations and a run id) or `derived` (inferred from code or a second-hand summary);
+- a **source** (URL, file or run id) and the date it was **read**;
+- optionally `expires`, `clientPath` and a note.
+
+The facts are `toolsHonoured`, `toolChoice` (auto, required, named, none), `parallelCalls`, `streamingToolArgs`, `reasoningField`, `serverParses`, `quantization` (declared only), `toolForce`, `toolForceThinking` and `toolStrictArgs`. A fact that has no source is absent, not guessed.
+
+## Resolution order
+
+For each fact, the first layer that knows it wins: your own setting, a measured result for this endpoint, a row for the surface and the model family, a row for the surface, then unknown. A measured result that contradicts a preset wins and leaves a drift note. A fact past its expiry is shown as stale and never acted on.
+
+## The evidence floor
+
+Which layer wins is separate from what it may cause.
+
+| Action | Evidence needed |
+| --- | --- |
+| Show a warning or suggestion | declared, derived or measured |
+| Turn tools off, or send without streaming | declared or measured |
+| Turn tools on by default | measured, every observation agreeing, at least 8 of them, not stale |
+| Turn text recovery on by default | never from a preset or a measurement; only your own setting |
+
+Your own setting may do whatever you ask.
+
+## What reads the facts today
+
+Only the info line of **Test connection** for Bedrock, for example `Provider facts: Bedrock Converse: ... (declared, read 2026-11-10)`. Nothing changes what is sent, which models get tools, or when recovery runs. Declared facts can be out of date; check the date.
+
+## Changing the data
+
+The file is imported by pull request together with its evidence. `node scripts/ci/check-surface-facts.mjs` rejects a fact with no source or date, a `measured` fact with no `k`, `n` and run id, an unknown level or fact name, and a measured `quantization`. A core test runs it on every change.

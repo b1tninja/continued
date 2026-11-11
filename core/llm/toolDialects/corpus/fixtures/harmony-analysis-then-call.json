@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja, not observed",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": "Analysis is reasoning, not content; expected prose is empty, so the analysis text must go to a reasoning channel."
   },

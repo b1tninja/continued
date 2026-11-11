@@ -54,7 +54,7 @@ jobs:
         run: |
           node scripts/ci/check-pins.mjs
           node --test scripts/ci/check-pins.test.mjs
-      - name: Fixture provenance and licences (advisory; --strict later)
+      - name: Fixture provenance and licences (strict)
         run: |
-          node scripts/ci/check-notice.mjs
-          node --test scripts/ci/check-notice.test.mjs
+          node scripts/ci/check-notice.mjs --strict
+          node --test scripts/ci/check-notice.test.mjs scripts/ci/backfill-fixture-licence.test.mjs

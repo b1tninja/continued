@@ -42,6 +42,10 @@ import { dumpRequest } from "../util/requestDump.js";
 import { validateContextLength } from "../util/tokenizer.js";
 
 import { getRequestTools, handleToolCalls } from "./handleToolCalls.js";
+import {
+  leakedCallNudgeAllowed,
+  noteLeakedCallNudge,
+} from "./leakedCallNudge.js";
 import { resetRefusalCount } from "./refusalCap.js";
 import { resetRepeatGuard } from "./repeatGuard.js";
 import { buildChatRequestBody } from "./requestBody.js";
@@ -249,10 +253,14 @@ function nudgeAnnouncedStep(args: {
 }): ChatHistoryItem[] | undefined {
   const { nudges } = args;
   if (args.shouldContinue) nudges.sinceToolUse = 0;
+  // An announced step is nudged in a headless turn only, where nobody is there
+  // to say "go on"; a tool call written as text in any turn, when the setting
+  // and the session cap allow it (leakedCallNudge.ts)
+  const mayNudgeLeak = leakedCallNudgeAllowed();
   const eligible =
     !args.shouldContinue &&
     !args.shouldAutoContinue &&
-    args.isHeadless &&
+    (args.isHeadless || mayNudgeLeak) &&
     !args.isCompacting &&
     !loopRunGoing() &&
     nudges.sinceToolUse < TURN_NUDGE_LIMIT &&
@@ -262,13 +270,19 @@ function nudgeAnnouncedStep(args: {
   // stop with nothing done. It gets its own text and its own cap of one per
   // turn, and nothing in it is parsed or run (isLeakedToolCall, H13).
   const leaked =
+    mayNudgeLeak &&
     nudges.leaked < LEAKED_CALL_NUDGE_LIMIT &&
     isLeakedToolCall({ content: args.content, knownTools: args.toolNames });
-  if (!leaked && !announcesNextStep(args.content)) return undefined;
+  if (!leaked && !(args.isHeadless && announcesNextStep(args.content))) {
+    return undefined;
+  }
   const text = leaked ? LEAKED_CALL_NUDGE : ACT_TURN_NUDGE;
   nudges.sinceToolUse++;
   nudges.thisTurn++;
-  if (leaked) nudges.leaked++;
+  if (leaked) {
+    nudges.leaked++;
+    noteLeakedCallNudge();
+  }
   logger.debug(
     leaked
       ? "Turn ended on a tool call written as text; nudging"
@@ -512,7 +526,7 @@ export async function processStreamingResponse(
     }
 
     noteTruncation(finishReason, { requestId, outputTokens }, callbacks);
-    hintToolDialectLeak({
+    void hintToolDialectLeak({
       model,
       content: aiResponse,
       toolCalls: Array.from(toolCallsMap.values()),

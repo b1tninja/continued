@@ -8,6 +8,7 @@
   "flag": "observed",
   "provenance": {
     "source": "https://huggingface.co/moonshotai/Kimi-K2-Instruct/discussions/48",
+    "license": "other",
     "retrieved": "2026-11-10",
     "reportDate": "2025-08-11",
     "note": "Content string from the reporter's sglang response (arguments shortened). The id lacks functions.NAME:IDX, so the tool name is not in the output: nothing to execute unless the client guesses from the argument keys, which it should not. Expected calls is empty on purpose."

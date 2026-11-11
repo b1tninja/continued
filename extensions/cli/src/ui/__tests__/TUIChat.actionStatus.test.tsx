@@ -104,7 +104,9 @@ describe("TUIChat - ActionStatus", () => {
     mockUseChat.mockReturnValue(waiting(true));
     const held = render(React.createElement(AppRoot, {}));
     try {
-      expect(held.lastFrame()).toContain("Reading the model's reply");
+      expect(held.lastFrame()).toContain(
+        "Checking the reply for a tool request",
+      );
     } finally {
       held.unmount();
     }
@@ -113,7 +115,9 @@ describe("TUIChat - ActionStatus", () => {
     const done = render(React.createElement(AppRoot, {}));
     try {
       expect(done.lastFrame()).toContain("esc to interrupt");
-      expect(done.lastFrame()).not.toContain("Reading the model's reply");
+      expect(done.lastFrame()).not.toContain(
+        "Checking the reply for a tool request",
+      );
     } finally {
       done.unmount();
     }

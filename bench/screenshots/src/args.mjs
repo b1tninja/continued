@@ -10,7 +10,7 @@ import {
 export const USAGE = `Usage: node bench/screenshots/screenshot.mjs [options]
 
   --view <names|all>     chat, conversation, streaming, tool-call, tool-call-done,
-                         loop, settings-tools (comma list; default all)
+                         loop, settings-tools, permissions-editor (comma list; default all)
   --width <px,px>        viewport widths (default 300,800)
   --height <px>          viewport height (default 700)
   --theme <dark|light|both>   (default both)

@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/ibm-granite/granite-3.3-8b-instruct/blob/main/tokenizer_config.json and vLLM granite_tool_parser.py, not observed",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": ""
   },

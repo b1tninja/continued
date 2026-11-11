@@ -25,9 +25,9 @@ export const SOURCE_HELP: Record<RuleSource, string> = {
 };
 
 export const DECISION_LABEL: Record<RuleDecision, string> = {
-  deny: "Deny",
+  deny: "Never",
   ask: "Ask",
-  allow: "Allow",
+  allow: "Always",
 };
 
 const DECISION_STYLE: Record<RuleDecision, string> = {

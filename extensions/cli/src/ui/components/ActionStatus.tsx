@@ -5,7 +5,7 @@ import { LoadingAnimation } from "../LoadingAnimation.js";
 import { Timer } from "../Timer.js";
 
 /** The spinner text while a reply is held for tool call recovery. */
-const READING_REPLY_MESSAGE = "Reading the model's reply...";
+const READING_REPLY_MESSAGE = "Checking the reply for a tool request...";
 
 interface ActionStatusProps {
   visible: boolean;
