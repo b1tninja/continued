@@ -81,7 +81,7 @@ export function BlockSettingsTopToolbar() {
   };
 
   return (
-    <div className="flex flex-1 items-center justify-between gap-3">
+    <div className="flex flex-1 items-center justify-between gap-1 md:gap-3">
       <div className="flex items-center gap-1">
         {shouldShowError && onlyMissingSecrets && (
           <ToolTip
@@ -135,7 +135,7 @@ export function BlockSettingsTopToolbar() {
         )}
 
         {!hasActiveContent && (
-          <div className="flex items-center gap-1.5">
+          <div className="hidden items-center gap-1.5 md:flex">
             <ToolTip content="Configure rules">
               <HoverItem onClick={handleRulesClick} px={2}>
                 <PencilIcon className="h-3 w-3 text-description-muted hover:brightness-125" />

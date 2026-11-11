@@ -21,8 +21,6 @@ import { exitEdit } from "../../redux/thunks/edit";
 import { getMetaKeyLabel, isMetaEquivalentKeyPressed } from "../../util";
 import { ToolTip } from "../gui/Tooltip";
 import ModelSelect from "../modelSelection/ModelSelect";
-import { PolicyControls } from "../PolicyControls";
-import { ModeSelect } from "../ModeSelect";
 import { Button } from "../ui";
 import { useFontSize } from "../ui/font";
 import ContextStatus from "./ContextStatus";
@@ -93,14 +91,6 @@ function InputToolbar(props: InputToolbarProps) {
         }}
       >
         <div className="flex flex-row items-center gap-1 xs:gap-1.5">
-          {!isInEdit && (
-            <ToolTip place="top" content="Select Mode">
-              <HoverItem className="!p-0">
-                <ModeSelect />
-              </HoverItem>
-            </ToolTip>
-          )}
-          {!isInEdit && <PolicyControls />}
           <ToolTip place="top" content="Select Model">
             <HoverItem className="!p-0">
               <ModelSelect />

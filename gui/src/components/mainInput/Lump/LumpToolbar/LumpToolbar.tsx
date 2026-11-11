@@ -47,25 +47,73 @@ const isTerminalCommand = (toolCallState: any) => {
   );
 };
 
-export function LumpToolbar() {
-  const dispatch = useAppDispatch();
-  const ideMessenger = useContext(IdeMessengerContext);
+export type LumpToolbarKind =
+  | "applying"
+  | "edit-outcome"
+  | "edit"
+  | "tts"
+  | "terminal"
+  | "streaming"
+  | "pending-tool-calls"
+  | "pending-apply"
+  | "idle";
+
+/**
+ * Which toolbar the row above the input shows. One place decides, in priority
+ * order, so the row's neighbours (the session controls) can tell whether the
+ * toolbar is a single line that sits beside them or a block that needs the
+ * full width.
+ */
+export function useLumpToolbarKind(): LumpToolbarKind {
   const ttsActive = useAppSelector((state) => state.ui.ttsActive);
   const isStreaming = useAppSelector((state) => state.session.isStreaming);
   const isInEdit = useAppSelector((state) => state.session.isInEdit);
+  const pendingToolCalls = useAppSelector(selectPendingToolCalls);
+  const editApplyStatus = useAppSelector(
+    (state) => state.editModeState.applyState.status,
+  );
+  const applyStates = useAppSelector(
+    (state) => state.session.codeBlockApplyStates.states,
+  );
+  const hasRunningTerminalCommand = useAppSelector(
+    (state) =>
+      selectToolCallsByStatus(state, "calling").filter(isTerminalCommand)
+        .length > 0,
+  );
+
+  if (applyStates.some((state) => state.status === "streaming")) {
+    return "applying";
+  }
+  if (isInEdit) return editApplyStatus === "done" ? "edit-outcome" : "edit";
+  if (ttsActive) return "tts";
+  if (hasRunningTerminalCommand) return "terminal";
+  if (isStreaming) return "streaming";
+  if (pendingToolCalls.length > 0) return "pending-tool-calls";
+  if (applyStates.some((state) => state.status === "done")) {
+    return "pending-apply";
+  }
+  return "idle";
+}
+
+/** Kinds that are one line and can share the row with the session controls. */
+export function isInlineToolbarKind(kind: LumpToolbarKind): boolean {
+  return kind === "idle" || kind === "streaming" || kind === "terminal";
+}
+
+export function LumpToolbar() {
+  const kind = useLumpToolbarKind();
+  const dispatch = useAppDispatch();
+  const ideMessenger = useContext(IdeMessengerContext);
+  const isStreaming = useAppSelector((state) => state.session.isStreaming);
   const jetbrains = isJetBrains();
   const pendingToolCalls = useAppSelector(selectPendingToolCalls);
   const firstPendingToolCall = useAppSelector(selectFirstPendingToolCall);
-  const editApplyState = useAppSelector(
-    (state) => state.editModeState.applyState,
-  );
   const applyStates = useAppSelector(
     (state) => state.session.codeBlockApplyStates.states,
   );
   const pendingApplyStates = applyStates.filter(
     (state) => state.status === "done",
   );
-  const isApplying = applyStates.some((state) => state.status === "streaming");
   const editor = useMainEditor();
 
   // Get ALL running terminal commands
@@ -169,45 +217,31 @@ export function LumpToolbar() {
     runningTerminalCalls,
   ]);
 
-  if (isApplying) {
-    return <IsApplyingToolbar />;
-  }
-
-  if (isInEdit) {
-    if (editApplyState.status === "done") {
+  switch (kind) {
+    case "applying":
+      return <IsApplyingToolbar />;
+    case "edit-outcome":
       return <EditOutcomeToolbar />;
+    case "edit":
+      return <EditToolbar />;
+    case "tts":
+      return <TtsActiveToolbar />;
+    case "terminal": {
+      const count = runningTerminalCalls.length;
+      const stopText = `Stop Terminal${count > 1 ? ` (${count})` : ""}`;
+      return (
+        <StreamingToolbar onStop={handleStopAction} displayText={stopText} />
+      );
     }
-
-    return <EditToolbar />;
+    case "streaming":
+      return <StreamingToolbar onStop={() => dispatch(cancelStream())} />;
+    case "pending-tool-calls":
+      return <PendingToolCallToolbar />;
+    case "pending-apply":
+      return (
+        <PendingApplyStatesToolbar pendingApplyStates={pendingApplyStates} />
+      );
+    default:
+      return <BlockSettingsTopToolbar />;
   }
-
-  if (ttsActive) {
-    return <TtsActiveToolbar />;
-  }
-
-  // Only show terminal streaming for actual terminal commands
-  if (hasRunningTerminalCommand) {
-    const count = runningTerminalCalls.length;
-    const stopText = `Stop Terminal${count > 1 ? ` (${count})` : ""}`;
-    return (
-      <StreamingToolbar onStop={handleStopAction} displayText={stopText} />
-    );
-  }
-
-  // Regular streaming (non-terminal)
-  if (isStreaming) {
-    return <StreamingToolbar onStop={() => dispatch(cancelStream())} />;
-  }
-
-  if (pendingToolCalls.length > 0) {
-    return <PendingToolCallToolbar />;
-  }
-
-  if (pendingApplyStates.length > 0) {
-    return (
-      <PendingApplyStatesToolbar pendingApplyStates={pendingApplyStates} />
-    );
-  }
-
-  return <BlockSettingsTopToolbar />;
 }
