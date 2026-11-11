@@ -1,5 +1,5 @@
 import { ToolImpl } from ".";
-import { fetchSearchResults } from "../../context/providers/WebContextProvider";
+import { fetchSearchResults } from "../../context/providers/webSearchBackend";
 import { getStringArg } from "../parseArgs";
 
 const DEFAULT_WEB_SEARCH_CHAR_LIMIT = 8000;

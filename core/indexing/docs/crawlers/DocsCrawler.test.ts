@@ -37,7 +37,7 @@ describe.skip("DocsCrawler", () => {
     const pages: PageData[] = [];
     const generator = docsCrawler.crawl(new URL(url));
     let done = false;
-    let crawler: DocsCrawlerType = "default";
+    let crawler: DocsCrawlerType = "cheerio";
     while (!done) {
       const result = await generator.next();
       if (result.done) {
