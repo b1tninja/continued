@@ -291,6 +291,24 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     import("../tools/permissions/ruleEditor").UndoResponse,
   ];
   /**
+   * Shadow reviewer (B16) as the Settings page shows it: the saved switch,
+   * budget and timeout from the person's own config.yaml, and the spend and
+   * review count from the shared spend ledger.
+   */
+  "audit/shadowSettings": [
+    undefined,
+    import("../tools/permissions/audit/shadowSettingsHandlers").ShadowSettingsView,
+  ];
+  /**
+   * Change `audit.shadowReviewer` in the person's own config.yaml (comments
+   * kept, only those keys written). Turning it on waits for the IDE's own
+   * dialog. Budget: more than 0 and at most 100 dollars.
+   */
+  "audit/setShadowSettings": [
+    import("../tools/permissions/audit/shadowConfig").ShadowChange,
+    import("../tools/permissions/audit/shadowSettingsHandlers").ShadowSetResponse,
+  ];
+  /**
    * The narrowest allow rule for a pending tool call, or why there is none.
    * Nothing is written; "Always allow" then sends the rule to config/addToolRule.
    */

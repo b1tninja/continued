@@ -42,6 +42,8 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "config/removeToolRule",
     "config/adoptToolRule",
     "config/undoToolRule",
+    "audit/shadowSettings",
+    "audit/setShadowSettings",
     "tools/suggestAllowRule",
     "config/refreshProfiles",
     "config/openProfile",
