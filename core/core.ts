@@ -37,6 +37,7 @@ import {
 } from "./util/terminalEnvironment";
 import { saveUserTerminalSettings } from "./util/userTerminalSettings";
 import { readUserGuidance } from "./util/userGuidance";
+import { registerShadowSettingsHandlers } from "./tools/permissions/audit/shadowSettingsHandlers";
 import {
   confirmInIde,
   registerRuleEditorHandlers,
@@ -49,6 +50,7 @@ import {
   recordPolicyDecision,
   recordReviewDecision,
 } from "./tools/permissions/audit/hook";
+import { registerAuditOverview } from "./tools/permissions/audit/overviewHandler";
 import {
   readPolicyFile,
   writePolicyFile,
@@ -683,6 +685,18 @@ export class Core {
       return report;
     });
 
+    registerAuditOverview(on as never, {
+      sources: async () =>
+        readRuleSources({
+          merged: (await this.configHandler.loadConfig()).config
+            ?.toolPermissions,
+        }),
+      cwd: async () => {
+        const dirs = await this.ide.getWorkspaceDirs();
+        return dirs[0] ? uriToPath(dirs[0]) : undefined;
+      },
+    });
+
     registerRuleEditorHandlers(on as never, {
       mergedRules: async () =>
         (await this.configHandler.loadConfig()).config?.toolPermissions,
@@ -694,6 +708,10 @@ export class Core {
         await this.configHandler.reloadConfig(reason);
       },
       confirmLoosening: (text) => confirmInIde(this.ide, text),
+    });
+
+    registerShadowSettingsHandlers(on as never, {
+      confirm: (text) => confirmInIde(this.ide, text),
     });
 
     on("policy/test", async ({ data }) => {
