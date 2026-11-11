@@ -2,6 +2,7 @@
 // speaks the four endpoints the lab uses. `script(body, state)` decides each
 // chat reply; the default answers like a well-behaved native-tools model.
 import http from "node:http";
+import { openaiRespond } from "./fakeLlama.mjs";
 
 export const SMALL = {
   name: "fake-small:1b",
@@ -80,6 +81,60 @@ export async function startFake({
           "fake.context_length": 8192,
         },
       });
+    }
+    if (req.url === "/api/version") return json({ version: "0.0.0-fake" });
+    if (req.url === "/v1/chat/completions") {
+      state.v1 = (state.v1 ?? []).concat([body]);
+      state.last = state.last ?? "";
+      const s = await script(body, state);
+      if (s.status)
+        return json({ error: { message: s.error ?? "boom" } }, s.status);
+      const reply = {
+        content: s.content,
+        reasoning: s.reasoning,
+        tool_calls: (s.tool_calls ?? []).map((c) => ({
+          name: c.function.name,
+          arguments: c.function.arguments,
+        })),
+      };
+      return openaiRespond(res, body, reply, {
+        engine: "ollama",
+        state,
+        reasoningField: "reasoning",
+      });
+    }
+    if (req.url === "/api/generate") {
+      if (body.keep_alive === 0)
+        return json({ done: true, done_reason: "unload" });
+      state.generates = (state.generates ?? []).concat([body]);
+      const text = "Paris";
+      const usage = {
+        prompt_eval_count: 30,
+        prompt_eval_duration: 5e6,
+        eval_count: 2,
+        eval_duration: 4e6,
+        load_duration: 1e6,
+        total_duration: 1e7,
+      };
+      if (!body.stream)
+        return json({
+          model: body.model,
+          response: text,
+          done: true,
+          done_reason: "stop",
+          ...usage,
+        });
+      res.writeHead(200, { "content-type": "application/x-ndjson" });
+      res.write(JSON.stringify({ response: "Pa", done: false }) + "\n");
+      res.write(JSON.stringify({ response: "ris", done: false }) + "\n");
+      return res.end(
+        JSON.stringify({
+          response: "",
+          done: true,
+          done_reason: "stop",
+          ...usage,
+        }) + "\n",
+      );
     }
     if (req.url === "/api/chat") {
       if (body.keep_alive === 0 && (body.messages ?? []).length === 0) {

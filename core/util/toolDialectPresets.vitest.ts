@@ -232,7 +232,7 @@ describe("tool dialect presets", () => {
   );
 
   it("does not recover a form no parser exists for, and says so", () => {
-    for (const id of ["deepseek-v4"]) {
+    for (const id of ["deepseek-r1", "gemma-4"]) {
       const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
       expect(p?.recoverWith, id).toBeUndefined();
     }
@@ -253,6 +253,18 @@ describe("tool dialect presets", () => {
     expect(mistral?.unverified?.join(" ")).toMatch(/mistral-common/);
     const ds = resolveToolDialectPreset("deepseek.v3.2");
     expect(ds?.unverified?.join(" ")).toMatch(/no Jinja template/);
+  });
+
+  it("recovers gpt-oss, Mistral and DeepSeek with the parsers built for their forms", () => {
+    for (const [id, dialect] of [
+      ["openai.gpt-oss-120b-1:0", "harmony"],
+      ["mistral.devstral-2-123b", "mistral"],
+      ["deepseek.v3.2", "dsml"],
+      ["deepseek-v4-flash", "dsml"],
+      ["deepseek-v3.1", "deepseek-v31"],
+    ]) {
+      expect(resolveToolDialectPreset(id)?.recoverWith, id).toBe(dialect);
+    }
   });
 
   it("gives Qwen3-Next the Hermes JSON dialect, not Qwen3-Coder's", () => {
@@ -354,6 +366,11 @@ describe("tool dialect presets", () => {
       "llama-json",
       "hermes-json",
       "glm-xml",
+      "harmony",
+      "mistral",
+      "dsml",
+      "deepseek-v31",
+      "toolcall-json",
       "kimi-tokens",
       "kimi-xtml",
       "minimax-xml",
@@ -370,12 +387,7 @@ describe("tool dialect presets", () => {
     for (const p of TOOL_DIALECT_PRESETS) {
       if (p.recoverWith) expect(built, p.id).toContain(p.recoverWith);
     }
-    for (const id of [
-      "deepseek-v3.2",
-      "gpt-oss",
-      "nemotron-h",
-      "llama-nemotron",
-    ]) {
+    for (const id of ["nemotron-h", "llama-nemotron"]) {
       expect(
         TOOL_DIALECT_PRESETS.find((p) => p.id === id)?.recoverWith,
         id,

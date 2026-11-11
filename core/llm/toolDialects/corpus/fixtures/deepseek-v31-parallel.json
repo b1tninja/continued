@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "deepseek-v31-parallel",
   "family": "deepseek-v3.x",
-  "dialect": "deepseek-tokens",
+  "dialect": "deepseek-v31",
   "kind": "negative",
   "failureMode": "parallel-merged",
   "flag": "synthesised",

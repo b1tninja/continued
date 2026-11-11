@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "llama3-python-tag-builtin",
   "family": "llama-3.x",
-  "dialect": "llama-json",
+  "dialect": "pythonic",
   "kind": "positive",
   "failureMode": "none",
   "flag": "synthesised",

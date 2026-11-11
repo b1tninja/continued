@@ -4,13 +4,17 @@
  * the setting and the parsers exist once. Off unless asked for.
  */
 import { recordRecovery } from "./recoveryStats.js";
+import { DeepseekV31Recovery } from "./deepseekV31.js";
+import { DsmlRecovery } from "./dsml.js";
 import { GlmXmlRecovery, recoverGlmXmlFromText } from "./glmXml.js";
+import { HarmonyRecovery } from "./harmony.js";
 import { HermesJsonRecovery, recoverHermesJsonFromText } from "./hermesJson.js";
 import { KimiTokensRecovery } from "./kimiTokens.js";
 import { KimiXtmlRecovery } from "./kimiXtml.js";
 import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
 import { MinimaxNsRecovery } from "./minimaxNs.js";
 import { MinimaxXmlRecovery } from "./minimaxXml.js";
+import { MistralRecovery } from "./mistral.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
 import { WRAPPER_ROWS, WrapperRecovery } from "./wrapperDialects.js";
 import { ToolcallJsonRecovery } from "./toolcallJson.js";
@@ -170,6 +174,29 @@ function chooseRecovery(
     if (wants(settings, row.dialect, model, row.nameRe)) {
       return { dialect: row.dialect, stage: new WrapperRecovery(tools, row) };
     }
+  }
+  return chooseOtherRecovery(model, tools, settings);
+}
+
+/** The stages for the Harmony, Mistral and DeepSeek forms. */
+function chooseOtherRecovery(
+  model: string,
+  tools: DialectTool[],
+  settings: Set<string>,
+): { dialect: string; stage: TextToolRecovery } | undefined {
+  if (wants(settings, "harmony", model, /gpt-oss/i)) {
+    return { dialect: "harmony", stage: new HarmonyRecovery(tools) };
+  }
+  if (
+    wants(settings, "mistral", model, /mistral|mixtral|devstral|magistral/i)
+  ) {
+    return { dialect: "mistral", stage: new MistralRecovery(tools) };
+  }
+  if (wants(settings, "dsml", model, /deepseek/i)) {
+    return { dialect: "dsml", stage: new DsmlRecovery(tools) };
+  }
+  if (wants(settings, "deepseek-v31", model, /deepseek/i)) {
+    return { dialect: "deepseek-v31", stage: new DeepseekV31Recovery(tools) };
   }
   return undefined;
 }

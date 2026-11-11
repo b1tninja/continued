@@ -483,6 +483,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     toolsEvidence: "unmeasured",
     nativeOnConverse: "unmeasured",
     textDialect: "dsml",
+    recoverWith: "dsml",
     promptStyle: {
       style: "native",
       evidence:
@@ -511,6 +512,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     measured:
       "DeepSeek V3.2: structured 8/8; all 8 also ended the text with a DSML function_calls fragment (always dropped)",
     textDialect: "dsml",
+    recoverWith: "dsml",
     promptStyle: {
       style: "native",
       evidence:
@@ -540,6 +542,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     toolsEvidence: "inferred",
     nativeOnConverse: "unmeasured",
     textDialect: "deepseek-tokens",
+    recoverWith: "deepseek-v31",
     promptStyle: {
       style: "native",
       evidence:
@@ -569,6 +572,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     nativeOnConverse: "all",
     measured: "gpt-oss 20B and 120B: structured 100%, no leak",
     textDialect: "harmony",
+    recoverWith: "harmony",
     promptStyle: {
       style: "native",
       evidence: "100% structured on Converse (live 2026-11-10)",
@@ -1074,6 +1078,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     nativeOnConverse: "all",
     measured: "Devstral 2 and Mistral Large 3: structured 100%, no leak",
     textDialect: "mistral",
+    recoverWith: "mistral",
     promptStyle: {
       style: "native",
       evidence:

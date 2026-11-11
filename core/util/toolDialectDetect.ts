@@ -9,6 +9,7 @@ export type Dialect =
   | "hermes-json" // <tool_call>{"name":..,"arguments":{..}}</tool_call>
   | "glm-xml" // <tool_call>NAME<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>
   | "dsml" // DeepSeek V3.2 fullwidth-bar function_calls / invoke / parameter
+  | "deepseek-v31" // <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>NAME<｜tool▁sep｜>{json}<｜tool▁call▁end｜>
   | "kimi-tokens" // <|tool_call_begin|>functions.NAME:IDX<|tool_call_argument_begin|>{json}
   | "harmony" // <|channel|>commentary to=functions.NAME <|constrain|>json<|message|>{json}<|call|>
   | "llama-function-tag" // Llama 3.1: <function=NAME>{json}</function>
@@ -89,6 +90,11 @@ const FINGERPRINTS: Fingerprint[] = [
       `<[${BAR}|]DSML[${BAR}|](?:function_calls|tool_calls|invoke)`,
     ),
     label: "DSML marker",
+  },
+  {
+    dialect: "deepseek-v31",
+    strong: new RegExp(`<[${BAR}|]tool▁calls?▁begin[${BAR}|]>`),
+    label: "DeepSeek tool-call tokens",
   },
   {
     dialect: "kimi-xtml",
@@ -186,7 +192,7 @@ const FINGERPRINTS: Fingerprint[] = [
   },
   {
     dialect: "mistral",
-    strong: /\[TOOL_CALLS\]\s*[\[{]/,
+    strong: /\[TOOL_CALLS\]\s*(?:[[{]|[\w.-]+(?:\[CALL_ID\]\w+)?\[ARGS\])/,
     weak: /\[TOOL_CALLS\]/,
     label: "[TOOL_CALLS]",
   },
@@ -245,7 +251,7 @@ function scan(
     if (f.strong.test(text)) {
       // Opening and closing markers both present means a finished call.
       const closed =
-        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>|<\/tool_calls:opensource>|<\|tool_call:end\|>|<\|calls\|>|<\/longcat_tool_call>|<\/seed:tool_call>|<\|END_ACTION\|>|<\/function_calls>|<\|close\|>tools|<\/TOOLCALL>/.test(
+        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>|<\/tool_calls:opensource>|<\|tool_call:end\|>|<\|calls\|>|<\/longcat_tool_call>|<\/seed:tool_call>|<\|END_ACTION\|>|<\/function_calls>|<\|close\|>tools|<[｜|]tool▁calls▁end[｜|]>|<\/[｜|]DSML[｜|](?:function_calls|tool_calls)>|<\/TOOLCALL>/.test(
           text,
         );
       return {

@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "id": "llama4-pythonic-typed-arguments",
+  "family": "llama4",
+  "dialect": "pythonic",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/unsloth/Llama-4-Scout-17B-16E-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "run_command",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "timeout": {
+            "type": "integer"
+          }
+        },
+        "required": ["command"]
+      }
+    }
+  ],
+  "text": "[run_command(command=\"ls -la\", timeout=10)]",
+  "markers": [],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["[run_command(command=\"ls -la\", timeout=10)]"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "r",
+        "u",
+        "n",
+        "_",
+        "c",
+        "o",
+        "m",
+        "m",
+        "a",
+        "n",
+        "d",
+        "(",
+        "c",
+        "o",
+        "m",
+        "m",
+        "a",
+        "n",
+        "d",
+        "=",
+        "\"",
+        "l",
+        "s",
+        " ",
+        "-",
+        "l",
+        "a",
+        "\"",
+        ",",
+        " ",
+        "t",
+        "i",
+        "m",
+        "e",
+        "o",
+        "u",
+        "t",
+        "=",
+        "1",
+        "0",
+        ")",
+        "]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[r",
+        "un_c",
+        "omman",
+        "d(",
+        "comm",
+        "and",
+        "=\"ls",
+        " -",
+        "la",
+        "\", t",
+        "im",
+        "eout",
+        "=1",
+        "0)]"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "run_command",
+        "arguments": {
+          "command": "ls -la",
+          "timeout": 10
+        }
+      }
+    ],
+    "text": ""
+  }
+}

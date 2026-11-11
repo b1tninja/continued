@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-harmony-builtin-recipient",
+  "family": "gpt-oss",
+  "dialect": "harmony",
+  "kind": "negative",
+  "failureMode": "undeclared-tool",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://github.com/openai/harmony/blob/main/docs/format.md and https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<|channel|>analysis to=browser.search code<|message|>{\"query\":\"weather paris\"}<|call|>",
+  "markers": [
+    "<|channel|>",
+    "<|constrain|>",
+    "<|message|>",
+    "<|call|>",
+    "<|start|>",
+    "<|end|>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|channel|>analysis to=browser.search code<|message|>{\"query\":\"weather paris\"}<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "c",
+        "h",
+        "a",
+        "n",
+        "n",
+        "e",
+        "l",
+        "|",
+        ">",
+        "a",
+        "n",
+        "a",
+        "l",
+        "y",
+        "s",
+        "i",
+        "s",
+        " ",
+        "t",
+        "o",
+        "=",
+        "b",
+        "r",
+        "o",
+        "w",
+        "s",
+        "e",
+        "r",
+        ".",
+        "s",
+        "e",
+        "a",
+        "r",
+        "c",
+        "h",
+        " ",
+        "c",
+        "o",
+        "d",
+        "e",
+        "<",
+        "|",
+        "m",
+        "e",
+        "s",
+        "s",
+        "a",
+        "g",
+        "e",
+        "|",
+        ">",
+        "{",
+        "\"",
+        "q",
+        "u",
+        "e",
+        "r",
+        "y",
+        "\"",
+        ":",
+        "\"",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        " ",
+        "p",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "<",
+        "|",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|cha",
+        "nnel|>analysis to=browser.search code<|message|>{\"query\":\"weather paris\"}<|call|>"
+      ],
+      "splitInside": "<|channel|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|channel|>",
+        "analysis to=browser.search code",
+        "<|message|>",
+        "{\"query\":\"weather paris\"}",
+        "<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|c",
+        "h",
+        "annel",
+        "|>a",
+        "na",
+        "lys",
+        "is ",
+        "t",
+        "o=",
+        "brows",
+        "er.se",
+        "arch ",
+        "co",
+        "de",
+        "<|m",
+        "e",
+        "ssage",
+        "|>{\"",
+        "q",
+        "u",
+        "ery",
+        "\":\"w",
+        "eat",
+        "he",
+        "r ",
+        "paris",
+        "\"}<",
+        "|c",
+        "all",
+        "|>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<|channel|>analysis to=browser.search code<|message|>{\"query\":\"weather paris\"}<|call|>"
+  }
+}
