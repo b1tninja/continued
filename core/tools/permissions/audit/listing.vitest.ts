@@ -25,6 +25,17 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+/** Every file under `dir`, relative, without `recursive` (older type libraries lack it). */
+function allFiles(root: string, rel = ""): string[] {
+  return fs
+    .readdirSync(path.join(root, rel), { withFileTypes: true })
+    .flatMap((e) =>
+      e.isDirectory()
+        ? allFiles(root, path.join(rel, e.name))
+        : [path.join(rel, e.name)],
+    );
+}
+
 interface Call {
   session?: string;
   id: string;
@@ -148,10 +159,7 @@ describe("auditListPage", () => {
     expect(res).not.toContain("abcdef1234567890abcdef");
     expect(res).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz0123456789");
     // A record whose file somehow holds an unmasked secret is masked on the way out
-    const file = fs
-      .readdirSync(dir, { recursive: true })
-      .map(String)
-      .find((f) => f.endsWith(".jsonl"))!;
+    const file = allFiles(dir).find((f) => f.endsWith(".jsonl"))!;
     const full = path.join(dir, file);
     const lines = fs
       .readFileSync(full, "utf8")
@@ -219,7 +227,7 @@ describe("auditInboxPage", () => {
 
   it("flags an old ask whose session file has not been written for a while", () => {
     write([{ id: "old", session: "gone", minutesAgo: 120, policy: "ask" }]);
-    for (const f of fs.readdirSync(dir, { recursive: true }).map(String)) {
+    for (const f of allFiles(dir)) {
       if (!f.endsWith(".jsonl")) continue;
       const t = new Date(NOW.getTime() - 100 * 60_000);
       fs.utimesSync(path.join(dir, f), t, t);
@@ -363,7 +371,7 @@ describe("registerAuditListHandlers", () => {
       "audit/list",
       "audit/status",
     ]);
-    const before = fs.readdirSync(dir, { recursive: true }).length;
+    const before = allFiles(dir).length;
     const list: any = await handlers.get("audit/list")!({ data: undefined });
     expect(list.rows).toHaveLength(1);
     const inbox: any = await handlers.get("audit/inbox")!({ data: {} });
@@ -380,6 +388,6 @@ describe("registerAuditListHandlers", () => {
     expect(
       ((await handlers.get("audit/status")!({ data: undefined })) as any).via,
     ).toBe("default");
-    expect(fs.readdirSync(dir, { recursive: true }).length).toBe(before);
+    expect(allFiles(dir).length).toBe(before);
   });
 });
