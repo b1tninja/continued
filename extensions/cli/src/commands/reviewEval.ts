@@ -17,6 +17,7 @@ import {
   parseGuidance,
   type ReviewDataset,
 } from "core/tools/permissions/auto/evaluation/reviewEvalDataset.js";
+import { scoreRuns } from "core/tools/permissions/auto/evaluation/reviewEvalRepeat.js";
 import {
   formatCostPlan,
   formatGate,
@@ -24,7 +25,6 @@ import {
   formatPaired,
   outcomeLines,
 } from "core/tools/permissions/auto/evaluation/reviewEvalReport.js";
-import { scoreRuns } from "core/tools/permissions/auto/evaluation/reviewEvalRepeat.js";
 import {
   planCost,
   runReviewEval,
@@ -116,7 +116,7 @@ async function loadReviewer(
   const model = reviewerModel(assistant);
   if (!model) return null;
   const plan: PlanModel = {
-    provider: model.provider,
+    provider: model.provider ?? "",
     model: model.model,
     reasoning: (model as { defaultCompletionOptions?: { reasoning?: boolean } })
       .defaultCompletionOptions?.reasoning,

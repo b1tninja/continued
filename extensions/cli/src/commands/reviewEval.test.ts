@@ -15,6 +15,7 @@ const dataset = JSON.parse(text);
 function setup(chat?: ReviewEvalDeps["createClient"]) {
   const out: string[] = [];
   const err: string[] = [];
+  const files: Record<string, string> = {};
   const createClient = vi.fn(
     chat ??
       (async () => ({
@@ -50,10 +51,14 @@ function setup(chat?: ReviewEvalDeps["createClient"]) {
       throw new Error(`ENOENT ${p}`);
     },
     createClient,
+    describeModel: vi.fn(async () => null),
+    writeFile: (path, t) => {
+      files[path] = t;
+    },
     out: (l) => out.push(l),
     err: (l) => err.push(l),
   };
-  return { deps, out, err, createClient };
+  return { deps, out, err, createClient, files };
 }
 
 describe("continuous reviewer eval", () => {
@@ -88,10 +93,10 @@ describe("continuous reviewer eval", () => {
       deps,
     );
     expect(code).toBe(0);
-    expect(createClient).toHaveBeenCalledWith("fake");
+    expect(createClient).toHaveBeenCalledWith("fake", undefined);
     const all = out.join("\n");
     expect(all.indexOf("Estimated input")).toBeLessThan(
-      all.indexOf("Agreement with labels"),
+      all.indexOf("Agreement, lenient"),
     );
     expect(all).toContain("False-allow on floor cases");
     expect(all).toContain("Format-failure rate");
@@ -150,5 +155,78 @@ describe("continuous reviewer eval", () => {
       await reviewEvalCommand({ dataset: "ds.json", run: true }, c.deps),
     ).toBe(1);
     expect(c.err.join("\n")).toContain("No reviewer model");
+  });
+
+  it("--config reaches the client builder", async () => {
+    const { deps, createClient } = setup();
+    await reviewEvalCommand(
+      { dataset: "ds.json", run: true, config: "rev.yaml" },
+      deps,
+    );
+    expect(createClient).toHaveBeenCalledWith(undefined, "rev.yaml");
+  });
+
+  it("--outcomes writes one JSONL line per case and run, with no case text", async () => {
+    const { deps, files } = setup();
+    await reviewEvalCommand(
+      { dataset: "ds.json", run: true, repeat: 2, outcomes: "o.jsonl" },
+      deps,
+    );
+    const lines = files["o.jsonl"]
+      .trim()
+      .split(String.fromCharCode(10))
+      .map((l) => JSON.parse(l));
+    expect(lines).toHaveLength(160);
+    expect(lines[0]).toHaveProperty("rawReply");
+    expect(lines[0]).toHaveProperty("verdict");
+    expect(files["o.jsonl"]).not.toContain("Why does the login page");
+  });
+
+  it("--repeat reports stability and the plan counts the repeats", async () => {
+    const { deps, out } = setup();
+    await reviewEvalCommand(
+      { dataset: "ds.json", run: true, repeat: 3, json: true },
+      deps,
+    );
+    const j = JSON.parse(out.join("\n"));
+    expect(j.metrics.stability.runs).toBe(3);
+    expect(j.plan.calls).toBe(240);
+  });
+
+  it("a floor case allowed in only one repeat fails the gate", async () => {
+    let n = 0;
+    const { deps } = setup(async () => ({
+      model: "flaky",
+      client: {
+        chat: async () => {
+          n++;
+          // allow everything during the third pass only
+          const allow = n > 160 && n <= 240;
+          return {
+            role: "assistant",
+            content: allow
+              ? '{"decision":"allow","reason":"x"}'
+              : '{"decision":"ask","category":"uncertain","reason":"x"}',
+          };
+        },
+      } as any,
+    }));
+    const code = await reviewEvalCommand(
+      { dataset: "ds.json", run: true, repeat: 3, concurrency: 1 },
+      deps,
+    );
+    expect(code).toBe(1);
+  });
+
+  it("dry run prints an estimated cost line and a reasoning warning", async () => {
+    const { deps, out } = setup();
+    deps.describeModel = async () => ({
+      provider: "bedrock",
+      model: "us.amazon.nova-2-lite-v1:0",
+    });
+    await reviewEvalCommand({ dataset: "ds.json", maxTokens: 300 }, deps);
+    const all = out.join("\n");
+    expect(all).toContain("Estimated cost:");
+    expect(all).toContain("WARNING");
   });
 });
