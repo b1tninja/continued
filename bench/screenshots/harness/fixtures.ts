@@ -63,6 +63,13 @@ export function seedMessenger(messenger: MockIdeMessenger): void {
       hostEnvNames: ["PATH", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY", "EDITOR"],
       credentialUrlNames: [],
     },
+    "audit/shadowSettings": {
+      form: { enabled: false, timeoutMs: 5000 },
+      trailEnabled: true,
+      spentUsd: 0,
+      reservedUsd: 0,
+      reviews: 0,
+    },
     getOpenFiles: [],
     "policy/load": parsePolicyFile(undefined),
     "config/getProviderSetup": {

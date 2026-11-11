@@ -3,8 +3,12 @@ import * as YAML from "yaml";
 import { editConfigYamlFile, getConfigYamlPath } from "../../../util/paths";
 import {
   DEFAULT_SHADOW_TIMEOUT_MS,
+  MAX_SHADOW_BUDGET_USD,
   MAX_SHADOW_TIMEOUT_MS,
-} from "./shadowSettings";
+  MIN_SHADOW_TIMEOUT_MS,
+} from "./shadowLimits";
+
+export { MAX_SHADOW_BUDGET_USD, MIN_SHADOW_TIMEOUT_MS };
 
 /**
  * The Settings page's way to change `audit.shadowReviewer` (ROADMAP B67).
@@ -17,8 +21,6 @@ import {
  * document instead of re-serialising it. The file must already exist and
  * parse; a file that does not is refused, not rewritten.
  */
-export const MAX_SHADOW_BUDGET_USD = 100;
-export const MIN_SHADOW_TIMEOUT_MS = 500;
 
 export interface ShadowForm {
   enabled: boolean;

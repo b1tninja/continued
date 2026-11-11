@@ -35,6 +35,7 @@ import { ConfigHeader } from "../components/ConfigHeader";
 import { ImportClineMcpButton } from "../components/ImportClineMcp";
 import { PolicyCard } from "../../../components/PolicyControls";
 import { ToolPoliciesGroup } from "../components/ToolPoliciesGroup";
+import { ShadowReviewControl } from "./ShadowReviewControl";
 import { TerminalEnvironmentControl } from "./TerminalEnvironmentControl";
 
 interface MCPServerStatusProps {
@@ -516,6 +517,7 @@ export function ToolsSection() {
       )}
       <div className="mb-4 space-y-6">
         <PolicyCard />
+        <ShadowReviewControl />
         <TerminalEnvironmentControl />
         <ToolPoliciesGroup
           showIcon={false}
