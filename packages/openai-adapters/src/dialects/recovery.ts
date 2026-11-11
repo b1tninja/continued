@@ -6,7 +6,11 @@
 import { recordRecovery } from "./recoveryStats.js";
 import { GlmXmlRecovery, recoverGlmXmlFromText } from "./glmXml.js";
 import { HermesJsonRecovery, recoverHermesJsonFromText } from "./hermesJson.js";
+import { KimiTokensRecovery } from "./kimiTokens.js";
+import { KimiXtmlRecovery } from "./kimiXtml.js";
 import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
+import { MinimaxNsRecovery } from "./minimaxNs.js";
+import { MinimaxXmlRecovery } from "./minimaxXml.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
 import { ToolcallJsonRecovery } from "./toolcallJson.js";
 import {
@@ -145,6 +149,18 @@ function chooseRecovery(
   }
   if (wants(settings, "glm-xml", model, /glm/i)) {
     return { dialect: "glm-xml", stage: new GlmXmlRecovery(tools) };
+  }
+  if (wants(settings, "kimi-tokens", model, /kimi|moonshot/i)) {
+    return { dialect: "kimi-tokens", stage: new KimiTokensRecovery(tools) };
+  }
+  if (wants(settings, "kimi-xtml", model, /kimi|moonshot/i)) {
+    return { dialect: "kimi-xtml", stage: new KimiXtmlRecovery(tools) };
+  }
+  if (wants(settings, "minimax-xml", model, /minimax/i)) {
+    return { dialect: "minimax-xml", stage: new MinimaxXmlRecovery(tools) };
+  }
+  if (wants(settings, "minimax-ns-xml", model, /minimax/i)) {
+    return { dialect: "minimax-ns-xml", stage: new MinimaxNsRecovery(tools) };
   }
   if (wants(settings, "toolcall-json", model, /nemotron/i)) {
     return { dialect: "toolcall-json", stage: new ToolcallJsonRecovery(tools) };

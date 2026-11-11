@@ -65,6 +65,22 @@ export const POSITIVE: Fixture[] = [
     text: '<|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"city": "Beijing"}<|tool_call_end|><|tool_calls_section_end|>',
   },
   {
+    name: "kimi k3 call (XTML)",
+    dialect: "kimi-xtml",
+    origin: "template",
+    source:
+      "https://huggingface.co/moonshotai/Kimi-K3/blob/main/encoding_k3.py (_open_tag/_close_tag, call tool/index, argument key/type), read 2026-11-10",
+    text: '<|open|>tools<|sep|><|open|>call tool="Read" index="1"<|sep|><|open|>argument key="path" type="string"<|sep|>src/a.ts<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|>',
+  },
+  {
+    name: "minimax m3 call (namespaced)",
+    dialect: "minimax-ns-xml",
+    origin: "template",
+    source:
+      "https://huggingface.co/MiniMaxAI/MiniMax-M3/blob/main/chat_template.jinja (ns_token, toolcall_begin_token, the assistant tool_calls rendering), read 2026-11-10",
+    text: ']<]minimax[>[<tool_call>\n]<]minimax[>[<invoke name="Read">]<]minimax[>[<path>src/a.ts]<]minimax[>[</path>]<]minimax[>[</invoke>\n]<]minimax[>[</tool_call>',
+  },
+  {
     name: "gpt-oss harmony call",
     dialect: "harmony",
     origin: "verbatim",

@@ -17,6 +17,10 @@ Set the variable in the environment that starts the editor or the CLI. It takes 
 | `llama-json`         | Llama's JSON call as text: `{"type": "function", "name": "read_file", "parameters": {...}}`, or an array of such objects or of JSON strings of them | `llama` |
 | `hermes-json`        | Hermes-style JSON in tags: `<tool_call>{"name": "...", "arguments": {...}}</tool_call>` | `qwen`, `hermes`            |
 | `glm-xml`            | GLM's tags: `<tool_call>NAME<arg_key>K</arg_key><arg_value>V</arg_value></tool_call>` | `glm`                         |
+| `kimi-tokens`        | Kimi K2's section tokens, with ids `functions.NAME:IDX` (forms below) | `kimi`, `moonshot`            |
+| `kimi-xtml`          | Kimi K3's XTML tags: `tools`, `call` and `argument` parts (forms below) | `kimi`, `moonshot`          |
+| `minimax-xml`        | MiniMax-M2's XML: `<minimax:tool_call><invoke name="NAME"><parameter name="K">V</parameter></invoke></minimax:tool_call>` | `minimax` |
+| `minimax-ns-xml`     | MiniMax-M3's namespaced tags, each behind the token `]<]minimax[>[` (forms below) | `minimax`                |
 | `toolcall-json`      | NVIDIA's JSON array in tags: `<TOOLCALL>[{"name": "...", "arguments": {...}}]</TOOLCALL>` | `nemotron`                  |
 | `qwen-xml,pythonic`  | Both                                                                  | each by its own match         |
 
@@ -48,6 +52,10 @@ models:
 | `llama-json`  | Recover Llama JSON calls for this model, whatever its id is.                            |
 | `hermes-json` | Recover Hermes-style JSON calls for this model, whatever its id is.                     |
 | `glm-xml`     | Recover GLM tag calls for this model, whatever its id is.                               |
+| `kimi-tokens` | Recover Kimi K2 section-token calls for this model, whatever its id is.                 |
+| `kimi-xtml`   | Recover Kimi K3 tag calls for this model, whatever its id is.                           |
+| `minimax-xml` | Recover MiniMax-M2 XML calls for this model, whatever its id is.                        |
+| `minimax-ns-xml` | Recover MiniMax-M3 namespaced calls for this model, whatever its id is.              |
 | `toolcall-json` | Recover `<TOOLCALL>` JSON calls (Nemotron-H, Llama-Nemotron) for this model, whatever its id is. |
 
 Any other value is rejected when the config loads. When `CONTINUE_RECOVER_TEXT_TOOL_CALLS` is set, it wins over `toolDialect`. The same switch decides whether Llama 3.x models are offered tools at all (they are off by default, because they write calls as text): setting `llama-json` in either place turns them on. The setting applies to Bedrock models in the IDE and in the CLI (`cn`); the rules below apply unchanged.
@@ -55,6 +63,10 @@ Any other value is rejected when the config loads. When `CONTINUE_RECOVER_TEXT_T
 ## Test connection
 
 In the Bedrock add-model form, **Test connection** also sends one request with a made-up tool at temperature 0 and shows one line: `Tool calls: native`, `Tool calls: written as text (qwen-xml)`, `Tool calls: not supported` or `Tool calls: unknown`. The request costs a few hundred tokens, the tool is never run, and the check is never sent anywhere else. A result of `written as text` tells you which `toolDialect` to set. Timeouts and errors show `unknown`, not `not supported`.
+
+## Ollama models with a server-side parser
+
+Many Ollama models (for example `qwen3.6`) are served through a renderer and parser: `/api/show` reports `parser: qwen3.5` and a template of just `{{ .Prompt }}`, so there is no tool markup in the template to read. The model-metadata lookup reads the `parser` name first (then the template, then the model name) and maps the parser names it has verified in Ollama's source to a dialect. Because Ollama itself turns the call into a structured one for these models, the hint is marked `serverParses`: the live notice and the recovery suggestion are not shown for that endpoint, and Test connection leaves out the preset line. A parser name that is not in the verified table maps to nothing and falls back to the model name.
 
 ## Live notice
 
@@ -71,6 +83,12 @@ Recovery is strict, because text that looks like a call is sometimes an example.
 - For `pythonic`, each call starts a line at column 0 outside a code fence, uses keyword arguments only, and the reply is nothing but such calls. Values are read as Python literals (strings, numbers, `True`, `False`, `None`, lists, tuples, dicts with string keys) by a small parser. Nothing is evaluated.
 - For `llama-json`, the reply is nothing but one call object or an array of them, with exactly the keys `name` and `parameters` (and an optional `type` of `function`).
 - For `hermes-json` and `glm-xml`, the reply is nothing but calls (an opening `<think>` block is kept as text), and for `glm-xml` a value is a string unless the schema declares another type, in which case it must be JSON of that type. Both were built from the model chat templates and checked on synthesised fixtures; no live leak of either was captured, so treat them as untested against real replies.
+- For `kimi-tokens`, the reply is nothing but one section of calls (an opening `<think>` block is kept as text). Each id must be `functions.NAME:IDX` with `NAME` a tool in the request and ids not repeated, and the arguments must be one JSON object. The form is from the Kimi-K2-Thinking chat template and the vendor's tool-calling guide. The wire form is `<|tool_calls_section_begin|><|tool_call_begin|>functions.NAME:0<|tool_call_argument_begin|>{...}<|tool_call_end|><|tool_calls_section_end|>`. The markers are special tokens: a server that strips special tokens from content leaves `functions.NAME:0{...}`, which cannot be told from prose, so only a reply that still carries the markers is recovered.
+- For `kimi-xtml`, the reply is, in order, an optional think part and an optional response part (both kept as text), one `tools` part and nothing else but the closing `message` tag. The wire form is `<|open|>tools<|sep|><|open|>call tool="NAME" index="1"<|sep|><|open|>argument key="K" type="string"<|sep|>V<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|>`. The grammar is derived from the vendor's `encoding_k3.py`: `<|open|>`, `<|sep|>` and `<|close|>` are not special tokens, so a server does not strip them. `index` counts 1, 2, ... in order, each argument's `type` must agree with its text (`string` for text, JSON of that type otherwise), and the arguments the encoder writes as a raw `<json>` block are not recovered. This is the form the model is rendered in, not one captured from a reply.
+- For `minimax-xml`, the reply is nothing but `<minimax:tool_call>` blocks of `<invoke name="NAME">` with `<parameter name="KEY">` values (an opening `<think>` block is kept as text). A value is a string unless the schema declares another type, in which case it must be JSON of that type. M2's generation prompt ends inside `<think>`, so a reply that begins with reasoning and a bare `</think>` does not start with a marker and is left as text.
+- For `minimax-ns-xml`, the reply is nothing but one `]<]minimax[>[<tool_call>` block of invokes (a leading `<mm:think>` block, or the bare `</mm:think>` the template writes for a turn without thinking, is kept as text). The wire form is `]<]minimax[>[<tool_call>`, then `]<]minimax[>[<invoke name="NAME">`, then `]<]minimax[>[<K>V]<]minimax[>[</K>` per argument, `]<]minimax[>[</invoke>` and `]<]minimax[>[</tool_call>`. Nested objects are tags per key, arrays are `<item>` tags, and each nested value is typed by the schema's `properties` and `items`. `]<]minimax[>[` is not a special token in the tokenizer, so it reaches the client; a stream with it removed is left as text.
+
+The Kimi and MiniMax parsers are for self-hosted servers (vLLM, SGLang, llama.cpp, reached through an OpenAI-compatible provider) that do not run the model's tool-call parser. On Bedrock, Kimi and MiniMax models return structured calls through Converse, so these settings change nothing there. All four were built from the vendor files named in their source headers and checked on synthesised fixtures; no live leak of any was captured, so treat them as untested against real replies.
 
 - For `toolcall-json`, the reply is nothing but one or more `<TOOLCALL>` blocks (an opening `<think>` block is kept as text). A block is a non-empty JSON array of objects with exactly the keys `name` and `arguments`; `arguments` is an object, or a string holding one. Several calls in one array, or several blocks, are all recovered. Unlike NVIDIA's own vLLM parser, which keeps only the first block and silently drops a call that has no `arguments`, one bad call (no `arguments`, `parameters` instead, a bare object that is not in an array, an unknown tool, an argument the schema refuses) makes the whole reply stay text, and it is counted as held and released as text in the recovery counts. The form comes from the model's chat template; no live reply was captured, so treat it as untested against real replies.
 
@@ -95,8 +113,12 @@ The preset never turns recovery on. To recover a family's text calls, set `toolD
 | GLM-4.5 to 5                              | `<arg_key>` / `<arg_value>` tags        | `glm-xml`                |
 | Llama 3.1 to 3.3                          | `{"name", "parameters"}` JSON           | `llama-json`             |
 | Llama 4, Nova                             | Python call syntax                      | `pythonic`               |
+| Kimi K2                                   | section tokens, `functions.NAME:IDX`    | `kimi-tokens`            |
+| Kimi K3                                   | XTML tags (`call`, `argument`)          | `kimi-xtml`              |
+| MiniMax-M2, M2.5                          | `<minimax:tool_call>` XML               | `minimax-xml`            |
+| MiniMax-M3                                | `]<]minimax[>[` namespaced tags         | `minimax-ns-xml`         |
 | Nemotron-H, Llama-Nemotron                | `<TOOLCALL>[{"name", "arguments"}]</TOOLCALL>` | `toolcall-json` |
-| Kimi, MiniMax, DeepSeek, gpt-oss, Gemma 4, Mistral | their own forms | none yet (native only) |
+| DeepSeek, gpt-oss, Gemma 4, Mistral | their own forms | none yet (native only) |
 | Gemma 3                                   | none: it made no tool calls             | none                     |
 
 Nemotron 3 (Super, Nano) writes the same markup as Qwen3-Coder, and NVIDIA's model cards use vLLM's `qwen3_coder` parser for it. Nemotron-H and Llama-Nemotron write `<TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>` instead; set `toolDialect: toolcall-json` to recover it (the preset does not set it for you).

@@ -19,6 +19,10 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   "llama-json": "llama-json",
   "hermes-json": "hermes-json",
   "glm-xml": "glm-xml",
+  "kimi-tokens": "kimi-tokens",
+  "kimi-xtml": "kimi-xtml",
+  "minimax-xml": "minimax-xml",
+  "minimax-ns-xml": "minimax-ns-xml",
 };
 
 /**
@@ -60,14 +64,17 @@ export interface ToolDialectLeak {
 /**
  * The dialect a reply leaked, or undefined: no markup, markup only in a code
  * fence, structured calls present, a dialect recovery cannot handle, or the
- * model already has a `toolDialect` set.
+ * model already has a `toolDialect` set, or the server parses the calls.
  */
 export function detectToolDialectLeak(args: {
   content: string | null | undefined;
   toolCalls?: ToolCallLike[];
   knownTools?: string[];
   current?: ToolDialectSetting;
+  /** The server parses this model's calls itself (MetadataHint.serverParses). */
+  serverParses?: boolean;
 }): ToolDialectLeak | undefined {
+  if (args.serverParses) return undefined;
   if (args.current && args.current !== "auto") return undefined;
   const c = classifyToolReply({
     content: args.content,

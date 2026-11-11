@@ -64,7 +64,15 @@ For each family: how tools reach the prompt, how a call is emitted, how a result
 - Parallel: several `<|tool_call_begin|>` blocks in one section; the index in the id distinguishes them. The vendor's sample parser reads only the first section.
 - Thinking: history writes an empty `<think></think>` for turns before the last non-tool-call assistant message; K2-Thinking keeps `reasoning_content` in `<think>...</think>` for the suffix.
 - Stop: `<|im_end|>`. The vendor guide says `finish_reason` at the end of tool calls "may vary across different engines" and tells clients to loop until it is not `tool_calls`, and to reset accumulated text after tool calls.
-- Sources: [Kimi-K2-Thinking chat_template.jinja](https://huggingface.co/moonshotai/Kimi-K2-Thinking/blob/main/chat_template.jinja), [Kimi-K2-Instruct chat_template.jinja](https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/chat_template.jinja), [tool_call_guidance.md](https://github.com/MoonshotAI/Kimi-K2/blob/main/docs/tool_call_guidance.md), read 2026-11-10. Kimi K3: not sourced.
+- Sources: [Kimi-K2-Thinking chat_template.jinja](https://huggingface.co/moonshotai/Kimi-K2-Thinking/blob/main/chat_template.jinja), [Kimi-K2-Instruct chat_template.jinja](https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/chat_template.jinja), [tool_call_guidance.md](https://github.com/MoonshotAI/Kimi-K2/blob/main/docs/tool_call_guidance.md), read 2026-11-10. Kimi K3 has its own form (next section).
+
+### Kimi K3 (XTML)
+
+- Not the K2 form. Source: the vendor renderer [encoding_k3.py](https://huggingface.co/moonshotai/Kimi-K3/blob/main/encoding_k3.py), read 2026-11-10. `_open_tag(tag, attrs)` is `<|open|>` + tag + ` key="value"` per attribute + `<|sep|>`; `_close_tag(tag)` is `<|close|>` + tag + `<|sep|>`; attribute values escape `&` as `&amp;` and `"` as `&quot;`. A message ends with `<|end_of_msg|>`.
+- Assistant turn: `message role="assistant"` holding `think` (the generation prompt opens it), `response`, then `tools`. Call: `<|open|>call tool="NAME" index="N"<|sep|>` (index 1-based), each argument `<|open|>argument key="K" type="T"<|sep|>TEXT<|close|>argument<|sep|>`, then `<|close|>call<|sep|>`; the tools part ends `<|close|>tools<|sep|>`. `T` is one of string, number, boolean, null, object, array; a string's TEXT is the string and any other type's TEXT is its JSON literal. Arguments that were not a JSON object are written as `<json type="object">` raw text.
+- The tokenizer lists `<|open|>`, `<|close|>` and `<|sep|>` with `special: false` (and `<|end_of_msg|>` as special), so servers do not strip the three tag markers.
+- Result: `message role="tool" tool="NAME" index="N"`; tool results are re-sorted to call order by `tool_call_id`, which is opaque (K3 drops the `functions.NAME:IDX` requirement).
+- Corpus: `kimi-k3-*` fixtures, synthesised from the encoder. The renderer shows what the model is trained on; no model output was captured.
 
 ### gpt-oss (Harmony)
 
@@ -111,6 +119,14 @@ For each family: how tools reach the prompt, how a call is emitted, how a result
 - Thinking: the generation prompt ends with `]~b]ai\n<think>\n`, so the output starts inside reasoning; history keeps `<think>` only after the last user message (interleaved thinking). Stop: `[e~[` is the message end marker; the guide names no stop token.
 - Parser guidance: the vendor "strongly" recommends the vLLM or SGLang parser; its reference parser uses non-greedy regexes, coerces types from the schema, strips one leading and trailing newline from values, and returns `[]` on any exception.
 - Sources: [MiniMax-M2.5 chat_template.jinja](https://huggingface.co/MiniMaxAI/MiniMax-M2.5/blob/main/chat_template.jinja), [M2 tool_calling_guide.md](https://huggingface.co/MiniMaxAI/MiniMax-M2/raw/main/docs/tool_calling_guide.md), read 2026-11-10.
+
+### MiniMax M3 (namespaced tags)
+
+- Source: [MiniMax-M3 chat_template.jinja](https://huggingface.co/MiniMaxAI/MiniMax-M3/blob/main/chat_template.jinja), read in full 2026-11-10; the vLLM recipe uses `--tool-call-parser minimax_m3` and `--reasoning-parser minimax_m3`, "distinct from `minimax_m2`" (recipes.vllm.ai, which does not describe the format).
+- Call: every tag is preceded by the namespace token `]<]minimax[>[` (NS): `NS<tool_call>`, a newline, per invoke `NS<invoke name="NAME">`, per argument `NS<K>VALUE` then `NS</K>`, `NS</invoke>` and a newline, then `NS</tool_call>`. The template says "wrap all invocations in a single" block. A nested object is expanded to one `NS<key>..NS</key>` per key, an array to one `NS<item>..NS</item>` per element, a boolean is `true` or `false`, a null is omitted. Scalar numbers are written as Python prints them.
+- Thinking: `<mm:think>...</mm:think>`; a turn with no thinking begins with a bare `</mm:think>`. The generation prompt adds `<mm:think>` only for `thinking_mode == "enabled"`, `</mm:think>` for `disabled`, and nothing for `adaptive` (the default).
+- The tokenizer lists `]<]minimax[>[` (id 200058), `<mm:think>` and `</mm:think>` with `special: false`, so servers do not strip them.
+- Corpus: `minimax-m3-*` fixtures, synthesised from the template.
 
 ### Amazon Nova
 
@@ -179,7 +195,7 @@ The "client-side repair" column is what a dialect parser or adapter could do. It
 
 - **Raw Qwen3-Coder and Nova failure dumps from our own runs.** None exist in `bench/` or the session scratchpad; only the stand-in strings in the evaluation harness test.
 - **Resolved 2026-11-10 (presets, `core/util/toolDialectPresetTable.ts`):** Nemotron has three formats. Nemotron 3 (Super, Nano) writes the Qwen3-Coder markup exactly (`<tool_call>` then `<function=NAME>`, one `<parameter=KEY>` per argument with the value on its own line, `</parameter>`, `</function>`, `</tool_call>`, thinking `<think>`; Super chat_template.jinja), and NVIDIA's Nano 3 card serves it with vLLM `--tool-call-parser qwen3_coder` and `--reasoning-parser nano_v3` (plugin file), SGLang `qwen3_coder`/`nano_v3`, TRT-LLM `--tool_parser qwen3_coder`. Nemotron-Nano-9B-v2 (Nemotron-H architecture) and Llama-3.3-Nemotron-Super-49B-v1.5 write `<TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>`; the 49B card needs vLLM `--tool-call-parser llama_nemotron_json` with a plugin file from the model repository. The vLLM parser names were checked against its registry (`vllm/tool_parsers/__init__.py`); GLM (`glm45`, `glm47`), Kimi-K2 (`kimi_k2`), gpt-oss (`openai`), Hermes/Qwen2.5 (`hermes`), Llama 3 (`llama3_json`), Llama 4 (`llama4_pythonic`), DeepSeek V3/V3.1/R1-0528 and Qwen3-Coder (`qwen3_xml`) come from the vLLM tool-calling docs, MiniMax (`minimax_m2`) from the vendor deployment guide. `deepseek_v32`, `kimi_k3` and `gemma4` exist in the registry but their pairing with the family was not read, and the table says so.
-- **Still unsourced after that:** Nemotron-H-4B/8B/47B and Nemotron 3 Ultra/3.5 templates (only the Nano-9B-v2 and 3 Super/Nano sources were read), whether the Nemotron-H parser plugin is needed, GLM-5 and Kimi K3 templates, any Ollama or llama.cpp parser or template note (none was verified, so none is recorded).
+- **Still unsourced after that:** Nemotron-H-4B/8B/47B and Nemotron 3 Ultra/3.5 templates (only the Nano-9B-v2 and 3 Super/Nano sources were read), whether the Nemotron-H parser plugin is needed, GLM-5 template, any Ollama or llama.cpp parser or template note (none was verified, so none is recorded).
 - **Stop tokens for GLM and Kimi from a generation config.** Kimi's `<|im_end|>` comes from the template; GLM's were not read.
 - **Kimi K3, Qwen3.5/3.6 and GLM-5 templates.** Issues name them; their repositories were not read. The corpus treats Qwen3.6 behaviour as observed only where a reporter quoted it.
 - **Grok raw format.** Not documented.

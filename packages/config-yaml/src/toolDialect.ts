@@ -23,6 +23,10 @@ export function recoveryValueFor(
     case "llama-json":
     case "hermes-json":
     case "glm-xml":
+    case "kimi-tokens":
+    case "kimi-xtml":
+    case "minimax-xml":
+    case "minimax-ns-xml":
     case "toolcall-json":
       return `force:${toolDialect}`;
     case "native":

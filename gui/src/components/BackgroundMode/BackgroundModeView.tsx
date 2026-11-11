@@ -22,7 +22,7 @@ export function BackgroundModeView({
           </div>
         )}
       </div>
-      <AgentsList isCreatingAgent={isCreatingAgent} />
+      <AgentsList />
     </div>
   );
 }

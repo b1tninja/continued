@@ -59,8 +59,8 @@ const LIVE: [
   ["mistral.devstral-2-123b", "mistral", "all", "yes", "mistral"],
   ["mistral.mistral-large-3-675b-instruct", "mistral", "all", "yes", "mistral"],
   ["moonshotai.kimi-k2.5", "kimi-k2", "all", "yes", "kimi-tokens"],
-  ["moonshotai.kimi-k3", "kimi-k3", "all", "yes", "none"],
-  ["moonshotai.kimi-k3.1", "kimi-k3", "all", "yes", "none"],
+  ["moonshotai.kimi-k3", "kimi-k3", "all", "yes", "kimi-xtml"],
+  ["moonshotai.kimi-k3.1", "kimi-k3", "all", "yes", "kimi-xtml"],
   ["minimax.minimax-m2", "minimax-m2", "all", "yes", "minimax-xml"],
   ["minimax.minimax-m2.5", "minimax-m2", "all", "yes", "minimax-xml"],
   ["nvidia.nemotron-super-3-120b", "nemotron-3", "all", "yes", "qwen-xml"],
@@ -173,12 +173,12 @@ describe("tool dialect presets", () => {
   // names is `none`, with the form written in promptStyle.evidence.
   const FAMILIES: [string, string, TextDialect][] = [
     // Kimi K3 (XTML) and MiniMax M3 (namespaced invoke) are not K2 and M2
-    ["moonshotai.kimi-k3", "kimi-k3", "none"],
-    ["moonshotai/Kimi-K3", "kimi-k3", "none"],
-    ["moonshotai/kimi-k3.1", "kimi-k3", "none"],
+    ["moonshotai.kimi-k3", "kimi-k3", "kimi-xtml"],
+    ["moonshotai/Kimi-K3", "kimi-k3", "kimi-xtml"],
+    ["moonshotai/kimi-k3.1", "kimi-k3", "kimi-xtml"],
     ["moonshotai/kimi-k2.5", "kimi-k2", "kimi-tokens"],
-    ["MiniMaxAI/MiniMax-M3", "minimax-m3", "none"],
-    ["minimax/minimax-m3", "minimax-m3", "none"],
+    ["MiniMaxAI/MiniMax-M3", "minimax-m3", "minimax-ns-xml"],
+    ["minimax/minimax-m3", "minimax-m3", "minimax-ns-xml"],
     ["minimax.minimax-m2.5", "minimax-m2", "minimax-xml"],
     ["minimax/minimax-m2.7", "minimax-m2", "minimax-xml"],
     // GLM-5 is sourced
@@ -219,17 +219,11 @@ describe("tool dialect presets", () => {
   );
 
   it("does not recover a form no parser exists for, and says so", () => {
-    for (const id of [
-      "kimi-k3",
-      "minimax-m3",
-      "deepseek-v4",
-      "liquid-lfm",
-      "hy3",
-    ]) {
+    for (const id of ["deepseek-v4", "liquid-lfm", "hy3"]) {
       const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
       expect(p?.recoverWith, id).toBeUndefined();
     }
-    for (const id of ["kimi-k3", "minimax-m3", "liquid-lfm", "hy3"]) {
+    for (const id of ["liquid-lfm", "hy3"]) {
       const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
       expect(p?.promptStyle.evidence, id).toMatch(/not yet recoverable/);
     }
@@ -347,14 +341,15 @@ describe("tool dialect presets", () => {
       "llama-json",
       "hermes-json",
       "glm-xml",
+      "kimi-tokens",
+      "kimi-xtml",
+      "minimax-xml",
+      "minimax-ns-xml",
     ];
     for (const p of TOOL_DIALECT_PRESETS) {
       if (p.recoverWith) expect(built, p.id).toContain(p.recoverWith);
     }
     for (const id of [
-      "kimi-k3",
-      "minimax-m2",
-      "minimax-m3",
       "deepseek-v3.2",
       "gpt-oss",
       "nemotron-h",
