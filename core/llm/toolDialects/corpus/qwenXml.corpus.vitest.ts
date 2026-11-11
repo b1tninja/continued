@@ -47,7 +47,12 @@ const qwenXml: CorpusParser = ({ chunks, tools }) => {
  * structure (a value may quote `</function>` or `</parameter>`); when a new
  * gap is found it goes here and the test says so when it is fixed.
  */
-const KNOWN_SHOULD_GAPS: string[] = [];
+const KNOWN_SHOULD_GAPS: string[] = [
+  // The Qwen3.5 and Nemotron 3 templates write a boolean as Python `True`
+  // (Jinja `string`); the parser accepts only JSON `true`, so the whole call is
+  // left as text. Qwen3.6 writes `true`. See plans/research/rq8-templates.md.
+  "qwen35-two-calls-python-bool",
+];
 
 describe("QwenXmlRecovery against the corpus", () => {
   let report: ReturnType<typeof runCorpus>;

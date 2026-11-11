@@ -27,14 +27,14 @@
       }
     }
   ],
-  "text": "[TOOL_CALLS][{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Z�rich\"}, \"id\": \"AbCdEf123\"}]",
+  "text": "[TOOL_CALLS][{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Zürich\"}, \"id\": \"AbCdEf123\"}]",
   "markers": ["[TOOL_CALLS]"],
   "streams": [
     {
       "label": "whole",
       "encoding": "utf8",
       "chunks": [
-        "[TOOL_CALLS][{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Z�rich\"}, \"id\": \"AbCdEf123\"}]"
+        "[TOOL_CALLS][{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Zürich\"}, \"id\": \"AbCdEf123\"}]"
       ],
       "splitInside": null
     },
@@ -103,7 +103,7 @@
         " ",
         "\"",
         "Z",
-        "�",
+        "ü",
         "r",
         "i",
         "c",
@@ -139,7 +139,7 @@
       "encoding": "utf8",
       "chunks": [
         "[TOOL_",
-        "CALLS][{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Z�rich\"}, \"id\": \"AbCdEf123\"}]"
+        "CALLS][{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Zürich\"}, \"id\": \"AbCdEf123\"}]"
       ],
       "splitInside": "[TOOL_CALLS]"
     },
@@ -148,7 +148,7 @@
       "encoding": "utf8",
       "chunks": [
         "[TOOL_CALLS]",
-        "[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Z�rich\"}, \"id\": \"AbCdEf123\"}]"
+        "[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Zürich\"}, \"id\": \"AbCdEf123\"}]"
       ],
       "splitInside": null
     },
@@ -174,7 +174,7 @@
         " {\"c",
         "i",
         "ty\":",
-        " \"Z�",
+        " \"Zü",
         "r",
         "ic",
         "h",
@@ -192,8 +192,8 @@
       "label": "inside-multibyte-char",
       "encoding": "base64",
       "chunks": [
-        "W1RPT0xfQ0FMTFNdW3sibmFtZSI6ICJnZXRfd2VhdGhlciIsICJhcmd1bWVudHMiOiB7ImNpdHkiOiAiWu8=",
-        "v71yaWNoIn0sICJpZCI6ICJBYkNkRWYxMjMifV0="
+        "W1RPT0xfQ0FMTFNdW3sibmFtZSI6ICJnZXRfd2VhdGhlciIsICJhcmd1bWVudHMiOiB7ImNpdHkiOiAiWsM=",
+        "vHJpY2gifSwgImlkIjogIkFiQ2RFZjEyMyJ9XQ=="
       ],
       "splitInside": "utf8-codepoint"
     }

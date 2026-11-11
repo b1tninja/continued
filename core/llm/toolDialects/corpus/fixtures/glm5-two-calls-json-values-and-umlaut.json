@@ -54,7 +54,7 @@
       }
     }
   ],
-  "text": "<tool_call>search<arg_key>query</arg_key><arg_value>z�rich \"x\"</arg_value><arg_key>limit</arg_key><arg_value>5</arg_value><arg_key>tags</arg_key><arg_value>[\"x\", \"y\"]</arg_value><arg_key>opts</arg_key><arg_value>{\"a\": null, \"b\": false}</arg_value></tool_call><tool_call>read_file<arg_key>path</arg_key><arg_value>src/a.ts</arg_value></tool_call>",
+  "text": "<tool_call>search<arg_key>query</arg_key><arg_value>zürich \"x\"</arg_value><arg_key>limit</arg_key><arg_value>5</arg_value><arg_key>tags</arg_key><arg_value>[\"x\", \"y\"]</arg_value><arg_key>opts</arg_key><arg_value>{\"a\": null, \"b\": false}</arg_value></tool_call><tool_call>read_file<arg_key>path</arg_key><arg_value>src/a.ts</arg_value></tool_call>",
   "markers": [
     "<tool_call>",
     "<arg_key>",
@@ -68,7 +68,7 @@
       "label": "whole",
       "encoding": "utf8",
       "chunks": [
-        "<tool_call>search<arg_key>query</arg_key><arg_value>z�rich \"x\"</arg_value><arg_key>limit</arg_key><arg_value>5</arg_value><arg_key>tags</arg_key><arg_value>[\"x\", \"y\"]</arg_value><arg_key>opts</arg_key><arg_value>{\"a\": null, \"b\": false}</arg_value></tool_call><tool_call>read_file<arg_key>path</arg_key><arg_value>src/a.ts</arg_value></tool_call>"
+        "<tool_call>search<arg_key>query</arg_key><arg_value>zürich \"x\"</arg_value><arg_key>limit</arg_key><arg_value>5</arg_value><arg_key>tags</arg_key><arg_value>[\"x\", \"y\"]</arg_value><arg_key>opts</arg_key><arg_value>{\"a\": null, \"b\": false}</arg_value></tool_call><tool_call>read_file<arg_key>path</arg_key><arg_value>src/a.ts</arg_value></tool_call>"
       ],
       "splitInside": null
     },
@@ -129,7 +129,7 @@
         "e",
         ">",
         "z",
-        "�",
+        "ü",
         "r",
         "i",
         "c",
@@ -429,7 +429,7 @@
       "encoding": "utf8",
       "chunks": [
         "<tool_",
-        "call>search<arg_key>query</arg_key><arg_value>z�rich \"x\"</arg_value><arg_key>limit</arg_key><arg_value>5</arg_value><arg_key>tags</arg_key><arg_value>[\"x\", \"y\"]</arg_value><arg_key>opts</arg_key><arg_value>{\"a\": null, \"b\": false}</arg_value></tool_call><tool_call>read_file<arg_key>path</arg_key><arg_value>src/a.ts</arg_value></tool_call>"
+        "call>search<arg_key>query</arg_key><arg_value>zürich \"x\"</arg_value><arg_key>limit</arg_key><arg_value>5</arg_value><arg_key>tags</arg_key><arg_value>[\"x\", \"y\"]</arg_value><arg_key>opts</arg_key><arg_value>{\"a\": null, \"b\": false}</arg_value></tool_call><tool_call>read_file<arg_key>path</arg_key><arg_value>src/a.ts</arg_value></tool_call>"
       ],
       "splitInside": "<tool_call>"
     },
@@ -443,7 +443,7 @@
         "query",
         "</arg_key>",
         "<arg_value>",
-        "z�rich \"x\"",
+        "zürich \"x\"",
         "</arg_value>",
         "<arg_key>",
         "limit",
@@ -496,7 +496,7 @@
         "r",
         "g_val",
         "ue>z",
-        "�",
+        "ü",
         "rich",
         " \"x\"",
         "<",
@@ -599,8 +599,8 @@
       "label": "inside-multibyte-char",
       "encoding": "base64",
       "chunks": [
-        "PHRvb2xfY2FsbD5zZWFyY2g8YXJnX2tleT5xdWVyeTwvYXJnX2tleT48YXJnX3ZhbHVlPnrv",
-        "v71yaWNoICJ4IjwvYXJnX3ZhbHVlPjxhcmdfa2V5PmxpbWl0PC9hcmdfa2V5PjxhcmdfdmFsdWU+NTwvYXJnX3ZhbHVlPjxhcmdfa2V5PnRhZ3M8L2FyZ19rZXk+PGFyZ192YWx1ZT5bIngiLCAieSJdPC9hcmdfdmFsdWU+PGFyZ19rZXk+b3B0czwvYXJnX2tleT48YXJnX3ZhbHVlPnsiYSI6IG51bGwsICJiIjogZmFsc2V9PC9hcmdfdmFsdWU+PC90b29sX2NhbGw+PHRvb2xfY2FsbD5yZWFkX2ZpbGU8YXJnX2tleT5wYXRoPC9hcmdfa2V5PjxhcmdfdmFsdWU+c3JjL2EudHM8L2FyZ192YWx1ZT48L3Rvb2xfY2FsbD4="
+        "PHRvb2xfY2FsbD5zZWFyY2g8YXJnX2tleT5xdWVyeTwvYXJnX2tleT48YXJnX3ZhbHVlPnrD",
+        "vHJpY2ggIngiPC9hcmdfdmFsdWU+PGFyZ19rZXk+bGltaXQ8L2FyZ19rZXk+PGFyZ192YWx1ZT41PC9hcmdfdmFsdWU+PGFyZ19rZXk+dGFnczwvYXJnX2tleT48YXJnX3ZhbHVlPlsieCIsICJ5Il08L2FyZ192YWx1ZT48YXJnX2tleT5vcHRzPC9hcmdfa2V5PjxhcmdfdmFsdWU+eyJhIjogbnVsbCwgImIiOiBmYWxzZX08L2FyZ192YWx1ZT48L3Rvb2xfY2FsbD48dG9vbF9jYWxsPnJlYWRfZmlsZTxhcmdfa2V5PnBhdGg8L2FyZ19rZXk+PGFyZ192YWx1ZT5zcmMvYS50czwvYXJnX3ZhbHVlPjwvdG9vbF9jYWxsPg=="
       ],
       "splitInside": "utf8-codepoint"
     }

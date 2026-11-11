@@ -54,14 +54,14 @@
       }
     }
   ],
-  "text": "<|tool_call>call:search{exact:true,limit:5,opts:{a:{c:1.5},b:null},query:<|\"|>z�rich \"x\"<|\"|>,tags:[<|\"|>x<|\"|>,<|\"|>y<|\"|>]}<tool_call|><|tool_call>call:read_file{path:<|\"|>src/a.ts<|\"|>}<tool_call|>",
+  "text": "<|tool_call>call:search{exact:true,limit:5,opts:{a:{c:1.5},b:null},query:<|\"|>zürich \"x\"<|\"|>,tags:[<|\"|>x<|\"|>,<|\"|>y<|\"|>]}<tool_call|><|tool_call>call:read_file{path:<|\"|>src/a.ts<|\"|>}<tool_call|>",
   "markers": ["<|tool_call>", "call:", "<|\"|>", "<tool_call|>"],
   "streams": [
     {
       "label": "whole",
       "encoding": "utf8",
       "chunks": [
-        "<|tool_call>call:search{exact:true,limit:5,opts:{a:{c:1.5},b:null},query:<|\"|>z�rich \"x\"<|\"|>,tags:[<|\"|>x<|\"|>,<|\"|>y<|\"|>]}<tool_call|><|tool_call>call:read_file{path:<|\"|>src/a.ts<|\"|>}<tool_call|>"
+        "<|tool_call>call:search{exact:true,limit:5,opts:{a:{c:1.5},b:null},query:<|\"|>zürich \"x\"<|\"|>,tags:[<|\"|>x<|\"|>,<|\"|>y<|\"|>]}<tool_call|><|tool_call>call:read_file{path:<|\"|>src/a.ts<|\"|>}<tool_call|>"
       ],
       "splitInside": null
     },
@@ -148,7 +148,7 @@
         "|",
         ">",
         "z",
-        "�",
+        "ü",
         "r",
         "i",
         "c",
@@ -277,7 +277,7 @@
       "encoding": "utf8",
       "chunks": [
         "<|tool",
-        "_call>call:search{exact:true,limit:5,opts:{a:{c:1.5},b:null},query:<|\"|>z�rich \"x\"<|\"|>,tags:[<|\"|>x<|\"|>,<|\"|>y<|\"|>]}<tool_call|><|tool_call>call:read_file{path:<|\"|>src/a.ts<|\"|>}<tool_call|>"
+        "_call>call:search{exact:true,limit:5,opts:{a:{c:1.5},b:null},query:<|\"|>zürich \"x\"<|\"|>,tags:[<|\"|>x<|\"|>,<|\"|>y<|\"|>]}<tool_call|><|tool_call>call:read_file{path:<|\"|>src/a.ts<|\"|>}<tool_call|>"
       ],
       "splitInside": "<|tool_call>"
     },
@@ -289,7 +289,7 @@
         "call:",
         "search{exact:true,limit:5,opts:{a:{c:1.5},b:null},query:",
         "<|\"|>",
-        "z�rich \"x\"",
+        "zürich \"x\"",
         "<|\"|>",
         ",tags:[",
         "<|\"|>",
@@ -342,7 +342,7 @@
         "ery:",
         "<|\"|",
         ">z",
-        "�rich",
+        "ürich",
         " \"x\"",
         "<|\"|",
         ">,ta",
@@ -388,8 +388,8 @@
       "label": "inside-multibyte-char",
       "encoding": "base64",
       "chunks": [
-        "PHx0b29sX2NhbGw+Y2FsbDpzZWFyY2h7ZXhhY3Q6dHJ1ZSxsaW1pdDo1LG9wdHM6e2E6e2M6MS41fSxiOm51bGx9LHF1ZXJ5Ojx8Inw+eu8=",
-        "v71yaWNoICJ4Ijx8Inw+LHRhZ3M6Wzx8Inw+eDx8Inw+LDx8Inw+eTx8Inw+XX08dG9vbF9jYWxsfD48fHRvb2xfY2FsbD5jYWxsOnJlYWRfZmlsZXtwYXRoOjx8Inw+c3JjL2EudHM8fCJ8Pn08dG9vbF9jYWxsfD4="
+        "PHx0b29sX2NhbGw+Y2FsbDpzZWFyY2h7ZXhhY3Q6dHJ1ZSxsaW1pdDo1LG9wdHM6e2E6e2M6MS41fSxiOm51bGx9LHF1ZXJ5Ojx8Inw+esM=",
+        "vHJpY2ggIngiPHwifD4sdGFnczpbPHwifD54PHwifD4sPHwifD55PHwifD5dfTx0b29sX2NhbGx8Pjx8dG9vbF9jYWxsPmNhbGw6cmVhZF9maWxle3BhdGg6PHwifD5zcmMvYS50czx8Inw+fTx0b29sX2NhbGx8Pg=="
       ],
       "splitInside": "utf8-codepoint"
     }
