@@ -44,6 +44,8 @@ import {
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import { IdeShadow } from "./tools/permissions/auto/shadowIde";
 import { getAuditTrail } from "./tools/permissions/audit/global";
+import { registerAuditListHandlers } from "./tools/permissions/audit/listingHandlers";
+import { machineAuditHost } from "./tools/permissions/audit/listingHost";
 import {
   recordPolicyDecision,
   recordReviewDecision,
@@ -694,6 +696,8 @@ export class Core {
       },
       confirmLoosening: (text) => confirmInIde(this.ide, text),
     });
+
+    registerAuditListHandlers(on as never, machineAuditHost);
 
     on("policy/test", async ({ data }) => {
       const { config } = await this.configHandler.loadConfig();

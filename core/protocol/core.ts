@@ -44,6 +44,7 @@ import type {
   SaveProviderModelsResult,
 } from "../config/providerSetup";
 import type { DecisionSource as ToolDecisionSource } from "../tools/permissions/decide";
+import type { AuditListProtocol } from "./audit";
 import type { ApprovalSettings } from "../tools/permissions/approval";
 import type { RuleEditRequest } from "../tools/permissions/ruleEditorHandlers";
 import { GlobalContextModelSelections } from "../util/GlobalContext";
@@ -163,7 +164,7 @@ export type BedrockProbeToolCallsResult =
 export type ProfileFileResult =
   { ok: true; profileId?: string } | { ok: false; error: string };
 
-export type ToCoreFromIdeOrWebviewProtocol = {
+export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
   // Special
   ping: [string, string];
   abort: [undefined, void];
