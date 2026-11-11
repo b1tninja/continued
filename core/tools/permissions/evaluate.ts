@@ -149,6 +149,8 @@ export interface EvaluateInput {
    * only when this is non-empty.
    */
   trustedDomains?: readonly string[];
+  /** The person's own `largeChangeLines` (default 300); `ask-large-change` asks above it */
+  largeChangeLines?: number;
   /**
    * Environment variable names the person added to or took off the lists of
    * names that change what a command does (envNames.ts), from their own
@@ -297,6 +299,8 @@ function firstProtectedHit(
       shell: input.shell,
       approval: input.approval,
       trustedDomains: input.trustedDomains,
+      largeChangeLines: input.largeChangeLines,
+      cwd: input.cwd,
     }),
     deputyCallHit({
       toolName,

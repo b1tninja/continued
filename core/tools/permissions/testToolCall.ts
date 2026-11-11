@@ -656,6 +656,7 @@ export function testToolCall(input: TestToolCallInput): ToolCallTestResult {
     permissionSources: usable.sources,
     approval,
     trustedDomains: input.sources.user?.auto?.environment?.trustedDomains,
+    largeChangeLines: input.sources.user?.auto?.environment?.largeChangeLines,
     cwd,
     shell,
   });
