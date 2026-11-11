@@ -26,10 +26,7 @@ import { classifyReadOnly } from "./readOnlyCommand";
  *
  * Like protected paths this reads the path as written and resolved, and a
  * terminal command by its words: it is a guard that sees what is visible, not
- * a sandbox. A path built at run time (a variable, a glob, a backtick, a bare
- * name after a `cd` into the home folder) is not seen: at YOLO a command with
- * such a write target asks (runtimeWriteTarget.ts, ROADMAP B31), and the
- * sandbox that denies writes to these folders (W8) is what holds for certain.
+ * a sandbox. A path built at run time (a variable, a glob) is not seen.
  */
 export interface PolicyFileHit {
   /** The path as it was matched, for the message. */
