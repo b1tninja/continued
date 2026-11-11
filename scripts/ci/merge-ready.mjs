@@ -24,8 +24,8 @@ if (!numbers.length) {
 
 if (combine) {
   const { main, prs } = fetchPrRefs(process.cwd(), numbers);
-  console.log(formatMatrix(combineMatrix(process.cwd(), main, prs)) + "
-");
+  console.log(formatMatrix(combineMatrix(process.cwd(), main, prs)));
+  console.log();
 }
 
 const gh = (...a) =>

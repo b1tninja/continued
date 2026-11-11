@@ -67,7 +67,9 @@ function mergedCommit(cwd, base, other) {
 
 export function changedFiles(cwd, main, ref) {
   const base = must(cwd, ["merge-base", main, ref]);
-  return must(cwd, ["diff", "--name-only", base, ref]).split("\n").filter(Boolean);
+  return must(cwd, ["diff", "--name-only", base, ref])
+    .split("\n")
+    .filter(Boolean);
 }
 
 /**
@@ -122,9 +124,9 @@ export function formatMatrix({ alone, pairs }) {
   out.push("", "Pairwise (second merged after first):");
   for (const p of pairs) {
     out.push(`  ${p.a} + ${p.b}: ${p.status.toUpperCase()}`);
-    if (p.conflicts.length) out.push(`      conflicts: ${p.conflicts.join(", ")}`);
-    if (p.shared.length)
-      out.push(`      shared files: ${p.shared.join(", ")}`);
+    if (p.conflicts.length)
+      out.push(`      conflicts: ${p.conflicts.join(", ")}`);
+    if (p.shared.length) out.push(`      shared files: ${p.shared.join(", ")}`);
     if (p.hot.length) out.push(`      HOT files: ${p.hot.join(", ")}`);
   }
   return out.join("\n");
@@ -133,7 +135,8 @@ export function formatMatrix({ alone, pairs }) {
 /** Fresh fetch of main and PR heads into refs/combine/*; returns {name: ref}. No checkout. */
 export function fetchPrRefs(cwd, numbers, remote = "origin") {
   const specs = ["+refs/heads/main:refs/combine/main"];
-  for (const n of numbers) specs.push(`+refs/pull/${n}/head:refs/combine/pr-${n}`);
+  for (const n of numbers)
+    specs.push(`+refs/pull/${n}/head:refs/combine/pr-${n}`);
   execFileSync("git", ["fetch", "--no-tags", remote, ...specs], {
     cwd,
     stdio: "inherit",
