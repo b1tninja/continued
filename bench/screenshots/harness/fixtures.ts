@@ -252,6 +252,24 @@ export const FIXTURES: Record<string, Fixture> = {
       } as never),
     );
   },
+  /** The "+" menu at the left of the prompt, open */
+  "attach-open": async ({ store }) => {
+    store.dispatch(newSession());
+    await new Promise((r) => setTimeout(r, 800));
+    (
+      document.querySelector("[data-testid=attach-menu-button]") as HTMLElement
+    )?.click();
+  },
+  /** The "..." menu under the prompt, open */
+  "overflow-open": async ({ store }) => {
+    store.dispatch(newSession());
+    await new Promise((r) => setTimeout(r, 800));
+    (
+      document.querySelector(
+        "[data-testid=input-overflow-button]",
+      ) as HTMLElement
+    )?.click();
+  },
   /** Loop mode: the plan card, the per-item budgets and the loop controls */
   loop: ({ store }) => {
     store.dispatch(newSession(session([], "Fix parseConfig")));

@@ -95,8 +95,9 @@ export function detectToolDialectLeak(args: {
 }
 
 /** The notice's text. */
-export function leakNoticeText(dialect: string): string {
-  return `This model wrote a tool call as text (looks like ${dialect}). Turn on recovery for this model?`;
+export function leakNoticeText(_dialect: string): string {
+  // The format name goes in the button tooltip, where it does not crowd the line
+  return "This model typed a tool request as plain text, so it did not run. Let Continue read that format for this model?";
 }
 
 /** The CLI's one-line hint. */
