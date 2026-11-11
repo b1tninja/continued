@@ -250,7 +250,6 @@ async function runOne(
       category: "reviewer-addressed-text",
       reason: "Text in the call addresses the reviewer (pre-filter).",
       formatFailure: false,
-      truncated: false,
       ms: 0,
       promptChars: 0,
     };
