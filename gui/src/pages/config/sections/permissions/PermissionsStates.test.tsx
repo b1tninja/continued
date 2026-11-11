@@ -39,11 +39,15 @@ describe("Permissions loading and error states", () => {
     expect(screen.getByTestId("permissions-loading").textContent).toContain(
       "Reading your permission rules",
     );
-    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(
+      screen.queryByRole("tablist", { name: "Permission areas" }),
+    ).toBeNull();
     expect(screen.queryByTestId("permissions-slow")).toBeNull();
     await act(async () => release(report));
     expect(screen.queryByTestId("permissions-loading")).toBeNull();
-    expect(screen.getByRole("tablist")).toBeDefined();
+    expect(
+      screen.getByRole("tablist", { name: "Permission areas" }),
+    ).toBeDefined();
   });
 
   it("says it is slow after the timeout and offers to try again", async () => {

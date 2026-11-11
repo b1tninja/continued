@@ -184,7 +184,9 @@ describe("Permissions: audit figures", () => {
       "Reading the audit figures",
     );
     // the rules are already usable
-    expect(screen.getByRole("tablist")).toBeDefined();
+    expect(
+      screen.getByRole("tablist", { name: "Permission areas" }),
+    ).toBeDefined();
     await act(async () => release(overview()));
     expect(screen.queryByTestId("audit-loading")).toBeNull();
     expect(screen.getByTestId("most-asked-item")).toBeDefined();
@@ -201,7 +203,9 @@ describe("Permissions: audit figures", () => {
       "could not be read",
     );
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByRole("tablist")).toBeDefined();
+    expect(
+      screen.getByRole("tablist", { name: "Permission areas" }),
+    ).toBeDefined();
     await act(async () => fireEvent.click(screen.getByTestId("audit-retry")));
     await waitFor(() => screen.getByTestId("most-asked-item"));
     expect(calls).toBe(2);
