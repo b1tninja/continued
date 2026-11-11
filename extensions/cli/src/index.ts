@@ -420,9 +420,9 @@ program
 
 // Reviewer evaluation: dry by default, --run sends the requests
 program
-  .command("review-eval")
+  .command("reviewer [action]")
   .description(
-    "Score a reviewer model and prompt guidance over a labelled set of tool calls (dry run unless --run)",
+    "Work with the reviewer model: eval scores a reviewer model and prompt guidance over a labelled set of tool calls (dry run unless --run)",
   )
   .option("--dataset <file>", "Labelled cases (JSON or YAML)")
   .option("--reviewer <model-role>", "Reviewer model name or role", "reviewer")
@@ -436,7 +436,14 @@ program
   .option("--json", "Machine-readable output")
   .option("--concurrency <n>", "Parallel requests", "4")
   .option("--timeout-ms <n>", "Per-request timeout", "30000")
-  .action(async (options) => {
+  .action(async (action: string | undefined, options) => {
+    if (action !== "eval") {
+      console.error(
+        "Usage: continuous reviewer eval --dataset <file> [options]",
+      );
+      await gracefulExit(1);
+      return;
+    }
     const code = await reviewEvalCommand(options);
     await gracefulExit(code);
   });

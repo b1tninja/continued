@@ -1,4 +1,5 @@
 import type { ILLM } from "../../../..";
+import { assembleGuidance } from "../guidance";
 import { parseReviewerReply } from "../parse";
 import { buildReviewMessages, newNonce } from "../prompt";
 import { reviewCompletionOptions, ReviewerReasoning } from "../review";
@@ -82,6 +83,13 @@ export function messagesFor(
   if (env.productionMarkers) {
     settingsEnv.productionMarkers = env.productionMarkers;
   }
+  // The trusted block comes only from validated guidance (`input.guidance`);
+  // `settings.guidance` is never read. Refused entries fail the run, because a
+  // dropped "never do X" would score a looser reviewer than the one tried.
+  const assembled = assembleGuidance(config.guidance);
+  if (assembled.errors.length > 0) {
+    throw new Error(`The guidance was refused: ${assembled.errors.join(" ")}`);
+  }
   return buildReviewMessages({
     toolName: c.tool,
     args: c.args,
@@ -90,10 +98,8 @@ export function messagesFor(
       toolCalls: c.history.toolCalls ?? [],
     },
     environment,
-    settings: {
-      environment: settingsEnv,
-      ...(config.guidance ? { guidance: config.guidance } : {}),
-    },
+    settings: { environment: settingsEnv },
+    guidance: assembled.guidance,
     nonce,
   });
 }
