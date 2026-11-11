@@ -5,12 +5,12 @@
  * adapts the arguments. Exit 0 clean, 3 findings, 2 usage. Values are never
  * printed.
  */
+import { EXIT_USAGE } from "core/util/secretScan/scanFiles.js";
 import {
   runSecretsScan,
   type Io,
   type SecretsScanOptions,
 } from "core/util/secretScan/secretsCli.js";
-import { EXIT_USAGE } from "core/util/secretScan/scanFiles.js";
 
 export function secretsCommand(
   action: string | undefined,

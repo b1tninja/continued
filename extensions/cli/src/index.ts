@@ -17,6 +17,7 @@ import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
 import { reviewEvalCommand } from "./commands/reviewEval.js";
 import { sandboxCommand } from "./commands/sandbox.js";
+import { secretsCommand } from "./commands/secrets.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
 import {
@@ -476,6 +477,34 @@ program
       await gracefulExit(code);
     },
   );
+
+// Secrets subcommand: scan files for secrets (exit 3 on a finding)
+program
+  .command("secrets [action] [paths...]")
+  .description(
+    "Scan files for secrets before they are committed or leave the machine; values are never printed (scan)",
+  )
+  .option("--profile <p>", "at-rest (default, recall first) or outbound")
+  .option("--json", "Machine-readable output")
+  .option("--staged", "Also scan the files staged in git")
+  .option("--salt <s>", "Fingerprint salt, to keep fingerprints comparable")
+  .option(
+    "--allow <fp>",
+    "A fingerprint to treat as not a secret (repeatable)",
+    (value: string, previous: string[] = []) => [...previous, value],
+  )
+  .option("--no-known", "Do not match this machine's own secret values")
+  .action(
+    async (
+      action: string | undefined,
+      paths: string[] | undefined,
+      options,
+    ) => {
+      const code = secretsCommand(action, paths ?? [], options);
+      await gracefulExit(code);
+    },
+  );
+
 // Sandbox status subcommand
 program
   .command("sandbox [action]")
