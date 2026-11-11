@@ -233,14 +233,19 @@ export function parsePolicySpec(
 export function describePolicy(l: PolicyLevels): string[] {
   const preset = presetOf(l);
   const lines = [
-    `Policy: ${preset ? POLICY_PRESETS[preset].label : "Custom"}`,
+    `Preset: ${preset ? POLICY_PRESETS[preset].label : "Custom"}`,
     "",
+    "Level of each area:",
   ];
   for (const area of POLICY_AREAS) {
     lines.push(
       `  ${POLICY_AREA_LABELS[area].padEnd(12)} ${policyLevelLabel(area, l[area]).padEnd(10)} ${POLICY_LEVEL_DESCRIPTIONS[area][l[area]]}`,
     );
   }
+  lines.push(
+    "",
+    "A preset sets all five levels at once. Rules (Never, Ask, Always) are listed with `continuous permissions list`; they and the built-in rules apply before the level.",
+  );
   return lines;
 }
 
