@@ -1,16 +1,11 @@
 import {
-  BoltIcon,
   CheckIcon,
   ChevronDownIcon,
   ClipboardDocumentListIcon,
   EyeIcon,
   ExclamationTriangleIcon,
-  HandRaisedIcon,
-  LockOpenIcon,
   PencilSquareIcon,
   QuestionMarkCircleIcon,
-  ShieldCheckIcon,
-  SparklesIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import {
@@ -18,10 +13,8 @@ import {
   POLICY_AREAS,
   POLICY_LEVEL_DESCRIPTIONS,
   POLICY_LEVELS,
-  POLICY_PRESET_ORDER,
   POLICY_PRESETS,
   policyLevelLabel,
-  presetOf,
   type PolicyArea,
   type PolicyLevel,
 } from "core/tools/permissions/policy";
@@ -38,6 +31,8 @@ import {
   changePolicyLevel,
 } from "../../redux/thunks/policySettings";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
+import { CHIP, LEVEL_GLYPHS, LEVEL_TONES } from "./levelStyle";
+import { PresetSelect } from "./PresetSelect";
 
 const AREA_ICONS: Record<PolicyArea, typeof EyeIcon> = {
   context: EyeIcon,
@@ -46,40 +41,6 @@ const AREA_ICONS: Record<PolicyArea, typeof EyeIcon> = {
   plan: ClipboardDocumentListIcon,
   questions: QuestionMarkCircleIcon,
 };
-
-/**
- * A glyph and a colour for each level, so a chip reads without its text: the
- * glyph says what happens (a raised hand asks you, a shield checks against
- * your rules, sparkles is the reviewer model, an open lock lets rules decide,
- * a bolt ignores them) and the colour says how far the trust goes, from green
- * (you decide) through blue (a reviewer) and amber (rules only) to red
- * (nothing checks).
- */
-const LEVEL_GLYPHS: Record<PolicyLevel, typeof EyeIcon> = {
-  manual: HandRaisedIcon,
-  cautious: ShieldCheckIcon,
-  automatic: SparklesIcon,
-  permissive: LockOpenIcon,
-  yolo: BoltIcon,
-};
-
-/**
- * The tint carries the level and the label is always the foreground colour:
- * theme greens and ambers fall under 4.5:1 on a light background (1.8:1 for
- * the default green), and a label that cannot be read is no label. The glyph
- * keeps the colour.
- */
-const LEVEL_TONES: Record<PolicyLevel, { chip: string; icon: string }> = {
-  manual: { chip: "bg-success/20 text-foreground", icon: "text-success" },
-  cautious: { chip: "bg-success/20 text-foreground", icon: "text-success" },
-  automatic: { chip: "bg-link/20 text-foreground", icon: "text-link" },
-  permissive: { chip: "bg-warning/20 text-foreground", icon: "text-warning" },
-  yolo: { chip: "bg-error/20 text-foreground", icon: "text-error" },
-};
-
-/** Every chip and the fold button is a target of at least 24 px (WCAG 2.5.8). */
-const CHIP =
-  "flex-none min-h-6 gap-1 rounded-full border-none px-2 transition-colors duration-200 hover:brightness-110";
 
 const AREA_HINTS: Record<PolicyArea, string> = {
   context: "Reading files and searching: what the agent looks at",
@@ -218,82 +179,6 @@ export function AreaLevelSelect({ area, variant }: AreaLevelSelectProps) {
               </ListboxOption>
             );
           })}
-        </ListboxOptions>
-      </div>
-    </Listbox>
-  );
-}
-
-/** The preset picker: a shortcut that sets all five areas at once. */
-export function PresetSelect({
-  placement = "toolbar",
-}: {
-  /** The toolbar's chip keeps the plain test id; Settings' copy is suffixed. */
-  placement?: "toolbar" | "settings";
-}) {
-  const dispatch = useAppDispatch();
-  const levels = useAppSelector((s) => s.ui.policyLevels);
-  const preset = presetOf(levels);
-  const top = POLICY_AREAS.some((a) => levels[a] === "yolo");
-
-  return (
-    <Listbox
-      value={preset ?? "custom"}
-      onChange={(name: string) => {
-        if (name in POLICY_PRESETS) {
-          void dispatch(
-            applyPolicyPreset(
-              POLICY_PRESETS[name as keyof typeof POLICY_PRESETS].levels,
-            ),
-          );
-        }
-      }}
-    >
-      <div className="relative" title="Presets set all five areas at once">
-        <ListboxButton
-          data-testid={
-            placement === "settings"
-              ? "policy-preset-settings"
-              : "policy-preset"
-          }
-          data-roving={placement === "toolbar" ? "" : undefined}
-          className={`${CHIP} text-foreground ${
-            top ? "bg-error/20" : "bg-lightgray/20"
-          }`}
-        >
-          {top && (
-            <ExclamationTriangleIcon
-              className="h-2.5 w-2.5 text-error"
-              aria-hidden="true"
-            />
-          )}
-          <span>{preset ? POLICY_PRESETS[preset].label : "Custom"}</span>
-          <ChevronDownIcon className="h-2 w-2 shrink-0" aria-hidden="true" />
-        </ListboxButton>
-        <ListboxOptions className="max-w-64 min-w-40">
-          {POLICY_PRESET_ORDER.map((name) => (
-            <ListboxOption
-              key={name}
-              value={name}
-              data-testid={`policy-preset-${name}`}
-              className="items-start gap-1"
-            >
-              <div
-                className="flex flex-col"
-                title={`${POLICY_PRESETS[name].label}: ${POLICY_PRESETS[name].description}`}
-              >
-                <span className={name === "yolo" ? "text-error" : ""}>
-                  {POLICY_PRESETS[name].label}
-                </span>
-                <span className="text-2xs whitespace-normal text-description">
-                  {POLICY_PRESETS[name].description}
-                </span>
-              </div>
-              <CheckIcon
-                className={`ml-auto h-3 w-3 shrink-0 ${preset === name ? "" : "opacity-0"}`}
-              />
-            </ListboxOption>
-          ))}
         </ListboxOptions>
       </div>
     </Listbox>

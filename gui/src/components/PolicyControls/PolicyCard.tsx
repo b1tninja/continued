@@ -14,7 +14,8 @@ import ToggleSwitch from "../gui/Switch";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { changePolicyExtras } from "../../redux/thunks/policySettings";
 import { Card } from "../ui";
-import { AreaLevelSelect, PresetSelect } from "./PolicyControls";
+import { AreaLevelSelect } from "./PolicyControls";
+import { PresetSelect } from "./PresetSelect";
 
 const AREA_HINTS = {
   context: "Reading files and searching. What the agent looks at.",

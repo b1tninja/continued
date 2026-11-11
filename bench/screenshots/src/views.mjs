@@ -35,6 +35,10 @@ export const VIEWS = {
     fixture: "overflow-open",
     note: 'the "..." menu under the prompt, open',
   },
+  "preset-open": {
+    fixture: "preset-open",
+    note: "the preset picker above the input, open: a glyph and a tone for each preset",
+  },
   loop: {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",
