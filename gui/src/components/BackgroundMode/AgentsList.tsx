@@ -107,7 +107,7 @@ function withChildren(agents: AgentView[]): Map<string, AgentView[]> {
 }
 
 interface RowProps {
-  /** Every row's cost is unknown: the list says so once instead of per row. */
+  /** No agent's cost is known (the session's $0 would mislead): the list says so once instead of per row. */
   costUnknown: boolean;
   agent: AgentView;
   kids: Map<string, AgentView[]>;
@@ -256,7 +256,10 @@ export function AgentsList() {
   const roots = snapshot.nodes.filter(
     (n) => !n.parentId || !ids.has(n.parentId),
   );
-  const costUnknown = snapshot.nodes.every((n) => n.cost.subtree === "unknown");
+  const agentRows = snapshot.nodes.filter((n) => n.kind !== "main");
+  const costUnknown =
+    agentRows.length > 0 &&
+    agentRows.every((n) => n.cost.subtree === "unknown");
   const waiting = snapshot.needsYou.length;
   const Icon = listOpen ? ChevronDownIcon : ChevronRightIcon;
 
