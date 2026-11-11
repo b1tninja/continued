@@ -278,7 +278,7 @@ function samePattern(
 }
 
 /** `outer` covers every call `inner` matches (approximated on the patterns' text). */
-function covers(outer: string, inner: string): boolean | "part" {
+export function covers(outer: string, inner: string): boolean | "part" {
   const m = samePattern(outer, inner);
   if (!m) return false;
   if (m.pa === undefined) return true; // a bare tool name covers every call

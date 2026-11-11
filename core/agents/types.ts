@@ -8,7 +8,7 @@
 
 /** `external-reserved` has no producer yet; the shape is held for later. */
 export type AgentKind =
-  "main" | "subagent" | "loop-worker" | "external-reserved";
+  "main" | "subagent" | "loop-worker" | "background" | "external-reserved";
 
 export type AgentState =
   | "running"

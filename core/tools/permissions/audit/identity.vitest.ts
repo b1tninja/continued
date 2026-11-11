@@ -6,6 +6,7 @@ import { mainAgentId, subagentRunToNode } from "../../../agents/fromRuns";
 import { canarySecrets } from "../../../util/secretScan/canary";
 import { recordPolicyDecision } from "./hook";
 import {
+  backgroundAuditAgent,
   loopWorkerAuditAgent,
   mainAuditAgent,
   subagentAuditAgent,
@@ -50,6 +51,44 @@ describe("agent identity in the audit record", () => {
     expect(subagentAuditAgent("s1", "call_1", "Explore").id).toBe(node.id);
     expect(mainAuditAgent("s1").id).toBe(mainAgentId("s1"));
     expect(loopWorkerAuditAgent("s1", "3").id).toBe("worker-3");
+  });
+
+  it("a loop worker carries the mode it runs in, not the word loop", () => {
+    expect(loopWorkerAuditAgent("s1", "3")).toEqual({
+      id: "worker-3",
+      kind: "loop-worker",
+      role: "item 3",
+      mode: "agent",
+      parentId: "main-s1",
+    });
+    expect(loopWorkerAuditAgent("s1", "3", "plan").mode).toBe("plan");
+  });
+
+  it("a background agent has its own kind, id, mode and parent", () => {
+    const a = backgroundAuditAgent("s1", "t9");
+    expect(a).toEqual({
+      id: "bg-t9",
+      kind: "background",
+      role: "background task",
+      mode: "background",
+      parentId: "main-s1",
+    });
+    expect(auditAgentOf(a)).toEqual(a);
+  });
+
+  it("the sanitiser clips and masks the new fields like the others", () => {
+    const a = auditAgentOf(
+      backgroundAuditAgent(
+        "s1",
+        "t9",
+        `Bearer ${"x".repeat(200)} token=abcd1234zzzz`,
+      ),
+    )!;
+    expect(a.role!.length).toBeLessThan(120);
+    expect(JSON.stringify(a)).not.toContain("abcd1234zzzz");
+    expect(
+      auditAgentOf({ id: "x", kind: "bogus" as never, parentId: "m" })?.kind,
+    ).toBe("subagent");
   });
 
   it("writes who made the call on the decision and the outcome", () => {

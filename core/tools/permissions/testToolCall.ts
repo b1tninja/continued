@@ -655,7 +655,9 @@ export function testToolCall(input: TestToolCallInput): ToolCallTestResult {
     permissions: undefined,
     permissionSources: usable.sources,
     approval,
-    trustedDomains: input.sources.user?.auto?.environment?.trustedDomains,
+    trustedDomains:
+      input.sources.trustedDomains ??
+      input.sources.user?.auto?.environment?.trustedDomains,
     largeChangeLines: input.sources.user?.auto?.environment?.largeChangeLines,
     cwd,
     shell,

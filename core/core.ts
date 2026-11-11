@@ -37,6 +37,7 @@ import {
 import { saveUserTerminalSettings } from "./util/userTerminalSettings";
 import { readUserGuidance } from "./util/userGuidance";
 import {
+  confirmInIde,
   registerRuleEditorHandlers,
   undoAvailable,
 } from "./tools/permissions/ruleEditorHandlers";
@@ -689,6 +690,7 @@ export class Core {
       reload: async (reason) => {
         await this.configHandler.reloadConfig(reason);
       },
+      confirmLoosening: (text) => confirmInIde(this.ide, text),
     });
 
     on("policy/test", async ({ data }) => {

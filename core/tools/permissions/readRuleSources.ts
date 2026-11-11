@@ -8,6 +8,7 @@ import type { RuleSourcesInput } from "./effectiveRules";
 import { type PolicyLevels } from "./policy";
 import { readPolicyFile } from "./settingsFile";
 import type { RuleSource, ToolPermissions } from "./rules";
+import { readUserTrustedDomains } from "./userTrustedDomains";
 
 function strings(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
@@ -119,12 +120,7 @@ export function readUserToolPermissions(
   return readUserConfigFile(file).permissions;
 }
 
-/** The domains the person trusts, from their own config.yaml only. */
-export function readUserTrustedDomains(
-  file = path.join(getContinueGlobalPath(), "config.yaml"),
-): string[] {
-  return readUserToolPermissions(file)?.auto?.environment?.trustedDomains ?? [];
-}
+export { readUserTrustedDomains } from "./userTrustedDomains";
 
 /** What the CLI keeps in permissions.yaml beside the shared policy keys. */
 function readCliLists(file: string): RuleSourcesInput["cliFile"] {
@@ -250,8 +246,12 @@ export function readRuleSources(
         allow: [...(assistant?.allow ?? []), ...droppedAllow],
       }
     : assistant;
+  const trustedDomains = readUserTrustedDomains(
+    options.configFile ?? path.join(global, "config.yaml"),
+  );
   return {
     user,
+    ...(trustedDomains.length ? { trustedDomains } : {}),
     userFile: {
       path: userFile.path,
       state: userFile.state,
