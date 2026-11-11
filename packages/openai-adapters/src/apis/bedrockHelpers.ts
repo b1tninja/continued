@@ -726,24 +726,20 @@ export function toolInputParses(input: string): boolean {
 }
 
 /**
- * Families measured to stream tool input intact (bsf-2026-11-10, 8 of 8 each:
- * Claude, Nova, DeepSeek V3, Kimi, GLM, MiniMax M2.5, gpt-oss, Mistral Large 3,
- * Devstral 2, Nemotron Nano 3). Their tool-argument deltas are passed on as
- * they arrive; any other model, including unmeasured ones, goes through
- * `ToolInputGate` holding. Qwen3 Coder (7 of 8) and MiniMax M2 are not
- * listed. Two copies, as `bedrockToolsNeedNonStreaming`.
+ * Families whose tool-argument deltas are passed on as they arrive, without
+ * the hold-and-parse check of `ToolInputGate`. The list is deliberately short:
+ * first-party Claude and Nova only. Every other model is held and checked,
+ * because 8 of 8 clean streams (bsf-2026-11-10) do not prove a model streams
+ * cleanly, and AWS re:Post
+ * (https://repost.aws/questions/QUdavvWt4aS-Km2zK71OFUSA) and AgentCore SDK
+ * issue 425 report corrupted streamed tool input for gpt-oss, which measured
+ * clean here. Holding costs only delayed argument deltas. A follow-up
+ * measurement at n>=30 per family decides who can be promoted to this list.
+ * Two copies, as `bedrockToolsNeedNonStreaming`.
  */
 const CLEAN_TOOL_STREAM_MODELS: RegExp[] = [
   /(^|\.)anthropic\.claude/i,
   /(^|\.)amazon\.nova/i,
-  /(^|\.)deepseek\.v3/i,
-  /(^|\.)moonshot(ai)?\.kimi-k/i,
-  /(^|\.)zai\.glm-/i,
-  /(^|\.)minimax\.minimax-m2\.5/i,
-  /(^|\.)openai\.gpt-oss/i,
-  /(^|\.)mistral\.mistral-large-3/i,
-  /(^|\.)mistral\.devstral-2/i,
-  /(^|\.)nvidia\.nemotron-nano-3/i,
 ];
 
 export function bedrockStreamsToolInputCleanly(modelId: string): boolean {

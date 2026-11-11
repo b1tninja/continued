@@ -429,9 +429,6 @@ describe("bedrockStreamsToolInputCleanly", () => {
     "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "amazon.nova-pro-v1:0",
     "us.amazon.nova-2-lite-v1:0",
-    "mistral.mistral-large-3-675b-instruct",
-    "mistral.devstral-2-123b",
-    "us.moonshotai.kimi-k3",
   ])("%s keeps progressive tool-argument deltas", (id) => {
     expect(bedrockStreamsToolInputCleanly(id)).toBe(true);
   });
@@ -442,6 +439,10 @@ describe("bedrockStreamsToolInputCleanly", () => {
     "minimax.minimax-m2",
     "mistral.some-new-model",
     "cohere.command-r-v1:0",
+    // reported corrupted on re:Post and in AgentCore issue 425, though 8/8 here
+    "openai.gpt-oss-120b-1:0",
+    "mistral.mistral-large-3-675b-instruct",
+    "us.moonshotai.kimi-k3",
   ])("%s is held until the input parses", (id) => {
     expect(bedrockStreamsToolInputCleanly(id)).toBe(false);
   });
