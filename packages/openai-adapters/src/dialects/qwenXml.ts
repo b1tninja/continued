@@ -91,8 +91,13 @@ const PARAM_OPEN_RE = /<parameter=([^>\s]+)>\n?/y;
 const PARAM_CLOSE = "</parameter>";
 const FUNCTION_CLOSE = "</function>";
 const CALL_CLOSE_RE = /\s*<\/tool_call>/y;
-/** Backtracking steps one recovery may take before it gives up (stays text). */
+/**
+ * Backtracking steps one recovery may take before it gives up (stays text),
+ * plus a few for every call the text closes, so a long reply of plain calls
+ * is not refused for its length.
+ */
 const STEP_BUDGET = 20000;
+const STEPS_PER_CALL = 8;
 
 /**
  * Whether a candidate value, text[from, to), is balanced where it looks like
@@ -121,67 +126,66 @@ function quotesBalanced(text: string, from: number, to: number): boolean {
 }
 
 /**
- * Parse `text` from `at` as calls and whitespace to its end, or undefined.
+ * The ways one call can be read at `at`, nearest closer first: each yield is
+ * a call and where it ends. Nothing is yielded when no reading is valid.
  *
  * A value may itself contain the closing tags (a file that quotes `</function>`),
  * so the first closing tag is not taken on trust: a `</parameter>` closes a
- * value only when whitespace and then `<parameter=` or `</function>` follow,
- * and a `</function>` closes a call only when what follows parses as the rest
- * of the reply. Candidate closers are tried nearest first and one that leaves
- * a schema-invalid value (an undeclared or repeated key, a value that does not
+ * value only when whitespace and then `<parameter=` or `</function>` follow.
+ * Candidate closers are tried nearest first and one that leaves a
+ * schema-invalid value (an undeclared or repeated key, a value that does not
  * fit its type) is passed over for a later one, so the reading that yields a
- * valid call wins and two calls are never merged into one: every call must
- * still be closed by its own `</function>` and the whole reply must parse.
+ * valid call wins.
  */
-function parseCalls(
+function* readCall(
   text: string,
-  at: number,
+  from: number,
   tools: DialectTool[],
-  budget: { steps: number },
-): RecoveredCall[] | undefined {
+  budget: { steps: number; limit: number },
+): Generator<{ call: RecoveredCall; end: number }> {
+  let at = from;
   while (at < text.length && /\s/.test(text[at])) at++;
-  if (at >= text.length) return [];
   OPEN_RE.lastIndex = at;
   const open = OPEN_RE.exec(text);
-  if (!open) return undefined;
+  if (!open) return;
   const tool = tools.find((t) => t.name === open[1]);
-  if (!tool) return undefined;
+  if (!tool) return;
   const schema = schemaOf(tool);
   const properties = schema.properties;
   const start = at;
 
-  const params = (
-    pos: number,
+  function* params(
+    from: number,
     args: Record<string, unknown>,
     repairs: RepairNote[],
-  ): RecoveredCall[] | undefined => {
-    if (++budget.steps > STEP_BUDGET) return undefined;
+  ): Generator<{ call: RecoveredCall; end: number }> {
+    if (++budget.steps > budget.limit) return;
+    let pos = from;
     while (pos < text.length && /\s/.test(text[pos])) pos++;
     if (text.startsWith(FUNCTION_CLOSE, pos)) {
       for (const key of schema.required ?? []) {
-        if (!(key in args)) return undefined;
+        if (!(key in args)) return;
       }
       let end = pos + FUNCTION_CLOSE.length;
       CALL_CLOSE_RE.lastIndex = end;
       if (CALL_CLOSE_RE.exec(text)) end = CALL_CLOSE_RE.lastIndex;
-      const rest = parseCalls(text, end, tools, budget);
-      if (!rest) return undefined;
-      return [
-        {
-          name: tool.name,
+      yield {
+        call: {
+          name: tool!.name,
           arguments: args,
           raw: text.slice(start, end),
           ...(repairs.length > 0 ? { repairs } : {}),
         },
-        ...rest,
-      ];
+        end,
+      };
+      return;
     }
     PARAM_OPEN_RE.lastIndex = pos;
     const p = PARAM_OPEN_RE.exec(text);
-    if (!p) return undefined;
+    if (!p) return;
     const key = p[1];
-    if (key in args) return undefined; // a repeated key is ambiguous
-    if (properties && !(key in properties)) return undefined;
+    if (key in args) return; // a repeated key is ambiguous
+    if (properties && !(key in properties)) return;
     const valueStart = PARAM_OPEN_RE.lastIndex;
     for (
       let j = text.indexOf(PARAM_CLOSE, valueStart);
@@ -202,19 +206,55 @@ function parseCalls(
       const written = raw.endsWith("\n") ? raw.slice(0, -1) : raw;
       const fit = coerce(written, properties?.[key]?.type);
       if (fit === undefined) continue;
-      const done = params(
+      yield* params(
         after,
         { ...args, [key]: fit.value },
         fit.repaired
           ? [...repairs, repairNote(key, written, fit.value)]
           : repairs,
       );
-      if (done) return done;
-      if (budget.steps > STEP_BUDGET) return undefined;
+      if (budget.steps > budget.limit) return;
     }
-    return undefined;
+  }
+  yield* params(open.index + open[0].length, {}, []);
+}
+
+/**
+ * Parse `text` as calls and whitespace to its end, or undefined. A
+ * `</function>` closes a call only when what follows parses as the rest of
+ * the reply, so a later failure takes the search back to the previous call's
+ * next reading. The search keeps its own stack of readings, one per call, so a
+ * reply of any number of calls costs heap, not call stack.
+ */
+function parseCalls(
+  text: string,
+  tools: DialectTool[],
+  budget: { steps: number; limit: number },
+): RecoveredCall[] | undefined {
+  const skip = (from: number): number => {
+    let i = from;
+    while (i < text.length && /\s/.test(text[i])) i++;
+    return i;
   };
-  return params(open.index + open[0].length, {}, []);
+  if (skip(0) >= text.length) return [];
+  const stack: Array<{
+    readings: Generator<{ call: RecoveredCall; end: number }>;
+    call?: RecoveredCall;
+  }> = [{ readings: readCall(text, 0, tools, budget) }];
+  while (stack.length > 0) {
+    const top = stack[stack.length - 1];
+    const next = top.readings.next();
+    if (budget.steps > budget.limit) return undefined;
+    if (next.done) {
+      stack.pop();
+      continue;
+    }
+    top.call = next.value.call;
+    const end = skip(next.value.end);
+    if (end >= text.length) return stack.map((level) => level.call!);
+    stack.push({ readings: readCall(text, end, tools, budget) });
+  }
+  return undefined;
 }
 
 /**
@@ -226,7 +266,14 @@ export function recoverQwenXmlCalls(
   text: string,
   tools: DialectTool[],
 ): RecoveredCall[] | undefined {
-  const calls = parseCalls(text, 0, tools, { steps: 0 });
+  let closes = 0;
+  for (let i = text.indexOf(FUNCTION_CLOSE); i !== -1; closes++) {
+    i = text.indexOf(FUNCTION_CLOSE, i + 1);
+  }
+  const calls = parseCalls(text, tools, {
+    steps: 0,
+    limit: STEP_BUDGET + STEPS_PER_CALL * closes,
+  });
   return calls && calls.length > 0 ? calls : undefined;
 }
 
