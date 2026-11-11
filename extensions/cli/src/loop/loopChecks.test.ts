@@ -78,9 +78,19 @@ describe("loop check commands use the approved shell", () => {
   });
 
   it("a command that runs past the limit is stopped with its process group", async () => {
+    // POSIX signals the process group (`kill(-pid)`); Windows has no process
+    // groups, so the runner starts `taskkill /T /F` instead. Either way the
+    // child ends, and the runner reports the same stop.
+    const windows = process.platform === "win32";
     vi.useFakeTimers();
     const child = fakeChild();
-    spawn.mockReturnValue(child);
+    spawn.mockImplementation((program: string) => {
+      if (program === "taskkill") {
+        child.emit("close", null);
+        return new EventEmitter();
+      }
+      return child;
+    });
     const kill = vi.spyOn(process, "kill").mockImplementation((pid) => {
       if (pid === -child.pid) child.emit("close", null);
       return true;
@@ -91,11 +101,20 @@ describe("loop check commands use the approved shell", () => {
       exitCode: null,
       output: "(stopped after 10 minutes)",
     });
-    expect(kill).toHaveBeenCalledWith(-child.pid, "SIGTERM");
+    if (windows) {
+      expect(kill).not.toHaveBeenCalled();
+      expect(spawn).toHaveBeenCalledWith(
+        "taskkill",
+        ["/pid", String(child.pid), "/T", "/F"],
+        expect.objectContaining({ windowsHide: true }),
+      );
+    } else {
+      expect(kill).toHaveBeenCalledWith(-child.pid, "SIGTERM");
+    }
     expect(spawn).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(Array),
-      expect.objectContaining({ detached: true }),
+      expect.objectContaining({ detached: !windows }),
     );
     kill.mockRestore();
   });
