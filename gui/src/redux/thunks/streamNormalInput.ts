@@ -75,6 +75,7 @@ import {
   preprocessToolCalls,
   refuseTruncatedToolCalls,
 } from "./preprocessToolCallArgs";
+import { refuseRoleCalls } from "./refuseRoleCalls";
 import { checkToolDialectLeak } from "./noteToolDialectLeak";
 import { nudgeLeakedToolCall } from "./nudgeLeakedToolCall";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
@@ -464,6 +465,14 @@ export const streamNormalInput = createAsyncThunk<
       completionOptions.maxTokens ??
         selectedChatModel.completionOptions?.maxTokens,
     );
+
+    // A call to a tool the mode's role may not use is refused, offered or not
+    refuseRoleCalls(dispatch, selectPendingToolCalls(getState()), {
+      mode: state1.session.mode,
+      tools: state1.config.config.tools,
+      planMcpTools: state1.ui.policyExtras.planMcpTools,
+      trustedMcpServers: state1.ui.policyExtras.trustedMcpServers,
+    });
 
     // 2. Pre-process args to catch invalid args before checking policies
     const state2 = getState();

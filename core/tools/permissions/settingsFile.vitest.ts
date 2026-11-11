@@ -153,3 +153,24 @@ describe("the file on disk", () => {
     expect(readPolicyFile(file).settings.levels.edits).toBe("permissive");
   });
 });
+
+describe("plan.mcpTools", () => {
+  it("reads the tools the person lets Plan mode use, and ignores what is not a name", () => {
+    const text = [
+      "plan:",
+      "  mcpTools:",
+      "    - docs/search",
+      "    - 3",
+      "    - wiki/*",
+      "",
+    ].join(String.fromCharCode(10));
+    expect(parsePolicyFile(text).settings.planMcpTools).toEqual([
+      "docs/search",
+      "wiki/*",
+    ]);
+  });
+
+  it("is absent when the file does not say", () => {
+    expect(parsePolicyFile(undefined).settings.planMcpTools).toBeUndefined();
+  });
+});

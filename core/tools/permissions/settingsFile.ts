@@ -27,6 +27,11 @@ export interface PolicyFileSettings extends PolicySettings {
   floor?: string[];
   /** MCP servers whose read-only hints the person trusts, by display name. */
   mcpServers?: Record<string, "trusted">;
+  /**
+   * MCP tools the person lets Plan mode use, whatever the server claims:
+   * "server/tool", "server/*" or "server" (plans/research/tr-owner-decisions.md, 1).
+   */
+  planMcpTools?: string[];
 }
 
 export interface PolicyFileRead {
@@ -119,6 +124,11 @@ export function parsePolicyFile(text: string | undefined): PolicyFileRead {
       if (value === "trusted") servers[name] = "trusted";
     }
     settings.mcpServers = servers;
+  }
+  if (Array.isArray(raw.plan?.mcpTools)) {
+    settings.planMcpTools = raw.plan.mcpTools.filter(
+      (t: unknown): t is string => typeof t === "string" && t.length > 0,
+    );
   }
   return { settings, notices };
 }

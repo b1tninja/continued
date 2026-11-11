@@ -54,6 +54,8 @@ export interface ApprovalTrace {
   askedPerson?: boolean;
   /** Loop mode held the call as a question */
   held?: boolean;
+  /** The role the tool table applied (core/tools/roleTools.ts) */
+  role?: string;
 }
 
 export function recordCliDecision(
@@ -68,7 +70,10 @@ export function recordCliDecision(
     const asked = trace.askedPerson || trace.held;
     const base = {
       session: cliAuditSession(),
-      agent: cliAuditAgent(),
+      agent: {
+        ...cliAuditAgent(),
+        ...(trace.role ? { toolRole: trace.role } : {}),
+      },
       callId: call.id,
       tool: call.name,
       args: safeJson(call.arguments),
