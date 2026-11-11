@@ -1,0 +1,33 @@
+import { useAppSelector } from "../../../redux/hooks";
+import { ToolTip } from "../../gui/Tooltip";
+import { ModeSelect } from "../../ModeSelect";
+import { PolicyControls } from "../../PolicyControls";
+import HoverItem from "../InputToolbar/HoverItem";
+
+/**
+ * The controls that set how the agent behaves for the whole session: the mode
+ * (Chat, Plan, Agent, Loop) and the permission policy. They live in the row
+ * above the input, apart from the controls tied to the message being written
+ * (context, model, send) below it. Edit mode has no mode or policy to set, so
+ * the group is absent there, as it was in the bottom row.
+ */
+export function SessionControls() {
+  const isInEdit = useAppSelector((state) => state.session.isInEdit);
+  if (isInEdit) return null;
+
+  return (
+    <div
+      role="group"
+      aria-label="Session controls"
+      data-testid="session-controls"
+      className="flex min-w-0 shrink-0 flex-wrap items-center gap-1 select-none xs:gap-1.5"
+    >
+      <ToolTip place="bottom" content="Select Mode">
+        <HoverItem className="!p-0">
+          <ModeSelect />
+        </HoverItem>
+      </ToolTip>
+      <PolicyControls />
+    </div>
+  );
+}
