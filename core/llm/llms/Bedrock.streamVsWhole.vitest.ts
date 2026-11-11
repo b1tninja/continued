@@ -58,6 +58,14 @@ const CALLS: Record<string, string> = {
     '<tool_call>{"name": "Read", "arguments": {"filepath": "a.txt"}}</tool_call>',
   "glm-xml":
     "<tool_call>Read<arg_key>filepath</arg_key><arg_value>a.txt</arg_value></tool_call>",
+  "kimi-tokens":
+    '<|tool_calls_section_begin|><|tool_call_begin|>functions.Read:0<|tool_call_argument_begin|>{"filepath": "a.txt"}<|tool_call_end|><|tool_calls_section_end|>',
+  "kimi-xtml":
+    '<|open|>tools<|sep|><|open|>call tool="Read" index="1"<|sep|><|open|>argument key="filepath" type="string"<|sep|>a.txt<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|>',
+  "minimax-xml":
+    '<minimax:tool_call>\n<invoke name="Read">\n<parameter name="filepath">a.txt</parameter>\n</invoke>\n</minimax:tool_call>',
+  "minimax-ns-xml":
+    ']<]minimax[>[<tool_call>\n]<]minimax[>[<invoke name="Read">]<]minimax[>[<filepath>a.txt]<]minimax[>[</filepath>]<]minimax[>[</invoke>\n]<]minimax[>[</tool_call>',
 };
 
 const refusedStreaming = () =>

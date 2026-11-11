@@ -11,6 +11,10 @@ const DIALECTS = [
   "llama-json",
   "hermes-json",
   "glm-xml",
+  "kimi-tokens",
+  "kimi-xtml",
+  "minimax-xml",
+  "minimax-ns-xml",
 ];
 const FIXTURES = path.resolve(
   __dirname,

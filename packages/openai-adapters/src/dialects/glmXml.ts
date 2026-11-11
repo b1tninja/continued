@@ -48,7 +48,8 @@ function valueEnd(s: string, from: number): number {
   return -1;
 }
 
-function typedValue(
+/** A tag value as the schema declares it: verbatim for a string, else JSON. */
+export function typedValue(
   tool: DialectTool,
   key: string,
   raw: string,

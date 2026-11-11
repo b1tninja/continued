@@ -16,6 +16,8 @@ export type Dialect =
   | "llama-json" // bare {"name":..,"parameters":{..}}
   | "mistral" // [TOOL_CALLS][{"name":..,"arguments":..}]
   | "minimax-xml" // <minimax:tool_call><invoke name=..>
+  | "minimax-ns-xml" // MiniMax-M3: ]<]minimax[>[<tool_call> ... namespaced tags
+  | "kimi-xtml" // Kimi K3: <|open|>tools<|sep|><|open|>call tool=".." index="1"<|sep|>..
   | "functiongemma" // <start_function_call>call:NAME{k:<escape>v<escape>}<end_function_call>
   | "pythonic"; // [name(arg=1), other(arg="x")]
 
@@ -78,6 +80,20 @@ const FINGERPRINTS: Fingerprint[] = [
       `<[${BAR}|]DSML[${BAR}|](?:function_calls|tool_calls|invoke)`,
     ),
     label: "DSML marker",
+  },
+  {
+    dialect: "kimi-xtml",
+    strong: new RegExp(
+      String.raw`<\|open\|>(?:tools<\|sep\|>|call tool="|argument key=")`,
+    ),
+    label: "Kimi K3 XTML tags",
+  },
+  {
+    dialect: "minimax-ns-xml",
+    strong: new RegExp(
+      String.raw`\]<\]minimax\[>\[<(?:tool_call>|invoke name=)`,
+    ),
+    label: "MiniMax-M3 namespaced tags",
   },
   {
     dialect: "kimi-tokens",
@@ -171,7 +187,7 @@ function scan(
     if (f.strong.test(text)) {
       // Opening and closing markers both present means a finished call.
       const closed =
-        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>/.test(
+        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>|<\|close\|>tools/.test(
           text,
         );
       return {
@@ -333,6 +349,7 @@ export function dialectFromChatTemplate(
     ["dsml", /DSML/, "DSML in template"],
     ["kimi-tokens", /tool_calls_section_begin/, "Kimi section token"],
     ["harmony", /<\|channel\|>[\s\S]*to=functions|<\|constrain\|>/, "Harmony"],
+    ["minimax-ns-xml", /\]<\]minimax\[>\[<tool_call>/, "M3 namespace token"],
     ["minimax-xml", /minimax:tool_call/, "minimax tag"],
     ["functiongemma", /start_function_call/, "start_function_call"],
     ["llama-python-tag", /<\|python_tag\|>/, "python_tag"],
