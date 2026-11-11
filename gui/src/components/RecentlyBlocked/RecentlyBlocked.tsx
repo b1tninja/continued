@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import {
@@ -39,8 +40,11 @@ export function RecentlyBlocked() {
               className="flex flex-col gap-0.5 rounded-sm border border-solid border-command-border px-1 py-0.5"
             >
               <div className="flex items-center gap-1">
-                <code className="min-w-0 flex-1 truncate" title={item.summary}>
-                  {item.summary}
+                <code
+                  className="min-w-0 flex-1 truncate"
+                  title={maskCommandForDisplay(item.summary)}
+                >
+                  {maskCommandForDisplay(item.summary)}
                 </code>
                 <span className="shrink-0 text-error">
                   {decisionLabel({
@@ -67,7 +71,7 @@ export function RecentlyBlocked() {
               </div>
               {item.reason && (
                 <div className="whitespace-normal text-description-muted">
-                  {item.reason}
+                  {maskCommandForDisplay(item.reason)}
                 </div>
               )}
               {!canAllowOnce(item) && (

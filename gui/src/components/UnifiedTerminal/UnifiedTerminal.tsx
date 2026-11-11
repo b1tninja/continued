@@ -1,6 +1,7 @@
 import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import Anser, { AnserJsonEntry } from "anser";
 import { ToolCallState } from "core";
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import { escapeCarriageReturn } from "escape-carriage";
 import { type JSX, useMemo, useState } from "react";
 import styled, { keyframes } from "styled-components";
@@ -337,8 +338,8 @@ interface UnifiedTerminalCommandProps {
 }
 
 export function UnifiedTerminalCommand({
-  command,
-  output = "",
+  command: rawCommand,
+  output: rawOutput = "",
   status = "completed",
   statusMessage = "",
   toolCallState,
@@ -346,6 +347,14 @@ export function UnifiedTerminalCommand({
   displayLines = 15,
 }: UnifiedTerminalCommandProps) {
   const dispatch = useAppDispatch();
+  // What is shown and copied is masked (the value of a secret variable
+  // assignment or a credential-shaped string); "run in terminal" keeps the
+  // real command, because it is an action and not a display.
+  const command = useMemo(
+    () => maskCommandForDisplay(rawCommand),
+    [rawCommand],
+  );
+  const output = useMemo(() => maskCommandForDisplay(rawOutput), [rawOutput]);
   const [isExpanded, setIsExpanded] = useState(true);
   const [outputExpanded, setOutputExpanded] = useState(false);
 
@@ -447,7 +456,7 @@ export function UnifiedTerminalCommand({
             {!isRunning && (
               <div className="hidden items-center gap-2.5 xs:flex">
                 <CopyButton text={copyContent} />
-                <RunInTerminalButton command={command} />
+                <RunInTerminalButton command={rawCommand} />
               </div>
             )}
           </div>

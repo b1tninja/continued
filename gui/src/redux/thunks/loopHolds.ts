@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import {
   itemBudgetNoteDue,
@@ -292,8 +293,9 @@ export function applyLoopHolds(
         reason: "You allowed this call from the loop's inbox.",
       };
     }
-    const summary = (
-      p.displayValue || describeHeldCall(name, toolCallState.parsedArgs)
+    // Shown to the person in the inbox: the masked text is what is stored
+    const summary = maskCommandForDisplay(
+      p.displayValue || describeHeldCall(name, toolCallState.parsedArgs),
     ).slice(0, 300);
     const held = holdQuestion(
       loop,
