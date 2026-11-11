@@ -49,6 +49,8 @@ export interface ReviewEvalOptions {
   profile?: string;
   /** Send the requests. Without it nothing is called. */
   run?: boolean;
+  /** `false` (--no-prefilter) leaves the addressed-text check out. */
+  prefilter?: boolean;
   json?: boolean;
   concurrency?: number | string;
   timeoutMs?: number | string;
@@ -199,6 +201,9 @@ export async function reviewEvalCommand(
       configs.push(
         guidanceConfig(opts.compare, deps, "built-in prompt", opts.profile),
       );
+    }
+    if (opts.prefilter === false) {
+      for (const c of configs) c.prefilter = false;
     }
   } catch (e) {
     deps.err(e instanceof Error ? e.message : String(e));

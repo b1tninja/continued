@@ -6,6 +6,7 @@ import {
   newNonce,
   reviewerPromptVersion,
 } from "../prompt";
+import { findReviewerAddressedText } from "../reviewerAddressed";
 import { reviewCompletionOptions, ReviewerReasoning } from "../review";
 import type {
   CaseEnvironment,
@@ -29,6 +30,12 @@ export interface ReviewerConfig {
    */
   profile?: string;
   reasoning?: ReviewerReasoning;
+  /**
+   * The deterministic check for text addressed to the reviewer, which in
+   * production runs before the model. On unless `false`; a hit is an ask
+   * and costs no call. Off only to measure the model and prompt alone.
+   */
+  prefilter?: boolean;
 }
 
 export interface CaseOutcome {
@@ -170,6 +177,17 @@ async function runOne(
   config: ReviewerConfig,
   opts: RunOptions,
 ): Promise<CaseOutcome> {
+  if (config.prefilter !== false && findReviewerAddressedText(c.args).length) {
+    return {
+      id: c.id,
+      decision: "ask",
+      category: "reviewer-addressed-text",
+      reason: "Text in the call addresses the reviewer (pre-filter).",
+      formatFailure: false,
+      ms: 0,
+      promptChars: 0,
+    };
+  }
   const messages = messagesFor(c, dataset, config);
   const promptChars = messages.reduce(
     (n, m) => n + messageText(m.content).length,

@@ -434,6 +434,10 @@ program
   )
   .option("--profile <id>", "Reviewer profile id (carried into the report)")
   .option("--run", "Call the model; without it nothing is sent")
+  .option(
+    "--no-prefilter",
+    "Leave out the check for text addressed to the reviewer, to measure the model alone",
+  )
   .option("--json", "Machine-readable output")
   .option("--concurrency <n>", "Parallel requests", "4")
   .option("--timeout-ms <n>", "Per-request timeout", "30000")

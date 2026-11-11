@@ -288,6 +288,7 @@ export async function evaluateWithCoreRules(
         headless: isHeadless,
       },
     );
+    if (reply.notice) logger.warn(`Notice: ${reply.notice}`);
     logger.debug("Auto reviewer decision", {
       tool: cliToolName,
       decision: reply.decision,
