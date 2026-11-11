@@ -671,17 +671,12 @@ describe("Loop mode's driver in the CLI", () => {
       services.toolPermissions.switchMode("auto");
       runItem("done");
       await runCheck("1");
-      // Windows PowerShell's -Command reports 1 for any failing native
-      // command, so the code the check chose (3) survives only on POSIX.
-      const code = process.platform === "win32" ? 1 : 3;
       expect(loopNow().items[0]).toMatchObject({
         status: "pending",
-        check: { status: "failed", exitCode: code },
+        check: { status: "failed", exitCode: 3 },
       });
       const again = nextTurn(history().length);
-      expect(again?.prompt).toContain(
-        `failed (exit ${code}). Fix what it reports:`,
-      );
+      expect(again?.prompt).toContain("failed (exit 3). Fix what it reports:");
       expect(again?.prompt).toContain("1 test failed");
     });
 
