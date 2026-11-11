@@ -1,0 +1,117 @@
+import { describe, expect, it } from "vitest";
+import { deputyCallHit } from "../deputyCall";
+import type { PolicyLevel } from "../policy";
+import { testToolCall, type TestDecision } from "../testToolCall";
+import { ROWS, type Row } from "./corpusRows";
+
+// protected-edits-06 edits /etc/hosts: labelled ask, and a floor case
+const EXPECTED_NEW_ASKS = ["protected-edits-06"];
+
+/**
+ * What the confused-deputy rule for the host file tools changes on the 287
+ * labelled calls (ROADMAP piece 14): each call through the real evaluator with
+ * `ask-outside-paths` off ("off") and on ("on"), at Permissive and at
+ * Automatic. The corpus is mostly terminal commands, which this rule does not
+ * read; the file-tool calls it does read are listed by id so a change shows.
+ * The floors inside the rule (device paths, streams, the global folder) have
+ * no switch, so they are counted straight from the path check.
+ */
+const LEVELS = (level: PolicyLevel) => ({
+  context: level,
+  tools: level,
+  edits: level,
+  plan: level,
+  questions: level,
+});
+const ORDER = { allow: 0, ask: 1, deny: 2 } as const;
+
+function decide(row: Row, level: PolicyLevel, deputy: "off" | "on") {
+  return testToolCall({
+    tool: row.tool,
+    args: row.args,
+    levels: LEVELS(level),
+    sources: {
+      user: { auto: { environment: { trustedDomains: row.trusted } } },
+      ...(deputy === "off" ? { builtin: { "ask-outside-paths": false } } : {}),
+    },
+    cwd: "/home/dev/shop",
+    shell: "bash",
+  }).decision as TestDecision;
+}
+
+function measure(level: PolicyLevel) {
+  const newAsks: string[] = [];
+  const newDenies: string[] = [];
+  const loosened: string[] = [];
+  for (const row of ROWS) {
+    const off = decide(row, level, "off");
+    const on = decide(row, level, "on");
+    if (off === "allow" && on === "ask") newAsks.push(row.id);
+    if (off !== "deny" && on === "deny") newDenies.push(row.id);
+    if (ORDER[on] < ORDER[off]) loosened.push(`${row.id}: ${off} -> ${on}`);
+  }
+  return { newAsks, newDenies, loosened };
+}
+
+describe("the confused-deputy rule on the 287 labelled calls", () => {
+  it("covers all 287 calls", () => {
+    expect(ROWS.length).toBe(287);
+  });
+
+  for (const level of ["permissive", "automatic"] as const) {
+    it(`at ${level}: no call is loosened and none is newly refused`, () => {
+      const m = measure(level);
+      expect(m.loosened).toEqual([]);
+      expect(m.newDenies).toEqual([]);
+    });
+  }
+
+  it("at Permissive: new asks on file-tool calls only", () => {
+    const m = measure("permissive");
+    const fileTools = new Set(
+      ROWS.filter((r) => r.tool !== "run_terminal_command").map((r) => r.id),
+    );
+    expect(m.newAsks.every((id) => fileTools.has(id))).toBe(true);
+    expect(m.newAsks).toEqual(EXPECTED_NEW_ASKS);
+  });
+
+  it("at Automatic: the same call stops going to the reviewer model", () => {
+    let reviewerOff = 0;
+    let reviewerOn = 0;
+    for (const row of ROWS) {
+      const run = (deputy: "off" | "on") =>
+        testToolCall({
+          tool: row.tool,
+          args: row.args,
+          levels: LEVELS("automatic"),
+          sources: {
+            user: { auto: { environment: { trustedDomains: row.trusted } } },
+            ...(deputy === "off"
+              ? { builtin: { "ask-outside-paths": false } }
+              : {}),
+          },
+          cwd: "/home/dev/shop",
+          shell: "bash",
+        }).wouldAskReviewer;
+      if (run("off")) reviewerOff++;
+      if (run("on")) reviewerOn++;
+    }
+    expect([reviewerOff, reviewerOn]).toEqual([199, 197]);
+  });
+
+  it("no corpus call trips a floor inside the rule", () => {
+    const floors = ROWS.filter((r) => {
+      const hit = deputyCallHit({
+        toolName: r.tool,
+        parsedArgs: r.args,
+        cwd: "/home/dev/shop",
+        home: "/home/dev",
+        flavor: "posix",
+        // Treat the path as inside the workspace: only the floors can fire.
+        resolved: { withinWorkspace: true },
+      });
+      return hit !== undefined;
+    }).map((r) => r.id);
+    expect(floors).toEqual([]);
+  });
+});

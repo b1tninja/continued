@@ -67,6 +67,7 @@ export type BuiltinRuleId =
   | "ask-large-change"
   | "ask-dependency-change"
   | "ask-unknown-host"
+  | "ask-outside-paths"
   | "plan-keeps-checks";
 
 export const BUILTIN_RULES: readonly {
@@ -123,6 +124,12 @@ export const BUILTIN_RULES: readonly {
     label: "Ask before contacting an unlisted host",
     description:
       "When you list trusted domains in your own config, a fetch or network command to any other host asks.",
+  },
+  {
+    id: "ask-outside-paths",
+    label: "Ask before a file tool leaves the workspace",
+    description:
+      "A read, listing or write of a real path outside the workspace folders: an absolute path elsewhere, a `..` climb, a symlink or junction that leaves, another account's home. Device paths, alternate data streams and your global configuration folder ask whatever this says.",
   },
   {
     id: "plan-keeps-checks",
