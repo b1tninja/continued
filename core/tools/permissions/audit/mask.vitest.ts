@@ -217,3 +217,33 @@ describe("maskText on benign text", () => {
     for (const t of changed) expect(SECRET_NAMED.test(t)).toBe(true);
   });
 });
+
+describe("maskText on environment variable assignments", () => {
+  const KEY = "Zq8vL2mN5xR7tY1wK4pC9dF3hJ6bG0aE";
+  it.each([
+    `API_KEY=${KEY} curl https://example.com`,
+    `A=1 API_KEY="${KEY}" B=2 curl https://example.com`,
+    `env -i GITHUB_TOKEN='${KEY}' git push`,
+    `export OPENAI_API_KEY=${KEY}`,
+    `sudo -E AWS_SECRET_ACCESS_KEY=${KEY} aws s3 ls`,
+    `$env:API_KEY='${KEY}'; curl https://example.com`,
+    `\${env:MY_TOKEN} = "${KEY}"`,
+    `set API_KEY=${KEY}&& curl https://example.com`,
+    `set "DB_PASSWORD=${KEY}" & app.exe`,
+    `setx API_KEY ${KEY}`,
+    `[Environment]::SetEnvironmentVariable('API_KEY','${KEY}')`,
+    `[System.Environment]::SetEnvironmentVariable("MY_SECRET", "${KEY}", "User")`,
+    `bash -c 'API_KEY=${KEY} curl x'`,
+  ])("never keeps the value: %s", (text) => {
+    const { text: out, kinds } = maskText(text);
+    expect(out).not.toContain(KEY);
+    expect(kinds.length).toBeGreaterThan(0);
+  });
+
+  it("keeps the name and a harmless assignment", () => {
+    expect(maskText(`API_KEY=${KEY} curl x`).text).toMatch(/^API_KEY=«masked:/);
+    expect(maskText("CI=1 FOO=bar npm test").text).toBe(
+      "CI=1 FOO=bar npm test",
+    );
+  });
+});

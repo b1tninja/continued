@@ -542,7 +542,9 @@ const CMD_INTERNAL: Record<string, Check> = {
   set: (args) =>
     args.length > 1 || args.some((a) => a.startsWith("/"))
       ? "set with a switch or several arguments"
-      : undefined,
+      : args.some((a) => a.includes("="))
+        ? "set with NAME=value sets a variable"
+        : undefined,
 };
 CMD_INTERNAL.chdir = CMD_INTERNAL.cd;
 

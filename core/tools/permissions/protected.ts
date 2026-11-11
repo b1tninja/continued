@@ -29,6 +29,7 @@ export type ProtectedKind =
   | "fetch-and-run"
   | "mcp-definition-changed"
   | "hidden-command"
+  | "env-assignment"
   | "destructive-command"
   | "large-change"
   | "dependency-change"
@@ -184,6 +185,9 @@ export function protectedReason(hit: ProtectedHit): string {
   }
   if (hit.kind === "hidden-command") {
     return `This runs ${hit.path}, so no rule can tell which program it is, and it always asks first.`;
+  }
+  if (hit.kind === "env-assignment") {
+    return `This sets ${hit.path}, which changes what the command runs or where it connects, so it always asks first.`;
   }
   if (hit.kind === "destructive-command") {
     return `This is a destructive command (${hit.path}): it throws away work or rewrites history, so it always asks first.`;

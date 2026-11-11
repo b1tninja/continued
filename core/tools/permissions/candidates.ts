@@ -103,6 +103,18 @@ function nested(
   } else if (name === "cmd") {
     const k = tail.findIndex((w) => /^\/[ck]$/i.test(w));
     if (k >= 0) run(tail.slice(k + 1).join(" "), "cmd");
+  } else if (name === "env") {
+    // `env -S 'FOO=1 git push'` splits a string into a command
+    const k = tail.findIndex((w) => /^(-S|--split-string)/.test(w));
+    if (k >= 0) {
+      const w = tail[k];
+      const attached = w.startsWith("--split-string=")
+        ? w.slice(15)
+        : w.length > 2 && !w.startsWith("--")
+          ? w.slice(2)
+          : undefined;
+      run(attached ?? tail[k + 1]);
+    }
   } else if (name === "eval") {
     run(tail.join(" "));
   } else if (name === "iex" || name === "invoke-expression") {

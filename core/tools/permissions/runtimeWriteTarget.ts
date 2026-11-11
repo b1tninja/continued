@@ -7,6 +7,7 @@ import { canonicalCmdlet } from "./powershell";
 import { resolveAlias } from "./powershellAliases";
 import { policyFileHit } from "./selfProtect";
 import { commandName, dequote, splitRawWords } from "./shellWords";
+import { skipWrapperFlags } from "./wrapperWords";
 
 /**
  * A terminal command whose write target is built when the command runs
@@ -110,14 +111,8 @@ function programWords(part: string): string[] {
     const isCall = (w === "&" || w === ".") && words.length > i + 1;
     if (isCall || /^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) i++;
     else if (WRAPPERS.has(commandName(dequote(w)))) {
-      i++;
-      // `env A=1 x`, `timeout 5 x`, `nice -n 5 x`
-      while (
-        i < words.length &&
-        (/^-/.test(words[i]) || /^[A-Za-z_]\w*=|^\d+$/.test(words[i]))
-      ) {
-        i++;
-      }
+      // `env -u A B=1 x`, `timeout 5 x`, `nice -n 5 x`
+      i = skipWrapperFlags(words, i + 1, commandName(dequote(w)));
     } else return words.slice(i);
   }
 }
