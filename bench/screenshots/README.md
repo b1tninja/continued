@@ -96,12 +96,12 @@ starting; disconnect it.
 | `harness/fixtures.ts`                  | The states, built with the same redux actions the gui tests use. Add a fixture here.    |
 | `harness/themes.ts`                    | The `--vscode-*` variables of a dark and a light theme.                                 |
 | `vite.config.mjs`                      | Builds the harness with gui's vite; maps `core` and `@continuedev/*` to source.         |
-| `lib/views.mjs`, `lib/args.mjs`        | The view list and the command line.                                                     |
-| `lib/shoot.mjs`                        | Serves the build on 127.0.0.1, drives the browser, writes pictures, compares two runs.  |
-| `lib/diff.mjs`                         | The pure parts of the comparison.                                                       |
-| `lib/sandbox.mjs`, `sandbox-entry.mjs` | The Windows Sandbox route.                                                              |
+| `src/views.mjs`, `src/args.mjs`        | The view list and the command line.                                                     |
+| `src/shoot.mjs`                        | Serves the build on 127.0.0.1, drives the browser, writes pictures, compares two runs.  |
+| `src/diff.mjs`                         | The pure parts of the comparison.                                                       |
+| `src/sandbox.mjs`, `sandbox-entry.mjs` | The Windows Sandbox route.                                                              |
 
-To add a view: add a fixture in `harness/fixtures.ts`, add it to `lib/views.mjs`
+To add a view: add a fixture in `harness/fixtures.ts`, add it to `src/views.mjs`
 (a test checks the two agree).
 
 ## Known limits

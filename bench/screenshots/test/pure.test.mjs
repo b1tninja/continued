@@ -3,10 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { parseArgs } from "../lib/args.mjs";
-import { chooseBrowser } from "../lib/browser.mjs";
-import { countDiff, pairEntries, summarize } from "../lib/diff.mjs";
-import { resolveRequest } from "../lib/server.mjs";
+import { parseArgs } from "../src/args.mjs";
+import { chooseBrowser } from "../src/browser.mjs";
+import { countDiff, pairEntries, summarize } from "../src/diff.mjs";
+import { resolveRequest } from "../src/server.mjs";
 import {
   parseThemes,
   parseViews,
@@ -15,7 +15,7 @@ import {
   shotName,
   VIEW_NAMES,
   VIEWS,
-} from "../lib/views.mjs";
+} from "../src/views.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 

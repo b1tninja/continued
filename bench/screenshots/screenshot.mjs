@@ -4,10 +4,10 @@
 // README.md in this folder.
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs, USAGE } from "./lib/args.mjs";
-import { buildHarness, playwrightDir } from "./lib/build.mjs";
-import { compareRuns, shoot } from "./lib/shoot.mjs";
-import { VIEWS } from "./lib/views.mjs";
+import { parseArgs, USAGE } from "./src/args.mjs";
+import { buildHarness, playwrightDir } from "./src/build.mjs";
+import { compareRuns, shoot } from "./src/shoot.mjs";
+import { VIEWS } from "./src/views.mjs";
 
 async function main() {
   let opts;
@@ -33,7 +33,7 @@ async function main() {
 
   let manifest;
   if (opts.sandbox) {
-    const { shootInSandbox } = await import("./lib/sandbox.mjs");
+    const { shootInSandbox } = await import("./src/sandbox.mjs");
     manifest = await shootInSandbox({
       dist,
       out,
