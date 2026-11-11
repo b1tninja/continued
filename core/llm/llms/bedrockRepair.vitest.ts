@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -49,7 +48,7 @@ describe("repairStreamedToolInput: the recorded broken streams", () => {
   );
 
   const recordsFile = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
+    __dirname,
     "../../../bench/evidence/bedrock-stream-force-2026-11-10/records.jsonl",
   );
   it.skipIf(!fs.existsSync(recordsFile))(
