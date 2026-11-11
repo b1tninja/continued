@@ -248,7 +248,7 @@ export function getContinueGlobalPath(): string {
 export function getSessionsFolderPath(): string {
   const sessionsPath = path.join(getContinueGlobalPath(), "sessions");
   if (!fs.existsSync(sessionsPath)) {
-    fs.mkdirSync(sessionsPath);
+    fs.mkdirSync(sessionsPath, { mode: 0o700 });
   }
   return sessionsPath;
 }
@@ -401,7 +401,7 @@ export function getContinueRcPath(): string {
 function getDevDataPath(): string {
   const sPath = path.join(getContinueGlobalPath(), "dev_data");
   if (!fs.existsSync(sPath)) {
-    fs.mkdirSync(sPath);
+    fs.mkdirSync(sPath, { mode: 0o700 });
   }
   return sPath;
 }
@@ -416,7 +416,7 @@ export function getDevDataFilePath(
 ): string {
   const versionPath = path.join(getDevDataPath(), schema);
   if (!fs.existsSync(versionPath)) {
-    fs.mkdirSync(versionPath);
+    fs.mkdirSync(versionPath, { mode: 0o700 });
   }
   return path.join(versionPath, `${String(eventName)}.jsonl`);
 }
@@ -730,7 +730,7 @@ export function getContinueDotEnv(): { [key: string]: string } {
 export function getLogsDirPath(): string {
   const logsPath = path.join(getContinueGlobalPath(), "logs");
   if (!fs.existsSync(logsPath)) {
-    fs.mkdirSync(logsPath);
+    fs.mkdirSync(logsPath, { mode: 0o700 });
   }
   return logsPath;
 }

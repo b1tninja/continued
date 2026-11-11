@@ -14,6 +14,8 @@ import { ZodObject } from "zod";
 import { Core } from "../core.js";
 import { ContinueConfig, IdeInfo, IdeSettings } from "../index.js";
 import { getDevDataFilePath } from "../util/paths.js";
+import { appendPrivate } from "../util/privateFiles.js";
+import { scrubDeep } from "../util/secretScan/scrubForDisk.js";
 import { joinPathsToUri } from "../util/uri.js";
 
 const DEFAULT_DEV_DATA_LEVEL: DataLogLevel = "all";
@@ -92,9 +94,8 @@ export class DataLogger {
 
       const parsed = localSchema?.safeParse(eventDataWithBaseValues);
       if (parsed?.success) {
-        fs.writeFileSync(filepath, `${JSON.stringify(parsed.data)}\n`, {
-          flag: "a",
-        });
+        // X15: commands, prompts and code in an event never land with a secret
+        appendPrivate(filepath, `${JSON.stringify(scrubDeep(parsed.data))}\n`);
       }
     } catch (error) {
       console.error("Error logging local dev data:", error);

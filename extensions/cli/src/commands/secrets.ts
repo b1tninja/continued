@@ -5,6 +5,7 @@
  * adapts the arguments. Exit 0 clean, 3 findings, 2 usage. Values are never
  * printed.
  */
+import { getGlobalDirPath } from "core/util/paths.js";
 import { EXIT_USAGE } from "core/util/secretScan/scanFiles.js";
 import {
   runSecretsScan,
@@ -19,9 +20,15 @@ export function secretsCommand(
   io?: Io,
 ): number {
   if (action !== "scan") {
-    const message = `Usage: continuous secrets scan <paths...> [--profile at-rest|outbound] [--json] [--staged]`;
+    const message = `Usage: continuous secrets scan <paths...> [--profile at-rest|outbound] [--json] [--staged] [--history [--include-claude-code]]`;
     (io?.err ?? console.error)(message);
     return EXIT_USAGE;
   }
-  return runSecretsScan(paths, options, io);
+  return runSecretsScan(
+    paths,
+    options.history
+      ? { ...options, globalDir: options.globalDir ?? getGlobalDirPath() }
+      : options,
+    io,
+  );
 }

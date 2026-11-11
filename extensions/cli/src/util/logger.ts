@@ -5,6 +5,8 @@ import path from "path";
 import chalk from "chalk";
 import winston from "winston";
 
+import { scrubForDisk } from "core/util/secretScan/scrubForDisk.js";
+
 import { env } from "../env.js";
 
 const { combine, timestamp, printf, errors } = winston.format;
@@ -94,6 +96,15 @@ const logFormat = printf(
   },
 );
 
+// X15: a credential in a logged message, error or stack never reaches cn.log
+const scrubLogs = winston.format((info) => {
+  if (typeof info.message === "string") {
+    info.message = scrubForDisk(info.message);
+  }
+  if (typeof info.stack === "string") info.stack = scrubForDisk(info.stack);
+  return info;
+});
+
 // Track headless mode
 let isHeadlessMode = false;
 let isTTYlessEnvironment = false;
@@ -103,6 +114,7 @@ const winstonLogger = winston.createLogger({
   level: "info", // Default level
   format: combine(
     errors({ stack: true }),
+    scrubLogs(),
     timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
     logFormat,
   ),
