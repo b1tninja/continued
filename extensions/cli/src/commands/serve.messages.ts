@@ -3,6 +3,7 @@ import {
   type RecoveryStatRow,
 } from "@continuedev/openai-adapters";
 import chalk from "chalk";
+import { maskDeep } from "core/tools/permissions/audit/mask.js";
 import type { Express, Request, Response } from "express";
 
 import {
@@ -15,7 +16,6 @@ import { prepareLoopTurn } from "../loop/loopSession.js";
 import { getSessionLoop, interruptRunningLoop } from "../loop/loopSession.js";
 import { startWave } from "../loop/loopWave.js";
 import { services } from "../services/index.js";
-import { maskDeep } from "core/tools/permissions/audit/mask.js";
 import { getCompleteStateSnapshot, type StateSnapshot } from "../session.js";
 import {
   isQueuedCommand,
