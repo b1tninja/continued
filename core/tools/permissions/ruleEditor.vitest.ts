@@ -24,7 +24,6 @@ import {
 } from "./ruleEditor";
 import { isPolicyFilePath } from "./selfProtect";
 import { testToolCall } from "./testToolCall";
-import { testToolCall } from "./testToolCall";
 
 const HOME = process.platform === "win32" ? "C:/Users/dev" : "/home/dev";
 
