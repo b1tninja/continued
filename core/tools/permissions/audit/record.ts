@@ -31,13 +31,18 @@ export interface AuditEnvelope {
   turn?: number;
 }
 
-export const AUDIT_AGENT_KINDS = ["main", "subagent", "loop-worker"] as const;
+export const AUDIT_AGENT_KINDS = [
+  "main",
+  "subagent",
+  "loop-worker",
+  "background",
+] as const;
 export const MAX_AGENT_FIELD_CHARS = 80;
 
 /**
  * Which agent made a call (ROADMAP O and X): a name, an enum and ids, never a
  * prompt. Ids are the ones the agent map uses (`main-<session>`,
- * `sub-<toolCallId>`, `worker-<itemId>`), so a row joins to a node.
+ * `sub-<toolCallId>`, `worker-<itemId>`, `bg-<taskId>`), so a row joins to a node.
  */
 export interface AuditAgent {
   id: string;
@@ -161,6 +166,8 @@ export interface TurnEvent extends AuditEnvelope {
   /** Length of the assistant's text, not the text */
   textChars: number;
   calls: number;
+  /** Which agent took the turn; absent in files written before it was added */
+  agent?: AuditAgent;
 }
 
 /** Who changed a permission rule: the Permissions page, the CLI or the Always allow button. */
@@ -340,8 +347,13 @@ export function turnDraft(input: {
   turn?: number;
   textChars: number;
   calls: number;
+  agent?: AuditAgent;
 }): AuditDraft {
-  return clean({ ...input, ev: "turn" as const }) as AuditDraft;
+  return clean({
+    ...input,
+    ev: "turn" as const,
+    agent: auditAgentOf(input.agent),
+  }) as AuditDraft;
 }
 
 export interface PolicyInput {

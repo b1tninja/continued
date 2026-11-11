@@ -4,6 +4,7 @@ import {
   policyDraft,
   shadowDraft,
   turnDraft,
+  type AuditAgent,
   type AuditPolicy,
   type DecisionInput,
   type OutcomeInput,
@@ -178,6 +179,7 @@ export class AuditTrail {
     turn?: number;
     textChars: number;
     calls: number;
+    agent?: AuditAgent;
   }): void {
     this.guard(() => {
       const result = this.writer.write(turnDraft(input));
