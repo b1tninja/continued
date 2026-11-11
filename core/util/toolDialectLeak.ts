@@ -12,8 +12,15 @@ import {
   type ToolCallLike,
 } from "./toolDialectDetect.js";
 
-/** The dialects the recovery switch can turn into calls, as `toolDialect` values. */
-const RECOVERABLE: Record<string, ToolDialectSetting> = {
+/**
+ * The dialects the recovery switch can turn into calls, as `toolDialect`
+ * values. Typed over every setting but the three that name no markup, so a
+ * dialect added to TOOL_DIALECT_VALUES does not compile until it is listed
+ * here, and the nudge test iterates the same list (it fails when a value has
+ * no fixture the nudge counts).
+ */
+type MarkupDialect = Exclude<ToolDialectSetting, "auto" | "native" | "off">;
+const RECOVERABLE: Record<MarkupDialect, ToolDialectSetting> = {
   "qwen-xml": "qwen-xml",
   pythonic: "pythonic",
   "llama-json": "llama-json",
@@ -95,7 +102,9 @@ export function detectToolDialectLeak(args: {
     toolCalls: args.toolCalls,
     knownTools: args.knownTools,
   });
-  const dialect = RECOVERABLE[c.dialect];
+  const dialect = (RECOVERABLE as Record<string, ToolDialectSetting>)[
+    c.dialect
+  ];
   if (!dialect || c.confidence < ACCEPT_THRESHOLD) return undefined;
   return { dialect };
 }
@@ -118,6 +127,27 @@ function mentionsTool(text: string, name: string): boolean {
     String.raw`(?:(?<=\bfunctions\.)|(?<![\w.-]))${escaped}(?![\w-])`,
   ).test(text);
 }
+
+const escapeRe = (name: string) =>
+  name.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+
+/**
+ * Where the call's name sits for the token dialects, whose section tokens
+ * alone can appear in an explanation: Kimi K2 `functions.NAME:IDX`, Harmony
+ * `to=functions.NAME`, DeepSeek after the call-begin token (V3.1) or the
+ * separator that follows `function` (R1).
+ */
+const NAME_SLOT: Record<string, (name: string) => RegExp> = {
+  "kimi-tokens": (n) =>
+    new RegExp(String.raw`functions\.${escapeRe(n)}:\d+(?![\w-])`),
+  harmony: (n) => new RegExp(String.raw`to=functions\.${escapeRe(n)}(?![\w-])`),
+  "deepseek-v31": (n) =>
+    new RegExp(
+      String.raw`tool▁call▁begin[｜|]>(?:(?:function|tool)<[｜|]tool▁sep[｜|]>)?${escapeRe(n)}(?![\w-])`,
+    ),
+  "deepseek-r1": (n) =>
+    new RegExp(String.raw`tool▁sep[｜|]>${escapeRe(n)}(?![\w-])`),
+};
 
 function jsonNamesTool(text: string, known: string[]): boolean {
   try {
@@ -163,5 +193,9 @@ export function isLeakedToolCall(args: {
   if (c.confidence < ACCEPT_THRESHOLD) {
     return c.confidence >= 0.7 && jsonNamesTool(outside, known);
   }
+  // The token dialects write the name in one fixed place; prose that merely
+  // names their tokens next to an offered tool is not a call.
+  const slot = NAME_SLOT[c.dialect];
+  if (slot) return known.some((name) => slot(name).test(outside));
   return known.some((name) => mentionsTool(outside, name));
 }
