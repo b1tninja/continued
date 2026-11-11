@@ -15,6 +15,7 @@ import { prepareLoopTurn } from "../loop/loopSession.js";
 import { getSessionLoop, interruptRunningLoop } from "../loop/loopSession.js";
 import { startWave } from "../loop/loopWave.js";
 import { services } from "../services/index.js";
+import { maskDeep } from "core/tools/permissions/audit/mask.js";
 import { getCompleteStateSnapshot, type StateSnapshot } from "../session.js";
 import {
   isQueuedCommand,
@@ -127,11 +128,15 @@ export function getServeStateSnapshot(
   state: ServerState,
 ): StateSnapshot & QueueSnapshot & LoopSnapshot & RunTallySnapshot {
   return {
-    ...getCompleteStateSnapshot(
-      state.session,
-      state.isProcessing,
-      messageQueue.getQueueLength(),
-      state.pendingPermission,
+    // Masked: a supervisor reads this, and a pending approval carries the
+    // call's arguments (plans/ROADMAP.md X10, "no secrets on a supervisor surface").
+    ...maskDeep(
+      getCompleteStateSnapshot(
+        state.session,
+        state.isProcessing,
+        messageQueue.getQueueLength(),
+        state.pendingPermission,
+      ),
     ),
     ...getQueueSnapshot(),
     ...getLoopSnapshot(),

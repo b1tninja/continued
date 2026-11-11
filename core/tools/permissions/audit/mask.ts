@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { scanText } from "../../../util/secretScan";
+import { sha256Hex } from "../../../util/secretScan/sha256";
 import { looksSecret } from "../secretCommands";
 
 /**
@@ -180,7 +180,7 @@ export function clipMasked(text: string, max: number): string {
 
 /** SHA-256 of masked text. Never hash the raw text: a hash of a low-entropy secret can be guessed. */
 export function hashMasked(masked: string): string {
-  return createHash("sha256").update(masked, "utf8").digest("hex");
+  return sha256Hex(masked);
 }
 
 /** Mask, then clip, then hash the masked full text: what a call's arguments become in a record. */
@@ -197,9 +197,24 @@ export function maskForAudit(
   };
 }
 
+/** Masked strings by input, so a history polled over and over is scanned once. */
+const DEEP_CACHE = new Map<string, string>();
+const DEEP_CACHE_MAX = 4000;
+
+function maskCached(text: string): string {
+  const hit = DEEP_CACHE.get(text);
+  if (hit !== undefined) return hit;
+  const out = maskText(text).text;
+  if (text.length <= 20000) {
+    if (DEEP_CACHE.size >= DEEP_CACHE_MAX) DEEP_CACHE.clear();
+    DEEP_CACHE.set(text, out);
+  }
+  return out;
+}
+
 /** Mask every string in a JSON-like value (a second pass the writer applies). */
 export function maskDeep<T>(value: T): T {
-  if (typeof value === "string") return maskText(value).text as unknown as T;
+  if (typeof value === "string") return maskCached(value) as unknown as T;
   if (Array.isArray(value))
     return value.map((v) => maskDeep(v)) as unknown as T;
   if (value && typeof value === "object") {
