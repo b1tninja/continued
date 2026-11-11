@@ -11,8 +11,6 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-import type { Command } from "commander";
-
 import {
   datasetFormat,
   parseDataset,
