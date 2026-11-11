@@ -9,6 +9,10 @@ import {
   auditDir,
   auditSettings,
 } from "core/tools/permissions/audit/global.js";
+import {
+  describeAgent,
+  listInbox,
+} from "core/tools/permissions/audit/inbox.js";
 import { maskText } from "core/tools/permissions/audit/mask.js";
 import {
   callRows,
@@ -20,10 +24,6 @@ import {
   type AuditCallRow,
   type AuditFilter,
 } from "core/tools/permissions/audit/reader.js";
-import {
-  describeAgent,
-  listInbox,
-} from "core/tools/permissions/audit/inbox.js";
 import type { DecisionEvent } from "core/tools/permissions/audit/record.js";
 
 export interface AuditCommandOptions {
