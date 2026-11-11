@@ -87,7 +87,9 @@ function withoutUntrustedLoosening(
   return YAML.stringify(config);
 }
 import { loadModelCatalog } from "../providers/modelsFile";
+import { resolveToolPermissions } from "../../tools/permissions/ruleTrust";
 import { resolveTerminalSettings } from "../../util/terminalEnvironment";
+import { readUserToolPermissions } from "../../util/userToolPermissions";
 import { readUserTerminalSettings } from "../../util/userTerminalSettings";
 import { readUserGuidance, withOwnGuidance } from "../../util/userGuidance";
 import { loadProviderInstances } from "../providers/providersFile";
@@ -520,10 +522,17 @@ export async function configYamlToContinueConfig(options: {
 
   // Tool rules. Kept even when some entries are unreadable: those are skipped
   // and reported, rather than failing the config.
-  // Reviewer guidance is the person's own, never the assistant's or a folder's
-  const own = withOwnGuidance(config.toolPermissions, readUserGuidance());
+  // Only the person's own config.yaml may add allow rules; deny and ask from
+  // any source are kept (core/tools/permissions/ruleTrust.ts). Reviewer
+  // guidance is the person's own, never the assistant's or a folder's.
+  const ruleTrust = resolveToolPermissions(
+    readUserToolPermissions(),
+    config.toolPermissions,
+  );
+  const own = withOwnGuidance(ruleTrust.permissions, readUserGuidance());
   continueConfig.toolPermissions = own.permissions;
   localErrors.push(
+    ...ruleTrust.notices.map((message) => ({ fatal: false, message })),
     ...own.notices.map((message) => ({ fatal: false, message })),
   );
   // Only the person's own config.yaml may loosen what commands inherit; what

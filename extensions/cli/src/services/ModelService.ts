@@ -1,8 +1,10 @@
 import { AssistantUnrolled, ModelConfig } from "@continuedev/config-yaml";
 import type { LoopItemModel, ModelUse } from "core/index.js";
+import { resolveToolPermissions } from "core/tools/permissions/ruleTrust.js";
 import { modeModelFor, modelForLoopItem } from "core/util/modelUse.js";
 import { resolveTerminalSettings } from "core/util/terminalEnvironment.js";
 import { readUserTerminalSettings } from "core/util/userTerminalSettings.js";
+import { readUserToolPermissions } from "core/util/userToolPermissions.js";
 
 import { AuthConfig, getModelName } from "../auth/workos.js";
 import { createLlmApi, getLlmApi } from "../config.js";
@@ -55,6 +57,16 @@ export class ModelService
       assistantModelsCount: assistant?.models?.length || 0,
     });
 
+    // Only the person's own config.yaml may add allow rules; deny and ask
+    // from the assistant are kept. The notices are logged, not fatal.
+    const ruleTrust = resolveToolPermissions(
+      readUserToolPermissions(),
+      assistant.toolPermissions,
+    );
+    for (const notice of ruleTrust.notices) logger.warn(notice);
+    if (ruleTrust.notices.length > 0) {
+      assistant = { ...assistant, toolPermissions: ruleTrust.permissions };
+    }
     this.assistant = assistant;
     // Only the person's own config.yaml may loosen what commands inherit.
     for (const notice of resolveTerminalSettings(
