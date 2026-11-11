@@ -1,5 +1,8 @@
 // Where the lab may write. Nothing outside these roots is ever opened for
-// writing: results and profiles under the lab, scratch under the OS temp dir.
+// writing: results and profiles under the lab, scratch under the OS temp dir,
+// server logs, and any root the owner names explicitly (--allow-root or
+// LAB_ALLOW_ROOTS, e.g. M:\ai\lab). A root is never implied by a path the
+// run merely mentions.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -25,6 +28,17 @@ export function roots(overrides = {}) {
     tmp: path.resolve(
       overrides.tmp ?? path.join(os.tmpdir(), "continuous-lab"),
     ),
+    logs: path.resolve(
+      overrides.logs ??
+        process.env.LAB_LOGS ??
+        path.join(LAB_ROOT, "results", "logs"),
+    ),
+    allow: [
+      ...(overrides.allow ?? []),
+      ...(process.env.LAB_ALLOW_ROOTS ?? "")
+        .split(path.delimiter)
+        .filter(Boolean),
+    ].map((p) => path.resolve(p)),
   };
 }
 
@@ -36,7 +50,8 @@ const inside = (root, file) => {
 /** Throws unless `file` is under a writable root; returns the resolved path. */
 export function assertWritable(file, r = roots()) {
   const abs = path.resolve(file);
-  if (![r.results, r.profiles, r.tmp].some((root) => inside(root, abs)))
+  const allowed = [r.results, r.profiles, r.tmp, r.logs, ...(r.allow ?? [])];
+  if (!allowed.some((root) => root && inside(root, abs)))
     throw new Error(`refusing to write outside the lab's folders: ${abs}`);
   return abs;
 }

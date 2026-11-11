@@ -9,11 +9,15 @@ import { formatDiff } from "./lib/diff.mjs";
 import { writeFixtures } from "./lib/fixtures.mjs";
 import { Budget, machineFacts } from "./lib/guards.mjs";
 import { formatInventory, inventory } from "./lib/inventory.mjs";
-import { OllamaClient } from "./lib/ollama.mjs";
+import { buildCacheReport, cacheRequestCount, runCache } from "./lib/cache.mjs";
+import { APIS, Engine, isLlamaApi, THINK_VALUES } from "./lib/transports.mjs";
+import { DEFAULT_EXE, startServer, stopFromPidFile } from "./lib/server.mjs";
 import { roots as makeRoots, writeText } from "./lib/paths.mjs";
 import { buildReport } from "./lib/report.mjs";
 import { readAll, readRecords, resultFile } from "./lib/results.mjs";
-import { makePlan, runSuite, warmup } from "./lib/run.mjs";
+import { cfgTag, makePlan, runSuite, warmup } from "./lib/run.mjs";
+import { modelGuard } from "./lib/guards.mjs";
+import fs from "node:fs";
 import { agentTools, loadSuite, SUITE_NAMES } from "./lib/suites.mjs";
 import { writeProfiles } from "./lib/suggest.mjs";
 
@@ -28,8 +32,20 @@ commands
   suggest                   write profiles/<model>.json from the results
   fixtures --suite S        write observed corpus fixtures from raw replies
   snapshot-tools            write the real agent tool list (needs the product's install)
+  server start|stop|status  start (foreground, Ctrl-C stops) or stop one llama-server for a GGUF
 
 suites: ${SUITE_NAMES.join(", ")}  (or a path to a suite JSON file)
+
+transports (README "Transports")
+  --api ollama-chat|ollama-v1|ollama-raw|openai-chat|llamacpp-raw   (default ollama-chat)
+  --base-url URL (default 127.0.0.1:11434; 127.0.0.1:8080 for openai-chat and llamacpp-raw)
+  --think on|off|default|low|medium|high   --temperature T   --num-predict N (-1 = no cap)
+  --tool-choice auto|required|none|<tool name>   --seed N   --body-extra '{"json":"merged into the body"}'
+  --gguf FILE (llama-server apis: size guard; with --serve, the file to start)  --serve (start and stop llama-server for the run)
+  --exe FILE  --port N  --ctx N  --ngl N  --parallel N  --alias NAME  --chat-template NAME  --chat-template-file FILE
+  --cache-reuse N  --reasoning-format F  --server-arg ARG (repeatable)  --no-vram-check  --ready-timeout S
+  --out DIR (plan/run/fixtures: results folder; report/diff/snapshot-tools: a file)  --results-dir DIR
+  --log-dir DIR  --allow-root DIR (repeatable extra write roots)  --ollama-url URL (the "is anything loaded" check)
 
 common options
   --suite S  --models a,b|smallest-safe|all-safe  --passes N  --limit N
@@ -47,7 +63,32 @@ const OPTIONS = {
   models: { type: "string" },
   passes: { type: "string", default: "1" },
   limit: { type: "string" },
-  "base-url": { type: "string", default: "http://127.0.0.1:11434" },
+  "base-url": { type: "string" },
+  api: { type: "string", default: "ollama-chat" },
+  "ollama-url": { type: "string", default: "http://127.0.0.1:11434" },
+  think: { type: "string" },
+  temperature: { type: "string" },
+  "num-predict": { type: "string" },
+  "tool-choice": { type: "string" },
+  seed: { type: "string" },
+  "body-extra": { type: "string" },
+  gguf: { type: "string" },
+  serve: { type: "boolean" },
+  exe: { type: "string" },
+  port: { type: "string" },
+  ctx: { type: "string" },
+  ngl: { type: "string" },
+  parallel: { type: "string" },
+  alias: { type: "string" },
+  "chat-template": { type: "string" },
+  "chat-template-file": { type: "string" },
+  "cache-reuse": { type: "string" },
+  "reasoning-format": { type: "string" },
+  "server-arg": { type: "string", multiple: true },
+  "no-vram-check": { type: "boolean" },
+  "ready-timeout": { type: "string", default: "300" },
+  "log-dir": { type: "string" },
+  "allow-root": { type: "string", multiple: true },
   "allow-remote": { type: "boolean" },
   product: { type: "string" },
   run: { type: "boolean" },
@@ -144,10 +185,45 @@ export async function main(argv, env = process.env) {
     return die(
       "the lab runs one request at a time; --concurrency is fixed at 1",
     );
+  // --out is a file for report/diff/snapshot-tools and a results folder for the rest
+  const outIsFile = ["report", "diff", "snapshot-tools"].includes(cmd);
   const roots = makeRoots({
-    results: v["results-dir"],
+    results: v["results-dir"] ?? (outIsFile ? undefined : v.out),
     profiles: v["profiles-dir"],
+    logs: v["log-dir"],
+    allow: v["allow-root"],
   });
+  if (!APIS.includes(v.api))
+    return die(`--api must be one of ${APIS.join(", ")}, got ${v.api}`);
+  if (v.think && !THINK_VALUES.includes(v.think))
+    return die(`--think must be one of ${THINK_VALUES.join(", ")}`);
+  const cfg = { api: v.api };
+  if (v.think) cfg.think = v.think;
+  if (v.temperature != null) cfg.temperature = num(v.temperature, "temperature");
+  if (v["num-predict"] != null) {
+    cfg.numPredict = Number(v["num-predict"]);
+    if (!Number.isInteger(cfg.numPredict))
+      return die("--num-predict needs an integer (-1 = no cap)");
+  }
+  if (v["tool-choice"]) cfg.toolChoice = v["tool-choice"];
+  if (v.seed != null) {
+    cfg.seed = Number(v.seed);
+    if (!Number.isInteger(cfg.seed)) return die("--seed needs an integer");
+  }
+  if (v["body-extra"]) {
+    try {
+      cfg.bodyExtra = JSON.parse(v["body-extra"]);
+    } catch {
+      return die("--body-extra needs a JSON object");
+    }
+    if (
+      !cfg.bodyExtra ||
+      typeof cfg.bodyExtra !== "object" ||
+      Array.isArray(cfg.bodyExtra)
+    )
+      return die("--body-extra needs a JSON object");
+  }
+  const llama = isLlamaApi(v.api);
   const limits = {
     maxVramGB: num(v["max-vram"], "max-vram"),
     maxRamGB: num(v["max-ram"], "max-ram"),
@@ -165,7 +241,9 @@ export async function main(argv, env = process.env) {
   if (cmd === "report") {
     const recs = v.file?.length ? readAll(v.file) : readAll(roots.results);
     const recs2 = v.suite ? recs.filter((r) => r.suite === v.suite) : recs;
-    const md = buildReport(recs2);
+    const md =
+      buildReport(recs2.filter((r) => r.kind !== "cache")) +
+      buildCacheReport(recs2);
     return v.out
       ? log("wrote " + writeText(v.out, md, roots))
       : process.stdout.write(md);
@@ -180,6 +258,58 @@ export async function main(argv, env = process.env) {
     return v.out
       ? log("wrote " + writeText(v.out, md, roots))
       : process.stdout.write(md);
+  }
+
+  const serverOpts = () => ({
+    exe: v.exe ?? DEFAULT_EXE,
+    gguf: v.gguf ?? die("--gguf FILE is required"),
+    port: v.port ? num(v.port, "port") : 8080,
+    ctx: v.ctx ? num(v.ctx, "ctx") : 16384,
+    ngl: v.ngl ? num(v.ngl, "ngl") : 99,
+    parallel: v.parallel ? num(v.parallel, "parallel") : 1,
+    alias: v.alias,
+    chatTemplate: v["chat-template"],
+    chatTemplateFile: v["chat-template-file"],
+    cacheReuse:
+      v["cache-reuse"] != null ? num(v["cache-reuse"], "cache-reuse") : undefined,
+    reasoningFormat: v["reasoning-format"],
+    extra: v["server-arg"] ?? [],
+    ollamaUrl: v["ollama-url"],
+    checkVram: !v["no-vram-check"],
+    readyTimeoutMs: num(v["ready-timeout"], "ready-timeout") * 1000,
+  });
+  if (cmd === "server") {
+    const sub = rest[0];
+    if (sub === "stop") {
+      const r = stopFromPidFile(roots);
+      return log(
+        r.stopped
+          ? `killed llama-server pid ${r.pid}`
+          : `nothing stopped (${r.reason ?? "process already gone"})`,
+      );
+    }
+    if (sub === "status") {
+      const pidFile = path.join(roots.logs, "llama-server.pid");
+      return log(
+        fs.existsSync(pidFile)
+          ? `pid file ${pidFile}: ${fs.readFileSync(pidFile, "utf8").trim()}`
+          : "no lab-started llama-server",
+      );
+    }
+    if (sub !== "start") return die("server needs start, stop or status");
+    const h = await startServer(serverOpts(), roots, { signal: ctl.signal });
+    log(
+      `llama-server ready at ${h.baseUrl} (pid ${h.pid}), log ${h.logFile}\nChat format: ${h.chatFormat() ?? "not in the log"}\nCtrl-C stops it.`,
+    );
+    try {
+      await new Promise((r) =>
+        ctl.signal.addEventListener("abort", r, { once: true }),
+      );
+    } finally {
+      h.stop();
+      log("llama-server stopped");
+    }
+    return;
   }
 
   const product = await loadProduct(v.product);
@@ -211,16 +341,66 @@ export async function main(argv, env = process.env) {
     );
   }
 
-  const client = new OllamaClient({
-    baseUrl: v["base-url"],
+  const client = new Engine({
+    api: v.api,
+    baseUrl:
+      v["base-url"] ??
+      (llama ? "http://127.0.0.1:8080" : "http://127.0.0.1:11434"),
+    ollamaUrl: v["ollama-url"],
     allowRemote: v["allow-remote"],
     requestTimeoutMs: num(v["request-timeout"], "request-timeout") * 1000,
     signal: ctl.signal,
   });
   const facts = machineFacts({ env });
-  const inv = await inventory({ client, product, limits, facts });
-  if (cmd === "inventory")
-    return process.stdout.write(formatInventory(inv, limits));
+  let server;
+  let inv;
+  if (llama) {
+    // llama-server lists no sizes: the GGUF file is the size fact. A running
+    // server already holds its VRAM, so the free-VRAM check belongs to the
+    // server helper (before it starts), not to the model guard.
+    if (!v.gguf)
+      return die(`--api ${v.api} needs --gguf FILE (its size is the guard; --serve starts it)`);
+    if (v.serve && cmd === "run" && v.run) {
+      server = await startServer(serverOpts(), roots, { signal: ctl.signal });
+      log(
+        `llama-server ready at ${server.baseUrl}; Chat format: ${server.chatFormat() ?? "not in the log"}`,
+      );
+      client.origin = server.baseUrl;
+    }
+    const size = fs.statSync(v.gguf).size;
+    const name = v.alias ?? path.basename(v.gguf).replace(/\.gguf$/i, "");
+    const row = {
+      name,
+      size,
+      sizeGB: size / 1e9,
+      family: "gguf",
+      capabilities: ["completion", "tools"],
+      toolsCapable: true,
+    };
+    row.guard = modelGuard(
+      { name, sizeBytes: size, capabilities: row.capabilities, family: "gguf" },
+      limits,
+      undefined,
+    );
+    row.safe = row.guard.ok;
+    inv = { facts, loaded: [], models: [row] };
+    if (!v.models) v.models = name;
+    if (cmd === "inventory")
+      return process.stdout.write(
+        `llama-server model ${name}: ${(size / 1e9).toFixed(1)} GB, ${row.safe ? "within the limits" : "REFUSED: " + row.guard.reasons.join("; ")}\n`,
+      );
+  } else {
+    inv = await inventory({ client, product, limits, facts });
+    if (cmd === "inventory")
+      return process.stdout.write(formatInventory(inv, limits));
+  }
+  try {
+    return await runCommand();
+  } finally {
+    server?.stop();
+  }
+
+  async function runCommand() {
 
   if (cmd === "fixtures") {
     const suite = loadSuite(v.suite ?? die("--suite is required"));
@@ -242,6 +422,39 @@ export async function main(argv, env = process.env) {
   const suite = loadSuite(v.suite ?? die("--suite is required"));
   const models = await pickModels(v.models, inv);
   const opts = suiteOptions(v);
+  if (suite.kind === "cache") {
+    const n = cacheRequestCount(suite);
+    log(
+      `${cmd === "run" && v.run ? "RUN" : "DRY RUN"}: cache suite, ${n} requests per model via ${cfg.api}${cfgTag(cfg)}, results ${resultFile(roots, "cache")}`,
+    );
+    if (cmd === "plan" || !v.run)
+      return log("dry: nothing was sent. Add --run to run for real.");
+    const budget = new Budget({
+      maxRequests: num(v["max-requests"], "max-requests"),
+      maxMs: num(v["max-minutes"], "max-minutes") * 60_000,
+    });
+    const s = await runCache({
+      client,
+      suite,
+      models,
+      roots,
+      budget,
+      signal: ctl.signal,
+      log,
+      facts: llama ? { ...facts, gpus: undefined } : facts,
+      limits,
+      cfg,
+      stream: (v.streams ?? "false").split(",")[0] === "true",
+      agentTools: agentTools(),
+      numCtx: opts.numCtx,
+      cooldownMs: num(v.cooldown, "cooldown") * 1000,
+    });
+    log(
+      `done: ${s.ran} ran, ${s.errors} errors, ${s.refused.length} model(s) refused${s.stopped ? `; stopped: ${s.stopped}` : ""}`,
+    );
+    if (s.stopped === "interrupted") process.exitCode = 130;
+    return;
+  }
   const passes = num(v.passes, "passes") || 1;
   const budget = new Budget({
     maxRequests: num(v["max-requests"], "max-requests"),
@@ -275,6 +488,7 @@ export async function main(argv, env = process.env) {
     history,
     warm,
     agentTools: agentTools(),
+    cfg,
   });
   log(
     `${cmd === "run" && v.run ? "RUN" : "DRY RUN"}: suite ${suite.suite}, results ${resultFile(roots, suite.suite)}`,
@@ -303,8 +517,9 @@ export async function main(argv, env = process.env) {
     budget,
     signal: ctl.signal,
     log,
-    facts,
+    facts: llama ? { ...facts, gpus: undefined } : facts,
     limits,
+    cfg,
     cooldownMs: num(v.cooldown, "cooldown") * 1000,
     modelMaxMs: num(v["model-minutes"], "model-minutes") * 60_000,
     agentTools: agentTools(),
@@ -313,6 +528,7 @@ export async function main(argv, env = process.env) {
     `done: ${summary.ran} ran, ${summary.skipped} already done, ${summary.errors} errors, ${summary.refused.length} model(s) refused${summary.stopped ? `; stopped: ${summary.stopped}` : ""}`,
   );
   if (summary.stopped === "interrupted") process.exitCode = 130;
+  }
 }
 
 const invoked =

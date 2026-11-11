@@ -17,6 +17,29 @@ const DEFAULT_TPS = 20;
 const DEFAULT_LOAD_S = 30;
 const MAX_CHUNKS_KEPT = 400;
 
+/**
+ * The transport and sampling overrides of a run. The default is what the lab
+ * always did (Ollama /api/chat, reasoning off where the model can, the suite's
+ * own temperature and token cap). Anything else changes the case key, so
+ * results of different configurations never mask each other on a rerun.
+ */
+export const DEFAULT_CFG = Object.freeze({ api: "ollama-chat" });
+
+export function cfgTag(cfg = DEFAULT_CFG) {
+  const parts = [];
+  if (cfg.api && cfg.api !== "ollama-chat") parts.push(cfg.api);
+  if (cfg.think != null) parts.push(`think=${cfg.think}`);
+  if (cfg.temperature != null) parts.push(`t=${cfg.temperature}`);
+  if (cfg.numPredict != null) parts.push(`np=${cfg.numPredict}`);
+  if (cfg.toolChoice != null) parts.push(`tc=${cfg.toolChoice}`);
+  if (cfg.seed != null) parts.push(`seed=${cfg.seed}`);
+  if (cfg.bodyExtra) parts.push("x=" + JSON.stringify(cfg.bodyExtra));
+  return parts.length ? "@" + parts.join(",") : "";
+}
+
+const keyFor = (suite, model, c, pass, cfg) =>
+  caseKey(suite, model, c.id + cfgTag(cfg), pass);
+
 export const presetFor = (product, name) => product?.presets?.resolve?.(name);
 
 /** Estimated seconds for the cases still to run, from measured or assumed speed. */
@@ -57,6 +80,7 @@ export function makePlan({
   history,
   warm = {},
   agentTools,
+  cfg = DEFAULT_CFG,
 }) {
   const done = doneKeys(history, { retryErrors: opts.retryErrors });
   return models.map((m) => {
@@ -71,7 +95,7 @@ export function makePlan({
     for (let pass = 1; pass <= passes; pass++)
       for (const c of cases) all.push({ ...c, pass });
     const remaining = all.filter(
-      (c) => !done.has(caseKey(suite.suite, m.name, c.id, c.pass)),
+      (c) => !done.has(keyFor(suite.suite, m.name, c, c.pass, cfg)),
     );
     const meas = warm[m.name] ?? measuredSpeed(history, m.name);
     return {
@@ -117,10 +141,14 @@ export async function warmup(client, model) {
   };
 }
 
-function recordFor({ suite, model, c, pass, reply, cls, score, error, ms }) {
+function recordFor({ suite, model, c, pass, reply, cls, score, error, ms, cfg, engine }) {
   const u = reply?.usage ?? {};
   return {
-    key: caseKey(suite.suite, model, c.id, pass),
+    key: keyFor(suite.suite, model, c, pass, cfg),
+    api: cfg.api,
+    cfg: { ...cfg, temperature: cfg.temperature ?? c.temperature, numPredict: cfg.numPredict ?? c.numPredict },
+    engine,
+    request: reply?.meta?.request,
     ts: new Date().toISOString(),
     suite: suite.suite,
     kind: suite.kind,
@@ -157,6 +185,7 @@ function recordFor({ suite, model, c, pass, reply, cls, score, error, ms }) {
     reply: reply && {
       text: reply.text,
       thinking: reply.thinking || undefined,
+      reasoningField: reply.meta?.reasoningField,
       toolCalls: reply.toolCalls,
       doneReason: reply.doneReason,
       chunks: reply.chunks?.slice(0, MAX_CHUNKS_KEPT),
@@ -210,6 +239,7 @@ export async function runSuite({
   cooldownMs = 0,
   modelMaxMs = Infinity,
   agentTools,
+  cfg = DEFAULT_CFG,
 }) {
   const file = resultFile(roots, suite.suite);
   const summary = { ran: 0, skipped: 0, errors: 0, refused: [], stopped: null };
@@ -261,13 +291,14 @@ export async function runSuite({
       agentTools,
     });
     const done = doneKeys(readRecords(file), { retryErrors: opts.retryErrors });
+    const engine = await client.describe?.(m.name).catch(() => undefined);
     const t0 = Date.now();
     let consecutiveErrors = 0;
     log(`== ${m.name}: ${cases.length} cases x ${passes} pass(es)`);
     try {
       outer: for (let pass = 1; pass <= passes; pass++) {
         for (const c of cases) {
-          const key = caseKey(suite.suite, m.name, c.id, pass);
+          const key = keyFor(suite.suite, m.name, c, pass, cfg);
           if (done.has(key)) {
             summary.skipped++;
             continue;
@@ -295,11 +326,23 @@ export async function runSuite({
               tools: c.sendTools ? c.tools : undefined,
               stream: c.stream,
               options: {
-                temperature: c.temperature,
-                num_predict: c.numPredict,
+                temperature: cfg.temperature ?? c.temperature,
+                num_predict: cfg.numPredict ?? c.numPredict,
                 num_ctx: opts.numCtx ?? c.numCtx,
+                seed: cfg.seed,
               },
-              think: m.capabilities?.includes("thinking") ? c.think : undefined,
+              // an explicit --think wins; otherwise the lab's old rule: off, and
+              // only for models that report the capability
+              think:
+                cfg.think != null
+                  ? cfg.think
+                  : m.capabilities?.includes("thinking")
+                    ? c.think
+                    : undefined,
+              toolChoice: cfg.toolChoice,
+              bodyExtra: cfg.bodyExtra,
+              style: c.style ?? undefined,
+              api: cfg.api,
               keepAlive: "2m",
             });
             if (suite.kind === "reviewer")
@@ -328,6 +371,8 @@ export async function runSuite({
             score,
             error,
             ms: Date.now() - started,
+            cfg,
+            engine,
           });
           appendRecord(file, rec, roots);
           error ? summary.errors++ : summary.ran++;
