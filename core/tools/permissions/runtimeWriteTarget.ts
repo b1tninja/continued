@@ -1,5 +1,3 @@
-import { tmpdir } from "node:os";
-import * as posix from "node:path/posix";
 import type { ShellKind } from "../../util/shell";
 import { parseCommand } from "./command";
 import { effectsOfCommand } from "./commandSpecs";
@@ -201,8 +199,7 @@ function short(word: string): string {
 /** A variable the command sets once, to a literal, before the part that uses it. */
 type Known = Map<string, string>;
 
-/** `$name = <right-hand side>`, the whole statement. */
-const ASSIGN_PS = /^\$([A-Za-z_]\w*)\s*=\s*(.+)$/s;
+const LITERAL_PS = /^\$([A-Za-z_]\w*)\s*=\s*('[^']*'|"[^"$`]*")$/;
 const LITERAL_POSIX =
   /^([A-Za-z_]\w*)=('[^']*'|"[^"$`]*"|[^\s"'$`*?;&|<>()]+)$/;
 
@@ -232,94 +229,24 @@ function setOnce(command: string, name: string): boolean {
 function literalAssignment(
   part: string,
   command: string,
-  known: Known,
   shell?: ShellKind,
-  cwd?: string,
 ): [string, string] | undefined {
   const posix = shell === "bash" || shell === "zsh" || shell === "sh";
-  const ps = posix ? undefined : ASSIGN_PS.exec(part);
-  const m = ps ?? LITERAL_POSIX.exec(part);
+  const m =
+    (posix ? undefined : LITERAL_PS.exec(part)) ?? LITERAL_POSIX.exec(part);
   if (!m || HIDDEN_ASSIGNMENT.test(command) || !setOnce(command, m[1])) {
     return undefined;
   }
-  const value = ps ? valueOf(m[2].trim(), known, shell, cwd) : dequote(m[2]);
-  return value === undefined ? undefined : [keyOf(m[1], shell), value];
+  return [keyOf(m[1], shell), dequote(m[2])];
 }
 
-/**
- * The text a PowerShell right-hand side is worth when every piece of it is
- * known: a quoted string, a double-quoted string holding only known
- * variables, `$PWD`, `$env:TEMP`, or `Join-Path` of such pieces. Anything else
- * (a command, a subexpression, a variable that is not known) is undefined,
- * and the variable stays unresolved.
- */
-function valueOf(
-  rhs: string,
-  known: Known,
-  shell?: ShellKind,
-  cwd?: string,
-): string | undefined {
-  const text = rhs.replace(/^\((.*)\)$/s, "$1").trim();
-  const join = /^join-path\s+(.*)$/is.exec(text);
-  const words = join
-    ? splitRawWords(join[1]).filter((w) => !/^-(?:path|childpath)$/i.test(w))
-    : [text];
-  if (words.length === 0 || (join && words.length > 3)) return undefined;
-  // a bare word on its own is a command, not a string
-  if (!join && !/^["'$]/.test(text)) return undefined;
-  const parts: string[] = [];
-  for (const word of words) {
-    const value = pieceOf(word, known, shell, cwd);
-    if (value === undefined) return undefined;
-    parts.push(value);
-  }
-  return parts.join(join ? "/" : "");
-}
-
-function pieceOf(
-  word: string,
-  known: Known,
-  shell?: ShellKind,
-  cwd?: string,
-): string | undefined {
-  if (/^'[^']*'$/.test(word)) return word.slice(1, -1);
-  const body = /^"([^"`]*)"$/.exec(word)?.[1] ?? word;
-  const text = substitute(body, known, shell, cwd);
-  // a bare word may not be a variable, a switch or an expression
-  const bare = body === word;
-  if (RUNTIME_PART.test(text) || /[\s;|&<>(){}]/.test(text)) return undefined;
-  return bare && /^-/.test(text) ? undefined : text;
-}
-
-/** The word with the variables that are known replaced by their values. */
-function substitute(
-  word: string,
-  known: Known,
-  shell?: ShellKind,
-  cwd?: string,
-): string {
-  const powershell = shell === "powershell";
+/** The word with the variables that are known replaced by their literals. */
+function substitute(word: string, known: Known, shell?: ShellKind): string {
   return word.replace(
-    /\$env:(temp|tmp)\b|\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/gi,
-    (whole, env?: string, braced?: string, plain?: string) => {
-      if (env !== undefined) return powershell ? tmpdir() : whole;
-      const name = keyOf(braced ?? plain ?? "", shell);
-      if (name === "pwd" && powershell && cwd !== undefined) return cwd;
-      return known.get(name) ?? whole;
-    },
+    /\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/g,
+    (whole, braced?: string, plain?: string) =>
+      known.get(keyOf(braced ?? plain ?? "", shell)) ?? whole,
   );
-}
-
-/** Is a path that was worked out inside the workspace, with no `..` leaving it? */
-function insideWorkspace(path: string, cwd: string | undefined): boolean {
-  if (cwd === undefined) return false;
-  const norm = (p: string) =>
-    posix.normalize(p.replace(/\\/g, "/")).replace(/\/+$/, "").toLowerCase();
-  const root = norm(cwd);
-  const full = /^(?:[A-Za-z]:)?\//.test(path.replace(/\\/g, "/"))
-    ? norm(path)
-    : norm(`${root}/${path}`);
-  return full === root || full.startsWith(`${root}/`);
 }
 
 /** Does a path, spelled out, name a file the product loads as config, code, rules or hooks? */
@@ -340,11 +267,10 @@ function namesPolicyFile(
 /**
  * What stops the command's write target being read from its text, or
  * undefined when every target it can see is written out. A variable the
- * command sets once to something it can work out (a literal, `$PWD`,
- * `$env:TEMP`, `Join-Path` of such pieces) counts as written out when the
- * result lies inside the workspace and is not a locked policy file; a result
- * anywhere else, and anything it cannot work out, asks. A reason names the
- * word, for the ask.
+ * command sets once to a literal counts as written out: its value is
+ * substituted, and the result is held against the locked policy files, which
+ * the path guards cannot do for a variable. A reason names the word, for the
+ * ask.
  */
 export function runtimeWriteTarget(
   command: string,
@@ -361,22 +287,17 @@ export function runtimeWriteTarget(
       .filter(Boolean),
   );
   for (const part of statements) {
-    const assigned = literalAssignment(part, command, known, shell, cwd);
+    const assigned = literalAssignment(part, command, shell);
     if (assigned) known.set(assigned[0], assigned[1]);
     for (const typed of targetsOf(part, shell)) {
-      const target = substitute(typed, known, shell, cwd);
+      const target = substitute(typed, known, shell);
       if (RUNTIME_PART.test(target)) {
         return `a write to ${short(typed)}, a path built when the command runs`;
       }
       if (homeCd && !ABSOLUTE.test(target)) {
         return `a write to ${short(typed)} after a cd into the home folder`;
       }
-      if (target === typed) continue;
-      const path = target.replace(/^(['"])(.*)\1$/s, "$2");
-      if (!insideWorkspace(path, cwd)) {
-        return `a write to ${short(typed)}, which is outside the workspace once its variable is read`;
-      }
-      if (namesPolicyFile(path, shell, cwd)) {
+      if (target !== typed && namesPolicyFile(dequote(target), shell, cwd)) {
         return `a write to ${short(typed)}, which is a policy file once its variable is read`;
       }
     }
