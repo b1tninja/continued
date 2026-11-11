@@ -1,5 +1,11 @@
-import type { StuckCall, StuckStep } from "../../../util/stuckSignals";
+import {
+  detectStuck,
+  type StuckCall,
+  type StuckReport,
+  type StuckStep,
+} from "../../../util/stuckSignals";
 import type {
+  AuditAgent,
   AuditRecord,
   DecisionEvent,
   OutcomeEvent,
@@ -25,22 +31,87 @@ import type {
  *    span, the signals see one observation.
  *  - Assistant text: the audit keeps its length only, so a text-only turn is a
  *    step with no text and the monologue signal cannot fire from an audit.
+ *  - Agents: the steps are of one agent (default the main agent, which a
+ *    record with no `agent` is too); `auditToAgentSteps` gives every agent's.
  *  - A call that did not run (denied, or never started) is a failed call whose
  *    result is the error line if there is one, else "not run".
  */
-export function auditToSteps(records: readonly AuditRecord[]): StuckStep[] {
+export function auditToSteps(
+  records: readonly AuditRecord[],
+  agent: string = MAIN_AGENT,
+): StuckStep[] {
+  return auditToAgentSteps(records).get(agent) ?? [];
+}
+
+/** The key of the main agent in `auditToAgentSteps`; see `agentKeyOf`. */
+export const MAIN_AGENT = "main";
+
+/**
+ * The agent a record belongs to. A record with no `agent` (written before
+ * #576, or by a host that does not say) and one of kind "main" are the same
+ * agent, `MAIN_AGENT`, whatever the session id in the main id is; every other
+ * agent is its own id.
+ */
+export function agentKeyOf(agent: AuditAgent | undefined): string {
+  if (!agent || agent.kind === "main") return MAIN_AGENT;
+  return agent.id;
+}
+
+/**
+ * The steps of every agent in the records, by agent key. Turn numbers are an
+ * agent's own (a subagent's first turn is not the main agent's first), so
+ * steps are formed inside an agent and never across agents; and an agent's
+ * steps hold only its own calls, so one agent's repeats are not hidden by
+ * another's calls and are not charged to it.
+ */
+export function auditToAgentSteps(
+  records: readonly AuditRecord[],
+): Map<string, StuckStep[]> {
   const ordered = [...records].sort((a, b) => a.seq - b.seq);
   const decisions = new Map<string, DecisionEvent>();
-  const outcomes: OutcomeEvent[] = [];
-  const turns: TurnEvent[] = [];
+  const groups = new Map<string, AgentRecords>();
+  const group = (key: string) => {
+    let g = groups.get(key);
+    if (!g) groups.set(key, (g = { outcomes: [], turns: [] }));
+    return g;
+  };
   for (const r of ordered) {
     if (r.ev === "decision") {
       // an ask answered by the person writes a second decision: the later wins
       decisions.set(r.callId, r);
-    } else if (r.ev === "outcome") outcomes.push(r);
-    else if (r.ev === "turn") turns.push(r);
+    } else if (r.ev === "outcome") {
+      // the outcome may omit the agent its decision named
+      const agent = r.agent ?? decisions.get(r.callId)?.agent;
+      group(agentKeyOf(agent)).outcomes.push(r);
+    } else if (r.ev === "turn") group(agentKeyOf(r.agent)).turns.push(r);
   }
+  const out = new Map<string, StuckStep[]>();
+  for (const [key, g] of groups) {
+    const steps = stepsOf(g, decisions);
+    if (steps.length > 0) out.set(key, steps);
+  }
+  return out;
+}
 
+interface AgentRecords {
+  outcomes: OutcomeEvent[];
+  turns: TurnEvent[];
+}
+
+/** What stuck detection says of each agent that has steps. */
+export function detectStuckByAgent(
+  records: readonly AuditRecord[],
+): { agent: string; report: StuckReport }[] {
+  return [...auditToAgentSteps(records)].map(([agent, steps]) => ({
+    agent,
+    report: detectStuck(steps),
+  }));
+}
+
+function stepsOf(
+  { outcomes, turns }: AgentRecords,
+  decisions: Map<string, DecisionEvent>,
+): StuckStep[] {
   // Steps in order of turn; a record with no turn is a step of its own.
   const byTurn = new Map<string, StuckCall[]>();
   const stepOrder: string[] = [];

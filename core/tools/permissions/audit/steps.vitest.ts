@@ -9,7 +9,7 @@ import {
 } from "../../../util/stuckSignals";
 import { buildWorkLog } from "../../../util/workLog";
 import { decisionDraft, outcomeDraft, turnDraft } from "./record";
-import { auditToSteps } from "./steps";
+import { auditToAgentSteps, auditToSteps, detectStuckByAgent } from "./steps";
 import { AuditWriter, readAuditFile } from "./writer";
 
 let dir: string;
@@ -275,5 +275,142 @@ describe("auditToSteps details", () => {
     }));
     expect(detectStuck(talk).signals.map((s) => s.kind)).toContain("monologue");
     expect(detectStuck(auditToSteps(throughAudit(talk))).signals).toEqual([]);
+  });
+});
+
+describe("auditToSteps by agent", () => {
+  const sub = { id: "sub-c1", kind: "subagent" as const, role: "Explore" };
+  const main = { id: "main-s", kind: "main" as const };
+  const worker = { id: "worker-3", kind: "loop-worker" as const };
+
+  /** Records for calls, each as [agent, turn, call]; seq follows array order. */
+  function write(
+    calls: [typeof sub | typeof main | undefined, number, StuckCall][],
+  ) {
+    const w = new AuditWriter({
+      dir,
+      now: () => new Date("2026-11-10T12:00:00Z"),
+    });
+    calls.forEach(([agent, turn, c], i) => {
+      const callId = `c${i}`;
+      w.write(
+        decisionDraft({
+          session: "s",
+          turn,
+          callId,
+          tool: c.tool,
+          args: JSON.stringify(c.args ?? {}),
+          policy: "allow",
+          by: "rules",
+          agent,
+        }),
+      );
+      w.write(
+        outcomeDraft({
+          session: "s",
+          turn,
+          callId,
+          tool: c.tool,
+          ran: true,
+          exit: c.error ? 1 : 0,
+          output: c.result ?? "",
+          error: c.error ? (c.result ?? "error") : undefined,
+          changed: c.changed,
+          read: c.read,
+          agent,
+        }),
+      );
+    });
+    return readAuditFile(path.join(dir, "2026-11", "s.jsonl"));
+  }
+
+  const kinds = (r: ReturnType<typeof detectStuckByAgent>[number]) =>
+    r.report.signals.map((s) => s.kind);
+
+  it("a busy main agent does not mask a subagent repeating one call", () => {
+    const records = write([
+      [sub, 1, read("a.ts")],
+      [main, 1, read("m1.ts")],
+      [sub, 2, read("a.ts")],
+      [main, 2, read("m2.ts")],
+      [sub, 3, read("a.ts")],
+      [main, 3, edit("m1.ts", "h1")],
+      [sub, 4, read("a.ts")],
+      [main, 4, bash("npm test")],
+    ]);
+    // read together, the main agent's edit resets the repeat count
+    const merged = detectStuck([...auditToAgentSteps(records).values()].flat());
+    expect(merged.signals.map((s) => s.kind)).not.toContain("repeat-call");
+    const by = detectStuckByAgent(records);
+    expect(by.map((r) => r.agent).sort()).toEqual(["main", "sub-c1"]);
+    expect(kinds(by.find((r) => r.agent === "sub-c1")!)).toContain(
+      "repeat-call",
+    );
+    expect(by.find((r) => r.agent === "main")!.report.level).toBe("none");
+  });
+
+  it("one agent's repeats do not accuse another that made each call once", () => {
+    const records = write([
+      [sub, 1, bash("npm test", FAIL, true)],
+      [main, 1, bash("npm test", FAIL, true)],
+      [worker as never, 1, bash("npm test", FAIL, true)],
+      [sub, 2, read("b.ts")],
+    ]);
+    const by = detectStuckByAgent(records);
+    expect(by.every((r) => r.report.level === "none")).toBe(true);
+    // while read as one history the same calls repeat
+    const merged = detectStuck([...auditToAgentSteps(records).values()].flat());
+    expect(merged.signals.length).toBeGreaterThan(0);
+  });
+
+  it("turn numbers are each agent's own", () => {
+    const records = write([
+      [main, 1, read("a.ts")],
+      [sub, 1, read("b.ts")],
+      [main, 2, read("c.ts")],
+    ]);
+    const steps = auditToAgentSteps(records);
+    expect(steps.get("main")).toHaveLength(2);
+    expect(steps.get("sub-c1")).toHaveLength(1);
+  });
+
+  it("records with no agent, and main's own, are one main agent", () => {
+    const records = write([
+      [undefined, 1, read("a.ts")],
+      [main, 2, read("a.ts")],
+      [undefined, 3, read("a.ts")],
+      [main, 4, read("a.ts")],
+    ]);
+    expect([...auditToAgentSteps(records).keys()]).toEqual(["main"]);
+    expect(auditToSteps(records)).toHaveLength(4);
+    expect(
+      detectStuck(auditToSteps(records)).signals.map((s) => s.kind),
+    ).toContain("repeat-call");
+  });
+
+  it("a text-only turn belongs to the agent that took it", () => {
+    const w = new AuditWriter({
+      dir,
+      now: () => new Date("2026-11-10T12:00:00Z"),
+    });
+    w.write(
+      turnDraft({ session: "s", turn: 1, textChars: 9, calls: 0, agent: sub }),
+    );
+    const steps = auditToAgentSteps(
+      readAuditFile(path.join(dir, "2026-11", "s.jsonl")),
+    );
+    expect([...steps.keys()]).toEqual(["sub-c1"]);
+  });
+
+  it("auditToSteps gives the main agent by default and another by key", () => {
+    const records = write([
+      [main, 1, read("a.ts")],
+      [sub, 1, read("b.ts")],
+    ]);
+    expect(auditToSteps(records)[0].calls[0].args).toEqual({ path: "a.ts" });
+    expect(auditToSteps(records, "sub-c1")[0].calls[0].args).toEqual({
+      path: "b.ts",
+    });
+    expect(auditToSteps(records, "nobody")).toEqual([]);
   });
 });

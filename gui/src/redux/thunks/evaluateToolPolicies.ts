@@ -125,6 +125,7 @@ export async function evaluateToolPolicy(
   mode?: MessageModes,
   sessionId?: string,
   agent?: AuditAgent,
+  history?: ReviewHistory,
 ): Promise<EvaluatedPolicy> {
   const result = await evaluateBasePolicy(
     ideMessenger,
@@ -134,6 +135,7 @@ export async function evaluateToolPolicy(
     approval,
     sessionId,
     agent,
+    history,
   );
   // Plan mode changes nothing until the plan is accepted, at every level
   // below YOLO
@@ -150,6 +152,7 @@ async function evaluateBasePolicy(
   approval?: ApprovalSettings,
   sessionId?: string,
   agent?: AuditAgent,
+  history?: ReviewHistory,
 ): Promise<EvaluatedPolicy> {
   const toolName = toolCallState.toolCall.function.name;
   // Core writes the decision to the audit trail when it knows the call
@@ -158,6 +161,9 @@ async function evaluateBasePolicy(
     ...(sessionId ? { sessionId } : {}),
     ...(agent ? { agent } : {}),
   };
+  // Offered for shadow review (core ignores it unless the person turned that
+  // on). Not for edits: their answer is a diff the person accepts or rejects.
+  const shadowHistory = history && !isEditTool(toolName) ? { history } : {};
 
   // Edit tools are reviewed as a diff the user accepts or rejects, so they
   // are not asked about up front. They still go through core so a deny rule
@@ -212,6 +218,7 @@ async function evaluateBasePolicy(
     processedArgs: toolCallState.processedArgs,
     ...(approval ? { approval } : {}),
     ...auditIds,
+    ...shadowHistory,
   });
 
   // Evaluate the policy dynamically
@@ -441,6 +448,7 @@ export async function evaluateToolPolicies(
   mode?: MessageModes,
   sessionId?: string,
   agent?: AuditAgent,
+  history?: ReviewHistory,
 ): Promise<EvaluatedPolicy[]> {
   // Check if ALL tool calls are auto-approved using dynamic evaluation
   let policyResults = await Promise.all(
@@ -454,6 +462,7 @@ export async function evaluateToolPolicies(
         mode,
         sessionId,
         agent,
+        history,
       ),
     ),
   );

@@ -237,3 +237,7 @@ test/         offline tests and the fake Ollama
 results/      gitignored: JSONL results and fixtures
 profiles/     gitignored: learned profiles
 ```
+
+## Product contract (MR7a, step one)
+
+The lab depends on one product module, `core/util/labContract.ts` (pure, no imports). `core/util/labContract.pin.json` pins its version and exported surface (a core vitest fails when they change without the pin), and `core/util/labContract.golden.json` holds vectors that both that vitest and the lab run (`lib/contractCheck.mjs`, called from `lab.mjs` at start: a product build that disagrees makes the lab exit 2). `scripts/ci/check-bench-boundary.mjs` fails CI when anything under `core/`, `gui/`, `extensions/`, `binary/` or `packages/` imports `bench/`. `schema/result.v1.schema.json` with `lib/resultSchema.mjs` is the result record schema (MR8) and `lib/governor.mjs` the spend, request and wall-time governor (MR9), a dry run unless told otherwise; neither calls a model or the network.

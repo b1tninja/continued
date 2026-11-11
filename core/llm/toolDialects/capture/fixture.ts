@@ -1,4 +1,5 @@
 import { maskText } from "../../../tools/permissions/audit/mask";
+import { captureFixtureId } from "../../../util/labContract";
 import type { ToolCallLike } from "../../../util/toolDialectDetect";
 import type { CorpusFixture, CorpusStream, CorpusTool } from "../corpus/corpus";
 import type { Classified } from "./classify";
@@ -28,24 +29,7 @@ export interface FixtureContext {
   classified: Classified;
 }
 
-const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+/, "")
-    .replace(/-+$/, "");
-
-export function fixtureId(parts: {
-  model: string;
-  transport: string;
-  streamed: boolean;
-  temperature: Temperature;
-  pass: number;
-  promptId: string;
-}): string {
-  const mode = parts.streamed ? "stream" : "whole";
-  return `live-${slug(parts.model)}-${parts.transport}-${mode}-t${parts.temperature}-p${parts.pass}-${parts.promptId}`;
-}
+export const fixtureId = captureFixtureId;
 
 export function toCorpusTools(tools: WireTool[]): CorpusTool[] {
   return tools.map((t) => {
