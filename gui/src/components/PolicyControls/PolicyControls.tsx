@@ -25,6 +25,7 @@ import {
   type PolicyArea,
   type PolicyLevel,
 } from "core/tools/permissions/policy";
+import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import {
   REVIEWABLE_AREAS,
@@ -265,18 +266,38 @@ export function PresetSelect() {
 }
 
 /**
- * The toolbar: a preset picker and one dropdown for each of the five areas.
- * Below the xs breakpoint only the preset picker is shown, because five more
- * targets do not fit; every area is still reachable in Settings > Tools.
+ * The session policy: a preset picker and one dropdown for each of the five
+ * areas. The five areas sit inline from the lg breakpoint; below it they fold
+ * behind a chevron next to the preset picker, so the row above the input keeps
+ * to one line in a narrow side panel. The fold is local state and is not saved.
  */
 export function PolicyControls() {
+  const [expanded, setExpanded] = useState(false);
   return (
     <div
-      className="flex flex-row items-center gap-1"
+      className="flex flex-row flex-wrap items-center gap-1"
       data-testid="policy-controls"
     >
       <PresetSelect />
-      <div className="hidden flex-row items-center gap-1 xs:flex">
+      <button
+        type="button"
+        data-testid="policy-areas-toggle"
+        aria-label={expanded ? "Hide policy areas" : "Show policy areas"}
+        aria-expanded={expanded}
+        aria-controls="policy-areas"
+        title="Set each area on its own"
+        onClick={() => setExpanded((open) => !open)}
+        className="hover:bg-list-item-hover flex h-5 w-5 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-description lg:hidden"
+      >
+        <ChevronDownIcon
+          className={`h-2.5 w-2.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+      <div
+        id="policy-areas"
+        className={`${expanded ? "flex" : "hidden"} flex-row items-center gap-1 lg:flex`}
+      >
         {POLICY_AREAS.map((area) => (
           <AreaLevelSelect key={area} area={area} variant="icon" />
         ))}
