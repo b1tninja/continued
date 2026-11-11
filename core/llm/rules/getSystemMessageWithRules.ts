@@ -142,7 +142,7 @@ const isRootLevelRule = (rule: RuleWithSource): boolean => {
  * Determines if a rule should be considered global and always applied
  * This includes rules with alwaysApply: true OR root-level rules with no globs
  */
-const isGlobalRule = (rule: RuleWithSource): boolean => {
+export const isGlobalRule = (rule: RuleWithSource): boolean => {
   // Rules with alwaysApply: true are always global
   if (rule.alwaysApply === true) {
     return true;
