@@ -26,7 +26,6 @@ export interface AgentsCommandDeps {
 
 const DEFAULT_URL = `http://${DEFAULT_SERVE_HOST}:8000`;
 
-// eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
 const clean = (v: unknown): string => String(v ?? "").replace(CONTROL, " ");
 

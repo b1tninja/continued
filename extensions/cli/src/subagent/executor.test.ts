@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import { agentRegistry } from "core/agents/registry.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fireSubagentStart, fireSubagentStop } from "../hooks/fireHook.js";
 import { checkToolPermission } from "../permissions/permissionChecker.js";

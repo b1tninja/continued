@@ -6,16 +6,16 @@ import { costMarkOf, costSince } from "core/util/loopCost.js";
 import { emitAgent, ensureMainAgent, tokensOf } from "../agents/feed.js";
 import { getSubagentModel } from "../contextManagement.js";
 import { fireSubagentStart, fireSubagentStop } from "../hooks/fireHook.js";
+import { usageSince } from "../loop/loopBudget.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import { services } from "../services/index.js";
 import { serviceContainer } from "../services/ServiceContainer.js";
 import type { ToolPermissionServiceState } from "../services/ToolPermissionService.js";
 import { ModelServiceState, SERVICE_NAMES } from "../services/types.js";
+import { getSessionUsage } from "../session.js";
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import type { StreamCallbacks } from "../stream/streamChatResponse.types.js";
 import type { ToolCallPreview, ToolPermissionPrompt } from "../tools/types.js";
-import { usageSince } from "../loop/loopBudget.js";
-import { getSessionUsage } from "../session.js";
 import { escapeEvents } from "../util/cli.js";
 import { logger } from "../util/logger.js";
 

@@ -1,5 +1,5 @@
-import { agentRegistry } from "core/agents/registry.js";
 import { projectAgents, type AgentsSnapshot } from "core/agents/project.js";
+import { agentRegistry } from "core/agents/registry.js";
 import type { Express, Request, Response } from "express";
 
 import { emitAgent, ensureMainAgent, sessionCostUsd } from "../agents/feed.js";
