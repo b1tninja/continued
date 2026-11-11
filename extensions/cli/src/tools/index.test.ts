@@ -196,6 +196,7 @@ const toolState = vi.hoisted(() => ({
   mode: "normal" as string,
   plan: undefined as { items: unknown[] } | undefined,
   loopItem: false,
+  mcp: [] as string[],
 }));
 
 vi.mock("../services/index.js", () => ({
@@ -204,7 +205,12 @@ vi.mock("../services/index.js", () => ({
     get: vi.fn(async (name: string) =>
       name === "model"
         ? { model: { provider: "bedrock", name: "m", model: "m" } }
-        : { tools: [] },
+        : {
+            tools: toolState.mcp.map((name) => ({
+              name,
+              inputSchema: { type: "object", properties: {} },
+            })),
+          },
     ),
   },
   services: {
@@ -247,6 +253,8 @@ describe("getAllAvailableTools and the task list", () => {
     toolState.mode = "normal";
     toolState.plan = undefined;
     toolState.loopItem = false;
+    toolState.mcp = [];
+    delete process.env.CONTINUE_STABLE_TOOL_ORDER;
   });
 
   it("does not offer TaskList in plan mode: PresentPlan's to-dos become the list", async () => {
@@ -272,5 +280,37 @@ describe("getAllAvailableTools and the task list", () => {
     const offered = await names();
     expect(offered).not.toContain("TaskList");
     expect(offered).toContain("FinishItem");
+  });
+
+  describe("MCP tool order (C64)", () => {
+    const mcpNames = async () => {
+      const offered = await names();
+      return offered.filter((n) => n.startsWith("mcp__"));
+    };
+
+    it("sorts MCP tools by name, so a reconnect does not reorder the list", async () => {
+      toolState.mcp = ["mcp__c__list", "mcp__a__search", "mcp__b__fetch"];
+      const first = await mcpNames();
+      toolState.mcp = ["mcp__b__fetch", "mcp__c__list", "mcp__a__search"];
+      expect(await mcpNames()).toEqual(first);
+      expect(first).toEqual([
+        "mcp__a__search",
+        "mcp__b__fetch",
+        "mcp__c__list",
+      ]);
+    });
+
+    it("keeps the built-in tools in front and in their own order", async () => {
+      toolState.mcp = ["mcp__a__search"];
+      const offered = await names();
+      expect(offered.at(-1)).toBe("mcp__a__search");
+      expect(offered.indexOf("Read")).toBeLessThan(offered.indexOf("Write"));
+    });
+
+    it("CONTINUE_STABLE_TOOL_ORDER=0 keeps the connection order", async () => {
+      process.env.CONTINUE_STABLE_TOOL_ORDER = "0";
+      toolState.mcp = ["mcp__c__list", "mcp__a__search"];
+      expect(await mcpNames()).toEqual(["mcp__c__list", "mcp__a__search"]);
+    });
   });
 });

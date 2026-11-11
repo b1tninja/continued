@@ -52,6 +52,7 @@ import { ThunkApiType } from "../store";
 import { buildChatRequest } from "../util/buildChatRequest";
 import { dumpPromptSegments } from "../util/promptSegmentDump";
 
+import { mainAuditAgent } from "core/tools/permissions/audit/identity";
 import { interceptSystemToolCalls } from "core/tools/systemMessageTools/interceptSystemToolCalls";
 
 import {
@@ -490,11 +491,13 @@ export const streamNormalInput = createAsyncThunk<
             sessionId: state3.session.id,
             history: buildReviewHistory(state3.session.history),
             onceGrants: state3.blockedCalls.grants,
+            agent: mainAuditAgent(state3.session.id, state3.session.mode),
           }
         : undefined,
       selectApprovalSettings(state3),
       state3.session.mode,
       state3.session.id,
+      mainAuditAgent(state3.session.id, state3.session.mode),
     );
     // Loop mode: a run past its turn limit that keeps calling tools ends here
     if (endRunAtTurnLimit(dispatch, getState)) {

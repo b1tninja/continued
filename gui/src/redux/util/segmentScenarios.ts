@@ -157,6 +157,9 @@ export function ideState(opts: {
 }
 
 /** The IDE scenarios by name (C62 scenarios 1 to 5, and 9 and 10 in the IDE). */
+/** The scoped rule listed before the global one, as a config may list them. */
+export const SCOPED_FIRST_RULES: RuleWithSource[] = [RULES[1], RULES[0]];
+
 export const IDE_SCENARIOS: Record<string, () => RootState> = {
   "ide-agent-claude": () => ideState({ model: CLAUDE }),
   "ide-agent-claude-tasklist": () =>
@@ -170,6 +173,24 @@ export const IDE_SCENARIOS: Record<string, () => RootState> = {
   "ide-agent-scoped-rule": () =>
     ideState({
       model: CLAUDE,
+      history: [
+        msg("user", "Fix the bug in lexer.ts", {
+          contextItems: [
+            {
+              name: "lexer.ts",
+              description: "",
+              content: "export const a = 1;",
+              uri: { type: "file", value: "file:///repo/src/lexer.ts" },
+              id: { providerTitle: "file", itemId: "lexer" },
+            },
+          ],
+        }),
+      ],
+    }),
+  "ide-agent-scoped-first": () =>
+    ideState({
+      model: CLAUDE,
+      rules: SCOPED_FIRST_RULES,
       history: [
         msg("user", "Fix the bug in lexer.ts", {
           contextItems: [

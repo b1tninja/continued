@@ -6,7 +6,7 @@ import { DecisionSource } from "../decide";
 import { uriToPath } from "../names";
 import { EvaluateInput, evaluateToolPolicyWithRules } from "../evaluate";
 import type { ToolPermissions } from "../rules";
-import type { AuditReviewer } from "../audit/record";
+import type { AuditAgent, AuditReviewer } from "../audit/record";
 import { ReviewCategory } from "./categories";
 import {
   addressedReason,
@@ -31,6 +31,8 @@ export interface AutoReviewRequest {
   sessionId: string;
   /** The call's id, for the audit trail */
   callId?: string;
+  /** Which agent made the call, for the audit trail */
+  agent?: AuditAgent;
   toolName: string;
   basePolicy: ToolPolicy;
   parsedArgs: Record<string, unknown>;

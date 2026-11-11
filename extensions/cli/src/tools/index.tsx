@@ -1,3 +1,7 @@
+import {
+  stableToolOrder,
+  stableToolOrderEnabled,
+} from "core/tools/stableToolOrder.js";
 // @ts-ignore
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { ChatCompletionTool } from "openai/resources.mjs";
@@ -180,7 +184,19 @@ export async function getAllAvailableTools(
   const mcpState = await serviceContainer.get<MCPServiceState>(
     SERVICE_NAMES.MCP,
   );
-  tools.push(...mcpState.tools.map(convertMcpToolToContinueTool));
+  // MCP servers connect in no fixed order: sorting by name keeps the tool
+  // list, the head of every request, the same between requests (C64).
+  // CONTINUE_STABLE_TOOL_ORDER=0 keeps the connection order.
+  const mcpTools = mcpState.tools.map(convertMcpToolToContinueTool);
+  tools.push(
+    ...(stableToolOrderEnabled(process.env.CONTINUE_STABLE_TOOL_ORDER)
+      ? stableToolOrder(
+          mcpTools,
+          (t) => t.name,
+          () => false,
+        )
+      : mcpTools),
+  );
 
   // CONTINUE_TOOL_SEARCH=auto: defer MCP tools above a token budget. With it
   // unset this returns `tools` unchanged.

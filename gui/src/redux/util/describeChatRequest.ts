@@ -7,7 +7,10 @@ import {
 } from "core/llm/promptSegments";
 import { promptProfile } from "core/llm/prompts/turns";
 import { promptChoiceFor, tailFor } from "core/llm/prompts/usePrompts";
-import { getRuleId } from "core/llm/rules/getSystemMessageWithRules";
+import {
+  getRuleId,
+  isGlobalRule,
+} from "core/llm/rules/getSystemMessageWithRules";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "core/tools/builtIn";
 import { generateToolsSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { renderChatMessage } from "core/util/messageContent";
@@ -25,7 +28,8 @@ import { SUMMARY_MARKER } from "./constructMessages";
  * block from `generateToolsSystemMessage`. Nothing here is sent.
  */
 
-const isScoped = (r: RuleWithSource) => !!(r.globs || r.regex);
+// A rule that is not global comes and goes with the files in play.
+const isScoped = (r: RuleWithSource) => !isGlobalRule(r);
 
 function toolSegments(request: ChatRequest, state: RootState): PromptSegment[] {
   const tools: Tool[] = request.completionOptions.tools ?? [];

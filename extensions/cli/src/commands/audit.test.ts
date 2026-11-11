@@ -84,6 +84,41 @@ describe("continuous audit", () => {
     expect(JSON.parse(text())).toHaveLength(1);
   });
 
+  it("names the agent in the list, filters by it and lists the inbox", () => {
+    const trail = new AuditTrail({
+      dir,
+      enabled: true,
+      now: () => new Date("2026-11-10T12:00:00Z"),
+      syncImportant: false,
+    });
+    trail.decision({
+      session: "sess-c",
+      callId: "3",
+      tool: "Bash",
+      args: JSON.stringify({ command: "npm test" }),
+      policy: "ask",
+      by: "rules",
+      agent: {
+        id: "sub-9",
+        kind: "subagent",
+        role: "Explore",
+        parentId: "main-sess-c",
+      },
+    });
+    auditCommand("list", undefined, { dir, json: true, agent: "Explore" });
+    const rows = JSON.parse(text());
+    expect(rows.map((r: any) => r.callId)).toEqual(["3"]);
+    expect(rows[0].agent.parentId).toBe("main-sess-c");
+    stdout = [];
+
+    expect(auditCommand("inbox", undefined, { dir })).toBe(0);
+    const lines = text().trim().split(/\r?\n/);
+    // the earlier ask in sess-b was refused, so only the open one waits
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("Explore under main-sess-c");
+    expect(lines[0]).toContain("npm test");
+  });
+
   it("prints one line per call in the default form", () => {
     auditCommand(undefined, undefined, { dir });
     const lines = text().trim().split("\n");

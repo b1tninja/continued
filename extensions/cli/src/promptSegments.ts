@@ -137,7 +137,9 @@ function systemSegments(
       makeSegment({
         id: "subagent.prompt",
         source: "mode",
-        stability: "static",
+        // Differs per subagent while the rules before it are shared by all
+        // of them, so it is the more volatile of the two and belongs last.
+        stability: "session",
         region: "system",
         text: subagentPrompt,
       }),

@@ -15,6 +15,8 @@ import {
   SubagentDefinition,
 } from "core/subagents/definitions";
 import { resolveSubagentModel } from "core/subagents/model";
+import type { AuditAgent } from "core/tools/permissions/audit/record";
+import { subagentAuditAgent } from "core/tools/permissions/audit/identity";
 import { modeModelFor } from "core/util/modelUse";
 import {
   SubagentRunStatus,
@@ -253,6 +255,8 @@ export interface SubagentDriveInput {
   handleCall?: (call: ToolCallState) => Promise<HandledCall | undefined>;
   /** Folders (URIs) the tool calls run in: a worker's worktree */
   workspaceDirs?: string[];
+  /** Who the audit trail names for this run's calls, under the parent's session */
+  audit?: { sessionId: string; agent: AuditAgent };
 }
 
 export interface SubagentDriveResult {
@@ -507,6 +511,8 @@ export async function driveSubagent(
         getState().ui.toolSettings,
         selectApprovalSettings(getState()),
         getState().session.mode,
+        input.audit?.sessionId,
+        input.audit?.agent,
       );
       if (policy.policy === "disabled") {
         fail(
@@ -771,6 +777,15 @@ export async function runSubagentTool(
       maxTurns: definition.maxTurns ?? DEFAULT_SUBAGENT_MAX_TURNS,
       onUpdate: update,
       approvalScope: toolCallId,
+      audit: {
+        sessionId: getState().session.id,
+        agent: subagentAuditAgent(
+          getState().session.id,
+          toolCallId,
+          definition.name,
+          getState().session.mode,
+        ),
+      },
     });
     local = outcome.local;
     finish(outcome.status, outcome.error);

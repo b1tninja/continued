@@ -15,6 +15,7 @@ import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveToolDialect } from "./config/yaml/saveToolDialect";
 import { getOllamaShowHint } from "./util/ollamaShowHint";
+import { testOpenAICompatConnection } from "./util/openaiCompatTest";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { uriToPath } from "./tools/permissions/names";
@@ -741,6 +742,7 @@ export class Core {
           toolName: data.toolName,
           parsedArgs: data.parsedArgs,
           approval: data.approval,
+          agent: data.agent,
         },
         reply,
       );
@@ -803,6 +805,11 @@ export class Core {
         };
       }
     });
+
+    // Test connection for any OpenAI-compatible endpoint; never throws.
+    on("openaiCompat/testConnection", async (msg) =>
+      testOpenAICompatConnection(msg.data),
+    );
 
     // Cached per model per process; no hint (an empty object) on any failure.
     on("ollama/showHint", async (msg) => ({
@@ -1965,6 +1972,7 @@ export class Core {
           approval,
           callId,
           sessionId,
+          agent,
         },
       }) => {
         const { config } = await this.configHandler.loadConfig();
@@ -1997,7 +2005,7 @@ export class Core {
         });
         recordPolicyDecision(
           getAuditTrail(),
-          { session: sessionId, callId, toolName, parsedArgs, approval },
+          { session: sessionId, callId, toolName, parsedArgs, approval, agent },
           basePolicy,
           result,
         );

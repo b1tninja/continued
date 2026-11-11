@@ -20,8 +20,7 @@
     "tools.builtin@agent": "6afdc7725842",
     "preamble": "86df2e5027c5",
     "turn.act@full": "dc81e6a64288",
-    "commit-signature": "c87efdc42c61",
-    "subagent.prompt": "18525b4a0f30"
+    "commit-signature": "c87efdc42c61"
   },
   "cli-compaction": {
     "tools.builtin@agent": "6afdc7725842",

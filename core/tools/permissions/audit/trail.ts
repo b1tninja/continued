@@ -153,12 +153,14 @@ export class AuditTrail {
       const tool = input.tool ?? p?.input.tool ?? "unknown";
       const session = input.session ?? p?.input.session ?? "unknown";
       const turn = input.turn ?? p?.input.turn;
+      const agent = input.agent ?? p?.input.agent;
       this.pending.delete(input.callId);
       const result = this.writer.write(
         outcomeDraft({
           ...input,
           tool,
           session,
+          ...(agent ? { agent } : {}),
           ...(turn === undefined ? {} : { turn }),
           durMs:
             input.durMs ??

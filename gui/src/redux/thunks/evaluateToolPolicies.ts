@@ -6,6 +6,7 @@ import {
   type CallContext,
 } from "core/tools/permissions/approval";
 import { resolveShell } from "core/util/shell";
+import type { AuditAgent } from "core/tools/permissions/audit/record";
 import type { AutoReviewReply } from "core/tools/permissions/auto/handler";
 import { userTextForReview } from "core/tools/permissions/auto/history";
 import type { ReviewHistory } from "core/tools/permissions/auto/prompt";
@@ -33,6 +34,8 @@ export interface AutoReviewContext {
   history: ReviewHistory;
   /** Exact calls the user allowed once from the Recently blocked list. */
   onceGrants?: string[];
+  /** Which agent is asking, for the audit trail */
+  agent?: AuditAgent;
 }
 
 export interface EvaluatedPolicy {
@@ -121,6 +124,7 @@ export async function evaluateToolPolicy(
   approval?: ApprovalSettings,
   mode?: MessageModes,
   sessionId?: string,
+  agent?: AuditAgent,
 ): Promise<EvaluatedPolicy> {
   const result = await evaluateBasePolicy(
     ideMessenger,
@@ -129,6 +133,7 @@ export async function evaluateToolPolicy(
     toolPolicies,
     approval,
     sessionId,
+    agent,
   );
   // Plan mode changes nothing until the plan is accepted, at every level
   // below YOLO
@@ -144,12 +149,14 @@ async function evaluateBasePolicy(
   toolPolicies: ToolPolicies,
   approval?: ApprovalSettings,
   sessionId?: string,
+  agent?: AuditAgent,
 ): Promise<EvaluatedPolicy> {
   const toolName = toolCallState.toolCall.function.name;
   // Core writes the decision to the audit trail when it knows the call
   const auditIds = {
     callId: toolCallState.toolCallId,
     ...(sessionId ? { sessionId } : {}),
+    ...(agent ? { agent } : {}),
   };
 
   // Edit tools are reviewed as a diff the user accepts or rejects, so they
@@ -334,6 +341,7 @@ async function reviewOpenCalls(
         const res = await ideMessenger.request("tools/autoReview", {
           sessionId: auto.sessionId,
           callId: r.toolCallState.toolCallId,
+          ...(auto.agent ? { agent: auto.agent } : {}),
           toolName,
           basePolicy,
           parsedArgs: r.toolCallState.parsedArgs,
@@ -432,6 +440,7 @@ export async function evaluateToolPolicies(
   approval?: ApprovalSettings,
   mode?: MessageModes,
   sessionId?: string,
+  agent?: AuditAgent,
 ): Promise<EvaluatedPolicy[]> {
   // Check if ALL tool calls are auto-approved using dynamic evaluation
   let policyResults = await Promise.all(
@@ -444,6 +453,7 @@ export async function evaluateToolPolicies(
         approval,
         mode,
         sessionId,
+        agent,
       ),
     ),
   );

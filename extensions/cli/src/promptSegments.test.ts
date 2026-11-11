@@ -2,7 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 
 import {
+  CACHE_BREAKPOINTS,
+  type CacheProvider,
   type PromptSegment,
+  cacheOrderViolations,
   type SegmentBudgets,
   commonPrefixLength,
   firstChangedVsPrev,
@@ -67,19 +70,18 @@ beforeAll(async () => {
   }
 });
 
-// The subagent's own prompt is appended after the user rules, a static
-// segment after a session one: a real ordering fault the manifest shows.
-const KNOWN_INVERSIONS: Record<string, string[]> = {
-  "cli-subagent": ["subagent.prompt (static) follows rules.user (session)"],
-};
-
 describe("CLI segment manifests", () => {
   for (const name of Object.keys(SCENARIOS)) {
     describe(name, () => {
-      it("is in canonical order (known inversions aside)", () => {
+      it("is in canonical order", () => {
         expect(validateManifest(manifests[name]).map((v) => v.message)).toEqual(
-          KNOWN_INVERSIONS[name] ?? [],
+          [],
         );
+      });
+      it("puts stable segments before volatile ones at every breakpoint", () => {
+        for (const p of Object.keys(CACHE_BREAKPOINTS) as CacheProvider[]) {
+          expect(cacheOrderViolations(manifests[name], p)).toEqual([]);
+        }
       });
       it("is within the per-segment token budgets", () => {
         expect(overBudget(manifests[name], budgets.cli)).toEqual([]);

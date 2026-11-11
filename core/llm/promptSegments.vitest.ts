@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   type PromptSegment,
   type SegmentSpec,
+  CACHE_BREAKPOINTS,
   assertValidManifest,
+  cacheOrderViolations,
   commonPrefixLength,
   createSegmentDump,
   describeSegments,
@@ -10,6 +12,7 @@ import {
   makeSegment,
   overBudget,
   promptSegmentsEnabled,
+  segmentsBefore,
   validateManifest,
   visibleOffenders,
   volatileEarly,
@@ -207,5 +210,82 @@ describe("the dump", () => {
       "rules.session",
     ]);
     expect(out[0]).toBe("[prompt-segments] req=1 model=m mode=agent");
+  });
+});
+
+describe("cache order (C62)", () => {
+  it("places breakpoints per provider: Nova takes none on the tools", () => {
+    expect(CACHE_BREAKPOINTS.anthropic).toEqual(["tools", "system", "history"]);
+    expect(CACHE_BREAKPOINTS["bedrock-claude"]).toEqual(
+      CACHE_BREAKPOINTS.anthropic,
+    );
+    expect(CACHE_BREAKPOINTS["bedrock-nova"]).toEqual(["system", "history"]);
+  });
+
+  it("a breakpoint caches every segment in front of it", () => {
+    expect(segmentsBefore(GOOD, "tools").map((s) => s.id)).toEqual([
+      "tools.builtin",
+      "tools.mcp",
+    ]);
+    expect(segmentsBefore(GOOD, "history").map((s) => s.id)).toEqual([
+      "tools.builtin",
+      "tools.mcp",
+      "turn.act",
+      "rules.session",
+      "env",
+      "history",
+    ]);
+  });
+
+  it("accepts stable-before-volatile order for every provider", () => {
+    for (const p of Object.keys(CACHE_BREAKPOINTS) as never[]) {
+      expect(cacheOrderViolations(GOOD, p)).toEqual([]);
+    }
+  });
+
+  describe("negative controls: the test bites", () => {
+    it("a volatile segment in the system region ahead of a session one", () => {
+      const bad = [
+        ...GOOD.slice(0, 3),
+        seg("rules.scoped:x", "turn", "system"),
+        ...GOOD.slice(3),
+      ];
+      expect(cacheOrderViolations(bad, "anthropic")).toEqual([
+        "rules.session (session) follows rules.scoped:x (turn)",
+        "env (session) follows rules.scoped:x (turn)",
+      ]);
+    });
+
+    it("a session segment in the first user message after a turn one in the system", () => {
+      const bad = [
+        seg("turn.act", "static", "system"),
+        seg("summary.compaction", "turn", "system"),
+        seg("env", "session", "first-user"),
+      ];
+      expect(cacheOrderViolations(bad, "bedrock-nova")).toEqual([
+        "env (session) follows summary.compaction (turn)",
+      ]);
+    });
+
+    it("a per-request segment in front of a breakpoint", () => {
+      const bad = [
+        seg("turn.act", "static", "system"),
+        seg("date", "request", "system"),
+      ];
+      const v = cacheOrderViolations(bad, "anthropic");
+      expect(v).toContain(
+        "date is per-request but is cached by the system breakpoint",
+      );
+    });
+
+    it("a static segment after a volatile one in another region", () => {
+      const bad = [
+        seg("history", "turn", "history"),
+        seg("tools.builtin", "static", "tools"),
+      ];
+      expect(cacheOrderViolations(bad, "anthropic")).toEqual([
+        "tools.builtin (static) follows history (turn)",
+      ]);
+    });
   });
 });

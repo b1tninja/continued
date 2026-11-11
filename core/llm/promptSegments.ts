@@ -309,3 +309,76 @@ export function staticHashes(
     segments.filter((s) => s.stability === "static").map((s) => [s.id, s.hash]),
   );
 }
+
+/** The providers whose cache breakpoints the cache-order test models. */
+export type CacheProvider = "anthropic" | "bedrock-claude" | "bedrock-nova";
+
+/**
+ * Where each provider's adapter puts cache breakpoints, as the region each one
+ * closes (a breakpoint caches everything in front of it). Anthropic and Bedrock
+ * Claude: the last tool, the system message, and the last two user messages
+ * (core/llm/llms/anthropicCache.ts, Bedrock `_addCachingToLastTwoUserMessages`);
+ * Bedrock Nova takes no tool breakpoint. `history` stands for the two message
+ * breakpoints: the conversation as sent, ending where the tail begins.
+ */
+export const CACHE_BREAKPOINTS: Record<CacheProvider, readonly Region[]> = {
+  anthropic: ["tools", "system", "history"],
+  "bedrock-claude": ["tools", "system", "history"],
+  "bedrock-nova": ["system", "history"],
+};
+
+/**
+ * The segments one breakpoint caches: everything up to and including its
+ * region. The first user message belongs to the conversation, so a breakpoint
+ * on `history` covers `first-user` too.
+ */
+export function segmentsBefore(
+  segments: readonly PromptSegment[],
+  region: Region,
+): PromptSegment[] {
+  return segments.filter((s) => regionRank(s.region) <= regionRank(region));
+}
+
+/**
+ * Across regions only two classes matter: stable (static or session, which
+ * change at most once a session) and the turn and request segments that can
+ * change between requests. The API fixes the region order, so a session tool
+ * list (MCP) in front of a static system message cannot be avoided, and is
+ * not a violation.
+ */
+const flatClass = (s: PromptSegment): number =>
+  Math.max(0, stabilityRank(s.stability) - 1);
+
+/**
+ * Cache-order violations over the whole request, across regions: a stable
+ * segment in front of which sits a turn or request segment (the flat order is
+ * what the provider reads), and any per-request segment in front of a
+ * breakpoint. Empty when stable segments all come before volatile ones.
+ */
+export function cacheOrderViolations(
+  segments: readonly PromptSegment[],
+  provider: CacheProvider,
+): string[] {
+  const out: string[] = [];
+  let worst: PromptSegment | undefined;
+  for (const s of segments) {
+    if (worst && flatClass(s) < flatClass(worst)) {
+      out.push(
+        `${s.id} (${s.stability}) follows ${worst.id} (${worst.stability})`,
+      );
+    }
+    if (!worst || flatClass(s) > flatClass(worst)) {
+      worst = s;
+    }
+  }
+  for (const region of CACHE_BREAKPOINTS[provider]) {
+    for (const s of segmentsBefore(segments, region)) {
+      if (s.stability === "request") {
+        out.push(
+          `${s.id} is per-request but is cached by the ${region} breakpoint`,
+        );
+      }
+    }
+  }
+  return out;
+}
