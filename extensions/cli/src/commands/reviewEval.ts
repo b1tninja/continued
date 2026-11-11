@@ -11,6 +11,8 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
+import type { Command } from "commander";
+
 import {
   datasetFormat,
   parseDataset,
@@ -40,6 +42,20 @@ import {
   type Metrics,
   type Paired,
 } from "core/tools/permissions/auto/evaluation/reviewEvalScore.js";
+
+/**
+ * The root program also defines `--config` and commander lets it take the flag
+ * wherever it appears, so the subcommand's own copy stays empty. Read it from
+ * the parent when the subcommand has none.
+ */
+export function withRootConfig<T extends { config?: string }>(
+  options: T,
+  command: { parent?: { opts(): { config?: string } } | null },
+): T {
+  if (options.config) return options;
+  const config = command.parent?.opts().config;
+  return config ? { ...options, config } : options;
+}
 
 export interface ReviewEvalOptions {
   dataset?: string;
@@ -94,8 +110,9 @@ async function loadReviewer(
   reviewer: string | undefined,
   configPath: string | undefined,
 ) {
-  const { initializeServices, getService, SERVICE_NAMES } =
-    await import("../services/index.js");
+  const { initializeServices, getService, SERVICE_NAMES } = await import(
+    "../services/index.js"
+  );
   const { reviewerModel } = await import("../permissions/coreRules.js");
   await initializeServices({
     headless: true,
@@ -364,4 +381,53 @@ export async function reviewEvalCommand(
     gate: verdict,
   });
   return verdict.verdict === "not safe to adopt" ? 1 : 0;
+}
+
+/** Registers `reviewer [action]` on the program; `exit` ends the process. */
+export function registerReviewerCommand(
+  program: Command,
+  exit: (code: number) => Promise<void> | void,
+  run: (opts: ReviewEvalOptions) => Promise<number> = reviewEvalCommand,
+): void {
+  program
+    .command("reviewer [action]")
+    .description(
+      "Work with the reviewer model: eval scores a reviewer model and prompt guidance over a labelled set of tool calls (dry run unless --run)",
+    )
+    .option("--dataset <file>", "Labelled cases (JSON or YAML)")
+    .option(
+      "--reviewer <model-role>",
+      "Reviewer model name or role",
+      "reviewer",
+    )
+    .option("--guidance <file>", "Guidance to try (JSON, YAML or text)")
+    .option(
+      "--compare <file>",
+      "Baseline guidance file, or `default` for the built-in prompt, to compare against",
+    )
+    .option("--profile <id>", "Reviewer profile id (carried into the report)")
+    .option("--run", "Call the model; without it nothing is sent")
+    .option(
+      "--no-prefilter",
+      "Leave out the check for text addressed to the reviewer, to measure the model alone",
+    )
+    .option("--json", "Machine-readable output")
+    .option("--concurrency <n>", "Parallel requests", "4")
+    .option("--timeout-ms <n>", "Per-request timeout", "30000")
+    .option("--config <path>", "Config file that defines the reviewer model")
+    .option("--repeat <k>", "Ask each case k times (floor gate: union)", "1")
+    .option("--max-tokens <n>", "Reply ceiling (1024 if it reasons, else 300)")
+    .option("--outcomes <file>", "Write every case's outcome as JSONL")
+    .action(async (action: string | undefined, options, command: Command) => {
+      options = withRootConfig(options, command);
+      if (action !== "eval") {
+        console.error(
+          "Usage: continuous reviewer eval --dataset <file> [options]",
+        );
+        await exit(1);
+        return;
+      }
+      const code = await run(options);
+      await exit(code);
+    });
 }
