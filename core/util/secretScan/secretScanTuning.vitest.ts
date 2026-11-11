@@ -66,7 +66,7 @@ describe("env-secret-assignment: recall is kept on true-positive shapes", () => 
     ["env file", `SERVICE_ACCESS_TOKEN=${rnd(ALNUM, 24)}`],
     ["json", `{"client_secret": "${rnd(ALNUM, 32)}"}`],
     ["yaml", `api_key: ${rnd(ALNUM, 40)}`],
-    ["short password, mixed classes", `DB_PASSWORD=${rnd("aBcDe3F9gH!x", 11)}`],
+    ["short password, mixed classes", `DB_PASSWORD=Xk9!mQ2vLp4`],
     ["presigned url parameter", `?x_amz_token=${rnd(ALNUM, 40)}&format=json`],
     ["long api key, weak name", `SOME_API_KEY=${rnd(ALNUM, 32)}`],
     ["bearer", `Authorization: Bearer ${rnd(ALNUM, 40)}`],

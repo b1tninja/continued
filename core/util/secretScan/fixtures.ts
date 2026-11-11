@@ -287,6 +287,9 @@ export function falsePositiveShapes(
     // dotted identifier and member access
     `secret_name=config.secrets.${word()}.${word()}`,
     `access_token_field=request.headers[0].${word()}`,
+    `const authToken = ${word()}.${word()}?.${word()} ?? ${word()};`,
+    `api_key_model: ${word()}/${word()}_${word()}:${word()}`,
+    `api_key_ref: ${word().toUpperCase()}/${word().toUpperCase()}_ID:${word().toUpperCase()}`,
     // grep and stack-trace output: file:line:
     `auth_token_file=src/${word()}/auth.ts:${rnd("123456789", 2)}:`,
     `tokenizer.${word()}.py:${rnd("123456789", 3)}:`,

@@ -22,7 +22,7 @@ const LOCATION_SUFFIX = /(?:\.[A-Za-z0-9]{1,5}:\d+|:\d+:)$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VERSION = /^v?\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?$/;
 const DOTTED_IDENTIFIER =
-  /^[A-Za-z_$][A-Za-z_$]*\d{0,3}(?:\.[A-Za-z_$][A-Za-z_$]*\d{0,3})+$/;
+  /^[A-Za-z_$][A-Za-z_$]*\d{0,3}(?:\??\.[A-Za-z_$][A-Za-z_$]*\d{0,3})+$/;
 const WORD_ONLY = /^[A-Za-z]+(?:[_-][A-Za-z]+)*\d{0,3}$/;
 const CAMEL = /^[a-z]+(?:[A-Z][a-z]+)+\d{0,3}$/;
 /** Names whose values are secrets often enough to keep short values. */
@@ -44,11 +44,13 @@ export function characterClasses(value: string): number {
 /** A file path: has an extension, or is slash-separated lowercase words. */
 export function looksLikePath(value: string): boolean {
   if (!value.includes("/")) return false;
-  if (/^[A-Za-z]:[\/]|^(?:\.{1,2}|~)\//.test(value)) return true;
+  if (/^[A-Za-z]:[\\/]|^(?:\.{1,2}|~)\//.test(value)) return true;
   const segments = value.split("/").filter(Boolean);
   if (segments.length < 2) return false;
   if (/\.[A-Za-z][A-Za-z0-9]{0,4}$/.test(value)) return true;
-  return /^[a-z0-9._@~-]+(?:\/[a-z0-9._@~-]+)+\/?$/.test(value);
+  // Words of one case per segment (`ibm/granite-13b:v2`, `ENV_NAME/PART`):
+  // a random base64 segment mixes cases.
+  return segments.every((s) => /^(?:[a-z0-9._@~:-]+|[A-Z0-9._@~:-]+)$/.test(s));
 }
 
 /** A hex string of a digest length (32, 40, 64 or 128). */
