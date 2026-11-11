@@ -100,7 +100,7 @@ export function AlwaysAllowButton({ toolCallId, toolName, parsedArgs }: Props) {
       <Button
         variant="ghost"
         size="sm"
-        className="my-1 font-medium text-description-muted"
+        className="my-0.5 min-h-6 font-medium text-description"
         disabled={state.kind === "working"}
         onClick={onClick}
         title={
@@ -118,7 +118,7 @@ export function AlwaysAllowButton({ toolCallId, toolName, parsedArgs }: Props) {
         <Button
           variant="ghost"
           size="sm"
-          className="my-1 font-medium text-description-muted"
+          className="my-0.5 min-h-6 font-medium text-description"
           onClick={() => setState({ kind: "idle" })}
           data-testid={`always-allow-cancel-${toolCallId}`}
         >

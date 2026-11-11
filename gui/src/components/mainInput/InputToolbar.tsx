@@ -1,22 +1,8 @@
-import {
-  AtSymbolIcon,
-  LightBulbIcon as LightBulbIconOutline,
-  PhotoIcon,
-} from "@heroicons/react/24/outline";
-import { LightBulbIcon as LightBulbIconSolid } from "@heroicons/react/24/solid";
 import { InputModifiers } from "core";
-import {
-  modelSupportsImages,
-  modelSupportsReasoning,
-} from "core/llm/autodetect";
-import { memo, useContext, useRef } from "react";
+import { memo, useContext } from "react";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
-import { useWarmCacheNote } from "../../hooks/useWarmCacheNote";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectUseActiveFile } from "../../redux/selectors";
-import { selectSelectedChatModel } from "../../redux/slices/configSlice";
-import { setHasReasoningEnabled } from "../../redux/slices/sessionSlice";
-import { setReasoningSetting } from "../../redux/slices/uiSlice";
 import { exitEdit } from "../../redux/thunks/edit";
 import { getMetaKeyLabel, isMetaEquivalentKeyPressed } from "../../util";
 import { ToolTip } from "../gui/Tooltip";
@@ -24,10 +10,8 @@ import ModelSelect from "../modelSelection/ModelSelect";
 import { Button } from "../ui";
 import { useFontSize } from "../ui/font";
 import ContextStatus from "./ContextStatus";
-import HoverItem from "./InputToolbar/HoverItem";
-import { CacheTipsButton } from "./CacheTipsButton";
-import { PromptCacheButton } from "./PromptCacheButton";
-import { UsageIndicator } from "./UsageIndicator";
+import HoverItem, { HoverButton } from "./InputToolbar/HoverItem";
+import { OverflowMenu } from "./InputToolbar/OverflowMenu";
 
 export interface ToolbarOptions {
   hideUseCodebase?: boolean;
@@ -39,9 +23,7 @@ export interface ToolbarOptions {
 
 interface InputToolbarProps {
   onEnter?: (modifiers: InputModifiers) => void;
-  onAddContextItem?: () => void;
   onClick?: () => void;
-  onImageFileSelected?: (file: File) => void;
   hidden?: boolean;
   activeKey: string | null;
   toolbarOptions?: ToolbarOptions;
@@ -52,31 +34,11 @@ interface InputToolbarProps {
 function InputToolbar(props: InputToolbarProps) {
   const dispatch = useAppDispatch();
   const ideMessenger = useContext(IdeMessengerContext);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const defaultModel = useAppSelector(selectSelectedChatModel);
   const useActiveFile = useAppSelector(selectUseActiveFile);
   const isInEdit = useAppSelector((store) => store.session.isInEdit);
   const codeToEdit = useAppSelector((store) => store.editModeState.codeToEdit);
-  const hasReasoningEnabled = useAppSelector(
-    (store) => store.session.hasReasoningEnabled,
-  );
   const isEnterDisabled =
     props.disabled || (isInEdit && codeToEdit.length === 0);
-
-  const supportsImages =
-    defaultModel &&
-    modelSupportsImages(
-      defaultModel.provider,
-      defaultModel.model,
-      defaultModel.title,
-      defaultModel.capabilities,
-    );
-
-  const supportsReasoning = modelSupportsReasoning(defaultModel);
-  // Changing the thinking settings rebuilds the message cache (measured live
-  // on Bedrock). Attaching an image to the new message does not, because it
-  // sits after everything already cached.
-  const warmCacheNote = useWarmCacheNote();
 
   const smallFont = useFontSize(-2);
   const tinyFont = useFontSize(-3);
@@ -85,91 +47,19 @@ function InputToolbar(props: InputToolbarProps) {
     <>
       <div
         onClick={props.onClick}
+        // Hidden controls must not be Tab stops
+        inert={props.hidden}
         className={`find-widget-skip flex flex-row items-center justify-between gap-1 bg-vsc-input-background pt-1 select-none ${props.hidden ? "pointer-events-none h-0 cursor-default opacity-0" : "pointer-events-auto mt-2 cursor-text opacity-100"}`}
         style={{
           fontSize: smallFont,
         }}
       >
-        <div className="flex flex-row items-center gap-1 xs:gap-1.5">
+        <div className="flex max-w-[45%] min-w-0 flex-row items-center">
           <ToolTip place="top" content="Select Model">
-            <HoverItem className="!p-0">
+            <HoverItem className="min-w-0 !p-0">
               <ModelSelect />
             </HoverItem>
           </ToolTip>
-          <div className="-mb-1 hidden items-center text-description transition-colors duration-200 xs:flex">
-            {props.toolbarOptions?.hideImageUpload ||
-              (supportsImages && (
-                <>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    style={{ display: "none" }}
-                    accept=".jpg,.jpeg,.png,.gif,.svg,.webp"
-                    onChange={(e) => {
-                      const files = e.target?.files ?? [];
-                      for (const file of files) {
-                        props.onImageFileSelected?.(file);
-                      }
-                      if (fileInputRef.current) {
-                        fileInputRef.current.value = "";
-                      }
-                    }}
-                  />
-
-                  <ToolTip place="top" content="Attach Image">
-                    <HoverItem className="">
-                      <PhotoIcon
-                        className="h-3 w-3 hover:brightness-125"
-                        onClick={(e) => {
-                          fileInputRef.current?.click();
-                        }}
-                      />
-                    </HoverItem>
-                  </ToolTip>
-                </>
-              ))}
-            {props.toolbarOptions?.hideAddContext || (
-              <ToolTip place="top" content="Attach Context">
-                <HoverItem onClick={props.onAddContextItem}>
-                  <AtSymbolIcon className="h-3 w-3 hover:brightness-125" />
-                </HoverItem>
-              </ToolTip>
-            )}
-            {supportsReasoning && (
-              <HoverItem
-                onClick={() => {
-                  dispatch(setHasReasoningEnabled(!hasReasoningEnabled));
-                  if (defaultModel?.title) {
-                    dispatch(
-                      setReasoningSetting({
-                        modelTitle: defaultModel.title,
-                        enabled: !hasReasoningEnabled,
-                      }),
-                    );
-                  }
-                }}
-              >
-                <ToolTip
-                  place="top"
-                  content={
-                    (hasReasoningEnabled
-                      ? "Disable model reasoning"
-                      : "Enable model reasoning") +
-                    (warmCacheNote ? ` ${warmCacheNote}` : "")
-                  }
-                >
-                  {hasReasoningEnabled ? (
-                    <LightBulbIconSolid className="h-3 w-3 brightness-200 hover:brightness-150" />
-                  ) : (
-                    <LightBulbIconOutline className="h-3 w-3 hover:brightness-150" />
-                  )}
-                </ToolTip>
-              </HoverItem>
-            )}
-            <PromptCacheButton />
-            <CacheTipsButton />
-            <UsageIndicator />
-          </div>
         </div>
 
         <div
@@ -181,15 +71,19 @@ function InputToolbar(props: InputToolbarProps) {
           {!isInEdit && <ContextStatus />}
           {!props.toolbarOptions?.hideUseCodebase && !isInEdit && (
             <div className="hidden transition-colors duration-200 hover:underline md:flex">
-              <HoverItem
-                className={
+              <HoverButton
+                data-testid="active-file-button"
+                aria-label={`${getMetaKeyLabel()}⏎ ${
+                  useActiveFile ? "No active file" : "Active file"
+                }`}
+                className={`px-1 text-2xs ${
                   props.activeKey === "Meta" ||
                   props.activeKey === "Control" ||
                   props.activeKey === "Alt"
                     ? "underline"
                     : ""
-                }
-                onClick={(e) =>
+                }`}
+                onClick={() =>
                   props.onEnter?.({
                     useCodebase: false,
                     noContext: !useActiveFile,
@@ -209,12 +103,13 @@ function InputToolbar(props: InputToolbarProps) {
                     {useActiveFile ? "No active file" : "Active file"}
                   </span>
                 </ToolTip>
-              </HoverItem>
+              </HoverButton>
             </div>
           )}
           {isInEdit && (
-            <HoverItem
-              className="hidden hover:underline sm:flex"
+            <HoverButton
+              aria-label="Esc to exit Edit"
+              className="hidden px-1 text-2xs hover:underline sm:inline-flex"
               onClick={async () => {
                 void dispatch(exitEdit({}));
                 ideMessenger.post("focusEditor", undefined);
@@ -223,8 +118,9 @@ function InputToolbar(props: InputToolbarProps) {
               <span>
                 <i>Esc</i> to exit Edit
               </span>
-            </HoverItem>
+            </HoverButton>
           )}
+          <OverflowMenu />
           <ToolTip place="top" content="Send (⏎)">
             <Button
               variant={props.isMainInput ? "primary" : "secondary"}
