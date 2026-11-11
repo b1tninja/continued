@@ -34,6 +34,11 @@ export interface ReviewPromptInput {
    * `settings` could have come from a repository or an assistant.
    */
   guidance?: EffectiveGuidance;
+  /**
+   * The instruction text to send instead of the built-in prompt (a variant from
+   * promptV3.ts). Absent is `REVIEWER_SYSTEM_PROMPT`.
+   */
+  systemPrompt?: string;
   /** Fence token; random per call. Tests pass a fixed one. */
   nonce: string;
 }
@@ -142,8 +147,9 @@ export function guidanceText(g: EffectiveGuidance): string {
 export function reviewerPromptVersion(
   guidance: EffectiveGuidance = EMPTY_GUIDANCE,
   profileId = "default",
+  instructionText: string = REVIEWER_SYSTEM_PROMPT,
 ): string {
-  return promptVersionOf(REVIEWER_SYSTEM_PROMPT, guidance, profileId);
+  return promptVersionOf(instructionText, guidance, profileId);
 }
 
 export function buildReviewMessages(input: ReviewPromptInput): ChatMessage[] {
@@ -193,7 +199,7 @@ export function buildReviewMessages(input: ReviewPromptInput): ChatMessage[] {
   ].join("\n\n");
 
   return [
-    { role: "system", content: REVIEWER_SYSTEM_PROMPT },
+    { role: "system", content: input.systemPrompt ?? REVIEWER_SYSTEM_PROMPT },
     { role: "user", content: user },
   ];
 }

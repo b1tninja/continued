@@ -31,6 +31,7 @@ import {
   ruleSourcesOfLoadedConfig,
 } from "./tools/permissions/readRuleSources";
 import { readUserEnvNames } from "./tools/permissions/userEnvNames";
+import { readUserReviewerPrompt } from "./tools/permissions/userReviewerPrompt";
 import { listEffectiveRules } from "./tools/permissions/effectiveRules";
 import { testToolCall } from "./tools/permissions/testToolCall";
 import { readUserLargeChangeLines } from "./tools/permissions/userLimits";
@@ -756,6 +757,7 @@ export class Core {
           enabled: config.experimental?.enableAutoApproval === true,
           reviewer: config.selectedModelByRole.reviewer,
           guidance: readUserGuidance(),
+          reviewerPrompt: readUserReviewerPrompt(),
           trustedDomains: readUserTrustedDomains(),
           envNames: readUserEnvNames(),
           shell: resolveShell().kind,
