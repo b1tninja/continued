@@ -36,6 +36,7 @@ export interface AgentView {
   workspace?: AgentWorkspace;
   activity?: AgentActivity;
   returnedLength?: number;
+  interrupted?: boolean;
   needsYou: boolean;
 }
 
@@ -198,6 +199,7 @@ function view(
     v.activity = n.activity;
   }
   if (finite(n.returnedLength)) v.returnedLength = n.returnedLength;
+  if (n.interrupted === true) v.interrupted = true;
   return v;
 }
 

@@ -93,6 +93,8 @@ export interface AgentNode {
   activity?: AgentActivity;
   /** How long what it handed back was; the text is not kept */
   returnedLength?: number;
+  /** A stopped agent that the IDE restarted under, not one a person stopped */
+  interrupted?: boolean;
 }
 
 /** What a producer says; the reducer decides what to keep. */

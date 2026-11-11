@@ -60,7 +60,7 @@ describe("BedrockConnectionTester", () => {
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     expect(
       await screen.findByText(
-        /3 models available in us-east-1 \(1 only on Mantle\)/,
+        /3 models available in us-east-1 \(1 only on Bedrock Mantle, AWS's newer endpoint\)/,
       ),
     ).toBeTruthy();
     expect(list).toHaveBeenCalledWith({ region: "us-east-1", apiKey: "k" });
@@ -96,7 +96,7 @@ describe("BedrockConnectionTester", () => {
   });
 
   const useCaseNotice =
-    "Anthropic models on this account need the Anthropic use-case form completed in the Bedrock console before they will work.";
+    "Anthropic models on this account need the Anthropic use-case form completed before they will work (Bedrock console, Model access).";
 
   it("shows one notice and passes the flag on when Anthropic models need the form", async () => {
     const flagged = models.map((m) =>
@@ -145,8 +145,9 @@ describe("BedrockConnectionTester", () => {
     });
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     expect(
-      await screen.findByText(/3 models available in us-east-1.*2 need access/),
+      await screen.findByText(/need access \(Bedrock console, Model access\)/),
     ).toBeTruthy();
+    expect(screen.getByText(/2 need access/)).toBeTruthy();
     const [loaded] = onModelsLoaded.mock.calls.at(-1)!;
     expect(loaded.map((m: any) => m.access)).toEqual([
       "needs-access",
@@ -175,6 +176,36 @@ describe("BedrockConnectionTester", () => {
       screen.getByRole("button", { name: "Test connection" }).click();
     });
     expect(await screen.findByText(/aws sso login/)).toBeTruthy();
+  });
+
+  it("announces a failure as an alert with the error in a copyable code block", async () => {
+    const arn =
+      "AccessDenied: arn:aws:sts::123456789012:assumed-role/dev-role-with-a-long-name/session";
+    const { user } = setup({
+      "bedrock/listModels": async () => ({ ok: false, error: arn }),
+    });
+    const writeText = vi.spyOn(navigator.clipboard, "writeText");
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Could not connect");
+    const code = alert.querySelector("code")!;
+    expect(code.textContent).toBe(arn);
+    expect(code.className).toContain("break-all");
+    expect(screen.queryByRole("status")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Copy error" }));
+    expect(writeText).toHaveBeenCalledWith(arn);
+    expect(screen.getByRole("button", { name: "Copied" })).toBeTruthy();
+  });
+
+  it("announces success as a status: one headline and one detail line", async () => {
+    const { user } = setup({
+      "bedrock/listModels": async () => ({ ok: true, models }),
+    });
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    const status = (await screen.findAllByRole("status"))[0]!;
+    expect(status.textContent).toMatch(/^Connected\. 2 models available/);
+    expect(status.querySelectorAll("span.block")).toHaveLength(2);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("sends a test message to the current model", async () => {
@@ -258,7 +289,7 @@ describe("BedrockConnectionTester tool-call line", () => {
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     await waitFor(() =>
       expect(screen.getByTestId("tool-calls-result").textContent).toBe(
-        "Tool calls: unknown (timeout)",
+        "Tool use: could not tell (timeout)",
       ),
     );
   });

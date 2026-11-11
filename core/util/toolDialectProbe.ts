@@ -32,7 +32,7 @@ export type ToolCallSupport =
 
 export interface ToolDialectProbeResult {
   support: ToolCallSupport;
-  /** "Tool calls: native", "Tool calls: written as text (qwen-xml)", ... */
+  /** "Tool calls: native", "Tool calls: written as text (qwen-xml)", "Tool use: could not tell" */
   label: string;
   /** The model-family preset's one-liner (toolDialectPresets.ts), when the model has one. */
   preset?: string;
@@ -54,7 +54,7 @@ export function labelFor(support: ToolCallSupport): string {
     case "none":
       return "Tool calls: not supported";
     default:
-      return "Tool calls: unknown";
+      return "Tool use: could not tell";
   }
 }
 

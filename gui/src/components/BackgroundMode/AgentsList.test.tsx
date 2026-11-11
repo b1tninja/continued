@@ -4,7 +4,13 @@ import type {
   Session,
   SubagentRunState,
 } from "core";
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import {
@@ -120,10 +126,13 @@ describe("AgentsList", () => {
       "1 waiting for you",
     );
     expect(within(list).getByText("1.5k tokens")).toBeDefined();
-    // The session has no priced usage here: unknown, never $0
-    expect(screen.getByTestId("agent-cost-sub-a").textContent).toBe(
-      "cost unknown",
+    // No priced usage here: unknown, never $0, and said once, not per row
+    expect(screen.queryByTestId("agent-cost-sub-a")).toBeNull();
+    expect(screen.getByTestId("agents-cost-unknown").textContent).toBe(
+      "Cost: not known for this model",
     );
+    expect(screen.getByTestId("agents-toggle").textContent).not.toContain("$");
+    expect(document.body.textContent).not.toContain("cost unknown");
     // Nothing of the prompt, the answer, a tool's summary or an approval's
     // text is on the page
     expect(document.body.textContent).not.toContain(SECRET);
@@ -184,5 +193,50 @@ describe("AgentsList", () => {
     for (const row of screen.getAllByTestId(/^agent-row-sub-/)) {
       expect(row.firstElementChild?.className).toContain("flex-wrap");
     }
+  });
+
+  it("derives the session row from what runs below it", async () => {
+    await setup({
+      a: { status: "completed", endedAt: Date.now() },
+      b: { status: "completed", endedAt: Date.now() },
+    });
+    // Both agents ended: the session is not still "Running"
+    expect(screen.getByTestId("agent-state-main-s1").textContent).toBe("Done");
+  });
+
+  it("calls the session ended early when an agent below it failed, and Running while one works", async () => {
+    await setup({
+      a: { status: "completed", endedAt: Date.now() },
+      b: { status: "failed" },
+    });
+    expect(screen.getByTestId("agent-state-main-s1").textContent).toBe(
+      "Ended early",
+    );
+    cleanup();
+    await setup({ a: { status: "completed" }, b: { status: "running" } });
+    expect(screen.getByTestId("agent-state-main-s1").textContent).toBe(
+      "Running",
+    );
+  });
+
+  it("labels an agent the IDE restarted under Interrupted, and one a person stopped Stopped", async () => {
+    await setup({
+      a: { status: "interrupted" },
+      b: { status: "cancelled" },
+    });
+    expect(screen.getByTestId("agent-state-sub-a").textContent).toBe(
+      "Interrupted",
+    );
+    expect(screen.getByTestId("agent-state-sub-b").textContent).toBe("Stopped");
+  });
+
+  it("keeps a very long agent name inside the row: truncated, breakable, with the full name in a title", async () => {
+    const long = "a-reviewer-with-an-extremely-long-agent-name-that-never-ends";
+    await setup({ a: { agent: long } });
+    const name = screen.getByTestId("agent-name-sub-a");
+    expect(name.textContent).toBe(long);
+    expect(name.getAttribute("title")).toBe(long);
+    expect(name.className).toContain("truncate");
+    expect(name.className).toContain("[overflow-wrap:anywhere]");
   });
 });
