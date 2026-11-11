@@ -13,6 +13,7 @@ import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
+import { reviewEvalCommand } from "./commands/reviewEval.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
 import {
@@ -411,6 +412,29 @@ program
   .option("-y, --yes", "Trust without asking, for scripts")
   .action(async (action: string | undefined, options) => {
     const code = await hooksCommand(action, { yes: options.yes });
+    await gracefulExit(code);
+  });
+
+// Reviewer evaluation: dry by default, --run sends the requests
+program
+  .command("review-eval")
+  .description(
+    "Score a reviewer model and prompt guidance over a labelled set of tool calls (dry run unless --run)",
+  )
+  .option("--dataset <file>", "Labelled cases (JSON or YAML)")
+  .option("--reviewer <model-role>", "Reviewer model name or role", "reviewer")
+  .option("--guidance <file>", "Guidance to try (JSON, YAML or text)")
+  .option(
+    "--compare <file>",
+    "Baseline guidance file, or `default` for the built-in prompt, to compare against",
+  )
+  .option("--profile <id>", "Reviewer profile id (carried into the report)")
+  .option("--run", "Call the model; without it nothing is sent")
+  .option("--json", "Machine-readable output")
+  .option("--concurrency <n>", "Parallel requests", "4")
+  .option("--timeout-ms <n>", "Per-request timeout", "30000")
+  .action(async (options) => {
+    const code = await reviewEvalCommand(options);
     await gracefulExit(code);
   });
 
