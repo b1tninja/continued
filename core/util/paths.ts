@@ -482,7 +482,7 @@ function editConfigYaml(
   } catch (e) {
     const error = `Could not read ${path.basename(configPath)}: ${errorText(e)}`;
     console.warn(error);
-    return { ok: false, error };
+    return { ok: false, error, cause: e };
   }
   // Edit the parsed document so comments and key order survive. The old
   // parse -> stringify round trip dropped every comment on each GUI save.
@@ -516,6 +516,7 @@ function editConfigYaml(
     return {
       ok: false,
       error: `Could not write ${path.basename(configPath)}: ${errorText(e)}`,
+      cause: e,
     };
   }
   return { ok: true, changed: true };
@@ -601,13 +602,19 @@ export function editConfigFile(
   configYamlCallback: (config: ConfigYaml) => ConfigYaml,
   target: ConfigEditTarget = "selected",
 ): ConfigEditResult | undefined {
+  const done = (r: ConfigEditResult): ConfigEditResult => {
+    // A file that cannot be read or written throws, as it always did; the
+    // result carries the same failure for callers that ask for it instead
+    if (!r.ok && r.cause !== undefined) throw r.cause;
+    return r;
+  };
   if (target === "selected" && selectedConfigFile !== undefined) {
     const file = getEditableConfigYamlPath();
-    return file ? editConfigYaml(configYamlCallback, file) : undefined;
+    return file ? done(editConfigYaml(configYamlCallback, file)) : undefined;
   }
   const yamlPath = getConfigYamlPath();
   if (fs.existsSync(yamlPath)) {
-    return editConfigYaml(configYamlCallback, yamlPath);
+    return done(editConfigYaml(configYamlCallback, yamlPath));
   } else if (fs.existsSync(getConfigJsonPath())) {
     editConfigJson(configJsonCallback);
   }
