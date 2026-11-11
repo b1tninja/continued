@@ -7,7 +7,7 @@ import { sha256Hex } from "../util/secretScan/sha256";
  *
  * A request is read by the provider as three regions, in this order: tools,
  * system, messages. A prompt cache reads a prefix, so what changes least must
- * come first. Every segment has a stability class, and the canonical order has
+ * come first. Every segment has a stability class, and inside a region the order has
  * non-decreasing stability: static, session, turn, request. A segment holds no
  * text, only its size and hash: the dump never prints contents.
  */
@@ -153,7 +153,10 @@ export function validateManifest(
           id: s.id,
           message: `${s.id} (${s.region}) follows ${prev.id} (${prev.region})`,
         });
-      } else if (stabilityRank(s.stability) < stabilityRank(prev.stability)) {
+      } else if (
+        s.region === prev.region &&
+        stabilityRank(s.stability) < stabilityRank(prev.stability)
+      ) {
         out.push({
           rule: "rank-inversion",
           id: s.id,
