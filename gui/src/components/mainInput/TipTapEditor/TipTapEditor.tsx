@@ -15,6 +15,7 @@ import useUpdatingRef from "../../../hooks/useUpdatingRef";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
 import { selectSelectedChatModel } from "../../../redux/slices/configSlice";
 import InputToolbar, { ToolbarOptions } from "../InputToolbar";
+import { AttachMenu } from "../InputToolbar/AttachMenu";
 import { ComboBoxItem } from "../types";
 import { DragOverlay } from "./components/DragOverlay";
 import { InputBoxDiv } from "./components/StyledComponents";
@@ -203,6 +204,19 @@ function TipTapEditorInner(props: TipTapEditorProps) {
     setShouldHideToolbar(false);
   }, [cancelBlurTimeout]);
 
+  const onImageFileSelected = (file: File) => {
+    void handleImageFile(ideMessenger, file).then((result) => {
+      if (!editor || !result) return;
+      const [_, dataUrl] = result;
+      const { schema } = editor.state;
+      const node = schema.nodes.image.create({ src: dataUrl });
+      editor.commands.command(({ tr }) => {
+        tr.insert(0, node);
+        return true;
+      });
+    });
+  };
+
   return (
     <InputBoxDiv
       onFocus={handleFocus}
@@ -263,39 +277,34 @@ function TipTapEditorInner(props: TipTapEditorProps) {
       }}
     >
       <div className="px-2.5 pt-2 pb-1">
-        <EditorContent
-          // In a short panel (VS Code's bottom panel) 70vh would push the
-          // toolbar and Enter button below the edge, so leave room for them
-          className={`scroll-container overflow-y-scroll ${props.isMainInput ? "max-h-[max(3em,min(70vh,calc(100vh_-_140px)))]" : ""}`}
-          spellCheck={false}
-          editor={editor}
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
-        />
+        <div className="flex items-start gap-1">
+          {!(shouldHideToolbar && !props.isMainInput) && (
+            <div className="-ml-1.5 flex-none">
+              <AttachMenu
+                hideImageUpload={props.toolbarOptions?.hideImageUpload}
+                hideAddContext={props.toolbarOptions?.hideAddContext}
+                onAddContextItem={() => insertCharacterWithWhitespace("@")}
+                onImageFileSelected={onImageFileSelected}
+              />
+            </div>
+          )}
+          <EditorContent
+            // In a short panel (VS Code's bottom panel) 70vh would push the
+            // toolbar and Enter button below the edge, so leave room for them
+            className={`scroll-container min-w-0 flex-1 overflow-y-scroll ${props.isMainInput ? "max-h-[max(3em,min(70vh,calc(100vh_-_140px)))]" : ""}`}
+            spellCheck={false}
+            editor={editor}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          />
+        </div>
         <InputToolbar
           isMainInput={props.isMainInput}
           toolbarOptions={props.toolbarOptions}
           activeKey={activeKey}
           hidden={shouldHideToolbar && !props.isMainInput}
-          onAddContextItem={() => insertCharacterWithWhitespace("@")}
           onEnter={onEnter}
-          onImageFileSelected={(file) => {
-            void handleImageFile(ideMessenger, file).then((result) => {
-              if (!editor) {
-                return;
-              }
-              if (result) {
-                const [_, dataUrl] = result;
-                const { schema } = editor.state;
-                const node = schema.nodes.image.create({ src: dataUrl });
-                editor.commands.command(({ tr }) => {
-                  tr.insert(0, node);
-                  return true;
-                });
-              }
-            });
-          }}
           disabled={isStreaming}
         />
       </div>

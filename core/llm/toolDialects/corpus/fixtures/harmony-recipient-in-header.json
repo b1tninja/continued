@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja, not observed (history rendering)",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": "Template places to=functions.NAME before the channel in history; the spacing and constrain token vary, so a parser must tolerate their absence."
   },

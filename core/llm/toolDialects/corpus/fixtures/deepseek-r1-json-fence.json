@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/tokenizer_config.json (history rendering), not observed",
+    "license": "mit",
     "retrieved": "2026-11-10",
     "note": "R1 template writes the type, separator, name, then a json fence. Whether R1 reliably emits this is not established."
   },

@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct/blob/main/chat_template.jinja, not observed",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": "The template's reminder allows reasoning BEFORE the call, not after. Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 1 call(s) and the text \"I'll read the file first.\\n\\n\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },

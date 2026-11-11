@@ -42,7 +42,10 @@ describe("PolicyControls", () => {
       questions: "cautious",
     });
     for (const area of ["context", "tools", "edits", "plan", "questions"]) {
-      expect(screen.getAllByTestId(`policy-select-${area}`)).toHaveLength(2);
+      expect(screen.getAllByTestId(`policy-select-${area}`)).toHaveLength(1);
+      expect(screen.getAllByTestId(`policy-select-${area}-row`)).toHaveLength(
+        1,
+      );
     }
     expect(screen.getAllByTestId("policy-preset")[0].textContent).toContain(
       "Careful",
@@ -55,9 +58,14 @@ describe("PolicyControls", () => {
     // Defaults: context permissive (amber), tools cautious (green), edits manual (green)
     const chip = (area: string) =>
       screen.getAllByTestId(`policy-select-${area}`)[0];
-    expect(chip("context").className).toContain("text-warning");
-    expect(chip("tools").className).toContain("text-success");
-    expect(chip("edits").className).toContain("text-success");
+    // The tint carries the level; the label colour is the foreground (contrast)
+    expect(chip("context").className).toContain("bg-warning/20");
+    expect(chip("tools").className).toContain("bg-success/20");
+    expect(chip("edits").className).toContain("bg-success/20");
+    for (const area of ["context", "tools", "edits"]) {
+      expect(chip(area).className).toContain("text-foreground");
+      expect(chip(area).className).toContain("min-h-6");
+    }
     // The level's name is there for screen readers and the tooltip, not as text
     expect(chip("context").getAttribute("aria-label")).toBe(
       "Context use: Permissive",
@@ -68,7 +76,7 @@ describe("PolicyControls", () => {
     await act(async () => {
       store.dispatch(setPolicyLevel({ area: "tools", level: "yolo" }));
     });
-    expect(chip("tools").className).toContain("text-error");
+    expect(chip("tools").className).toContain("bg-error/20");
   });
 
   it("each area has its own five levels, and choosing one changes only that area", async () => {

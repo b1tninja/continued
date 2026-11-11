@@ -6,6 +6,8 @@ interface TabButtonProps {
   isActive: boolean;
   onClick: () => void;
   tabId?: string;
+  /** The element id, unique per group (TabGroup passes one). */
+  domId?: string;
 }
 
 export function TabButton({
@@ -14,6 +16,7 @@ export function TabButton({
   isActive,
   onClick,
   tabId,
+  domId,
 }: TabButtonProps) {
   return (
     <ToolTip content={label} place="right" className="text-xs md:!hidden">
@@ -23,6 +26,7 @@ export function TabButton({
             ? "bg-vsc-input-background px-2 py-2"
             : "px-2 py-2 text-description"
         }`}
+        id={domId}
         onClick={onClick}
         data-testid={tabId ? `tab-${tabId}` : undefined}
       >

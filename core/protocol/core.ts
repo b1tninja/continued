@@ -153,6 +153,8 @@ export type BedrockProbeToolCallsResult =
       kind: "native" | "text" | "none" | "unknown";
       /** What the model-family preset says about this model, when it has one. */
       preset?: string;
+      /** Provider facts line (information only). */
+      facts?: string;
     }
   | { ok: false; error: string };
 

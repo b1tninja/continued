@@ -94,8 +94,10 @@ describe("PendingToolCallToolbar: why it is asking", () => {
     );
   });
 
-  it("says that sending a message rejects what is waiting", async () => {
+  it("says that sending a new message cancels what is waiting", async () => {
     await setup([call("a")]);
-    expect(screen.getByText(/Sending a message rejects this/)).toBeTruthy();
+    expect(
+      screen.getByText(/Sending a new message cancels this command/),
+    ).toBeTruthy();
   });
 });

@@ -8,7 +8,6 @@ import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { dismissCacheTip } from "../../redux/slices/uiSlice";
 import { cacheTipKey, cacheTips } from "../../util/cacheTips";
 import { Popover, PopoverButton, PopoverPanel } from "../ui";
-import HoverItem from "./InputToolbar/HoverItem";
 
 /**
  * A small warning icon in the toolbar that appears only when there is advice
@@ -17,7 +16,7 @@ import HoverItem from "./InputToolbar/HoverItem";
  * with what to change and a way to dismiss it. Dismissals are remembered per
  * model, so a tip the user has decided to live with does not come back.
  */
-export function CacheTipsButton() {
+export function useCacheTips() {
   const dispatch = useAppDispatch();
   const model = useAppSelector(selectSelectedChatModel);
   const setting = useAppSelector(selectCacheSetting);
@@ -61,8 +60,14 @@ export function CacheTipsButton() {
     [model, setting, dismissed, ledger, failures, globalProfiles],
   );
 
-  if (!model || tips.length === 0) return null;
   const hasWarning = tips.some((t) => t.severity === "warning");
+  return { dispatch, model, tips, hasWarning };
+}
+
+/** `inMenu`: shown as a labelled row in the toolbar's overflow menu. */
+export function CacheTipsButton({ inMenu = false }: { inMenu?: boolean }) {
+  const { dispatch, model, tips, hasWarning } = useCacheTips();
+  if (!model || tips.length === 0) return null;
 
   return (
     <Popover className="relative">
@@ -70,13 +75,16 @@ export function CacheTipsButton() {
         data-testid="cache-tips-button"
         aria-label={`${tips.length} tip${tips.length === 1 ? "" : "s"} about this model`}
         title={tips[0].title}
-        className="m-0 flex flex-none cursor-pointer items-center border-none bg-transparent p-0"
+        className={`m-0 flex min-h-6 flex-none cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-xs text-foreground ${inMenu ? "w-full px-2" : "min-w-6 justify-center"}`}
       >
-        <HoverItem as="span" className="flex items-center">
-          <ExclamationTriangleIcon
-            className={`h-3 w-3 ${hasWarning ? "text-warning" : "text-description"}`}
-          />
-        </HoverItem>
+        <ExclamationTriangleIcon
+          className={`h-4 w-4 shrink-0 ${hasWarning ? "text-warning" : "text-description"}`}
+        />
+        {inMenu && (
+          <span>
+            {tips.length} tip{tips.length === 1 ? "" : "s"} about this model
+          </span>
+        )}
       </PopoverButton>
       <PopoverPanel
         anchor="top start"

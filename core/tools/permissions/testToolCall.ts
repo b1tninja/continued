@@ -15,6 +15,7 @@ import {
   runTerminalCommandTool,
   searchWebTool,
 } from "../definitions";
+import { maskDeep } from "./audit/mask";
 import { levelOfCall, type ApprovalSettings } from "./approval";
 import { lintCommand, type LintFinding } from "./commandLint";
 import { findRuleMatch, type DecisionSource } from "./decide";
@@ -719,5 +720,6 @@ export function testToolCall(input: TestToolCallInput): ToolCallTestResult {
     if (check.injection) result.injection = check.injection;
     result.steps.push(check.step);
   }
-  return result;
+  // The tester echoes the call it was given; a credential in it is masked.
+  return maskDeep(result);
 }

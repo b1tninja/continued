@@ -135,7 +135,8 @@ function ModelOption({
         <Button
           variant="ghost"
           size="sm"
-          className="my-0 h-4 w-4 p-0 text-description-muted opacity-0 transition-opacity group-hover:opacity-100 hover:enabled:text-foreground"
+          aria-label={`Configure ${option.title}`}
+          className="my-0 h-4 w-4 p-0 text-description-muted opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 hover:enabled:text-foreground"
           onClick={handleConfigureClick}
         >
           <Cog6ToothIcon className="h-3.5 w-3.5" />
@@ -338,13 +339,16 @@ function ModelSelect() {
 
   return (
     <Listbox onChange={(val: string) => chooseModel(val)}>
-      <div className="relative flex">
+      <div className="relative flex min-w-0">
         <ListboxButton
           data-testid="model-select-button"
           ref={buttonRef}
-          className="h-[18px] gap-1 border-none text-description"
+          className="h-6 max-w-full min-w-0 gap-1 border-none text-description"
         >
-          <span className="line-clamp-1 break-all hover:brightness-110">
+          <span
+            className="truncate hover:brightness-110"
+            title={modelSelectTitle(selectedModel) || "Select model"}
+          >
             {modelSelectTitle(selectedModel) || "Select model"}
           </span>
           <ChevronDownIcon
@@ -363,7 +367,9 @@ function ModelSelect() {
                 }}
                 variant="ghost"
                 size="sm"
-                className="relative my-0 h-5 w-5 p-0"
+                aria-label="Configure models"
+                title="Configure models"
+                className="relative my-0 h-6 w-6 p-0"
                 data-testid="model-select-configure"
               >
                 <Cog6ToothIcon className="h-3.5 w-3.5 text-description" />

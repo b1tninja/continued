@@ -1,3 +1,5 @@
+import { globToRegExp, SECRET_NAME_PATTERNS } from "./secretScan/secretNames";
+
 /**
  * The environment a command is given, with secrets taken out
  * (plans/jail-network.md, section 3, "What else is in the jail"). Pure: it
@@ -40,47 +42,11 @@ export interface ScrubResult {
 }
 
 /**
- * Names and patterns that carry a secret or the means to get one: keys,
- * tokens, passwords, cloud and provider prefixes, this product's own
- * variables, and the agent and daemon sockets a shell inherits.
+ * Names and patterns that carry a secret or the means to get one. The list
+ * lives in `secretScan/secretNames.ts`, one list for this module and for the
+ * scanner's known-value picker.
  */
-export const DEFAULT_SECRET_PATTERNS: readonly string[] = [
-  "*API_KEY",
-  "*APIKEY",
-  "*_KEY",
-  "*TOKEN",
-  "*SECRET",
-  "*SECRET_KEY",
-  "*PASSWORD",
-  "*PASSWD",
-  "*_PASS",
-  "*CREDENTIAL",
-  "*CREDENTIALS",
-  "*PRIVATE_KEY",
-  "*ACCESS_KEY",
-  "*_PWD",
-  "*CONNECTION_STRING",
-  "AWS_*",
-  "AZURE_*",
-  "GCP_*",
-  "GOOGLE_APPLICATION_CREDENTIALS",
-  "CLOUDSDK_*",
-  "CONTINUOUS_*",
-  "CONTINUE_*",
-  "ANTHROPIC_*",
-  "OPENAI_*",
-  "BEDROCK_*",
-  "SSH_AUTH_SOCK",
-  "SSH_AGENT_PID",
-  "GPG_AGENT_INFO",
-  "DOCKER_HOST",
-  "DOCKER_CONFIG",
-  "KUBECONFIG",
-  "DATABASE_URL",
-  "PGPASSWORD",
-  "MYSQL_PWD",
-  "NETRC",
-];
+export const DEFAULT_SECRET_PATTERNS: readonly string[] = SECRET_NAME_PATTERNS;
 
 /**
  * Names an allowlisted environment keeps: enough for a shell and common tools
@@ -121,11 +87,6 @@ export const DEFAULT_ALLOWLIST: readonly string[] = [
   "NUMBER_OF_PROCESSORS",
   "PROCESSOR_ARCHITECTURE",
 ];
-
-function globToRegExp(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^${escaped.replace(/\*/g, ".*")}$`, "i");
-}
 
 /** A `scheme://user:password@host` URL, or any URL with a user name in it. */
 export function urlHasCredentials(value: string): boolean {

@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/MiniMaxAI/MiniMax-M2.5/blob/main/chat_template.jinja, not observed",
+    "license": "other",
     "retrieved": "2026-11-10",
     "note": "The template's generation prompt ends with <think>, so the model output starts inside reasoning and only a closing tag appears."
   },

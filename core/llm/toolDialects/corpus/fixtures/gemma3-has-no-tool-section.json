@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "https://huggingface.co/unsloth/gemma-3-27b-it/blob/main/chat_template.jinja (mirror; no tool rendering in the template)",
+    "license": "gemma",
     "retrieved": "2026-11-10",
     "note": "Gemma 3's template renders no tools; any call is a prompt-engineered convention. Expected calls is empty because no dialect is defined; policy either."
   },

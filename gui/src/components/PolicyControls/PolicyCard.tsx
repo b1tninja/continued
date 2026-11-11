@@ -75,11 +75,11 @@ export function PolicyCard() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-col">
               <span className="text-sm">Preset</span>
-              <span className="text-2xs text-description-muted">
+              <span className="text-2xs text-description">
                 Sets all five areas at once.
               </span>
             </div>
-            <PresetSelect />
+            <PresetSelect placement="settings" />
           </div>
           {POLICY_AREAS.map((area) => (
             <div
@@ -89,7 +89,7 @@ export function PolicyCard() {
             >
               <div className="flex flex-col">
                 <span className="text-sm">{POLICY_AREA_LABELS[area]}</span>
-                <span className="text-2xs text-description-muted">
+                <span className="text-2xs text-description">
                   {AREA_HINTS[area]}
                 </span>
               </div>
@@ -100,7 +100,7 @@ export function PolicyCard() {
       </Card>
 
       <h4 className="mt-3 mb-1 text-xs font-semibold">Built-in rules</h4>
-      <p className="mt-0 mb-1 text-2xs text-description-muted">
+      <p className="mt-0 mb-1 text-2xs text-description">
         Protections you can see and switch off. YOLO ignores them.
       </p>
       <Card>
@@ -121,7 +121,7 @@ export function PolicyCard() {
                 }
                 text={rule.label}
               />
-              <div className="text-2xs text-description-muted">
+              <div className="text-2xs text-description">
                 {rule.description}
               </div>
             </div>
@@ -129,7 +129,7 @@ export function PolicyCard() {
           {LOCKED_FLOOR_RULES.map((rule) => (
             <div key={rule.id} data-testid={`locked-${rule.id}`}>
               <div className="text-xs">{rule.label} (locked)</div>
-              <div className="text-2xs text-description-muted">
+              <div className="text-2xs text-description">
                 {rule.description} No setting, including YOLO, turns this off.
               </div>
             </div>
@@ -146,7 +146,7 @@ export function PolicyCard() {
           >
             <span>
               New to-dos a re-plan may add by itself
-              <span className="block text-2xs text-description-muted">
+              <span className="block text-2xs text-description">
                 Plan edits at Permissive. Default {DEFAULT_MAX_NEW_PLAN_ITEMS}.
               </span>
             </span>
@@ -171,7 +171,7 @@ export function PolicyCard() {
             >
               <span>
                 {type}
-                <span className="block text-2xs text-description-muted">
+                <span className="block text-2xs text-description">
                   {QUESTION_TYPE_DESCRIPTIONS[type]}
                 </span>
               </span>
@@ -191,7 +191,7 @@ export function PolicyCard() {
 
       {floor.length > 0 && (
         <p
-          className="mt-2 mb-0 text-2xs text-description-muted"
+          className="mt-2 mb-0 text-2xs text-description"
           data-testid="policy-floor"
         >
           {floor.length} floor rule{floor.length === 1 ? "" : "s"} in
