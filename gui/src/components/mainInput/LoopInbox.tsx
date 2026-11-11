@@ -60,7 +60,7 @@ export function LoopInbox() {
 
   return (
     <div data-testid="loops-panel" className="mx-1 mb-1 min-w-0">
-      <div className="px-0.5 text-2xs tracking-wide text-description-muted uppercase">
+      <div className="px-0.5 text-2xs tracking-wide text-description uppercase">
         Loops
       </div>
       <div
@@ -96,7 +96,7 @@ export function LoopInbox() {
                 setLoopStrategyThunk(e.target.value as LoopStrategy),
               )
             }
-            className="shrink-0 cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+            className="shrink-0 cursor-pointer rounded border border-solid border-border bg-input px-1 py-1 text-xs text-foreground"
           >
             {LOOP_STRATEGY_ORDER.map((strategy) => (
               <option key={strategy} value={strategy}>
@@ -105,7 +105,7 @@ export function LoopInbox() {
             ))}
           </select>
           <label
-            className="flex shrink-0 items-center gap-0.5 text-description"
+            className="flex shrink-0 items-center gap-0.5 py-1 text-description"
             title={
               supervised
                 ? "Parallel waves run only at a level that does not ask before each edit"
@@ -130,7 +130,7 @@ export function LoopInbox() {
                   type="button"
                   data-testid="loop-start-fresh"
                   title="Drop the paused loop and plan again"
-                  className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-description-muted hover:text-foreground"
+                  className="min-h-6 shrink-0 cursor-pointer border-none bg-transparent px-1 text-xs text-description hover:text-foreground"
                   onClick={() => void dispatch(startFreshThunk())}
                 >
                   Start fresh
@@ -140,7 +140,7 @@ export function LoopInbox() {
                 <button
                   type="button"
                   data-testid="loop-resume"
-                  className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+                  className="min-h-6 shrink-0 cursor-pointer border-none bg-transparent px-1 text-xs text-link hover:underline"
                   title={
                     paused
                       ? "Budgets restart from now; the next item is told you worked outside the loop"
@@ -156,7 +156,7 @@ export function LoopInbox() {
               <button
                 type="button"
                 data-testid="loop-end"
-                className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-description-muted hover:text-foreground"
+                className="min-h-6 shrink-0 cursor-pointer border-none bg-transparent px-1 text-xs text-description hover:text-foreground"
                 onClick={() => void dispatch(endLoopThunk())}
               >
                 Close
@@ -173,7 +173,7 @@ export function LoopInbox() {
                       ? "Stop the wave's workers now; their items go back to pending"
                       : "Stop once the running item or re-plan ends"
                   }
-                  className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+                  className="min-h-6 shrink-0 cursor-pointer border-none bg-transparent px-1 text-xs text-link hover:underline"
                   onClick={() => void dispatch(stopLoopThunk())}
                 >
                   {waveRunning ? "Stop the wave" : "Stop after this item"}
@@ -184,7 +184,7 @@ export function LoopInbox() {
                   type="button"
                   data-testid="loop-stop-now"
                   title="Stop the running item now; it goes back to pending"
-                  className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+                  className="min-h-6 shrink-0 cursor-pointer border-none bg-transparent px-1 text-xs text-link hover:underline"
                   onClick={() => void dispatch(cancelStream())}
                 >
                   Stop now
@@ -254,9 +254,9 @@ export function LoopInbox() {
             maxLength={LOOP_LIMITS.maxAnswerLength}
             placeholder="A note about the whole plan (read at the next re-plan, or by every item)"
             onChange={(e) => setNote(e.target.value)}
-            className="min-w-0 flex-1 basis-40 rounded border border-solid border-border bg-transparent px-1 text-xs text-foreground placeholder:text-description-muted"
+            className="min-w-0 flex-1 basis-40 rounded border border-solid border-border bg-transparent px-1 py-1 text-xs text-foreground placeholder:text-description"
           />
-          <label className="flex shrink-0 items-center gap-0.5 text-description">
+          <label className="flex shrink-0 items-center gap-0.5 py-1 text-description">
             <input
               type="checkbox"
               data-testid="loop-replan-now"
@@ -269,7 +269,7 @@ export function LoopInbox() {
             Re-plan now
           </label>
           <label
-            className="flex shrink-0 items-center gap-0.5 text-description"
+            className="flex shrink-0 items-center gap-0.5 py-1 text-description"
             title="Send this with every item from now on, instead of waiting for the re-plan"
           >
             <input
@@ -287,7 +287,7 @@ export function LoopInbox() {
             type="button"
             data-testid="loop-plan-note-send"
             disabled={!note.trim()}
-            className="shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input disabled:cursor-default disabled:opacity-50"
+            className="shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-2 py-1 text-xs text-foreground hover:bg-input disabled:cursor-default disabled:opacity-50"
             onClick={async () => {
               const failed = await onAnswer({
                 text: note,

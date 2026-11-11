@@ -34,7 +34,7 @@ import {
   formatTokenCount,
   loopUsage,
 } from "core/util/loopUsage";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import {
   runLoopItemAgainThunk,
@@ -45,9 +45,9 @@ import { setLimitPolicyThunk } from "../../redux/thunks/loopBudget";
 import { stopLoopWorker } from "../../util/subagents/loopWorkers";
 
 const BUTTON =
-  "shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-1.5 text-xs text-foreground hover:bg-input";
+  "shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-2 py-1 text-xs text-foreground hover:bg-input";
 const FIELD =
-  "w-20 rounded border border-solid border-border bg-input px-1 text-xs text-foreground";
+  "w-20 rounded border border-solid border-border bg-input px-1 py-1 text-xs text-foreground";
 
 function statusLabel(loop: LoopState, itemId: string): string {
   const state = loop.items.find((i) => i.id === itemId);
@@ -105,7 +105,7 @@ function CheckLine({
   return (
     <div
       data-testid={`loop-check-${task.id}`}
-      className="ml-3 min-w-0 text-2xs text-description-muted"
+      className="ml-3 min-w-0 text-2xs text-description"
     >
       <div className="truncate" title={task.check ?? check?.command}>
         check: <code>{task.check ?? check?.command}</code>
@@ -140,7 +140,7 @@ function FilesLine({ task }: { task: TaskItem }) {
   return (
     <div
       data-testid={`loop-files-${task.id}`}
-      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
+      className="ml-3 min-w-0 truncate text-2xs text-description"
       title="The files this item changes; items with disjoint files may run at the same time"
     >
       files: <code>{task.files.join(", ")}</code>
@@ -164,7 +164,7 @@ function WorkerLine({
   return (
     <div
       data-testid={`loop-worker-${task.id}`}
-      className="ml-3 flex min-w-0 items-center gap-1 text-2xs text-description-muted"
+      className="ml-3 flex min-w-0 items-center gap-1 text-2xs text-description"
     >
       <span className="min-w-0 flex-1 truncate" title={run.worktree}>
         in its own worktree{run.worktree ? `: ${run.worktree}` : ""}
@@ -192,7 +192,7 @@ function ModelLine({ task, model }: { task: TaskItem; model?: LoopItemModel }) {
   return (
     <div
       data-testid={`loop-model-${task.id}`}
-      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
+      className="ml-3 min-w-0 truncate text-2xs text-description"
       title={model?.fallbackReason ?? "The model this item runs with"}
     >
       model: {task.model}
@@ -250,7 +250,7 @@ function BudgetLine({
   return (
     <div
       data-testid={`loop-budget-${task.id}`}
-      className="ml-3 min-w-0 truncate text-2xs text-description-muted"
+      className="ml-3 min-w-0 truncate text-2xs text-description"
       title="The item's own budget and what is left of it"
     >
       budget: {parts.join(" · ")}
@@ -345,12 +345,12 @@ function LoopUsagePanel({ loop }: { loop: LoopState }) {
       />
       <div
         data-testid="loop-usage-cost"
-        className="text-description-muted"
+        className="text-description"
         title="An estimate at list price, from the session's usage by model"
       >
         Cost: {formatCostAmount(u.cost)}
       </div>
-      <div data-testid="loop-usage-totals" className="text-description-muted">
+      <div data-testid="loop-usage-totals" className="text-description">
         {u.items.done}/{u.items.total} done · {u.runs} run
         {u.runs === 1 ? "" : "s"}
       </div>
@@ -384,6 +384,9 @@ export function LoopControls({
   const [draft, setDraft] = useState(() => draftOf(loop));
   // The limits are out of sight until asked for
   const [budgetOpen, setBudgetOpen] = useState(false);
+  // Below the xs breakpoint the re-plan, budget and usage controls fold behind one "Limits" button
+  const [limitsOpen, setLimitsOpen] = useState(false);
+  const limitsId = useId();
   // Once a budget has been set, or differs from the level's own, show what is left
   const [budgetApplied, setBudgetApplied] = useState(false);
   const preset = LOOP_AUTONOMY[loop.autonomy ?? "auto"].budget;
@@ -431,24 +434,27 @@ export function LoopControls({
                   data-testid={`loop-item-${task.id}`}
                   className="flex min-w-0 items-center gap-1"
                 >
-                  <span className="min-w-0 flex-1 truncate text-foreground">
+                  <span
+                    className="min-w-0 flex-1 truncate text-foreground"
+                    title={`${task.id}. ${task.text}`}
+                  >
                     {task.id}. {task.text}
                   </span>
                   {dependency && (
                     <span
                       data-testid={`loop-after-${task.id}`}
-                      className="shrink-0 text-description-muted"
+                      className="shrink-0 text-description"
                     >
                       {dependency}
                     </span>
                   )}
-                  <span className="shrink-0 text-description-muted">
+                  <span className="shrink-0 text-description">
                     {statusLabel(loop, task.id)}
                   </span>
                   {showUsage && state.attempts > 0 && (
                     <span
                       data-testid={`loop-runs-${task.id}`}
-                      className="shrink-0 text-description-muted"
+                      className="shrink-0 text-description"
                     >
                       {state.attempts} run{state.attempts === 1 ? "" : "s"}
                       {state.usage
@@ -503,127 +509,144 @@ export function LoopControls({
           })}
         </ul>
       )}
-      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
-        <label className="flex shrink-0 items-center gap-0.5">
-          Re-plan
-          <select
-            data-testid="loop-replan"
-            value={replan.kind}
-            onChange={(e) => {
-              const kind = e.target.value as LoopReplanSetting["kind"];
-              void setReplan(
-                kind === "up_to"
-                  ? { kind, replans: Math.max(1, maxRounds - 1) }
-                  : { kind },
-              );
-            }}
-            className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
-          >
-            <option value="never">never</option>
-            <option value="up_to">up to N times</option>
-            <option value="until_done">until done</option>
-          </select>
-        </label>
-        {replan.kind === "up_to" && (
-          <input
-            type="number"
-            data-testid="loop-replan-count"
-            min={1}
-            value={replan.replans}
-            onChange={(e) => {
-              const replans = Number(e.target.value);
-              // An emptied field is not "never"; wait for a number
-              if (replans >= 1) void setReplan({ kind: "up_to", replans });
-            }}
-            className={FIELD}
-          />
-        )}
-        <button
-          type="button"
-          data-testid="loop-budget-toggle"
-          aria-expanded={budgetOpen}
-          title={describeLoopBudget(loop.budget)}
-          className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
-          onClick={() => {
-            if (budgetOpen) setDraft(draftOf(loop));
-            setBudgetOpen(!budgetOpen);
-          }}
-        >
-          {budgetOpen ? "Hide the budget" : "Set a budget…"}
-        </button>
-      </div>
-      {showUsage && <LoopUsagePanel loop={loop} />}
-      {budgetOpen && (
-        <div
-          data-testid="loop-budget"
-          className="mt-1 flex min-w-0 flex-wrap items-center gap-1"
-        >
-          {(
-            [
-              ["rounds", "Rounds"],
-              ["tokens", "Tokens (0: none)"],
-              ["minutes", "Minutes (0: none)"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key} className="flex shrink-0 items-center gap-0.5">
-              {label}
-              <input
-                type="number"
-                data-testid={`loop-limit-${key}`}
-                min={0}
-                value={draft[key]}
-                onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-                className={FIELD}
-              />
-            </label>
-          ))}
-          <label
-            className="flex shrink-0 items-center gap-0.5"
-            title="When a to-do uses up its own budget: Suggest asks you, Force stops it, Review has its work reviewed and extends it once if it is progressing"
-          >
-            At a to-do's limit
+      <button
+        type="button"
+        data-testid="loop-limits-toggle"
+        aria-expanded={limitsOpen}
+        aria-controls={limitsId}
+        className="mt-1 min-h-6 cursor-pointer border-none bg-transparent px-0 text-xs text-link hover:underline xs:hidden"
+        onClick={() => setLimitsOpen(!limitsOpen)}
+      >
+        {limitsOpen ? "Hide limits" : "Limits�"}
+      </button>
+      <div id={limitsId} className={limitsOpen ? "block" : "hidden xs:block"}>
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+          <label className="flex shrink-0 items-center gap-0.5 py-1">
+            Re-plan
             <select
-              data-testid="loop-limit-policy"
-              value={limitPolicyOf(loop)}
-              onChange={(e) =>
-                void dispatch(
-                  setLimitPolicyThunk(e.target.value as LimitPolicy),
-                )
-              }
-              className="cursor-pointer rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+              data-testid="loop-replan"
+              value={replan.kind}
+              onChange={(e) => {
+                const kind = e.target.value as LoopReplanSetting["kind"];
+                void setReplan(
+                  kind === "up_to"
+                    ? { kind, replans: Math.max(1, maxRounds - 1) }
+                    : { kind },
+                );
+              }}
+              className="cursor-pointer rounded border border-solid border-border bg-input px-1 py-1 text-xs text-foreground"
             >
-              {LIMIT_POLICIES.map((policy) => (
-                <option key={policy} value={policy}>
-                  {LIMIT_POLICY_LABEL[policy]}
-                </option>
-              ))}
+              <option value="never">never</option>
+              <option value="up_to">up to N times</option>
+              <option value="until_done">until done</option>
             </select>
           </label>
+          {replan.kind === "up_to" && (
+            <input
+              type="number"
+              data-testid="loop-replan-count"
+              min={1}
+              value={replan.replans}
+              onChange={(e) => {
+                const replans = Number(e.target.value);
+                // An emptied field is not "never"; wait for a number
+                if (replans >= 1) void setReplan({ kind: "up_to", replans });
+              }}
+              className={FIELD}
+            />
+          )}
           <button
             type="button"
-            data-testid="loop-limits-apply"
-            className={BUTTON}
+            data-testid="loop-budget-toggle"
+            aria-expanded={budgetOpen}
             title={describeLoopBudget(loop.budget)}
-            onClick={async () => {
-              const result = await dispatch(
-                setLoopBudgetThunk({
-                  maxRounds: Number(draft.rounds),
-                  maxTokens: Number(draft.tokens),
-                  maxWallMs: Math.round(Number(draft.minutes) * 60000),
-                }),
-              ).unwrap();
-              report(result);
-              // Applied: the fields go away; a refusal keeps them open
-              if (result.ok) {
-                setBudgetOpen(false);
-                setBudgetApplied(true);
-              }
+            className="min-h-6 shrink-0 cursor-pointer border-none bg-transparent px-1 text-xs text-link hover:underline"
+            onClick={() => {
+              if (budgetOpen) setDraft(draftOf(loop));
+              setBudgetOpen(!budgetOpen);
             }}
           >
-            Apply
+            {budgetOpen ? "Hide the budget" : "Set a budget…"}
           </button>
         </div>
-      )}
+        {showUsage && <LoopUsagePanel loop={loop} />}
+        {budgetOpen && (
+          <div
+            data-testid="loop-budget"
+            className="mt-1 flex min-w-0 flex-wrap items-center gap-1"
+          >
+            {(
+              [
+                ["rounds", "Rounds"],
+                ["tokens", "Tokens (0: none)"],
+                ["minutes", "Minutes (0: none)"],
+              ] as const
+            ).map(([key, label]) => (
+              <label
+                key={key}
+                className="flex shrink-0 items-center gap-0.5 py-1"
+              >
+                {label}
+                <input
+                  type="number"
+                  data-testid={`loop-limit-${key}`}
+                  min={0}
+                  value={draft[key]}
+                  onChange={(e) =>
+                    setDraft({ ...draft, [key]: e.target.value })
+                  }
+                  className={FIELD}
+                />
+              </label>
+            ))}
+            <label
+              className="flex shrink-0 items-center gap-0.5 py-1"
+              title="When a to-do uses up its own budget: Suggest asks you, Force stops it, Review has its work reviewed and extends it once if it is progressing"
+            >
+              At a to-do's limit
+              <select
+                data-testid="loop-limit-policy"
+                value={limitPolicyOf(loop)}
+                onChange={(e) =>
+                  void dispatch(
+                    setLimitPolicyThunk(e.target.value as LimitPolicy),
+                  )
+                }
+                className="cursor-pointer rounded border border-solid border-border bg-input px-1 py-1 text-xs text-foreground"
+              >
+                {LIMIT_POLICIES.map((policy) => (
+                  <option key={policy} value={policy}>
+                    {LIMIT_POLICY_LABEL[policy]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              data-testid="loop-limits-apply"
+              className={BUTTON}
+              title={describeLoopBudget(loop.budget)}
+              onClick={async () => {
+                const result = await dispatch(
+                  setLoopBudgetThunk({
+                    maxRounds: Number(draft.rounds),
+                    maxTokens: Number(draft.tokens),
+                    maxWallMs: Math.round(Number(draft.minutes) * 60000),
+                  }),
+                ).unwrap();
+                report(result);
+                // Applied: the fields go away; a refusal keeps them open
+                if (result.ok) {
+                  setBudgetOpen(false);
+                  setBudgetApplied(true);
+                }
+              }}
+            >
+              Apply
+            </button>
+          </div>
+        )}
+      </div>
       {error && (
         <div
           role="alert"
