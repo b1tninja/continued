@@ -1,0 +1,10 @@
+{%- macro render_tool_namespace(namespace_name, tools) -%}\n    
+{%- for tool in tools %}\n        
+{%- if tools -%}\n        
+{{- "\nCalls to these tools must go to the commentary channel: 'functions'." }}\n    
+{%- if developer_message or tools %}\n    
+{%- if tools -%}\n        
+{{- render_tool_namespace("functions", tools) }}\n    
+{{- "functions." + tool_call.name + "<|channel|>commentary " }}\n            
+{{- "<|start|>functions." + last_tool_call.name }}\n        
+{{- " to=assistant<|channel|>commentary<|message|>" + message.content|tojson + "<|end|>" }}\n    

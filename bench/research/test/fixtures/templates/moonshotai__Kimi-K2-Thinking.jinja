@@ -1,0 +1,3 @@
+{%- set formatted_id = tool_call['id'] -%}\n    <|tool_call_begin|>
+{%- if tools -%}\n  <|im_system|>tool_declare<|im_middle|>
+{{ tools | tojson(separators=(',', ':')) }}<|im_end|>\n

@@ -1,0 +1,4 @@
+{%- if enable_thinking or tools or (messages and messages[0]['role'] in ['system', 'develop
+{%- if tools -%}\n        
+{%- for tool in tools %}\n            
+{{- '<|tool_call>call:' + function['name'] + '{' -}}\n                    

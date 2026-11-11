@@ -1,0 +1,8 @@
+{%- macro render_tool_instruction(tools) %}\n    
+{{- "\nYou may invoke one or more tools to assist with the user's query. Available tools are provided in JSON Schema format: <|tools:begin|><|tool:begin|><tools-json-object><|tool:end|>...<|tools:end|>\n" }}\n    
+{{- "<|tools:begin|>" }}\n    
+{%- for tool in tools %}\n        
+{{- "<|tools:end|>\n" }}\n    
+{%- if ns.system_messages or default_system_prompt or tools or response_format -%}\n    
+{%- if tools -%}\n            
+{{- render_tool_instruction(tools) }}\n        

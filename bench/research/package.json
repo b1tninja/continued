@@ -1,0 +1,12 @@
+{
+  "name": "@b1tninja/continuous-model-research",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dev-only model research tool: reads public Hugging Face metadata and checks the tool-dialect preset table for drift. Not part of any workspace or release artifact.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "check": "node mrt.mjs check",
+    "report": "node mrt.mjs report"
+  }
+}

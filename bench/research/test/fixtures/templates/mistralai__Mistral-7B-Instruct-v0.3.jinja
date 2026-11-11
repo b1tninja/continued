@@ -1,0 +1,5 @@
+{%- if not tools is defined %}\n    
+{%- set tools = none %}\n
+{%- if tools is not none and (message == user_messages[-1]) %}\n         
+{%- for tool in tools %}\n                
+{{- "[TOOL_CALLS] [" }}\n        

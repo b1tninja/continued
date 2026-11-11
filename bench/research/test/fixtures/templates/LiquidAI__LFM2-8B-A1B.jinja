@@ -1,0 +1,4 @@
+{%- set func_name = func["name"] -%}\n		
+{%- if tools -%}\n	
+stem_prompt + ("\n" if ns.system_prompt else "") + "List of tools: <|tool_list_start|>[" -%}\n	
+{%- for tool in tools -%}\n		

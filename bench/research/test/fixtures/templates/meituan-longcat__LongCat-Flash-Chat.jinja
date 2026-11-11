@@ -1,0 +1,9 @@
+{%- if tools and tool_choice != 'none' %}\n    
+{{- "You have access to the following tools: \n\n" }}\n    
+{%- for tool in tools %}\n        
+{%- set tool = {"type":"code_interpreter","function":{"name":"code_interpreter_preview","description":"The code will be  ...  online functionality is needed, please use other permitted tools. \nCode will respond with the output of the execution or time out after 60.0 seconds. ","parameters":{"type":"object","properties":{"language":{"type":"string",
+ongcat_tool_call> XML tags as follows:\n<longcat_tool_call>\n{"name": <function-name>, "arguments": <args-dict>}\n</longcat_tool_
+and placed consecutively. For example:\n<longcat_tool_call>\n{"name": <function-name>, "arguments": <args-dict>}\n</longcat_tool_call><longcat_tool_call>\n{"name": <function-name>, "arguments": <args-dict>}\n</longcat_tool_
+_call.function.arguments is string -%}\n                    {"name": "
+{%- else -%}\n                    {"name": "
+{%- if msg.name -%}\n            {"name": 

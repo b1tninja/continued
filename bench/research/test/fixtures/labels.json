@@ -1,0 +1,238 @@
+{
+  "note": "truth = the call form the vendor template writes, read by a person; 'novel' = a form the classifier has no rule for; 'none' = no tool support in the template. Dev samples were used to write the rules; hold-out samples were not.",
+  "dev": {
+    "Qwen/Qwen3-Coder-30B-A3B-Instruct": {
+      "truth": "qwen-xml",
+      "file": "Qwen__Qwen3-Coder-30B-A3B-Instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "Qwen/Qwen3-Next-80B-A3B-Instruct": {
+      "truth": "hermes-json",
+      "file": "Qwen__Qwen3-Next-80B-A3B-Instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "Qwen/Qwen3-30B-A3B": {
+      "truth": "hermes-json",
+      "file": "Qwen__Qwen3-30B-A3B.jinja",
+      "license": "apache-2.0"
+    },
+    "Qwen/Qwen3.5-27B": {
+      "truth": "qwen-xml",
+      "file": "Qwen__Qwen3.5-27B.jinja",
+      "license": "apache-2.0"
+    },
+    "Qwen/Qwen3.6-27B": {
+      "truth": "qwen-xml",
+      "file": "Qwen__Qwen3.6-27B.jinja",
+      "license": "apache-2.0"
+    },
+    "zai-org/GLM-4.5": {
+      "truth": "glm-xml",
+      "file": "zai-org__GLM-4.5.jinja",
+      "license": "mit"
+    },
+    "zai-org/GLM-4.7": {
+      "truth": "glm-xml",
+      "file": "zai-org__GLM-4.7.jinja",
+      "license": "mit"
+    },
+    "zai-org/GLM-5": {
+      "truth": "glm-xml",
+      "file": "zai-org__GLM-5.jinja",
+      "license": "mit"
+    },
+    "moonshotai/Kimi-K2-Instruct": {
+      "truth": "kimi-tokens",
+      "file": "moonshotai__Kimi-K2-Instruct.jinja",
+      "license": "other"
+    },
+    "moonshotai/Kimi-K2-Thinking": {
+      "truth": "kimi-tokens",
+      "file": "moonshotai__Kimi-K2-Thinking.jinja",
+      "license": "other"
+    },
+    "MiniMaxAI/MiniMax-M2": {
+      "truth": "minimax-xml",
+      "file": "MiniMaxAI__MiniMax-M2.jinja",
+      "license": "other"
+    },
+    "MiniMaxAI/MiniMax-M3": {
+      "truth": "novel",
+      "file": "MiniMaxAI__MiniMax-M3.jinja",
+      "license": "other"
+    },
+    "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16": {
+      "truth": "qwen-xml",
+      "file": "nvidia__NVIDIA-Nemotron-3-Super-120B-A12B-BF16.jinja",
+      "license": "other"
+    },
+    "nvidia/NVIDIA-Nemotron-Nano-9B-v2": {
+      "truth": "toolcall-json",
+      "file": "nvidia__NVIDIA-Nemotron-Nano-9B-v2.jinja",
+      "license": "other"
+    },
+    "nvidia/Llama-3_3-Nemotron-Super-49B-v1_5": {
+      "truth": "toolcall-json",
+      "file": "nvidia__Llama-3_3-Nemotron-Super-49B-v1_5.jinja",
+      "license": "other"
+    },
+    "openai/gpt-oss-20b": {
+      "truth": "harmony",
+      "file": "openai__gpt-oss-20b.jinja",
+      "license": "apache-2.0"
+    },
+    "deepseek-ai/DeepSeek-V3.1": {
+      "truth": "deepseek-tokens",
+      "file": "deepseek-ai__DeepSeek-V3.1.jinja",
+      "license": "mit"
+    },
+    "deepseek-ai/DeepSeek-R1": {
+      "truth": "deepseek-tokens",
+      "file": "deepseek-ai__DeepSeek-R1.jinja",
+      "license": "mit"
+    },
+    "google/gemma-4-31B-it": {
+      "truth": "gemma4",
+      "file": "google__gemma-4-31B-it.jinja",
+      "license": "apache-2.0"
+    },
+    "NousResearch/Hermes-3-Llama-3.1-8B": {
+      "truth": "hermes-json",
+      "file": "NousResearch__Hermes-3-Llama-3.1-8B.jinja",
+      "license": "llama3"
+    },
+    "mistralai/Mistral-7B-Instruct-v0.3": {
+      "truth": "mistral",
+      "file": "mistralai__Mistral-7B-Instruct-v0.3.jinja",
+      "license": "apache-2.0"
+    }
+  },
+  "holdout": {
+    "ibm-granite/granite-3.3-8b-instruct": {
+      "truth": "novel",
+      "sameFamilyAsDev": false,
+      "file": "ibm-granite__granite-3.3-8b-instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "ibm-granite/granite-4.0-h-small": {
+      "truth": "hermes-json",
+      "sameFamilyAsDev": false,
+      "file": "ibm-granite__granite-4.0-h-small.jinja",
+      "license": "apache-2.0"
+    },
+    "XiaomiMiMo/MiMo-7B-RL": {
+      "truth": "hermes-json",
+      "sameFamilyAsDev": false,
+      "file": "XiaomiMiMo__MiMo-7B-RL.jinja",
+      "license": "mit"
+    },
+    "stepfun-ai/Step-3.5-Flash": {
+      "truth": "qwen-xml",
+      "sameFamilyAsDev": false,
+      "file": "stepfun-ai__Step-3.5-Flash.jinja",
+      "license": "apache-2.0"
+    },
+    "LiquidAI/LFM2-8B-A1B": {
+      "truth": "novel",
+      "sameFamilyAsDev": false,
+      "file": "LiquidAI__LFM2-8B-A1B.jinja",
+      "license": "other"
+    },
+    "tencent/Hunyuan-A13B-Instruct": {
+      "truth": "none",
+      "sameFamilyAsDev": false,
+      "file": "tencent__Hunyuan-A13B-Instruct.jinja",
+      "license": "other"
+    },
+    "inclusionAI/Ling-flash-2.0": {
+      "truth": "hermes-json",
+      "sameFamilyAsDev": false,
+      "file": "inclusionAI__Ling-flash-2.0.jinja",
+      "license": "mit"
+    },
+    "ByteDance-Seed/Seed-OSS-36B-Instruct": {
+      "truth": "novel",
+      "sameFamilyAsDev": false,
+      "file": "ByteDance-Seed__Seed-OSS-36B-Instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "internlm/internlm3-8b-instruct": {
+      "truth": "none",
+      "sameFamilyAsDev": false,
+      "file": "internlm__internlm3-8b-instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "microsoft/Phi-4-mini-instruct": {
+      "truth": "novel",
+      "sameFamilyAsDev": false,
+      "file": "microsoft__Phi-4-mini-instruct.jinja",
+      "license": "mit"
+    },
+    "allenai/Olmo-3-7B-Instruct": {
+      "truth": "novel",
+      "sameFamilyAsDev": false,
+      "file": "allenai__Olmo-3-7B-Instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "baidu/ERNIE-4.5-21B-A3B-PT": {
+      "truth": "none",
+      "sameFamilyAsDev": false,
+      "file": "baidu__ERNIE-4.5-21B-A3B-PT.jinja",
+      "license": "apache-2.0"
+    },
+    "openbmb/MiniCPM4.1-8B": {
+      "truth": "none",
+      "sameFamilyAsDev": false,
+      "file": "openbmb__MiniCPM4.1-8B.jinja",
+      "license": "apache-2.0"
+    },
+    "NousResearch/Hermes-4-14B": {
+      "truth": "hermes-json",
+      "sameFamilyAsDev": false,
+      "file": "NousResearch__Hermes-4-14B.jinja",
+      "license": "apache-2.0"
+    },
+    "meituan-longcat/LongCat-Flash-Chat": {
+      "truth": "novel",
+      "sameFamilyAsDev": false,
+      "file": "meituan-longcat__LongCat-Flash-Chat.jinja",
+      "license": "mit"
+    },
+    "deepseek-ai/DeepSeek-V3.1-Terminus": {
+      "truth": "deepseek-tokens",
+      "sameFamilyAsDev": true,
+      "file": "deepseek-ai__DeepSeek-V3.1-Terminus.jinja",
+      "license": "mit"
+    },
+    "Qwen/Qwen2.5-7B-Instruct": {
+      "truth": "hermes-json",
+      "sameFamilyAsDev": true,
+      "file": "Qwen__Qwen2.5-7B-Instruct.jinja",
+      "license": "apache-2.0"
+    },
+    "upstage/Solar-Open-100B": {
+      "truth": "novel",
+      "sameFamilyAsDev": false,
+      "file": "upstage__Solar-Open-100B.jinja",
+      "license": "other"
+    },
+    "nvidia/Nemotron-H-8B-Reasoning-128K": {
+      "truth": "none",
+      "sameFamilyAsDev": false,
+      "file": "nvidia__Nemotron-H-8B-Reasoning-128K.jinja",
+      "license": "other"
+    },
+    "Nanbeige/Nanbeige4-3B-Thinking-2511": {
+      "truth": "hermes-json",
+      "sameFamilyAsDev": false,
+      "file": "Nanbeige__Nanbeige4-3B-Thinking-2511.jinja",
+      "license": "apache-2.0"
+    },
+    "MiniMaxAI/MiniMax-M2.5": {
+      "truth": "minimax-xml",
+      "sameFamilyAsDev": true,
+      "file": "MiniMaxAI__MiniMax-M2.5.jinja",
+      "license": "other"
+    }
+  }
+}

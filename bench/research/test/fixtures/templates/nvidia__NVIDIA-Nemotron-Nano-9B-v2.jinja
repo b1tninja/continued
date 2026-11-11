@@ -1,0 +1,9 @@
+{%- if tools -%}
+{{- 'You can use the following tools to assist the user if required:' -}}
+{%- for tool in tools -%}
+{{- '<TOOLCALL>[
+{{"name": "tool_name1", "arguments": "tool_args1"}}, ' -}}
+{{"name": "tool_name2", "arguments": "tool_args2"}}]</TOOLCALL>\n\n' -
+{{- 'Based on the tool responses, you can call additional tools if needed, correct tool calls if any errors are found, or j
+{{- '<TOOLCALL>[' -}}
+{{- '{"name": "' + fn.name + '", "arguments": ' -}}
