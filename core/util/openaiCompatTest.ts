@@ -11,8 +11,22 @@
  * The sender is `fetchFn`, so tests record bodies and nothing leaves the
  * machine. The key is only ever sent as a bearer header and never returned.
  */
+import {
+  hasOpenAICompatDefault,
+  openAICompatBase,
+  openAICompatDefaultBase,
+} from "./openaiCompatBases.js";
+import {
+  fingerprintOf,
+  findMeasured,
+  measuredFactsOf,
+  type MeasuredEntry,
+  recordingEnabled,
+  recordProbe,
+} from "./measuredFacts.js";
 import { getOllamaShowHint } from "./ollamaShowHint.js";
 import { surfaceForProvider } from "./surfaceFacts.js";
+import { recoverableDialect } from "./toolDialectLeak.js";
 import { hintFromLlamaCppProps } from "./toolDialectMetadata.js";
 import { probeToolDialect, type ToolCallSupport } from "./toolDialectProbe.js";
 
@@ -24,6 +38,14 @@ export interface OpenAICompatTestInput {
   model?: string;
   timeoutMs?: number;
   fetchFn?: TestFetch;
+  /**
+   * Write the result to the local measured-facts file (default true). The
+   * user setting `probes.record: false` also turns it off.
+   */
+  record?: boolean;
+  /** For tests: the measured-facts file and today's date. */
+  measuredFile?: string;
+  now?: string;
 }
 
 export type TestFetch = (
@@ -49,6 +71,10 @@ export interface OpenAICompatProbe {
   facts?: string;
   /** The server parses this model's calls itself (Ollama). */
   serverParses?: boolean;
+  /** `toolDialect` value that would recover the calls the model wrote as text. */
+  recoveryDialect?: string;
+  /** The result was added to the local measured-facts file; n is the probe count there. */
+  recorded?: { n: number };
 }
 
 export type OpenAICompatTestResult =
@@ -61,37 +87,10 @@ export type OpenAICompatTestResult =
     }
   | { ok: false; error: string };
 
-const DEFAULT_BASES: Record<string, string> = {
-  openai: "https://api.openai.com/v1",
-  ollama: "http://127.0.0.1:11434/v1",
-  "llama.cpp": "http://127.0.0.1:8080/v1",
-  llamafile: "http://127.0.0.1:8080/v1",
-  lmstudio: "http://127.0.0.1:1234/v1",
-  vllm: "http://127.0.0.1:8000/v1",
-  "text-gen-webui": "http://127.0.0.1:5000/v1",
-  msty: "http://127.0.0.1:10000/v1",
-  openrouter: "https://openrouter.ai/api/v1",
-  deepseek: "https://api.deepseek.com",
-  groq: "https://api.groq.com/openai/v1",
-  together: "https://api.together.xyz/v1",
-  mistral: "https://api.mistral.ai/v1",
-};
+/** The API surface this tester measures. */
+const API = "openai-chat";
 
-/** Providers this tester knows a default endpoint for; any other needs an apiBase. */
-export function hasOpenAICompatDefault(provider: string): boolean {
-  return Object.hasOwn(DEFAULT_BASES, provider);
-}
-
-/** The OpenAI-compatible base URL (ends in /v1 for the local servers), no trailing slash. */
-export function openAICompatBase(
-  provider: string,
-  apiBase?: string,
-): string | undefined {
-  const raw = (apiBase?.trim() || DEFAULT_BASES[provider])?.replace(/\/+$/, "");
-  if (!raw) return undefined;
-  // Ollama's native base has no /v1; its OpenAI surface does.
-  return provider === "ollama" && !/\/v1$/.test(raw) ? `${raw}/v1` : raw;
-}
+export { hasOpenAICompatDefault, openAICompatBase, openAICompatDefaultBase };
 
 /** Strip secrets that an error body may echo back. */
 function scrub(text: string, key?: string): string {
@@ -223,6 +222,11 @@ export async function testOpenAICompatConnection(
   });
   const template = await llamaCppTemplate(input, base);
   const surface = surfaceForProvider(input.provider);
+  const prior = findMeasured(
+    { provider: input.provider, apiBase: base, model: input.model, api: API },
+    input.measuredFile,
+  );
+  let shape: string | undefined;
   const result = await probeToolDialect(
     async (probe) => {
       const res = await call(input, `${base}/chat/completions`, "POST", {
@@ -240,6 +244,7 @@ export async function testOpenAICompatConnection(
           res.error || describeFailure(res.status, res.body, input.apiKey),
         );
       }
+      shape = fingerprintOf(res.data);
       const msg = (
         res.data as {
           choices?: {
@@ -267,8 +272,12 @@ export async function testOpenAICompatConnection(
       serverParses: show?.serverParses,
       toolsAdvertised: show?.toolsAdvertised,
       ...(surface ? { surface } : {}),
+      ...(prior ? { measured: measuredFactsOf(prior) } : {}),
     },
   );
+  const recorded = recordResult(input, base, result.support, shape, {
+    skipped: show?.toolsAdvertised === false,
+  });
   const note = templateNoteFor(template, result.support);
   return {
     ok: true,
@@ -281,6 +290,55 @@ export async function testOpenAICompatConnection(
       ...(result.preset ? { preset: result.preset } : {}),
       ...(result.facts ? { facts: result.facts } : {}),
       ...(result.serverParses ? { serverParses: true } : {}),
+      ...(recoveryDialect(result.support, result.serverParses)
+        ? {
+            recoveryDialect: recoveryDialect(
+              result.support,
+              result.serverParses,
+            ),
+          }
+        : {}),
+      ...(recorded ? { recorded: { n: recorded.n } } : {}),
     },
   };
+}
+
+/** The `toolDialect` that would recover a call written as text, unless the server parses calls itself. */
+function recoveryDialect(
+  support: ToolCallSupport,
+  serverParses: boolean | undefined,
+): string | undefined {
+  return support.kind === "text" && !serverParses
+    ? recoverableDialect(support.dialect)
+    : undefined;
+}
+
+/**
+ * Add the probe to the local measured-facts file (core/util/measuredFacts.ts)
+ * unless recording is off. A probe that never ran (the server lists no tools
+ * capability) or could not tell is not a measurement and is not written.
+ */
+function recordResult(
+  input: OpenAICompatTestInput,
+  base: string,
+  support: ToolCallSupport,
+  shape: string | undefined,
+  opts: { skipped: boolean },
+): MeasuredEntry | undefined {
+  if (opts.skipped || !input.model) return undefined;
+  if (input.record === false || !recordingEnabled()) return undefined;
+  if (support.kind === "unknown") return undefined;
+  return recordProbe(
+    {
+      provider: input.provider,
+      apiBase: base,
+      model: input.model,
+      api: API,
+      outcome: support.kind === "native" ? "native" : support.kind,
+      ...(support.kind === "text" ? { dialect: support.dialect } : {}),
+      fingerprint: shape ?? "no-reply",
+      now: input.now ?? new Date().toISOString().slice(0, 10),
+    },
+    input.measuredFile,
+  );
 }

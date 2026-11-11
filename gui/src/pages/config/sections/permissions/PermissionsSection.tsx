@@ -1,8 +1,10 @@
+import type { AuditOverview } from "core/tools/permissions/audit/auditOverview";
 import type {
   AreaReport,
   EffectiveRulesReport,
 } from "core/tools/permissions/effectiveRules";
 import {
+  areaOfTool,
   DEFAULT_MAX_NEW_PLAN_ITEMS,
   POLICY_AREA_LABELS,
   POLICY_AREAS,
@@ -18,12 +20,17 @@ import { useAppDispatch, useAppSelector } from "../../../../redux/hooks";
 import { updateConfig } from "../../../../redux/slices/configSlice";
 import { modifyAnyConfigWithSharedConfig } from "core/config/sharedConfig";
 import { ConfigHeader } from "../../components/ConfigHeader";
+import { AuditOverviewPanel, type ReviewRequest } from "./AuditOverviewPanel";
 import { EditableRules, type EditorEnv } from "./EditableRules";
+import { AuditInbox } from "./audit/AuditInbox";
+import { AuditList } from "./audit/AuditList";
+import { ViewSwitch, type PermissionsView } from "./audit/ViewSwitch";
 import { FirstRunOverview } from "./FirstRunOverview";
 import { LocksSection } from "./Locks";
 import { PermissionsError, PermissionsSkeleton } from "./PermissionsStates";
 import { BuiltinList, RuleList } from "./RuleList";
 import { RuleTester } from "./RuleTester";
+import { auditKeyOf, useAuditOverview } from "./useAuditOverview";
 import { usePermissionsReport } from "./usePermissionsReport";
 
 function PlanSettings({ area }: { area: AreaReport }) {
@@ -94,10 +101,16 @@ function AreaPanel({
   area,
   report,
   env,
+  audit,
+  review,
+  onReviewOpened,
 }: {
   area: PolicyArea;
   report: EffectiveRulesReport;
   env: EditorEnv;
+  audit?: AuditOverview;
+  review?: ReviewRequest & { nonce: number };
+  onReviewOpened?: () => void;
 }) {
   const levels = useAppSelector((s) => s.ui.policyLevels);
   const [result, setResult] = useState<ToolCallTestResult | undefined>();
@@ -152,6 +165,9 @@ function AreaPanel({
               rules={a.rules}
               highlight={result?.matchedRules.map((m) => m.raw)}
               env={env}
+              audit={audit}
+              review={review}
+              onReviewOpened={onReviewOpened}
             />
           )}
           <RuleTester area={area} levels={levels} onResult={setResult} />
@@ -179,6 +195,21 @@ export function PermissionsSection() {
     levels,
   );
   const [active, setActive] = useState<PolicyArea>("tools");
+  const [view, setView] = useState<PermissionsView>("rules");
+  const [review, setReview] = useState<
+    (ReviewRequest & { nonce: number }) | undefined
+  >();
+  const ruleTexts = report
+    ? [
+        ...new Set(
+          [
+            ...Object.values(report.areas).flatMap((a) => a.rules),
+            ...report.unscoped,
+          ].map(auditKeyOf),
+        ),
+      ]
+    : [];
+  const audit = useAuditOverview(ideMessenger, ruleTexts, Boolean(report));
   const [introHidden, setIntroHidden] = useState(false);
   const [status, setStatus] = useState<
     { text: string; error?: boolean } | undefined
@@ -202,6 +233,14 @@ export function PermissionsSection() {
       setStatus({ text });
       reload();
     },
+  };
+
+  // Review opens the editor in the rule's own area, with the rule filled in
+  const onReview = (r: ReviewRequest) => {
+    setActive(
+      areaOfTool(r.rule.split("(")[0]) === "context" ? "context" : "tools",
+    );
+    setReview({ ...r, nonce: Date.now() });
   };
 
   const undo = async () => {
@@ -232,28 +271,31 @@ export function PermissionsSection() {
         className="mb-2"
       />
       {showIntro && <FirstRunOverview onDismiss={dismissIntro} />}
-      {loading && <PermissionsSkeleton slow={slow} onRetry={reload} />}
-      {error && <PermissionsError onRetry={reload} />}
-      {userFile?.state === "broken" && (
-        <div className="mb-2">
-          <Alert type="error" size="sm">
-            <span className="text-2xs" data-testid="config-broken">
-              Your config.yaml cannot be read: {userFile.error} Your rules are
-              not shown, and editing is off so nothing is written over the file.
-              Fix the file, then reload.
-            </span>
-          </Alert>
-        </div>
-      )}
-      {userFile?.state === "missing" && (
-        <div className="mb-2">
-          <Alert type="warning" size="sm">
-            <span className="text-2xs" data-testid="config-missing">
-              There is no config.yaml, so rules cannot be saved here.
-            </span>
-          </Alert>
-        </div>
-      )}
+      <ViewSwitch view={view} onChange={setView} />
+      <div hidden={view !== "rules"}>
+        {loading && <PermissionsSkeleton slow={slow} onRetry={reload} />}
+        {error && <PermissionsError onRetry={reload} />}
+        {userFile?.state === "broken" && (
+          <div className="mb-2">
+            <Alert type="error" size="sm">
+              <span className="text-2xs" data-testid="config-broken">
+                Your config.yaml cannot be read: {userFile.error} Your rules are
+                not shown, and editing is off so nothing is written over the
+                file. Fix the file, then reload.
+              </span>
+            </Alert>
+          </div>
+        )}
+        {userFile?.state === "missing" && (
+          <div className="mb-2">
+            <Alert type="warning" size="sm">
+              <span className="text-2xs" data-testid="config-missing">
+                There is no config.yaml, so rules cannot be saved here.
+              </span>
+            </Alert>
+          </div>
+        )}
+      </div>
       <div role="status" aria-live="polite" data-testid="change-status">
         {status && (
           <p
@@ -274,56 +316,97 @@ export function PermissionsSection() {
           Undo last change
         </Button>
       )}
-      {report?.notices.map((n) => (
-        <div className="mb-2" key={n}>
-          <Alert type="warning" size="sm">
-            <span className="text-2xs">{n}</span>
-          </Alert>
-        </div>
-      ))}
-      {report && (
+      <div hidden={view !== "rules"}>
+        {report?.notices.map((n) => (
+          <div className="mb-2" key={n}>
+            <Alert type="warning" size="sm">
+              <span className="text-2xs">{n}</span>
+            </Alert>
+          </div>
+        ))}
+        {report && (
+          <div
+            role="tablist"
+            aria-label="Permission areas"
+            className="mb-3 flex flex-wrap gap-1"
+          >
+            {POLICY_AREAS.map((area) => (
+              <button
+                key={area}
+                role="tab"
+                id={`permissions-tab-${area}`}
+                aria-selected={active === area}
+                aria-controls={`permissions-panel-${area}`}
+                data-testid={`tab-${area}`}
+                onClick={() => setActive(area)}
+                className={`cursor-pointer rounded-sm border border-solid px-2 py-0.5 text-xs text-foreground ${
+                  active === area
+                    ? "border-border-focus bg-input"
+                    : "border-border bg-transparent"
+                }`}
+              >
+                {POLICY_AREA_LABELS[area]}
+                {report && report.areas[area].rules.length > 0 && (
+                  <span className="ml-1 text-description-muted">
+                    {report.areas[area].rules.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+        {report && (
+          <AuditOverviewPanel
+            overview={audit.overview}
+            loading={audit.loading}
+            slow={audit.slow}
+            error={audit.error}
+            canEdit={env.editable}
+            onReview={onReview}
+            onRetry={audit.reload}
+          />
+        )}
+        {report && (
+          <AreaPanel
+            key={active}
+            area={active}
+            report={report}
+            env={env}
+            audit={audit.overview}
+            review={review}
+            onReviewOpened={() => setReview(undefined)}
+          />
+        )}
+        {report && report.unscoped.length > 0 && (
+          <section aria-label="Rules with no area" className="mt-3">
+            <h5 className="my-1 text-xs font-semibold">Rules with no area</h5>
+            <p className="my-1 text-2xs text-description-muted">
+              These name a tool that only touches the session, or cannot be
+              read, so no area applies.
+            </p>
+            <RuleList rules={report.unscoped} />
+          </section>
+        )}
+      </div>
+      {view === "recent" && (
         <div
-          role="tablist"
-          aria-label="Permission areas"
-          className="mb-3 flex flex-wrap gap-1"
+          role="tabpanel"
+          id="permissions-view-recent"
+          aria-labelledby="permissions-view-tab-recent"
         >
-          {POLICY_AREAS.map((area) => (
-            <button
-              key={area}
-              role="tab"
-              id={`permissions-tab-${area}`}
-              aria-selected={active === area}
-              aria-controls={`permissions-panel-${area}`}
-              data-testid={`tab-${area}`}
-              onClick={() => setActive(area)}
-              className={`cursor-pointer rounded-sm border border-solid px-2 py-0.5 text-xs text-foreground ${
-                active === area
-                  ? "border-border-focus bg-input"
-                  : "border-border bg-transparent"
-              }`}
-            >
-              {POLICY_AREA_LABELS[area]}
-              {report && report.areas[area].rules.length > 0 && (
-                <span className="ml-1 text-description-muted">
-                  {report.areas[area].rules.length}
-                </span>
-              )}
-            </button>
-          ))}
+          <AuditList />
         </div>
       )}
-      {report && (
-        <AreaPanel key={active} area={active} report={report} env={env} />
-      )}
-      {report && report.unscoped.length > 0 && (
-        <section aria-label="Rules with no area" className="mt-3">
-          <h5 className="my-1 text-xs font-semibold">Rules with no area</h5>
-          <p className="my-1 text-2xs text-description-muted">
-            These name a tool that only touches the session, or cannot be read,
-            so no area applies.
-          </p>
-          <RuleList rules={report.unscoped} />
-        </section>
+      {view === "inbox" && (
+        <div
+          role="tabpanel"
+          id="permissions-view-inbox"
+          aria-labelledby="permissions-view-tab-inbox"
+        >
+          <AuditInbox
+            env={{ ...env, editable: env.editable && Boolean(report) }}
+          />
+        </div>
       )}
     </section>
   );

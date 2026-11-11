@@ -1,10 +1,20 @@
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetOllamaShowCache } from "./ollamaShowHint.js";
 import {
   openAICompatBase,
-  testOpenAICompatConnection,
+  testOpenAICompatConnection as realTest,
   type TestFetch,
 } from "./openaiCompatTest.js";
+
+const measuredDir = mkdtempSync(join(tmpdir(), "measured-"));
+/** Tests never write to the real global folder. */
+const testOpenAICompatConnection = (
+  i: Parameters<typeof realTest>[0],
+): ReturnType<typeof realTest> =>
+  realTest({ measuredFile: join(measuredDir, "m.json"), ...i });
 
 type Route = { status?: number; body?: unknown };
 
@@ -195,5 +205,85 @@ describe("testOpenAICompatConnection", () => {
     });
     expect(r.ok && r.probe && "serverParses" in r.probe).toBe(true);
     expect(r.ok && r.probe && "preset" in r.probe).toBe(false);
+  });
+});
+
+describe("recording and recovery offer", () => {
+  const textReply = {
+    choices: [
+      {
+        message: {
+          content:
+            "<tool_call>\n<function=echo_text>\n<parameter=text>\nq\n</parameter>\n<parameter=count>\n1\n</parameter>\n</function>\n</tool_call>",
+        },
+      },
+    ],
+  };
+  const routes = (reply: unknown) => ({
+    "GET http://127.0.0.1:1234/v1/models": { body: models },
+    "POST http://127.0.0.1:1234/v1/chat/completions": { body: reply },
+  });
+  const freshFile = () =>
+    join(mkdtempSync(join(tmpdir(), "rec-")), "facts.json");
+
+  it("writes one k=1 n=1 entry, host name only, and offers recovery for text", async () => {
+    const file = freshFile();
+    const r = await realTest({
+      provider: "lmstudio",
+      apiBase: "http://user:pw@Box.Lan:1234/v1",
+      model: "qwen3-coder",
+      apiKey: "sk-secret",
+      measuredFile: file,
+      now: "2026-11-11",
+      fetchFn: fakeFetch({
+        "GET http://user:pw@Box.Lan:1234/v1/models": { body: models },
+        "POST http://user:pw@Box.Lan:1234/v1/chat/completions": {
+          body: textReply,
+        },
+      }),
+    });
+    const probe = r.ok && r.probe && "kind" in r.probe ? r.probe : undefined;
+    expect(probe?.kind).toBe("text");
+    expect(probe?.recoveryDialect).toBeTruthy();
+    expect(probe?.recorded).toEqual({ n: 1 });
+    const text = readFileSync(file, "utf8");
+    expect(JSON.parse(text).entries[0]).toMatchObject({
+      provider: "lmstudio",
+      host: "box.lan",
+      model: "qwen3-coder",
+      value: "text",
+      k: 1,
+      n: 1,
+    });
+    for (const secret of ["sk-secret", "pw", "user:", ":1234"]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
+  it("writes nothing with record: false", async () => {
+    const file = freshFile();
+    const r = await realTest({
+      provider: "lmstudio",
+      model: "m2",
+      record: false,
+      measuredFile: file,
+      fetchFn: fakeFetch(routes(nativeReply)),
+    });
+    expect(r.ok && r.probe && "recorded" in r.probe).toBe(false);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it("does not record an unknown result", async () => {
+    const file = freshFile();
+    await realTest({
+      provider: "lmstudio",
+      model: "m2",
+      measuredFile: file,
+      fetchFn: fakeFetch({
+        "GET http://127.0.0.1:1234/v1/models": { body: models },
+        "POST http://127.0.0.1:1234/v1/chat/completions": { status: 500 },
+      }),
+    });
+    expect(existsSync(file)).toBe(false);
   });
 });

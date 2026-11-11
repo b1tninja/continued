@@ -23,6 +23,7 @@ import {
   setTaskPlan,
 } from "@gui/redux/slices/sessionSlice";
 import type { setupStore } from "@gui/redux/store";
+import { AUDIT_FIXTURES } from "./auditFixtures";
 
 export type Store = ReturnType<typeof setupStore>;
 export interface FixtureContext {
@@ -62,6 +63,13 @@ export function seedMessenger(messenger: MockIdeMessenger): void {
       notices: [],
       hostEnvNames: ["PATH", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY", "EDITOR"],
       credentialUrlNames: [],
+    },
+    "audit/shadowSettings": {
+      form: { enabled: false, timeoutMs: 5000 },
+      trailEnabled: true,
+      spentUsd: 0,
+      reservedUsd: 0,
+      reviews: 0,
     },
     getOpenFiles: [],
     "policy/load": parsePolicyFile(undefined),
@@ -559,5 +567,7 @@ Object.assign(FIXTURES, {
     store.dispatch(newSession());
   },
 });
+
+Object.assign(FIXTURES, AUDIT_FIXTURES);
 
 export const FIXTURE_NAMES = Object.keys(FIXTURES);

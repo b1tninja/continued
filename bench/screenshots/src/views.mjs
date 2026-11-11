@@ -101,6 +101,14 @@ export const VIEWS = {
     fixture: "chat-first-run",
     note: "a new chat for a first-time user, with the one-line first-run notice",
   },
+  "audit-list": {
+    fixture: "audit-list",
+    note: "Settings, Permissions, Recent calls: decisions, who decided, agents, filters",
+  },
+  "audit-inbox": {
+    fixture: "audit-inbox",
+    note: "Settings, Permissions, Inbox: open asks oldest first, ages, possibly-ended label, Show older",
+  },
   "settings-tools": {
     fixture: "settings-tools",
     note: "Settings, Tools tab, with Commands and secrets",
