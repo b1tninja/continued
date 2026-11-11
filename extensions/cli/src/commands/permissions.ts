@@ -2,8 +2,8 @@
  * `continuous permissions list [--area A] [--json]` and
  * `continuous permissions test <tool> <arg...>`: the same data as the
  * Permissions page in the IDE (core/tools/permissions/effectiveRules.ts and
- * testToolCall.ts). Read-only: nothing is written, nothing is run and no
- * model is asked.
+ * testToolCall.ts). `list` and `test` write nothing, run nothing and ask no
+ * model. `add`, `remove` and `adopt` change your own rules (permissionsEdit.ts).
  */
 
 import path from "node:path";
@@ -28,9 +28,15 @@ import {
 } from "core/tools/permissions/testToolCall.js";
 
 import { env } from "../env.js";
+import {
+  addCommand,
+  adoptCommand,
+  removeCommand,
+  type PermissionsEditOptions,
+} from "./permissionsEdit.js";
 import { PERMISSIONS_YAML_PATH } from "../permissions/permissionsYamlLoader.js";
 
-export interface PermissionsCommandOptions {
+export interface PermissionsCommandOptions extends PermissionsEditOptions {
   json?: boolean;
   area?: string;
   mode?: string;
@@ -241,8 +247,16 @@ export function permissionsCommand(
       return listCommand(options, full);
     case "test":
       return testCommand(args, options, full);
+    case "add":
+      return addCommand(args, options, full);
+    case "remove":
+      return removeCommand(args, options, full);
+    case "adopt":
+      return adoptCommand(args, options, full);
     default:
-      full.err(`Unknown action "${action}". Use: list, test`);
+      full.err(
+        `Unknown action "${action}". Use: list, test, add, remove, adopt`,
+      );
       return 1;
   }
 }
