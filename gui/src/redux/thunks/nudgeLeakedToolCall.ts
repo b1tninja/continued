@@ -1,7 +1,11 @@
 import type { ChatHistoryItem } from "core";
 import { renderChatMessage } from "core/util/messageContent";
 import { isLeakedToolCall } from "core/util/toolDialectLeak";
-import { LEAKED_CALL_NUDGE, LEAKED_CALL_NUDGE_LIMIT } from "core/util/turnEnd";
+import {
+  LEAKED_CALL_NUDGE,
+  LEAKED_CALL_NUDGE_LIMIT,
+  LEAKED_CALL_NUDGE_SESSION_LIMIT,
+} from "core/util/turnEnd";
 import type { AppThunkDispatch, RootState } from "../store";
 import { addUserInputToHistory } from "./addUserInputToHistory";
 import type { IIdeMessenger } from "../../context/IdeMessenger";
@@ -24,6 +28,13 @@ export function leakedCallNudgesThisTurn(history: ChatHistoryItem[]): number {
   return n;
 }
 
+/** Nudges sent in the whole session, for the session cap. */
+export function leakedCallNudgesThisSession(
+  history: ChatHistoryItem[],
+): number {
+  return history.filter(isNudge).length;
+}
+
 /**
  * H13: a reply that is a tool call written as text ends the agent's turn with
  * nothing done. Say so to the model once per turn and let it answer: the nudge
@@ -40,12 +51,20 @@ export async function nudgeLeakedToolCall(args: {
   ideMessenger: IIdeMessenger;
 }): Promise<boolean> {
   const { history, loop } = args.state.session;
+  // On unless the person turned it off (Settings, "Ask again when a tool
+  // call is typed as text")
+  if (args.state.config?.config?.ui?.nudgeLeakedToolCalls === false) {
+    return false;
+  }
   if (loop?.current) return false;
   const last = history.at(-1)?.message;
   if (last?.role !== "assistant" || (last.toolCalls?.length ?? 0) > 0) {
     return false;
   }
-  if (leakedCallNudgesThisTurn(history) >= LEAKED_CALL_NUDGE_LIMIT) {
+  if (
+    leakedCallNudgesThisTurn(history) >= LEAKED_CALL_NUDGE_LIMIT ||
+    leakedCallNudgesThisSession(history) >= LEAKED_CALL_NUDGE_SESSION_LIMIT
+  ) {
     return false;
   }
   if (

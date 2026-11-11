@@ -76,4 +76,28 @@ describe("StreamingToolbar", () => {
     });
     expect(screen.queryByTestId("recovery-hold")).toBeNull();
   });
+
+  it("adds the elapsed seconds to the hold line after 10 s, not before", async () => {
+    vi.useFakeTimers();
+    try {
+      const store = await setup();
+      await act(async () => {
+        store.dispatch(setRecoveryHold(true));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(9_000);
+      });
+      expect(screen.getByTestId("recovery-hold").textContent).not.toContain(
+        " s)",
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(screen.getByTestId("recovery-hold").textContent).toContain(
+        "(12 s)",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
