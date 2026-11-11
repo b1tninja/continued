@@ -168,6 +168,14 @@ const READ_ONLY: Record<string, Check> = {
 };
 
 /**
+ * Aliases that 5.1 and 7 on Windows define for a read cmdlet and that are other
+ * programs elsewhere (`compare` is ImageMagick, `write` is the terminal
+ * messenger): they were never vouched, and the larger alias table does not
+ * change that, so a command on either asks as before.
+ */
+const ALIAS_NOT_VOUCHED = new Set(["compare", "write"]);
+
+/**
  * Programs PowerShell runs the same way every shell does. Its own cmdlets and
  * their aliases are not a list of names here: they go through powershell.ts,
  * which knows each cmdlet's parameters. Names that are other programs on
@@ -728,7 +736,7 @@ function classifyForShell(
     if (shell === "powershell" && !(name in POWERSHELL_EXTERNAL)) {
       // A cmdlet or an alias of one: known by its parameters, not its name
       const cmdlet = canonicalCmdlet(name);
-      if (cmdlet) {
+      if (cmdlet && !ALIAS_NOT_VOUCHED.has(name.toLowerCase())) {
         if (CHANGES_DIRECTORY.has(cmdlet)) movedDirectory = true;
         const problem = checkReadCmdlet(cmdlet, rest);
         if (problem) return no(problem);
