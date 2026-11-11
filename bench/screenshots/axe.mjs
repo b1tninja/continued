@@ -89,7 +89,12 @@ async function main() {
     });
     return console.error(`baseline written: ${BASELINE}`);
   }
-  const { added, improved } = diffBaseline(current, readBaseline(BASELINE));
+  const { added, improved } = diffBaseline(
+    current,
+    Object.fromEntries(
+      Object.entries(readBaseline(BASELINE)).filter(([v]) => views.includes(v)),
+    ),
+  );
   for (const i of improved)
     console.error(`improved  ${i.view}  ${i.rule}  ${i.was} -> ${i.count}`);
   for (const a of added)

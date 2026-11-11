@@ -1,0 +1,87 @@
+{
+  "tool": "bench/screenshots axe.mjs",
+  "axeTags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+  "note": "Known violations per view: rule -> most nodes seen at any width or theme. Fix and tighten with --update; never add by hand.",
+  "views": {
+    "agents-ended": {
+      "color-contrast": 26
+    },
+    "agents-running": {
+      "color-contrast": 26
+    },
+    "attach-open": {},
+    "audit-inbox": {
+      "color-contrast": 9
+    },
+    "audit-list": {
+      "color-contrast": 13
+    },
+    "bedrock-fail": {},
+    "bedrock-ok": {
+      "color-contrast": 1
+    },
+    "chat": {
+      "color-contrast": 2
+    },
+    "chat-first-run": {
+      "color-contrast": 2
+    },
+    "conversation": {
+      "color-contrast": 14,
+      "scrollable-region-focusable": 1
+    },
+    "dialect": {
+      "color-contrast": 2
+    },
+    "held": {
+      "color-contrast": 2
+    },
+    "loop": {
+      "color-contrast": 2
+    },
+    "overflow-open": {
+      "aria-hidden-focus": 3,
+      "color-contrast": 2
+    },
+    "permissions-editor": {
+      "color-contrast": 16
+    },
+    "permissions-error": {
+      "color-contrast": 3
+    },
+    "permissions-intro": {
+      "color-contrast": 6
+    },
+    "permissions-loading": {
+      "color-contrast": 3
+    },
+    "preset-open": {},
+    "settings-configs": {},
+    "settings-general": {
+      "color-contrast": 8
+    },
+    "settings-help": {
+      "color-contrast": 3
+    },
+    "settings-indexing": {},
+    "settings-models": {
+      "color-contrast": 4
+    },
+    "settings-permissions": {
+      "color-contrast": 6
+    },
+    "settings-rules": {
+      "color-contrast": 2
+    },
+    "settings-tools": {},
+    "streaming": {
+      "color-contrast": 2
+    },
+    "tool-call": {
+      "color-contrast": 2
+    },
+    "tool-call-done": {
+      "color-contrast": 2
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   highContrastActive,
@@ -64,10 +64,7 @@ describe("reduced motion", () => {
 });
 
 describe("the stylesheet", () => {
-  const css = readFileSync(
-    fileURLToPath(new URL("../index.css", import.meta.url)),
-    "utf8",
-  );
+  const css = readFileSync(join(process.cwd(), "src", "index.css"), "utf8");
 
   it("stops animation under both signals", () => {
     expect(css).toMatch(

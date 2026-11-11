@@ -49,6 +49,23 @@ Views: `chat` (empty chat with the input and toolbar), `conversation`,
 rule that allows every command: the typed confirmation, diff and verdict). `audit-list` and `audit-inbox` (Settings, Permissions, the Recent calls and Inbox views, with fake audit answers). The
 policy chips are in every chat view, below the input.
 
+### Accessibility (axe-core)
+
+```sh
+cd bench/screenshots && npm run axe -- --browser edge      # every view, 300 and 800, dark and light
+npm run axe -- --view settings-permissions --report         # one view, every violation with a target
+npm run axe -- --update                                     # rewrite axe-baseline.json from this run
+```
+
+One `AxeBuilder({ page })` call per page, after `window.__shotReady` and before
+the picture (`src/axe.mjs`, tags wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa;
+`@axe-core/playwright` 4.14.0 and `axe-core` 4.14.0 are pinned exactly and work with
+the vendored `playwright-core`, which is its peer). `axe-baseline.json` holds the
+known violations per view: rule, then the most nodes seen at any width or theme.
+`npm run axe` exits 1 when a view has a rule the baseline does not list, or more
+nodes of one than it allows; it prints improvements so the baseline can be tightened
+with `--update`. Pictures (`screenshot.mjs`) and axe are separate runs.
+
 ### Before and after
 
 ```sh
