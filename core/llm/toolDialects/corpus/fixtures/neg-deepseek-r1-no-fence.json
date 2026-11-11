@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from the DeepSeek-R1 and V3-0324 chat templates https://huggingface.co/deepseek-ai/DeepSeek-R1/raw/main/tokenizer_config.json, vLLM's tool_chat_template_deepseekr1.jinja and its deepseek_v3 tool parser, not observed",
+    "license": "mit",
     "retrieved": "2026-11-10",
     "note": "Arguments without the json fence are the V3.1 shape, not this one."
   },
