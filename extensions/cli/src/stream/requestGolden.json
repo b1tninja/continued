@@ -1,8 +1,8 @@
 {
-  "cli-agent": "074375cbdf54ad2e0eb239c1ac457329ee50903d713ff64709f964faf085a30d",
-  "cli-agent-plain": "f041f22aa9fd95e16ef230c26497a6ddae0f45eebd986f06bb0088fabad71c17",
-  "cli-plan": "84a0061465449455eb0111dcfdd08d420a8e8b953a381edf82ec62bdc13324c8",
-  "cli-subagent": "d721fcf1f57fbd45d0c03a6795a8deaed0648f36fbb08f6ad0d13e55ff648d12",
-  "cli-compaction": "fc9f88fa7c9e5faabb1d226da853689fa3d30127f3119f5689085fd4d90df5ee",
-  "cli-resume": "d8a2c0cb35f8ed643cc88bc4c738bdf13994a2a73618bdd6809c569cadfcdb24"
+  "cli-agent": "f37181a0b5ae7cc6f375368ca768144219aaeef586a1874c7ab197694cb430d4",
+  "cli-agent-plain": "32da71502d771eea31cee87b544fad67b0816c1bf6335838c6d87a9e01640313",
+  "cli-plan": "4e375bdde31dd84806f0a5118ccd1c2822667effee273db4cfc37450590d1a8e",
+  "cli-subagent": "f5caa8b929df8992d2e267e70758701b181a923e1acc78e92e5fc161b130f692",
+  "cli-compaction": "d9a05cce3e30f69442cbfdef7071c29bf2a0a58eaa9320f05e1f315ffde33736",
+  "cli-resume": "bd1d2b13986ac4645a95c8fcc171b392c0ccdff6831ce92c82d453f5e2ae9fb4"
 }
