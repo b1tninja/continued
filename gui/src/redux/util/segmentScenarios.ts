@@ -145,6 +145,23 @@ export const IDE_SCENARIOS: Record<string, () => RootState> = {
   "ide-agent-nova": () => ideState({ model: NOVA }),
   "ide-loop-item": () =>
     ideState({ model: CLAUDE, loop: true, taskPlan: PLAN }),
+  "ide-agent-scoped-rule": () =>
+    ideState({
+      model: CLAUDE,
+      history: [
+        msg("user", "Fix the bug in lexer.ts", {
+          contextItems: [
+            {
+              name: "lexer.ts",
+              description: "",
+              content: "export const a = 1;",
+              uri: { type: "file", value: "file:///repo/src/lexer.ts" },
+              id: { providerTitle: "file", itemId: "lexer" },
+            },
+          ],
+        }),
+      ],
+    }),
   "ide-compacted": () =>
     ideState({
       model: CLAUDE,

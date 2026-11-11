@@ -5,5 +5,6 @@
   "ide-agent-qwen-prompted": "8da9611fdc2109874e99c9dc3ca9a5ec6e0d4f6d004cd4677cb20bc6dc1f0f99",
   "ide-agent-nova": "2661085f909c61f80e9681b03c52f82048cb550f736a904e03b65775b1e58a87",
   "ide-loop-item": "4fba256afd3e383df4e1b4e891163961b37f365bcd21ad5bff9b0397e3f621db",
+  "ide-agent-scoped-rule": "0cf928697e4709af79ea6978bf7528fcacd00c448cd47174ead04aa2bbadd066",
   "ide-compacted": "3b3c67a6e713c886d0bd60aee7be4d6542b04056d78652fbbded54c1bb31b4d4"
 }
