@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/unsloth/Llama-3.3-70B-Instruct/blob/main/chat_template.jinja, not observed (mirror of the gated Meta repo)",
+    "license": "llama3.3",
     "retrieved": "2026-11-10",
     "note": "Key is parameters, not arguments."
   },

@@ -47,6 +47,7 @@ import { unrollLocalYamlBlocks } from "./loadLocalYamlBlocks";
 import * as YAML from "yaml";
 import {
   clearFolderRules,
+  recordAssistantAllows,
   recordFolderRules,
 } from "../../tools/permissions/folderRules";
 import {
@@ -528,6 +529,15 @@ export async function configYamlToContinueConfig(options: {
   const ruleTrust = resolveToolPermissions(
     readUserToolPermissions(),
     config.toolPermissions,
+  );
+  // Remember what was dropped so the Permissions page can offer to adopt it
+  const keptAllow = new Set(
+    (ruleTrust.permissions?.allow ?? []).map((r) => r.trim()),
+  );
+  recordAssistantAllows(
+    (config.toolPermissions?.allow ?? []).filter(
+      (r): r is string => typeof r === "string" && !keptAllow.has(r.trim()),
+    ),
   );
   const own = withOwnGuidance(ruleTrust.permissions, readUserGuidance());
   continueConfig.toolPermissions = own.permissions;

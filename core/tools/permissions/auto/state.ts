@@ -61,7 +61,12 @@ export class AutoReviewState {
     result: ReviewResult,
     context = "",
   ): void {
-    if (result.category === "reviewer-unavailable") return;
+    if (
+      result.category === "reviewer-unavailable" ||
+      result.category === "reviewer-addressed-text"
+    ) {
+      return;
+    }
     if (this.cache.size >= MAX_CACHE) {
       const oldest = this.cache.keys().next().value;
       if (oldest !== undefined) this.cache.delete(oldest);

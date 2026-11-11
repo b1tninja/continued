@@ -18,6 +18,11 @@ import {
   describePreset,
   resolveToolDialectPreset,
 } from "./toolDialectPresets.js";
+import {
+  surfaceFactsLine,
+  surfaceFamily,
+  type SurfaceQuery,
+} from "./surfaceFacts.js";
 
 export type ToolCallSupport =
   | { kind: "native"; intact: boolean; issues: string[] }
@@ -33,6 +38,8 @@ export interface ToolDialectProbeResult {
   preset?: string;
   /** The server parses this model's calls itself; no recovery is suggested. */
   serverParses?: boolean;
+  /** "Provider facts: ..." from the surface facts file: information only, gates nothing. */
+  facts?: string;
 }
 
 /** The wizard's result line for a support verdict. */
@@ -92,7 +99,11 @@ function refusedTools(error: unknown): boolean {
 export async function probeToolDialect(
   send: (request: ProbeRequest) => Promise<ToolReply>,
   model?: string,
-  options: { serverParses?: boolean } = {},
+  options: {
+    serverParses?: boolean;
+    /** The provider/engine/API surface, with the label to show for it. */
+    surface?: { query: SurfaceQuery; label: string };
+  } = {},
 ): Promise<ToolDialectProbeResult> {
   let support: ToolCallSupport;
   try {
@@ -103,9 +114,17 @@ export async function probeToolDialect(
   const preset = options.serverParses
     ? undefined
     : resolveToolDialectPreset(model);
+  const family = surfaceFamily(resolveToolDialectPreset(model)?.id, model);
+  const facts = options.surface
+    ? surfaceFactsLine(options.surface.label, {
+        ...options.surface.query,
+        modelFamily: family,
+      })
+    : undefined;
   return {
     support,
     label: labelFor(support),
+    ...(facts ? { facts } : {}),
     ...(options.serverParses ? { serverParses: true } : {}),
     ...(preset ? { preset: describePreset(preset) } : {}),
   };

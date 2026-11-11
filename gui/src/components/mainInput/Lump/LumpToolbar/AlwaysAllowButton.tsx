@@ -55,6 +55,12 @@ export function AlwaysAllowButton({ toolCallId, toolName, parsedArgs }: Props) {
       if (result === "invalid") {
         return setState({ kind: "message", text: "That rule is not valid." });
       }
+      if (result !== "added" && result !== "exists") {
+        return setState({
+          kind: "message",
+          text: saved.content.error ?? COULD_NOT_SAVE,
+        });
+      }
       setState({ kind: "idle" });
       void dispatch(callToolById({ toolCallId }));
     } catch {

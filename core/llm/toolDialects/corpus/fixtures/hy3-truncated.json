@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/tencent/Hy3/blob/main/chat_template.jinja and vLLM hy_v3_tool_parser.py, not observed",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": ""
   },
