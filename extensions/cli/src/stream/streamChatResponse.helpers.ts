@@ -224,7 +224,10 @@ async function coreRulesVerdict(
       ...(mcpServer
         ? {
             mcp: { serverName: mcpServer, toolName: toolCall.name },
-            mcpSchema: toolCall.tool?.parameters as Record<string, unknown>,
+            mcpSchema: toolCall.tool?.parameters as unknown as Record<
+              string,
+              unknown
+            >,
             mcpDefinitionChange: mcpPinChange(mcpServer, toolCall.name),
           }
         : {}),

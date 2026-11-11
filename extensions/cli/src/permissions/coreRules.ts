@@ -17,8 +17,8 @@ import {
 import { mcpRuleName } from "core/tools/permissions/names.js";
 import { readUserTrustedDomains } from "core/tools/permissions/readRuleSources.js";
 import { processedPathArgs } from "core/tools/permissions/realPath.js";
-import { deputyWorkspace } from "core/tools/permissions/workspaceRoots.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
+import { deputyWorkspace } from "core/tools/permissions/workspaceRoots.js";
 import { resolveShell } from "core/util/shell.js";
 import { readUserGuidance } from "core/util/userGuidance.js";
 
@@ -247,6 +247,14 @@ export interface CoreRulesInput {
   cwd?: string;
 }
 
+/** The MCP tool's declared schema, where the engine reads it (`function.parameters`). */
+function schemaOf(
+  name: string,
+  parameters: Record<string, unknown> | undefined,
+) {
+  return parameters ? { function: { name, parameters } } : {};
+}
+
 function pathArgsFor(
   isMcp: boolean,
   toolName: string,
@@ -284,9 +292,7 @@ export async function evaluateWithCoreRules(
         group: mcp.serverName,
         originalFunctionName: mcp.toolName,
         uri: `mcp:${mcp.serverName}`,
-        ...(input.mcpSchema
-          ? { function: { name: mcp.toolName, parameters: input.mcpSchema } }
-          : {}),
+        ...schemaOf(mcp.toolName, input.mcpSchema),
         evaluateToolCallPolicy: input.evaluateToolCallPolicy as never,
         ...(input.mcpDefinitionChange
           ? { mcpDefinitionChange: input.mcpDefinitionChange }

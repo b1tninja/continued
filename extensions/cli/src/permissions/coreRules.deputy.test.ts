@@ -4,9 +4,9 @@ import * as path from "node:path";
 
 import type { ApprovalSettings } from "core/tools/permissions/approval.js";
 import type { PolicyLevel } from "core/tools/permissions/policy.js";
+import { needsLink, tryLink } from "core/tools/permissions/testLinks.js";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { needsLink, tryLink } from "core/tools/permissions/testLinks.js";
 import { evaluateWithCoreRules, toCoreCall } from "./coreRules.js";
 
 /**
@@ -41,6 +41,7 @@ const decide = (
     level?: PolicyLevel;
     builtin?: ApprovalSettings["builtin"];
     mcp?: { serverName: string; toolName: string };
+    mcpSchema?: Record<string, unknown>;
   } = {},
 ) =>
   evaluateWithCoreRules({
@@ -53,6 +54,7 @@ const decide = (
       ...(over.builtin ? { builtin: over.builtin } : {}),
     },
     mcp: over.mcp,
+    mcpSchema: over.mcpSchema,
     isHeadless: false,
     cwd: ws,
   });
@@ -204,4 +206,32 @@ describe("MCP file tools through the CLI", () => {
       )?.decision,
     ).toBe("allow");
   });
+});
+
+describe("an MCP tool's path argument, from its schema, through the CLI", () => {
+  const mcp = { serverName: "files", toolName: "open" };
+  const mcpSchema = {
+    type: "object",
+    properties: { where: { type: "string", format: "uri-reference" } },
+  };
+
+  it("asks for a path under a name no rule knows, when the schema calls it a path", async () => {
+    const args = { where: outside };
+    expect((await decide("open", args, { mcp }))?.decision).toBe("allow");
+    expect((await decide("open", args, { mcp, mcpSchema }))?.decision).toBe(
+      "ask",
+    );
+    expect(
+      (await decide("open", { where: "a.ts" }, { mcp, mcpSchema }))?.decision,
+    ).toBe("allow");
+  });
+
+  it.skipIf(!link.ok)(
+    needsLink("asks for a path through a link that leaves the folder", link),
+    async () => {
+      const v = await decide("open", { path: "link/target.txt" }, { mcp });
+      expect(v?.decision).toBe("ask");
+      expect(v?.source).toBe("protected-path");
+    },
+  );
 });

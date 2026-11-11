@@ -1,4 +1,6 @@
 import { getAuditTrail } from "core/tools/permissions/audit/global.js";
+import { mainAuditAgent } from "core/tools/permissions/audit/identity.js";
+import type { AuditAgent } from "core/tools/permissions/audit/record.js";
 import type { AuditTrail } from "core/tools/permissions/audit/trail.js";
 
 import { getCurrentSession } from "../session.js";
@@ -20,6 +22,21 @@ export function cliAuditSession(): string {
   } catch {
     return "cli";
   }
+}
+
+let currentAgent: AuditAgent | undefined;
+
+/**
+ * Who this process is for the audit record: a Loop worker names itself
+ * (loopWorker.ts); anything else is the session's main agent. The ids are
+ * the agent map's, so a record joins to a node.
+ */
+export function setCliAuditAgent(agent: AuditAgent | undefined): void {
+  currentAgent = agent;
+}
+
+export function cliAuditAgent(): AuditAgent {
+  return currentAgent ?? mainAuditAgent(cliAuditSession());
 }
 
 /** What the permission path learned while deciding one call. */
@@ -51,6 +68,7 @@ export function recordCliDecision(
     const asked = trace.askedPerson || trace.held;
     const base = {
       session: cliAuditSession(),
+      agent: cliAuditAgent(),
       callId: call.id,
       tool: call.name,
       args: safeJson(call.arguments),

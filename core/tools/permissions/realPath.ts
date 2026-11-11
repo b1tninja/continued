@@ -18,13 +18,32 @@ export interface RealPath {
   isWithinWorkspace: boolean;
 }
 
-function real(p: string): string {
+/**
+ * A path with its links followed. A link whose target does not exist (a
+ * dangling link) is followed to where the target would be, so a write through
+ * it is judged where it would create the file; a missing file is judged by
+ * its nearest existing parent. `hops` bounds a loop of links.
+ */
+function real(p: string, hops = 0): string {
   try {
     return fs.realpathSync.native(p);
   } catch {
+    if (hops < 16) {
+      try {
+        if (fs.lstatSync(p).isSymbolicLink()) {
+          const target = nodePath.resolve(
+            real(nodePath.dirname(p), hops + 1),
+            fs.readlinkSync(p),
+          );
+          return real(target, hops + 1);
+        }
+      } catch {
+        // Not a link, or not readable: fall back to the parent.
+      }
+    }
     const parent = nodePath.dirname(p);
     if (parent === p) return p;
-    return nodePath.join(real(parent), nodePath.basename(p));
+    return nodePath.join(real(parent, hops + 1), nodePath.basename(p));
   }
 }
 

@@ -7,9 +7,9 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
+import { tryLink } from "core/tools/permissions/testLinks.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { tryLink } from "core/tools/permissions/testLinks.js";
 import { getProjectHookFiles, loadHooksConfig } from "./hookConfig.js";
 import {
   fingerprintProjectHooks,

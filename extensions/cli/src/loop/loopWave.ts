@@ -1,8 +1,8 @@
 import { execSync, fork } from "child_process";
-import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import type { LoopReminder, LoopState, TaskItem, Usage } from "core/index.js";
+import type { AuditAgent } from "core/tools/permissions/audit/record.js";
 import {
   finishParallelRun,
   itemCheck,
@@ -14,6 +14,7 @@ import {
 } from "core/util/loopMode.js";
 
 import { emitAgent, ensureMainAgent, tokensOf } from "../agents/feed.js";
+import { cliAuditSession } from "../audit/cliAudit.js";
 import {
   cleanupWorktree,
   createWorktree,
@@ -53,6 +54,7 @@ import {
   type LoopWorkerMessage,
   type LoopWorkerOutput,
 } from "./loopWorker.js";
+import { nextWorkerAgent } from "./workerIdentity.js";
 
 /**
  * A parallel wave in the CLI (L4): core's `run_parallel` action names items
@@ -210,9 +212,10 @@ function spawnWorkerAgent(
   itemId: string,
   worktree: string,
   model: string | undefined,
+  agent: AuditAgent,
 ): void {
   const parent = ensureMainAgent();
-  const id = `worker-${randomUUID()}`;
+  const id = agent.id;
   workerAgents.set(itemId, id);
   emitAgent({
     type: "spawned",
@@ -220,8 +223,8 @@ function spawnWorkerAgent(
     parentId: parent,
     rootId: parent,
     kind: "loop-worker",
-    role: `item ${itemId}`,
-    mode: "loop",
+    role: agent.role ?? `item ${itemId}`,
+    mode: agent.mode,
     model,
     workspace: { kind: "worktree", name: path.basename(worktree) },
     at: Date.now(),
@@ -330,6 +333,7 @@ export async function startWave(
         plan,
         prompt: prepared.prompt,
         baselineUsage,
+        agent: nextWorkerAgent(cliAuditSession(), itemId),
         // The worker's loop names this item as its run; the others of the
         // wave show as running beside it
         loop: {
@@ -349,7 +353,12 @@ export async function startWave(
   for (const entry of started) {
     const controller = new AbortController();
     controllers.set(entry.item.id, controller);
-    spawnWorkerAgent(entry.item.id, entry.worktree, entry.input.model);
+    spawnWorkerAgent(
+      entry.item.id,
+      entry.worktree,
+      entry.input.model,
+      entry.input.agent!,
+    );
     void runOne(entry, controller.signal).finally(() => {
       controllers.delete(entry.item.id);
       if (controllers.size === 0) setWaveAbort(undefined);

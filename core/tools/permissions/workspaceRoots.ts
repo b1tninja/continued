@@ -17,7 +17,8 @@ export function deputyWorkspace(
     d.startsWith("file:") || !/^[a-z][a-z0-9+.-]+:\/\//i.test(d);
   const local = dirs
     .filter(isLocal)
-    .map((d) => (d.startsWith("file:") ? uriToPath(d) : d));
+    .map((d) => (d.startsWith("file:") ? uriToPath(d) : d))
+    .filter((d): d is string => !!d);
   if (local.length === 0 || local.length !== dirs.length) {
     return { workspaceDirs: local };
   }

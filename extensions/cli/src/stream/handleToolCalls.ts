@@ -34,7 +34,11 @@ import {
   preprocessStreamedToolCalls,
 } from "./streamChatResponse.helpers.js";
 import { StreamCallbacks } from "./streamChatResponse.types.js";
-import { auditStepsOf, stuckNoteForHistory } from "./stuckNotes.js";
+import {
+  auditRecordsOf,
+  auditStepsOf,
+  stuckNoteForHistory,
+} from "./stuckNotes.js";
 
 interface HandleToolCallsOptions {
   toolCalls: ToolCall[];
@@ -162,8 +166,13 @@ function noteStuckRound(
     ? ctx.chatHistorySvc.getHistory?.()
     : ctx.chatHistory;
   if (!history) return;
-  const note = stuckNoteForHistory(history, () =>
-    auditStepsOf(cliAuditTrail().dir, cliAuditSession()),
+  const note = stuckNoteForHistory(
+    history,
+    () => auditStepsOf(cliAuditTrail().dir, cliAuditSession()),
+    () => {
+      const trail = cliAuditTrail();
+      return trail.enabled ? auditRecordsOf(trail.dir, cliAuditSession()) : [];
+    },
   );
   if (!note) return;
   const owner = history.findLast((item) =>
