@@ -1,0 +1,34 @@
+{
+  "ide-agent-claude": {
+    "tools.builtin@agent": "8d88f34238bc",
+    "turn.agent@full": "85ef5288de58"
+  },
+  "ide-agent-claude-tasklist": {
+    "tools.builtin@agent": "ea03a84dec87",
+    "turn.agent@full": "85ef5288de58"
+  },
+  "ide-plan-claude": {
+    "tools.builtin@plan": "78e1a89acf12",
+    "turn.plan@full": "1ddaf76d6251"
+  },
+  "ide-agent-qwen-prompted": {
+    "turn.agent@tailored": "318c4dd200eb",
+    "format.agent": "fe01dc79d63f"
+  },
+  "ide-agent-nova": {
+    "tools.builtin@agent": "8d88f34238bc",
+    "turn.agent@full": "85ef5288de58"
+  },
+  "ide-loop-item": {
+    "tools.builtin@agent": "8d88f34238bc",
+    "turn.agent@full": "85ef5288de58"
+  },
+  "ide-agent-scoped-rule": {
+    "tools.builtin@agent": "8d88f34238bc",
+    "turn.agent@full": "85ef5288de58"
+  },
+  "ide-compacted": {
+    "tools.builtin@agent": "8d88f34238bc",
+    "turn.agent@full": "85ef5288de58"
+  }
+}
