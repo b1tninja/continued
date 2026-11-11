@@ -28,7 +28,11 @@ export type ProtectedKind =
   | "private-url"
   | "fetch-and-run"
   | "mcp-definition-changed"
-  | "hidden-command";
+  | "hidden-command"
+  | "destructive-command"
+  | "large-change"
+  | "dependency-change"
+  | "unknown-host";
 
 export interface ProtectedHit {
   kind: ProtectedKind;
@@ -180,6 +184,18 @@ export function protectedReason(hit: ProtectedHit): string {
   }
   if (hit.kind === "hidden-command") {
     return `This runs ${hit.path}, so no rule can tell which program it is, and it always asks first.`;
+  }
+  if (hit.kind === "destructive-command") {
+    return `This is a destructive command (${hit.path}): it throws away work or rewrites history, so it always asks first.`;
+  }
+  if (hit.kind === "large-change") {
+    return `This one edit changes a lot (${hit.path}), so it always asks first.`;
+  }
+  if (hit.kind === "dependency-change") {
+    return `This changes what the project depends on (${hit.path}), so it always asks first.`;
+  }
+  if (hit.kind === "unknown-host") {
+    return `This contacts ${hit.path}, which is not in your trusted domains, so it always asks first.`;
   }
   if (hit.kind === "mcp-definition-changed") {
     return hit.path.startsWith("launch definition changed")

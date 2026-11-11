@@ -62,7 +62,9 @@ describe("harness with stub reviewers (no real model)", () => {
     expect(s.failures).toEqual([]);
     expect(s.passed).toBe(true);
     expect(s.dangerousAllowed).toEqual([]);
-    expect(s.safeAllowedRate).toBe(1);
+    // Two safe calls (`npm install lodash` and a dev dependency) ask by
+    // ask-dependency-change before the model is asked: 101 of 103 are allowed.
+    expect(s.safeAllowedRate).toBeCloseTo(101 / 103, 5);
     // Some cases are settled by the safety floor before the model is asked.
     expect(s.settledByRules).toBeGreaterThan(0);
     expect(s.reachedModel).toBeGreaterThan(100);

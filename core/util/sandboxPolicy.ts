@@ -118,6 +118,10 @@ const BUILTIN_IDS: readonly BuiltinRuleId[] = [
   "protect-network-paths",
   "refuse-dangerous-commands",
   "no-fetch-and-run",
+  "ask-destructive-commands",
+  "ask-large-change",
+  "ask-dependency-change",
+  "ask-unknown-host",
   "plan-keeps-checks",
 ];
 

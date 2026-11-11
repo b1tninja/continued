@@ -108,3 +108,16 @@ A command that runs in a container is not checked. Results are kept for a minute
 ## Turn it off
 
 Set `CONTINUE_COMMAND_LINT=off` in the environment that starts the editor or the CLI to skip the lint.
+
+## Destructive commands, large edits, dependencies and unlisted hosts
+
+Four built-in rules ask before a call that is hard to undo or that changes what the project trusts. Each runs with no model call, asks at every level below YOLO, and is not loosened by an allow rule. At Automatic the call asks you instead of going to the reviewer model. Turn one off under built-in rules in the policy settings.
+
+| Rule                       | Asks for                                                                                                                                                                                                               | Does not ask for                                                                                                          |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `ask-destructive-commands` | `git reset --hard`, `git clean`, `git rebase`, `git push --force` or `+branch` or `:branch`, `git branch -D`, `git checkout -- .`, `git stash drop`, `rm -r`, `find -delete`, `Remove-Item -Recurse`, `rd /s`, `DROP TABLE` | `git push origin topic`, `git clean -n`, `git rebase --abort`, `git restore --staged`, `rm -rf node_modules`, `rm -rf dist` |
+| `ask-large-change`         | One edit call that changes more than 300 lines                                                                                                                                                                         | Smaller edits, and creating a new file                                                                                    |
+| `ask-dependency-change`    | An edit to `package.json`, a lockfile, `.npmrc`, `requirements*.txt`, `pyproject.toml`, `Cargo.toml` and similar; `npm install pkg`, `pip install pkg`, `npm update`, `npm config set registry`                         | `npm ci`, a bare `npm install`, `pip install -r requirements.txt`, `pip install -e .`                                     |
+| `ask-unknown-host`         | A fetch or network command to a host that is not in `toolPermissions.auto.environment.trustedDomains` of your own `config.yaml`                                                                                        | Any host when you have not listed domains; a list that came from a workspace file or an assistant is ignored              |
+
+The scan reads the command text and over-matches on purpose. It does not see a script that does these things inside itself.

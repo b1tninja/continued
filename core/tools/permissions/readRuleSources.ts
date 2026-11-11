@@ -119,6 +119,13 @@ export function readUserToolPermissions(
   return readUserConfigFile(file).permissions;
 }
 
+/** The domains the person trusts, from their own config.yaml only. */
+export function readUserTrustedDomains(
+  file = path.join(getContinueGlobalPath(), "config.yaml"),
+): string[] {
+  return readUserToolPermissions(file)?.auto?.environment?.trustedDomains ?? [];
+}
+
 /** What the CLI keeps in permissions.yaml beside the shared policy keys. */
 function readCliLists(file: string): RuleSourcesInput["cliFile"] {
   try {

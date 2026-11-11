@@ -89,6 +89,8 @@ export interface AutoReviewDeps {
    * may have come from a repository or an assistant and is never read.
    */
   guidance?: GuidanceInput;
+  /** The person's own `toolPermissions.auto.environment.trustedDomains`, and nothing else. */
+  trustedDomains?: readonly string[];
   sessions: AutoReviewSessions;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -132,6 +134,7 @@ export async function autoReviewToolCall(
     approval: req.approval,
     cwd: folderPath(deps.environment.workspaceDirs?.[0]),
     shell: deps.shell,
+    trustedDomains: deps.trustedDomains,
   });
   const base = { displayValue: evaluated.displayValue };
   const settled = (

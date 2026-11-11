@@ -13,6 +13,7 @@ import { hasUnsafeShellConstruct } from "./command";
 import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
 import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
+import { askProtectionHit } from "./askProtections";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
@@ -136,6 +137,12 @@ export interface EvaluateInput {
   shell?: ShellKind;
   /** The level chosen for each area; absent means Cautious everywhere. */
   approval?: ApprovalSettings;
+  /**
+   * Domains the person trusts, read from their own config file and nothing
+   * else (never a workspace file or an assistant). `ask-unknown-host` acts
+   * only when this is non-empty.
+   */
+  trustedDomains?: readonly string[];
 }
 
 /**
@@ -304,7 +311,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   const hiddenName = floorOn
     ? hiddenNameHit(commandText, input.shell)
     : undefined;
-  const protectedHit =
+  const protectedHit = [
     findProtected({
       toolName,
       parsedArgs,
@@ -312,10 +319,19 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
       skip: skippedProtections(input.approval),
       cwd: input.cwd,
       shell: input.shell,
-    }) ??
-    privateUrl ??
-    changedDefinition ??
-    hiddenName;
+    }),
+    privateUrl,
+    changedDefinition,
+    hiddenName,
+    askProtectionHit({
+      toolName,
+      parsedArgs,
+      resolvedPath,
+      shell: input.shell,
+      approval: input.approval,
+      trustedDomains: input.trustedDomains,
+    }),
+  ].find((hit) => hit !== undefined);
 
   // The floor: deny rules the person wrote to bind even at YOLO
   const floorRules = parsePermissions({ deny: input.approval?.floor }, "floor");
