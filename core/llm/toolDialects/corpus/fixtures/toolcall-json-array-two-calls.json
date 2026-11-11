@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 1,
+  "id": "toolcall-json-array-two-calls",
+  "family": "nemotron-toolcall",
+  "dialect": "toolcall-json",
+  "kind": "positive",
+  "failureMode": "parallel-merged",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from the Nano-9B-v2 chat template https://huggingface.co/nvidia/NVIDIA-Nemotron-Nano-9B-v2/raw/main/tokenizer_config.json, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}, {\"name\": \"get_time\", \"arguments\": {\"tz\": \"UTC\"}}]</TOOLCALL>",
+  "markers": ["<TOOLCALL>", "</TOOLCALL>", "<think>", "</think>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}, {\"name\": \"get_time\", \"arguments\": {\"tz\": \"UTC\"}}]</TOOLCALL>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">",
+        "[",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        ",",
+        " ",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "t",
+        "i",
+        "m",
+        "e",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "t",
+        "z",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "U",
+        "T",
+        "C",
+        "\"",
+        "}",
+        "}",
+        "]",
+        "<",
+        "/",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<TO",
+        "OLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}, {\"name\": \"get_time\", \"arguments\": {\"tz\": \"UTC\"}}]</TOOLCALL>"
+      ],
+      "splitInside": "<TOOLCALL>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<TOOLCALL>",
+        "[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}, {\"name\": \"get_time\", \"arguments\": {\"tz\": \"UTC\"}}]",
+        "</TOOLCALL>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<T",
+        "OOLC",
+        "ALL>[",
+        "{\"n",
+        "am",
+        "e\": ",
+        "\"",
+        "ge",
+        "t_w",
+        "eathe",
+        "r\",",
+        " \"arg",
+        "ument",
+        "s\":",
+        " ",
+        "{",
+        "\"",
+        "cit",
+        "y\":",
+        " ",
+        "\"Par",
+        "is",
+        "\"}},",
+        " {\"na",
+        "me\"",
+        ": \"g",
+        "et_",
+        "time",
+        "\", ",
+        "\"argu",
+        "men",
+        "ts\":",
+        " {\"",
+        "tz\"",
+        ": ",
+        "\"UTC\"",
+        "}",
+        "}]",
+        "</TOO",
+        "LC",
+        "A",
+        "L",
+        "L>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      },
+      {
+        "name": "get_time",
+        "arguments": {
+          "tz": "UTC"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

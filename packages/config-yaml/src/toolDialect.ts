@@ -23,6 +23,7 @@ export function recoveryValueFor(
     case "llama-json":
     case "hermes-json":
     case "glm-xml":
+    case "toolcall-json":
       return `force:${toolDialect}`;
     case "native":
     case "off":

@@ -23,7 +23,9 @@ describe("dialectFromModelName", () => {
   test.each([
     ["Qwen3-Coder-30B-A3B-Instruct-AWQ", "qwen-xml"],
     ["qwen3-coder:30b", "qwen-xml"],
-    ["Qwen3-Next-80B-A3B", "qwen-xml"],
+    ["Qwen3-Next-80B-A3B", "hermes-json"],
+    ["Qwen3.6-27B", "qwen-xml"],
+    ["qwen3.8-flash", "qwen-xml"],
     ["Qwen3-32B", "hermes-json"],
     ["qwen2.5-72b-instruct", "hermes-json"],
     ["zai-org/GLM-4.5-Air", "glm-xml"],

@@ -1,0 +1,8 @@
+{%- set tools = custom_tools %}\n
+{%- if tools is defined and tools %}\n    
+{%- set tool_definition = (tool_definition|string) + ((tools | tojson(indent=4))|string) %}\n
+{%- set tools = none %}\n
+{%- if tools is not none  %}\n        \n        \n        
+pose: output ONLY the function call(s)\n- Use exact format: [func_name1(param1=value1, param2=value2), func_name2(...)]\nExamples:\n
+{%- if user_provided_system_message and tools %}\n        
+tions in JSON format that you can invoke. Use exact format: [func_name1(param1=value1, param2=value2), func_name2(...)]\n" }}\n      

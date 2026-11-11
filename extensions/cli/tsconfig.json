@@ -29,6 +29,7 @@
   "include": [
     "src/**/*",
     "scripts/measureStuck.ts",
+    "scripts/probeSandboxRuntime.ts",
     "scripts/probeWindowsSandbox.ts",
     "scripts/runEscapeProbes.ts",
     "scripts/sandboxRun.ts",
