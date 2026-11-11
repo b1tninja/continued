@@ -23,8 +23,7 @@ describe("views", () => {
   it("every view names a fixture that harness/fixtures.ts defines", () => {
     const text = ["fixtures.ts", "auditFixtures.ts"]
       .map((f) => fs.readFileSync(path.join(here, "..", "harness", f), "utf8"))
-      .join("
-");
+      .join("\n");
     for (const [name, v] of Object.entries(VIEWS)) {
       assert.ok(
         new RegExp(`(^|\\s)"?${v.fixture}"?:\\s`, "m").test(text),
