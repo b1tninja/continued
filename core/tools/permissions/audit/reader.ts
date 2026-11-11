@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import type {
-  AuditAgent,
-  AuditRecord,
-  DecisionEvent,
-  OutcomeEvent,
+import {
+  AUDIT_VERSION,
+  type AuditAgent,
+  type AuditRecord,
+  type DecisionEvent,
+  type OutcomeEvent,
 } from "./record";
 import { readAuditFile } from "./writer";
 
@@ -191,19 +192,17 @@ export function matchesFilter(row: AuditCallRow, f: AuditFilter): boolean {
   return true;
 }
 
-/** Rows of the whole directory (or one session) that pass the filter, oldest first. */
-export function listCalls(dir: string, f: AuditFilter = {}): AuditCallRow[] {
-  const bySession = new Map<string, AuditRecord[]>();
-  for (const file of listAuditFiles(dir)) {
-    if (f.session && file.session !== f.session) continue;
-    const list = bySession.get(file.session) ?? [];
-    list.push(...readAuditFile(file.file));
-    bySession.set(file.session, list);
-  }
-  return [...bySession.values()]
-    .flatMap((records) => callRows(records))
-    .filter((row) => matchesFilter(row, f))
-    .sort((a, b) => a.ts.localeCompare(b.ts));
+/**
+ * Rows of the directory (or one session) that pass the filter, oldest first.
+ * The read is bounded (see bounded.ts): by default the last 90 days, at most
+ * 32 MB and 100,000 records, newest first.
+ */
+export function listCalls(
+  dir: string,
+  f: AuditFilter = {},
+  limits: ReadLimits = {},
+): AuditCallRow[] {
+  return listCallsBounded(dir, f, limits).rows;
 }
 
 export interface PruneResult {
@@ -240,4 +239,204 @@ export function pruneAudit(
     }
   }
   return { deleted, bytes };
+}
+
+/**
+ * A bounded read of the audit directory (ROADMAP B27): the cost of a read is
+ * set by the limits, never by how much the directory holds. A 1 GB trail must
+ * not hang `continuous audit suggest` or the Permissions page.
+ *
+ * - Files older than `maxAgeDays` are not opened (their mtime says when they
+ *   were last written, so a stat is enough).
+ * - Newest files are read first, and reading stops at `maxBytes`. A file larger
+ *   than what is left is read from its tail, so what is dropped is the oldest.
+ * - At most `maxRows` records are kept, newest first.
+ * - Lines are read in chunks, never the whole file as one string.
+ *
+ * A call whose records were split across two rotated parts, or cut by a limit,
+ * joins with what was read; the stats say a limit was hit so the caller can
+ * say the figures are partial.
+ */
+export interface ReadLimits {
+  /** Bytes of audit files to read in all; the oldest part is dropped first */
+  maxBytes?: number;
+  /** Skip files last written longer ago than this */
+  maxAgeDays?: number;
+  /** Records to keep */
+  maxRows?: number;
+  now?: Date;
+}
+
+export const DEFAULT_READ_LIMITS = {
+  maxBytes: 32 * 1024 * 1024,
+  maxAgeDays: 90,
+  maxRows: 100_000,
+} as const;
+
+export interface ReadStats {
+  filesSeen: number;
+  filesRead: number;
+  filesSkippedByAge: number;
+  bytesRead: number;
+  records: number;
+  /** The limit that cut the read short, when one did */
+  truncatedBy?: "bytes" | "rows";
+}
+
+const CHUNK = 1024 * 1024;
+/** Cheap test before JSON.parse: a decision or outcome line, the only ones joined into rows. */
+const CALL_EVENT = /"ev":"(?:decision|outcome)"/;
+
+/**
+ * Call `onLine` for each complete line of `file` from byte `start`, in chunks.
+ * `onLine` returns false to stop. Returns the bytes read.
+ */
+export function forEachLine(
+  file: string,
+  start: number,
+  onLine: (line: string) => boolean | void,
+): number {
+  let fd: number;
+  try {
+    fd = fs.openSync(file, "r");
+  } catch {
+    return 0;
+  }
+  let read = 0;
+  try {
+    const buf = Buffer.alloc(CHUNK);
+    let carry: Buffer = Buffer.alloc(0);
+    let position = start;
+    // Starting inside a file: the first line is a fragment and is dropped
+    let dropFirst = start > 0;
+    for (;;) {
+      const n = fs.readSync(fd, buf, 0, CHUNK, position);
+      if (n <= 0) break;
+      position += n;
+      read += n;
+      let data = carry.length
+        ? Buffer.concat([carry, buf.subarray(0, n)])
+        : Buffer.from(buf.subarray(0, n));
+      let nl = data.lastIndexOf(10);
+      if (nl < 0) {
+        carry = data;
+        continue;
+      }
+      carry = Buffer.from(data.subarray(nl + 1));
+      data = data.subarray(0, nl);
+      let from = 0;
+      for (;;) {
+        const next = data.indexOf(10, from);
+        const end = next < 0 ? data.length : next;
+        if (dropFirst) dropFirst = false;
+        else if (onLine(data.toString("utf8", from, end)) === false) {
+          return read;
+        }
+        if (next < 0) break;
+        from = next + 1;
+      }
+    }
+    if (carry.length && !dropFirst) onLine(carry.toString("utf8"));
+  } finally {
+    fs.closeSync(fd);
+  }
+  return read;
+}
+
+function parseLine(line: string): AuditRecord | undefined {
+  if (!CALL_EVENT.test(line)) return undefined;
+  try {
+    const rec = JSON.parse(line);
+    return rec && typeof rec === "object" && rec.v === AUDIT_VERSION
+      ? (rec as AuditRecord)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Decision and outcome records of the directory, within the limits, grouped by session. */
+export function readCallRecordsBounded(
+  dir: string,
+  limits: ReadLimits = {},
+  sessionOnly?: string,
+): { bySession: Map<string, AuditRecord[]>; stats: ReadStats } {
+  const maxBytes = limits.maxBytes ?? DEFAULT_READ_LIMITS.maxBytes;
+  const maxRows = limits.maxRows ?? DEFAULT_READ_LIMITS.maxRows;
+  const maxAgeDays = limits.maxAgeDays ?? DEFAULT_READ_LIMITS.maxAgeDays;
+  const cutoff = (limits.now ?? new Date()).getTime() - maxAgeDays * 86_400_000;
+  const stats: ReadStats = {
+    filesSeen: 0,
+    filesRead: 0,
+    filesSkippedByAge: 0,
+    bytesRead: 0,
+    records: 0,
+  };
+  const bySession = new Map<string, AuditRecord[]>();
+  const files = listAuditFiles(dir)
+    .filter((f) => !sessionOnly || f.session === sessionOnly)
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+  stats.filesSeen = files.length;
+  for (const f of files) {
+    if (f.mtimeMs < cutoff) {
+      stats.filesSkippedByAge++;
+      continue;
+    }
+    const left = maxBytes - stats.bytesRead;
+    if (left <= 0) {
+      stats.truncatedBy = "bytes";
+      break;
+    }
+    const start = f.bytes > left ? f.bytes - left : 0;
+    if (start > 0) stats.truncatedBy = "bytes";
+    stats.filesRead++;
+    const kept: AuditRecord[] = [];
+    stats.bytesRead += forEachLine(f.file, start, (line) => {
+      const rec = parseLine(line);
+      if (!rec) return true;
+      kept.push(rec);
+      if (stats.records + kept.length >= maxRows) {
+        stats.truncatedBy = "rows";
+        return false;
+      }
+      return true;
+    });
+    stats.records += kept.length;
+    const list = bySession.get(f.session) ?? [];
+    list.push(...kept);
+    bySession.set(f.session, list);
+    if (stats.truncatedBy === "rows") break;
+  }
+  return { bySession, stats };
+}
+
+/** The joined rows of the directory within the limits, oldest first, with what was read. */
+export function listCallsBounded(
+  dir: string,
+  filter: AuditFilter = {},
+  limits: ReadLimits = {},
+): { rows: AuditCallRow[]; stats: ReadStats } {
+  // An explicit --since is honoured even when it is older than the default age
+  const sinceMs = filter.since ? Date.parse(filter.since) : NaN;
+  const sinceDays = Number.isNaN(sinceMs)
+    ? 0
+    : Math.ceil(((limits.now ?? new Date()).getTime() - sinceMs) / 86_400_000);
+  const { bySession, stats } = readCallRecordsBounded(
+    dir,
+    {
+      ...limits,
+      maxAgeDays: Math.max(
+        limits.maxAgeDays ?? DEFAULT_READ_LIMITS.maxAgeDays,
+        sinceDays,
+      ),
+    },
+    filter.session,
+  );
+  const rows = [...bySession.values()]
+    .flatMap((records) => callRows(records))
+    .filter((row) => matchesFilter(row, filter))
+    .sort(
+      (a, b) => a.ts.localeCompare(b.ts) || a.session.localeCompare(b.session),
+    );
+  return { rows, stats };
 }

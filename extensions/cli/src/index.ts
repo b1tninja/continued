@@ -515,7 +515,7 @@ program
 program
   .command("audit [action] [session]")
   .description(
-    "Read the audit trail of tool call decisions (list, show <session>, inbox, prune)",
+    "Read the audit trail of tool call decisions (list, show <session>, inbox, suggest, prune)",
   )
   .option("--json", "Machine-readable output")
   .option("--session <id>", "Only this session")
@@ -527,6 +527,11 @@ program
   .option("--limit <n>", "Only the last n calls")
   .option("--days <n>", "prune: delete files older than this many days")
   .option("--dry-run", "prune: say what would be deleted")
+  .option("--min <n>", "suggest: answers needed before a rule is suggested")
+  .option("--max-age-days <n>", "suggest: read at most this many days back")
+  .option("--max-mb <n>", "suggest: read at most this many megabytes")
+  .option("--max-rows <n>", "suggest: read at most this many records")
+  .option("--verbose", "suggest: also say what was not suggested, and why")
   .action(
     async (
       action: string | undefined,
