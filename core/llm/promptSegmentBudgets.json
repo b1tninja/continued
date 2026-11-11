@@ -1,0 +1,61 @@
+{
+  "_note": "Per-segment token ceilings (chars/4): today measured size + 15 percent, from the test scenarios (C62). Raising a number is a visible diff; prompt text growth must be deliberate.",
+  "ide": {
+    "tools.builtin@agent": {
+      "maxTokens": 3824
+    },
+    "tools.builtin@plan": {
+      "maxTokens": 1765
+    },
+    "turn.agent@full": {
+      "maxTokens": 791
+    },
+    "turn.plan@full": {
+      "maxTokens": 927
+    },
+    "turn.agent@tailored": {
+      "maxTokens": 627
+    },
+    "format.agent": {
+      "maxTokens": 1038
+    },
+    "summary.compaction": {
+      "maxTokens": 18
+    },
+    "tail.turn": {
+      "maxTokens": 21
+    },
+    "task-list": {
+      "maxTokens": 110
+    }
+  },
+  "cli": {
+    "tools.builtin@agent": {
+      "maxTokens": 2123
+    },
+    "tools.builtin@plan": {
+      "maxTokens": 2879
+    },
+    "tools.mcp": {
+      "maxTokens": 125
+    },
+    "preamble": {
+      "maxTokens": 130
+    },
+    "turn.act@full": {
+      "maxTokens": 674
+    },
+    "turn.plan@full": {
+      "maxTokens": 810
+    },
+    "commit-signature": {
+      "maxTokens": 67
+    },
+    "env.date+git": {
+      "maxTokens": 53
+    },
+    "task-list": {
+      "maxTokens": 13
+    }
+  }
+}
