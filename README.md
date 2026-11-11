@@ -94,6 +94,7 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 | 2.8.2   | A two-phase infinity as the Loop mark and the logo, and narrower policy chips with a glyph and colour for each level                                                    |
 | 2.10.0  | Security hardening from an outside review (folder trust, fail-closed permissions), run commands in a container, loop budgets, and host rules                            |
 | 2.12.0  | Commands start with a scrubbed environment, an audit trail, MCP tool pinning, `toolDialect` for models that write tool calls as text, dollar budgets                    |
+| 2.12.1  | More built-in ask rules (destructive commands, large edits, dependencies, hosts), Test connection for OpenAI-compatible endpoints                                       |
 
 ## Where it is heading
 
