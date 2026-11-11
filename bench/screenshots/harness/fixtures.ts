@@ -10,6 +10,8 @@ import type {
   ToolCallState,
 } from "core";
 import { parsePolicyFile } from "core/tools/permissions/settingsFile";
+import { listEffectiveRules } from "core/tools/permissions/effectiveRules";
+import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { createLoop, enterWait } from "core/util/loopMode";
 import type { MockIdeMessenger } from "@gui/context/MockIdeMessenger";
 import {
@@ -247,5 +249,157 @@ export const FIXTURES: Record<string, Fixture> = {
       ?.scrollIntoView({ block: "start" });
   },
 };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function subCall(id: string): ToolCallState {
+  return {
+    toolCallId: id,
+    toolCall: {
+      id,
+      type: "function",
+      function: { name: "subagent", arguments: "{}" },
+    },
+    status: "calling",
+    parsedArgs: {},
+    subagent: {
+      agent: "explore",
+      model: "Claude Haiku",
+      description: "Find where timeouts are parsed",
+      prompt: "find it",
+      status: "running",
+      toolCalls: [],
+      text: "",
+      startedAt: Date.now() - 95_000,
+      usage: { inputTokens: 12_400, outputTokens: 900 },
+    },
+  } as ToolCallState;
+}
+
+/** Subagent calls with the given statuses (and names) on one assistant turn. */
+function agentsSession(
+  runs: { agent?: string; status: string; model?: string }[],
+): Fixture {
+  return ({ store }) => {
+    const calls = runs.map((r, i) => {
+      const c: any = subCall(`s${i + 1}`);
+      c.subagent = {
+        ...c.subagent,
+        agent: r.agent ?? c.subagent.agent,
+        status: r.status,
+        ...(r.model ? { model: r.model } : {}),
+        ...(r.status === "running" ? {} : { endedAt: Date.now() - 1000 }),
+      };
+      return c as ToolCallState;
+    });
+    store.dispatch(
+      newSession(
+        session([
+          user("Look into the timeouts in three places"),
+          assistant("I started some helpers.", calls),
+        ]),
+      ),
+    );
+  };
+}
+
+function settingsTab(tab: string): Fixture {
+  return async ({ navigate }) => {
+    navigate(`/config?tab=${tab}`);
+    await sleep(600);
+  };
+}
+
+const BEDROCK_MODELS = [
+  {
+    id: "anthropic.claude-sonnet-4-5-20250929-v1:0",
+    name: "Claude Sonnet 4.5",
+    provider: "Anthropic",
+    kind: "on-demand",
+    needsAnthropicUseCase: true,
+  },
+  {
+    id: "us.amazon.nova-pro-v1:0",
+    name: "Nova Pro",
+    provider: "Amazon",
+    kind: "inference-profile",
+    access: "needs-access",
+  },
+];
+
+/** The Bedrock "Test connection" result, mounted on its own (see main.tsx). */
+function bedrock(ok: boolean): Fixture {
+  return async ({ messenger }) => {
+    const h = messenger.responseHandlers as any;
+    h["bedrock/listModels"] = async (d: any) =>
+      !ok
+        ? {
+            ok: false,
+            error:
+              "AccessDeniedException: User arn:aws:sts::123456789012:assumed-role/dev-role-for-the-production-account/session-1731234567 is not authorized to perform: bedrock:ListFoundationModels",
+          }
+        : d.endpoint === "mantle"
+          ? { ok: true, models: [] }
+          : { ok: true, models: BEDROCK_MODELS };
+    h["bedrock/probeToolCalls"] = async () => ({
+      ok: true,
+      kind: "text",
+      label: "Tool calls: written as text (qwen-xml)",
+      preset: "qwen-xml (tools written as text)",
+    });
+    await sleep(300);
+    [...document.querySelectorAll("button")]
+      .find((b) => /Test connection/.test(b.textContent ?? ""))
+      ?.click();
+    await sleep(600);
+  };
+}
+
+Object.assign(FIXTURES, {
+  "settings-models": settingsTab("models"),
+  "settings-rules": settingsTab("rules"),
+  "settings-permissions": async (ctx) => {
+    ctx.messenger.responseHandlers["policy/rules"] = (async () =>
+      listEffectiveRules({
+        levels: DEFAULT_POLICY_LEVELS,
+        floor: ["runTerminalCommand(rm -rf /*)"],
+        user: {
+          deny: ["runTerminalCommand(terraform apply*)"],
+          ask: ["runTerminalCommand(git push*)"],
+          allow: ["runTerminalCommand(npm test*)", "readFile(src/**)"],
+        },
+        assistant: { allow: ["mcp__github__*"] },
+        folder: [],
+        cliFile: { exclude: ["Write(.git/**)"] },
+        maxNewPlanItems: 3,
+        notices: [],
+      } as never)) as never;
+    await settingsTab("permissions")(ctx);
+  },
+  "settings-configs": settingsTab("configs"),
+  "settings-indexing": settingsTab("indexing"),
+  "settings-general": settingsTab("settings"),
+  "settings-help": settingsTab("help"),
+  "agents-running": agentsSession([
+    { status: "running" },
+    {
+      agent: "a-reviewer-with-an-extremely-long-agent-name",
+      status: "running",
+      model:
+        "Claude Opus 4 with a very long model title (eu-west-1 inference profile)",
+    },
+    { status: "completed" },
+  ]),
+  "agents-ended": agentsSession([
+    {
+      agent: "a-reviewer-with-an-extremely-long-agent-name",
+      status: "completed",
+    },
+    { status: "interrupted" },
+    { status: "cancelled" },
+  ]),
+  "bedrock-ok": bedrock(true),
+  "bedrock-fail": bedrock(false),
+});
 
 export const FIXTURE_NAMES = Object.keys(FIXTURES);
