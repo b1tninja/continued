@@ -64,6 +64,7 @@ export const SCENARIOS: Record<string, CliScenarioSpec> = {
     taskListBlock: "<task_list>\n[>] 1. Add a test\n</task_list>",
     mcp: ["mcp__a__search", "mcp__b__fetch", "mcp__c__list"],
   },
+  "cli-agent-plain": { mode: "normal", history: HISTORY },
   "cli-plan": { mode: "plan", history: HISTORY },
   "cli-subagent": {
     mode: "normal",
