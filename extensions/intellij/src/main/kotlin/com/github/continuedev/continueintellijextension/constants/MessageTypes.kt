@@ -152,6 +152,7 @@ class MessageTypes {
             "bedrock/testModel",
             "bedrock/probeToolCalls",
             "config/setToolDialect",
+            "ollama/showHint",
             "config/getTerminalEnvironment",
             "config/setTerminalEnvironment",
             "policy/rules",

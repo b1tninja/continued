@@ -525,6 +525,10 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     BedrockConnectionParams & { model: string },
     BedrockTestModelResult,
   ];
+  "ollama/showHint": [
+    { provider?: string; apiBase?: string; model: string },
+    { serverParses?: boolean; toolsAdvertised?: boolean },
+  ];
   "bedrock/probeToolCalls": [
     BedrockConnectionParams & { model: string },
     BedrockProbeToolCallsResult,
