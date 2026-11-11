@@ -217,6 +217,8 @@ export class DataLogger {
           );
         }
       } else if (uriComponents.scheme === "file") {
+        // X15 decision: a file:// destination is the user's own sink and is
+        // written as configured, not scrubbed. Only the local dev_data copy is.
         // Write to jsonc file for local file URIs
         const dirUri = joinPathsToUri(dataConfig.destination, schema);
         const dirPath = fileURLToPath(dirUri);

@@ -1,13 +1,16 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { scrubDeep } from "core/util/secretScan/scrubForDisk.js";
+
 import { logger } from "./logger.js";
 
 /**
  * Set to a directory, makes the CLI write every outgoing chat request body
  * (OpenAI format, as handed to the provider adapter, before sending) to a
  * timestamped JSON file there, so the prefixes of two sessions can be diffed
- * when a prompt cache misses. Keys that look like credentials are redacted.
+ * when a prompt cache misses. Keys that look like credentials are redacted, and secrets found in any string
+ * are scrubbed with the shared at-rest rules (X15).
  */
 export const REQUEST_DUMP_ENV = "CONTINUE_DUMP_REQUESTS";
 
@@ -50,7 +53,10 @@ export function dumpRequest(
       directory,
       `request-${stamp}-${String(sequence).padStart(3, "0")}.json`,
     );
-    fs.writeFileSync(file, JSON.stringify(redactRequest(body), null, 2));
+    fs.writeFileSync(
+      file,
+      JSON.stringify(scrubDeep(redactRequest(body)), null, 2),
+    );
     return file;
   } catch (error) {
     if (!warned) {

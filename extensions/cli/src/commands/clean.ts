@@ -46,8 +46,8 @@ export function cleanCommand(
   options: CleanCommandOptions,
   io: Io = consoleIo,
 ): number {
-  const ms = parseAge(options.olderThan ?? `${DEFAULT_RETENTION_DAYS}d`);
-  if (!ms) {
+  const ms = options.olderThan ? parseAge(options.olderThan) : undefined;
+  if (options.olderThan && !ms) {
     io.err(`Bad --older-than "${options.olderThan}": use 30d, 12h or 2w.`);
     return 2;
   }
@@ -68,7 +68,13 @@ export function cleanCommand(
     return 0;
   }
   io.out(`Global folder: ${root}`);
-  io.out(`Older than: ${plan.cutoff.toISOString()}`);
+  io.out(
+    ms
+      ? `Older than: ${plan.cutoff.toISOString()} (--older-than, all stores)`
+      : `Retention defaults used: ${Object.entries(DEFAULT_RETENTION_DAYS)
+          .map(([s, d]) => `${s} ${d}d`)
+          .join(", ")}. --older-than overrides all of them.`,
+  );
   for (const l of summarize(plan)) io.out(l);
   if (!apply) {
     io.out(

@@ -538,9 +538,12 @@ program
 program
   .command("clean")
   .description(
-    "Delete this product's own sessions, dev_data and logs older than an age; dry run unless --yes. Not secure erasure on SSDs",
+    "Delete this product's own sessions, dev_data and logs older than an age; dry run unless --yes. Not secure erasure on SSDs. Never runs by itself. input_history.json and file:// data destinations are not touched",
   )
-  .option("--older-than <age>", "30d (default), 12h, 2w")
+  .option(
+    "--older-than <age>",
+    "One age for every store: 30d, 12h, 2w. Default: sessions 30d, logs 14d, dev_data 90d",
+  )
   .option("--dry-run", "List only (the default)")
   .option("--yes", "Actually delete")
   .option("--json", "Machine-readable output")

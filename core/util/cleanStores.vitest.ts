@@ -79,6 +79,35 @@ describe("clean", () => {
     ]);
   });
 
+  it("uses per-store defaults: sessions 30d, logs 14d, dev_data 90d", () => {
+    const root = tree();
+    const s20 = path.join(root, "sessions", "s20.json");
+    const l20 = path.join(root, "logs", "l20.log");
+    const s40 = path.join(root, "sessions", "s40.json");
+    const l10 = path.join(root, "logs", "l10.log");
+    for (const f of [s20, l20, s40, l10]) fs.writeFileSync(f, "x");
+    aged(s20, 20);
+    aged(l20, 20);
+    aged(s40, 40);
+    aged(l10, 10);
+    const jl = path.join(root, "dev_data", "0.2.0", "e.jsonl");
+    const at = (d: number) =>
+      JSON.stringify({ timestamp: new Date(Date.now() - d * DAY_MS) });
+    fs.writeFileSync(
+      jl,
+      `${at(60)}
+${at(100)}
+${at(1)}
+`,
+    );
+    const plan = planClean(root);
+    const names = plan.entries.map((e) => path.basename(e.file)).sort();
+    expect(names).toEqual(["e.jsonl", "l20.log", "s40.json"]);
+    expect(plan.entries.find((e) => e.store === "dev_data")?.lines).toBe(1);
+    // an explicit age overrides every store
+    expect(planClean(root, 5 * DAY_MS).entries.length).toBe(5);
+  });
+
   it("refuses a path outside the root", () => {
     const root = tree();
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), "outside-"));
@@ -88,6 +117,7 @@ describe("clean", () => {
     const r = runClean({
       root,
       cutoff: new Date(),
+      cutoffs: { sessions: 0, dev_data: 0, logs: 0 },
       bytes: 0,
       skipped: [],
       entries: [{ store: "sessions", file: victim, bytes: 2, action: "file" }],

@@ -4,6 +4,8 @@ import path from "path";
 import { env } from "../env.js";
 
 const HISTORY_FILE = path.join(env.continueHome, "input_history.json");
+// X15 decision: the typed prompts stay raw (recall is the feature), capped at
+// this many entries. The file is not scrubbed and `continuous clean` leaves it.
 const MAX_HISTORY_SIZE = 1000;
 
 export interface InputHistoryEntry {

@@ -15,7 +15,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const DAY_MS = 86_400_000;
-export const DEFAULT_RETENTION_DAYS = 30;
+/** Used when no age is given: sessions 30 days, logs 14, dev_data 90. */
+export const DEFAULT_RETENTION_DAYS = {
+  sessions: 30,
+  logs: 14,
+  dev_data: 90,
+} as const;
 
 export type StoreName = "sessions" | "dev_data" | "logs";
 
@@ -30,7 +35,10 @@ export interface CleanEntry {
 
 export interface CleanPlan {
   root: string;
+  /** The oldest cutoff of any store, for display. */
   cutoff: Date;
+  /** Cutoff per store, as epoch ms. */
+  cutoffs: Record<StoreName, number>;
   entries: CleanEntry[];
   /** Bytes of whole files to delete, plus bytes of dropped lines. */
   bytes: number;
@@ -126,15 +134,22 @@ function entryFor(
     : { store, file, bytes: st.size, action: "file", lines: old };
 }
 
+/** One age for every store (a number), or the per-store defaults (undefined). */
 export function planClean(
   root: string,
-  olderThanMs: number,
+  olderThanMs?: number,
   now = Date.now(),
 ): CleanPlan {
-  const cutoffMs = now - olderThanMs;
+  const cutoffs = Object.fromEntries(
+    STORES.map(([s]) => [
+      s,
+      now - (olderThanMs ?? DEFAULT_RETENTION_DAYS[s] * DAY_MS),
+    ]),
+  ) as Record<StoreName, number>;
   const plan: CleanPlan = {
     root,
-    cutoff: new Date(cutoffMs),
+    cutoff: new Date(Math.min(...Object.values(cutoffs))),
+    cutoffs,
     entries: [],
     bytes: 0,
     skipped: [],
@@ -142,7 +157,7 @@ export function planClean(
   for (const [store, wanted] of STORES) {
     for (const file of walk(path.join(root, store), plan.skipped)) {
       if (!inside(root, file) || !wanted(file)) continue;
-      const e = entryFor(store, file, cutoffMs);
+      const e = entryFor(store, file, cutoffs[store]);
       if (!e) continue;
       plan.entries.push(e);
       plan.bytes += e.bytes;
@@ -211,7 +226,7 @@ export function runClean(plan: CleanPlan): CleanResult {
           deletedSessions.add(path.basename(e.file, ".json"));
         }
       } else {
-        dropOldLines(e.file, +plan.cutoff);
+        dropOldLines(e.file, plan.cutoffs[e.store]);
       }
       result.droppedLines += e.lines ?? 0;
       result.bytes += e.bytes;
