@@ -6,6 +6,7 @@
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "vitest": "vitest run",
     "eval:reviewer": "node scripts/reviewer-eval.mjs",
+    "capture:live": "node scripts/capture-live.mjs",
     "eval:turns": "node scripts/turns-eval.mjs",
     "replay:ageing": "node scripts/replay-ageing.mjs",
     "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage && open ./coverage/lcov-report/index.html",
