@@ -104,6 +104,24 @@ describe("interceptSystemToolCalls", () => {
     expect(out).toEqual([{ role: "assistant", content: "", promptProgress }]);
   });
 
+  it("passes on the signal that a reply is held for tool call recovery", async () => {
+    const out: ChatMessage[] = [];
+    for await (const group of interceptSystemToolCalls(
+      createAsyncGenerator([
+        [{ role: "assistant", content: "", recoveryHold: "start" }],
+        [{ role: "assistant", content: "", recoveryHold: "end" }],
+      ]),
+      abortController,
+      framework,
+    )) {
+      out.push(...group);
+    }
+    expect(out).toEqual([
+      { role: "assistant", content: "", recoveryHold: "start" },
+      { role: "assistant", content: "", recoveryHold: "end" },
+    ]);
+  });
+
   it("passes through assistant messages with existing tool calls", async () => {
     const messages: ChatMessage[][] = [
       [

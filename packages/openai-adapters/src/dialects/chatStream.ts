@@ -16,6 +16,7 @@ import {
   type RecoveredCall,
   type RecoveryEvent,
 } from "./qwenXml.js";
+import { holdChunk } from "./holdSignal.js";
 import {
   createTextToolRecovery,
   recoveredCallId,
@@ -110,7 +111,9 @@ function callChunk(
  * `source` with recovery applied. Chunks without a choice (usage) and chunks
  * without text pass through; text is held by `recovery`; at the chunk that
  * finishes the reply the held text is judged, and recovered calls come before
- * a finish_reason of "tool_calls".
+ * a finish_reason of "tool_calls". When text is held, one chunk with an empty
+ * delta says so when the hold begins and another when it is judged
+ * (holdSignal.ts), so a reader can show that the reply is being read.
  */
 export async function* recoverChatStream(
   source: AsyncIterable<ChatCompletionChunk>,
@@ -129,6 +132,10 @@ export async function* recoverChatStream(
     }
     return text;
   };
+  function* hold(base: ChatCompletionChunk) {
+    const phase = recovery.takeHoldSignal?.();
+    if (phase) yield holdChunk(phase, base);
+  }
   function* calls(base: ChatCompletionChunk) {
     if (sawToolCalls) return;
     for (const [i, call] of recovered.entries()) {
@@ -147,6 +154,7 @@ export async function* recoverChatStream(
     const content = choice.delta?.content;
     let text = typeof content === "string" ? content : undefined;
     if (text) text = take(recovery.push(text));
+    yield* hold(chunk);
     if (!choice.finish_reason) {
       if (typeof content !== "string") yield chunk;
       else if (text || Object.keys(choice.delta).some((k) => k !== "content")) {
@@ -156,6 +164,7 @@ export async function* recoverChatStream(
     }
     finished = true;
     text = (text ?? "") + take(recovery.end());
+    yield* hold(chunk);
     if (sawToolCalls || recovered.length === 0) {
       yield withContent(chunk, text);
       continue;
@@ -176,6 +185,7 @@ export async function* recoverChatStream(
   }
   if (!finished && last) {
     const text = take(recovery.end());
+    yield* hold(last);
     if (text) yield withContent({ ...last, usage: undefined }, text);
     yield* calls(last);
   }

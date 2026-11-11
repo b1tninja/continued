@@ -6,6 +6,7 @@ import "./init.js";
 import { Command } from "commander";
 
 import { acp } from "./commands/acp.js";
+import { agentsCommand } from "./commands/agents.js";
 import { auditCommand } from "./commands/audit.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
@@ -14,6 +15,7 @@ import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
 import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
+import { reviewEvalCommand } from "./commands/reviewEval.js";
 import { sandboxCommand } from "./commands/sandbox.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
@@ -416,6 +418,36 @@ program
     await gracefulExit(code);
   });
 
+// Reviewer evaluation: dry by default, --run sends the requests
+program
+  .command("reviewer [action]")
+  .description(
+    "Work with the reviewer model: eval scores a reviewer model and prompt guidance over a labelled set of tool calls (dry run unless --run)",
+  )
+  .option("--dataset <file>", "Labelled cases (JSON or YAML)")
+  .option("--reviewer <model-role>", "Reviewer model name or role", "reviewer")
+  .option("--guidance <file>", "Guidance to try (JSON, YAML or text)")
+  .option(
+    "--compare <file>",
+    "Baseline guidance file, or `default` for the built-in prompt, to compare against",
+  )
+  .option("--profile <id>", "Reviewer profile id (carried into the report)")
+  .option("--run", "Call the model; without it nothing is sent")
+  .option("--json", "Machine-readable output")
+  .option("--concurrency <n>", "Parallel requests", "4")
+  .option("--timeout-ms <n>", "Per-request timeout", "30000")
+  .action(async (action: string | undefined, options) => {
+    if (action !== "eval") {
+      console.error(
+        "Usage: continuous reviewer eval --dataset <file> [options]",
+      );
+      await gracefulExit(1);
+      return;
+    }
+    const code = await reviewEvalCommand(options);
+    await gracefulExit(code);
+  });
+
 // Terminal environment subcommand
 program
   .command("terminal-env [action]")
@@ -466,6 +498,24 @@ program
       modelHost: options.modelHost,
       workspace: options.workspace,
     });
+    await gracefulExit(code);
+  });
+
+// Agents subcommand: the agents of a running `cn serve`
+program
+  .command("agents [action]")
+  .description("List the agents of a running cn serve (list)")
+  .option("--json", "Machine-readable output")
+  .option(
+    "--url <url>",
+    "The server's address (default: http://127.0.0.1:8000)",
+  )
+  .option(
+    "--token <token>",
+    "The server's bearer token (also read from CONTINUOUS_SERVE_TOKEN)",
+  )
+  .action(async (action: string | undefined, options) => {
+    const code = await agentsCommand(action, options);
     await gracefulExit(code);
   });
 

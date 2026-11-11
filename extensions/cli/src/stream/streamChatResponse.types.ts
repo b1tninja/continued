@@ -24,6 +24,12 @@ export interface StreamCallbacks {
    */
   onStatusMessage?: (message: string) => void;
   /**
+   * The reply is being held back while recovery looks for a tool call the
+   * model wrote as text (`true`), or the hold is over (`false`). Called once
+   * for each; never called when recovery is off.
+   */
+  onRecoveryHold?: (holding: boolean) => void;
+  /**
    * Called after a round of tool calls has finished and before the next model
    * request. A returned item (a user message the person asked to steer with)
    * is appended to the conversation, so the model reads it in the same turn.

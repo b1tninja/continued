@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_ALLOWLIST,
   DEFAULT_SECRET_PATTERNS,
@@ -219,5 +219,18 @@ describe("the lists", () => {
     expect(urlHasCredentials("https://host/a@b")).toBe(false);
     expect(urlHasCredentials("host:1234")).toBe(false);
     expect(urlHasCredentials("/usr/bin")).toBe(false);
+  });
+});
+
+describe("scrubEnvironment without a process (webview)", () => {
+  it("does not read process when given no platform", () => {
+    vi.stubGlobal("process", undefined);
+    try {
+      expect(typeof process).toBe("undefined");
+      const { removed } = scrubEnvironment({ GITHUB_TOKEN: "", EDITOR: "" });
+      expect(removed).toContain("GITHUB_TOKEN");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

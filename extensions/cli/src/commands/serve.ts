@@ -33,6 +33,7 @@ import { exitBecause } from "../util/processErrors.js";
 import { readStdinSync } from "../util/stdin.js";
 
 import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
+import { registerAgentsRoute } from "./serve.agents.js";
 import {
   DEFAULT_SERVE_HOST,
   installServeGuards,
@@ -243,6 +244,7 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     onIdle: () => storageSyncService.markAgentStatusUnread(),
   };
   registerMessageRoutes(app, messageCtx);
+  registerAgentsRoute(app, state);
 
   // POST /permission - Approve or reject pending tool permission
   app.post("/permission", async (req: Request, res: Response) => {

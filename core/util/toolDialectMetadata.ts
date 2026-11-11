@@ -18,9 +18,15 @@ export interface MetadataHint {
   /** The family signal, when the metadata names one. */
   signal?: DialectSignal;
   /** Template-derived hints are stronger than name-derived ones. */
-  basis?: "chat-template" | "model-name";
+  basis?: "chat-template" | "model-name" | "ollama-parser";
   /** Server says it can do tools (Ollama capabilities); not which parser. */
   toolsAdvertised?: boolean;
+  /**
+   * The server itself turns this model's text into structured tool calls
+   * (Ollama named a parser that handles tool calls), so a call written as
+   * text is not expected on that endpoint and recovery is not suggested.
+   */
+  serverParses?: boolean;
   /** Model name or path the hint came from, for logs. */
   modelName?: string;
   evidence: string[];
@@ -98,6 +104,66 @@ function fromTemplateOrName(
   return { source, modelName, evidence };
 }
 
+/**
+ * Ollama parser names (the `parser` field of `/api/show`) to what they do.
+ * Source: ollama/ollama `model/parsers/parsers.go` `ParserForName` (read
+ * 2026-11-10) and the parser file named in each note. A name not in this table
+ * is unverified: it maps to no dialect and does not set `serverParses`.
+ * `renderer` names are not looked up here: they only build the prompt.
+ */
+export const OLLAMA_PARSERS: Record<
+  string,
+  { dialect?: Dialect; note: string }
+> = {
+  "qwen3-coder": {
+    dialect: "qwen-xml",
+    note: 'qwen3coder.go: finds toolOpenTag "<tool_call>" / toolCloseTag "</tool_call>" and "rewrites the <function=...> and <parameter=...> tags as XML"',
+  },
+  "qwen3.5": {
+    dialect: "qwen-xml",
+    note: 'qwen35.go: "handles qwen3.5 reasoning extraction and delegates post-thinking content (including XML tool calls) to Qwen3CoderParser"',
+  },
+  ornith: {
+    dialect: "qwen-xml",
+    note: 'parsers.go: case "ornith" returns &Qwen35Parser{}',
+  },
+  qwen3: {
+    dialect: "hermes-json",
+    note: 'qwen3.go: qwen3ToolOpenTag "<tool_call>", body json.Unmarshal into name/arguments',
+  },
+  "qwen3-thinking": {
+    dialect: "hermes-json",
+    note: "parsers.go: Qwen3Parser with thinking on",
+  },
+  "glm-4.7": {
+    dialect: "glm-xml",
+    note: 'glm47.go embeds GLM46Parser; glm46.go tags "<tool_call>", "<arg_key>", "<arg_value>"',
+  },
+  "glm-ocr": {
+    dialect: "glm-xml",
+    note: 'glmocr.go: "the GLM46 parser with thinking disabled"',
+  },
+  ministral: {
+    dialect: "mistral",
+    note: 'ministral.go: ministralToolCallsTag "[TOOL_CALLS]", ministralArgsTag "[ARGS]"',
+  },
+  harmony: {
+    dialect: "harmony",
+    note: "parsers.go: harmony.NewHarmonyMessageHandler()",
+  },
+  functiongemma: {
+    dialect: "functiongemma",
+    note: 'functiongemma.go: "<start_function_call>call:name{args}<end_function_call>"',
+  },
+  // Parses tool calls, but our dialect list has no matching form.
+  deepseek3: {
+    note: 'deepseek3.go: "<｜tool▁calls▁begin｜>" tokens; not our dsml (V3.2)',
+  },
+  gemma4: { note: 'gemma4.go: "<|tool_call>" ... "<tool_call|>"' },
+  "gemma4-no-thinking": { note: "gemma4.go, thinking off" },
+  "nemotron-3-nano": { note: 'nemotron3nano.go: "<tool_call>" open tag' },
+};
+
 /** llama.cpp `GET /props`: `chat_template` and `model_path`. */
 export function hintFromLlamaCppProps(props: unknown): MetadataHint {
   const p = obj(props) ?? {};
@@ -107,9 +173,12 @@ export function hintFromLlamaCppProps(props: unknown): MetadataHint {
 }
 
 /**
- * Ollama `POST /api/show`: `template`, `capabilities`, `details.family`,
- * `model_info["general.architecture"]`. The `tools` capability only says the
- * server has some parser for this model.
+ * Ollama `POST /api/show`: `parser`, `renderer`, `template`, `capabilities`,
+ * `details.family`, `model_info["general.architecture"]`. Models served
+ * through a renderer/parser (`template_source: "renderer_parser"`) show the
+ * template `{{ .Prompt }}`, so the parser name is read first, then the
+ * template, then the model name. The `tools` capability only says the server
+ * has some way to take tools for this model.
  */
 export function hintFromOllamaShow(
   show: unknown,
@@ -119,17 +188,44 @@ export function hintFromOllamaShow(
   const details = obj(s.details);
   const info = obj(s.model_info);
   const caps = Array.isArray(s.capabilities) ? s.capabilities : undefined;
-  const hint = fromTemplateOrName("ollama-show", str(s.template), [
+  const names = [
     model,
     str(info?.["general.basename"]),
     str(details?.family),
     str(info?.["general.architecture"]),
-  ]);
+  ];
+  const parser = str(s.parser);
+  const renderer = str(s.renderer);
+  const entry =
+    parser && Object.hasOwn(OLLAMA_PARSERS, parser)
+      ? OLLAMA_PARSERS[parser]
+      : undefined;
+  let hint: MetadataHint;
+  if (entry?.dialect) {
+    hint = {
+      source: "ollama-show",
+      signal: { dialect: entry.dialect, confidence: 0.95 },
+      basis: "ollama-parser",
+      modelName: names.find((n) => !!n),
+      evidence: [`ollama parser "${parser}" -> ${entry.dialect}`],
+    };
+  } else {
+    hint = fromTemplateOrName("ollama-show", str(s.template), names);
+    if (parser) {
+      hint.evidence.push(
+        entry
+          ? `ollama parser "${parser}" has no matching dialect`
+          : `ollama parser "${parser}" not in the verified table`,
+      );
+    }
+  }
+  if (entry) hint.serverParses = true;
+  if (renderer) hint.evidence.push(`ollama renderer "${renderer}"`);
   if (caps) {
     hint.toolsAdvertised = caps.includes("tools");
     hint.evidence.push(
       hint.toolsAdvertised
-        ? "capabilities include tools"
+        ? `capabilities include tools${caps.includes("thinking") ? " and thinking" : ""}`
         : "capabilities do not include tools",
     );
   }

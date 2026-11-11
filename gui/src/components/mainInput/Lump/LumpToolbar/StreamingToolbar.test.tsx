@@ -4,6 +4,7 @@ import { MockIdeMessenger } from "../../../../context/MockIdeMessenger";
 import {
   setInactive,
   setPromptProgress,
+  setRecoveryHold,
 } from "../../../../redux/slices/sessionSlice";
 import { setupStore } from "../../../../redux/store";
 import { renderWithProviders } from "../../../../util/test/render";
@@ -46,5 +47,33 @@ describe("StreamingToolbar", () => {
       store.dispatch(setInactive());
     });
     expect(screen.queryByTestId("prompt-progress")).toBeNull();
+  });
+
+  it("says the reply is being read while it is held for tool call recovery, and clears when the hold ends", async () => {
+    const store = await setup();
+    await act(async () => {
+      store.dispatch(setRecoveryHold(true));
+    });
+    expect(screen.getByTestId("recovery-hold").textContent).toContain(
+      "Reading the model's reply",
+    );
+    expect(screen.queryByText("Generating")).toBeNull();
+
+    await act(async () => {
+      store.dispatch(setRecoveryHold(false));
+    });
+    expect(screen.queryByTestId("recovery-hold")).toBeNull();
+    expect(screen.getByText("Generating")).toBeTruthy();
+  });
+
+  it("clears the hold line when the stream is stopped or fails", async () => {
+    const store = await setup();
+    await act(async () => {
+      store.dispatch(setRecoveryHold(true));
+    });
+    await act(async () => {
+      store.dispatch(setInactive());
+    });
+    expect(screen.queryByTestId("recovery-hold")).toBeNull();
   });
 });
