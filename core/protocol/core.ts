@@ -672,6 +672,18 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     { levels?: import("../tools/permissions/policy").PolicyLevels } | undefined,
     import("../tools/permissions/effectiveRules").EffectiveRulesReport,
   ];
+  /**
+   * The audit figures for the Permissions page, read from the audit index
+   * (never the trail): per-rule use, the most-asked list, unused hints.
+   * Read-only; masked keys only.
+   */
+  "audit/overview": [
+    (
+      | import("../tools/permissions/audit/overviewHandler").AuditOverviewRequest
+      | undefined
+    ),
+    import("../tools/permissions/audit/auditOverview").AuditOverview,
+  ];
   /** Run one call through the real evaluator and explain it. Nothing runs. */
   "policy/test": [
     Omit<
