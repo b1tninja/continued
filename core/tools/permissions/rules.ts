@@ -7,12 +7,29 @@
 
 export type RuleDecision = "allow" | "ask" | "deny";
 
+/**
+ * Where a rule was written. `user-config` is the person's own config.yaml,
+ * `permissions-yaml` the CLI lists and floor in permissions.yaml, `assistant`
+ * a hub or assistant configuration, `folder` a file that came with the
+ * workspace, `floor` the deny rules in permissions.yaml that bind at YOLO,
+ * `builtin` the protections shipped with the product.
+ */
+export type RuleSource =
+  | "builtin"
+  | "floor"
+  | "user-config"
+  | "permissions-yaml"
+  | "assistant"
+  | "folder";
+
 export interface ParsedRule {
   decision: RuleDecision;
   raw: string;
   toolName: string;
   /** undefined for a bare tool name, which matches any call to that tool */
   pattern?: string;
+  /** Where the rule was written, when the caller knew (names the source in reasons) */
+  origin?: RuleSource;
 }
 
 export interface ToolPermissions {
@@ -36,6 +53,7 @@ export interface RuleMatch {
 export function parseRule(
   raw: string,
   decision: RuleDecision,
+  origin?: RuleSource,
 ): ParsedRule | undefined {
   const trimmed = raw.trim();
   // Tool names may end in `*` for MCP name patterns (mcp__server__*).
@@ -43,10 +61,19 @@ export function parseRule(
   if (!m) return undefined;
   const [, toolName, pattern] = m;
   if (pattern !== undefined && pattern.trim() === "") return undefined;
-  return { decision, raw: trimmed, toolName, pattern };
+  return {
+    decision,
+    raw: trimmed,
+    toolName,
+    pattern,
+    ...(origin ? { origin } : {}),
+  };
 }
 
-export function parseToolPermissions(perms: ToolPermissions): ParsedRule[] {
+export function parseToolPermissions(
+  perms: ToolPermissions,
+  origin?: RuleSource,
+): ParsedRule[] {
   const out: ParsedRule[] = [];
   for (const [decision, list] of [
     ["allow", perms.allow ?? []],
@@ -54,7 +81,7 @@ export function parseToolPermissions(perms: ToolPermissions): ParsedRule[] {
     ["deny", perms.deny ?? []],
   ] as const) {
     for (const raw of list) {
-      const rule = parseRule(raw, decision);
+      const rule = parseRule(raw, decision, origin);
       if (rule) out.push(rule);
     }
   }

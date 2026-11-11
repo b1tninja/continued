@@ -7,14 +7,21 @@ import {
   parseRule,
   parseToolPermissions,
   RuleDecision,
+  RuleSource,
   ToolPermissions,
 } from "./rules";
 
 /** Parsed rules, or none when the user has not set any. */
 export function parsePermissions(
   perms: ToolPermissions | undefined,
+  origin?: RuleSource,
 ): ParsedRule[] {
-  return perms ? parseToolPermissions(perms) : [];
+  return perms ? parseToolPermissions(perms, origin) : [];
+}
+
+/** Whether a rule's tool name is one this version knows (or an MCP name). */
+export function isKnownRuleName(name: string): boolean {
+  return KNOWN_NAMES.has(name) || name.startsWith("mcp__");
 }
 
 /** A file:// URI as a plain path with forward slashes, or undefined if it is not one. */
