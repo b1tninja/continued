@@ -367,6 +367,11 @@ export async function main(argv, env = process.env) {
   }
 
   const product = await loadProduct(v.product);
+  if (product.root && product.contractProblems.length) {
+    log("refusing to run: this product build disagrees with the lab contract");
+    for (const m of product.contractProblems) log(`  ${m}`);
+    process.exit(2);
+  }
   for (const m of product.missing)
     log(`note: product feature unavailable: ${m}`);
 

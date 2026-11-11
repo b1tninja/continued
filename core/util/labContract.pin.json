@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "surface": {
+    "LAB_CONTRACT_VERSION": {
+      "value": 1
+    },
+    "PROBE_OUTCOMES": {
+      "value": ["structured", "leak", "refused", "error"]
+    },
+    "Z95": {
+      "value": 1.959963984540054
+    },
+    "captureFixtureId": {
+      "function": 1
+    },
+    "formatRate": {
+      "function": 1
+    },
+    "slug": {
+      "function": 1
+    },
+    "validateProbeResult": {
+      "function": 1
+    },
+    "wilson": {
+      "function": 2
+    }
+  }
+}

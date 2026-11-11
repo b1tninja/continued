@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { register } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { checkContract } from "./lib/contractCheck.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -131,6 +132,8 @@ export async function loadProduct(explicitRoot) {
   const p = {
     root,
     missing: [],
+    contract: null,
+    contractProblems: ["product checkout not found"],
     detect: null,
     presets: null,
     parsers: {},
@@ -154,6 +157,21 @@ export async function loadProduct(explicitRoot) {
       return null;
     }
   };
+  // The one module of the product the lab is meant to depend on. Anything it
+  // disagrees about is a reason to refuse to run (see lab.mjs).
+  p.contract = await attempt("contract module", () =>
+    imp("core/util/labContract.ts"),
+  );
+  let golden = null;
+  try {
+    golden = JSON.parse(
+      fs.readFileSync(
+        path.join(root, "core/util/labContract.golden.json"),
+        "utf8",
+      ),
+    );
+  } catch {}
+  p.contractProblems = checkContract(p.contract, golden);
   p.detect = await attempt("leak detector", () =>
     imp("core/util/toolDialectDetect.ts"),
   );

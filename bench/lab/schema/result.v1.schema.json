@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "continuous-lab/result.v1",
+  "title": "Lab result record v1 (MR8)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "labSha",
+    "productSha",
+    "contractVersion",
+    "arm",
+    "request",
+    "reply",
+    "usage",
+    "classification",
+    "scanStatus"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "labSha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "productSha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "contractVersion": { "type": "integer", "minimum": 1 },
+    "arm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "declaredQuant",
+        "provider",
+        "engine",
+        "apiSurface",
+        "clientPath",
+        "sampling"
+      ],
+      "properties": {
+        "model": { "type": "string", "minLength": 1 },
+        "declaredQuant": { "type": "string" },
+        "provider": { "type": "string", "minLength": 1 },
+        "engine": { "type": "string", "minLength": 1 },
+        "apiSurface": {
+          "enum": [
+            "ollama-chat",
+            "openai-chat",
+            "ollama-generate-raw",
+            "llamacpp-completion",
+            "bedrock-converse"
+          ]
+        },
+        "clientPath": { "type": "string", "minLength": 1 },
+        "sampling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["temperature"],
+          "properties": {
+            "temperature": { "type": ["number", "string"] },
+            "topP": { "type": "number", "minimum": 0 },
+            "topK": { "type": "integer", "minimum": 0 },
+            "seed": { "type": "integer" },
+            "maxTokens": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "request": { "$ref": "#/$defs/hashed" },
+    "reply": { "$ref": "#/$defs/hashed" },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "inputTokens": { "type": "integer", "minimum": 0 },
+        "outputTokens": { "type": "integer", "minimum": 0 },
+        "costUsd": { "type": "number", "minimum": 0 },
+        "wallMs": { "type": "number", "minimum": 0 }
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "dialect"],
+      "properties": {
+        "outcome": { "enum": ["structured", "leak", "refused", "error"] },
+        "dialect": { "type": "string" }
+      }
+    },
+    "scanStatus": { "enum": ["clean", "flagged", "unscanned"] }
+  },
+  "$defs": {
+    "hashed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "bytes": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
