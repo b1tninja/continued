@@ -1,9 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import budgets from "core/llm/promptSegmentBudgets.json";
 import {
   type PromptSegment,
+  type SegmentBudgets,
   commonPrefixLength,
   firstChangedVsPrev,
   overBudget,
@@ -37,6 +37,13 @@ vi.mock("./services/ServiceContainer.js", () => ({
  * BASELINE tests record the volatile-early offenders as they are today.
  */
 
+// The budgets file lives in core, shared with the IDE tests.
+const budgets: { cli: SegmentBudgets } = JSON.parse(
+  fs.readFileSync(
+    path.join(__dirname, "../../../core/llm/promptSegmentBudgets.json"),
+    "utf8",
+  ),
+);
 const GOLDEN_FILE = path.join(__dirname, "promptSegmentGolden.json");
 
 async function manifest(spec: CliScenarioSpec): Promise<PromptSegment[]> {

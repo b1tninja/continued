@@ -127,7 +127,7 @@ export function ideState(opts: {
     session: {
       ...state.session,
       mode: opts.mode ?? "agent",
-      history,
+      history: history as RootState["session"]["history"],
       taskPlan: opts.taskPlan,
       loop,
     },
