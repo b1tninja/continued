@@ -156,6 +156,22 @@ describe("Bedrock: a reply streamed or whole gives the same result", () => {
       });
     }
 
+    for (const [label, reply] of [
+      ["prose then a call", `Reading it now.\n${call}`],
+      ["a call then prose", `${call}\nThat reads it.`],
+    ]) {
+      it(`${dialect}: ${label} stays text in both paths (the whole reply must be calls)`, async () => {
+        process.env.CONTINUE_RECOVER_TEXT_TOOL_CALLS = `force:${dialect}`;
+        const w = await run(whole(reply));
+        expect(w.calls).toEqual([]);
+        expect(w.visible).toBe(reply);
+        for (const size of [1, 7, 1000]) {
+          send.mockReset();
+          expect(await run(streamed(reply, size))).toEqual(w);
+        }
+      });
+    }
+
     it(`${dialect}: thinking then prose gives the same text`, async () => {
       process.env.CONTINUE_RECOVER_TEXT_TOOL_CALLS = `force:${dialect}`;
       const reply = THINKING + "All done, nothing to read.";

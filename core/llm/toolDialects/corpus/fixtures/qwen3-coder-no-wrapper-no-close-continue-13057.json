@@ -3,16 +3,16 @@
   "id": "qwen3-coder-no-wrapper-no-close-continue-13057",
   "family": "qwen3-coder",
   "dialect": "qwen-xml",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "unterminated-call",
   "flag": "observed",
   "provenance": {
     "source": "https://github.com/continuedev/continue/issues/13057",
     "retrieved": "2026-11-10",
     "reportDate": "2026-07-29",
-    "note": "As pasted by the reporter (Continue 2.0.0, Ollama 0.32.5, qwen3-coder:30b); the paste may have lost newlines. No closing tags at all, values inline after the tag. Ideal output is a judgement call, so policy is either."
+    "note": "As pasted by the reporter (Continue 2.0.0, Ollama 0.32.5, qwen3-coder:30b); the paste may have lost newlines. No closing tags at all, values inline after the tag. Ideal output is a judgement call, so policy is either. Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 1 call(s) and the text \"I'll create a file called test.txt with the content \\\"hello\\\".\\n\\n\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
-  "policy": "either",
+  "policy": "must",
   "tools": [
     {
       "name": "create_new_file",
@@ -282,15 +282,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "create_new_file",
-        "arguments": {
-          "filepath": "test.txt",
-          "contents": "hello"
-        }
-      }
-    ],
-    "text": "I'll create a file called test.txt with the content \"hello\".\n\n"
+    "calls": [],
+    "text": "I'll create a file called test.txt with the content \"hello\".\n\n<function=create_new_file>\n<parameter=filepath> test.txt\n<parameter=contents> hello"
   }
 }

@@ -133,6 +133,29 @@ describe("isLeakedToolCall", () => {
     }
   });
 
+  it("counts a call that recovery declined because prose came before or after it (Q28): the turn must not end silently", () => {
+    const declined = [...corpus.values()].filter((f) =>
+      f.provenance.note.includes("Declined by owner rule"),
+    );
+    expect(declined.length).toBeGreaterThan(5);
+    // Not every declined dialect is classified by the nudge yet (the Kimi,
+    // DeepSeek V3.1 and Harmony shapes); the ones that are must stay counted.
+    const counted = declined.filter((f) => leak(f.id));
+    for (const id of [
+      "qwen3-coder-prose-then-call",
+      "qwen3-coder-prose-after-call",
+      "qwen3-coder-two-calls-with-prose-between",
+      "qwen3-coder-missing-open-tag-ollama-16686",
+      "qwen3-coder-30b-bedrock-function-xml-as-text",
+      "mistral-v3-parallel-and-prose",
+    ]) {
+      expect(
+        counted.map((f) => f.id),
+        id,
+      ).toContain(id);
+    }
+  });
+
   it("needs a tool that was actually offered", () => {
     expect(
       isLeakedToolCall({

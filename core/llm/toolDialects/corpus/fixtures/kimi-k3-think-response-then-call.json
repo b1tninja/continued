@@ -3,13 +3,13 @@
   "id": "kimi-k3-think-response-then-call",
   "family": "kimi-k3",
   "dialect": "kimi-xtml",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "thinking-markup",
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from encoding_k3.py https://huggingface.co/moonshotai/Kimi-K3/blob/main/encoding_k3.py, not observed",
     "retrieved": "2026-11-10",
-    "note": ""
+    "note": "Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 1 call(s) and the text \"<|open|>think<|sep|>The user wants the weather.<|close|>think<|sep|><|open|>response<|sep|>Checking.<|close|>response<|sep|>\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
   "policy": "must",
   "tools": [
@@ -575,14 +575,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "get_weather",
-        "arguments": {
-          "city": "Paris"
-        }
-      }
-    ],
-    "text": "<|open|>think<|sep|>The user wants the weather.<|close|>think<|sep|><|open|>response<|sep|>Checking.<|close|>response<|sep|>"
+    "calls": [],
+    "text": "<|open|>think<|sep|>The user wants the weather.<|close|>think<|sep|><|open|>response<|sep|>Checking.<|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"get_weather\" index=\"1\"<|sep|><|open|>argument key=\"city\" type=\"string\"<|sep|>Paris<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|>"
   }
 }

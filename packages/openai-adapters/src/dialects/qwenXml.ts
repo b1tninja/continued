@@ -274,7 +274,8 @@ function startsCall(text: string, at: number): boolean {
  * Stream-safe recovery for one text block. `push` takes each text delta and
  * returns what can be shown now. Once a marker that begins a call is seen,
  * everything from it on is held until `end`, where it is either parsed as
- * calls (and not shown) or released unchanged as text. A trailing fragment
+ * calls (and not shown) or released unchanged as text; a call that follows
+ * prose (more than a leading think block) is released, never recovered. A trailing fragment
  * that could still become a marker is held too, so a split marker never
  * leaks. Chunk boundaries do not change the result.
  */

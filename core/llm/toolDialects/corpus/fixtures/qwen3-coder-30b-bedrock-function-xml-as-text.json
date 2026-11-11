@@ -3,14 +3,14 @@
   "id": "qwen3-coder-30b-bedrock-function-xml-as-text",
   "family": "qwen3-coder",
   "dialect": "qwen-xml",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "tool-call-as-text",
   "flag": "observed",
   "provenance": {
     "source": "Observed live on Bedrock Converse 2026-11-10, model qwen.qwen3-coder-30b-a3b-v1:0",
     "retrieved": "2026-11-10",
     "reportDate": "2026-11-10",
-    "note": "Prose, then <function=...> with parameters, then a stray </tool_call> with no opener; no toolUse block in the reply. The closing tag was not preceded by an opening one."
+    "note": "Prose, then <function=...> with parameters, then a stray </tool_call> with no opener; no toolUse block in the reply. The closing tag was not preceded by an opening one. Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 1 call(s) and the text \"To find all TODO comments in the `src` directory, I will use the `grep` command to search for lines containing \\\"TODO\\\" within the directory. The command will be executed recursively to ensure all subdirectories are included.\\n\\n\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
   "policy": "must",
   "tools": [
@@ -519,14 +519,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "run_command",
-        "arguments": {
-          "command": "grep -r \"TODO\" src/"
-        }
-      }
-    ],
-    "text": "To find all TODO comments in the `src` directory, I will use the `grep` command to search for lines containing \"TODO\" within the directory. The command will be executed recursively to ensure all subdirectories are included.\n\n"
+    "calls": [],
+    "text": "To find all TODO comments in the `src` directory, I will use the `grep` command to search for lines containing \"TODO\" within the directory. The command will be executed recursively to ensure all subdirectories are included.\n\n<function=run_command>\n<parameter=command>\ngrep -r \"TODO\" src/\n</parameter>\n</function>\n</tool_call>"
   }
 }

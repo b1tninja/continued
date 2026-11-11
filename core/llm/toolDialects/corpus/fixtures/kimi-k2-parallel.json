@@ -3,13 +3,13 @@
   "id": "kimi-k2-parallel",
   "family": "kimi-k2",
   "dialect": "kimi-tokens",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "parallel-merged",
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/moonshotai/Kimi-K2-Thinking/blob/main/chat_template.jinja, not observed",
     "retrieved": "2026-11-10",
-    "note": ""
+    "note": "Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 2 call(s) and the text \"Looking up both.\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
   "policy": "must",
   "tools": [
@@ -461,20 +461,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "get_weather",
-        "arguments": {
-          "city": "Paris"
-        }
-      },
-      {
-        "name": "get_time",
-        "arguments": {
-          "tz": "UTC"
-        }
-      }
-    ],
-    "text": "Looking up both."
+    "calls": [],
+    "text": "Looking up both.<|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{\"city\": \"Paris\"}<|tool_call_end|><|tool_call_begin|>functions.get_time:1<|tool_call_argument_begin|>{\"tz\": \"UTC\"}<|tool_call_end|><|tool_calls_section_end|>"
   }
 }

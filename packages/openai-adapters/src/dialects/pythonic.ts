@@ -9,7 +9,8 @@
  * column 0, outside a code fence; the callee is exactly the name of a tool in
  * the request; every argument is a keyword argument whose name the schema
  * declares and whose value has the type the schema asks for; every required
- * argument is present; and the held text is nothing but such calls. Values are
+ * argument is present; and the reply is nothing but such calls, after at most
+ * a think block (a call that follows prose is not recovered). Values are
  * read by a small parser over Python literals (strings, numbers, True, False,
  * None, lists, tuples, dicts with string keys). Nothing is ever evaluated.
  */
