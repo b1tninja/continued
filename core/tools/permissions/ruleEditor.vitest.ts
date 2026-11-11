@@ -442,14 +442,21 @@ describe("adopt", () => {
 });
 
 describe("the audit event", () => {
-  const events = () =>
-    (fs.existsSync(auditDir)
-      ? (fs.readdirSync(auditDir, { recursive: true }) as string[])
-      : []
-    )
-      .filter((f) => String(f).endsWith(".jsonl"))
-      .flatMap((f) => readAuditFile(path.join(auditDir, String(f))))
-      .filter((r) => r.ev === "policy") as any[];
+  const events = (): any[] => {
+    if (!fs.existsSync(auditDir)) return [];
+    const names: string[] = [];
+    const walk = (d: string) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const full = path.join(d, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (e.name.endsWith(".jsonl")) names.push(full);
+      }
+    };
+    walk(auditDir);
+    return names
+      .flatMap((f) => readAuditFile(f))
+      .filter((r) => r.ev === "policy");
+  };
 
   it("records who, what, the hashes and loosens, with the rule masked", () => {
     const before = readUserConfigFile(file).hash;
