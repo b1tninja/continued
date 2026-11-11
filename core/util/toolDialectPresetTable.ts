@@ -303,10 +303,11 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     measured:
       "structured 8/8; one <think>...</think> block leaked into the text of a reply to a tool result",
     textDialect: "kimi-tokens",
+    recoverWith: "kimi-tokens",
     promptStyle: {
       style: "native",
       evidence:
-        "8/8 structured on Converse (live 2026-11-10); the token form has no parser here",
+        "8/8 structured on Converse (live 2026-11-10); the token form is recovered by kimi-tokens (self-hosted servers)",
     },
     observedLeak:
       "<think> block in text (lifted into reasoning by the Bedrock handlers)",
@@ -334,14 +335,14 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "Kimi K3 and K3.1: structured 100%, no leak",
-    // Not kimi-tokens: K3 writes its own tag form (encoding_k3.py), which no
-    // TextDialect value names yet. `none` here means "no recoverable text
-    // dialect"; a value for it needs the dialect enum.
-    textDialect: "none",
+    // Not kimi-tokens: K3 writes its own tag form (encoding_k3.py), recovered
+    // by kimi-xtml.
+    textDialect: "kimi-xtml",
+    recoverWith: "kimi-xtml",
     promptStyle: {
       style: "native",
       evidence:
-        "100% structured on Converse (live 2026-11-10); the text form is the XTML call block <|open|>tools<|sep|><|open|>call tool=NAME index=N<|sep|><|open|>argument key=K type=T<|sep|>VALUE<|close|>argument<|sep|>...<|close|>call<|sep|><|close|>tools<|sep|> (encoding_k3.py, read 2026-11-10); not yet recoverable, no parser",
+        "100% structured on Converse (live 2026-11-10); the text form is the XTML call block <|open|>tools<|sep|><|open|>call tool=NAME index=N<|sep|><|open|>argument key=K type=T<|sep|>VALUE<|close|>argument<|sep|>...<|close|>call<|sep|><|close|>tools<|sep|> (encoding_k3.py, read 2026-11-10); recovered by kimi-xtml (self-hosted servers)",
     },
     serverParser: {
       vllm: "kimi_k3",
@@ -357,8 +358,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     unverified: [
       "the repository ships a Python encoder, not a Jinja template, so the template classifier cannot decide it",
       "encoding_k3.py renders history; the token ids of <|open|>, <|close|> and <|sep|> and what the model actually emits were not measured",
-      "a call may carry a single <|open|>json type=object<|sep|> body in place of argument tags (_xtml_json_block); not exercised",
-      "needs a dialect value for the XTML form (the dialect enum was not touched)",
+      "a call may carry a single <|open|>json type=object<|sep|> body in place of argument tags (_xtml_json_block); kimi-xtml refuses it",
     ],
   },
   {
@@ -370,6 +370,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     nativeOnConverse: "all",
     measured: "Kimi K2.5: structured 100%, no leak",
     textDialect: "kimi-tokens",
+    recoverWith: "kimi-tokens",
     promptStyle: {
       style: "native",
       evidence: "100% structured on Converse (live 2026-11-10)",
@@ -397,13 +398,14 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     bedrockTools: "yes",
     toolsEvidence: "inferred",
     nativeOnConverse: "unmeasured",
-    // Not minimax-xml: M3 changed the call block (see promptStyle) and no
-    // TextDialect value names it, so `none` means "no recoverable text dialect".
-    textDialect: "none",
+    // Not minimax-xml: M3 changed the call block (see promptStyle); the
+    // namespaced form is recovered by minimax-ns-xml.
+    textDialect: "minimax-ns-xml",
+    recoverWith: "minimax-ns-xml",
     promptStyle: {
       style: "native",
       evidence:
-        'M3 template instructs ]<]minimax[>[<tool_call> then ]<]minimax[>[<invoke name="tool-name-1"> with each parameter as ]<]minimax[>[<param>value]<]minimax[>[</param>, closed by ]<]minimax[>[</invoke> and ]<]minimax[>[</tool_call> (read 2026-11-10; the namespace marker ]<]minimax[>[ is prepended to every tag); thinking is <mm:think>; not yet recoverable, no parser',
+        'M3 template instructs ]<]minimax[>[<tool_call> then ]<]minimax[>[<invoke name="tool-name-1"> with each parameter as ]<]minimax[>[<param>value]<]minimax[>[</param>, closed by ]<]minimax[>[</invoke> and ]<]minimax[>[</tool_call> (read 2026-11-10; the namespace marker ]<]minimax[>[ is prepended to every tag); thinking is <mm:think>; recovered by minimax-ns-xml (self-hosted servers)',
     },
     thinkingTags: ["<mm:think>", "</mm:think>"],
     source: [
@@ -414,7 +416,6 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
       "never run live: bedrockTools is inferred from the M2 family, and M2 uses <minimax:tool_call> (a different form)",
       "no serverParser read: the M3 card has no --tool-call-parser line",
       "the call form is read from the template's instruction text and history renderer, not from model output",
-      "needs a dialect value for this form (the dialect enum was not touched)",
     ],
   },
   {
@@ -426,6 +427,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     nativeOnConverse: "all",
     measured: "MiniMax M2 and M2.5: structured 100%, no leak",
     textDialect: "minimax-xml",
+    recoverWith: "minimax-xml",
     promptStyle: {
       style: "native",
       evidence:
