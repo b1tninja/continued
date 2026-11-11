@@ -488,6 +488,34 @@
           "note": "strict: true on a function; the request is rejected if the schema does not qualify."
         }
       }
+    },
+    {
+      "id": "bedrock-converse-claude-5.5",
+      "provider": "bedrock",
+      "engine": "*",
+      "api": "converse",
+      "modelFamily": "claude-5.5-generation",
+      "facts": {
+        "toolChoice": {
+          "value": {
+            "auto": true,
+            "required": false,
+            "named": false,
+            "none": true
+          },
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "Opus 5.5, Sonnet 5.5, Claude Fable 5.1/5.2 and Mythos 5.1/5.2: any and tool return HTTP 400 whatever the thinking setting; use auto with strict. Anthropic lists Amazon Bedrock among the platforms the restriction applies to; not tried through Converse by us."
+        },
+        "toolForce": {
+          "value": "rejected",
+          "level": "declared",
+          "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
+          "readOn": "2026-11-10",
+          "note": "Opus 5.5, Sonnet 5.5, Claude Fable 5.1/5.2 and Mythos 5.1/5.2: any and tool return HTTP 400 whatever the thinking setting; use auto with strict. Anthropic lists Amazon Bedrock among the platforms the restriction applies to; not tried through Converse by us."
+        }
+      }
     }
   ]
 }

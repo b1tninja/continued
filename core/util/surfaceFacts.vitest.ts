@@ -214,6 +214,18 @@ describe("the shipped data", () => {
     ).toBe("none");
   });
 
+  it("does not let the generic Converse row claim forced choice for Claude 5.5 on Bedrock", () => {
+    const q = { provider: "bedrock", api: "converse" };
+    const claude = resolveFact("toolChoice", {
+      ...q,
+      modelFamily: "claude-5.5-generation",
+    });
+    expect(claude.value).toMatchObject({ required: false, named: false });
+    expect(resolveFact("toolChoice", q).value).toMatchObject({
+      required: true,
+    });
+  });
+
   it("keeps Llama 3.3 on Converse as measured: may disable tools, nothing more", () => {
     const r = resolveFact("toolsHonoured", {
       provider: "bedrock",
