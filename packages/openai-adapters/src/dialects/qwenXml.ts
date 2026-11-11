@@ -17,6 +17,7 @@
  * schema and every required one is present. Anything else stays text.
  */
 
+import { hasProseBefore } from "./heldRecovery.js";
 import { coerceString, repairNote } from "./schemaCheck.js";
 
 export interface DialectTool {
@@ -333,7 +334,9 @@ export class QwenXmlRecovery {
   end(): RecoveryEvent[] {
     const out: RecoveryEvent[] = [];
     if (this.held !== undefined) {
-      const calls = recoverQwenXmlCalls(this.held, this.tools);
+      const calls = hasProseBefore(this.shown)
+        ? undefined
+        : recoverQwenXmlCalls(this.held, this.tools);
       if (calls) {
         for (const call of calls) out.push({ type: "call", call });
       } else {

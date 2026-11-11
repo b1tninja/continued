@@ -85,10 +85,10 @@ const golden: {
     ],
   },
   {
-    name: "prose on an earlier line, then the call",
+    name: "prose on an earlier line, then the call (declined: the whole reply must be calls)",
     text: 'Here is the plan.\n\npresent_plan(title="x")\n',
-    text_after: "Here is the plan.\n\n",
-    calls: [{ name: "present_plan", arguments: { title: "x" } }],
+    text_after: 'Here is the plan.\n\npresent_plan(title="x")\n',
+    calls: [],
   },
   {
     name: "two calls",

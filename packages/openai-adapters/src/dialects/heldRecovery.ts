@@ -22,6 +22,15 @@ export function leadingThink(s: string): string {
   );
 }
 
+/**
+ * Whether `shown`, the text of a block released before a call marker, is
+ * more than whitespace and a leading `<think>` block. The whole reply must be
+ * calls (plans/ROADMAP.md Q28), so a call after prose is not recovered.
+ */
+export function hasProseBefore(shown: string): boolean {
+  return shown.slice(leadingThink(shown).length).trim() !== "";
+}
+
 export function skipSpace(s: string, from: number): number {
   let i = from;
   while (i < s.length && /\s/.test(s[i])) i++;

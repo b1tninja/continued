@@ -14,6 +14,7 @@
  * None, lists, tuples, dicts with string keys). Nothing is ever evaluated.
  */
 import type { DialectTool, RecoveredCall, RecoveryEvent } from "./qwenXml.js";
+import { hasProseBefore } from "./heldRecovery.js";
 import { fittedCall } from "./schemaCheck.js";
 
 const MAX_DEPTH = 20;
@@ -322,7 +323,9 @@ export class PythonicRecovery {
   end(): RecoveryEvent[] {
     const out: RecoveryEvent[] = [];
     if (this.held !== undefined) {
-      const calls = recoverPythonicCalls(this.held, this.tools);
+      const calls = hasProseBefore(this.shown)
+        ? undefined
+        : recoverPythonicCalls(this.held, this.tools);
       if (calls) {
         for (const call of calls) out.push({ type: "call", call });
       } else {
