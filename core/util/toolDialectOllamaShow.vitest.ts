@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { detectToolDialectLeak } from "./toolDialectLeak.js";
 import { hintFromOllamaShow, OLLAMA_PARSERS } from "./toolDialectMetadata.js";
 import { probeToolDialect } from "./toolDialectProbe.js";
@@ -116,5 +116,15 @@ describe("serverParses is respected", () => {
     });
     expect(r.serverParses).toBe(true);
     expect(r.preset).toBeUndefined();
+  });
+});
+
+describe("probe when /api/show lists no tools capability", () => {
+  test("reports not supported without sending", async () => {
+    const send = vi.fn();
+    const r = await probeToolDialect(send, "m", { toolsAdvertised: false });
+    expect(send).not.toHaveBeenCalled();
+    expect(r.support.kind).toBe("none");
+    expect(r.label).toBe("Tool calls: not supported");
   });
 });

@@ -43,6 +43,7 @@ import {
   bedrockOmitUnsupportedInference,
   bedrockReasoningFields,
   bedrockSamplingParams,
+  bedrockStreamsToolInputCleanly,
   bedrockToolsNeedNonStreaming,
   bedrockUsageToCompletionUsage,
   cleanReplyText,
@@ -58,6 +59,7 @@ import {
   leaksDsmlMarker,
   normalizeToolUseIds,
   ThinkingSplit,
+  ToolInputGate,
 } from "./bedrockHelpers.js";
 import { holdChunk } from "../dialects/holdSignal.js";
 import type { RecoveredCall } from "../dialects/qwenXml.js";
@@ -915,6 +917,30 @@ export class BedrockApi implements BaseLlmApi {
   }
 
   /**
+   * Ends the toolUse block held in the gate: yields it when its input parses.
+   * When it does not, the model is remembered as one whose tool input must not
+   * be streamed, and the result says whether the turn is to be retried through
+   * Converse (nothing has gone out that a retry would repeat). Otherwise the
+   * block is yielded as streamed, since text or an earlier call went out.
+   */
+  private *settleToolCall(
+    gate: ToolInputGate<ChatCompletionChunk>,
+    model: string,
+  ): Generator<ChatCompletionChunk, boolean> {
+    const closed = gate.close();
+    if (closed.broken) {
+      modelsWithoutStreamingTools.add(model);
+      console.debug(
+        `Bedrock: ${model} streamed tool input that is not JSON; ${
+          closed.retry ? "retrying through Converse" : "too late to retry"
+        }`,
+      );
+    }
+    yield* closed.parts;
+    return closed.retry;
+  }
+
+  /**
    * A request with tools to a model that cannot stream them
    * (bedrockToolsNeedNonStreaming): sent through Converse, and the whole
    * reply yielded as the chunks the stream would have produced: text, each
@@ -1246,8 +1272,28 @@ export class BedrockApi implements BaseLlmApi {
       // Each toolUse block gets its own tool_calls index, so a reply with
       // several calls is not merged into one.
       let toolIndex = -1;
+      // A toolUse block is held until its input is known to parse (see
+      // ToolInputGate): a model that streams it broken is retried once
+      // through Converse, before any of it has reached the caller.
+      const gate = new ToolInputGate<ChatCompletionChunk>(
+        !bedrockStreamsToolInputCleanly(body.model),
+      );
+      const retryThroughConverse = () =>
+        this.converseWholeMessage(
+          client,
+          { ...requestBody },
+          signal,
+          fallbackModelId,
+          body,
+        );
 
       for await (const chunk of response.stream) {
+        if (chunk.contentBlockStart?.start?.toolUse) {
+          if (yield* this.settleToolCall(gate, body.model)) {
+            yield* retryThroughConverse();
+            return;
+          }
+        }
         if (chunk.contentBlockStop || chunk.messageStop) {
           if (dsmlHold) {
             const text = flushDsmlHold(dsmlHold);
@@ -1256,6 +1302,10 @@ export class BedrockApi implements BaseLlmApi {
           }
           if (thinkingTags) yield* filteredChunks(thinkingTags.flush());
           if (recovery) yield* recoveryChunks(recovery.end());
+          if (yield* this.settleToolCall(gate, body.model)) {
+            yield* retryThroughConverse();
+            return;
+          }
         }
 
         if (chunk.contentBlockDelta?.delta) {
@@ -1263,6 +1313,7 @@ export class BedrockApi implements BaseLlmApi {
 
           // Handle text content
           if (delta.text) {
+            gate.noteOutput();
             let text = delta.text;
             if (filterDsml) {
               const split = holdBackDsmlMarker(dsmlHold + text);
@@ -1278,6 +1329,7 @@ export class BedrockApi implements BaseLlmApi {
           // (see reasoningDeltaFor).
           const reasoning = delta.reasoningContent;
           if (reasoning) {
+            gate.noteOutput();
             const reasoningDelta = reasoningDeltaFor(reasoning, isNova2);
             if (reasoningDelta) {
               yield chatChunkFromDelta({
@@ -1291,7 +1343,7 @@ export class BedrockApi implements BaseLlmApi {
 
           // Handle tool use
           if (delta.toolUse) {
-            yield chatChunkFromDelta({
+            const fragment = chatChunkFromDelta({
               model: body.model,
               id,
               delta: {
@@ -1308,6 +1360,8 @@ export class BedrockApi implements BaseLlmApi {
                 ],
               },
             });
+            if (gate.holding) gate.add(fragment, delta.toolUse.input);
+            else yield fragment;
           }
         }
 
@@ -1316,7 +1370,7 @@ export class BedrockApi implements BaseLlmApi {
 
           if (start.toolUse) {
             toolIndex++;
-            yield chatChunkFromDelta({
+            const opened = chatChunkFromDelta({
               model: body.model,
               id,
               delta: {
@@ -1333,6 +1387,7 @@ export class BedrockApi implements BaseLlmApi {
                 ],
               },
             });
+            yield* gate.open(opened);
           }
         }
 
@@ -1366,6 +1421,10 @@ export class BedrockApi implements BaseLlmApi {
             usage: bedrockUsageToCompletionUsage(chunk.metadata.usage),
           });
         }
+      }
+      if (yield* this.settleToolCall(gate, body.model)) {
+        yield* retryThroughConverse();
+        return;
       }
     } catch (error) {
       const accessMessage = bedrockModelAccessMessage(
