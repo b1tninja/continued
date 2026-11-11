@@ -6,6 +6,7 @@ import {
   maskForAudit,
   maskText,
 } from "./mask";
+import { benignCorpus, secretCases } from "../../../util/secretScan/fixtures";
 
 // Built from pieces so no real-looking credential sits in the source.
 const aws = "AKIA" + "ABCDEFGHIJKLMNOP";
@@ -170,5 +171,49 @@ describe("maskDeep", () => {
     expect(JSON.stringify(out)).not.toContain("abcdef");
     expect(out.n).toBe(3);
     expect(out.ok).toBe(true);
+  });
+});
+
+// X9b: the shared rule set runs after the passes above, so a value one of its
+// rules knows is masked even where no pass listed the shape.
+describe("maskText with the shared rule set", () => {
+  const cases = secretCases(11);
+  it.each(cases.map((c) => [c.ruleId, c] as const))(
+    "masks the %s fixture",
+    (_id, c) => {
+      const text = c.wrap(c.value);
+      const out = maskText(text).text;
+      expect(out).not.toContain(c.value);
+      expect(maskText(out).text).toBe(out);
+    },
+  );
+
+  it("masks a provider token the hand-written passes have no shape for", () => {
+    const hf = cases.find((c) => c.ruleId === "huggingface-access-token")!;
+    const { text, kinds } = maskText(`curl -u me:${hf.value} u`);
+    expect(text).not.toContain(hf.value);
+    expect(kinds.length).toBeGreaterThan(0);
+  });
+});
+
+// The false-positive guard: ordinary text the secret scanner's benign corpus
+// holds must come through the masker unchanged, except the lines that hold a
+// secret-named assignment, header or URL userinfo (the recall-first passes
+// mask those placeholders on purpose; this list is the pinned set).
+describe("maskText on benign text", () => {
+  const SECRET_NAMED =
+    /API_KEY|TOKEN|PASSWORD|Authorization|aws_|:\/\/[^\s/:@]+:|BEGIN PRIVATE|AKIA|token=/i;
+  const corpus = benignCorpus();
+
+  it("leaves lockfile hashes, ids, commits, data URIs and identifiers alone", () => {
+    const plain = corpus.filter((t) => !SECRET_NAMED.test(t));
+    expect(plain.length).toBeGreaterThan(30);
+    for (const t of plain) expect(maskText(t).text).toBe(t);
+  });
+
+  it("changes only the pinned secret-named lines, and never reads a mask as a secret", () => {
+    const changed = corpus.filter((t) => maskText(t).text !== t);
+    expect(changed.length).toBeLessThanOrEqual(9);
+    for (const t of changed) expect(SECRET_NAMED.test(t)).toBe(true);
   });
 });

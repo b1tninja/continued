@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { canarySecrets } from "../../../util/secretScan/canary";
 import type { AutoReviewReply } from "../auto/handler";
 import {
   auditEnabledFromEnv,
@@ -194,7 +195,7 @@ describe("decisions and outcomes", () => {
 describe("masking", () => {
   it("masks secrets in arguments before writing and hashing", () => {
     const trail = trailAt();
-    const secret = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789";
+    const secret = canarySecrets().anthropicKey;
     const command = `curl -H "x-api-key: ${secret}" https://api.example.com`;
     recordPolicyDecision(trail, ctx("c1", command), "allowedWithPermission", {
       policy: "allowedWithPermission",
