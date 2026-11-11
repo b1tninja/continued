@@ -82,6 +82,7 @@ import { ConfigHandler } from "../config/ConfigHandler";
 import { ProcessedItem } from "../nextEdit/NextEditPrefetchQueue";
 import { NextEditOutcome } from "../nextEdit/types";
 import { ContinueErrorReason } from "../util/errors";
+import type { OpenAICompatTestResult } from "../util/openaiCompatTest";
 
 export enum OnboardingModes {
   API_KEY = "API Key",
@@ -524,6 +525,15 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "bedrock/testModel": [
     BedrockConnectionParams & { model: string },
     BedrockTestModelResult,
+  ];
+  "openaiCompat/testConnection": [
+    {
+      provider: string;
+      apiBase?: string;
+      apiKey?: string;
+      model?: string;
+    },
+    OpenAICompatTestResult,
   ];
   "ollama/showHint": [
     { provider?: string; apiBase?: string; model: string },

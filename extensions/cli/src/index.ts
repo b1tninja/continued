@@ -21,6 +21,7 @@ import { sandboxCommand } from "./commands/sandbox.js";
 import { registerSecretsCommand } from "./commands/secrets.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
+import { testConnectionCommand } from "./commands/testConnection.js";
 import {
   handleValidationErrors,
   validateFlags,
@@ -536,6 +537,22 @@ program
       await gracefulExit(code);
     },
   );
+
+// Test connection for an OpenAI-compatible endpoint
+program
+  .command("test-connection")
+  .description(
+    "Check an OpenAI-compatible endpoint: models listed, and with --model how it answers a tool call",
+  )
+  .option("--provider <name>", "Provider (openai, ollama, llama.cpp, ...)")
+  .option("--api-base <url>", "API base URL (defaults per provider)")
+  .option("--api-key-env <name>", "Environment variable holding the API key")
+  .option("--model <id>", "Also send one tool-call probe to this model")
+  .option("--json", "Machine-readable output")
+  .action(async (options) => {
+    const code = await testConnectionCommand(options);
+    await gracefulExit(code);
+  });
 
 // Handle unknown commands
 program.on("command:*", () => {
