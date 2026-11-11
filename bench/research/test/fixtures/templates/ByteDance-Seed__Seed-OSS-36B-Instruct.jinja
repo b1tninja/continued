@@ -1,3 +1,4 @@
+{%- set toolcall_begin_token   = '<seed:tool_call>'         -%}\n
 {%- if not tools is defined or tools is none %}\n
 {%- set tools = [] %}\n
 {%- if tools is iterable and tools | length > 0 %}\n

@@ -1,0 +1,8 @@
+{%- if xml_tools or python_tools or tools -%}\n    
+{%- if xml_tools or tools -%}\n      
+{%- if tools -%}\n        
+{%- set xml_tools = tools -%}\n      
+r query.\nYou are provided with function signatures within <tools></tools> XML tags:\n\n<tools>\n") -%}\n      
+{%- set xml_tool_string = ns.xml_tool_string + "</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-obje
+ reasoning in an agentic loop.\n\nYou can use the following tools in your python code like regular functions:\n<tools>\n") -%}\n      
+{%- set python_tool_string = ns.python_tool_string + "</tools>\n\nThe state persists between code executions: so variable

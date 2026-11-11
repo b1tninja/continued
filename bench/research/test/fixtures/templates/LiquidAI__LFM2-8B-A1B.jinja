@@ -1,4 +1,5 @@
 {%- set func_name = func["name"] -%}\n		
+{{- "<|tool_call_start|>[" + (tool_calls_ns.tool_calls | join(", ")) + "]<|tool_call
 {%- if tools -%}\n	
 stem_prompt + ("\n" if ns.system_prompt else "") + "List of tools: <|tool_list_start|>[" -%}\n	
 {%- for tool in tools -%}\n		

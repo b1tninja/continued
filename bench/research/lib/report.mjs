@@ -57,7 +57,7 @@ export function report({ findings, uncovered }, dataset) {
       ["repo", "kind", "detail"],
       findings
         .filter((f) =>
-          ["undecided", "unavailable", "unresolved"].includes(f.kind),
+          ["undecided", "novel", "unavailable", "unresolved"].includes(f.kind),
         )
         .map((f) => [f.repo, f.kind, f.detail]),
     ),

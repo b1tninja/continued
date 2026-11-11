@@ -3,6 +3,8 @@
 {{- "<|tools:begin|>" }}\n    
 {%- for tool in tools %}\n        
 {{- "<|tools:end|>\n" }}\n    
+a JSON object with the following structure, enclosed within <|tool_call:begin|> and <|tool_call:end|> tags: \n<|tool_call:begin|><tool-call-id><|tool_call:name|><tool-name><|tool_call:args|
 {%- if ns.system_messages or default_system_prompt or tools or response_format -%}\n    
 {%- if tools -%}\n            
 {{- render_tool_instruction(tools) }}\n        
+{{- "<|tool_call:begin|>" + tool_call.id +"<|tool_call:name|>" + tool_call.function.
