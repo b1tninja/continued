@@ -167,7 +167,8 @@ export interface TurnEvent extends AuditEnvelope {
 export type PolicyChangeSource =
   "permissions-page" | "cli" | "always-allow-button";
 
-export type PolicyChangeOp = "add" | "update" | "remove" | "adopt" | "undo";
+export type PolicyChangeOp =
+  "add" | "update" | "remove" | "adopt" | "move" | "undo";
 
 /**
  * A change to the person's own permission rules (plans/rule-editor.md, B22).
@@ -191,7 +192,7 @@ export interface PolicyEvent extends AuditEnvelope {
   /** The change lets something run that did not before */
   loosens: boolean;
   /** How the change was confirmed, when it needed it */
-  confirmed?: "typed" | "click";
+  confirmed?: "typed" | "click" | "native";
   /** SHA-256 of the file's text before and after, or undefined when it did not exist */
   beforeHash?: string;
   afterHash?: string;
@@ -354,7 +355,7 @@ export interface PolicyInput {
   newRule?: string;
   from?: string;
   loosens: boolean;
-  confirmed?: "typed" | "click";
+  confirmed?: "typed" | "click" | "native";
   beforeHash?: string;
   afterHash?: string;
 }

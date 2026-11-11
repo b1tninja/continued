@@ -278,6 +278,11 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     import("../tools/permissions/ruleEditor").ToolRuleEditResponse,
   ];
   /** Copy a rule from an assistant or workspace file into the person's own */
+  /** Move one rule of the person's own up or down its list (the verdict never changes) */
+  "config/moveToolRule": [
+    RuleEditRequest,
+    import("../tools/permissions/ruleEditor").ToolRuleEditResponse,
+  ];
   "config/adoptToolRule": [
     RuleEditRequest,
     import("../tools/permissions/ruleEditor").ToolRuleEditResponse,
