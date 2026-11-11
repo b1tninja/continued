@@ -6,6 +6,14 @@ export interface ParsedReply {
   calls: RecoveredCall[];
 }
 
+/**
+ * The most text a stage holds for one reply, in characters (about 1 MiB). A
+ * real call is a few KB; past this the text is released as text and nothing
+ * more is held until the reply ends, so a model that opens a marker and never
+ * closes it cannot grow the buffer without bound or stall the person.
+ */
+export const MAX_HELD_CHARS = 1 << 20;
+
 export const THINK_OPEN = "<think>";
 export const THINK_CLOSE = "</think>";
 
@@ -47,6 +55,7 @@ export function skipSpace(s: string, from: number): number {
 export class HeldBlockRecovery {
   private buffer = "";
   private state: "undecided" | "held" | "passthrough" = "undecided";
+  private capped = false;
 
   constructor(
     private readonly tools: DialectTool[],
@@ -71,11 +80,25 @@ export class HeldBlockRecovery {
       this.buffer = "";
       return out ? [{ type: "text", text: out }] : [];
     }
+    if (this.buffer.length > MAX_HELD_CHARS) {
+      const out = this.buffer;
+      this.buffer = "";
+      this.state = "passthrough";
+      this.capped = true;
+      return [{ type: "text", text: out }];
+    }
     return [];
   }
 
   isHolding(): boolean {
     return this.state === "held" && this.buffer !== "";
+  }
+
+  /** Whether the cap released held text since this was last called. */
+  takeCapReleased(): boolean {
+    const was = this.capped;
+    this.capped = false;
+    return was;
   }
 
   end(): RecoveryEvent[] {
