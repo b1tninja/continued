@@ -25,6 +25,6 @@ export function ModeIcon({ mode, className: given }: ModeIconProps) {
       return <RocketLaunchIcon className={className} />;
     case "loop":
       // The figure eight is twice as wide as it is tall
-      return <LoopPhaseMark className={given} />;
+      return <LoopPhaseMark className={given} testId="loop-phase-mode" />;
   }
 }

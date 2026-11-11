@@ -16,6 +16,8 @@ interface LoopPhaseMarkProps {
   className?: string;
   /** Show the phase beside the mark */
   label?: boolean;
+  /** The primary placement (the loop panel) keeps the plain id; others suffix it. */
+  testId?: string;
 }
 
 /**
@@ -24,7 +26,11 @@ interface LoopPhaseMarkProps {
  * rest the mark dims as a whole and the dot stays on the lobe it last used, so
  * a glance still says what the loop did last.
  */
-export function LoopPhaseMark({ className, label }: LoopPhaseMarkProps) {
+export function LoopPhaseMark({
+  className,
+  label,
+  testId = "loop-phase",
+}: LoopPhaseMarkProps) {
   const phase = useAppSelector(selectLoopPhase);
   // A rest keeps the side of the turn before it
   const last = useRef<LoopIconSide | undefined>(undefined);
@@ -34,7 +40,7 @@ export function LoopPhaseMark({ className, label }: LoopPhaseMarkProps) {
 
   return (
     <span
-      data-testid="loop-phase"
+      data-testid={testId}
       data-phase={phase}
       data-lit={last.current ?? "none"}
       title={`Loop: ${text.toLowerCase()}`}

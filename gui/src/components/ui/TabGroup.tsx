@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Divider } from "./Divider";
 import { TabButton } from "./TabButton";
 
@@ -27,12 +28,14 @@ export function TabGroup({
   showBottomDivider = false,
   className = "",
 }: TabGroupProps) {
+  // Two groups on one page must not share element ids
+  const groupId = useId();
   return (
     <div className={className}>
       {showTopDivider && <Divider />}
 
       {label && (
-        <div className="mb-1 ml-1.5 hidden text-2xs font-medium text-description-muted md:block md:pt-1">
+        <div className="mb-1 ml-1.5 hidden text-2xs font-medium text-description md:block md:pt-1">
           {label}
         </div>
       )}
@@ -45,6 +48,7 @@ export function TabGroup({
           isActive={activeTab === tab.id}
           onClick={() => onTabClick(tab.id)}
           tabId={tab.id}
+          domId={`${groupId}-tab-${tab.id}`}
         />
       ))}
 

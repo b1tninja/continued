@@ -22,7 +22,7 @@ async function setup(ui = <Lump />) {
 describe("Lump session controls", () => {
   it("holds the mode and policy controls above the input, before the toolbox", async () => {
     await setup();
-    const group = screen.getByRole("group", { name: "Session controls" });
+    const group = screen.getByRole("toolbar", { name: "Session controls" });
     expect(within(group).getByTestId("mode-select-button")).toBeTruthy();
     const controls = within(group).getByTestId("policy-controls");
     expect(within(controls).getByTestId("policy-preset")).toBeTruthy();

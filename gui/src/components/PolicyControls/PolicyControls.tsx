@@ -63,13 +63,23 @@ const LEVEL_GLYPHS: Record<PolicyLevel, typeof EyeIcon> = {
   yolo: BoltIcon,
 };
 
-const LEVEL_TONES: Record<PolicyLevel, { chip: string; text: string }> = {
-  manual: { chip: "bg-success/20 text-success", text: "text-success" },
-  cautious: { chip: "bg-success/20 text-success", text: "text-success" },
-  automatic: { chip: "bg-link/20 text-link", text: "text-link" },
-  permissive: { chip: "bg-warning/20 text-warning", text: "text-warning" },
-  yolo: { chip: "bg-error/20 text-error", text: "text-error" },
+/**
+ * The tint carries the level and the label is always the foreground colour:
+ * theme greens and ambers fall under 4.5:1 on a light background (1.8:1 for
+ * the default green), and a label that cannot be read is no label. The glyph
+ * keeps the colour.
+ */
+const LEVEL_TONES: Record<PolicyLevel, { chip: string; icon: string }> = {
+  manual: { chip: "bg-success/20 text-foreground", icon: "text-success" },
+  cautious: { chip: "bg-success/20 text-foreground", icon: "text-success" },
+  automatic: { chip: "bg-link/20 text-foreground", icon: "text-link" },
+  permissive: { chip: "bg-warning/20 text-foreground", icon: "text-warning" },
+  yolo: { chip: "bg-error/20 text-foreground", icon: "text-error" },
 };
+
+/** Every chip and the fold button is a target of at least 24 px (WCAG 2.5.8). */
+const CHIP =
+  "flex-none min-h-6 gap-1 rounded-full border-none px-2 transition-colors duration-200 hover:brightness-110";
 
 const AREA_HINTS: Record<PolicyArea, string> = {
   context: "Reading files and searching: what the agent looks at",
@@ -125,11 +135,15 @@ export function AreaLevelSelect({ area, variant }: AreaLevelSelectProps) {
         title={`${label}. ${POLICY_LEVEL_DESCRIPTIONS[area][shown]}`}
       >
         <ListboxButton
-          data-testid={`policy-select-${area}`}
+          // The toolbar chip keeps the plain id; the Settings row is suffixed
+          data-testid={
+            variant === "row"
+              ? `policy-select-${area}-row`
+              : `policy-select-${area}`
+          }
+          data-roving={variant === "icon" ? "" : undefined}
           aria-label={label}
-          className={`flex-none gap-1 rounded-full border-none transition-colors duration-200 hover:brightness-110 ${tone.chip} ${
-            variant === "row" ? "px-1.5 py-0.5" : "px-1.5 py-1"
-          }`}
+          className={`${CHIP} ${tone.chip}`}
         >
           {variant === "row" ? (
             <>
@@ -157,7 +171,7 @@ export function AreaLevelSelect({ area, variant }: AreaLevelSelectProps) {
           )}
         </ListboxButton>
         <ListboxOptions className="max-w-72 min-w-48">
-          <div className="px-2 py-1 text-2xs text-description-muted">
+          <div className="px-2 py-1 text-2xs text-description">
             <div className="font-semibold">{POLICY_AREA_LABELS[area]}</div>
             <div className="whitespace-normal">
               {AREA_HINTS[area]}. Fewer decisions reach you as you go down.
@@ -180,16 +194,19 @@ export function AreaLevelSelect({ area, variant }: AreaLevelSelectProps) {
                   const OptionGlyph = LEVEL_GLYPHS[level];
                   return (
                     <OptionGlyph
-                      className={`mt-0.5 h-3 w-3 shrink-0 ${LEVEL_TONES[level].text}`}
+                      className={`mt-0.5 h-3 w-3 shrink-0 ${LEVEL_TONES[level].icon}`}
                       aria-hidden="true"
                     />
                   );
                 })()}
-                <div className="flex flex-col">
-                  <span className={LEVEL_TONES[level].text}>
-                    {policyLevelLabel(area, level)}
-                  </span>
-                  <span className="text-2xs whitespace-normal text-description-muted">
+                <div
+                  className="flex flex-col"
+                  title={`${policyLevelLabel(area, level)}: ${
+                    unavailable ?? POLICY_LEVEL_DESCRIPTIONS[area][level]
+                  }`}
+                >
+                  <span>{policyLevelLabel(area, level)}</span>
+                  <span className="text-2xs whitespace-normal text-description">
                     {unavailable
                       ? `Not available. ${unavailable}`
                       : POLICY_LEVEL_DESCRIPTIONS[area][level]}
@@ -208,7 +225,12 @@ export function AreaLevelSelect({ area, variant }: AreaLevelSelectProps) {
 }
 
 /** The preset picker: a shortcut that sets all five areas at once. */
-export function PresetSelect() {
+export function PresetSelect({
+  placement = "toolbar",
+}: {
+  /** The toolbar's chip keeps the plain test id; Settings' copy is suffixed. */
+  placement?: "toolbar" | "settings";
+}) {
   const dispatch = useAppDispatch();
   const levels = useAppSelector((s) => s.ui.policyLevels);
   const preset = presetOf(levels);
@@ -229,12 +251,22 @@ export function PresetSelect() {
     >
       <div className="relative" title="Presets set all five areas at once">
         <ListboxButton
-          data-testid="policy-preset"
-          className={`flex-none gap-1 rounded-full border-none px-1.5 py-0.5 transition-colors duration-200 hover:brightness-110 ${
-            top ? "bg-error/20 text-error" : "bg-lightgray/20 text-description"
+          data-testid={
+            placement === "settings"
+              ? "policy-preset-settings"
+              : "policy-preset"
+          }
+          data-roving={placement === "toolbar" ? "" : undefined}
+          className={`${CHIP} text-foreground ${
+            top ? "bg-error/20" : "bg-lightgray/20"
           }`}
         >
-          {top && <ExclamationTriangleIcon className="h-2.5 w-2.5" />}
+          {top && (
+            <ExclamationTriangleIcon
+              className="h-2.5 w-2.5 text-error"
+              aria-hidden="true"
+            />
+          )}
           <span>{preset ? POLICY_PRESETS[preset].label : "Custom"}</span>
           <ChevronDownIcon className="h-2 w-2 shrink-0" aria-hidden="true" />
         </ListboxButton>
@@ -246,11 +278,14 @@ export function PresetSelect() {
               data-testid={`policy-preset-${name}`}
               className="items-start gap-1"
             >
-              <div className="flex flex-col">
+              <div
+                className="flex flex-col"
+                title={`${POLICY_PRESETS[name].label}: ${POLICY_PRESETS[name].description}`}
+              >
                 <span className={name === "yolo" ? "text-error" : ""}>
                   {POLICY_PRESETS[name].label}
                 </span>
-                <span className="text-2xs whitespace-normal text-description-muted">
+                <span className="text-2xs whitespace-normal text-description">
                   {POLICY_PRESETS[name].description}
                 </span>
               </div>
@@ -282,12 +317,13 @@ export function PolicyControls() {
       <button
         type="button"
         data-testid="policy-areas-toggle"
+        data-roving=""
         aria-label={expanded ? "Hide policy areas" : "Show policy areas"}
         aria-expanded={expanded}
         aria-controls="policy-areas"
         title="Set each area on its own"
         onClick={() => setExpanded((open) => !open)}
-        className="hover:bg-list-item-hover flex h-5 w-5 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-description lg:hidden"
+        className="hover:bg-list-item-hover flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-description lg:hidden"
       >
         <ChevronDownIcon
           className={`h-2.5 w-2.5 transition-transform ${expanded ? "rotate-180" : ""}`}
