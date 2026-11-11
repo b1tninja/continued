@@ -13,6 +13,7 @@ import {
 import { safeStderr, safeStdout } from "../init.js";
 import { configureLogger } from "../logger.js";
 import * as logging from "../logging.js";
+import { seedPlanBuild } from "../plans/planBuild.js";
 import { initializeServices, services } from "../services/index.js";
 import { serviceContainer } from "../services/ServiceContainer.js";
 import {
@@ -461,6 +462,8 @@ async function runHeadlessMode(
     toolPermissionOverrides: permissionOverrides,
   });
 
+  seedPlanBuild();
+
   // Get required services from the service container
   const modelState = await serviceContainer.get<ModelServiceState>(
     SERVICE_NAMES.MODEL,
@@ -590,6 +593,8 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
         headless: false,
         toolPermissionOverrides: permissionOverrides,
       });
+
+      seedPlanBuild();
 
       const agentFileState = await serviceContainer.get<AgentFileServiceState>(
         SERVICE_NAMES.AGENT_FILE,

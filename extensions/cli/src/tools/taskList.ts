@@ -8,6 +8,11 @@ import {
   taskPlanToMarkdown,
 } from "core/util/taskPlan.js";
 
+import {
+  activePlanBuild,
+  gateCompletions,
+  syncActivePlan,
+} from "../plans/planBuild.js";
 import { services } from "../services/index.js";
 import {
   getSessionLoop,
@@ -122,6 +127,15 @@ export const taskListTool: Tool = {
     };
   },
   run: async (args: { items?: unknown; reset?: unknown }) => {
-    return saveTaskPlan(planFromToolArgs(args));
+    const next = planFromToolArgs(args);
+    // `continuous plan build`: the harness runs a to-do's check:, and the
+    // file's checkboxes follow the list. A Loop does its own checks.
+    if (!activePlanBuild() || getSessionLoop()) {
+      return saveTaskPlan(next);
+    }
+    const { plan, notes } = await gateCompletions(getSessionTaskPlan(), next);
+    const answer = saveTaskPlan(plan);
+    syncActivePlan(plan);
+    return notes.length ? [answer, ...notes].join("\n") : answer;
   },
 };

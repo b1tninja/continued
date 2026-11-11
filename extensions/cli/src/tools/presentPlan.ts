@@ -30,6 +30,7 @@ import {
   requestLoopTurnEnd,
   startLoopFromPlan,
 } from "../loop/loopSession.js";
+import { writePlanText } from "../plans/planStore.js";
 import { services } from "../services/index.js";
 import { quizService } from "../services/QuizService.js";
 import {
@@ -82,7 +83,7 @@ export async function savePlan(args: PresentPlanArgs, cwd = process.cwd()) {
   });
   const file = path.join(dir, fileName);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
+  writePlanText(
     file,
     serializePlanFile({
       title: parsed.title,
@@ -102,7 +103,7 @@ export async function savePlan(args: PresentPlanArgs, cwd = process.cwd()) {
     decisions: parsed.decisions,
     /** Writes the file again with the person's answers to the decisions. */
     writeAnswers(answered: PlanDecision[]) {
-      fs.writeFileSync(
+      writePlanText(
         file,
         serializePlanFile({
           title: parsed.title,

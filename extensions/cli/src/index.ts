@@ -15,6 +15,7 @@ import { registerCleanCommand } from "./commands/clean.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
+import { registerPlanCommand } from "./commands/plan.js";
 import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
 import { registerReviewerCommand } from "./commands/reviewEval.js";
@@ -475,6 +476,9 @@ registerSecretsCommand(program);
 
 // Clean: retention for the product's own persisted files (dry run unless --yes)
 registerCleanCommand(program);
+
+// Plan files: continuous plan list / build
+registerPlanCommand(program);
 
 // Sandbox status subcommand
 program
