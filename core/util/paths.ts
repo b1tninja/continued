@@ -470,7 +470,8 @@ export type ConfigEditTarget = "selected" | "main";
 
 /** What an edit of a config file did. A failed edit never throws and never passes as a success. */
 export type ConfigEditResult =
-  { ok: true; changed: boolean } | { ok: false; error: string };
+  | { ok: true; changed: boolean }
+  | { ok: false; error: string; cause?: unknown };
 
 function editConfigYaml(
   callback: (config: ConfigYaml) => ConfigYaml,
