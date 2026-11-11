@@ -95,7 +95,7 @@ function Confirmation({
           onChange={(e) => onChange(e.target.value)}
           autoComplete="off"
           spellCheck={false}
-          className="w-full min-w-0 rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+          className="box-border w-full min-w-0 rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
         />
       </div>
     );
@@ -246,7 +246,7 @@ export function RuleChangeForm({
               id={`${id}-decision`}
               value={decision}
               onChange={(e) => setDecision(e.target.value as RuleDecision)}
-              className="w-full min-w-0 rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
+              className="box-border w-full min-w-0 rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
             >
               {DECISIONS.map((d) => (
                 <option key={d} value={d}>
@@ -273,7 +273,7 @@ export function RuleChangeForm({
               aria-describedby={`${id}-help`}
               autoComplete="off"
               spellCheck={false}
-              className="w-full min-w-0 rounded border border-solid border-border bg-input px-1 font-mono text-xs text-foreground"
+              className="box-border w-full min-w-0 rounded border border-solid border-border bg-input px-1 font-mono text-xs text-foreground"
             />
             <span id={`${id}-help`} className="text-2xs text-description-muted">
               Write toolName(pattern), or just toolName. * matches any
@@ -294,7 +294,7 @@ export function RuleChangeForm({
           placeholder="A command, path or address to test this rule against"
           autoComplete="off"
           spellCheck={false}
-          className="w-full min-w-0 rounded border border-solid border-border bg-input px-1 font-mono text-xs text-foreground"
+          className="box-border w-full min-w-0 rounded border border-solid border-border bg-input px-1 font-mono text-xs text-foreground"
         />
       </div>
       <div

@@ -88,7 +88,6 @@ export function useRuleChange(
       });
       return res.status === "success" ? res.content : undefined;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [ideMessenger, key, baseHash],
   );
 
@@ -114,7 +113,6 @@ export function useRuleChange(
         setError(res.error ?? "This rule cannot be saved.");
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [send]);
 
   useEffect(() => {
