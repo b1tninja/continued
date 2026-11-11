@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -173,7 +174,7 @@ export function SubagentCard({ toolCallState }: SubagentCardProps) {
               className="max-h-48 overflow-y-auto pl-4 break-words whitespace-pre-wrap text-description"
               data-testid={`subagent-prompt-${id}`}
             >
-              {run.prompt}
+              {maskCommandForDisplay(run.prompt)}
             </div>
           )}
         </div>
@@ -192,7 +193,10 @@ export function SubagentCard({ toolCallState }: SubagentCardProps) {
               <span className="min-w-0 break-all">
                 <span className="font-mono">{call.name}</span>
                 {call.summary && (
-                  <span className="text-description"> {call.summary}</span>
+                  <span className="text-description">
+                    {" "}
+                    {maskCommandForDisplay(call.summary)}
+                  </span>
                 )}
               </span>
             </li>
@@ -211,13 +215,13 @@ export function SubagentCard({ toolCallState }: SubagentCardProps) {
             {run.pendingApproval.summary && (
               <span className="break-all text-description">
                 {" "}
-                {run.pendingApproval.summary}
+                {maskCommandForDisplay(run.pendingApproval.summary)}
               </span>
             )}
           </span>
           {run.pendingApproval.note && (
             <span className="text-2xs break-words text-warning">
-              {run.pendingApproval.note}
+              {maskCommandForDisplay(run.pendingApproval.note)}
             </span>
           )}
           <div className="flex flex-wrap justify-end gap-1">

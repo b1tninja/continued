@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import type { ToolCallDecision } from "core";
 
 /** The short words on the chip, by who decided. */
@@ -42,9 +43,11 @@ export function DecisionChip({
 }) {
   if (!decision) return null;
   const blocked = decision.outcome === "blocked";
-  const detail = [decision.reason, decision.rule && `Rule: ${decision.rule}`]
-    .filter(Boolean)
-    .join("\n");
+  const detail = maskCommandForDisplay(
+    [decision.reason, decision.rule && `Rule: ${decision.rule}`]
+      .filter(Boolean)
+      .join("\n"),
+  );
   return (
     <span
       data-testid="decision-chip"

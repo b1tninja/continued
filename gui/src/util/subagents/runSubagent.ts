@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import type {
   ChatHistoryItem,
   ContextItem,
@@ -439,7 +440,7 @@ export async function driveSubagent(
     const name = call.toolCall.function.name;
     const summary: SubagentToolCallSummary = {
       name,
-      summary: summarizeToolArgs(call.parsedArgs),
+      summary: maskCommandForDisplay(summarizeToolArgs(call.parsedArgs)),
       status: "calling",
     };
     const index = toolCalls.length;

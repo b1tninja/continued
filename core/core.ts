@@ -29,6 +29,7 @@ import {
   readUserTrustedDomains,
   ruleSourcesOfLoadedConfig,
 } from "./tools/permissions/readRuleSources";
+import { readUserEnvNames } from "./tools/permissions/userEnvNames";
 import { listEffectiveRules } from "./tools/permissions/effectiveRules";
 import { testToolCall } from "./tools/permissions/testToolCall";
 import { readUserLargeChangeLines } from "./tools/permissions/userLimits";
@@ -40,6 +41,7 @@ import {
 } from "./util/terminalEnvironment";
 import { saveUserTerminalSettings } from "./util/userTerminalSettings";
 import { readUserGuidance } from "./util/userGuidance";
+import { registerShadowSettingsHandlers } from "./tools/permissions/audit/shadowSettingsHandlers";
 import {
   confirmInIde,
   registerRuleEditorHandlers,
@@ -52,6 +54,7 @@ import {
   recordPolicyDecision,
   recordReviewDecision,
 } from "./tools/permissions/audit/hook";
+import { registerAuditOverview } from "./tools/permissions/audit/overviewHandler";
 import {
   readPolicyFile,
   writePolicyFile,
@@ -686,6 +689,18 @@ export class Core {
       return report;
     });
 
+    registerAuditOverview(on as never, {
+      sources: async () =>
+        readRuleSources({
+          merged: (await this.configHandler.loadConfig()).config
+            ?.toolPermissions,
+        }),
+      cwd: async () => {
+        const dirs = await this.ide.getWorkspaceDirs();
+        return dirs[0] ? uriToPath(dirs[0]) : undefined;
+      },
+    });
+
     registerRuleEditorHandlers(on as never, {
       mergedRules: async () =>
         (await this.configHandler.loadConfig()).config?.toolPermissions,
@@ -699,11 +714,16 @@ export class Core {
       confirmLoosening: (text) => confirmInIde(this.ide, text),
     });
 
+    registerShadowSettingsHandlers(on as never, {
+      confirm: (text) => confirmInIde(this.ide, text),
+    });
+
     on("policy/test", async ({ data }) => {
       const { config } = await this.configHandler.loadConfig();
       const dirs = await this.ide.getWorkspaceDirs();
       return testToolCall({
         ...data,
+        envNames: readUserEnvNames(),
         sources: readRuleSources({
           merged: config?.toolPermissions,
           levels: data.levels as PolicyLevels | undefined,
@@ -732,6 +752,7 @@ export class Core {
           reviewer: config.selectedModelByRole.reviewer,
           guidance: readUserGuidance(),
           trustedDomains: readUserTrustedDomains(),
+          envNames: readUserEnvNames(),
           shell: resolveShell().kind,
           reviewerReasoning: reasoningOptionsForEffort(
             config.modeModels?.reviewer?.reasoningEffort,
@@ -2037,6 +2058,7 @@ export class Core {
             : {}),
           approval,
           trustedDomains: readUserTrustedDomains(),
+          envNames: readUserEnvNames(),
           largeChangeLines: readUserLargeChangeLines(),
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
           // The shell terminal commands run in

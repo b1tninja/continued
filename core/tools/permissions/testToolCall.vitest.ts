@@ -253,3 +253,36 @@ describe("testToolCall", () => {
     expect(writes.calls).toBe(0);
   });
 });
+
+describe("env-name lists and the secrets a result may show", () => {
+  const FAKE = "fake-token-value-for-tests";
+  const levels = { context: "yolo", tools: "yolo", edits: "yolo" } as any;
+
+  it("only the person's own lists count: a list that came with the sources is ignored", () => {
+    const planted = {
+      user: { auto: { environment: { envNames: { ask: ["FOO_*"] } } } },
+      workspace: { auto: { environment: { envNames: { ask: ["FOO_*"] } } } },
+    } as any;
+    const plain = run("FOO_X=1 ls", { levels, sources: planted });
+    expect(plain.decision).toBe("allow");
+    const own = run("FOO_X=1 ls", {
+      levels,
+      sources: planted,
+      envNames: { ask: ["FOO_*"] },
+    });
+    expect(own.decision).toBe("ask");
+  });
+
+  it("an allow entry does not loosen a dangerous name", () => {
+    const r = run("LD_PRELOAD=/x.so ls", {
+      levels,
+      envNames: { allow: ["LD_PRELOAD"] },
+    });
+    expect(r.decision).toBe("ask");
+  });
+
+  it("the result never shows the value of a secret variable", () => {
+    const r = run(`API_KEY=${FAKE} npm test`);
+    expect(JSON.stringify(r)).not.toContain(FAKE);
+  });
+});
