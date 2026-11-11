@@ -47,3 +47,11 @@ Distributions are read from the registry, not by running `wsl.exe`: on a machine
 - This is where commands run, not isolation. A WSL distribution can read and write your Windows drives under `/mnt`, and commands run with your access.
 - Files the agent edits with the edit tools are still edited on the Windows side. A project that lives in the Windows file system is slow to use from WSL; a project inside the distribution is not.
 - In a VS Code window attached to WSL (Remote WSL), commands already run in the distribution and this setting is not needed.
+
+## Sandbox runtime status (probe only)
+
+`continuous sandbox status` reports whether Anthropic's [sandbox-runtime](https://github.com/anthropics/sandbox-runtime) (`srt`) could run on this machine: the platform (Linux, WSL2 and macOS are supported; native Windows and WSL1 are not), whether `srt`, `bwrap`, `socat`, `rg` and `sandbox-exec` are present, whether user namespaces look usable, and the one-line fix for each missing item. Add `--json` for scripts. Inside a WSL2 distribution, run it there; on Windows it lists the WSL and Windows Sandbox routes instead.
+
+It also prints the sandbox configuration Continuous would use, clearly marked as a preview: the workspace as the only writable folder, secret folders denied, and the model host as the only network destination.
+
+**This is a status probe only. Nothing is sandboxed yet.** The command reads files and runs `--version` checks, never runs `srt`, installs nothing and never says a command is contained. `/mnt/c` and your environment variables are not covered by `srt` and are listed as such in the output; files a command creates later are not protected by `srt`'s deny list either.
