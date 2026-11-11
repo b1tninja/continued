@@ -1,0 +1,84 @@
+import type { LoopParallelRun, SubagentRunState } from "..";
+import type { SubagentRunStatus } from "../subagents/result";
+import type { AgentNode, AgentState } from "./types";
+
+/**
+ * Nodes for what the IDE already keeps: a subagent's run on its tool call and
+ * a Loop worker's entry in `loop.parallel`. Only names, states and numbers
+ * are read. The run's prompt, answer, tool-call summaries and approval text
+ * are not touched, so they cannot reach a view built from these nodes.
+ */
+
+const STATE: Record<SubagentRunStatus, AgentState> = {
+  queued: "blocked",
+  running: "running",
+  completed: "done",
+  partial: "stopped",
+  failed: "failed",
+  cancelled: "stopped",
+  interrupted: "stopped",
+};
+
+/** The main node's id for a session */
+export const mainAgentId = (sessionId: string) => `main-${sessionId}`;
+
+export function subagentRunToNode(
+  run: SubagentRunState,
+  ids: { toolCallId: string; rootId: string; parentId: string },
+): AgentNode {
+  const waiting = run.status === "running" && !!run.pendingApproval;
+  const node: AgentNode = {
+    id: `sub-${ids.toolCallId}`,
+    parentId: ids.parentId,
+    rootId: ids.rootId,
+    kind: "subagent",
+    role: run.agent || "subagent",
+    state: waiting ? "waiting-approval" : STATE[run.status],
+  };
+  if (run.model) node.model = run.model;
+  if (run.status === "queued") node.blockedOn = { kind: "slot" };
+  if (waiting) {
+    node.blockedOn = { kind: "approval" };
+    node.activity = "waiting for you";
+  }
+  if (run.startedAt !== undefined) node.startedAt = run.startedAt;
+  if (run.endedAt !== undefined) node.endedAt = run.endedAt;
+  if (run.usage) {
+    node.tokens = {
+      input: run.usage.inputTokens,
+      output: run.usage.outputTokens,
+      cacheRead: run.usage.cachedTokens ?? 0,
+      cacheWrite: 0,
+    };
+  }
+  if (run.status === "completed") node.returnedLength = run.text.length;
+  return node;
+}
+
+/** The last path segment, so a worktree's folder is named but not located. */
+function folderName(path: string): string {
+  const parts = path.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] ?? "";
+}
+
+export function loopWorkerToNode(
+  run: LoopParallelRun,
+  ids: { rootId: string; parentId: string; model?: string },
+): AgentNode {
+  const started = Date.parse(run.startedAt);
+  return {
+    id: `worker-${run.itemId}`,
+    parentId: ids.parentId,
+    rootId: ids.rootId,
+    kind: "loop-worker",
+    role: `item ${run.itemId}`,
+    mode: "loop",
+    state: "running",
+    ...(ids.model ? { model: ids.model } : {}),
+    ...(Number.isFinite(started) ? { startedAt: started } : {}),
+    workspace: {
+      kind: "worktree",
+      ...(run.worktree ? { name: folderName(run.worktree) } : {}),
+    },
+  };
+}
