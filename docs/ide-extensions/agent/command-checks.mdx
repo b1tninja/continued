@@ -95,9 +95,29 @@ Some variables change what a command does, so the name decides:
 
 The value matters in one case: a value that runs code (`FOO=$(curl x | sh) cmd`, a backtick) asks at every level for any name, because the code runs whatever the variable is called. `PATH` asks whatever its value, because no value proves which program a name will run without reading the disk. `IFS= read -r line` is not asked about: there `IFS` is set for the builtin, not for a program.
 
-In the prompt the reason names the variable and never its value. The command shown in a prompt or a refusal has the value of a variable named like a secret (`API_KEY`, `GITHUB_TOKEN`, `AWS_*`) or shaped like a credential replaced with `«masked:secret-variable»`, and the audit trail masks it the same way.
+In the prompt the reason names the variable and never its value. Everything that shows a command or a tool call's arguments to you before it runs (the approval card, the terminal card, the tool-call title, the subagent and Loop cards, the CLI approval prompt, the "Try a call" result, and the text the Copy button copies) shows the value of a variable named like a secret (`API_KEY`, `GITHUB_TOKEN`, `AWS_*`) or shaped like a credential as `Â«masked:secret-variableÂ»`. The variable name stays visible. The audit trail masks it the same way. This is display only: the command that runs, and the text every rule reads, is the real one, so a masked prompt never changes what you approve.
 
-The lists are built in. The engine accepts a list of names to add and a list to allow, but only from the person's own settings and never from a workspace file or an assistant, and no config key feeds it yet. The checks switch off with the built-in rule `refuse-dangerous-commands`.
+### Your own lists
+
+The lists are built in. To add names that should always ask, or to stop asking about a name, put them under `toolPermissions.auto.environment.envNames` in your own `config.yaml`:
+
+```yaml
+toolPermissions:
+  auto:
+    environment:
+      envNames:
+        ask: [DEPLOY_*, STAGING_HOST]
+        allow: [HTTPS_PROXY]
+```
+
+Names are compared ignoring case, and an entry ending in `*` matches every name that starts with it.
+
+- `ask` makes a name ask at every level, YOLO included.
+- `allow` stops a Sensitive or Unknown name from asking. It never loosens a name the built-in policy marks Dangerous (`PATH`, `LD_*`, `NODE_OPTIONS` and the rest of that row), and it never loosens a value that runs code. Those keep asking at every level, whatever the list says.
+- Only your own `config.yaml` is read. The same keys in a workspace file, an assistant or a hub block are ignored, and a workspace file's `allow` list is dropped with a notice.
+- The file is read once and read again when it changes, not on every tool call.
+
+The checks switch off with the built-in rule `refuse-dangerous-commands`.
 
 ## Shell dialects
 

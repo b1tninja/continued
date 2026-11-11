@@ -23,9 +23,9 @@ import { looksSecret } from "./secretCommands";
  * sensitive, and matching more is the safe direction. The lists are built in.
  * `EnvNameOptions` lets a caller add names (`ask`) or take names off
  * (`allow`); the caller must read them from the person's own config and from
- * nothing else (not a workspace file, an assistant or the environment).
- * Nothing feeds it yet (ROADMAP follow-up), so today only the built-in lists
- * apply.
+ * nothing else (not a workspace file, an assistant or the environment):
+ * `readUserEnvNames` (userEnvNames.ts). An `allow` entry never lowers a name
+ * the built-in policy marks dangerous.
  *
  * Sources, one per family. The git, Node.js and ld.so pages were re-read on
  * 2026-11-11 (GIT_CONFIG_COUNT and GIT_EXEC_PATH were not visible in the page
@@ -291,18 +291,12 @@ function listMatches(
   });
 }
 
-/** Classify a variable name. Pure: the value is judged separately (`valueRunsCode`). */
-export function classifyEnvName(
-  name: string,
-  options: EnvNameOptions = {},
-): EnvClass {
+/**
+ * Classify a variable name by the built-in lists alone. The person's own
+ * `allow` and `ask` lists are applied on top by `classifyEnvName`.
+ */
+function builtinClass(name: string): EnvClass {
   const lower = name.toLowerCase();
-  if (listMatches(options.allow, name)) {
-    return { risk: "harmless", why: "allowed in your config" };
-  }
-  if (listMatches(options.ask, name)) {
-    return { risk: "dangerous", why: "listed in your config" };
-  }
   if (
     HARMLESS.has(lower) ||
     HARMLESS_PREFIXES.some((p) => lower.startsWith(p))
@@ -326,6 +320,29 @@ export function classifyEnvName(
     return { risk: "sensitive", why: "a credential variable" };
   }
   return { risk: "unknown", why: "no known effect" };
+}
+
+/**
+ * Classify a variable name. Pure: the value is judged separately
+ * (`valueRunsCode`). An `ask` entry always raises a name. An `allow` entry
+ * lowers a name only from sensitive or unknown: a name the built-in policy
+ * marks dangerous stays dangerous, because it asks at every level and a
+ * config entry must not remove that floor.
+ */
+export function classifyEnvName(
+  name: string,
+  options: EnvNameOptions = {},
+): EnvClass {
+  const base = builtinClass(name);
+  if (listMatches(options.ask, name)) {
+    return base.risk === "dangerous"
+      ? base
+      : { risk: "dangerous", why: "listed in your config" };
+  }
+  if (base.risk !== "dangerous" && listMatches(options.allow, name)) {
+    return { risk: "harmless", why: "allowed in your config" };
+  }
+  return base;
 }
 
 /**

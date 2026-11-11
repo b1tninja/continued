@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import { QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
 import type { LoopQuestion } from "core";
 import { LOOP_LIMITS } from "core/util/loopMode";
@@ -71,7 +72,9 @@ function LoopQuestionRow({
         {question.id} · {KIND_LABEL[question.kind]}
         {itemText ? ` · ${itemText}` : ""}
       </div>
-      <div className="break-words text-foreground">{question.question}</div>
+      <div className="break-words text-foreground">
+        {maskCommandForDisplay(question.question)}
+      </div>
       {question.assumption && (
         <div className="break-words text-description">
           Assumed: {question.assumption}

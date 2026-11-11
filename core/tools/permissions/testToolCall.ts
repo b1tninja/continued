@@ -15,8 +15,9 @@ import {
   runTerminalCommandTool,
   searchWebTool,
 } from "../definitions";
-import { maskDeep } from "./audit/mask";
+import { maskArgsForDisplay } from "./displayMask";
 import { levelOfCall, type ApprovalSettings } from "./approval";
+import type { EnvNameOptions } from "./envNames";
 import { lintCommand, type LintFinding } from "./commandLint";
 import { findRuleMatch, type DecisionSource } from "./decide";
 import {
@@ -69,6 +70,8 @@ export interface TestToolCallInput {
   levels?: Partial<PolicyLevels>;
   /** The rule sources (see readRuleSources); `levels` here are overridden by `levels` above */
   sources: RuleSourcesInput;
+  /** The person's own `auto.environment.envNames` (readUserEnvNames); never from `sources` */
+  envNames?: EnvNameOptions;
   /** The tool's own setting; defaults to the tool's default */
   basePolicy?: ToolPolicy;
   /** The workspace folder; relative paths are resolved against it */
@@ -656,6 +659,7 @@ export function testToolCall(input: TestToolCallInput): ToolCallTestResult {
     permissionSources: usable.sources,
     approval,
     trustedDomains: input.sources.user?.auto?.environment?.trustedDomains,
+    envNames: input.envNames,
     cwd,
     shell,
   });
@@ -722,5 +726,5 @@ export function testToolCall(input: TestToolCallInput): ToolCallTestResult {
     result.steps.push(check.step);
   }
   // The tester echoes the call it was given; a credential in it is masked.
-  return maskDeep(result);
+  return maskArgsForDisplay(result);
 }

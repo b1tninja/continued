@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask.js";
 import { Box, Text, useInput } from "ink";
 import React, { useState } from "react";
 
@@ -64,8 +65,9 @@ export const ToolPermissionSelector: React.FC<ToolPermissionSelectorProps> = ({
   onResponse,
 }) => {
   // Named in full, because it is saved for every later session
+  // The rule that is saved is the real one; the line that names it is masked
   const permissionOptions = getPermissionOptions(
-    generatePolicyRule(toolName, toolArgs),
+    maskCommandForDisplay(generatePolicyRule(toolName, toolArgs)),
   );
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [initialHasShownDangerousCommand] = useState(

@@ -17,6 +17,7 @@ import {
 import { mcpRuleName } from "core/tools/permissions/names.js";
 import { readUserTrustedDomains } from "core/tools/permissions/readRuleSources.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
+import { readUserEnvNames } from "core/tools/permissions/userEnvNames.js";
 import { resolveShell } from "core/util/shell.js";
 import { readUserGuidance } from "core/util/userGuidance.js";
 
@@ -287,6 +288,7 @@ export async function evaluateWithCoreRules(
         reviewer: input.reviewer ?? null,
         guidance: readUserGuidance(),
         trustedDomains: readUserTrustedDomains(),
+        envNames: readUserEnvNames(),
         environment: {
           workspaceDirs: [input.cwd ?? process.cwd()],
           os: process.platform,
@@ -336,6 +338,7 @@ export async function evaluateWithCoreRules(
     permissions,
     approval: input.approval,
     trustedDomains: readUserTrustedDomains(),
+    envNames: readUserEnvNames(),
     cwd: input.cwd ?? process.cwd(),
     // The shell the CLI runs commands in: its login shell, PowerShell on Windows
     shell: resolveShell().kind,

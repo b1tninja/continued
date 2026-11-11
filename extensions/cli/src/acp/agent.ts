@@ -1,5 +1,7 @@
 import path from "path";
 
+import { maskArgsForDisplay } from "core/tools/permissions/displayMask.js";
+
 import type { StreamCallbacks } from "../stream/streamChatResponse.types.js";
 
 import { JsonRpcPeer, RPC_CODES, RpcError } from "./rpc.js";
@@ -78,7 +80,9 @@ function argPath(args: unknown): string | undefined {
   return undefined;
 }
 
-function titleFor(name: string, args: unknown): string {
+function titleFor(name: string, rawArgs: unknown): string {
+  // The editor shows this title in its approval prompt
+  const args = maskArgsForDisplay(rawArgs);
   if (args && typeof args === "object") {
     const a = args as Record<string, unknown>;
     const detail = a.command ?? a.filepath ?? a.file_path ?? a.path ?? a.query;
@@ -284,7 +288,7 @@ export class AcpAgent {
         title: titleFor(name, args),
         kind: toolKindFor(name),
         status: "pending",
-        rawInput: args,
+        rawInput: maskArgsForDisplay(args),
         ...(loc ? { locations: [{ path: loc }] } : {}),
       });
       return call;
@@ -354,7 +358,7 @@ export class AcpAgent {
             title: titleFor(name, args),
             kind: toolKindFor(name),
             status: "pending",
-            rawInput: args,
+            rawInput: maskArgsForDisplay(args),
           },
           options: [
             { optionId: "allow", name: "Allow", kind: "allow_once" },

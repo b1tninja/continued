@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import { ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 import { ToolCallState } from "core";
 import {
@@ -362,7 +363,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
               {String(item.text)}
               {typeof item.check === "string" && item.check.trim() && (
                 <div className="pl-5 font-mono text-description-muted">
-                  check: {item.check.trim()}
+                  check: {maskCommandForDisplay(item.check.trim())}
                 </div>
               )}
             </li>

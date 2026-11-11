@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import { useAppDispatch, useAppSelector } from "../../../../redux/hooks";
 import { selectPendingToolCalls } from "../../../../redux/selectors/selectToolCalls";
 import { callToolById } from "../../../../redux/thunks/callToolById";
@@ -68,10 +69,10 @@ export function PendingToolCallToolbar() {
           {toolCall.policyNote && (
             <span
               className="max-w-56 truncate text-2xs text-warning"
-              title={toolCall.policyNote}
+              title={maskCommandForDisplay(toolCall.policyNote)}
               data-testid={`policy-note-${toolCall.toolCallId}`}
             >
-              {toolCall.policyNote}
+              {maskCommandForDisplay(toolCall.policyNote)}
             </span>
           )}
 

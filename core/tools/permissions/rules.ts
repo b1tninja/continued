@@ -38,7 +38,12 @@ export interface ToolPermissions {
   deny?: string[];
   /** Settings for the experimental reviewer (Auto mode). Never loosens a rule. */
   auto?: {
-    environment?: { trustedDomains?: string[]; productionMarkers?: string[] };
+    environment?: {
+      trustedDomains?: string[];
+      productionMarkers?: string[];
+      /** Variable names that always ask (`ask`) or never ask (`allow`); read from the person's own config only */
+      envNames?: { ask?: string[]; allow?: string[] };
+    };
     guidance?: { block?: string[]; allow?: string[] };
     limits?: { consecutiveDenials?: number; totalDenials?: number };
   };

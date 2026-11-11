@@ -21,6 +21,7 @@ import { readUserConfigFile } from "./readRuleSources";
 import type { RuleDecision, ToolPermissions } from "./rules";
 import { testToolCall, type TestDecision } from "./testToolCall";
 import { canonicalRuleName } from "./names";
+import { readUserEnvNames } from "./userEnvNames";
 
 /**
  * The write side of the Permissions page and `continuous permissions add|remove|adopt`
@@ -240,6 +241,7 @@ function verdictOf(
       tool,
       ...(field ? { [field]: value } : {}),
       sources,
+      envNames: readUserEnvNames(),
       ...(cwd ? { cwd } : {}),
     } as never);
     return { decision: r.decision, source: r.source, reason: r.reason };
