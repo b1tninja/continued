@@ -47,7 +47,7 @@ export class OllamaClient {
     this.requests = 0;
   }
 
-  async #call(
+  async call(
     pathname,
     body,
     { timeoutMs, method = "POST", ignoreSignal = false } = {},
@@ -89,8 +89,8 @@ export class OllamaClient {
     }
   }
 
-  async #json(pathname, body, opts) {
-    const { res, done, timedOut } = await this.#call(pathname, body, opts);
+  async json(pathname, body, opts) {
+    const { res, done, timedOut } = await this.call(pathname, body, opts);
     try {
       return await res.json();
     } catch (e) {
@@ -104,25 +104,25 @@ export class OllamaClient {
   }
 
   tags() {
-    return this.#json("/api/tags", undefined, {
+    return this.json("/api/tags", undefined, {
       method: "GET",
       timeoutMs: 15_000,
     });
   }
   ps() {
-    return this.#json("/api/ps", undefined, {
+    return this.json("/api/ps", undefined, {
       method: "GET",
       timeoutMs: 15_000,
     });
   }
   show(model) {
-    return this.#json("/api/show", { model }, { timeoutMs: 30_000 });
+    return this.json("/api/show", { model }, { timeoutMs: 30_000 });
   }
 
   /** Free the model's memory now. Never throws: a failed unload is reported. */
   async unload(model) {
     try {
-      await this.#json(
+      await this.json(
         "/api/chat",
         { model, messages: [], keep_alive: 0 },
         { timeoutMs: 30_000, ignoreSignal: true },
@@ -154,7 +154,7 @@ export class OllamaClient {
     if (think !== undefined) body.think = think;
     if (keepAlive !== undefined) body.keep_alive = keepAlive;
     const t0 = Date.now();
-    const { res, done, timedOut } = await this.#call("/api/chat", body, {
+    const { res, done, timedOut } = await this.call("/api/chat", body, {
       timeoutMs,
     });
     const out = {
