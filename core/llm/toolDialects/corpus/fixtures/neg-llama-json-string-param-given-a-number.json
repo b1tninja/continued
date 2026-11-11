@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-llama-json-string-param-given-a-number",
+  "family": "llama-3.x",
+  "dialect": "llama-json",
+  "kind": "negative",
+  "failureMode": "argument-type-mismatch",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from the shape of llama33-bedrock-json-integer-as-string (observed live 2026-11-10)",
+    "retrieved": "2026-11-10",
+    "note": "path is declared a string and the call gives the number 123: only strings are ever coerced, and never into a string, so the call stays text."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "run_command",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "timeout": {
+            "type": "integer"
+          }
+        },
+        "required": ["command"]
+      }
+    }
+  ],
+  "text": "{\"type\": \"function\",\"name\": \"read_file\",\"parameters\": {\"path\": 123}}",
+  "markers": [],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"type\": \"function\",\"name\": \"read_file\",\"parameters\": {\"path\": 123}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "{",
+        "\"",
+        "t",
+        "y",
+        "p",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "\"",
+        ",",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "r",
+        "e",
+        "a",
+        "d",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        "\"",
+        ",",
+        "\"",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "p",
+        "a",
+        "t",
+        "h",
+        "\"",
+        ":",
+        " ",
+        "1",
+        "2",
+        "3",
+        "}",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "fixed-7",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"type\"",
+        ": \"func",
+        "tion\",\"",
+        "name\": ",
+        "\"read_f",
+        "ile\",\"p",
+        "aramete",
+        "rs\": {\"",
+        "path\": ",
+        "123}}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "{\"type\": \"function\",\"name\": \"read_file\",\"parameters\": {\"path\": 123}}"
+  }
+}

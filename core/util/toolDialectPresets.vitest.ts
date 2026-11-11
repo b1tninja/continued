@@ -1,3 +1,13 @@
+import {
+  effectiveRecoverySetting,
+  withToolDialect,
+  type ToolDialectSetting,
+} from "@continuedev/config-yaml";
+import {
+  createTextToolRecovery,
+  LlamaJsonRecovery,
+  recoverySetting,
+} from "@continuedev/openai-adapters";
 import { describe, expect, it } from "vitest";
 import { bedrockSupportsTools } from "../llm/toolSupport.js";
 import { TOOL_DIALECT_PRESETS } from "./toolDialectPresetTable.js";
@@ -236,10 +246,112 @@ describe("Bedrock tool support from the presets", () => {
 
   it("offers Llama 3.x tools only with llama-json recovery", () => {
     const id = "meta.llama3-3-70b-instruct-v1:0";
-    expect(bedrockSupportsTools(id)).toBe(false);
-    expect(bedrockSupportsTools(id, "auto")).toBe(false);
-    expect(bedrockSupportsTools(id, "off")).toBe(false);
-    expect(bedrockSupportsTools(id, "llama-json")).toBe(true);
-    expect(presetBedrockTools(id, "qwen-xml")).toBe(false);
+    const none = {};
+    expect(bedrockSupportsTools(id, undefined, undefined, none)).toBe(false);
+    expect(bedrockSupportsTools(id, "auto", undefined, none)).toBe(false);
+    expect(bedrockSupportsTools(id, "off", undefined, none)).toBe(false);
+    expect(bedrockSupportsTools(id, "llama-json", undefined, none)).toBe(true);
+    expect(presetBedrockTools(id, "qwen-xml", undefined, none)).toBe(false);
+  });
+
+  describe("tool enabling follows the recovery switch (config field and environment variable)", () => {
+    const llama33 = "meta.llama3-3-70b-instruct-v1:0";
+    const llama31 = "us.meta.llama3-1-70b-instruct-v1:0";
+    const ENV = "CONTINUE_RECOVER_TEXT_TOOL_CALLS";
+    const FIELD = "x_continue_recover_text_tool_calls";
+
+    it("turns tools on when only the environment variable asks for llama-json", () => {
+      for (const id of [llama33, llama31]) {
+        expect(
+          bedrockSupportsTools(id, undefined, undefined, {
+            [ENV]: "llama-json",
+          }),
+        ).toBe(true);
+        expect(
+          bedrockSupportsTools(id, undefined, undefined, {
+            [ENV]: "force:llama-json",
+          }),
+        ).toBe(true);
+        expect(
+          bedrockSupportsTools(id, undefined, undefined, {
+            [ENV]: "qwen-xml,llama-json",
+          }),
+        ).toBe(true);
+      }
+    });
+
+    it("lets the environment variable win over the config field", () => {
+      // The variable names another dialect: llama-json is not asked for.
+      expect(
+        bedrockSupportsTools(llama33, "llama-json", undefined, {
+          [ENV]: "qwen-xml",
+        }),
+      ).toBe(false);
+      // The config turns recovery off, the variable turns it on.
+      expect(
+        bedrockSupportsTools(llama33, "off", undefined, {
+          [ENV]: "llama-json",
+        }),
+      ).toBe(true);
+      // An empty variable is not set.
+      expect(
+        bedrockSupportsTools(llama33, "llama-json", undefined, { [ENV]: "" }),
+      ).toBe(true);
+    });
+
+    it("reads the extra body field recovery reads", () => {
+      expect(
+        bedrockSupportsTools(llama33, undefined, { [FIELD]: "llama-json" }, {}),
+      ).toBe(true);
+      expect(
+        bedrockSupportsTools(llama33, undefined, { [FIELD]: "pythonic" }, {}),
+      ).toBe(false);
+    });
+
+    it("changes nothing for families that are not with-recovery", () => {
+      const env = { [ENV]: "llama-json" };
+      expect(
+        bedrockSupportsTools(
+          "google.gemma-3-27b-it",
+          undefined,
+          undefined,
+          env,
+        ),
+      ).toBe(false);
+      expect(
+        bedrockSupportsTools("amazon.nova-pro-v1:0", "off", undefined, env),
+      ).toBe(true);
+      expect(
+        bedrockSupportsTools("deepseek.r1-v1:0", undefined, undefined, env),
+      ).toBe(false);
+    });
+
+    it("asks the same question the recovery stage answers", () => {
+      const cases: [
+        ToolDialectSetting | undefined,
+        Record<string, unknown> | undefined,
+        Record<string, string | undefined>,
+      ][] = [
+        [undefined, undefined, {}],
+        ["llama-json", undefined, {}],
+        ["native", undefined, {}],
+        ["off", { a: 1 }, { [ENV]: "llama-json" }],
+        ["llama-json", undefined, { [ENV]: "qwen-xml" }],
+        [undefined, { [FIELD]: "force:llama-json" }, {}],
+        ["qwen-xml", { [FIELD]: "force:llama-json" }, {}],
+        [undefined, undefined, { [ENV]: "pythonic,llama-json" }],
+        ["llama-json", undefined, { [ENV]: "" }],
+      ];
+      for (const [toolDialect, extra, env] of cases) {
+        const body = withToolDialect(extra, toolDialect, env);
+        const recovery = createTextToolRecovery(llama33, [], body, env);
+        expect(recovery instanceof LlamaJsonRecovery).toBe(
+          bedrockSupportsTools(llama33, toolDialect, extra, env),
+        );
+        expect(effectiveRecoverySetting(toolDialect, extra, env)).toBe(
+          recoverySetting(body, env),
+        );
+      }
+    });
   });
 });

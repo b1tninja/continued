@@ -52,6 +52,19 @@ describe("recovered calls in a history", () => {
 });
 
 describe("dialectArms", () => {
+  it("counts the forms a leak took, by the detector's dialect names", () => {
+    const [arm] = dialectArms([
+      {
+        modelRow: "llama33",
+        dialect: "off",
+        textLeaks: 2,
+        textLeakForms: ["llama-json", "llama-json"],
+      },
+      { modelRow: "llama33", dialect: "off", textLeakForms: ["pythonic"] },
+    ]);
+    expect(arm.forms).toEqual({ "llama-json": 2, pythonic: 1 });
+  });
+
   const record = (dialect: string | undefined, over: object = {}) => ({
     modelRow: "qwen3coder",
     dialect,
@@ -75,6 +88,7 @@ describe("dialectArms", () => {
         dialect: "off",
         n: 1,
         textLeaks: 4,
+        forms: {},
         runsWithLeak: 1,
         recovered: 0,
         runsWithRecovered: 0,
@@ -84,6 +98,7 @@ describe("dialectArms", () => {
         dialect: "off",
         n: 3,
         textLeaks: 3,
+        forms: {},
         runsWithLeak: 2,
         recovered: 0,
         runsWithRecovered: 0,
@@ -93,6 +108,7 @@ describe("dialectArms", () => {
         dialect: "qwen-xml",
         n: 2,
         textLeaks: 0,
+        forms: {},
         runsWithLeak: 0,
         recovered: 3,
         runsWithRecovered: 1,
@@ -113,9 +129,11 @@ describe("dialectArms", () => {
       record("qwen-xml", { recovered: 1 }),
     ]);
     expect(lines).toHaveLength(4);
-    expect(lines[2]).toBe("| qwen3coder | off | 1 | 2 (1 of 1) | 0 (0 of 1) |");
+    expect(lines[2]).toBe(
+      "| qwen3coder | off | 1 | 2 (1 of 1, 95% CI 21-100%) | none | 0 (0 of 1, 95% CI 0-79%) |",
+    );
     expect(lines[3]).toBe(
-      "| qwen3coder | qwen-xml | 1 | 0 (0 of 1) | 1 (1 of 1) |",
+      "| qwen3coder | qwen-xml | 1 | 0 (0 of 1, 95% CI 0-79%) | none | 1 (1 of 1, 95% CI 21-100%) |",
     );
     expect(dialectArmsLines([])).toEqual([]);
   });

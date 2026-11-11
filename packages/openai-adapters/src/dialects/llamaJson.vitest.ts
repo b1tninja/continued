@@ -91,7 +91,7 @@ describe("llama-json recovery", () => {
     ["an unknown tool", single.replace("read_file", "delete_all")],
     ["an undeclared argument", single.replace('"path"', '"file"')],
     ["a missing required argument", '{"name": "read_file", "parameters": {}}'],
-    ["a number sent as a string", intAsString],
+    ["a string that is not a number", intAsString.replace('"10"', '"10abc"')],
     ["schema-wrapped values (Llama 4 Maverick)", wrapped],
     ["an extra key", single.replace('"type"', '"id": 1, "type"')],
     ["type other than function", single.replace('"function"', '"tool"')],

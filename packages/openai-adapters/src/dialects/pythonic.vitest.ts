@@ -130,7 +130,7 @@ const negatives: { name: string; text: string }[] = [
   { name: "a missing required argument", text: "read_file(limit=3)" },
   {
     name: "an argument of the wrong type",
-    text: 'read_file(path="a", limit="3")',
+    text: 'read_file(path="a", limit="3x")',
   },
   { name: "a repeated keyword", text: 'read_file(path="a", path="b")' },
   { name: "an unterminated call", text: 'present_plan(title="x", decisions=[' },

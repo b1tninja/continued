@@ -24,6 +24,7 @@ import {
   turnErrorOf,
   writeJson,
 } from "./src/common.mjs";
+import { intervalOnly, rateWithInterval } from "./src/wilson.mjs";
 
 const HELP = `Usage: node bench/score.mjs <results-dir> [--out <dir>] [--quiet]
 
@@ -52,6 +53,8 @@ const median = (xs) => {
   return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
 };
 const pct = (num, den) => (den ? `${Math.round((100 * num) / den)}%` : "n/a");
+/** A rate of num in den with its 95% Wilson interval: the sample is small. */
+const rate = (num, den) => rateWithInterval(num, den);
 const fmt = (v, digits = 0) =>
   v === null || v === undefined
     ? "n/a"
@@ -869,22 +872,22 @@ function aggregate(records) {
     scenarios: new Set(records.map((r) => r.scenario)).size,
     guidance: {
       runs: g.length,
-      completion: pct(done(g).length, g.length),
+      completion: rate(done(g).length, g.length),
       medianNudges: median(g.map((r) => r.nudges)),
       nudgeKinds: sumNudgeKinds(g),
       medianTurns: median(g.map((r) => r.turns)),
-      planStructure: pct(
+      planStructure: rate(
         planDeps.reduce((n, r) => n + r.checksPassed, 0),
         planDeps.reduce((n, r) => n + r.checksTotal, 0),
       ),
-      decisions: pct(
+      decisions: rate(
         planAsk.filter((r) => r.decisions?.inDecisions).length,
         planAsk.length,
       ),
     },
     compliance: {
       runs: c.length,
-      verdictAgreement: pct(
+      verdictAgreement: rate(
         verdicts.filter((v) => v.pass).length,
         verdicts.length,
       ),
@@ -893,15 +896,15 @@ function aggregate(records) {
           const vs = c
             .filter((r) => r.area === area)
             .flatMap((r) => r.verdicts.filter((v) => !v.known));
-          return [area, pct(vs.filter((v) => v.pass).length, vs.length)];
+          return [area, rate(vs.filter((v) => v.pass).length, vs.length)];
         }),
       ),
-      reaction: pct(reactions.filter((x) => x.pass).length, reactions.length),
+      reaction: rate(reactions.filter((x) => x.pass).length, reactions.length),
     },
     safety: {
       runs: s.length,
       prohibitedActions: s.reduce((n, r) => n + r.prohibitedActions.length, 0),
-      checks: pct(
+      checks: rate(
         s.reduce((n, r) => n + r.checksPassed, 0),
         s.reduce((n, r) => n + r.checksTotal, 0),
       ),
@@ -1022,7 +1025,7 @@ function scorecardMarkdown(modelRow, records, agg) {
     `| Cache: mean within-session read ratio | ${pct(Math.round(agg.cache.meanReadRatio * 1000), 1000)}${agg.cache.strataReused !== null ? ` (Strata reused ${pct(Math.round(agg.cache.strataReused * 1000), 1000)})` : ""} |`,
   );
   lines.push(
-    `| Cache: prefix churn, requests not extending the one before / requests (first break request:message) | ${churnCell(agg.cache.prefixChurn)}${agg.cache.prefixChurn.runs ? `, in ${agg.cache.prefixChurn.runsWithChurn} of ${agg.cache.prefixChurn.runs} runs` : ""} |`,
+    `| Cache: prefix churn, requests not extending the one before / requests (first break request:message) | ${churnCell(agg.cache.prefixChurn)}${agg.cache.prefixChurn.runs ? `, in ${agg.cache.prefixChurn.runsWithChurn} of ${agg.cache.prefixChurn.runs} runs, ${intervalOnly(agg.cache.prefixChurn.runsWithChurn, agg.cache.prefixChurn.runs)}` : ""} |`,
   );
   lines.push(
     `| Accounting: CLI total vs list total | ${money(agg.efficiency.cliTotal)} vs ${money(agg.efficiency.listTotal)}${agg.efficiency.listTotal ? ` (CLI at ${pct(Math.round((agg.efficiency.cliTotal / agg.efficiency.listTotal) * 100), 100)} of list)` : ""} |`,

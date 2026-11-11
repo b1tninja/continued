@@ -44,7 +44,7 @@ models:
 | `hermes-json` | Recover Hermes-style JSON calls for this model, whatever its id is.                     |
 | `glm-xml`     | Recover GLM tag calls for this model, whatever its id is.                               |
 
-Any other value is rejected when the config loads. When `CONTINUE_RECOVER_TEXT_TOOL_CALLS` is set, it wins over `toolDialect`. The setting applies to Bedrock models in the IDE and in the CLI (`cn`); the rules below apply unchanged.
+Any other value is rejected when the config loads. When `CONTINUE_RECOVER_TEXT_TOOL_CALLS` is set, it wins over `toolDialect`. The same switch decides whether Llama 3.x models are offered tools at all (they are off by default, because they write calls as text): setting `llama-json` in either place turns them on. The setting applies to Bedrock models in the IDE and in the CLI (`cn`); the rules below apply unchanged.
 
 ## Test connection
 
@@ -60,9 +60,10 @@ Recovery is strict, because text that looks like a call is sometimes an example.
 
 - The model made no tool call of its own in that reply.
 - The call names a tool that is in the request, and every argument is one the tool's schema declares, with a value of the type the schema asks for. Every required argument is present.
+- A string that is the exact literal of the type the schema declares is read as that value, in every dialect: `"10"` for an integer, `"true"` for a boolean, JSON text for an array or object. Only the plain spelling counts (`10`, not `10abc`, `1e3`, `010` or an empty string), a parameter that may be a string keeps its text, and the recovered call records the repair. This runs only when recovery is on.
 - For `qwen-xml`, the reply is nothing but calls and whitespace, and a marker inside a code fence or right after a backtick does not start a call.
 - For `pythonic`, each call starts a line at column 0 outside a code fence, uses keyword arguments only, and the reply is nothing but such calls. Values are read as Python literals (strings, numbers, `True`, `False`, `None`, lists, tuples, dicts with string keys) by a small parser. Nothing is evaluated.
-- For `llama-json`, the reply is nothing but one call object or an array of them, with exactly the keys `name` and `parameters` (and an optional `type` of `function`); a number sent as a string for an integer argument is refused.
+- For `llama-json`, the reply is nothing but one call object or an array of them, with exactly the keys `name` and `parameters` (and an optional `type` of `function`).
 - For `hermes-json` and `glm-xml`, the reply is nothing but calls (an opening `<think>` block is kept as text), and for `glm-xml` a value is a string unless the schema declares another type, in which case it must be JSON of that type. Both were built from the model chat templates and checked on synthesised fixtures; no live leak of either was captured, so treat them as untested against real replies.
 
 Anything else stays text, exactly as the model wrote it. While a reply streams, text that might be the start of a call is held back until the reply ends, so a recovered call never shows as text first; with recovery on, replies from a matching model can appear later than without it.

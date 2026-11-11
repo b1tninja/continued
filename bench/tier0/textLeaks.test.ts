@@ -1,6 +1,17 @@
+import { readFileSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
 import { describe, expect, it } from "vitest";
 
-import { isTextLeak, textLeaks } from "../src/common.mjs";
+import {
+  isTextLeak,
+  leakForm,
+  parseDialectOption,
+  RECOVERY_DIALECTS,
+  textLeakForms,
+  textLeaks,
+} from "../src/common.mjs";
 
 /**
  * The bench's `textLeaks` column (plans/ROADMAP.md H13): replies that wrote a
@@ -37,6 +48,16 @@ describe("isTextLeak", () => {
       "FinishItem(\n  summary='done',\n)",
     ],
     ["an IDE tool name", 'read_file(filepath="a.ts")'],
+    ["positional arguments", 'present_plan("x")'],
+    [
+      "GLM tags",
+      "<tool_call>Read<arg_key>filepath</arg_key><arg_value>a</arg_value></tool_call>",
+    ],
+    [
+      "Llama JSON naming a tool the old pattern did not know",
+      '{"type": "function", "name": "run_command", "parameters": {"command": "ls"}}',
+    ],
+    ["DeepSeek DSML", "<｜DSML｜function_calls>"],
   ])("sees %s", (_name, text) => {
     expect(isTextLeak(text)).toBe(true);
   });
@@ -53,12 +74,96 @@ describe("isTextLeak", () => {
       'Example:\n```python\npresent_plan(title="x")',
     ],
     ["an indented call", '    present_plan(title="x")'],
-    ["positional arguments (not the logged form)", 'present_plan("x")'],
     ["a different function", 'print(value="x")'],
     ["a longer name", 'present_plan_v2(title="x")'],
     ["the tool name without a call", "I will use PresentPlan next."],
   ])("does not see %s", (_name, text) => {
     expect(isTextLeak(text)).toBe(false);
+  });
+});
+
+describe("leakForm", () => {
+  it.each([
+    ["qwen-xml", "<function=Read><parameter=filepath>a</parameter></function>"],
+    ["pythonic", 'present_plan(title="x")'],
+    ["llama-json", '{"name": "Read", "parameters": {"filepath": "a"}}'],
+    ["hermes-json", '{"name": "Read", "arguments": {"filepath": "a"}}'],
+    [
+      "glm-xml",
+      "<tool_call>Read<arg_key>k</arg_key><arg_value>a</arg_value></tool_call>",
+    ],
+  ])("names the form %s as the detector does", (form, text) => {
+    expect(leakForm(text)).toBe(form);
+  });
+
+  it("is undefined for prose, and for markup that is only quoted", () => {
+    expect(leakForm("All done.")).toBeUndefined();
+    expect(leakForm("Use `<function=Read>` to read.")).toBeUndefined();
+  });
+
+  it("finds a call that follows a sentence", () => {
+    expect(leakForm('Here is the plan.\n\npresent_plan(title="x")')).toBe(
+      "pythonic",
+    );
+  });
+
+  it("trusts a call expression only for a tool that was offered", () => {
+    expect(leakForm('lookup(key="x")')).toBeUndefined();
+    expect(leakForm('lookup(key="x")', ["lookup"])).toBe("pythonic");
+  });
+});
+
+describe("textLeakForms", () => {
+  it("lists the form of every leaked reply, and counts tools the run called as offered", () => {
+    const history = [
+      reply("Looking at it."),
+      reply('{"name": "Read", "parameters": {"filepath": "a"}}'),
+      { message: { role: "assistant", content: 'lookup(key="x")' } },
+      {
+        message: { role: "assistant", content: "" },
+        toolCallStates: [{ toolCall: { function: { name: "lookup" } } }],
+      },
+    ];
+    expect(textLeakForms(history)).toEqual(["llama-json", "pythonic"]);
+  });
+});
+
+describe("--dialect", () => {
+  it("accepts off and every recovery dialect, alone or in a list", () => {
+    expect(parseDialectOption("off")).toBe("off");
+    for (const d of RECOVERY_DIALECTS) {
+      expect(parseDialectOption(d)).toBe(d);
+      expect(parseDialectOption(`force:${d}`)).toBe(`force:${d}`);
+    }
+    expect(parseDialectOption("llama-json, qwen-xml")).toBe(
+      "llama-json,qwen-xml",
+    );
+  });
+
+  it.each(["", "xml", "qwen-xml,", "auto", "native", "off,qwen-xml"])(
+    "refuses %j",
+    (v) => {
+      expect(() => parseDialectOption(v)).toThrow(/--dialect must be/);
+    },
+  );
+
+  it("lists exactly the dialects the toolDialect config accepts", () => {
+    // packages/config-yaml/src/schemas/models.ts: besides these, auto, native and off
+    const source = readFileSync(
+      path.join(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "../../packages/config-yaml/src/schemas/models.ts",
+      ),
+      "utf-8",
+    );
+    const block = /TOOL_DIALECT_VALUES = \[([^\]]*)\]/.exec(source);
+    const values = [...(block?.[1] ?? "").matchAll(/"([a-z-]+)"/g)].map(
+      (m) => m[1],
+    );
+    expect(values.length).toBeGreaterThan(5);
+    expect(
+      values.filter((v) => !["auto", "native", "off"].includes(v)),
+    ).toEqual(RECOVERY_DIALECTS);
   });
 });
 

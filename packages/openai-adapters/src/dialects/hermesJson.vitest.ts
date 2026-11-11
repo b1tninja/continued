@@ -47,8 +47,8 @@ describe("hermes-json recovery", () => {
       renderHermesJsonCall({ ...call, arguments: { path: "a", x: 1 } }),
     ],
     [
-      "numeric string for integer",
-      renderHermesJsonCall({ ...call, arguments: { path: "a", limit: "3" } }),
+      "a string that is not an integer literal",
+      renderHermesJsonCall({ ...call, arguments: { path: "a", limit: "3x" } }),
     ],
     [
       "missing required",

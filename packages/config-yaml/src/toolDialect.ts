@@ -51,3 +51,41 @@ export function withToolDialect(
   }
   return { ...extraBody, [RECOVER_FIELD]: value };
 }
+
+/** The environment, where there is one (the webview has none). */
+function processEnv(): Record<string, string | undefined> {
+  return typeof process !== "undefined" && process.env ? process.env : {};
+}
+
+/**
+ * The recovery setting in force for a model: its `toolDialect` and the extra
+ * body properties, then the environment variable (which wins, as
+ * `withToolDialect` arranges). Exactly what the adapters' `recoverySetting`
+ * reads from the body this produces, so everything that asks "is recovery on
+ * for this model, and for which dialect" (the Bedrock handlers, tool enabling,
+ * the bench) gets one answer. Undefined when nothing asks for recovery.
+ */
+export function effectiveRecoverySetting(
+  toolDialect: ToolDialectSetting | undefined,
+  extraBody?: Record<string, unknown>,
+  env: Record<string, string | undefined> = processEnv(),
+): string | undefined {
+  const asked =
+    withToolDialect(extraBody, toolDialect, env)?.[RECOVER_FIELD] ??
+    env[RECOVER_ENV];
+  return typeof asked === "string" ? asked : undefined;
+}
+
+/**
+ * Whether a recovery setting (one name or a comma-separated list, each
+ * optionally `force:`-prefixed) asks for `dialect`.
+ */
+export function recoverySettingAsks(
+  setting: string | undefined,
+  dialect: string,
+): boolean {
+  return (setting ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .some((s) => s === dialect || s === `force:${dialect}`);
+}

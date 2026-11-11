@@ -28,7 +28,7 @@ import {
   skipSpace,
   THINK_OPEN,
 } from "./heldRecovery.js";
-import { argumentsFit, declaredType } from "./schemaCheck.js";
+import { declaredType, fittedCall } from "./schemaCheck.js";
 import type { DialectTool, RecoveredCall } from "./qwenXml.js";
 
 const OPEN = "<tool_call>";
@@ -102,12 +102,9 @@ function parseBlock(
     args[key] = typed.value;
     at = end + VAL_CLOSE.length;
   }
-  if (!argumentsFit(tool, args)) return undefined;
   const next = at + CLOSE.length;
-  return {
-    call: { name: tool.name, arguments: args, raw: text.slice(pos, next) },
-    next,
-  };
+  const call = fittedCall(tool, args, text.slice(pos, next));
+  return call ? { call, next } : undefined;
 }
 
 /** The calls in `text` when all of it is GLM calls, else undefined. */

@@ -14,6 +14,7 @@
  * None, lists, tuples, dicts with string keys). Nothing is ever evaluated.
  */
 import type { DialectTool, RecoveredCall, RecoveryEvent } from "./qwenXml.js";
+import { fittedCall } from "./schemaCheck.js";
 
 const MAX_DEPTH = 20;
 
@@ -164,39 +165,6 @@ class Literals {
   }
 }
 
-type Schema = {
-  properties?: Record<string, { type?: string | string[] } | undefined>;
-  required?: string[];
-};
-
-export function typeFits(
-  value: unknown,
-  type: string | string[] | undefined,
-): boolean {
-  const types = Array.isArray(type) ? type : type ? [type] : [];
-  if (types.length === 0) return true;
-  return types.some((t) => {
-    switch (t) {
-      case "string":
-        return typeof value === "string";
-      case "integer":
-        return typeof value === "number" && Number.isInteger(value);
-      case "number":
-        return typeof value === "number";
-      case "boolean":
-        return typeof value === "boolean";
-      case "array":
-        return Array.isArray(value);
-      case "object":
-        return !!value && typeof value === "object" && !Array.isArray(value);
-      case "null":
-        return value === null;
-      default:
-        return true;
-    }
-  });
-}
-
 /** One call at `at`, or undefined when it is not a complete valid call. */
 function parseCall(
   text: string,
@@ -209,10 +177,6 @@ function parseCall(
     const tool = tools.find((t) => t.name === name);
     if (!tool || lit.peek() !== "(") return undefined;
     lit.pos++;
-    const schema: Schema =
-      tool.parameters && typeof tool.parameters === "object"
-        ? (tool.parameters as Schema)
-        : {};
     const args: Record<string, unknown> = {};
     for (;;) {
       lit.ws();
@@ -224,20 +188,13 @@ function parseCall(
       lit.expect("=");
       const value = lit.value(0);
       if (key in args) return undefined;
-      if (schema.properties && !(key in schema.properties)) return undefined;
-      if (!typeFits(value, schema.properties?.[key]?.type)) return undefined;
       args[key] = value;
       lit.ws();
       if (lit.peek() === ",") lit.pos++;
       else if (lit.peek() !== ")") return undefined;
     }
-    for (const key of schema.required ?? []) {
-      if (!(key in args)) return undefined;
-    }
-    return {
-      call: { name: tool.name, arguments: args, raw: text.slice(at, lit.pos) },
-      end: lit.pos,
-    };
+    const call = fittedCall(tool, args, text.slice(at, lit.pos));
+    return call ? { call, end: lit.pos } : undefined;
   } catch (e) {
     if (e instanceof Fail) return undefined;
     throw e;

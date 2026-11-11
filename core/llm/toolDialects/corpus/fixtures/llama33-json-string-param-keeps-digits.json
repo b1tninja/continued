@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "id": "llama33-json-string-param-keeps-digits",
+  "family": "llama-3.x",
+  "dialect": "llama-json",
+  "kind": "positive",
+  "failureMode": "argument-type-mismatch",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from the shape of llama33-bedrock-json-integer-as-string (observed live 2026-11-10)",
+    "retrieved": "2026-11-10",
+    "note": "A string-typed parameter whose value is digits stays the string; only the integer parameter (written \"10\") becomes a number."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "run_command",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "timeout": {
+            "type": "integer"
+          }
+        },
+        "required": ["command"]
+      }
+    }
+  ],
+  "text": "{\"type\": \"function\",\"name\": \"run_command\",\"parameters\": {\"command\": \"10\",\"timeout\": \"10\"}}",
+  "markers": [],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"type\": \"function\",\"name\": \"run_command\",\"parameters\": {\"command\": \"10\",\"timeout\": \"10\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "{",
+        "\"",
+        "t",
+        "y",
+        "p",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "\"",
+        ",",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "r",
+        "u",
+        "n",
+        "_",
+        "c",
+        "o",
+        "m",
+        "m",
+        "a",
+        "n",
+        "d",
+        "\"",
+        ",",
+        "\"",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "o",
+        "m",
+        "m",
+        "a",
+        "n",
+        "d",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "1",
+        "0",
+        "\"",
+        ",",
+        "\"",
+        "t",
+        "i",
+        "m",
+        "e",
+        "o",
+        "u",
+        "t",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "1",
+        "0",
+        "\"",
+        "}",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "fixed-7",
+      "encoding": "utf8",
+      "chunks": [
+        "{\"type\"",
+        ": \"func",
+        "tion\",\"",
+        "name\": ",
+        "\"run_co",
+        "mmand\",",
+        "\"parame",
+        "ters\": ",
+        "{\"comma",
+        "nd\": \"1",
+        "0\",\"tim",
+        "eout\": ",
+        "\"10\"}}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "run_command",
+        "arguments": {
+          "command": "10",
+          "timeout": 10
+        }
+      }
+    ],
+    "text": ""
+  }
+}
