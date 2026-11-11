@@ -202,7 +202,8 @@ function lockPolicyFiles(
     cwd: input.cwd,
     shell: input.shell,
   })?.level;
-  const refuse = level === "automatic" || level === "yolo";
+  // A scan that gave up cannot say the call is a write: it asks, never refuses.
+  const refuse = (level === "automatic" || level === "yolo") && !hit.capped;
   if (!refuse && result.policy === "allowedWithPermission") return result;
   return {
     ...result,
