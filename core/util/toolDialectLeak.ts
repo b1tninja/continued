@@ -19,6 +19,10 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   "llama-json": "llama-json",
   "hermes-json": "hermes-json",
   "glm-xml": "glm-xml",
+  "kimi-tokens": "kimi-tokens",
+  "kimi-xtml": "kimi-xtml",
+  "minimax-xml": "minimax-xml",
+  "minimax-ns-xml": "minimax-ns-xml",
 };
 
 /**
