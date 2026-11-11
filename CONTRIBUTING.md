@@ -190,6 +190,50 @@ and `node scripts/ci/merge-ready.mjs <pr numbers>` (read-only) for the order.
 
 Never use `git stash` or `git stash pop` when several worktrees share one repository: the stash is shared across them, and one agent popped another's work in progress. Commit work in progress on your own branch instead.
 
+### Working in shared worktrees
+
+Agents and people often work in several `git worktree`s of one repository at the same time. Some
+of git's state is shared between them, and that has cost real work.
+
+- **Never `git stash`.** `refs/stash` is shared by every worktree of the repository (git-worktree(1):
+  all refs under `refs/` are shared except `refs/bisect`, `refs/worktree` and `refs/rewritten`), so a
+  `git stash pop` in one worktree applies another worktree's work in progress. There is no stash
+  hook in githooks(5). Commit WIP on your own branch instead, and push it:
+  `scripts/agents/checkpoint.sh` (commits everything as `wip: ...` and pushes the current branch; it
+  refuses on `main`; call it every few minutes so a session restart loses nothing; squash `wip:`
+  commits before merging).
+- **Optional hard guard.** `sh scripts/agents/install-stash-guard.sh` installs a `reference-transaction`
+  hook into this worktree's hooks directory that aborts any update of `refs/stash` (it runs in the
+  `prepared` phase, so the working tree is left untouched). `GIT_ALLOW_STASH=1` overrides it for one
+  command. It is per worktree (`core.hooksPath=.husky/_` is relative) and is not installed by
+  `npm install`. Husky only generates stubs for its own list of hooks, so the file is copied in.
+- **See what is in the shared list:** `node scripts/ci/check-stash.mjs` (read-only; `--strict` exits 1
+  when any stash exists) flags stashes that belong to another worktree's branch and left-over
+  `lint-staged automatic backup` entries.
+- **The pre-commit hook does not use the stash.** `.husky/pre-commit` runs
+  `lint-staged --no-stash --hide-partially-staged`. Without `--no-stash`, lint-staged writes a backup
+  into the shared stash list (`git stash create` + `git stash store`) and leaves it there after a
+  failed hook. Trade-off: with no backup, a failing task is not rolled back automatically; the
+  index is not modified until all tasks succeed, so a failed `prettier --write` leaves the files as
+  they were in the working tree plus whatever prettier already rewrote. `--hide-partially-staged` is
+  passed explicitly because `--no-stash` implies `--no-hide-partially-staged`, which would commit the
+  unstaged half of partially staged files. Do not skip the hook with `-n` or
+  `core.hooksPath=/dev/null` to avoid a stash problem: there is none now.
+- **Junctions.** A worktree whose `node_modules` is a junction (or symlink) into another checkout
+  must never be deleted with `rm -rf`, `Remove-Item -Recurse` or an IDE "delete": the recursive
+  delete follows the link and empties the shared `node_modules`. Remove the link first with
+  `cmd /c rmdir "<worktree>\node_modules"` (removes only the link), then `git worktree remove`.
+  `node scripts/ci/worktree-hygiene.mjs` is a read-only report: it lists linked worktrees, which are
+  clean and merged into `origin/main`, which contain links, and prints the exact commands. It never
+  deletes anything itself.
+- **Hooks only run where husky is installed.** `core.hooksPath` is `.husky/_`, relative to each
+  worktree, and `.husky/_` is git-ignored: a new worktree has no hooks until `npm run prepare` (or
+  `npx husky`) runs in it.
+- **Combination check before merging several PRs:** `node scripts/ci/merge-ready.mjs 518 519 --combine`
+  (see [docs/ci-merge-gate.md](./docs/ci-merge-gate.md)).
+
+Research notes and sources: [docs/shared-worktrees.md](./docs/shared-worktrees.md).
+
 ### What makes a good PR?
 
 To keep the Continue codebase clean and maintainable, we expect the following from our own team and all contributors:
