@@ -21,10 +21,15 @@ const model = (provider: string, toolDialect?: string) => ({
   toolDialect,
 });
 
-async function setup(reply: string, m = model("bedrock")) {
+async function setup(
+  reply: string,
+  m: ReturnType<typeof model> & { apiBase?: string } = model("bedrock"),
+  hint?: object,
+) {
   const ideMessenger = new MockIdeMessenger();
   const setToolDialect = vi.fn(async () => ({ saved: true }));
   ideMessenger.responseHandlers["config/setToolDialect"] = setToolDialect;
+  if (hint) ideMessenger.responseHandlers["ollama/showHint"] = async () => hint;
   const store = setupStore({ ideMessenger });
   await renderWithProviders(<ToolDialectNotice />, {
     store,
@@ -104,6 +109,28 @@ describe("ToolDialectNotice", () => {
     expect(setToolDialect).toHaveBeenCalledWith({
       title: "Qwen",
       toolDialect: "qwen-xml",
+    });
+  });
+
+  describe("a model behind Ollama", () => {
+    const ollamaModel = {
+      ...model("openai"),
+      apiBase: "http://localhost:11434/v1",
+    };
+
+    it("is quiet when Ollama's parser handles the model", async () => {
+      const { check } = await setup(leaked, ollamaModel, {
+        serverParses: true,
+        toolsAdvertised: true,
+      });
+      await check();
+      expect(screen.queryByTestId("tool-dialect-notice")).toBeNull();
+    });
+
+    it("keeps the notice when the parser is unknown or there is no hint", async () => {
+      const { check } = await setup(leaked, ollamaModel, {});
+      await check();
+      expect(screen.getByTestId("tool-dialect-notice")).toBeTruthy();
     });
   });
 });

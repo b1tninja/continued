@@ -1,9 +1,8 @@
 import type { ModelConfig } from "@continuedev/config-yaml";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import qwenEmbedding from "core/util/fixtures/ollama-show/qwen3-embedding-8b.json";
 import qwen36 from "core/util/fixtures/ollama-show/qwen3.6-27b.json";
 import { resetOllamaShowCache } from "core/util/ollamaShowHint.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   hintToolDialectLeak,

@@ -1,11 +1,10 @@
 import type { ModelConfig } from "@continuedev/config-yaml";
+import { getOllamaShowHint } from "core/util/ollamaShowHint.js";
 import {
   detectToolDialectLeak,
   leakHintText,
   providerRecoversText,
 } from "core/util/toolDialectLeak.js";
-
-import { getOllamaShowHint } from "core/util/ollamaShowHint.js";
 
 import type { StreamCallbacks } from "./streamChatResponse.types.js";
 

@@ -53,8 +53,8 @@ export function resetOllamaShowCache(): void {
 
 /** The cached hint for one model; undefined when the server did not answer in time or is not Ollama. */
 export function getOllamaShowHint(args: {
-  provider: string | undefined;
-  apiBase: string | undefined;
+  provider?: string;
+  apiBase?: string;
   model: string;
   fetchFn?: FetchLike;
   timeoutMs?: number;

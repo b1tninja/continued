@@ -92,14 +92,18 @@ function refusedTools(error: unknown): boolean {
 export async function probeToolDialect(
   send: (request: ProbeRequest) => Promise<ToolReply>,
   model?: string,
-  options: { serverParses?: boolean } = {},
+  options: { serverParses?: boolean; toolsAdvertised?: boolean } = {},
 ): Promise<ToolDialectProbeResult> {
   let support: ToolCallSupport;
-  try {
-    support = supportFromReply(await send(probeRequestFor()));
-  } catch (e) {
-    support = refusedTools(e) ? { kind: "none" } : { kind: "unknown" };
-  }
+  if (options.toolsAdvertised === false) {
+    // The server lists capabilities without `tools`: nothing to probe.
+    support = { kind: "none" };
+  } else
+    try {
+      support = supportFromReply(await send(probeRequestFor()));
+    } catch (e) {
+      support = refusedTools(e) ? { kind: "none" } : { kind: "unknown" };
+    }
   const preset = options.serverParses
     ? undefined
     : resolveToolDialectPreset(model);
