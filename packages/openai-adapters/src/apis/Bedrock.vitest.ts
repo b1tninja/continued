@@ -1391,6 +1391,94 @@ describe("BedrockApi tools through Converse (Llama 4, Qwen3 32B; probed live 202
     expect(second.sent.map((s) => s.command)).toEqual(["ConverseCommand"]);
   });
 
+  const toolBlock = (...fragments: string[]) => [
+    {
+      contentBlockStart: {
+        start: { toolUse: { toolUseId: "t1", name: "Read" } },
+      },
+    },
+    ...fragments.map((input) => ({
+      contentBlockDelta: { delta: { toolUse: { input } } },
+    })),
+    { contentBlockStop: {} },
+  ];
+  const stopped = { messageStop: { stopReason: "tool_use" } };
+  const argsOf = (chunks: any[]) =>
+    chunks
+      .flatMap((c) => c.choices?.[0]?.delta?.tool_calls ?? [])
+      .map((c) => c.function?.arguments ?? "")
+      .join("");
+
+  it.each([
+    // Qwen3 32B, measured 2026-11-10: opening `{"` missing (4 of 8)
+    ["opening brace missing", ['path": "a.ts"}']],
+    // Qwen3 Coder 30B, measured 2026-11-10: cut off at the brace (1 of 8)
+    ["truncated to {", ["{"]],
+  ])(
+    "retries once through Converse when the streamed tool input is broken (%s), and remembers the model",
+    async (name, fragments) => {
+      const model = `mistral.broken-${name.replace(/\W/g, "")}`;
+      const first = client(converseReply, [
+        ...toolBlock(...fragments),
+        stopped,
+      ]);
+      const chunks = await first.collect(model, { tools });
+      expect(first.sent.map((s) => s.command)).toEqual([
+        "ConverseStreamCommand",
+        "ConverseCommand",
+      ]);
+      // only the complete calls from Converse; the broken fragment is dropped
+      expect(argsOf(chunks)).toBe('{"filepath":"a.ts"}{"filepath":"b.ts"}');
+      const second = client(converseReply);
+      await second.collect(model, { tools });
+      expect(second.sent.map((s) => s.command)).toEqual(["ConverseCommand"]);
+    },
+  );
+
+  it("streams a tool input that parses as before, in order", async () => {
+    const { collect, sent } = client(converseReply, [
+      ...toolBlock('{"file', 'path": "a.ts"}'),
+      stopped,
+    ]);
+    const chunks = await collect("mistral.clean-streamer", { tools });
+    expect(sent.map((s) => s.command)).toEqual(["ConverseStreamCommand"]);
+    expect(argsOf(chunks)).toBe('{"filepath": "a.ts"}');
+  });
+
+  it("does not retry when text was already shown, but remembers the model", async () => {
+    const model = "mistral.late-breaker";
+    const first = client(converseReply, [
+      { contentBlockDelta: { delta: { text: "Let me look." } } },
+      { contentBlockStop: {} },
+      ...toolBlock('path": "a.ts"}'),
+      stopped,
+    ]);
+    const chunks = await first.collect(model, { tools });
+    expect(first.sent.map((s) => s.command)).toEqual(["ConverseStreamCommand"]);
+    expect(chunks[0].choices[0].delta.content).toBe("Let me look.");
+    expect(argsOf(chunks)).toBe('path": "a.ts"}');
+    const second = client(converseReply);
+    await second.collect(model, { tools });
+    expect(second.sent.map((s) => s.command)).toEqual(["ConverseCommand"]);
+  });
+
+  it("does not retry once an earlier tool call was released, so no call runs twice", async () => {
+    const first = client(converseReply, [
+      ...toolBlock('{"filepath": "a.ts"}'),
+      ...toolBlock("{"),
+      stopped,
+    ]);
+    const chunks = await first.collect("mistral.second-call-broken", { tools });
+    expect(first.sent.map((s) => s.command)).toEqual(["ConverseStreamCommand"]);
+    expect(argsOf(chunks)).toBe('{"filepath": "a.ts"}{');
+  });
+
+  it("treats a tool without arguments (no input fragment) as valid", async () => {
+    const { collect, sent } = client(converseReply, [...toolBlock(), stopped]);
+    await collect("mistral.no-args", { tools });
+    expect(sent.map((s) => s.command)).toEqual(["ConverseStreamCommand"]);
+  });
+
   it("does not retry other errors", async () => {
     const other = client(converseReply, [], new Error("ThrottlingException"));
     await expect(
