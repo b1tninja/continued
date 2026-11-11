@@ -16,6 +16,7 @@ import {
 } from "core/tools/permissions/evaluate.js";
 import { mcpRuleName } from "core/tools/permissions/names.js";
 import { readUserTrustedDomains } from "core/tools/permissions/readRuleSources.js";
+import { processedPathArgs } from "core/tools/permissions/realPath.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
 import { resolveShell } from "core/util/shell.js";
 import { readUserGuidance } from "core/util/userGuidance.js";
@@ -69,7 +70,13 @@ export function toCoreCall(
     case "Fetch":
       return { toolName: "fetch_url_content", parsedArgs: args };
     case "Search":
-      return { toolName: "grep_search", parsedArgs: { query: args.pattern } };
+      return {
+        toolName: "grep_search",
+        parsedArgs: {
+          query: args.pattern,
+          ...(typeof args.path === "string" ? { path: args.path } : {}),
+        },
+      };
     default: {
       const mcp = mcpCallFromName(name);
       if (!mcp) return undefined;
@@ -237,6 +244,17 @@ export interface CoreRulesInput {
   cwd?: string;
 }
 
+function pathArgsFor(
+  isMcp: boolean,
+  toolName: string,
+  parsedArgs: Record<string, unknown>,
+  cwd: string | undefined,
+) {
+  return isMcp
+    ? undefined
+    : processedPathArgs(toolName, parsedArgs, cwd ?? process.cwd());
+}
+
 /**
  * Run the core engine for one CLI call. Returns undefined when the layer does
  * not apply (no rules and no reviewer, or a tool core has no name for), so the
@@ -276,6 +294,9 @@ export async function evaluateWithCoreRules(
     call?.toolName ?? mcpRuleName(mcp!.serverName, mcp!.toolName);
   const parsedArgs = call?.parsedArgs ?? args;
   const basePolicy = toToolPolicy(cliPermission);
+  // The CLI has no IDE to resolve a path, so the real path (links followed)
+  // and whether it is inside the working folder are worked out here.
+  const processedArgs = pathArgsFor(!!mcp, toolName, parsedArgs, input.cwd);
 
   if (useReviewer) {
     const reply: AutoReviewReply = await autoReviewToolCall(
@@ -298,6 +319,7 @@ export async function evaluateWithCoreRules(
         toolName,
         basePolicy,
         parsedArgs,
+        ...(processedArgs ? { processedArgs } : {}),
         history: buildReviewHistory(input.history ?? []),
         approval: input.approval,
         headless: isHeadless,
@@ -333,6 +355,7 @@ export async function evaluateWithCoreRules(
     toolName,
     basePolicy,
     parsedArgs,
+    ...(processedArgs ? { processedArgs } : {}),
     permissions,
     approval: input.approval,
     trustedDomains: readUserTrustedDomains(),

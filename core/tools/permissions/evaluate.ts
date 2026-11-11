@@ -365,6 +365,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
       approval: input.approval,
       flavor: input.platform,
       home: input.home,
+      mcp: !!tool.uri?.startsWith("mcp:") && !!tool.originalFunctionName,
     }),
   ].find((hit) => hit !== undefined);
 
