@@ -85,7 +85,9 @@ async function setup() {
 describe("PermissionsSection", () => {
   it("has five area tabs, with the Tools tab first showing its level", async () => {
     await setup();
-    const tabs = within(screen.getByRole("tablist")).getAllByRole("tab");
+    const tabs = within(
+      screen.getByRole("tablist", { name: "Permission areas" }),
+    ).getAllByRole("tab");
     expect(tabs.map((t) => t.textContent?.replace(/\d+$/, ""))).toEqual([
       "Context use",
       "Tool use",

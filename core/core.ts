@@ -15,9 +15,14 @@ import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveToolDialect } from "./config/yaml/saveToolDialect";
 import { getOllamaShowHint } from "./util/ollamaShowHint";
-import { testOpenAICompatConnection } from "./util/openaiCompatTest";
+import { probeStatusFor } from "./util/measuredFacts";
+import {
+  openAICompatBase,
+  testOpenAICompatConnection,
+} from "./util/openaiCompatTest";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
+import { deputyWorkspace } from "./tools/permissions/workspaceRoots";
 import { uriToPath } from "./tools/permissions/names";
 import type { PolicyLevels } from "./tools/permissions/policy";
 import {
@@ -46,6 +51,8 @@ import {
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import { IdeShadow } from "./tools/permissions/auto/shadowIde";
 import { getAuditTrail } from "./tools/permissions/audit/global";
+import { registerAuditListHandlers } from "./tools/permissions/audit/listingHandlers";
+import { machineAuditHost } from "./tools/permissions/audit/listingHost";
 import {
   recordPolicyDecision,
   recordReviewDecision,
@@ -710,6 +717,8 @@ export class Core {
       confirmLoosening: (text) => confirmInIde(this.ide, text),
     });
 
+    registerAuditListHandlers(on as never, machineAuditHost);
+
     registerShadowSettingsHandlers(on as never, {
       confirm: (text) => confirmInIde(this.ide, text),
     });
@@ -837,8 +846,25 @@ export class Core {
     });
 
     // Test connection for any OpenAI-compatible endpoint; never throws.
+    // Only the four connection fields are taken: the page cannot choose a file.
     on("openaiCompat/testConnection", async (msg) =>
-      testOpenAICompatConnection(msg.data),
+      testOpenAICompatConnection({
+        provider: msg.data.provider,
+        apiBase: msg.data.apiBase,
+        apiKey: msg.data.apiKey,
+        model: msg.data.model,
+      }),
+    );
+
+    on("openaiCompat/probeStatus", async (msg) =>
+      probeStatusFor(
+        {
+          provider: msg.data.provider,
+          apiBase: openAICompatBase(msg.data.provider, msg.data.apiBase),
+          model: msg.data.model,
+        },
+        new Date().toISOString().slice(0, 10),
+      ),
     );
 
     // Cached per model per process; no hint (an empty object) on any failure.
@@ -847,6 +873,12 @@ export class Core {
     }));
 
     on("config/setToolDialect", async (msg) => {
+      if (
+        msg.data.confirm &&
+        !(await confirmInIde(this.ide, msg.data.confirm).catch(() => false))
+      ) {
+        return { saved: false, declined: true };
+      }
       const saved = saveToolDialect(msg.data.title, msg.data.toolDialect);
       if (saved) {
         await this.configHandler.reloadConfig(
@@ -2034,6 +2066,7 @@ export class Core {
           envNames: readUserEnvNames(),
           largeChangeLines: readUserLargeChangeLines(),
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
+          ...deputyWorkspace(dirs),
           // The shell terminal commands run in
           shell: resolveShell().kind,
         });

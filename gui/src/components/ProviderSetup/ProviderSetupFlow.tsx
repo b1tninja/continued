@@ -728,6 +728,7 @@ export function ProviderSetupFlow({
               apiBase={isLocal ? connection.apiBase : values.apiBase}
               apiKey={values.apiKey}
               model={provider.packages[0].params.model}
+              modelTitle={provider.packages[0].title}
               canTest={fieldsFilled}
             />
           )}

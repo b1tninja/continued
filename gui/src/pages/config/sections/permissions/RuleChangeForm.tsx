@@ -23,7 +23,7 @@ export type FormMode =
       kind: "add";
       prefix: string;
       example: string;
-      /** Set when the rule comes from the most-asked list */
+      /** The list the rule starts in (Ask when absent); set by the most-asked list and the inbox */
       decision?: RuleDecision;
     }
   | { kind: "edit"; decision: RuleDecision; rule: string }

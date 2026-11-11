@@ -44,6 +44,7 @@ import type {
   SaveProviderModelsResult,
 } from "../config/providerSetup";
 import type { DecisionSource as ToolDecisionSource } from "../tools/permissions/decide";
+import type { AuditListProtocol } from "./audit";
 import type { ApprovalSettings } from "../tools/permissions/approval";
 import type { RuleEditRequest } from "../tools/permissions/ruleEditorHandlers";
 import { GlobalContextModelSelections } from "../util/GlobalContext";
@@ -82,6 +83,7 @@ import { ConfigHandler } from "../config/ConfigHandler";
 import { ProcessedItem } from "../nextEdit/NextEditPrefetchQueue";
 import { NextEditOutcome } from "../nextEdit/types";
 import { ContinueErrorReason } from "../util/errors";
+import type { ProbeStatus } from "../util/measuredFacts";
 import type { OpenAICompatTestResult } from "../util/openaiCompatTest";
 
 export enum OnboardingModes {
@@ -163,7 +165,7 @@ export type BedrockProbeToolCallsResult =
 export type ProfileFileResult =
   { ok: true; profileId?: string } | { ok: false; error: string };
 
-export type ToCoreFromIdeOrWebviewProtocol = {
+export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
   // Special
   ping: [string, string];
   abort: [undefined, void];
@@ -230,8 +232,16 @@ export type ToCoreFromIdeOrWebviewProtocol = {
    * such entry to edit.
    */
   "config/setToolDialect": [
-    { title: string; toolDialect: ToolDialectSetting },
-    { saved: boolean },
+    {
+      title: string;
+      toolDialect: ToolDialectSetting;
+      /**
+       * Ask in the IDE's own dialog first (the page cannot answer it). When
+       * the answer is no, nothing is written and `declined` is true.
+       */
+      confirm?: string;
+    },
+    { saved: boolean; declined?: boolean },
   ];
   /**
    * The effective policy for the environment commands inherit, where it comes
@@ -552,6 +562,14 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       model?: string;
     },
     OpenAICompatTestResult,
+  ];
+  /**
+   * The last local Test connection result for a model's endpoint, from the
+   * measured-facts file (core/util/measuredFacts.ts). "unknown" when none.
+   */
+  "openaiCompat/probeStatus": [
+    { provider: string; apiBase?: string; model: string },
+    ProbeStatus,
   ];
   "ollama/showHint": [
     { provider?: string; apiBase?: string; model: string },

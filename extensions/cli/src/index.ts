@@ -551,6 +551,7 @@ program
   .option("--api-key-env <name>", "Environment variable holding the API key")
   .option("--model <id>", "Also send one tool-call probe to this model")
   .option("--json", "Machine-readable output")
+  .option("--no-record", "Do not write the result to the local facts file")
   .action(async (options) => {
     const code = await testConnectionCommand(options);
     await gracefulExit(code);
