@@ -58,3 +58,5 @@ jobs:
         run: |
           node scripts/ci/check-notice.mjs
           node --test scripts/ci/check-notice.test.mjs
+      - name: Process-guard scripts (merge-tree matrix, worktree hygiene, stash guard, checkpoint)
+        run: node --test scripts/ci/combine.test.mjs scripts/ci/check-stash.test.mjs scripts/ci/worktree-hygiene.test.mjs "scripts/agents/*.test.mjs"
