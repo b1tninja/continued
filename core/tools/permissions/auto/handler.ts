@@ -294,7 +294,7 @@ export async function autoReviewToolCall(
 }
 
 /** Token counts from whichever shape a provider reports them in. */
-function usageOf(raw: unknown): AuditReviewer["usage"] | undefined {
+export function usageOf(raw: unknown): AuditReviewer["usage"] | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const u = raw as Record<string, unknown>;
   const num = (...keys: string[]) => {

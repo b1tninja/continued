@@ -119,7 +119,7 @@ describe("PolicyControls", () => {
     });
     const banner = screen.getByTestId("yolo-banner");
     expect(banner.textContent).toContain("Questions (IDGAF)");
-    expect(banner.textContent).toContain("Deny rules");
+    expect(banner.textContent).toContain("Never rules");
     // Unrelated state changes do not remove it.
     await act(async () => {
       store.dispatch(setPolicyLevel({ area: "context", level: "manual" }));

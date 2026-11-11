@@ -17,6 +17,7 @@ import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
 import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { askProtectionHit } from "./askProtections";
+import { deputyCallHit } from "./deputyCall";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
@@ -154,6 +155,10 @@ export interface EvaluateInput {
    * config file and nothing else.
    */
   envNames?: EnvNameOptions;
+  /** Path syntax to judge file paths by; the host's when absent. Tests set it. */
+  platform?: "win32" | "posix";
+  /** The home folder; the host's when absent. Tests set it. */
+  home?: string;
 }
 
 /**
@@ -346,6 +351,20 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
       shell: input.shell,
       approval: input.approval,
       trustedDomains: input.trustedDomains,
+    }),
+    deputyCallHit({
+      toolName,
+      parsedArgs,
+      resolved: resolved
+        ? {
+            path: resolvedPath,
+            withinWorkspace: resolved.isWithinWorkspace,
+          }
+        : undefined,
+      cwd: input.cwd,
+      approval: input.approval,
+      flavor: input.platform,
+      home: input.home,
     }),
   ].find((hit) => hit !== undefined);
 

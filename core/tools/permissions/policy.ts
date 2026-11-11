@@ -67,6 +67,7 @@ export type BuiltinRuleId =
   | "ask-large-change"
   | "ask-dependency-change"
   | "ask-unknown-host"
+  | "ask-outside-paths"
   | "plan-keeps-checks";
 
 export const BUILTIN_RULES: readonly {
@@ -123,6 +124,12 @@ export const BUILTIN_RULES: readonly {
     label: "Ask before contacting an unlisted host",
     description:
       "When you list trusted domains in your own config, a fetch or network command to any other host asks.",
+  },
+  {
+    id: "ask-outside-paths",
+    label: "Ask before a file tool leaves the workspace",
+    description:
+      "A read, listing or write of a real path outside the workspace folders: an absolute path elsewhere, a `..` climb, a symlink or junction that leaves, another account's home. Device paths, alternate data streams and your global configuration folder ask whatever this says.",
   },
   {
     id: "plan-keeps-checks",
@@ -267,7 +274,7 @@ export const POLICY_LEVEL_DESCRIPTIONS: Record<
   context: {
     manual: "Asks before each read.",
     cautious:
-      "Reads what your allow rules and tool settings cover, asks otherwise.",
+      "Reads what your Always rules and tool settings cover, asks otherwise.",
     automatic: "As Cautious, and a reviewer model decides what is left.",
     permissive: "Reads anything no rule stops.",
     yolo: "Reads anything. Every rule is ignored.",
@@ -275,14 +282,14 @@ export const POLICY_LEVEL_DESCRIPTIONS: Record<
   tools: {
     manual: "Asks before each command and tool.",
     cautious:
-      "Runs what your allow rules and tool settings cover, asks otherwise.",
+      "Runs what your Always rules and tool settings cover, asks otherwise.",
     automatic: "As Cautious, and a reviewer model decides what is left.",
     permissive: "Runs anything no rule stops.",
     yolo: "Runs anything. Every rule is ignored.",
   },
   edits: {
     manual: "You review each diff.",
-    cautious: "Accepts what your allow rules cover, you review the rest.",
+    cautious: "Accepts what your Always rules cover, you review the rest.",
     automatic: "A reviewer model accepts, refuses or sends it to you.",
     permissive: "Accepts anything no rule stops.",
     yolo: "Accepts everything. Every rule is ignored.",

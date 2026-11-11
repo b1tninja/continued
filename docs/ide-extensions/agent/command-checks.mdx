@@ -140,3 +140,13 @@ Four built-in rules ask before a call that is hard to undo or that changes what 
 | `ask-unknown-host`         | A fetch or network command to a host that is not in `toolPermissions.auto.environment.trustedDomains` of your own `config.yaml`                                                                                        | Any host when you have not listed domains; a list that came from a workspace file or an assistant is ignored              |
 
 The scan reads the command text and over-matches on purpose. It does not see a script that does these things inside itself.
+
+## File tools that leave the workspace
+
+The file tools read and write with the editor's own authority, so text from a repository, a web page or a tool result can steer them to a file you never meant. A file tool call asks, at every level below YOLO and whatever an allow rule says, when it reaches:
+
+- a real path outside the workspace folders: an absolute path elsewhere, a `..` climb, or a symlink or junction that leaves (the path is judged where it lands, not as written), and another account's home (`~root/x`). The built-in rule `ask-outside-paths` controls this, in your own `permissions.yaml`
+- a network or device path (`\\host\share`, `\\?\C:\x`, `/dev`, `/proc`, `/sys`), a Windows device name (`NUL`, `COM1`), an alternate data stream (`notes.txt:hidden`), a name with a trailing dot or space, or an 8.3 short name. Network paths follow `protect-network-paths`; the rest has no switch
+- your global configuration folder (`~/.continuous`, `~/.continue`), even to read, because it holds keys
+
+The check is the same text judged by Windows rules on Windows and by POSIX rules elsewhere. Case is ignored on Windows only; on Linux a path that differs from the workspace only by case asks.

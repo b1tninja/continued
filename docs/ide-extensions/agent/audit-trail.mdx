@@ -47,6 +47,26 @@ continuous audit prune [--days <n>] [--dry-run]
 
 `--decision ask` matches calls that asked at any point, including those you then approved. `--decision reviewer` matches calls the reviewer model decided. `--json` prints one array: rows for `list`, raw records for `show`.
 
+## Measure the reviewer on your own work
+
+Shadow mode asks the reviewer model about calls it was not asked about, and records what it would have decided next to what actually happened. It never changes a decision, never holds a tool call up (it runs alongside the call and is dropped if it is slow), and sends the reviewer the same masked text the reviewer always gets. It is off until you turn it on in your own global `config.yaml`; a workspace or assistant file cannot enable it. A dollar budget is required:
+
+```yaml
+audit:
+  shadowReviewer:
+    enabled: true
+    budgetUsd: 0.25
+    timeoutMs: 5000
+```
+
+`budgetUsd` caps all shadow reviews kept in the audit trail (30 days by default). Once reached, no more run. A reviewer model with no known price stops after one review, because a budget cannot be held to it. It needs a reviewer model (see [the reviewer](/customize/model-roles/reviewer)) and the audit trail on.
+
+```bash
+continuous audit shadow [--session <id>] [--model <name>] [--since <date>] [--until <date>] [--limit <n>] [--json]
+```
+
+The report shows how often the reviewer agreed with the real decision, a matrix of real decision against shadow decision, counts and cost by model, and the disagreements with their masked arguments.
+
 ## Turn it off
 
 In the global `config.yaml`:

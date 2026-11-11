@@ -515,7 +515,7 @@ program
 program
   .command("audit [action] [session]")
   .description(
-    "Read the audit trail of tool call decisions (list, show <session>, inbox, prune)",
+    "Read the audit trail of tool call decisions (list, show <session>, inbox, shadow, prune)",
   )
   .option("--json", "Machine-readable output")
   .option("--session <id>", "Only this session")
@@ -524,7 +524,8 @@ program
   .option("--agent <who>", "Only this agent (role, id or kind)")
   .option("--since <date>", "From this date (inclusive)")
   .option("--until <date>", "Up to this date (inclusive)")
-  .option("--limit <n>", "Only the last n calls")
+  .option("--limit <n>", "Only the last n calls (shadow: disagreements shown)")
+  .option("--model <name>", "shadow: only this reviewer model")
   .option("--days <n>", "prune: delete files older than this many days")
   .option("--dry-run", "prune: say what would be deleted")
   .action(

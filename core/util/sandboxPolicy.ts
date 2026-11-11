@@ -122,6 +122,7 @@ const BUILTIN_IDS: readonly BuiltinRuleId[] = [
   "ask-large-change",
   "ask-dependency-change",
   "ask-unknown-host",
+  "ask-outside-paths",
   "plan-keeps-checks",
 ];
 

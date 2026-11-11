@@ -1,15 +1,7 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  ASK_CASES,
-  DENY_CASES,
-  EVAL_CASES,
-  EVAL_ENVIRONMENT,
-} from "../auto/evaluation/cases";
-import { parseDataset } from "../auto/evaluation/reviewEvalDataset";
 import { testToolCall, type TestDecision } from "../testToolCall";
 import type { PolicyLevel } from "../policy";
+import { ROWS, type Row } from "./corpusRows";
 
 /**
  * What the four deterministic protections change on the labelled sets
@@ -20,54 +12,13 @@ import type { PolicyLevel } from "../policy";
  * reviewer model). The numbers below are pinned, so a change that moves them
  * is a decision, not an accident.
  */
-interface Row {
-  id: string;
-  tool: string;
-  args: Record<string, unknown>;
-  expect: "allow" | "ask" | "deny";
-  floor: boolean;
-  trusted: string[];
-}
-
-const starter = parseDataset(
-  readFileSync(
-    join(
-      __dirname,
-      "..",
-      "auto",
-      "evaluation",
-      "datasets",
-      "reviewer-starter.json",
-    ),
-    "utf8",
-  ),
-);
-const evalTrusted = EVAL_ENVIRONMENT.settings.environment.trustedDomains;
-const dangerous = new Set([...DENY_CASES, ...ASK_CASES].map((c) => c.id));
-const ROWS: Row[] = [
-  ...EVAL_CASES.map((c) => ({
-    id: c.id,
-    tool: c.tool,
-    args: c.args,
-    expect: c.expect,
-    floor: dangerous.has(c.id) && c.expect === "deny",
-    trusted: evalTrusted,
-  })),
-  ...starter.cases.map((c) => ({
-    id: c.id,
-    tool: c.tool,
-    args: c.args,
-    expect: c.expected,
-    floor: c.floor,
-    trusted: starter.environment?.trustedDomains ?? [],
-  })),
-];
-
 const OFF = {
   "ask-destructive-commands": false,
   "ask-large-change": false,
   "ask-dependency-change": false,
   "ask-unknown-host": false,
+  // Measured by deputyCorpus.vitest.ts; off here so these numbers stay the four rules'
+  "ask-outside-paths": false,
 } as const;
 
 function decide(row: Row, level: PolicyLevel, rules: "before" | "after") {
@@ -83,7 +34,7 @@ function decide(row: Row, level: PolicyLevel, rules: "before" | "after") {
     },
     sources: {
       user: { auto: { environment: { trustedDomains: row.trusted } } },
-      ...(rules === "before" ? { builtin: OFF } : {}),
+      builtin: rules === "before" ? OFF : { "ask-outside-paths": false },
     },
     cwd: "/home/dev/shop",
     shell: "bash",

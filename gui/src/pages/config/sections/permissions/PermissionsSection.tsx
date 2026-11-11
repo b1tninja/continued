@@ -10,16 +10,21 @@ import {
   type PolicyArea,
 } from "core/tools/permissions/policy";
 import type { ToolCallTestResult } from "core/tools/permissions/testToolCall";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import Alert from "../../../../components/gui/Alert";
 import { Button } from "../../../../components/ui";
 import { IdeMessengerContext } from "../../../../context/IdeMessenger";
-import { useAppSelector } from "../../../../redux/hooks";
+import { useAppDispatch, useAppSelector } from "../../../../redux/hooks";
+import { updateConfig } from "../../../../redux/slices/configSlice";
+import { modifyAnyConfigWithSharedConfig } from "core/config/sharedConfig";
 import { ConfigHeader } from "../../components/ConfigHeader";
 import { EditableRules, type EditorEnv } from "./EditableRules";
+import { FirstRunOverview } from "./FirstRunOverview";
 import { LocksSection } from "./Locks";
+import { PermissionsError, PermissionsSkeleton } from "./PermissionsStates";
 import { BuiltinList, RuleList } from "./RuleList";
 import { RuleTester } from "./RuleTester";
+import { usePermissionsReport } from "./usePermissionsReport";
 
 function PlanSettings({ area }: { area: AreaReport }) {
   const s = area.settings;
@@ -167,29 +172,27 @@ function AreaPanel({
 export function PermissionsSection() {
   const ideMessenger = useContext(IdeMessengerContext);
   const levels = useAppSelector((s) => s.ui.policyLevels);
-  const [report, setReport] = useState<EffectiveRulesReport | undefined>();
-  const [error, setError] = useState(false);
+  const dispatch = useAppDispatch();
+  const config = useAppSelector((s) => s.config.config);
+  const { report, error, slow, loading, reload } = usePermissionsReport(
+    ideMessenger,
+    levels,
+  );
   const [active, setActive] = useState<PolicyArea>("tools");
-  const [reloads, setReloads] = useState(0);
+  const [introHidden, setIntroHidden] = useState(false);
   const [status, setStatus] = useState<
     { text: string; error?: boolean } | undefined
   >();
 
-  useEffect(() => {
-    let cancelled = false;
-    void ideMessenger.request("policy/rules", { levels }).then((res) => {
-      if (cancelled) return;
-      if (res.status === "success") {
-        setReport(res.content);
-        setError(false);
-      } else {
-        setError(true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [ideMessenger, levels, reloads]);
+  // Dismissal is saved in the person's own settings, so it holds for good.
+  const showIntro =
+    !introHidden && config.ui?.permissionsIntroDismissed !== true;
+  const dismissIntro = () => {
+    setIntroHidden(true);
+    const shared = { permissionsIntroDismissed: true };
+    dispatch(updateConfig(modifyAnyConfigWithSharedConfig(config, shared)));
+    ideMessenger.post("config/updateSharedConfig", shared);
+  };
 
   const userFile = report?.userFile;
   const env: EditorEnv = {
@@ -197,7 +200,7 @@ export function PermissionsSection() {
     baseHash: userFile?.hash,
     onChanged: (text) => {
       setStatus({ text });
-      setReloads((n) => n + 1);
+      reload();
     },
   };
 
@@ -217,7 +220,7 @@ export function PermissionsSection() {
           : (r.error ?? "Could not undo."),
       error: r.result !== "undone",
     });
-    setReloads((n) => n + 1);
+    reload();
   };
 
   return (
@@ -228,11 +231,9 @@ export function PermissionsSection() {
         showAddButton={false}
         className="mb-2"
       />
-      {error && (
-        <Alert type="error" size="sm">
-          <span className="text-2xs">The rules could not be read.</span>
-        </Alert>
-      )}
+      {showIntro && <FirstRunOverview onDismiss={dismissIntro} />}
+      {loading && <PermissionsSkeleton slow={slow} onRetry={reload} />}
+      {error && <PermissionsError onRetry={reload} />}
       {userFile?.state === "broken" && (
         <div className="mb-2">
           <Alert type="error" size="sm">
@@ -280,35 +281,37 @@ export function PermissionsSection() {
           </Alert>
         </div>
       ))}
-      <div
-        role="tablist"
-        aria-label="Permission areas"
-        className="mb-3 flex flex-wrap gap-1"
-      >
-        {POLICY_AREAS.map((area) => (
-          <button
-            key={area}
-            role="tab"
-            id={`permissions-tab-${area}`}
-            aria-selected={active === area}
-            aria-controls={`permissions-panel-${area}`}
-            data-testid={`tab-${area}`}
-            onClick={() => setActive(area)}
-            className={`cursor-pointer rounded-sm border border-solid px-2 py-0.5 text-xs text-foreground ${
-              active === area
-                ? "border-border-focus bg-input"
-                : "border-border bg-transparent"
-            }`}
-          >
-            {POLICY_AREA_LABELS[area]}
-            {report && report.areas[area].rules.length > 0 && (
-              <span className="ml-1 text-description-muted">
-                {report.areas[area].rules.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {report && (
+        <div
+          role="tablist"
+          aria-label="Permission areas"
+          className="mb-3 flex flex-wrap gap-1"
+        >
+          {POLICY_AREAS.map((area) => (
+            <button
+              key={area}
+              role="tab"
+              id={`permissions-tab-${area}`}
+              aria-selected={active === area}
+              aria-controls={`permissions-panel-${area}`}
+              data-testid={`tab-${area}`}
+              onClick={() => setActive(area)}
+              className={`cursor-pointer rounded-sm border border-solid px-2 py-0.5 text-xs text-foreground ${
+                active === area
+                  ? "border-border-focus bg-input"
+                  : "border-border bg-transparent"
+              }`}
+            >
+              {POLICY_AREA_LABELS[area]}
+              {report && report.areas[area].rules.length > 0 && (
+                <span className="ml-1 text-description-muted">
+                  {report.areas[area].rules.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
       {report && (
         <AreaPanel key={active} area={active} report={report} env={env} />
       )}

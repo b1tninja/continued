@@ -2,11 +2,13 @@ import {
   decisionDraft,
   outcomeDraft,
   policyDraft,
+  shadowDraft,
   turnDraft,
   type AuditPolicy,
   type DecisionInput,
   type OutcomeInput,
   type PolicyInput,
+  type ShadowInput,
 } from "./record";
 import { pruneAudit, type PruneResult } from "./reader";
 import { AuditWriter, DEFAULT_MAX_FILE_BYTES } from "./writer";
@@ -179,6 +181,20 @@ export class AuditTrail {
   }): void {
     this.guard(() => {
       const result = this.writer.write(turnDraft(input));
+      if (!result.ok) this.fail(result.error);
+    });
+  }
+
+  /** What the reviewer would have decided, beside the real decision (shadow mode). */
+  shadow(input: Omit<ShadowInput, "session"> & { session?: string }): void {
+    this.guard(() => {
+      const p = this.pending.get(input.callId);
+      const result = this.writer.write(
+        shadowDraft({
+          ...input,
+          session: input.session ?? p?.input.session ?? "unknown",
+        }),
+      );
       if (!result.ok) this.fail(result.error);
     });
   }

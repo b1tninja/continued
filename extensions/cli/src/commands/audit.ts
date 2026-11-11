@@ -26,6 +26,8 @@ import {
 } from "core/tools/permissions/audit/reader.js";
 import type { DecisionEvent } from "core/tools/permissions/audit/record.js";
 
+import { auditShadowAction } from "./auditShadow.js";
+
 export interface AuditCommandOptions {
   json?: boolean;
   session?: string;
@@ -39,6 +41,8 @@ export interface AuditCommandOptions {
   /** Where the audit files are; defaults to the global directory */
   dir?: string;
   limit?: string | number;
+  /** shadow: only this reviewer model */
+  model?: string;
 }
 
 function out(line = ""): void {
@@ -229,8 +233,12 @@ export function auditCommand(
       return inboxAction(dir, options);
     case "prune":
       return pruneAction(dir, options);
+    case "shadow":
+      return auditShadowAction(dir, options, out, err);
     default:
-      err(`Unknown audit action '${action}'. Use list, show, inbox or prune.`);
+      err(
+        `Unknown audit action '${action}'. Use list, show, inbox, shadow or prune.`,
+      );
       return 2;
   }
 }
