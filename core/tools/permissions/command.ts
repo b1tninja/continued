@@ -1,3 +1,5 @@
+import type { ShellKind } from "../../util/shell";
+
 /**
  * Shell command handling for tool permission rules.
  *
@@ -140,10 +142,28 @@ function collapseSpaces(s: string): string {
  * the scanner never sees (`rg$IFS--pre=sh`). Plain `$HOME` and `${HOME}` are fine.
  * Deny and ask rules do not use this: they match more, not less.
  */
-export function hasUnsafeShellConstruct(command: string): boolean {
+export function hasUnsafeShellConstruct(
+  command: string,
+  shell?: ShellKind,
+): boolean {
   if (/\$\(|`|<\(|>\(/.test(command)) return true;
-  if (/\$\{[^}]*[@:=#%/^,!?+-][^}]*\}/.test(command)) return true;
-  return /\$\{?IFS\b/.test(command);
+  const scanned =
+    shell === "powershell" ? maskPowershellVariables(command) : command;
+  if (/\$\{[^}]*[@:=#%/^,!?+-][^}]*\}/.test(scanned)) return true;
+  return /\$\{?IFS\b/.test(scanned);
+}
+
+/**
+ * PowerShell reads `${...}` as a variable name, whatever characters it holds
+ * (`${env:FOO}`, `${my-var}`): nothing in it expands. Those two forms are
+ * blanked before the bash-style scan, which would take the `:` or `-` for a
+ * parameter expansion. Other drives (`${function:x}`, `${variable:x}`) keep
+ * asking, since writing them defines code, and a `$` inside the braces stays
+ * visible. Running the variable (`& ${env:X}`) is a command-name question
+ * (hiddenCommandName), not this one.
+ */
+function maskPowershellVariables(command: string): string {
+  return command.replace(/\$\{(env:)?([^}$:`@]+)\}/gi, "$$V");
 }
 
 /** The parts of a command, for callers that only need the split. */

@@ -54,7 +54,7 @@ function hidesTheCommand(
   if (command === undefined) return false;
   return (
     floorMustRefuse(command, shell) ||
-    hasUnsafeShellConstruct(command) ||
+    hasUnsafeShellConstruct(command, shell) ||
     hiddenCommandName(command, shell) !== undefined ||
     envAssignmentHit(command, shell, envNames)?.severity === "dangerous"
   );
