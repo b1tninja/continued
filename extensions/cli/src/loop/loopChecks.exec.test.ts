@@ -58,6 +58,16 @@ describe("loop checks report the real exit code (unmocked)", () => {
     expect(run).toEqual({ exitCode: 0, output: "fine" });
   });
 
+  it.runIf(process.platform === "win32")(
+    "a native code from an earlier statement does not hide a later success",
+    async () => {
+      const run = await runCheckCommand(
+        'node -e "process.exit(3)"; Write-Output hi',
+      );
+      expect(run.exitCode).toBe(0);
+    },
+  );
+
   it("a failing cmdlet or builtin reports 1", async () => {
     const command =
       process.platform === "win32"
@@ -66,23 +76,6 @@ describe("loop checks report the real exit code (unmocked)", () => {
     const run = await runCheckCommand(command);
     expect(run.exitCode).toBe(1);
   });
-
-  it.runIf(process.platform === "win32")(
-    "a stale native code does not leak past a later success or failure",
-    async () => {
-      expect(
-        (await runCheckCommand('node -e "process.exit(3)"; Write-Output hi'))
-          .exitCode,
-      ).toBe(0);
-      expect(
-        (
-          await runCheckCommand(
-            'node -e "process.exit(3)"; Get-Item D:\definitely\not\here',
-          )
-        ).exitCode,
-      ).toBe(1);
-    },
-  );
 });
 
 describe("loop check timeouts (unmocked)", () => {

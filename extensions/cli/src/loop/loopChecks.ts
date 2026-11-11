@@ -180,7 +180,11 @@ export function runCheckCommand(
     child.stdout?.on("data", (chunk: string) => take("out", chunk));
     child.stderr?.on("data", (chunk: string) => take("err", chunk));
     child.on("error", (error) => finish(null, error.message));
-    child.on("close", (code) => finish(typeof code === "number" ? code : null));
+    // A command that was stopped has no exit code of its own: taskkill makes
+    // it 1, and that is not what the check chose
+    child.on("close", (code) =>
+      finish(typeof code === "number" && !timedOut ? code : null),
+    );
   });
 }
 
