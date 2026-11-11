@@ -29,7 +29,7 @@ vi.mock("./configTabs", () => {
 
 const open = (tab: string) =>
   renderWithProviders(<ConfigPage />, {
-    routerProps: { initialEntries: [`/config?tab=${tab}`] },
+    routerProps: { initialEntries: [`/config?tab=${tab}`] } as never,
   });
 
 describe("Settings page at a narrow width", () => {
