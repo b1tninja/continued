@@ -1,6 +1,7 @@
 import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { ILLM } from "../../..";
 import { levelOfCall, type ApprovalSettings } from "../approval";
+import type { EnvNameOptions } from "../envNames";
 import type { ShellKind } from "../../../util/shell";
 import { DecisionSource } from "../decide";
 import { uriToPath } from "../names";
@@ -92,6 +93,8 @@ export interface AutoReviewDeps {
   guidance?: GuidanceInput;
   /** The person's own `toolPermissions.auto.environment.trustedDomains`, and nothing else. */
   trustedDomains?: readonly string[];
+  /** The person's own `toolPermissions.auto.environment.envNames`, and nothing else. */
+  envNames?: EnvNameOptions;
   sessions: AutoReviewSessions;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -137,6 +140,7 @@ export async function autoReviewToolCall(
     ...deputyWorkspace(deps.environment.workspaceDirs ?? []),
     shell: deps.shell,
     trustedDomains: deps.trustedDomains,
+    envNames: deps.envNames,
   });
   const base = { displayValue: evaluated.displayValue };
   const settled = (

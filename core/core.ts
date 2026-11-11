@@ -26,6 +26,7 @@ import {
   readUserTrustedDomains,
   ruleSourcesOfLoadedConfig,
 } from "./tools/permissions/readRuleSources";
+import { readUserEnvNames } from "./tools/permissions/userEnvNames";
 import { listEffectiveRules } from "./tools/permissions/effectiveRules";
 import { testToolCall } from "./tools/permissions/testToolCall";
 import { readUserLargeChangeLines } from "./tools/permissions/userLimits";
@@ -701,6 +702,7 @@ export class Core {
       const dirs = await this.ide.getWorkspaceDirs();
       return testToolCall({
         ...data,
+        envNames: readUserEnvNames(),
         sources: readRuleSources({
           merged: config?.toolPermissions,
           levels: data.levels as PolicyLevels | undefined,
@@ -729,6 +731,7 @@ export class Core {
           reviewer: config.selectedModelByRole.reviewer,
           guidance: readUserGuidance(),
           trustedDomains: readUserTrustedDomains(),
+          envNames: readUserEnvNames(),
           shell: resolveShell().kind,
           reviewerReasoning: reasoningOptionsForEffort(
             config.modeModels?.reviewer?.reasoningEffort,
@@ -2011,6 +2014,7 @@ export class Core {
             : {}),
           approval,
           trustedDomains: readUserTrustedDomains(),
+          envNames: readUserEnvNames(),
           largeChangeLines: readUserLargeChangeLines(),
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
           ...deputyWorkspace(dirs),

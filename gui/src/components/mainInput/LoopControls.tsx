@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import type {
   LoopCheckResult,
   LoopItemModel,
@@ -102,13 +103,14 @@ function CheckLine({
   check?: LoopCheckResult;
 }) {
   if (!task.check && !check) return null;
+  const shownCheck = maskCommandForDisplay(task.check ?? check?.command ?? "");
   return (
     <div
       data-testid={`loop-check-${task.id}`}
       className="ml-3 min-w-0 text-2xs text-description"
     >
-      <div className="truncate" title={task.check ?? check?.command}>
-        check: <code>{task.check ?? check?.command}</code>
+      <div className="truncate" title={shownCheck}>
+        check: <code>{shownCheck}</code>
         {check && (
           <span
             data-testid={`loop-check-result-${task.id}`}
@@ -117,7 +119,7 @@ function CheckLine({
             {" "}
             · {CHECK_LABEL[check.status]}
             {check.status === "refused" && check.output
-              ? `: ${check.output}`
+              ? `: ${maskCommandForDisplay(check.output)}`
               : ""}
           </span>
         )}
@@ -127,7 +129,7 @@ function CheckLine({
           data-testid={`loop-check-output-${task.id}`}
           className="m-0 max-h-16 overflow-auto break-words whitespace-pre-wrap"
         >
-          {check.output.trim()}
+          {maskCommandForDisplay(check.output.trim())}
         </pre>
       )}
     </div>
