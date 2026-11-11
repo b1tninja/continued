@@ -14,20 +14,21 @@ import { IDE_SCENARIOS } from "./segmentScenarios";
  */
 const GOLDEN_FILE = join(__dirname, "requestGolden.json");
 
-function requestHash(name: string): string {
+function requestJson(name: string): string {
   const request = buildChatRequest(IDE_SCENARIOS[name]());
-  return sha256Hex(
-    JSON.stringify({
-      messages: request.messages,
-      tools: request.completionOptions.tools ?? null,
-      taskList: request.taskListMessage ?? null,
-    }),
-  );
+  return JSON.stringify({
+    messages: request.messages,
+    tools: request.completionOptions.tools ?? null,
+    taskList: request.taskListMessage ?? null,
+  });
 }
 
 describe("IDE requests are byte-identical to the recorded goldens", () => {
   const actual = Object.fromEntries(
-    Object.keys(IDE_SCENARIOS).map((name) => [name, requestHash(name)]),
+    Object.keys(IDE_SCENARIOS).map((name) => [
+      name,
+      sha256Hex(requestJson(name)),
+    ]),
   );
   if (process.env.WRITE_GOLDEN) {
     writeFileSync(GOLDEN_FILE, JSON.stringify(actual, null, 2) + "\n");
@@ -37,7 +38,8 @@ describe("IDE requests are byte-identical to the recorded goldens", () => {
     : {};
   for (const name of Object.keys(IDE_SCENARIOS)) {
     it(name, () => {
-      expect(actual[name]).toBe(golden[name]);
+      // A failing hash prints the request it hashed, to find what differs.
+      expect(actual[name], requestJson(name)).toBe(golden[name]);
     });
   }
 });
