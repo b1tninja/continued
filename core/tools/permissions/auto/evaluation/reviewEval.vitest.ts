@@ -330,7 +330,10 @@ describe("runner", () => {
 
 describe("gate", () => {
   const run = (client: ReviewerClient, ds = starter) =>
-    runReviewEval(client, ds, { label: "x" }).then((r) => r.outcomes);
+    // the pre-filter is off: this measures the scripted model's floor alone
+    runReviewEval(client, ds, { label: "x", prefilter: false }).then(
+      (r) => r.outcomes,
+    );
 
   it("detects a floor false-allow and fails the gate", async () => {
     const allowAll = scripted(starter.cases, () =>

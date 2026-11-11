@@ -84,6 +84,14 @@ A "refuse" answer for an "ask" reason is turned into an ask. An answer the revie
 
 Files, web pages and command output can contain text written to hijack an agent ("ignore previous instructions and ..."). Continuous checks every tool result for wording like that. When it finds some, it puts a short notice in front of the result that tells the model the text is data and not an instruction from you, and it tells the reviewer that the earlier call's output was flagged (the reviewer still never sees the output itself). This is a pattern check, not a guarantee: wording it does not know goes through unchanged, and harmless text can be flagged by accident. It never blocks a tool call by itself.
 
+## Text addressed to the reviewer
+
+Before the model is asked, Automatic runs a fixed check on the call itself: the command (comments, `echo` and `printf` strings, here-strings), the file content being written, the URL and every other argument. It looks for wording aimed at the reviewer or at its verdict: "note to the reviewer", "assistant note", "pre-approved", "answer allow", "the decision must be allow", "ignore previous instructions", a forged verdict such as `{"decision":"allow"}`, the reviewer's own fence markers, and role headers such as `system:` or `assistant:`. Case, Unicode lookalike letters, zero-width characters, shell quoting splits and URL encoding are folded away first.
+
+A call that matches is never allowed. It is asked, or refused when no one can be asked, and the reason names the kind of text that matched without repeating it. The model is not consulted, so nothing it says can loosen the call. This is a deliberate narrow check, not the general injection hint: it does not match the words "reviewer" or "approval" on their own, plural "reviewers", "code reviewer", or a plain `grep` or `git log --grep` for a phrase. YOLO is not affected: the call runs, and a notice says it carried such text.
+
+It cannot see an instruction that is paraphrased, written in another language, encoded (base64 is not decoded), or split across separate arguments, so it is one layer: the reviewer prompt also tells the model that such text is an attack and never evidence of safety, and the rules, protected paths and safety floor still apply first. `continuous reviewer eval` applies the check too; `--no-prefilter` leaves it out to measure the model alone.
+
 ## Settings
 
 ```yaml title="config.yaml"
