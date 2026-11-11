@@ -687,49 +687,58 @@ class Bedrock extends BaseLLM {
       this.region,
     );
     const client = await this._getClient();
-    return probeToolDialect(async (probe) => {
-      const response = await client.send(
-        new ConverseCommand({
-          modelId,
-          system: [{ text: probe.messages[0].content }],
-          messages: [
-            { role: "user", content: [{ text: probe.messages[1].content }] },
-          ],
-          toolConfig: {
-            tools: probe.tools.map((t) => ({
-              toolSpec: {
-                name: t.function.name,
-                description: t.function.description,
-                inputSchema: { json: t.function.parameters },
-              },
-            })),
-            toolChoice: { auto: {} },
-          },
-          inferenceConfig: {
-            temperature: probe.params.temperature,
-            maxTokens: probe.params.max_tokens,
-          },
-          ...this._extraConverseFields(),
-        } as any),
-      );
-      const blocks = response.output?.message?.content ?? [];
-      return {
-        content: blocks
-          .map((b) => ("text" in b ? (b.text ?? "") : ""))
-          .join(""),
-        toolCalls: blocks.flatMap((b, i) =>
-          "toolUse" in b && b.toolUse
-            ? [
-                {
-                  id: b.toolUse.toolUseId ?? `call_${i}`,
-                  name: b.toolUse.name ?? "",
-                  arguments: JSON.stringify(b.toolUse.input ?? {}),
+    return probeToolDialect(
+      async (probe) => {
+        const response = await client.send(
+          new ConverseCommand({
+            modelId,
+            system: [{ text: probe.messages[0].content }],
+            messages: [
+              { role: "user", content: [{ text: probe.messages[1].content }] },
+            ],
+            toolConfig: {
+              tools: probe.tools.map((t) => ({
+                toolSpec: {
+                  name: t.function.name,
+                  description: t.function.description,
+                  inputSchema: { json: t.function.parameters },
                 },
-              ]
-            : [],
-        ),
-      };
-    }, this.model);
+              })),
+              toolChoice: { auto: {} },
+            },
+            inferenceConfig: {
+              temperature: probe.params.temperature,
+              maxTokens: probe.params.max_tokens,
+            },
+            ...this._extraConverseFields(),
+          } as any),
+        );
+        const blocks = response.output?.message?.content ?? [];
+        return {
+          content: blocks
+            .map((b) => ("text" in b ? (b.text ?? "") : ""))
+            .join(""),
+          toolCalls: blocks.flatMap((b, i) =>
+            "toolUse" in b && b.toolUse
+              ? [
+                  {
+                    id: b.toolUse.toolUseId ?? `call_${i}`,
+                    name: b.toolUse.name ?? "",
+                    arguments: JSON.stringify(b.toolUse.input ?? {}),
+                  },
+                ]
+              : [],
+          ),
+        };
+      },
+      this.model,
+      {
+        surface: {
+          query: { provider: "bedrock", api: "converse" },
+          label: "Bedrock Converse",
+        },
+      },
+    );
   }
 
   /** Send a tiny request to verify credentials, region and access to `model`. */

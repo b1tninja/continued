@@ -184,6 +184,7 @@
               "reference",
               "reference/yaml-migration",
               "reference/json-reference",
+              "reference/surface-facts",
               "reference/deprecated-context-providers",
               "reference/deprecated-codebase",
               "reference/deprecated-docs"
