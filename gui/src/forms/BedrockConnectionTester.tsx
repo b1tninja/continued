@@ -11,7 +11,7 @@ import { BedrockAllModelsResult, listBedrockModelsFor } from "./bedrockModels";
 import type { BedrockEndpointModel } from "./modelListUtils";
 
 const ANTHROPIC_USE_CASE_NOTICE =
-  "Anthropic models on this account need the Anthropic use-case form completed in the Bedrock console before they will work.";
+  "Anthropic models on this account need the Anthropic use-case form completed before they will work (Bedrock console, Model access).";
 
 interface Props {
   /** Connection settings built from the current form values. */
@@ -31,6 +31,32 @@ interface Props {
     models: BedrockEndpointModel[] | undefined,
     notes: string[],
   ) => void;
+}
+
+/**
+ * A failure: one headline, then the error itself (it can hold an ARN or a
+ * long request id, so it breaks anywhere) with a Copy button for a bug report.
+ */
+function ErrorResult({ headline, error }: { headline: string; error: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Alert type="error" size="sm" role="alert">
+      <span className="block text-xs font-medium">{headline}</span>
+      <code className="block text-xs break-all whitespace-pre-wrap">
+        {error}
+      </code>
+      <button
+        type="button"
+        className="mt-1 min-h-6 cursor-pointer rounded border border-solid border-border bg-transparent px-2 text-xs text-foreground hover:brightness-125"
+        onClick={() => {
+          void navigator.clipboard?.writeText(error);
+          setCopied(true);
+        }}
+      >
+        {copied ? "Copied" : "Copy error"}
+      </button>
+    </Alert>
+  );
 }
 
 /**
@@ -146,23 +172,24 @@ export function BedrockConnectionTester({
       </div>
 
       {listResult && !listResult.ok && (
-        <Alert type="error" size="sm">
-          <span className="text-xs whitespace-pre-wrap">
-            {listResult.error}
-          </span>
-        </Alert>
+        <ErrorResult headline="Could not connect" error={listResult.error} />
       )}
 
       {listResult?.ok && (
-        <Alert type="success" size="sm">
-          <span className="text-xs">
-            Connected. {models.length} model
-            {models.length === 1 ? "" : "s"} available
+        <Alert type="success" size="sm" role="status">
+          <span className="block text-xs font-medium">
+            Connected. {models.length} model{models.length === 1 ? "" : "s"}{" "}
+            available
             {connection.region ? ` in ${connection.region}` : ""}
-            {mantleOnly > 0 ? ` (${mantleOnly} only on Mantle)` : ""}. The Model
-            list above now shows them
+            {mantleOnly > 0
+              ? ` (${mantleOnly} only on Bedrock Mantle, AWS's newer endpoint)`
+              : ""}
+            .
+          </span>
+          <span className="block text-xs text-description">
+            The Model list above now shows them
             {needAccess > 0
-              ? `; ${needAccess} need${needAccess === 1 ? "s" : ""} access in the Bedrock console and ${needAccess === 1 ? "is" : "are"} marked`
+              ? `; ${needAccess} need${needAccess === 1 ? "s" : ""} access (Bedrock console, Model access) and ${needAccess === 1 ? "is" : "are"} marked`
               : ""}
             .
           </span>
@@ -173,32 +200,33 @@ export function BedrockConnectionTester({
         <Alert
           type={toolCalls.ok && toolCalls.kind !== "none" ? "info" : "warning"}
           size="sm"
+          role="status"
         >
           <span className="text-xs" data-testid="tool-calls-result">
             {toolCalls.ok
               ? toolCalls.label
-              : `Tool calls: unknown (${toolCalls.error})`}
+              : `Tool use: could not tell (${toolCalls.error})`}
           </span>
           {toolCalls.ok && toolCalls.preset && (
             <span
               className="block text-xs opacity-80"
               data-testid="tool-calls-preset"
             >
-              {toolCalls.preset}
+              Known format for this model family: {toolCalls.preset}
             </span>
           )}
         </Alert>
       )}
 
       {models.some((m) => m.needsAnthropicUseCase) && (
-        <Alert type="warning" size="sm">
+        <Alert type="warning" size="sm" role="status">
           <span className="text-xs">{ANTHROPIC_USE_CASE_NOTICE}</span>
         </Alert>
       )}
 
       {testResult &&
         (testResult.ok ? (
-          <Alert type="success" size="sm">
+          <Alert type="success" size="sm" role="status">
             <span className="text-xs">
               {testResult.modelId} replied
               {testResult.reply ? ` "${testResult.reply}"` : ""} in{" "}
@@ -206,11 +234,10 @@ export function BedrockConnectionTester({
             </span>
           </Alert>
         ) : (
-          <Alert type="error" size="sm">
-            <span className="text-xs whitespace-pre-wrap">
-              {testResult.error}
-            </span>
-          </Alert>
+          <ErrorResult
+            headline="Test message failed"
+            error={testResult.error}
+          />
         ))}
     </div>
   );

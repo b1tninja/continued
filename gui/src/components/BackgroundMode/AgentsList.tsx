@@ -34,6 +34,56 @@ const BLOCKED_LABEL: Record<string, string> = {
   budget: "out of budget",
 };
 
+const ACTIVE: ReadonlySet<AgentState> = new Set([
+  "running",
+  "waiting-approval",
+  "blocked",
+]);
+
+/** Every agent started below `agent`, at any depth. */
+function descendants(
+  agent: AgentView,
+  kids: Map<string, AgentView[]>,
+): AgentView[] {
+  return (kids.get(agent.id) ?? []).flatMap((k) => [
+    k,
+    ...descendants(k, kids),
+  ]);
+}
+
+/**
+ * The label a row shows. The session row is derived from what runs below it
+ * (it is not "Running" once everything it started has ended), and an agent the
+ * IDE restarted under is "Interrupted" rather than "Stopped".
+ */
+function stateOf(
+  agent: AgentView,
+  kids: Map<string, AgentView[]>,
+): { label: string; className: string } {
+  if (agent.interrupted && agent.state === "stopped") {
+    return { label: "Interrupted", className: STATE_CLASS.stopped };
+  }
+  const below = agent.kind === "main" ? descendants(agent, kids) : [];
+  if (agent.state === "running" && below.length > 0) {
+    if (below.some((a) => a.state === "waiting-approval")) {
+      return {
+        label: STATE_LABEL["waiting-approval"],
+        className: STATE_CLASS["waiting-approval"],
+      };
+    }
+    if (!below.some((a) => ACTIVE.has(a.state))) {
+      const allDone = below.every((a) => a.state === "done");
+      return allDone
+        ? { label: STATE_LABEL.done, className: STATE_CLASS.done }
+        : { label: "Ended early", className: STATE_CLASS.stopped };
+    }
+  }
+  return {
+    label: STATE_LABEL[agent.state],
+    className: STATE_CLASS[agent.state],
+  };
+}
+
 function formatTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
@@ -57,6 +107,8 @@ function withChildren(agents: AgentView[]): Map<string, AgentView[]> {
 }
 
 interface RowProps {
+  /** Every row's cost is unknown: the list says so once instead of per row. */
+  costUnknown: boolean;
   agent: AgentView;
   kids: Map<string, AgentView[]>;
   level: number;
@@ -65,7 +117,15 @@ interface RowProps {
   toggle: (id: string) => void;
 }
 
-function AgentRow({ agent, kids, level, now, collapsed, toggle }: RowProps) {
+function AgentRow({
+  costUnknown,
+  agent,
+  kids,
+  level,
+  now,
+  collapsed,
+  toggle,
+}: RowProps) {
   const children = kids.get(agent.id) ?? [];
   const open = !collapsed.has(agent.id);
   const Icon = open ? ChevronDownIcon : ChevronRightIcon;
@@ -79,6 +139,7 @@ function AgentRow({ agent, kids, level, now, collapsed, toggle }: RowProps) {
     ? agent.tokens.input + agent.tokens.output
     : undefined;
   const name = agent.kind === "main" ? "Session" : agent.role;
+  const state = stateOf(agent, kids);
   return (
     <li data-testid={`agent-row-${agent.id}`} data-state={agent.state}>
       <div
@@ -99,15 +160,24 @@ function AgentRow({ agent, kids, level, now, collapsed, toggle }: RowProps) {
         ) : (
           <span className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
         )}
-        <span className="min-w-0 font-semibold break-all">{name}</span>
         <span
-          className={`flex-shrink-0 rounded border border-solid border-border px-1 text-2xs ${STATE_CLASS[agent.state]}`}
+          className="max-w-full min-w-0 truncate font-semibold [overflow-wrap:anywhere]"
+          title={name}
+          data-testid={`agent-name-${agent.id}`}
+        >
+          {name}
+        </span>
+        <span
+          className={`flex-shrink-0 rounded border border-solid border-border px-1 text-2xs ${state.className}`}
           data-testid={`agent-state-${agent.id}`}
         >
-          {STATE_LABEL[agent.state]}
+          {state.label}
         </span>
         {agent.model && (
-          <span className="min-w-0 break-all text-description-muted">
+          <span
+            className="max-w-full min-w-0 truncate [overflow-wrap:anywhere] text-description-muted"
+            title={agent.model}
+          >
             {agent.model}
           </span>
         )}
@@ -116,16 +186,18 @@ function AgentRow({ agent, kids, level, now, collapsed, toggle }: RowProps) {
             <span>{formatTokens(tokens)} tokens</span>
           )}
           {time && <span>{time}</span>}
-          <span
-            data-testid={`agent-cost-${agent.id}`}
-            title={
-              children.length > 0
-                ? `Itself: ${formatCostAmount(agent.cost.self)}. With the agents below: ${formatCostAmount(agent.cost.subtree)}`
-                : undefined
-            }
-          >
-            {formatCostAmount(agent.cost.subtree)}
-          </span>
+          {!costUnknown && (
+            <span
+              data-testid={`agent-cost-${agent.id}`}
+              title={
+                children.length > 0
+                  ? `Itself: ${formatCostAmount(agent.cost.self)}. With the agents below: ${formatCostAmount(agent.cost.subtree)}`
+                  : undefined
+              }
+            >
+              {formatCostAmount(agent.cost.subtree)}
+            </span>
+          )}
         </span>
       </div>
       {(doing || agent.workspace?.name) && (
@@ -145,6 +217,7 @@ function AgentRow({ agent, kids, level, now, collapsed, toggle }: RowProps) {
           {children.map((child) => (
             <AgentRow
               key={child.id}
+              costUnknown={costUnknown}
               agent={child}
               kids={kids}
               level={level + 1}
@@ -183,6 +256,7 @@ export function AgentsList() {
   const roots = snapshot.nodes.filter(
     (n) => !n.parentId || !ids.has(n.parentId),
   );
+  const costUnknown = snapshot.nodes.every((n) => n.cost.subtree === "unknown");
   const waiting = snapshot.needsYou.length;
   const Icon = listOpen ? ChevronDownIcon : ChevronRightIcon;
 
@@ -205,9 +279,11 @@ export function AgentsList() {
             ? `, ${snapshot.totals.failed} ended early`
             : ""}
         </span>
-        <span className="ml-auto normal-case">
-          {formatCostAmount(snapshot.totals.costUsd)}
-        </span>
+        {!costUnknown && (
+          <span className="ml-auto normal-case">
+            {formatCostAmount(snapshot.totals.costUsd)}
+          </span>
+        )}
       </button>
       {listOpen && (
         <ul
@@ -215,9 +291,18 @@ export function AgentsList() {
           aria-label="Agents"
           data-testid="agents-list"
         >
+          {costUnknown && (
+            <li
+              className="py-0.5 text-description-muted"
+              data-testid="agents-cost-unknown"
+            >
+              Cost: not known for this model
+            </li>
+          )}
           {roots.map((agent) => (
             <AgentRow
               key={agent.id}
+              costUnknown={costUnknown}
               agent={agent}
               kids={kids}
               level={0}

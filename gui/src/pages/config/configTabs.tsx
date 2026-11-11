@@ -24,6 +24,8 @@ interface TabOption {
   label: string;
   component: React.ReactNode;
   icon: React.ReactNode;
+  /** A command (Back), not a tab */
+  action?: boolean;
 }
 
 interface TabSection {
@@ -41,6 +43,7 @@ export const topTabSections: TabSection[] = [
       {
         id: "back",
         label: "Back",
+        action: true,
         component: <div />,
         icon: <ArrowLeftIcon className="h-3 w-3 shrink-0 xs:h-4 xs:w-4" />,
       },

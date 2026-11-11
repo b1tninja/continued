@@ -81,16 +81,16 @@ describe("tool-call probe result line", () => {
 
   it("unknown: empty reply, advisory markup, timeout, other errors", async () => {
     expect(await probe(async () => ({ content: "" }))).toBe(
-      "Tool calls: unknown",
+      "Tool use: could not tell",
     );
     expect(
       await probe(async () => ({ content: text("llama3-json-canonical") })),
-    ).toBe("Tool calls: unknown");
+    ).toBe("Tool use: could not tell");
     expect(
       await probe(async () => {
         throw new Error("timeout");
       }),
-    ).toBe("Tool calls: unknown");
+    ).toBe("Tool use: could not tell");
   });
 
   it("a mention inside a code fence is not a dialect", async () => {
