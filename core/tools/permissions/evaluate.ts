@@ -16,6 +16,7 @@ import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
+import { runtimeWriteTarget } from "./runtimeWriteTarget";
 import { policyFileHit, POLICY_FILE_REASON } from "./selfProtect";
 import type { ProtectedHit, ProtectedKind } from "./protected";
 import type { RuleSource, ToolPermissions } from "./rules";
@@ -145,13 +146,57 @@ export interface EvaluateInput {
 export function evaluateToolPolicyWithRules(
   input: EvaluateInput,
 ): ToolPolicyResult {
-  return lockPolicyFiles(input, evaluateRules(input));
+  return lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input)));
+}
+
+/**
+ * ROADMAP B31. The path guards read a path as it is written, so a terminal
+ * command whose write target is built when it runs (`$d`, a wildcard, a
+ * backtick, a bare name after a `cd` into the home folder) is not covered by
+ * them. At YOLO, which would otherwise run it, it asks. It only tightens: a
+ * call already refused or already asked is left as it is, and no rule or
+ * setting loosens it. The sandbox that denies writes to the policy folders (W8)
+ * is what holds for certain.
+ */
+export const RUNTIME_WRITE_REASON =
+  "This command writes to a path built when it runs, which the path guards cannot read, so at YOLO it asks.";
+
+function lockRuntimeWrites(
+  input: EvaluateInput,
+  result: ToolPolicyResult,
+): ToolPolicyResult {
+  const { tool, toolName, parsedArgs } = input;
+  const command = parsedArgs.command;
+  if (!tool || toolName !== "run_terminal_command") return result;
+  if (
+    typeof command !== "string" ||
+    result.policy !== "allowedWithoutPermission"
+  ) {
+    return result;
+  }
+  const level = levelOfCall(input.approval, toolName, tool, {
+    parsedArgs,
+    cwd: input.cwd,
+    shell: input.shell,
+  })?.level;
+  if (level !== "yolo") return result;
+  const why = runtimeWriteTarget(command, input.shell, input.cwd);
+  if (!why) return result;
+  return {
+    ...result,
+    policy: "allowedWithPermission",
+    source: "floor",
+    reason: `${RUNTIME_WRITE_REASON} (${why})`,
+  };
 }
 
 /**
  * The locked floor (selfProtect.ts): a call that would write or delete a
  * permission or policy file asks, and is refused at Automatic and YOLO, where
  * nobody is there to say yes to a change that undoes the other protections.
+ * That holds for a path the call names. A terminal command is read as it is
+ * written, so a path built when it runs is not seen here; at YOLO such a
+ * command asks instead (lockRuntimeWrites).
  * It runs after everything else and only tightens, so no rule, level or
  * built-in switch can loosen it.
  */
