@@ -47,14 +47,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
+        id: node
         with:
           node-version-file: ".nvmrc"
 
+      # Same key as the setup-component action's root cache (same `npm ci`), so a hit is shared.
       - uses: actions/cache@v6
         id: root-cache
         with:
           path: node_modules
-          key: ${{ runner.os }}-root-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-root-node-modules-node${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install root dependencies
         if: steps.root-cache.outputs.cache-hit != 'true'
@@ -63,11 +65,13 @@ jobs:
       # prettier-plugin-tailwindcss loads gui/tailwind.config.cjs, which needs the gui
       # dependencies (tailwindcss, ...). Without them 0.8+ fails on every gui file, and
       # it sorts classes differently than a normal checkout does.
+      # Its own key: this is `npm ci --ignore-scripts`, which is not what the gui checks install,
+      # so it must not be restored there (or the other way round).
       - uses: actions/cache@v6
         id: gui-cache
         with:
           path: gui/node_modules
-          key: ${{ runner.os }}-gui-node-modules-${{ hashFiles('gui/package-lock.json') }}
+          key: ${{ runner.os }}-gui-node-modules-noscripts-node${{ steps.node.outputs.node-version }}-${{ hashFiles('gui/package-lock.json') }}
 
       - name: Install gui dependencies
         if: steps.gui-cache.outputs.cache-hit != 'true'
@@ -281,41 +285,39 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
+        id: node
         with:
           node-version-file: ".nvmrc"
 
-      - name: Cache npm
-        uses: actions/cache@v6
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-cache-matrix-${{ hashFiles('core/package-lock.json', 'extensions/vscode/package-lock.json') }}
+      - name: Setup packages
+        uses: ./.github/actions/setup-packages
 
-      - name: Cache packages node_modules
-        uses: actions/cache@v6
-        with:
-          path: |
-            packages/*/node_modules
-          key: ${{ runner.os }}-packages-node-modules-${{ hashFiles('packages/*/package-lock.json') }}
-
-      - name: Cache core node modules
-        uses: actions/cache@v6
-        with:
-          path: core/node_modules
-          key: ${{ runner.os }}-core-node-modules-${{ hashFiles('core/package-lock.json') }}
-
-      - name: Cache vscode extension node modules
-        uses: actions/cache@v6
+      # Restore only: the extension's node_modules comes from the setup-component action's cache
+      # (saved after a clean `npm ci`), so `npm ci` below runs only on a miss.
+      - name: Restore vscode extension node modules
         id: vscode-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: extensions/vscode/node_modules
-          key: ${{ runner.os }}-vscode-node-modules-${{ hashFiles('extensions/vscode/package-lock.json') }}
+          key: ${{ runner.os }}-vscode-node-modules-node${{ steps.node.outputs.node-version }}-${{ hashFiles('extensions/vscode/package-lock.json') }}
+
+      - name: Restore npm download cache
+        id: npm-cache
+        if: steps.vscode-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-cache-matrix-${{ hashFiles('extensions/vscode/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-cache-matrix-
 
       - name: Build packages and get test files
         id: vscode-get-test-file-matrix
         run: |
-          node ./scripts/build-packages.js
           cd extensions/vscode
-          npm ci
+          if [ "${{ steps.vscode-cache.outputs.cache-hit }}" != "true" ]; then
+            npm ci
+          fi
           npm run e2e:compile
           if [[ "${{ github.event.pull_request.head.repo.fork }}" == "true" || "${{ github.actor }}" == "dependabot[bot]" ]]; then
             # Exclude SSH tests for forks
@@ -330,6 +332,27 @@ jobs:
         env:
           # https://github.com/microsoft/vscode-ripgrep/issues/9#issuecomment-643965333
           GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+
+      - name: Save vscode extension node modules
+        if: steps.vscode-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: extensions/vscode/node_modules
+          key: ${{ steps.vscode-cache.outputs.cache-primary-key }}
+
+      - name: Save npm download cache
+        if: steps.npm-cache.outcome == 'success' && steps.npm-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
+      - uses: ./.github/actions/cache-report
+        if: always()
+        with:
+          entries: |
+            vscode-node-modules|${{ steps.vscode-cache.outcome }}|${{ steps.vscode-cache.outputs.cache-hit }}|${{ steps.vscode-cache.outputs.cache-matched-key }}
+            npm-matrix|${{ steps.npm-cache.outcome }}|${{ steps.npm-cache.outputs.cache-hit }}|${{ steps.npm-cache.outputs.cache-matched-key }}
 
       - name: Debug Outputs
         run: |

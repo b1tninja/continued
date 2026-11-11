@@ -108,6 +108,8 @@ jobs:
           npm_config_arch: ${{ matrix.npm_config_arch }}
           pre-release: false
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Release build: nothing restored from a cache may reach a shipped artefact (docs/ci-caching.md).
+          cache: "false"
 
       - name: Upload .vsix artifact
         uses: actions/upload-artifact@v7
@@ -152,13 +154,17 @@ jobs:
           cache: "npm"
           cache-dependency-path: extensions/cli/package-lock.json
 
+      # Release build: nothing restored from a cache may reach a shipped artefact (docs/ci-caching.md).
       - name: Setup packages
         uses: ./.github/actions/setup-packages
+        with:
+          cache: "false"
       - name: Setup core component
         uses: ./.github/actions/setup-component
         with:
           component: core
           include-root: true
+          cache: "false"
 
       - name: Build core
         run: |

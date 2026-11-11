@@ -93,14 +93,6 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Cache CLI node_modules
-        uses: actions/cache@v6
-        with:
-          path: extensions/cli/node_modules
-          key: ${{ runner.os }}-node${{ matrix.node-version }}-cli-modules-${{ hashFiles('extensions/cli/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node${{ matrix.node-version }}-cli-modules-
-
       - name: Setup packages
         uses: ./.github/actions/setup-packages
       - name: Setup core component
@@ -114,10 +106,39 @@ jobs:
           cd core
           npm run build
 
+      # The setup-packages action switched node to the version in .nvmrc, whatever the matrix
+      # says, so the key names the version that is on the path now. Exact hit only: a partial
+      # restore of node_modules must not stand in for `npm ci`. Saved from main only.
+      - name: Node version
+        id: nodev
+        run: echo "version=$(node -v)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore CLI node_modules
+        id: cli-modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: extensions/cli/node_modules
+          key: ${{ runner.os }}-node${{ steps.nodev.outputs.version }}-cli-modules-${{ hashFiles('extensions/cli/package-lock.json') }}
+
       - name: Install dependencies
         run: |
           cd extensions/cli
-          npm ci --include=optional
+          if [ "${{ steps.cli-modules.outputs.cache-hit }}" != "true" ]; then
+            npm ci --include=optional
+          fi
+
+      - name: Save CLI node_modules
+        if: steps.cli-modules.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: extensions/cli/node_modules
+          key: ${{ steps.cli-modules.outputs.cache-primary-key }}
+
+      - uses: ./.github/actions/cache-report
+        if: always()
+        with:
+          entries: |
+            cli-node-modules|${{ steps.cli-modules.outcome }}|${{ steps.cli-modules.outputs.cache-hit }}|${{ steps.cli-modules.outputs.cache-matched-key }}
 
       - name: Build
         run: |
