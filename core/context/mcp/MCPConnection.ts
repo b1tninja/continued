@@ -48,6 +48,7 @@ import {
   createSignedInOauthProvider,
   getOauthCallbackUrl,
 } from "./MCPOauth";
+import { oauthOptionsFromSettings } from "./mcpOauthSettings";
 import {
   adoptLegacyPin,
   evaluatePins,
@@ -610,7 +611,7 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
       this.options.url,
       this.extras.ide,
       {
-        callbackPort: this.oauthSettings?.callbackPort,
+        ...oauthOptionsFromSettings(this.oauthSettings),
         oauthScope: decision.scope,
       },
     );
@@ -623,6 +624,7 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
   private signInGuidance(hadSignIn: boolean): string {
     const callback = getOauthCallbackUrl(
       this.oauthSettings?.callbackPort ?? DEFAULT_OAUTH_CALLBACK_PORT,
+      this.oauthSettings?.redirectHost,
     );
     return hadSignIn
       ? `Your sign-in to ${this.options.name} has expired or was revoked. Use Sign in to authenticate again. (OAuth callback: ${callback})`

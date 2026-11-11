@@ -624,6 +624,9 @@ The [Model Context Protocol](https://modelcontextprotocol.io/introduction) is a 
 - `requestOptions`: Optional request options for `sse` and `streamable-http` servers. Same format as [model requestOptions](#models).
 - `oauth`: Optional OAuth settings for `sse` and `streamable-http` servers.
   - `callbackPort`: Port of the local server that receives the browser redirect while signing in (default `3000`).
+  - `clientId`: Client id of an OAuth client you registered with the server's authorization server. When set, dynamic client registration is not used.
+  - `clientSecret`: Secret of that client, if it has one. Write it as `${{ secrets.NAME }}`, never inline.
+  - `redirectHost`: Host name in the redirect URL, `localhost` (default) or `127.0.0.1`. The local server listens on loopback addresses only either way.
 - `connectionTimeout`: Optional timeout for _initial_ connection to MCP server
 
 **Example:**
