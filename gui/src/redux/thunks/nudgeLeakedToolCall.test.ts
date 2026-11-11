@@ -1,5 +1,8 @@
 import type { ChatHistoryItem } from "core";
-import { LEAKED_CALL_NUDGE } from "core/util/turnEnd";
+import {
+  LEAKED_CALL_NUDGE,
+  LEAKED_CALL_NUDGE_SESSION_LIMIT,
+} from "core/util/turnEnd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RootState } from "../store";
 import { addUserInputToHistory } from "./addUserInputToHistory";
@@ -22,9 +25,17 @@ const item = (
 ): ChatHistoryItem =>
   ({ message: { role, content, ...extra }, contextItems: [] }) as never;
 
-const run = (history: ChatHistoryItem[], loop?: unknown, tools = ["Write"]) =>
+const run = (
+  history: ChatHistoryItem[],
+  loop?: unknown,
+  tools = ["Write"],
+  ui?: object,
+) =>
   nudgeLeakedToolCall({
-    state: { session: { history, loop } } as unknown as RootState,
+    state: {
+      session: { history, loop },
+      config: { config: { ui } },
+    } as unknown as RootState,
     toolNames: tools,
     dispatch: vi.fn() as never,
     getState: (() => ({ session: { history } })) as never,
@@ -88,5 +99,32 @@ describe("nudgeLeakedToolCall (H13)", () => {
       toolCalls: [{ id: "1", type: "function", function: { name: "Write" } }],
     });
     expect(await run([item("user", "hi"), reply])).toBe(false);
+  });
+
+  it("sends nothing when the setting is off", async () => {
+    const history = [item("user", "write a.txt"), item("assistant", LEAK)];
+    expect(
+      await run(history, undefined, ["Write"], { nudgeLeakedToolCalls: false }),
+    ).toBe(false);
+    expect(addUserInputToHistory).not.toHaveBeenCalled();
+  });
+
+  it("is on when the setting is not set", async () => {
+    const history = [item("user", "write a.txt"), item("assistant", LEAK)];
+    expect(await run(history, undefined, ["Write"], {})).toBe(true);
+  });
+
+  it("stops after the session limit, across turns", async () => {
+    const history: ChatHistoryItem[] = [];
+    for (let i = 0; i < LEAKED_CALL_NUDGE_SESSION_LIMIT; i++) {
+      history.push(
+        item("user", "write a.txt"),
+        item("assistant", LEAK),
+        item("user", LEAKED_CALL_NUDGE),
+        item("assistant", "done"),
+      );
+    }
+    history.push(item("user", "again"), item("assistant", LEAK));
+    expect(await run(history)).toBe(false);
   });
 });

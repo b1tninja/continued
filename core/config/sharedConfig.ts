@@ -34,6 +34,7 @@ export const sharedConfigSchema = z
     displayRawMarkdown: z.boolean(),
     showChatScrollbar: z.boolean(),
     continueAfterToolRejection: z.boolean(),
+    nudgeLeakedToolCalls: z.boolean(),
 
     // `tabAutocompleteOptions` in `ContinueConfig`
     useAutocompleteCache: z.boolean(),
@@ -159,6 +160,10 @@ export function modifyAnyConfigWithSharedConfig<
   if (sharedConfig.continueAfterToolRejection !== undefined) {
     configCopy.ui.continueAfterToolRejection =
       sharedConfig.continueAfterToolRejection;
+  }
+
+  if (sharedConfig.nudgeLeakedToolCalls !== undefined) {
+    configCopy.ui.nudgeLeakedToolCalls = sharedConfig.nudgeLeakedToolCalls;
   }
 
   configCopy.experimental = {

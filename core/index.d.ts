@@ -2364,6 +2364,8 @@ export interface ContinueUIConfig {
   codeWrap?: boolean;
   showSessionTabs?: boolean;
   continueAfterToolRejection?: boolean;
+  /** Ask the model once to re-issue a tool call it wrote as text (H13). Default true. */
+  nudgeLeakedToolCalls?: boolean;
 }
 
 export interface ContextMenuConfig {

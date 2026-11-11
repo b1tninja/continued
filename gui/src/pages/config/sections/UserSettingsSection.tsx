@@ -50,6 +50,7 @@ export function UserSettingsSection() {
   const showSessionTabs = config.ui?.showSessionTabs ?? false;
   const continueAfterToolRejection =
     config.ui?.continueAfterToolRejection ?? false;
+  const nudgeLeakedToolCalls = config.ui?.nudgeLeakedToolCalls ?? true;
   const codeWrap = config.ui?.codeWrap ?? false;
   const showChatScrollbar = config.ui?.showChatScrollbar ?? false;
   const readResponseTTS = config.experimental?.readResponseTTS ?? false;
@@ -289,6 +290,15 @@ export function UserSettingsSection() {
                     value={continueAfterToolRejection}
                     onChange={(value) =>
                       handleUpdate({ continueAfterToolRejection: value })
+                    }
+                  />
+                  <UserSetting
+                    type="toggle"
+                    title="Ask again when a tool call is typed as text"
+                    description=" if the model writes a tool call as plain text so nothing runs, ask it once to make the call properly. At most once per turn and 5 per chat; nothing in the text is run."
+                    value={nudgeLeakedToolCalls}
+                    onChange={(value) =>
+                      handleUpdate({ nudgeLeakedToolCalls: value })
                     }
                   />
                 </div>
