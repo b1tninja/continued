@@ -1,0 +1,121 @@
+name: Post-merge check
+
+# CI15: two pull requests that were each green alone can break `main` together (#553 x #557 TS2741,
+# #587 x #588 lint complexity). Nothing built the merged result. This builds the tip of `main` after
+# every push with the same type-check and lint commands the PR checks run, and keeps ONE issue open
+# while main is red (closed again when a later push is green). See docs/ci-merge-gate.md section 6.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Only the newest tip matters: a newer push supersedes the run in flight.
+concurrency:
+  group: post-merge-check
+  cancel-in-progress: true
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup packages
+        uses: ./.github/actions/setup-packages
+      - name: Setup core component
+        uses: ./.github/actions/setup-component
+        with:
+          component: core
+          include-root: true
+      - name: Type check and lint
+        run: |
+          cd core
+          npx tsc --noEmit
+          npm run lint
+
+  gui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup packages
+        uses: ./.github/actions/setup-packages
+      - name: Setup core component
+        uses: ./.github/actions/setup-component
+        with:
+          component: core
+          include-root: true
+      - name: Setup gui component
+        uses: ./.github/actions/setup-component
+        with:
+          component: gui
+          include-packages: false
+      - name: Type check and lint
+        run: |
+          cd gui
+          npx tsc --noEmit
+          npm run lint
+
+  binary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup packages
+        uses: ./.github/actions/setup-packages
+      - name: Setup core component
+        uses: ./.github/actions/setup-component
+        with:
+          component: core
+          include-root: true
+      - name: Setup binary component
+        uses: ./.github/actions/setup-component
+        with:
+          component: binary
+          include-packages: false
+      - name: Type check
+        run: |
+          cd binary
+          npx tsc --noEmit
+
+  report:
+    # No checkout and no third-party action: only the preinstalled gh and the built-in token.
+    needs: [core, gui, binary]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      SHA: ${{ github.sha }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RESULTS: ${{ needs.core.result }} ${{ needs.gui.result }} ${{ needs.binary.result }}
+      TITLE: "main is red: post-merge check failed"
+    steps:
+      - name: Open, update or close the tracking issue
+        run: |
+          set -eu
+          existing=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title \
+            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+          case " $RESULTS " in
+            *" failure "*|*" skipped "*)
+              body="Commit $SHA on main failed the post-merge check (results in order core, gui, binary: $RESULTS). Run: $RUN_URL. Usually two pull requests that were each green alone; find the pair with node scripts/ci/merge-ready.mjs --trial."
+              if [ -n "$existing" ]; then
+                gh issue comment "$existing" --body "$body"
+              else
+                gh issue create --title "$TITLE" --body "$body"
+              fi
+              ;;
+            *)
+              if [ -n "$existing" ]; then
+                gh issue close "$existing" --comment "Green again at $SHA: $RUN_URL"
+              fi
+              ;;
+          esac
