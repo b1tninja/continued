@@ -24,6 +24,7 @@ import {
   getTerminalEnvironmentStatus,
 } from "./util/terminalEnvironment";
 import { saveUserTerminalSettings } from "./util/userTerminalSettings";
+import { readUserGuidance } from "./util/userGuidance";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import { getAuditTrail } from "./tools/permissions/audit/global";
@@ -652,6 +653,7 @@ export class Core {
           permissions: config.toolPermissions,
           enabled: config.experimental?.enableAutoApproval === true,
           reviewer: config.selectedModelByRole.reviewer,
+          guidance: readUserGuidance(),
           shell: resolveShell().kind,
           reviewerReasoning: reasoningOptionsForEffort(
             config.modeModels?.reviewer?.reasoningEffort,

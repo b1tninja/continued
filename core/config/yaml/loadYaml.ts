@@ -84,6 +84,7 @@ function withoutUntrustedLoosening(
 import { loadModelCatalog } from "../providers/modelsFile";
 import { resolveTerminalSettings } from "../../util/terminalEnvironment";
 import { readUserTerminalSettings } from "../../util/userTerminalSettings";
+import { readUserGuidance, withOwnGuidance } from "../../util/userGuidance";
 import { loadProviderInstances } from "../providers/providersFile";
 import { LocalPlatformClient } from "./LocalPlatformClient";
 import { llmsFromModelConfig } from "./models";
@@ -513,7 +514,12 @@ export async function configYamlToContinueConfig(options: {
 
   // Tool rules. Kept even when some entries are unreadable: those are skipped
   // and reported, rather than failing the config.
-  continueConfig.toolPermissions = config.toolPermissions;
+  // Reviewer guidance is the person's own, never the assistant's or a folder's
+  const own = withOwnGuidance(config.toolPermissions, readUserGuidance());
+  continueConfig.toolPermissions = own.permissions;
+  localErrors.push(
+    ...own.notices.map((message) => ({ fatal: false, message })),
+  );
   // Only the person's own config.yaml may loosen what commands inherit; what
   // the assistant or a folder sets is held to the default or tighter.
   localErrors.push(

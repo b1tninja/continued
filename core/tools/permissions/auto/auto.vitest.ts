@@ -105,8 +105,8 @@ describe("reviewer prompt", () => {
       environment: { os: "linux", workspaceDirs: ["file:///w"] },
       settings: {
         environment: { productionMarkers: ["prod"] },
-        guidance: { block: ["Never run migrations"] },
       },
+      guidance: { block: ["Never run migrations"], allow: [] },
       nonce: "abc123",
     });
 
