@@ -96,7 +96,7 @@ describe("the confused-deputy rule on the 287 labelled calls", () => {
       if (run("off")) reviewerOff++;
       if (run("on")) reviewerOn++;
     }
-    expect([reviewerOff, reviewerOn]).toEqual([199, 197]);
+    expect([reviewerOff, reviewerOn]).toEqual([198, 196]);
   });
 
   it("no corpus call trips a floor inside the rule", () => {

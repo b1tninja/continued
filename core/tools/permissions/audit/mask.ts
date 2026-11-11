@@ -60,6 +60,18 @@ const JSON_PAIR = /("([^"\\]{1,60})"\s*:\s*)"((?:[^"\\]|\\.)*)"/g;
 const ASSIGN =
   /(\b[A-Za-z_][A-Za-z0-9_.-]*=)("(?:[^"\\]|\\.)*"|'[^']*'|[^\s;&|"'`)]+)/g;
 
+/** `$env:NAME = 'value'` and `${env:NAME} += "value"` (PowerShell) */
+export const PS_ENV_ASSIGN =
+  /(\$(?:env:([A-Za-z_]\w*)|\{env:([^}]+)\})\s*\+?=\s*)("(?:[^"`]|`.)*"|'(?:[^']|'')*'|[^\s;]+)/gi;
+
+/** `SetEnvironmentVariable('NAME', 'value'` (.NET, from PowerShell) */
+export const PS_SET_ENV =
+  /(SetEnvironmentVariable\(\s*['"]([^'"]+)['"]\s*,\s*)("[^"]*"|'[^']*')/gi;
+
+/** `setx NAME value` (cmd) */
+export const SETX =
+  /(\bsetx\s+(?:\/\w+\s+\S+\s+)*([A-Za-z_]\w*)\s+)("[^"]*"|[^\s&|;]+)/gi;
+
 /** `--password hunter2`, `--api-key=x`, `-H` is handled by HEADER */
 const FLAG =
   /(--[A-Za-z][A-Za-z0-9-]*)([= ]+)("[^"]*"|'[^']*'|[^\s"';&|-][^\s"';&|]*)/g;
@@ -131,6 +143,25 @@ export function maskText(text: string): MaskResult {
     const { q } = unquoted(value);
     return `${head}${q}${mark("secret-variable")}${q}`;
   });
+
+  const maskNamed = (m: string, head: string, name: string, value: string) => {
+    if (!looksSecret(name) || alreadyMasked(value)) return m;
+    seen("secret-variable");
+    const { q } = unquoted(value);
+    return `${head}${q}${mark("secret-variable")}${q}`;
+  };
+  out = out.replace(
+    PS_ENV_ASSIGN,
+    (
+      m,
+      head: string,
+      a: string | undefined,
+      b: string | undefined,
+      value: string,
+    ) => maskNamed(m, head, a ?? b ?? "", value),
+  );
+  out = out.replace(PS_SET_ENV, maskNamed);
+  out = out.replace(SETX, maskNamed);
 
   out = out.replace(FLAG, (m, flag: string, sep: string, value: string) => {
     if (!looksSecret(flag.slice(2)) || alreadyMasked(value)) return m;

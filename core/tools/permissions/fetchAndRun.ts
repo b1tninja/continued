@@ -1,4 +1,5 @@
 import { programName } from "./destinations";
+import { skipWrapperFlags } from "./wrapperWords";
 
 /**
  * The built-in rule `no-fetch-and-run` (plans/command-analysis.md, P11): a
@@ -199,8 +200,7 @@ function simpleOf(segment: string): Simple | undefined {
     while (i < words.length && /^[A-Za-z_]\w*=/.test(words[i])) i++;
     const w = words[i]?.toLowerCase();
     if (w !== undefined && WRAPPERS.has(programName(w))) {
-      i++;
-      while (i < words.length && words[i].startsWith("-")) i++;
+      i = skipWrapperFlags(words, i + 1, programName(w));
       continue;
     }
     break;

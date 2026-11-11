@@ -10,6 +10,9 @@ import {
 } from "./approval";
 import { hiddenCommandName } from "./commandName";
 import { hasUnsafeShellConstruct } from "./command";
+import { envAssignmentHit } from "./envAssignments";
+import { maskAssignmentValues } from "./envMask";
+import type { EnvNameOptions } from "./envNames";
 import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
 import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
@@ -46,12 +49,14 @@ export function floorMustRefuse(
 function hidesTheCommand(
   command: string | undefined,
   shell?: ShellKind,
+  envNames?: EnvNameOptions,
 ): boolean {
   if (command === undefined) return false;
   return (
     floorMustRefuse(command, shell) ||
     hasUnsafeShellConstruct(command) ||
-    hiddenCommandName(command, shell) !== undefined
+    hiddenCommandName(command, shell) !== undefined ||
+    envAssignmentHit(command, shell, envNames)?.severity === "dangerous"
   );
 }
 
@@ -144,6 +149,12 @@ export interface EvaluateInput {
    * only when this is non-empty.
    */
   trustedDomains?: readonly string[];
+  /**
+   * Environment variable names the person added to or took off the lists of
+   * names that change what a command does (envNames.ts), from their own
+   * config file and nothing else.
+   */
+  envNames?: EnvNameOptions;
   /** Path syntax to judge file paths by; the host's when absent. Tests set it. */
   platform?: "win32" | "posix";
   /** The home folder; the host's when absent. Tests set it. */
@@ -257,7 +268,8 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   // command was never shown.)
   let displayValue: string | undefined;
   if (toolName === "run_terminal_command" && parsedArgs.command) {
-    displayValue = parsedArgs.command as string;
+    // A secret in an assignment (`API_KEY=sk-... curl`) is not shown
+    displayValue = maskAssignmentValues(parsedArgs.command as string);
   }
 
   let evaluated = tool.evaluateToolCallPolicy
@@ -316,6 +328,9 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   const hiddenName = floorOn
     ? hiddenNameHit(commandText, input.shell)
     : undefined;
+  const envHit = floorOn
+    ? envAssignmentProtection(commandText, input.shell, input.envNames)
+    : undefined;
   const protectedHit = [
     findProtected({
       toolName,
@@ -328,6 +343,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     privateUrl,
     changedDefinition,
     hiddenName,
+    envHit,
     askProtectionHit({
       toolName,
       parsedArgs,
@@ -390,7 +406,8 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   // A hidden command is not loosened at any level, YOLO included. Otherwise
   // YOLO reaches past a refusal, a rule and a protected path, and Permissive
   // acts only on a call that would otherwise ask.
-  const hidden = floorOn && hidesTheCommand(commandText, input.shell);
+  const hidden =
+    floorOn && hidesTheCommand(commandText, input.shell, input.envNames);
   const loosening = hidden
     ? undefined
     : found?.level === "yolo" || evaluated === "allowedWithPermission"
@@ -453,6 +470,17 @@ function hiddenNameHit(
   const why =
     command === undefined ? undefined : hiddenCommandName(command, shell);
   return why ? { kind: "hidden-command", path: why } : undefined;
+}
+
+/** A variable set in front of the command that changes what it does: the name, never the value. */
+function envAssignmentProtection(
+  command: string | undefined,
+  shell: ShellKind | undefined,
+  names: EnvNameOptions | undefined,
+): ProtectedHit | undefined {
+  const hit =
+    command === undefined ? undefined : envAssignmentHit(command, shell, names);
+  return hit ? { kind: "env-assignment", path: hit.reason } : undefined;
 }
 
 function changedDefinitionHit(
