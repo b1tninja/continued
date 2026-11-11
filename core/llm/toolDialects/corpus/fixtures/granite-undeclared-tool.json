@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "id": "granite-undeclared-tool",
+  "family": "granite-3.x",
+  "dialect": "granite-tokens",
+  "kind": "negative",
+  "failureMode": "undeclared-tool",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/ibm-granite/granite-3.3-8b-instruct/blob/main/tokenizer_config.json and vLLM granite_tool_parser.py, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<|tool_call|>[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]",
+  "markers": ["<|tool_call|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call|>[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">",
+        "[",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "d",
+        "e",
+        "l",
+        "e",
+        "t",
+        "e",
+        "_",
+        "e",
+        "v",
+        "e",
+        "r",
+        "y",
+        "t",
+        "h",
+        "i",
+        "n",
+        "g",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        "]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool",
+        "_call|>[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]"
+      ],
+      "splitInside": "<|tool_call|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call|>",
+        "[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|too",
+        "l_",
+        "ca",
+        "ll|",
+        ">[",
+        "{\"na",
+        "me\": ",
+        "\"d",
+        "el",
+        "e",
+        "te",
+        "_e",
+        "v",
+        "eryt",
+        "h",
+        "ing\",",
+        " ",
+        "\"arg",
+        "ument",
+        "s",
+        "\": {\"",
+        "city\"",
+        ": \"P",
+        "ari",
+        "s\"}}",
+        "]"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<|tool_call|>[{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}]"
+  }
+}

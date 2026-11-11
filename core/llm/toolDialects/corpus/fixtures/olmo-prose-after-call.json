@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "id": "olmo-prose-after-call",
+  "family": "olmo-3",
+  "dialect": "olmo-function-calls",
+  "kind": "negative",
+  "failureMode": "prose-around-call",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/allenai/Olmo-3-7B-Instruct/blob/main/chat_template.jinja and vLLM docs tool_calling.md (Olmo 3), not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<function_calls>get_weather(city=\"Paris\")</function_calls>\nThe weather is shown above.",
+  "markers": ["<function_calls>", "</function_calls>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<function_calls>get_weather(city=\"Paris\")</function_calls>\nThe weather is shown above."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "(",
+        "c",
+        "i",
+        "t",
+        "y",
+        "=",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        ")",
+        "<",
+        "/",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">",
+        "\n",
+        "T",
+        "h",
+        "e",
+        " ",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        " ",
+        "i",
+        "s",
+        " ",
+        "s",
+        "h",
+        "o",
+        "w",
+        "n",
+        " ",
+        "a",
+        "b",
+        "o",
+        "v",
+        "e",
+        "."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<functio",
+        "n_calls>get_weather(city=\"Paris\")</function_calls>\nThe weather is shown above."
+      ],
+      "splitInside": "<function_calls>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<function_calls>",
+        "get_weather(city=\"Paris\")",
+        "</function_calls>",
+        "\nThe weather is shown above."
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<f",
+        "uncti",
+        "on_ca",
+        "lls>",
+        "g",
+        "e",
+        "t_w",
+        "eat",
+        "her(",
+        "city=",
+        "\"P",
+        "aris\"",
+        ")</f",
+        "uncti",
+        "on_ca",
+        "lls>\n",
+        "The w",
+        "e",
+        "ath",
+        "e",
+        "r is",
+        " s",
+        "hown",
+        " abov",
+        "e",
+        "."
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<function_calls>get_weather(city=\"Paris\")</function_calls>\nThe weather is shown above."
+  }
+}

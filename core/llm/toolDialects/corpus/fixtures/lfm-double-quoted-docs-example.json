@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "id": "lfm-double-quoted-docs-example",
+  "family": "lfm2",
+  "dialect": "lfm-tokens",
+  "kind": "positive",
+  "failureMode": "docs-form",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/LiquidAI/LFM2-8B-A1B/blob/main/chat_template.jinja and https://docs.liquid.ai/lfm/key-concepts/tool-use, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<|tool_call_start|>[get_weather(city=\"Paris\")]<|tool_call_end|>",
+  "markers": ["<|tool_call_start|>", "<|tool_call_end|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call_start|>[get_weather(city=\"Paris\")]<|tool_call_end|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "_",
+        "s",
+        "t",
+        "a",
+        "r",
+        "t",
+        "|",
+        ">",
+        "[",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "(",
+        "c",
+        "i",
+        "t",
+        "y",
+        "=",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        ")",
+        "]",
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "_",
+        "e",
+        "n",
+        "d",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_ca",
+        "ll_start|>[get_weather(city=\"Paris\")]<|tool_call_end|>"
+      ],
+      "splitInside": "<|tool_call_start|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call_start|>",
+        "[get_weather(city=\"Paris\")]",
+        "<|tool_call_end|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|t",
+        "ool_",
+        "cal",
+        "l_s",
+        "tart",
+        "|>[g",
+        "et_w",
+        "eathe",
+        "r(cit",
+        "y=\"P",
+        "aris",
+        "\")]",
+        "<|",
+        "tool_",
+        "ca",
+        "ll_en",
+        "d|>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

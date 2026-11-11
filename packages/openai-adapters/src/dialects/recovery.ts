@@ -8,6 +8,7 @@ import { GlmXmlRecovery, recoverGlmXmlFromText } from "./glmXml.js";
 import { HermesJsonRecovery, recoverHermesJsonFromText } from "./hermesJson.js";
 import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
+import { WRAPPER_ROWS, WrapperRecovery } from "./wrapperDialects.js";
 import {
   type DialectTool,
   QwenXmlRecovery,
@@ -121,6 +122,11 @@ function chooseRecovery(
   }
   if (wants(settings, "glm-xml", model, /glm/i)) {
     return { dialect: "glm-xml", stage: new GlmXmlRecovery(tools) };
+  }
+  for (const row of WRAPPER_ROWS) {
+    if (wants(settings, row.dialect, model, row.nameRe)) {
+      return { dialect: row.dialect, stage: new WrapperRecovery(tools, row) };
+    }
   }
   return undefined;
 }

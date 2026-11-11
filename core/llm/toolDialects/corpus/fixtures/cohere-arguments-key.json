@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "id": "cohere-arguments-key",
+  "family": "command-a",
+  "dialect": "cohere-action",
+  "kind": "negative",
+  "failureMode": "malformed-keys",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from documentation https://docs.cohere.com/docs/command-a-hf (the Hub repo is gated, template not read), not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<|START_ACTION|>[{\"tool_name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]<|END_ACTION|>",
+  "markers": [
+    "<|START_ACTION|>",
+    "<|END_ACTION|>",
+    "<|START_THINKING|>",
+    "<|END_THINKING|>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|START_ACTION|>[{\"tool_name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]<|END_ACTION|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "S",
+        "T",
+        "A",
+        "R",
+        "T",
+        "_",
+        "A",
+        "C",
+        "T",
+        "I",
+        "O",
+        "N",
+        "|",
+        ">",
+        "[",
+        "{",
+        "\"",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        "]",
+        "<",
+        "|",
+        "E",
+        "N",
+        "D",
+        "_",
+        "A",
+        "C",
+        "T",
+        "I",
+        "O",
+        "N",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|START_",
+        "ACTION|>[{\"tool_name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]<|END_ACTION|>"
+      ],
+      "splitInside": "<|START_ACTION|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|START_ACTION|>",
+        "[{\"tool_name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]",
+        "<|END_ACTION|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|ST",
+        "ART_",
+        "A",
+        "CTION",
+        "|>[{",
+        "\"tool",
+        "_",
+        "name",
+        "\": \"g",
+        "e",
+        "t",
+        "_weat",
+        "her\",",
+        " \"arg",
+        "um",
+        "e",
+        "nts\":",
+        " {\"ci",
+        "t",
+        "y\": \"",
+        "Par",
+        "is\"}}",
+        "]<|E",
+        "ND_AC",
+        "TIO",
+        "N|>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<|START_ACTION|>[{\"tool_name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]<|END_ACTION|>"
+  }
+}

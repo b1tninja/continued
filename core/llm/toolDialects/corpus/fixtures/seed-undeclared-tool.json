@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "id": "seed-undeclared-tool",
+  "family": "seed-oss",
+  "dialect": "seed-xml",
+  "kind": "negative",
+  "failureMode": "undeclared-tool",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<seed:tool_call>\n<function=delete_everything>\n<parameter=city>Paris</parameter>\n</function>\n</seed:tool_call>",
+  "markers": [
+    "<seed:tool_call>",
+    "</seed:tool_call>",
+    "<function=",
+    "<parameter="
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<seed:tool_call>\n<function=delete_everything>\n<parameter=city>Paris</parameter>\n</function>\n</seed:tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "s",
+        "e",
+        "e",
+        "d",
+        ":",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "\n",
+        "<",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "=",
+        "d",
+        "e",
+        "l",
+        "e",
+        "t",
+        "e",
+        "_",
+        "e",
+        "v",
+        "e",
+        "r",
+        "y",
+        "t",
+        "h",
+        "i",
+        "n",
+        "g",
+        ">",
+        "\n",
+        "<",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "=",
+        "c",
+        "i",
+        "t",
+        "y",
+        ">",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "<",
+        "/",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        ">",
+        "\n",
+        "<",
+        "/",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        ">",
+        "\n",
+        "<",
+        "/",
+        "s",
+        "e",
+        "e",
+        "d",
+        ":",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<seed:to",
+        "ol_call>\n<function=delete_everything>\n<parameter=city>Paris</parameter>\n</function>\n</seed:tool_call>"
+      ],
+      "splitInside": "<seed:tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<seed:tool_call>",
+        "\n",
+        "<function=",
+        "delete_everything>\n",
+        "<parameter=",
+        "city>Paris</parameter>\n</function>\n",
+        "</seed:tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "se",
+        "ed:t",
+        "ool",
+        "_ca",
+        "ll>",
+        "\n<",
+        "fu",
+        "nc",
+        "ti",
+        "on=d",
+        "el",
+        "e",
+        "te",
+        "_eve",
+        "r",
+        "ythi",
+        "ng",
+        ">\n<",
+        "pa",
+        "ra",
+        "me",
+        "ter=c",
+        "ity>",
+        "Pari",
+        "s</pa",
+        "r",
+        "amete",
+        "r",
+        ">\n</f",
+        "u",
+        "nc",
+        "ti",
+        "on>",
+        "\n</s",
+        "ee",
+        "d:to",
+        "ol_ca",
+        "ll>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<seed:tool_call>\n<function=delete_everything>\n<parameter=city>Paris</parameter>\n</function>\n</seed:tool_call>"
+  }
+}

@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "id": "olmo-json-literals-true-null",
+  "family": "olmo-3",
+  "dialect": "olmo-function-calls",
+  "kind": "positive",
+  "failureMode": "json-literals",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/allenai/Olmo-3-7B-Instruct/blob/main/chat_template.jinja and vLLM docs tool_calling.md (Olmo 3), not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<function_calls>read_file(path=\"a.txt\", limit=10)</function_calls>",
+  "markers": ["<function_calls>", "</function_calls>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<function_calls>read_file(path=\"a.txt\", limit=10)</function_calls>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">",
+        "r",
+        "e",
+        "a",
+        "d",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        "(",
+        "p",
+        "a",
+        "t",
+        "h",
+        "=",
+        "\"",
+        "a",
+        ".",
+        "t",
+        "x",
+        "t",
+        "\"",
+        ",",
+        " ",
+        "l",
+        "i",
+        "m",
+        "i",
+        "t",
+        "=",
+        "1",
+        "0",
+        ")",
+        "<",
+        "/",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<functio",
+        "n_calls>read_file(path=\"a.txt\", limit=10)</function_calls>"
+      ],
+      "splitInside": "<function_calls>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<function_calls>",
+        "read_file(path=\"a.txt\", limit=10)",
+        "</function_calls>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<fu",
+        "nctio",
+        "n_c",
+        "a",
+        "ll",
+        "s>",
+        "read",
+        "_file",
+        "(",
+        "pat",
+        "h=\"a",
+        ".txt\"",
+        ",",
+        " ",
+        "lim",
+        "it",
+        "=1",
+        "0)</f",
+        "un",
+        "cti",
+        "on_",
+        "cal",
+        "ls",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "read_file",
+        "arguments": {
+          "path": "a.txt",
+          "limit": 10
+        }
+      }
+    ],
+    "text": ""
+  }
+}

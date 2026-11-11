@@ -21,6 +21,23 @@ describe("detectToolDialectLeak", () => {
     );
   });
 
+  it("sees the Group C forms written as text", () => {
+    for (const [id, dialect] of [
+      ["granite-canonical", "granite-tokens"],
+      ["lfm-canonical", "lfm-tokens"],
+      ["hy3-canonical", "hy3-tags"],
+      ["solar-canonical", "solar-tokens"],
+      ["longcat-canonical", "longcat-json"],
+      ["olmo-canonical", "olmo-function-calls"],
+      ["seed-canonical", "seed-xml"],
+      ["cohere-canonical", "cohere-action"],
+    ] as const) {
+      expect(detectToolDialectLeak({ content: text(id) }), id).toEqual({
+        dialect,
+      });
+    }
+  });
+
   it("sees qwen markup written as text", () => {
     expect(
       detectToolDialectLeak({
@@ -89,6 +106,14 @@ describe("isLeakedToolCall", () => {
       "deepseek-v32-dsml-canonical",
       "mistral-v3-tool-calls-json",
       "llama3-python-tag-builtin",
+      "granite-canonical",
+      "lfm-canonical",
+      "hy3-canonical",
+      "solar-canonical",
+      "longcat-canonical",
+      "olmo-canonical",
+      "seed-canonical",
+      "cohere-canonical",
     ]) {
       expect(leak(id), id).toBe(true);
     }

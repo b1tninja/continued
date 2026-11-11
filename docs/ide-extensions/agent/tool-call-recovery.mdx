@@ -17,6 +17,14 @@ Set the variable in the environment that starts the editor or the CLI. It takes 
 | `llama-json`         | Llama's JSON call as text: `{"type": "function", "name": "read_file", "parameters": {...}}`, or an array of such objects or of JSON strings of them | `llama` |
 | `hermes-json`        | Hermes-style JSON in tags: `<tool_call>{"name": "...", "arguments": {...}}</tool_call>` | `qwen`, `hermes`            |
 | `glm-xml`            | GLM's tags: `<tool_call>NAME<arg_key>K</arg_key><arg_value>V</arg_value></tool_call>` | `glm`                         |
+| `granite-tokens` | IBM Granite 3.x: `<|tool_call|>[{"name": "...", "arguments": {...}}]` | `granite` |
+| `lfm-tokens` | Liquid LFM2: `<|tool_call_start|>[name(arg=...)]<|tool_call_end|>` | `lfm`, `liquid` |
+| `hy3-tags` | Tencent Hy3: `<tool_calls:opensource><tool_call:opensource>NAME<tool_sep:opensource>` and suffixed `<arg_key>` / `<arg_value>` tags | `hy3` |
+| `solar-tokens` | Upstage Solar Open: `<|tool_call:begin|>ID<|tool_call:name|>NAME<|tool_call:args|>{...}<|tool_call:end|>` | `solar` |
+| `longcat-json` | Meituan LongCat: `<longcat_tool_call>{"name": "...", "arguments": {...}}</longcat_tool_call>` | `longcat` |
+| `olmo-function-calls` | AI2 Olmo 3: `<function_calls>name(arg=...)</function_calls>` | `olmo` |
+| `seed-xml` | ByteDance Seed-OSS: `<seed:tool_call><function=NAME><parameter=KEY>...</parameter></function></seed:tool_call>` | `seed` |
+| `cohere-action` | Cohere Command: `<|START_ACTION|>[{"tool_name": "...", "parameters": {...}}]<|END_ACTION|>` | `command`, `cohere` |
 | `qwen-xml,pythonic`  | Both                                                                  | each by its own match         |
 
 The same setting can be given per model as `x_continue_recover_text_tool_calls` in `requestOptions.extraBodyProperties`; it takes the same values. Recovery applies to Amazon Bedrock models only, and a model whose id does not match gets no recovery whatever the setting says.
@@ -47,6 +55,14 @@ models:
 | `llama-json`  | Recover Llama JSON calls for this model, whatever its id is.                            |
 | `hermes-json` | Recover Hermes-style JSON calls for this model, whatever its id is.                     |
 | `glm-xml`     | Recover GLM tag calls for this model, whatever its id is.                               |
+| `granite-tokens` | Recover Granite 3.x `<|tool_call|>` JSON-list calls for this model, whatever its id is. |
+| `lfm-tokens` | Recover LFM2 token-wrapped Python-list calls for this model, whatever its id is. |
+| `hy3-tags` | Recover Hy3 tag calls for this model, whatever its id is. |
+| `solar-tokens` | Recover Solar Open token calls for this model, whatever its id is. |
+| `longcat-json` | Recover LongCat JSON calls for this model, whatever its id is. |
+| `olmo-function-calls` | Recover Olmo 3 `<function_calls>` calls for this model, whatever its id is. |
+| `seed-xml` | Recover Seed-OSS tag calls for this model, whatever its id is. |
+| `cohere-action` | Recover Cohere Command action calls for this model, whatever its id is. |
 
 Any other value is rejected when the config loads. When `CONTINUE_RECOVER_TEXT_TOOL_CALLS` is set, it wins over `toolDialect`. The same switch decides whether Llama 3.x models are offered tools at all (they are off by default, because they write calls as text): setting `llama-json` in either place turns them on. The setting applies to Bedrock models in the IDE and in the CLI (`cn`); the rules below apply unchanged.
 
@@ -70,6 +86,16 @@ Recovery is strict, because text that looks like a call is sometimes an example.
 - For `llama-json`, the reply is nothing but one call object or an array of them, with exactly the keys `name` and `parameters` (and an optional `type` of `function`).
 - For `hermes-json` and `glm-xml`, the reply is nothing but calls (an opening `<think>` block is kept as text), and for `glm-xml` a value is a string unless the schema declares another type, in which case it must be JSON of that type. Both were built from the model chat templates and checked on synthesised fixtures; no live leak of either was captured, so treat them as untested against real replies.
 
+- For the families below, the reply is nothing but calls in the family's own markers (an opening think block in the family's own tags is kept as text). They share one reader, so what they refuse is the same: prose before or after the calls, a fenced example, a tool that was not offered, a body that is not exactly the family's grammar, a missing close marker. When a value contains the close marker itself, the reader tries each later close marker until the call and the rest of the reply both parse. Every form was built from the model's own chat template, the vendor's documentation or the vendor's own parser, read on 2026-11-10; no live reply of any of them was captured, so treat them all as untested against real replies.
+  - `granite-tokens`: `<|tool_call|>` and then a JSON array of objects with exactly the keys `name` and `arguments` (an object).
+  - `lfm-tokens`: `<|tool_call_start|>`, a non-empty Python list of calls with keyword arguments, `<|tool_call_end|>`. Values are Python literals, as for `pythonic`. LFM's optional JSON mode is not recovered.
+  - `hy3-tags`: one `<tool_calls:opensource>` block of one or more `<tool_call:opensource>NAME<tool_sep:opensource>` calls whose arguments are `<arg_key:opensource>` / `<arg_value:opensource>` pairs. A value is a string unless the schema declares another type, in which case it must be JSON of that type, as for `glm-xml`.
+  - `solar-tokens`: one or more `<|tool_call:begin|>ID<|tool_call:name|>NAME<|tool_call:args|>{JSON object}<|tool_call:end|>` blocks, the ID being ten lowercase letters or digits, with an optional `<|tool_calls|>` before and `<|calls|>` after.
+  - `longcat-json`: one or more `<longcat_tool_call>` blocks, each one JSON object with exactly `name` and `arguments` (an object, not a string).
+  - `olmo-function-calls`: one `<function_calls>` block of calls with keyword arguments, one per line or separated by whitespace. Values are JSON or Python literals.
+  - `seed-xml`: one or more `<seed:tool_call>` blocks, each exactly one `<function=NAME><parameter=KEY>value</parameter></function>`, read as for `qwen-xml`.
+  - `cohere-action`: one `<|START_ACTION|>` block holding a non-empty JSON array of objects with `tool_name`, `parameters` (an object) and optionally a string `tool_call_id`. Cohere's Hub repositories are gated, so this form comes from Cohere's public documentation (`docs.cohere.com/docs/command-a-hf`). Command R and R+ of 2024 write a different, fenced form and are not covered.
+
 Anything else stays text, exactly as the model wrote it. While a reply streams, text that might be the start of a call is held back until the reply ends, so a recovered call never shows as text first; with recovery on, replies from a matching model can appear later than without it.
 
 A recovered call goes through the same tool permissions as any other call.
@@ -91,7 +117,19 @@ The preset never turns recovery on. To recover a family's text calls, set `toolD
 | GLM-4.5 to 5                              | `<arg_key>` / `<arg_value>` tags        | `glm-xml`                |
 | Llama 3.1 to 3.3                          | `{"name", "parameters"}` JSON           | `llama-json`             |
 | Llama 4, Nova                             | Python call syntax                      | `pythonic`               |
+| Granite 3.x | `<|tool_call|>` JSON list | `granite-tokens` |
+| Granite 4.0, SmolLM3 | `<tool_call>` JSON, as Hermes | `hermes-json` |
+| Granite 4.2 | `<tool_call><function=...>` XML | `qwen-xml` |
+| Liquid LFM2, LFM2.5 | `<|tool_call_start|>` Python list | `lfm-tokens` |
+| Tencent Hy3 | `:opensource`-suffixed tags | `hy3-tags` |
+| Upstage Solar Open | `<|tool_call:begin|>` tokens | `solar-tokens` |
+| Meituan LongCat | `<longcat_tool_call>` JSON | `longcat-json` |
+| AI2 Olmo 3 | `<function_calls>` Python calls | `olmo-function-calls` |
+| ByteDance Seed-OSS | `<seed:tool_call>` XML | `seed-xml` |
+| Cohere Command A, R7B | `<|START_ACTION|>` JSON | `cohere-action` |
 | Kimi, MiniMax, DeepSeek, gpt-oss, Gemma 4, Mistral, Llama-Nemotron, Nemotron-H | their own forms | none yet (native only) |
 | Gemma 3                                   | none: it made no tool calls             | none                     |
 
 Nemotron 3 (Super, Nano) writes the same markup as Qwen3-Coder, and NVIDIA's model cards use vLLM's `qwen3_coder` parser for it. Nemotron-H and Llama-Nemotron write `<TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>` instead; no recovery exists for that form yet.
+
+Phi-4-mini and Falcon-H1 have no recovery. Phi-4-mini's card and template do not say what its calls look like (the tokens `<|tool_call|>` and `<|/tool_call|>` exist, and vLLM's parser reads a different form for a different template), and Falcon-H1's template shows a single-quoted dictionary whose real output is not documented.

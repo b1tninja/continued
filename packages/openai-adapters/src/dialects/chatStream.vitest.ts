@@ -11,6 +11,14 @@ const DIALECTS = [
   "llama-json",
   "hermes-json",
   "glm-xml",
+  "granite-tokens",
+  "lfm-tokens",
+  "hy3-tags",
+  "solar-tokens",
+  "longcat-json",
+  "olmo-function-calls",
+  "seed-xml",
+  "cohere-action",
 ];
 const FIXTURES = path.resolve(
   __dirname,

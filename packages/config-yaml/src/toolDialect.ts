@@ -23,6 +23,14 @@ export function recoveryValueFor(
     case "llama-json":
     case "hermes-json":
     case "glm-xml":
+    case "granite-tokens":
+    case "lfm-tokens":
+    case "hy3-tags":
+    case "solar-tokens":
+    case "longcat-json":
+    case "olmo-function-calls":
+    case "seed-xml":
+    case "cohere-action":
       return `force:${toolDialect}`;
     case "native":
     case "off":

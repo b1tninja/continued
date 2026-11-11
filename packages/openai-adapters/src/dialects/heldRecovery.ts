@@ -9,13 +9,21 @@ export interface ParsedReply {
 export const THINK_OPEN = "<think>";
 export const THINK_CLOSE = "</think>";
 
-/** The leading `<think>` block of `s` with the whitespace after it, or "". */
-export function leadingThink(s: string): string {
+/**
+ * The leading think block of `s` with the whitespace after it, or "". The
+ * markers default to `<think>` / `</think>`; a family with its own (Seed-OSS,
+ * Hy3, LongCat, Cohere) passes them.
+ */
+export function leadingThink(
+  s: string,
+  open: string = THINK_OPEN,
+  close: string = THINK_CLOSE,
+): string {
   const lead = s.length - s.trimStart().length;
-  if (!s.startsWith(THINK_OPEN, lead)) return "";
-  const end = s.indexOf(THINK_CLOSE, lead);
+  if (!s.startsWith(open, lead)) return "";
+  const end = s.indexOf(close, lead);
   if (end === -1) return "";
-  const after = end + THINK_CLOSE.length;
+  const after = end + close.length;
   const rest = s.slice(after);
   return (
     s.slice(0, after) + rest.slice(0, rest.length - rest.trimStart().length)

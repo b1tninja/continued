@@ -249,6 +249,14 @@ export const TOOL_DIALECT_VALUES = [
   "llama-json",
   "hermes-json",
   "glm-xml",
+  "granite-tokens",
+  "lfm-tokens",
+  "hy3-tags",
+  "solar-tokens",
+  "longcat-json",
+  "olmo-function-calls",
+  "seed-xml",
+  "cohere-action",
   "off",
 ] as const;
 export const toolDialectSchema = z.enum(TOOL_DIALECT_VALUES, {

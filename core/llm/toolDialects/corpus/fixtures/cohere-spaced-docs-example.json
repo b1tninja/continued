@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 1,
+  "id": "cohere-spaced-docs-example",
+  "family": "command-a",
+  "dialect": "cohere-action",
+  "kind": "positive",
+  "failureMode": "docs-form",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from documentation https://docs.cohere.com/docs/command-a-hf (the Hub repo is gated, template not read), not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<|START_ACTION|> [ {\"tool_call_id\": \"0\", \"tool_name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}} ] <|END_ACTION|>",
+  "markers": [
+    "<|START_ACTION|>",
+    "<|END_ACTION|>",
+    "<|START_THINKING|>",
+    "<|END_THINKING|>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|START_ACTION|> [ {\"tool_call_id\": \"0\", \"tool_name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}} ] <|END_ACTION|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "S",
+        "T",
+        "A",
+        "R",
+        "T",
+        "_",
+        "A",
+        "C",
+        "T",
+        "I",
+        "O",
+        "N",
+        "|",
+        ">",
+        " ",
+        "[",
+        " ",
+        "{",
+        "\"",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "_",
+        "i",
+        "d",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "0",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        " ",
+        "]",
+        " ",
+        "<",
+        "|",
+        "E",
+        "N",
+        "D",
+        "_",
+        "A",
+        "C",
+        "T",
+        "I",
+        "O",
+        "N",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|START_",
+        "ACTION|> [ {\"tool_call_id\": \"0\", \"tool_name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}} ] <|END_ACTION|>"
+      ],
+      "splitInside": "<|START_ACTION|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|START_ACTION|>",
+        " [ {\"tool_call_id\": \"0\", \"tool_name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}} ] ",
+        "<|END_ACTION|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|S",
+        "T",
+        "A",
+        "R",
+        "T_AC",
+        "TIO",
+        "N|>",
+        " [ ",
+        "{\"t",
+        "oo",
+        "l_cal",
+        "l_id",
+        "\": \"",
+        "0\", ",
+        "\"to",
+        "ol",
+        "_",
+        "name",
+        "\": \"",
+        "get_w",
+        "eath",
+        "er\",",
+        " ",
+        "\"",
+        "param",
+        "eters",
+        "\"",
+        ": ",
+        "{\"ci",
+        "ty",
+        "\": \"",
+        "Pari",
+        "s\"}",
+        "} ",
+        "] ",
+        "<",
+        "|",
+        "END_",
+        "A",
+        "CTIO",
+        "N",
+        "|>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}
