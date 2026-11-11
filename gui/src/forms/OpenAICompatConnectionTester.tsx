@@ -1,8 +1,17 @@
 import { useContext, useState } from "react";
+import type { ToolDialectSetting } from "@continuedev/config-yaml";
+import { openAICompatDefaultBase } from "core/util/openaiCompatBases";
 import type { OpenAICompatTestResult } from "core/util/openaiCompatTest";
+import {
+  recoveryConfirmText,
+  recoveryOffer,
+  recoverySnippet,
+} from "core/util/recoveryOffer";
 import { Button } from "../components/ui/Button";
 import Alert from "../components/gui/Alert";
 import { IdeMessengerContext } from "../context/IdeMessenger";
+
+const LINE = String.fromCharCode(10);
 
 interface Props {
   provider: string;
@@ -11,6 +20,8 @@ interface Props {
   apiKey?: string;
   /** The model that will be saved; the first listed one is probed when it is not served. */
   model?: string;
+  /** The name the model has (or will have) in config.yaml; recovery is set on that entry. */
+  modelTitle?: string;
   /** Required fields are filled in. */
   canTest: boolean;
 }
@@ -25,12 +36,16 @@ export function OpenAICompatConnectionTester({
   apiBase,
   apiKey,
   model,
+  modelTitle,
   canTest,
 }: Props) {
   const ideMessenger = useContext(IdeMessengerContext);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<OpenAICompatTestResult>();
   const [probedModel, setProbedModel] = useState<string>();
+  const [recovery, setRecovery] = useState<
+    "on" | "declined" | { snippet: string[] }
+  >();
 
   async function run(withModel?: string) {
     const res = await ideMessenger.request("openaiCompat/testConnection", {
@@ -51,6 +66,7 @@ export function OpenAICompatConnectionTester({
     setBusy(true);
     setResult(undefined);
     setProbedModel(undefined);
+    setRecovery(undefined);
     try {
       const listed = await run();
       if (!listed.ok || listed.models.length === 0) return setResult(listed);
@@ -69,6 +85,27 @@ export function OpenAICompatConnectionTester({
   }
 
   const probe = result?.ok ? result.probe : undefined;
+  const offer = recoveryOffer(probe?.ok ? probe : undefined, provider, "ide");
+  const target = modelTitle ?? probedModel;
+
+  /** Sets `toolDialect` on this model in the person's own config.yaml, after the IDE's own confirmation. */
+  async function turnOnRecovery(dialect: string) {
+    if (!target) return;
+    const res = await ideMessenger.request("config/setToolDialect", {
+      title: target,
+      toolDialect: dialect as ToolDialectSetting,
+      confirm: recoveryConfirmText(target, dialect),
+    });
+    if (res.status === "success" && res.content.saved) setRecovery("on");
+    else if (res.status === "success" && res.content.declined) {
+      setRecovery("declined");
+    } else {
+      setRecovery({ snippet: recoverySnippet(provider, target, dialect) });
+    }
+  }
+
+  const needsBase = !openAICompatDefaultBase(provider) && !apiBase?.trim();
+  const defaultBase = openAICompatDefaultBase(provider);
   return (
     <div className="flex flex-col gap-2">
       <div>
@@ -76,10 +113,20 @@ export function OpenAICompatConnectionTester({
           type="button"
           variant="outline"
           onClick={testConnection}
-          disabled={!canTest || busy}
+          disabled={!canTest || busy || needsBase}
         >
           {busy ? "Connecting…" : "Test connection"}
         </Button>
+        {(needsBase || (defaultBase && !apiBase?.trim())) && (
+          <span
+            className="mt-1 block text-xs text-description-muted"
+            data-testid="test-connection-base-help"
+          >
+            {needsBase
+              ? "This provider has no default address. Enter its API base (it usually ends in /v1) to test it."
+              : `With no API base, this tests ${defaultBase}.`}
+          </span>
+        )}
       </div>
 
       {result && !result.ok && (
@@ -138,6 +185,46 @@ export function OpenAICompatConnectionTester({
               data-testid="tool-calls-facts"
             >
               {probe.facts}
+            </span>
+          )}
+          {probe.ok && probe.recorded && (
+            <span
+              className="block text-xs opacity-80"
+              data-testid="tool-calls-recorded"
+            >
+              Recorded on this computer: host name and counts only, no key. One
+              probe is not enough to change any default. To stop recording, set
+              probes.record: false in config.yaml.
+            </span>
+          )}
+          {offer && target && !recovery && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-1"
+              data-testid="turn-on-recovery"
+              title={`Sets toolDialect: ${offer.dialect} on ${target} in your config.yaml, after you confirm`}
+              onClick={() => void turnOnRecovery(offer.dialect)}
+            >
+              Turn on recovery
+            </Button>
+          )}
+          {recovery === "on" && (
+            <span className="block text-xs" data-testid="recovery-on">
+              Recovery is on for this model.
+            </span>
+          )}
+          {recovery === "declined" && (
+            <span className="block text-xs">Not changed.</span>
+          )}
+          {recovery && typeof recovery === "object" && (
+            <span className="block text-xs" data-testid="recovery-snippet">
+              Could not edit config.yaml (the model may not be saved yet, or
+              comes from a shared block). Add this by hand:
+              <code className="block whitespace-pre-wrap">
+                {recovery.snippet.join(LINE)}
+              </code>
             </span>
           )}
         </Alert>
