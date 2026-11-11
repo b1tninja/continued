@@ -24,6 +24,24 @@ export interface MappedFolder {
   readOnly: boolean;
 }
 
+/**
+ * One `--map <hostDir>=<C:\name>` argument as a READ-ONLY mapped folder. The
+ * split is at the LAST `=` followed by a drive path, so a host path may itself
+ * contain `=`. The sandbox side must be an absolute path outside the folders
+ * the runner owns.
+ */
+export function parseMapArg(value: string): MappedFolder {
+  const m = /^(.+)=([A-Za-z]:\\[^=]+)$/.exec(value);
+  if (!m) {
+    throw new Error(`--map takes <hostDir>=<C:\\name>, got: ${value}`);
+  }
+  const sandbox = m[2].replace(/[\\/]+$/, "");
+  if (/^[A-Za-z]:\\(payload|out|node)(\\|$)/i.test(sandbox)) {
+    throw new Error(`--map may not target ${sandbox}: the runner owns it`);
+  }
+  return { host: m[1], sandbox, readOnly: true };
+}
+
 export interface SandboxConfigOptions {
   networking: boolean;
   folders: MappedFolder[];

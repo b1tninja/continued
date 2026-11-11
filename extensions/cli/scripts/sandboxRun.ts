@@ -5,7 +5,8 @@
  *
  *   npx tsx --tsconfig scripts/tsconfig.json scripts/sandboxRun.ts \
  *     --payload <dir> --cmd "node run.mjs args" \
- *     [--network on|off] [--timeout 300] [--out <dir>] [--keep] [--ignore-vpn]
+ *     [--network on|off] [--timeout 300] [--out <dir>] [--keep] [--ignore-vpn] \
+ *     [--map <hostDir>=<C:\name>]...
  *
  * The payload is copied with plain file operations (no .git, node_modules or
  * big files) and mapped read-only at C:\payload; the host's Node install is
@@ -15,7 +16,8 @@
  * stderr.txt, exit.txt and a DONE marker into C:\out, which this script polls.
  * The sandbox is always stopped: on success, failure, timeout and Ctrl-C.
  * Refuses when a sandbox is already running or a connected VPN would stop the
- * sandbox's network. No API keys are passed in.
+ * sandbox's network. Each `--map <hostDir>=<C:\name>` adds one more READ-ONLY
+ * mapped folder (a browser cache, say). No API keys are passed in.
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -27,9 +29,11 @@ import {
   buildSandboxConfig,
   copyPayload,
   detectVpn,
+  parseMapArg,
   parseSandboxIds,
   pollResult,
   vpnVerdict,
+  type MappedFolder,
   type VpnReaders,
 } from "core/util/windowsSandboxRun.js";
 import {
@@ -51,6 +55,16 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 const flag = (name: string) => process.argv.includes(`--${name}`);
+/** Every value of a repeatable option: `--map a=b --map c=d`. */
+function args(name: string): string[] {
+  const out: string[] = [];
+  process.argv.forEach((a, i) => {
+    if (a === `--${name}` && process.argv[i + 1] !== undefined) {
+      out.push(process.argv[i + 1]);
+    }
+  });
+  return out;
+}
 
 function psLines(script: string): string[] {
   try {
@@ -89,7 +103,7 @@ async function main(): Promise<void> {
   const cmd = arg("cmd");
   if (!payload || !cmd) {
     fail(
-      'Usage: sandboxRun.ts --payload <dir> --cmd "node run.mjs args" [--network on|off] [--timeout 300] [--out <dir>] [--keep] [--ignore-vpn]',
+      'Usage: sandboxRun.ts --payload <dir> --cmd "node run.mjs args" [--network on|off] [--timeout 300] [--out <dir>] [--keep] [--ignore-vpn] [--map <hostDir>=<C:\\name>]...',
     );
   }
   const networkArg = arg("network") ?? "off";
@@ -101,6 +115,13 @@ async function main(): Promise<void> {
   if (!Number.isFinite(timeoutS) || timeoutS <= 0) fail("Bad --timeout");
   if (!fs.statSync(payload, { throwIfNoEntry: false })?.isDirectory()) {
     fail(`Payload is not a directory: ${payload}`);
+  }
+
+  let extraFolders: MappedFolder[] = [];
+  try {
+    extraFolders = args("map").map(parseMapArg);
+  } catch (e) {
+    fail((e as Error).message);
   }
 
   const status = windowsSandboxStatus();
@@ -197,6 +218,7 @@ async function main(): Promise<void> {
           readOnly: true,
         },
         { host: outDir, sandbox: SANDBOX_OUT, readOnly: false },
+        ...extraFolders,
       ],
     });
     const started = parseSandboxIds(
