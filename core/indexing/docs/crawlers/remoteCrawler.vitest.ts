@@ -2,6 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContinueConfig, IDE } from "../../..";
 import DocsCrawler from "./DocsCrawler";
 
+// Crawl requests go through the shared fetch; stand in for it with the global
+// replacement each test installs, and for DNS with a public answer.
+vi.mock("@continuedev/fetch", () => ({
+  fetchwithRequestOptions: (...args: unknown[]) =>
+    (globalThis as any).fetch(...args),
+}));
+vi.mock("../../../util/networkAddress", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../util/networkAddress")>()),
+  classifyHost: async () => ({ addresses: [], nonPublic: false }),
+}));
+
 const ide = { showToast: async () => undefined } as unknown as IDE;
 const config = { experimental: {} } as ContinueConfig;
 

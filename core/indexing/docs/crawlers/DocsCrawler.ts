@@ -44,7 +44,11 @@ class DocsCrawler {
     startUrl: URL,
   ): AsyncGenerator<PageData, DocsCrawlerType, undefined> {
     if (startUrl.host === this.GITHUB_HOST) {
-      yield* new GitHubCrawler(startUrl, this.githubToken).crawl();
+      yield* new GitHubCrawler(
+        startUrl,
+        this.githubToken,
+        this.config.requestOptions,
+      ).crawl();
       return "github";
     }
 
@@ -56,6 +60,7 @@ class DocsCrawler {
           startUrl,
           this.maxRequestsPerCrawl,
           this.maxDepth,
+          this.config.requestOptions,
         ).crawl();
         if (pageData.length > 0) {
           yield* pageData;
@@ -71,6 +76,7 @@ class DocsCrawler {
         startUrl,
         this.maxRequestsPerCrawl,
         this.maxDepth,
+        this.config.requestOptions,
       ).crawl();
       return "chromium";
     } else {
@@ -80,6 +86,7 @@ class DocsCrawler {
         startUrl,
         this.maxRequestsPerCrawl,
         this.maxDepth,
+        this.config.requestOptions,
       ).crawl()) {
         yield pageData;
         didCrawlSinglePage = true;
@@ -107,6 +114,7 @@ class DocsCrawler {
             startUrl,
             this.maxRequestsPerCrawl,
             this.maxDepth,
+            this.config.requestOptions,
           ).crawl();
           return "chromium";
         }
