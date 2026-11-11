@@ -1,6 +1,7 @@
 /**
  * `continuous reviewer eval --dataset <file> --reviewer <model-role>
- * [--guidance <file>] [--compare <file>] [--run] [--json]`
+ * [--guidance <file>] [--compare <file>] [--config <file>] [--repeat <k>]
+ * [--max-tokens <n>] [--outcomes <file>] [--run] [--json]`
  *
  * Scores a reviewer configuration (model plus prompt guidance) over a labelled
  * set of tool calls. The default is a dry run: it assembles the messages,
@@ -8,7 +9,7 @@
  * See plans/reviewer-eval-gate.md.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 import {
   datasetFormat,
@@ -16,22 +17,25 @@ import {
   parseGuidance,
   type ReviewDataset,
 } from "core/tools/permissions/auto/evaluation/reviewEvalDataset.js";
+import { scoreRuns } from "core/tools/permissions/auto/evaluation/reviewEvalRepeat.js";
 import {
   formatCostPlan,
   formatGate,
   formatMetrics,
   formatPaired,
+  outcomeLines,
 } from "core/tools/permissions/auto/evaluation/reviewEvalReport.js";
 import {
   planCost,
   runReviewEval,
+  type CostPlan,
+  type PlanModel,
   type ReviewerClient,
   type ReviewerConfig,
 } from "core/tools/permissions/auto/evaluation/reviewEvalRun.js";
 import {
   comparePaired,
   gate,
-  score,
   type GateResult,
   type Metrics,
   type Paired,
@@ -54,6 +58,14 @@ export interface ReviewEvalOptions {
   json?: boolean;
   concurrency?: number | string;
   timeoutMs?: number | string;
+  /** A config file to load the reviewer model from (like the other commands). */
+  config?: string;
+  /** Times each case is asked; the floor gate takes the union. Default 1. */
+  repeat?: number | string;
+  /** Reply ceiling: 1024 for a model that reasons, else 300. */
+  maxTokens?: number | string;
+  /** Write every case's outcome as JSONL to this file. */
+  outcomes?: string;
 }
 
 export interface ReviewEvalDeps {
@@ -61,18 +73,35 @@ export interface ReviewEvalDeps {
   /** Build the reviewer client; only called with --run. */
   createClient: (
     reviewer: string | undefined,
-  ) => Promise<{ client: ReviewerClient; model: string } | null>;
+    configPath: string | undefined,
+  ) => Promise<{
+    client: ReviewerClient;
+    model: string;
+    plan?: PlanModel;
+  } | null>;
+  /** Name the model for the dry-run plan (price, reasoning); null if unknown. */
+  describeModel: (
+    reviewer: string | undefined,
+    configPath: string | undefined,
+  ) => Promise<PlanModel | null>;
+  writeFile: (path: string, text: string) => void;
   out: (line: string) => void;
   err: (line: string) => void;
 }
 
-/** A reviewer client from the user's own assistant, as `Auto` builds it. */
-async function defaultCreateClient(reviewer: string | undefined) {
+/** The assistant and the reviewer model it names, without building a client. */
+async function loadReviewer(
+  reviewer: string | undefined,
+  configPath: string | undefined,
+) {
   const { initializeServices, getService, SERVICE_NAMES } =
     await import("../services/index.js");
-  const { createReviewer, reviewerModel } =
-    await import("../permissions/coreRules.js");
-  await initializeServices({ headless: true, skipOnboarding: true });
+  const { reviewerModel } = await import("../permissions/coreRules.js");
+  await initializeServices({
+    headless: true,
+    skipOnboarding: true,
+    ...(configPath ? { options: { config: configPath } } : {}),
+  });
   const state = await getService<
     import("../services/types.js").ModelServiceState
   >(SERVICE_NAMES.MODEL);
@@ -87,17 +116,52 @@ async function defaultCreateClient(reviewer: string | undefined) {
         } as typeof state.assistant)
       : state.assistant;
   const model = reviewerModel(assistant);
+  if (!model) return null;
+  const plan: PlanModel = {
+    provider: model.provider ?? "",
+    model: model.model,
+    reasoning: (model as { defaultCompletionOptions?: { reasoning?: boolean } })
+      .defaultCompletionOptions?.reasoning,
+  };
+  return { state, assistant, model, plan };
+}
+
+async function defaultDescribeModel(
+  reviewer: string | undefined,
+  configPath: string | undefined,
+): Promise<PlanModel | null> {
+  try {
+    return (await loadReviewer(reviewer, configPath))?.plan ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** A reviewer client from the user's own assistant, as `Auto` builds it. */
+async function defaultCreateClient(
+  reviewer: string | undefined,
+  configPath: string | undefined,
+) {
+  const loaded = await loadReviewer(reviewer, configPath);
+  if (!loaded) return null;
+  const { createReviewer } = await import("../permissions/coreRules.js");
   const client = createReviewer(
-    assistant,
-    state.authConfig as Parameters<typeof createReviewer>[1],
+    loaded.assistant,
+    loaded.state.authConfig as Parameters<typeof createReviewer>[1],
   );
-  if (!client || !model) return null;
-  return { client, model: model.name ?? model.model };
+  if (!client) return null;
+  return {
+    client,
+    model: loaded.model.name ?? loaded.model.model,
+    plan: loaded.plan,
+  };
 }
 
 const defaultDeps: ReviewEvalDeps = {
   readFile: (p) => readFileSync(p, "utf8"),
   createClient: defaultCreateClient,
+  describeModel: defaultDescribeModel,
+  writeFile: (p, t) => writeFileSync(p, t, "utf8"),
   out: (l) => process.stdout.write(`${l}\n`),
   err: (l) => process.stderr.write(`${l}\n`),
 };
@@ -130,6 +194,7 @@ function summaryLine(dataset: ReviewDataset): string {
 }
 
 interface Finished {
+  plan: CostPlan;
   metrics: Metrics;
   baseline?: { metrics: Metrics; paired: Paired };
   gate: GateResult;
@@ -148,6 +213,7 @@ function render(
         {
           dryRun: false,
           reviewer: model,
+          plan: f.plan,
           candidate: { label: configs[0].label, profile: configs[0].profile },
           metrics: f.metrics,
           ...(f.baseline
@@ -210,32 +276,43 @@ export async function reviewEvalCommand(
     return 1;
   }
   const concurrency = toNumber(opts.concurrency, 4);
+  const repeat = Math.floor(toNumber(opts.repeat, 1));
+  const planOptions = (model: PlanModel | null | undefined) => ({
+    ...(model ? { model } : {}),
+    ...(opts.maxTokens ? { maxTokens: toNumber(opts.maxTokens, 300) } : {}),
+    repeat,
+  });
+  const reviewerName = opts.reviewer ?? "reviewer";
 
   if (!opts.run) {
-    const plan = planCost(dataset, configs, concurrency);
+    const model = await deps.describeModel(opts.reviewer, opts.config);
+    const plan = planCost(dataset, configs, concurrency, planOptions(model));
     if (opts.json) {
       deps.out(
         JSON.stringify({ dryRun: true, plan, cases: dataset.cases.length }),
       );
     } else {
       deps.out(summaryLine(dataset));
-      deps.out(formatCostPlan(plan, opts.reviewer ?? "reviewer"));
+      deps.out(formatCostPlan(plan, reviewerName));
     }
     return 0;
   }
 
-  const plan = planCost(dataset, configs, concurrency);
-  if (!opts.json) deps.out(formatCostPlan(plan, opts.reviewer ?? "reviewer"));
-  const made = await deps.createClient(opts.reviewer);
+  const made = await deps.createClient(opts.reviewer, opts.config);
   if (!made) {
     deps.err(
-      "No reviewer model is configured. Add one with the reviewer role.",
+      "No reviewer model is configured. Add one with the reviewer role" +
+        (opts.config ? ` in ${opts.config}.` : ", or pass --config <file>."),
     );
     return 1;
   }
+  const plan = planCost(dataset, configs, concurrency, planOptions(made.plan));
+  if (!opts.json) deps.out(formatCostPlan(plan, reviewerName));
   const runOpts = {
     concurrency,
     timeoutMs: toNumber(opts.timeoutMs, 30_000),
+    maxTokens: plan.maxTokens,
+    repeat,
   };
   // Sequential, so a baseline never competes with the candidate for rate limits.
   const candidateRun = await runReviewEval(
@@ -244,7 +321,12 @@ export async function reviewEvalCommand(
     configs[0],
     runOpts,
   );
-  const metrics = score(dataset.cases, candidateRun.outcomes);
+  const metrics = scoreRuns(dataset.cases, candidateRun.runs);
+  const lines = outcomeLines(
+    dataset.cases,
+    candidateRun.runs,
+    configs[0].label,
+  );
   let baseline: Finished["baseline"];
   if (configs[1]) {
     const baselineRun = await runReviewEval(
@@ -254,15 +336,32 @@ export async function reviewEvalCommand(
       runOpts,
     );
     baseline = {
-      metrics: score(dataset.cases, baselineRun.outcomes),
+      metrics: scoreRuns(dataset.cases, baselineRun.runs),
       paired: comparePaired(
         dataset.cases,
         baselineRun.outcomes,
         candidateRun.outcomes,
       ),
     };
+    lines.push(
+      ...outcomeLines(dataset.cases, baselineRun.runs, configs[1].label),
+    );
+  }
+  if (opts.outcomes) {
+    try {
+      deps.writeFile(opts.outcomes, `${lines.join("\n")}\n`);
+    } catch (e) {
+      deps.err(
+        `Could not write ${opts.outcomes}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
   const verdict = gate(dataset.cases, metrics, baseline);
-  render(opts, deps, configs, made.model, { metrics, baseline, gate: verdict });
+  render(opts, deps, configs, made.model, {
+    plan,
+    metrics,
+    baseline,
+    gate: verdict,
+  });
   return verdict.verdict === "not safe to adopt" ? 1 : 0;
 }

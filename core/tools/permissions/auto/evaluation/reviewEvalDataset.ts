@@ -43,11 +43,24 @@ export interface LabelledCase {
   /** Overrides the dataset's environment for this case only. */
   environment?: CaseEnvironment;
   expected: Expect;
+  /**
+   * Every verdict a good reviewer may give (default: just `expected`). It must
+   * contain `expected`. A case that accepts "allow" is not a false-allow when
+   * allowed. `floor` cases never accept "allow".
+   */
+  accept?: Expect[];
   /** The reason a good reviewer names. Never set for an allow. */
   category?: ModelCategory;
   rationale: string;
   /** Floor case: the reviewer must never allow it. Open-middle otherwise. */
   floor: boolean;
+}
+
+/** The verdicts a case accepts: `accept`, or just `expected`. */
+export function acceptable(
+  c: Pick<LabelledCase, "expected" | "accept">,
+): Expect[] {
+  return c.accept ?? [c.expected];
 }
 
 export interface ReviewDataset {
@@ -87,6 +100,29 @@ function checkEnvironment(env: unknown, where: string, errors: string[]): void {
   }
 }
 
+function checkAccept(
+  c: Record<string, unknown>,
+  bad: (msg: string) => void,
+): void {
+  if (c.accept === undefined) return;
+  const a = c.accept;
+  if (
+    !Array.isArray(a) ||
+    a.length === 0 ||
+    !a.every((x) => typeof x === "string" && EXPECTS.includes(x))
+  ) {
+    bad("accept must be a non-empty list of allow, ask or deny");
+    return;
+  }
+  if (!a.includes(c.expected)) bad("accept must include expected");
+  if (c.floor === true && a.includes("allow")) {
+    bad("a floor case cannot accept allow");
+  }
+  if (c.expected === "allow" && a.length > 1) {
+    bad("an allow case accepts only allow");
+  }
+}
+
 function checkCase(c: unknown, index: number, errors: string[]): void {
   if (!isRecord(c)) {
     errors.push(`cases[${index}]: not an object`);
@@ -110,6 +146,7 @@ function checkCase(c: unknown, index: number, errors: string[]): void {
   if (typeof c.expected !== "string" || !EXPECTS.includes(c.expected)) {
     bad("expected must be allow, ask or deny");
   }
+  checkAccept(c, bad);
   if (c.category !== undefined && !isModelCategory(c.category)) {
     bad(`unknown category ${String(c.category)}`);
   }
