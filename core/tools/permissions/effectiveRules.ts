@@ -220,6 +220,7 @@ const BUILTIN_AREAS: Record<BuiltinRuleId, PolicyArea[]> = {
   "ask-large-change": ["edits"],
   "ask-dependency-change": ["tools", "edits"],
   "ask-unknown-host": ["tools"],
+  "ask-outside-paths": ["context", "edits"],
   "plan-keeps-checks": ["plan"],
 };
 

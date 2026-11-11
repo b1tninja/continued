@@ -106,6 +106,25 @@ const WRITE_TOOLS = new Set([
   "multi_edit",
 ]);
 
+/** The path a built-in file tool names, and whether it only reads. */
+export function fileToolTarget(
+  toolName: string,
+  parsedArgs: Record<string, unknown>,
+): { path: string | undefined; reads: boolean } | undefined {
+  const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+  if (READ_TOOLS.has(toolName)) {
+    return { path: str(parsedArgs.filepath), reads: true };
+  }
+  if (LIST_TOOLS.has(toolName)) {
+    const dir = str(parsedArgs.dirPath) ?? str(parsedArgs.directory_path);
+    return { path: dir, reads: true };
+  }
+  if (WRITE_TOOLS.has(toolName)) {
+    return { path: str(parsedArgs.filepath), reads: false };
+  }
+  return undefined;
+}
+
 /** Does this tool call touch a protected path? Checks the written path and the resolved one. */
 export function findProtected(args: {
   toolName: string;

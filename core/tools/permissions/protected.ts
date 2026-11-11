@@ -32,7 +32,8 @@ export type ProtectedKind =
   | "destructive-command"
   | "large-change"
   | "dependency-change"
-  | "unknown-host";
+  | "unknown-host"
+  | "file-deputy";
 
 export interface ProtectedHit {
   kind: ProtectedKind;
@@ -207,6 +208,9 @@ export function protectedReason(hit: ProtectedHit): string {
   }
   if (hit.kind === "network") {
     return `This touches the network path ${hit.path}. Looking it up contacts that computer, and on Windows can send your login to it, so it always asks first.`;
+  }
+  if (hit.kind === "file-deputy") {
+    return `This reaches ${hit.path}, a place you did not point the agent at, so it always asks first.`;
   }
   return hit.kind === "secret"
     ? `This touches ${hit.path}, which can hold credentials, so it always asks first.`

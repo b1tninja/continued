@@ -43,6 +43,32 @@ function failed(over: Partial<SandboxCompileInput> = {}) {
   return r;
 }
 
+describe("compileSandboxConfig: the default read policy", () => {
+  // `open` is the default (ROADMAP piece 14, open decision S9-X3). It is open
+  // about everything except what a deputy would go for: the home secrets and our
+  // own configuration folders, which hold keys. Changing either is a decision.
+  it("defaults to open, and still hides home secrets and our own folders", () => {
+    const p = plan();
+    expect(p.readPolicy).toBe("open");
+    const denied = p.config.filesystem.denyRead;
+    for (const d of [
+      "/home/dev/.ssh",
+      "/home/dev/.aws",
+      "/home/dev/.continue",
+      "/home/dev/.continuous",
+    ]) {
+      expect(denied, d).toContain(d);
+    }
+    expect(p.config.filesystem.allowRead).toEqual([]);
+    expect(p.notEnforced.map((n) => n.id)).toContain("open-reads");
+  });
+
+  it("workspace-only is what also hides the rest of the home folder", () => {
+    const p = plan({ readPolicy: "workspace-only" });
+    expect(p.config.filesystem.denyRead).toContain("/home");
+  });
+});
+
 describe("compileSandboxConfig: shape", () => {
   it("compiles the defaults and never says contained", () => {
     const p = plan();
