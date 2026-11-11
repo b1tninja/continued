@@ -8,55 +8,11 @@ import {
   authorizeRequest,
   hostHeaderAllowed,
   installServeGuards,
-  isLoopbackHost,
   originHeaderAllowed,
-  resolveServeToken,
-  serveBindingProblem,
   serveRequestProblem,
 } from "./serve.helpers.js";
 
 const TOKEN = "0123456789abcdef0123";
-
-describe("cn serve binding", () => {
-  it("lets a loopback bind omit --token", () => {
-    for (const host of [
-      "127.0.0.1",
-      "localhost",
-      "::1",
-      "[::1]",
-      "127.1.2.3",
-    ]) {
-      expect(isLoopbackHost(host)).toBe(true);
-      expect(serveBindingProblem(host, undefined)).toBeUndefined();
-    }
-  });
-
-  it("requires a token of 16 characters or more off loopback", () => {
-    for (const host of ["0.0.0.0", "::", "192.168.1.20", "myhost"]) {
-      expect(isLoopbackHost(host)).toBe(false);
-      expect(serveBindingProblem(host, undefined)).toMatch(/16 characters/);
-      expect(serveBindingProblem(host, "   ")).toMatch(/16 characters/);
-      expect(serveBindingProblem(host, "short")).toMatch(/16 characters/);
-      expect(serveBindingProblem(host, "0123456789abcdef0123")).toBeUndefined();
-    }
-  });
-});
-
-describe("the serve access token", () => {
-  it("is optional: absent without --token, taken from --token or the environment", () => {
-    expect(resolveServeToken(undefined, {})).toBeUndefined();
-    expect(resolveServeToken("   ", {})).toBeUndefined();
-    expect(resolveServeToken(`  ${TOKEN}  `, {})).toBe(TOKEN);
-    expect(
-      resolveServeToken(undefined, { CONTINUOUS_SERVE_TOKEN: ` ${TOKEN} ` }),
-    ).toBe(TOKEN);
-    expect(
-      resolveServeToken("from-flag-0123456789", {
-        CONTINUOUS_SERVE_TOKEN: TOKEN,
-      }),
-    ).toBe("from-flag-0123456789");
-  });
-});
 
 describe("the bearer token", () => {
   it("accepts the exact token", () => {
@@ -117,7 +73,7 @@ describe("serve request headers", () => {
     expect(originHeaderAllowed("https://evil.example")).toBe(false);
 
     expect(serveRequestProblem({ host: "evil.example" }, "127.0.0.1")).toEqual({
-      status: 421,
+      status: 403,
       error:
         "The Host header must be the loopback name or address this server is bound to.",
     });
@@ -195,7 +151,7 @@ describe("serve request guards", () => {
       host: "evil.example",
       authorization: `Bearer ${TOKEN}`,
     });
-    expect(res.status).toBe(421);
+    expect(res.status).toBe(403);
     expect(res.body).toContain("loopback");
   });
 
@@ -228,7 +184,7 @@ describe("serve request guards", () => {
     const ok = await request(port, { host: `127.0.0.1:${port}` });
     expect(ok.status).toBe(200);
     const badHost = await request(port, { host: "evil.example" });
-    expect(badHost.status).toBe(421);
+    expect(badHost.status).toBe(403);
     const badOrigin = await request(port, {
       host: `127.0.0.1:${port}`,
       origin: "https://evil.example",

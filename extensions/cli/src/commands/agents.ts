@@ -8,6 +8,7 @@
 
 import type { AgentView, AgentsSnapshot } from "core/agents/project.js";
 
+import { tokenForUrl } from "./serve.auth.js";
 import { DEFAULT_SERVE_HOST } from "./serve.helpers.js";
 
 export interface AgentsCommandOptions {
@@ -106,7 +107,8 @@ export async function agentsCommand(
     return 1;
   }
   const base = (options.url ?? DEFAULT_URL).replace(/\/+$/, "");
-  const token = options.token ?? env.CONTINUOUS_SERVE_TOKEN;
+  const token =
+    options.token ?? env.CONTINUOUS_SERVE_TOKEN ?? tokenForUrl(base);
   let snapshot: AgentsSnapshot;
   try {
     const res = await (deps.fetch ?? fetch)(`${base}/agents`, {
