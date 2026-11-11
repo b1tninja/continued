@@ -5,6 +5,7 @@
  * adapts the arguments. Exit 0 clean, 3 findings, 2 usage. Values are never
  * printed.
  */
+import { Option } from "commander";
 import { getGlobalDirPath } from "core/util/paths.js";
 import { EXIT_USAGE } from "core/util/secretScan/scanFiles.js";
 import {
@@ -12,6 +13,15 @@ import {
   type Io,
   type SecretsScanOptions,
 } from "core/util/secretScan/secretsCli.js";
+
+export const historyOption = new Option(
+  "--history",
+  "Scan this product's own stores (sessions, dev_data, logs) for secrets already on disk",
+);
+export const includeClaudeCodeOption = new Option(
+  "--include-claude-code",
+  "With --history: also read ~/.claude/projects transcripts, read-only",
+);
 
 export function secretsCommand(
   action: string | undefined,

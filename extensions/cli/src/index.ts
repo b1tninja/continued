@@ -10,7 +10,7 @@ import { agentsCommand } from "./commands/agents.js";
 import { auditCommand } from "./commands/audit.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
-import { cleanCommand } from "./commands/clean.js";
+import { registerCleanCommand } from "./commands/clean.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
@@ -18,7 +18,11 @@ import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
 import { reviewEvalCommand } from "./commands/reviewEval.js";
 import { sandboxCommand } from "./commands/sandbox.js";
-import { secretsCommand } from "./commands/secrets.js";
+import {
+  historyOption,
+  includeClaudeCodeOption,
+  secretsCommand,
+} from "./commands/secrets.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
 import {
@@ -515,14 +519,8 @@ program
     (value: string, previous: string[] = []) => [...previous, value],
   )
   .option("--no-known", "Do not match this machine's own secret values")
-  .option(
-    "--history",
-    "Scan this product's own stores (sessions, dev_data, logs) for secrets already on disk",
-  )
-  .option(
-    "--include-claude-code",
-    "With --history: also read ~/.claude/projects transcripts, read-only",
-  )
+  .addOption(historyOption)
+  .addOption(includeClaudeCodeOption)
   .action(
     async (
       action: string | undefined,
@@ -535,21 +533,7 @@ program
   );
 
 // Clean: retention for the product's own persisted files (dry run unless --yes)
-program
-  .command("clean")
-  .description(
-    "Delete this product's own sessions, dev_data and logs older than an age; dry run unless --yes. Not secure erasure on SSDs. Never runs by itself. input_history.json and file:// data destinations are not touched",
-  )
-  .option(
-    "--older-than <age>",
-    "One age for every store: 30d, 12h, 2w. Default: sessions 30d, logs 14d, dev_data 90d",
-  )
-  .option("--dry-run", "List only (the default)")
-  .option("--yes", "Actually delete")
-  .option("--json", "Machine-readable output")
-  .action(async (options) => {
-    await gracefulExit(cleanCommand(options));
-  });
+registerCleanCommand(program);
 
 // Sandbox status subcommand
 program

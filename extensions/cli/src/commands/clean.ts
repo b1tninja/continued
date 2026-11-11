@@ -4,6 +4,7 @@
  * Prints counts, sizes and paths, never contents. Only sessions, dev_data and
  * logs under the global folder are touched.
  */
+import type { Command } from "commander";
 import {
   DEFAULT_RETENTION_DAYS,
   parseAge,
@@ -13,6 +14,8 @@ import {
 } from "core/util/cleanStores.js";
 import { getGlobalDirPath } from "core/util/paths.js";
 import type { Io } from "core/util/secretScan/secretsCli.js";
+
+import { gracefulExit } from "../util/exit.js";
 
 export interface CleanCommandOptions {
   olderThan?: string;
@@ -89,4 +92,23 @@ export function cleanCommand(
   );
   io.out(CLEAN_NOTE);
   return r.failed.length ? 1 : 0;
+}
+
+/** Adds `continuous clean` to the program. */
+export function registerCleanCommand(program: Command): void {
+  program
+    .command("clean")
+    .description(
+      "Delete this product's own sessions, dev_data and logs older than an age; dry run unless --yes. Not secure erasure on SSDs. Never runs by itself. input_history.json and file:// data destinations are not touched",
+    )
+    .option(
+      "--older-than <age>",
+      "One age for every store: 30d, 12h, 2w. Default: sessions 30d, logs 14d, dev_data 90d",
+    )
+    .option("--dry-run", "List only (the default)")
+    .option("--yes", "Actually delete")
+    .option("--json", "Machine-readable output")
+    .action(async (options) => {
+      await gracefulExit(cleanCommand(options));
+    });
 }
