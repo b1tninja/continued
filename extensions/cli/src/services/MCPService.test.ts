@@ -13,6 +13,11 @@ const mockClient = {
   close: vi.fn(() => Promise.resolve()),
 };
 
+// No network in unit tests: the revision probe finds no modern server.
+vi.mock("core/context/mcp/mcpModernConnect.js", () => ({
+  connectModernIfSupported: vi.fn(async () => undefined),
+}));
+
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   // vitest 4 mocks invoked with `new` need a function, not an arrow
   Client: vi.fn(function () {
