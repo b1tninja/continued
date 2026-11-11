@@ -188,6 +188,8 @@ is well explained by <http://releaseflow.org>.
 one at a time with "Update branch" in between. See [docs/ci-merge-gate.md](./docs/ci-merge-gate.md)
 and `node scripts/ci/merge-ready.mjs <pr numbers>` (read-only) for the order.
 
+Never use `git stash` or `git stash pop` when several worktrees share one repository: the stash is shared across them, and one agent popped another's work in progress. Commit work in progress on your own branch instead.
+
 ### What makes a good PR?
 
 To keep the Continue codebase clean and maintainable, we expect the following from our own team and all contributors:
