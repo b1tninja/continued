@@ -63,6 +63,12 @@ export async function hooksCommand(
         return 0;
       }
       describe(cwd, files);
+      if (loadHooksConfig(cwd).managedOnly) {
+        out(
+          "Your settings say managedHooksOnly: these hooks do not run, trusted or not.",
+        );
+        return 0;
+      }
       out(
         isProjectTrusted(cwd, fingerprint)
           ? "Trusted: these hooks run."
