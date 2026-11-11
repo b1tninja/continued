@@ -31,6 +31,43 @@ export interface AuditEnvelope {
   turn?: number;
 }
 
+export const AUDIT_AGENT_KINDS = ["main", "subagent", "loop-worker"] as const;
+export const MAX_AGENT_FIELD_CHARS = 80;
+
+/**
+ * Which agent made a call (ROADMAP O and X): a name, an enum and ids, never a
+ * prompt. Ids are the ones the agent map uses (`main-<session>`,
+ * `sub-<toolCallId>`, `worker-<itemId>`), so a row joins to a node.
+ */
+export interface AuditAgent {
+  id: string;
+  kind: (typeof AUDIT_AGENT_KINDS)[number];
+  /** The definition's name ("Explore") or "item 3"; clipped and masked */
+  role?: string;
+  /** The permission mode or loop, as a short word */
+  mode?: string;
+  /** The spawning agent's id; absent for the main agent */
+  parentId?: string;
+}
+
+/** Copy the identity field by field: nothing else a caller attached survives. */
+export function auditAgentOf(
+  agent: AuditAgent | undefined,
+): AuditAgent | undefined {
+  if (!agent || typeof agent.id !== "string" || !agent.id) return undefined;
+  const line = (v: unknown) =>
+    typeof v === "string" && v
+      ? clipMasked(maskText(v).text, MAX_AGENT_FIELD_CHARS)
+      : undefined;
+  return clean({
+    id: line(agent.id) as string,
+    kind: AUDIT_AGENT_KINDS.includes(agent.kind) ? agent.kind : "subagent",
+    role: line(agent.role),
+    mode: line(agent.mode),
+    parentId: line(agent.parentId),
+  });
+}
+
 /** What the command analysis found; every part is optional while it is wired up */
 export interface AuditReading {
   shell?: string;
@@ -80,6 +117,8 @@ export interface DecisionEvent extends AuditEnvelope {
   area?: string;
   level?: string;
   mode?: string;
+  /** Which agent made the call; absent in files written before it was added */
+  agent?: AuditAgent;
   reason?: string;
   /** The `seq` of the ask this line answers */
   answers?: number;
@@ -114,6 +153,7 @@ export interface OutcomeEvent extends AuditEnvelope {
   /** Files the call changed, with a hash of the content after (for edit-revert) */
   changed?: { path: string; hash: string }[];
   read?: string[];
+  agent?: AuditAgent;
 }
 
 export interface TurnEvent extends AuditEnvelope {
@@ -185,6 +225,7 @@ export interface DecisionInput {
   area?: string;
   level?: string;
   mode?: string;
+  agent?: AuditAgent;
   reason?: string;
   answers?: number;
   reviewer?: AuditReviewer;
@@ -215,6 +256,7 @@ export function decisionDraft(input: DecisionInput): AuditDraft {
     displayValue: maskLine(input.displayValue, MAX_ARGS_CHARS),
     reason: maskLine(input.reason, MAX_REASON_CHARS),
     reviewer: input.reviewer ? clean({ ...input.reviewer }) : undefined,
+    agent: auditAgentOf(input.agent),
   }) as AuditDraft;
 }
 
@@ -233,6 +275,7 @@ export interface OutcomeInput {
   error?: string;
   changed?: { path: string; hash: string }[];
   read?: string[];
+  agent?: AuditAgent;
 }
 
 /** Digits, hex runs and paths-with-ids vary run to run; the signature should not. */
@@ -263,6 +306,7 @@ export function outcomeDraft(input: OutcomeInput): AuditDraft {
         ? undefined
         : hashMasked(maskText(output.trim()).text),
     errSig: error ? errorSignature(error) : undefined,
+    agent: auditAgentOf(input.agent),
   }) as AuditDraft;
 }
 

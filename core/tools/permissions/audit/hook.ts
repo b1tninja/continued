@@ -2,7 +2,7 @@ import type { ToolPolicy } from "@continuedev/terminal-security";
 import { levelOfCall, type ApprovalSettings } from "../approval";
 import type { AutoReviewReply } from "../auto/handler";
 import type { ToolPolicyResult } from "../evaluate";
-import type { AuditBy, AuditPolicy, DecisionInput } from "./record";
+import type { AuditAgent, AuditBy, AuditPolicy, DecisionInput } from "./record";
 import type { AuditTrail } from "./trail";
 
 /**
@@ -19,6 +19,8 @@ export interface AuditCallContext {
   parsedArgs: Record<string, unknown>;
   approval?: ApprovalSettings;
   loopItem?: string;
+  /** Which agent made the call; absent for a host that does not say */
+  agent?: AuditAgent;
 }
 
 export function auditPolicyOf(policy: ToolPolicy): AuditPolicy {
@@ -61,6 +63,7 @@ function baseInput(
     ...(area ? { area } : {}),
     ...(level ? { level } : {}),
     ...(ctx.loopItem ? { loopItem: ctx.loopItem } : {}),
+    ...(ctx.agent ? { agent: ctx.agent, mode: ctx.agent.mode } : {}),
   };
 }
 

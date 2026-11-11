@@ -681,6 +681,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       /** The call and session, so the decision can be written to the audit trail */
       callId?: string;
       sessionId?: string;
+      /** Which agent made the call (main, a subagent or a Loop worker), for the audit */
+      agent?: import("../tools/permissions/audit/record").AuditAgent;
     },
     {
       policy: ToolPolicy;

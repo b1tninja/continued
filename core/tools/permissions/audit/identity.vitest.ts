@@ -1,0 +1,169 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mainAgentId, subagentRunToNode } from "../../../agents/fromRuns";
+import { canarySecrets } from "../../../util/secretScan/canary";
+import { recordPolicyDecision } from "./hook";
+import {
+  loopWorkerAuditAgent,
+  mainAuditAgent,
+  subagentAuditAgent,
+} from "./identity";
+import { describeAgent, listInbox } from "./inbox";
+import { callRows, listCalls, readAuditSession } from "./reader";
+import { auditAgentOf } from "./record";
+import { AuditTrail } from "./trail";
+
+let dir: string;
+beforeEach(() => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-identity-"));
+});
+afterEach(() => {
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+const T0 = "2026-11-10T12:00:00.000Z";
+const trail = () =>
+  new AuditTrail({
+    dir,
+    enabled: true,
+    now: () => new Date(T0),
+    syncImportant: false,
+  });
+
+const ctx = (callId: string, agent?: ReturnType<typeof mainAuditAgent>) => ({
+  session: "s1",
+  callId,
+  toolName: "run_terminal_command",
+  parsedArgs: { command: "npm test" },
+  ...(agent ? { agent } : {}),
+});
+const ask = { policy: "allowedWithPermission" as const };
+
+describe("agent identity in the audit record", () => {
+  it("ids match the agent map's", () => {
+    const node = subagentRunToNode(
+      { agent: "Explore", status: "running", toolCalls: [] } as never,
+      { toolCallId: "call_1", rootId: mainAgentId("s1"), parentId: "p" },
+    );
+    expect(subagentAuditAgent("s1", "call_1", "Explore").id).toBe(node.id);
+    expect(mainAuditAgent("s1").id).toBe(mainAgentId("s1"));
+    expect(loopWorkerAuditAgent("s1", "3").id).toBe("worker-3");
+  });
+
+  it("writes who made the call on the decision and the outcome", () => {
+    const t = trail();
+    const agent = subagentAuditAgent("s1", "call_1", "Explore", "agent");
+    recordPolicyDecision(t, ctx("c1", agent), "allowedWithPermission", {
+      policy: "allowedWithoutPermission",
+    });
+    t.outcome({ callId: "c1", ran: true, exit: 0 });
+    const [row] = callRows(readAuditSession(dir, "s1"));
+    expect(row.agent).toEqual({
+      id: "sub-call_1",
+      kind: "subagent",
+      role: "Explore",
+      mode: "agent",
+      parentId: "main-s1",
+    });
+    expect(row.decisions[0].mode).toBe("agent");
+    expect(row.outcome?.agent?.role).toBe("Explore");
+  });
+
+  it("a call with no identity writes none, and a bad kind becomes subagent", () => {
+    const t = trail();
+    recordPolicyDecision(t, ctx("c1"), "allowedWithPermission", ask as never);
+    const [row] = callRows(readAuditSession(dir, "s1"));
+    expect("agent" in row).toBe(false);
+    expect(
+      auditAgentOf({ id: "x", kind: "bogus", extra: "p" } as never),
+    ).toEqual({ id: "x", kind: "subagent" });
+    expect(auditAgentOf({ id: "" } as never)).toBeUndefined();
+  });
+
+  it("never lets a secret in a role reach the file", () => {
+    const t = trail();
+    const secret = canarySecrets().anthropicKey;
+    const agent = subagentAuditAgent("s1", "c", `agent ${secret}`);
+    recordPolicyDecision(
+      t,
+      ctx("c1", agent),
+      "allowedWithPermission",
+      ask as never,
+    );
+    const text = fs
+      .readdirSync(path.join(dir, "2026-11"))
+      .map((f) => fs.readFileSync(path.join(dir, "2026-11", f), "utf8"))
+      .join("");
+    expect(text).not.toContain(secret);
+    expect(text).toContain("masked");
+  });
+
+  it("filters rows by the agent's role, id or kind", () => {
+    const t = trail();
+    recordPolicyDecision(
+      t,
+      ctx("c1", mainAuditAgent("s1")),
+      "allowedWithPermission",
+      ask as never,
+    );
+    recordPolicyDecision(
+      t,
+      ctx("c2", subagentAuditAgent("s1", "k", "Explore")),
+      "allowedWithPermission",
+      ask as never,
+    );
+    expect(listCalls(dir, { agent: "Explore" }).map((r) => r.callId)).toEqual([
+      "c2",
+    ]);
+    expect(listCalls(dir, { agent: "main" }).map((r) => r.callId)).toEqual([
+      "c1",
+    ]);
+    expect(listCalls(dir, { agent: "sub-k" })).toHaveLength(1);
+  });
+});
+
+describe("the inbox", () => {
+  it("lists asks with no answer and names the agent waiting", () => {
+    const t = trail();
+    const sub = subagentAuditAgent("s1", "k", "Explore", "agent");
+    recordPolicyDecision(
+      t,
+      ctx("c1", sub),
+      "allowedWithPermission",
+      ask as never,
+    );
+    recordPolicyDecision(
+      t,
+      ctx("c2", mainAuditAgent("s1")),
+      "allowedWithPermission",
+      ask as never,
+    );
+    recordPolicyDecision(t, ctx("c3"), "allowedWithPermission", {
+      policy: "allowedWithoutPermission",
+      source: "allow-rule",
+    });
+    t.answer("c2", true);
+    t.outcome({ callId: "c2", ran: true });
+    const items = listInbox(dir);
+    expect(items.map((i) => i.callId)).toEqual(["c1"]);
+    expect(describeAgent(items[0].agent)).toBe("Explore [agent] under main-s1");
+    expect(describeAgent(undefined)).toBe("unknown agent");
+  });
+
+  it("a refused ask leaves the inbox, and age cuts the list", () => {
+    const t = trail();
+    recordPolicyDecision(t, ctx("c1"), "allowedWithPermission", ask as never);
+    expect(listInbox(dir)).toHaveLength(1);
+    expect(
+      listInbox(
+        dir,
+        {},
+        { now: new Date("2026-11-12T00:00:00Z"), maxAgeMs: 3600_000 },
+      ),
+    ).toHaveLength(0);
+    t.answer("c1", false);
+    expect(listInbox(dir)).toHaveLength(0);
+  });
+});

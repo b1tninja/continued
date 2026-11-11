@@ -514,12 +514,13 @@ program
 program
   .command("audit [action] [session]")
   .description(
-    "Read the audit trail of tool call decisions (list, show <session>, prune)",
+    "Read the audit trail of tool call decisions (list, show <session>, inbox, prune)",
   )
   .option("--json", "Machine-readable output")
   .option("--session <id>", "Only this session")
   .option("--decision <d>", "allow, ask, deny or reviewer")
   .option("--tool <name>", "Only this tool")
+  .option("--agent <who>", "Only this agent (role, id or kind)")
   .option("--since <date>", "From this date (inclusive)")
   .option("--until <date>", "Up to this date (inclusive)")
   .option("--limit <n>", "Only the last n calls")

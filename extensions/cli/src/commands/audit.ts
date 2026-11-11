@@ -1,5 +1,5 @@
 /**
- * `continuous audit list|show <session>|prune`: read the audit trail the
+ * `continuous audit list|show <session>|inbox|prune`: read the audit trail the
  * permission path writes (plans/reviewer-audit.md, P12d). The files are
  * `<global dir>/audit/<yyyy-mm>/<session>.jsonl`; this only reads them, and
  * `prune` deletes whole files past the retention.
@@ -9,6 +9,10 @@ import {
   auditDir,
   auditSettings,
 } from "core/tools/permissions/audit/global.js";
+import {
+  describeAgent,
+  listInbox,
+} from "core/tools/permissions/audit/inbox.js";
 import { maskText } from "core/tools/permissions/audit/mask.js";
 import {
   callRows,
@@ -27,6 +31,7 @@ export interface AuditCommandOptions {
   session?: string;
   decision?: string;
   tool?: string;
+  agent?: string;
   since?: string;
   until?: string;
   days?: string | number;
@@ -65,6 +70,7 @@ function line(row: AuditCallRow): string {
     row.policy.padEnd(5),
     clip(who, 28).padEnd(28),
     row.tool.padEnd(18),
+    clip(row.agent?.role ?? row.agent?.kind ?? "-", 12).padEnd(12),
     ran.padEnd(8),
     clip(row.argsMasked.replace(/\s+/g, " "), 60),
   ].join("  ");
@@ -95,6 +101,7 @@ function filterOf(options: AuditCommandOptions): AuditFilter | string {
     session: options.session,
     decision: options.decision,
     tool: options.tool,
+    agent: options.agent,
     since: options.since,
     until: options.until,
   };
@@ -166,6 +173,30 @@ function showAction(
   return 0;
 }
 
+/** The calls waiting for an answer, and which agent is waiting on each. */
+function inboxAction(dir: string, options: AuditCommandOptions): number {
+  const filter = filterOf(options);
+  if (typeof filter === "string") {
+    err(filter);
+    return 2;
+  }
+  const items = listInbox(dir, filter);
+  if (options.json) {
+    out(JSON.stringify(items));
+    return 0;
+  }
+  if (items.length === 0) {
+    out("Nothing is waiting for an answer.");
+    return 0;
+  }
+  for (const item of items) {
+    out(
+      `${item.askedAt.slice(0, 19).replace("T", " ")}  ${describeAgent(item.agent)}  ${item.tool}  ${clip(item.summary, 60)}`,
+    );
+  }
+  return 0;
+}
+
 function pruneAction(dir: string, options: AuditCommandOptions): number {
   const days = parseDays(options.days) ?? auditSettings().retentionDays;
   const result = pruneAudit(dir, {
@@ -194,10 +225,12 @@ export function auditCommand(
       return listAction(dir, options);
     case "show":
       return showAction(dir, arg, options);
+    case "inbox":
+      return inboxAction(dir, options);
     case "prune":
       return pruneAction(dir, options);
     default:
-      err(`Unknown audit action '${action}'. Use list, show or prune.`);
+      err(`Unknown audit action '${action}'. Use list, show, inbox or prune.`);
       return 2;
   }
 }
