@@ -97,6 +97,7 @@ export function EditableRules({
             <Button
               variant="outline"
               size="sm"
+              className="min-h-6"
               aria-label={`Change rule ${r.raw}`}
               onClick={() =>
                 setOpen({
@@ -110,6 +111,7 @@ export function EditableRules({
             <Button
               variant="outline"
               size="sm"
+              className="min-h-6"
               aria-label={`Remove rule ${r.raw}`}
               onClick={() =>
                 setOpen({
@@ -131,6 +133,7 @@ export function EditableRules({
           <Button
             variant="outline"
             size="sm"
+            className="min-h-6"
             aria-label={`Adopt rule ${r.raw}`}
             onClick={() =>
               setOpen({
@@ -162,6 +165,7 @@ export function EditableRules({
             ref={addButton}
             variant="outline"
             size="sm"
+            className="min-h-6"
             aria-label="Add a rule"
             onClick={() =>
               setOpen({

@@ -27,8 +27,6 @@ export interface RuleEditRequest {
   /** update: the list and text the rule becomes */
   newDecision?: RuleDecision;
   newRule?: string;
-  /** move: one place up (-1) or down (1) in its list */
-  moveBy?: -1 | 1;
   /** The typed phrase, or "yes" */
   confirm?: string;
   baseHash?: string;
@@ -55,7 +53,7 @@ type On = (
   handler: (msg: { data: any }) => Promise<unknown>,
 ) => void;
 
-const WRITTEN: string[] = ["added", "updated", "removed", "adopted", "moved"];
+const WRITTEN: string[] = ["added", "updated", "removed", "adopted"];
 
 const ALLOW = "Allow";
 
@@ -118,7 +116,6 @@ export function registerRuleEditorHandlers(on: On, host: RuleEditorHost): void {
         rule: data.rule,
         ...(data.newDecision ? { newDecision: data.newDecision } : {}),
         ...(data.newRule !== undefined ? { newRule: data.newRule } : {}),
-        ...(data.moveBy ? { moveBy: data.moveBy } : {}),
         ...(extra.confirm ? { confirm: extra.confirm } : {}),
         ...(data.baseHash ? { baseHash: data.baseHash } : {}),
         ...(dryRun ? { dryRun: true } : {}),
@@ -187,9 +184,6 @@ export function registerRuleEditorHandlers(on: On, host: RuleEditorHost): void {
   );
   on("config/adoptToolRule", ({ data }) =>
     run("adopt", data, "permissions-page"),
-  );
-  on("config/moveToolRule", ({ data }) =>
-    run("move", data, "permissions-page"),
   );
   on("config/undoToolRule", async ({ data }): Promise<UndoResponse> => {
     const file = getConfigYamlPath();

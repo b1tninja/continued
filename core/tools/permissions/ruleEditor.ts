@@ -39,7 +39,7 @@ import { refusalFor } from "./ruleRefusal";
  * (selfProtect.ts).
  */
 
-export type ToolRuleOp = "add" | "update" | "remove" | "adopt" | "move";
+export type ToolRuleOp = "add" | "update" | "remove" | "adopt";
 
 export interface ToolRuleEdit {
   op: ToolRuleOp;
@@ -48,8 +48,6 @@ export interface ToolRuleEdit {
   /** update: the list and text the rule becomes */
   newDecision?: RuleDecision;
   newRule?: string;
-  /** move: one place up (-1) or down (1) in its list; the verdict never changes */
-  moveBy?: -1 | 1;
   /** adopt: where the rule is now (shown in the audit event) */
   from?: "folder" | "assistant" | "permissions-yaml";
   /** The typed phrase, or "yes" for a plain confirmation */
@@ -74,7 +72,6 @@ export type ToolRuleEditResult =
   | "updated"
   | "removed"
   | "adopted"
-  | "moved"
   | "preview"
   | "needs-confirmation"
   | "no-config"
@@ -158,9 +155,9 @@ export function applyToolRuleOp(
   config: ConfigYaml,
   edit: Pick<
     ToolRuleEdit,
-    "op" | "decision" | "rule" | "newDecision" | "newRule" | "moveBy"
+    "op" | "decision" | "rule" | "newDecision" | "newRule"
   >,
-): { config: ConfigYaml; skip?: "exists" | "not-found" | "edge" } {
+): { config: ConfigYaml; skip?: "exists" | "not-found" } {
   const rule = edit.rule.trim();
   if (edit.op === "add" || edit.op === "adopt") {
     const list = listOf(config, edit.decision);
@@ -169,16 +166,6 @@ export function applyToolRuleOp(
   }
   const from = listOf(config, edit.decision);
   if (!from.some((r) => same(r, rule))) return { config, skip: "not-found" };
-  if (edit.op === "move") {
-    const at = from.findIndex((r) => same(r, rule));
-    const to = at + (edit.moveBy ?? 0);
-    if (!edit.moveBy || to < 0 || to >= from.length) {
-      return { config, skip: "edge" };
-    }
-    const next = [...from];
-    [next[at], next[to]] = [next[to], next[at]];
-    return { config: withList(config, edit.decision, next) };
-  }
   const without = from.filter((r) => !same(r, rule));
   if (edit.op === "remove") {
     return { config: withList(config, edit.decision, without) };
@@ -366,7 +353,6 @@ function pushUndo(file: string, entry: UndoEntry): void {
  * is treated as loosening when unsure.
  */
 function undoLoosens(edit: ToolRuleEdit): boolean {
-  if (edit.op === "move") return false;
   if (edit.op === "add" || edit.op === "adopt")
     return edit.decision !== "allow";
   if (edit.op === "remove") return edit.decision === "allow";
@@ -405,7 +391,7 @@ function refusalOf(
   sources: RuleSourcesInput,
   verdict: RuleVerdict | undefined,
 ): string | undefined {
-  if (edit.op === "remove" || edit.op === "move") return undefined;
+  if (edit.op === "remove") return undefined;
   const updating = edit.op === "update";
   return refusalFor({
     decision: updating ? (edit.newDecision ?? edit.decision) : edit.decision,
@@ -415,23 +401,12 @@ function refusalOf(
   });
 }
 
-/** What the editor says about this change; a move never loosens and needs nothing. */
+/** What the editor says about this change: validity, friction, loosening, warnings. */
 function analysisOf(
   edit: ToolRuleEdit,
   sources: RuleSourcesInput,
   home: string,
 ): RuleAnalysis {
-  const rule = edit.rule.trim();
-  if (edit.op === "move") {
-    return {
-      valid: true,
-      rule,
-      broad: false,
-      friction: "none",
-      loosens: false,
-      warnings: [],
-    };
-  }
   const removing = edit.op === "remove";
   const updating = edit.op === "update";
   return analyzeRule({
@@ -512,14 +487,6 @@ export function editToolRule(
       beforeHash: file.hash,
     };
   }
-  if (applied.skip === "edge") {
-    return {
-      result: "exists",
-      analysis,
-      error: `That rule is already ${edit.moveBy === -1 ? "first" : "last"} in its list.`,
-      beforeHash: file.hash,
-    };
-  }
   if (applied.skip === "not-found") {
     return {
       result: "not-found",
@@ -544,10 +511,7 @@ export function editToolRule(
   const diff = lineDiff(textBefore, dry.text ?? textBefore);
   const afterPerms = applied.config.toolPermissions as
     ToolPermissions | undefined;
-  const verdict =
-    edit.op === "move"
-      ? undefined
-      : computeVerdict(edit, afterPerms, deps, sources);
+  const verdict = computeVerdict(edit, afterPerms, deps, sources);
   const refusal = refusalOf(edit, sources, verdict);
   if (refusal) {
     return {
@@ -661,9 +625,7 @@ export function editToolRule(
         ? "updated"
         : edit.op === "remove"
           ? "removed"
-          : edit.op === "move"
-            ? "moved"
-            : "adopted";
+          : "adopted";
   return {
     result,
     analysis,

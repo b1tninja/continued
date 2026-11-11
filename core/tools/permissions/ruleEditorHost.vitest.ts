@@ -110,50 +110,6 @@ describe("the written dialect", () => {
   });
 });
 
-describe("reordering", () => {
-  it("moves a rule one place, keeps comments, never loosens, needs no confirmation", () => {
-    const res = editToolRule(
-      edit({ op: "move", rule: "runTerminalCommand(git pull*)", moveBy: -1 }),
-      deps,
-    );
-    expect(res.result).toBe("moved");
-    expect(res.analysis?.loosens).toBe(false);
-    expect(res.analysis?.friction).toBe("none");
-    expect(fs.readFileSync(file, "utf8")).toContain("# my rules");
-    expect(readUserConfigFile(file).permissions?.ask).toEqual([
-      "runTerminalCommand(git pull*)",
-      "runTerminalCommand(git push*)",
-      "runTerminalCommand(git fetch*)",
-    ]);
-  });
-
-  it("says when a rule is already at the edge, and writes nothing", () => {
-    const before = fs.readFileSync(file, "utf8");
-    const res = editToolRule(
-      edit({ op: "move", rule: "runTerminalCommand(git push*)", moveBy: -1 }),
-      deps,
-    );
-    expect(res.result).toBe("exists");
-    expect(res.error).toMatch(/first/);
-    expect(fs.readFileSync(file, "utf8")).toBe(before);
-  });
-
-  it("is put back by undo, which does not loosen", () => {
-    const before = fs.readFileSync(file, "utf8");
-    editToolRule(
-      edit({ op: "move", rule: "runTerminalCommand(git push*)", moveBy: 1 }),
-      deps,
-    );
-    const undone = undoToolRuleChange({
-      file,
-      audit: deps.audit,
-      source: "permissions-page",
-    });
-    expect(undone.result).toBe("undone");
-    expect(fs.readFileSync(file, "utf8")).toBe(before);
-  });
-});
-
 describe("refusal in the page's words", () => {
   it("refuses an Always rule that an always-on rule already refuses", () => {
     const msg = refusalFor({

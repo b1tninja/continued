@@ -167,8 +167,7 @@ export interface TurnEvent extends AuditEnvelope {
 export type PolicyChangeSource =
   "permissions-page" | "cli" | "always-allow-button";
 
-export type PolicyChangeOp =
-  "add" | "update" | "remove" | "adopt" | "move" | "undo";
+export type PolicyChangeOp = "add" | "update" | "remove" | "adopt" | "undo";
 
 /**
  * A change to the person's own permission rules (plans/rule-editor.md, B22).

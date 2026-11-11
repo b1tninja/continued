@@ -162,20 +162,6 @@ describe("a loosening waits for the IDE's own dialog", () => {
     expect(res.result).toBe("refused");
   });
 
-  it("reorders without a dialog", async () => {
-    await call("config/addToolRule", {
-      decision: "deny",
-      rule: "runTerminalCommand(rm -rf*)",
-    });
-    const res = await call("config/moveToolRule", {
-      decision: "deny",
-      rule: "runTerminalCommand(rm -rf*)",
-      moveBy: -1,
-    });
-    expect(res.result).toBe("moved");
-    expect(confirm).not.toHaveBeenCalled();
-  });
-
   it("undoing an added Never is a loosening and asks; putting a Never back does not", async () => {
     await call("config/addToolRule", {
       decision: "deny",
