@@ -34,6 +34,8 @@ export type GlobalContextType = {
   skipPlaintextKeyOffer?: boolean;
   /** Where the model setup flow last stored an API key. */
   preferredKeyStorage?: "secure" | "env";
+  /** The CLI showed its one-time permissions line in the header. */
+  cliFirstRunBannerShown?: boolean;
   cliSelectedModel?: string; // CLI-specific model selection for unauthenticated users
 
   /**
