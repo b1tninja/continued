@@ -97,7 +97,17 @@ describe("isLeakedToolCall", () => {
   it("does not count negatives, fenced examples or inline mentions", () => {
     for (const f of corpus.values()) {
       if (!f.id.startsWith("neg-")) continue;
+      // Recovery leaves a call with a mistyped argument as text, but it is
+      // still a call written as text, so the nudge applies (next test).
+      if (f.failureMode === "argument-type-mismatch") continue;
       expect(leak(f.id), f.id).toBe(false);
+    }
+  });
+
+  it("counts a call whose argument has the wrong type: recovery declines it, the nudge does not", () => {
+    for (const f of corpus.values()) {
+      if (f.failureMode !== "argument-type-mismatch") continue;
+      expect(leak(f.id), f.id).toBe(true);
     }
   });
 
