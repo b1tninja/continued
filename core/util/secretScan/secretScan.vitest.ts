@@ -6,7 +6,7 @@ import { inspect } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  benignCorpus,
+  scannerBenignCorpus,
   B64,
   ALNUM,
   randomFrom,
@@ -93,6 +93,7 @@ describe("a finding never holds the value", () => {
     const c = cases[0];
     const [f] = scanText(c.wrap(c.value), "outbound", { salt: SALT });
     expect(Object.keys(f).sort()).toEqual([
+      "action",
       "class",
       "confidence",
       "end",
@@ -392,7 +393,7 @@ describe("false positives", () => {
   // 1000 corpus lines, measured below and printed when the test runs.
   const OUTBOUND_BUDGET = 0;
   const AT_REST_BUDGET_PER_1000_LINES = 2;
-  const corpus = benignCorpus();
+  const corpus = scannerBenignCorpus();
 
   it("outbound reports nothing on benign text", () => {
     const hits = corpus.flatMap((t) => scanText(t, "outbound", { salt: SALT }));
