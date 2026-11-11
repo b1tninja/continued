@@ -16,7 +16,7 @@ import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
 import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
-import { reviewEvalCommand } from "./commands/reviewEval.js";
+import { registerReviewerCommand } from "./commands/reviewEval.js";
 import { sandboxCommand } from "./commands/sandbox.js";
 import { registerSecretsCommand } from "./commands/secrets.js";
 import { serve } from "./commands/serve.js";
@@ -421,42 +421,7 @@ program
   });
 
 // Reviewer evaluation: dry by default, --run sends the requests
-program
-  .command("reviewer [action]")
-  .description(
-    "Work with the reviewer model: eval scores a reviewer model and prompt guidance over a labelled set of tool calls (dry run unless --run)",
-  )
-  .option("--dataset <file>", "Labelled cases (JSON or YAML)")
-  .option("--reviewer <model-role>", "Reviewer model name or role", "reviewer")
-  .option("--guidance <file>", "Guidance to try (JSON, YAML or text)")
-  .option(
-    "--compare <file>",
-    "Baseline guidance file, or `default` for the built-in prompt, to compare against",
-  )
-  .option("--profile <id>", "Reviewer profile id (carried into the report)")
-  .option("--run", "Call the model; without it nothing is sent")
-  .option(
-    "--no-prefilter",
-    "Leave out the check for text addressed to the reviewer, to measure the model alone",
-  )
-  .option("--json", "Machine-readable output")
-  .option("--concurrency <n>", "Parallel requests", "4")
-  .option("--timeout-ms <n>", "Per-request timeout", "30000")
-  .option("--config <path>", "Config file that defines the reviewer model")
-  .option("--repeat <k>", "Ask each case k times (floor gate: union)", "1")
-  .option("--max-tokens <n>", "Reply ceiling (1024 if it reasons, else 300)")
-  .option("--outcomes <file>", "Write every case's outcome as JSONL")
-  .action(async (action: string | undefined, options) => {
-    if (action !== "eval") {
-      console.error(
-        "Usage: continuous reviewer eval --dataset <file> [options]",
-      );
-      await gracefulExit(1);
-      return;
-    }
-    const code = await reviewEvalCommand(options);
-    await gracefulExit(code);
-  });
+registerReviewerCommand(program, gracefulExit);
 
 // Terminal environment subcommand
 program
