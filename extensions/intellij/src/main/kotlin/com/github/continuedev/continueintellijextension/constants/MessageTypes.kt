@@ -105,6 +105,8 @@ class MessageTypes {
             "config/removeToolRule",
             "config/adoptToolRule",
             "config/undoToolRule",
+            "audit/shadowSettings",
+            "audit/setShadowSettings",
             "tools/suggestAllowRule",
             "config/refreshProfiles",
             "config/openProfile",
