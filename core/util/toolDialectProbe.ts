@@ -101,16 +101,22 @@ export async function probeToolDialect(
   model?: string,
   options: {
     serverParses?: boolean;
+    /** `/api/show` listed capabilities and `tools` is not among them: do not probe. */
+    toolsAdvertised?: boolean;
     /** The provider/engine/API surface, with the label to show for it. */
     surface?: { query: SurfaceQuery; label: string };
   } = {},
 ): Promise<ToolDialectProbeResult> {
   let support: ToolCallSupport;
-  try {
-    support = supportFromReply(await send(probeRequestFor()));
-  } catch (e) {
-    support = refusedTools(e) ? { kind: "none" } : { kind: "unknown" };
-  }
+  if (options.toolsAdvertised === false) {
+    // The server lists capabilities without `tools`: nothing to probe.
+    support = { kind: "none" };
+  } else
+    try {
+      support = supportFromReply(await send(probeRequestFor()));
+    } catch (e) {
+      support = refusedTools(e) ? { kind: "none" } : { kind: "unknown" };
+    }
   const preset = options.serverParses
     ? undefined
     : resolveToolDialectPreset(model);
