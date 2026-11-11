@@ -179,6 +179,13 @@ describe("/policy", () => {
       describePolicy({ ...DEFAULT_POLICY_LEVELS, tools: "yolo" }).join("\n"),
     ).toContain("Custom");
   });
+
+  it("describePolicy uses the vocabulary: preset, level, rule", () => {
+    const text = describePolicy(DEFAULT_POLICY_LEVELS).join("\n");
+    expect(text).toContain("Preset: Careful");
+    expect(text).toContain("Level of each area:");
+    expect(text).toContain("Never, Ask, Always");
+  });
 });
 
 describe("the shared settings file", () => {

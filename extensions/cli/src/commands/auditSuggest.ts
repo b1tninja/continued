@@ -8,6 +8,8 @@
 
 import path from "node:path";
 
+import type { Command } from "commander";
+
 import {
   auditDir,
   auditSettings,
@@ -139,4 +141,14 @@ export function auditSuggestCommand(
     out(line);
   }
   return 0;
+}
+
+/** The options of `audit suggest`, kept here so index.ts does not grow. */
+export function addAuditSuggestOptions(command: Command): Command {
+  return command
+    .option("--min <n>", "suggest: answers needed before a rule is suggested")
+    .option("--max-age-days <n>", "suggest: read at most this many days back")
+    .option("--max-mb <n>", "suggest: read at most this many megabytes")
+    .option("--max-rows <n>", "suggest: read at most this many records")
+    .option("--verbose", "suggest: also say what was not suggested, and why");
 }

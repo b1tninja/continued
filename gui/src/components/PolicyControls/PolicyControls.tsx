@@ -247,8 +247,8 @@ export function YoloBanner() {
     >
       <ExclamationTriangleIcon className="h-3 w-3 shrink-0" />
       <span className="flex-1">
-        {names}: nothing asks. Deny rules, ask rules, protected paths and the
-        safety check are ignored for these.
+        {names}: nothing asks. Never rules, Ask rules, protected paths and the
+        built-in rule check are ignored for these.
       </span>
       <button
         type="button"

@@ -5,7 +5,7 @@
 const LOCKS: { id: string; label: string; reason: string }[] = [
   {
     id: "floor",
-    label: "Floor rules",
+    label: "Always-on rules",
     reason:
       "Never rules in your permissions.yaml bind at every level, YOLO included. They are changed by editing that file, not here.",
   },

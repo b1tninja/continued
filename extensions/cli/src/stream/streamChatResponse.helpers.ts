@@ -16,6 +16,7 @@ import {
   recordCliOutcome,
   type ApprovalTrace,
 } from "../audit/cliAudit.js";
+import { startShadowReview } from "../audit/shadowHook.js";
 import { itemBudgetNoteNow } from "../loop/loopBudget.js";
 import { holdLoopCall, loopRepeatGuard } from "../loop/loopHolds.js";
 import {
@@ -270,6 +271,9 @@ export async function checkToolPermissionApproval(
     hookDecision,
   });
   recordCliDecision(toolCall, trace, result);
+  // Shadow mode (off unless the person's own config turned it on): fire and
+  // forget; nothing it does reaches the decision above
+  void startShadowReview(toolCall, trace, result);
   return result;
 }
 
