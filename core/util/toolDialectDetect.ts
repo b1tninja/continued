@@ -27,6 +27,7 @@ export type Dialect =
   | "longcat-json" // LongCat: <longcat_tool_call>{"name":..,"arguments":{..}}</longcat_tool_call>
   | "olmo-function-calls" // Olmo 3: <function_calls>name(arg=1)</function_calls>
   | "seed-xml" // Seed-OSS: <seed:tool_call><function=NAME><parameter=KEY>v</parameter></function></seed:tool_call>
+  | "toolcall-json" // Nemotron: <TOOLCALL>[{"name":..,"arguments":{..}}]</TOOLCALL>
   | "cohere-action"; // Cohere Command: <|START_ACTION|>[{"tool_name":..,"parameters":{..}}]<|END_ACTION|>
 
 export type DetectKind = Dialect | "native-structured" | "prose" | "unknown";
@@ -155,6 +156,12 @@ const FINGERPRINTS: Fingerprint[] = [
     label: "<seed:tool_call>",
   },
   {
+    dialect: "toolcall-json",
+    strong: /<TOOLCALL>\s*[[{]/,
+    weak: /<TOOLCALL>/,
+    label: "<TOOLCALL>[",
+  },
+  {
     dialect: "cohere-action",
     strong: /<\|START_ACTION\|>/,
     label: "<|START_ACTION|>",
@@ -238,7 +245,7 @@ function scan(
     if (f.strong.test(text)) {
       // Opening and closing markers both present means a finished call.
       const closed =
-        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>|<\/tool_calls:opensource>|<\|tool_call:end\|>|<\|calls\|>|<\/longcat_tool_call>|<\/seed:tool_call>|<\|END_ACTION\|>|<\/function_calls>|<\|close\|>tools/.test(
+        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>|<\/tool_calls:opensource>|<\|tool_call:end\|>|<\|calls\|>|<\/longcat_tool_call>|<\/seed:tool_call>|<\|END_ACTION\|>|<\/function_calls>|<\|close\|>tools|<\/TOOLCALL>/.test(
           text,
         );
       return {
@@ -265,8 +272,11 @@ function pythonicCall(
   known: string[] | undefined,
 ): { name: string; confidence: number } | undefined {
   const t = text.trim();
+  // A list opened with `[` may be cut off or end in a trailing comma (Llama 4
+  // under a token limit or a sloppy sampler): the opening is the evidence.
+  const tail = t.startsWith("[") ? "" : String.raw`\)\s*\]?$`;
   const m = new RegExp(
-    String.raw`^\[?\s*(${NAME})\(\s*(?:${NAME}\s*=|\)|["'\d\[{])[\s\S]*\)\s*\]?$`,
+    String.raw`^\[?\s*(${NAME})\(\s*(?:${NAME}\s*=|\)|["'\d\[{])[\s\S]*${tail}`,
   ).exec(t);
   if (!m || /\n\s*\n/.test(t)) return undefined; // the whole reply, one block
   const known_ = known?.includes(m[1]) ?? false;

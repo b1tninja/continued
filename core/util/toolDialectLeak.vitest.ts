@@ -117,6 +117,17 @@ describe("detectToolDialectLeak", () => {
   });
 });
 
+/** Failure modes of a negative that is still a call written as text. */
+const DECLINED_CALL = new Set([
+  "argument-type-mismatch",
+  "truncated",
+  "prose-around-call",
+  "bare-object",
+  "missing-arguments",
+  "wrong-key",
+  "partial-refused",
+]);
+
 describe("isLeakedToolCall", () => {
   const tools = (id: string) => corpus.get(id)!.tools.map((t) => t.name);
   const leak = (id: string, extra?: { toolCalls?: never }) =>
@@ -145,6 +156,10 @@ describe("isLeakedToolCall", () => {
       "olmo-canonical",
       "seed-canonical",
       "cohere-canonical",
+      "toolcall-json-canonical",
+      "toolcall-json-array-two-calls",
+      "toolcall-json-think-then-call",
+      "llama4-pythonic-canonical",
     ]) {
       expect(leak(id), id).toBe(true);
     }
@@ -153,17 +168,68 @@ describe("isLeakedToolCall", () => {
   it("does not count negatives, fenced examples or inline mentions", () => {
     for (const f of corpus.values()) {
       if (!f.id.startsWith("neg-")) continue;
-      // Recovery leaves a call with a mistyped argument as text, but it is
-      // still a call written as text, so the nudge applies (next test).
-      if (f.failureMode === "argument-type-mismatch") continue;
+      // Recovery leaves a refused call as text, but it is still a call
+      // written as text, so the nudge applies (next test).
+      if (DECLINED_CALL.has(f.failureMode)) continue;
       expect(leak(f.id), f.id).toBe(false);
     }
   });
 
-  it("counts a call whose argument has the wrong type: recovery declines it, the nudge does not", () => {
+  it("counts a refused call (wrong argument type, truncated, bare object, wrong key): recovery declines it, the nudge does not", () => {
     for (const f of corpus.values()) {
-      if (f.failureMode !== "argument-type-mismatch") continue;
+      if (!f.id.startsWith("neg-") || !DECLINED_CALL.has(f.failureMode)) {
+        continue;
+      }
       expect(leak(f.id), f.id).toBe(true);
+    }
+  });
+
+  it("counts a Llama 4 list that was cut off or ends in a trailing comma, and not a quoted one (Q24c)", () => {
+    const id = "llama4-pythonic-canonical";
+    const full = text(id);
+    const shapes = [
+      full.slice(0, full.length - 14),
+      full.replace(/\)\]$/, "),]"),
+      full.replace(/\)\]$/, ", )]"),
+      `[${full.slice(1, full.indexOf("), ") + 3)}`,
+    ];
+    for (const content of shapes) {
+      expect(
+        isLeakedToolCall({ content, knownTools: tools(id) }),
+        content,
+      ).toBe(true);
+    }
+    for (const content of [
+      "Use [1, 2, 3] as the list.",
+      `Example: \`${full}\``,
+      `\`\`\`
+${full.slice(0, 20)}
+\`\`\``,
+      `[unknown_tool(a=1),`,
+    ]) {
+      expect(
+        isLeakedToolCall({ content, knownTools: tools(id) }),
+        content,
+      ).toBe(false);
+    }
+  });
+
+  it("does not count a quoted TOOLCALL block (fenced, inline, or naming no offered tool)", () => {
+    const id = "toolcall-json-canonical";
+    const call = text(id);
+    for (const content of [
+      `Reply with:
+
+\`\`\`
+${call}
+\`\`\``,
+      `The marker is \`${call}\`.`,
+      "The <TOOLCALL> marker wraps a JSON list.",
+    ]) {
+      expect(
+        isLeakedToolCall({ content, knownTools: tools(id) }),
+        content,
+      ).toBe(false);
     }
   });
 

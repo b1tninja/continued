@@ -30,6 +30,7 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   "longcat-json": "longcat-json",
   "olmo-function-calls": "olmo-function-calls",
   "seed-xml": "seed-xml",
+  "toolcall-json": "toolcall-json",
   "cohere-action": "cohere-action",
 };
 
