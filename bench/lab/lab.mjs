@@ -14,7 +14,7 @@ import { APIS, Engine, isLlamaApi, THINK_VALUES } from "./lib/transports.mjs";
 import { DEFAULT_EXE, startServer, stopFromPidFile } from "./lib/server.mjs";
 import { roots as makeRoots, writeText } from "./lib/paths.mjs";
 import { buildReport } from "./lib/report.mjs";
-import { readAll, readRecords, resultFile } from "./lib/results.mjs";
+import { labelArms, readAll, readRecords, resultFile } from "./lib/results.mjs";
 import { cfgTag, makePlan, runSuite, warmup } from "./lib/run.mjs";
 import { modelGuard } from "./lib/guards.mjs";
 import fs from "node:fs";
@@ -243,7 +243,7 @@ export async function main(argv, env = process.env) {
     const recs = v.file?.length ? readAll(v.file) : readAll(roots.results);
     const recs2 = v.suite ? recs.filter((r) => r.suite === v.suite) : recs;
     const md =
-      buildReport(recs2.filter((r) => r.kind !== "cache")) +
+      buildReport(labelArms(recs2.filter((r) => r.kind !== "cache"))) +
       buildCacheReport(recs2);
     return v.out
       ? log("wrote " + writeText(v.out, md, roots))

@@ -797,3 +797,16 @@ test("cli: run the leaks suite and the cache suite over openai-chat with --out a
     await fake.close();
   }
 });
+
+test("report: two transports of one model are two rows, default records unchanged", async () => {
+  const { labelArms } = await import("../lib/results.mjs");
+  const out = labelArms([
+    { key: "s|m|c1|p1", model: "m" },
+    { key: "s|m|c1@openai-chat,np=64|p1", model: "m" },
+    { key: "cache|m|x@a|p1", model: "m", kind: "cache" },
+  ]);
+  assert.deepEqual(
+    out.map((r) => r.model),
+    ["m", "m [openai-chat,np=64]", "m"],
+  );
+});

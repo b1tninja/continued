@@ -52,3 +52,18 @@ export function readAll(dirOrFiles) {
       : [];
   return files.flatMap((f) => readRecords(f));
 }
+
+/**
+ * Records with the configuration suffix of their key (`@openai-chat,np=64`)
+ * appended to the model name, so a report never pools two transports or two
+ * sampling configurations of one model into the same row. Default-configured
+ * records are unchanged.
+ */
+export function labelArms(records) {
+  return records.map((r) => {
+    const m = /@([^|]+)\|p\d+$/.exec(r.key ?? "");
+    return m && r.kind !== "cache"
+      ? { ...r, model: `${r.model} [${m[1]}]` }
+      : r;
+  });
+}
