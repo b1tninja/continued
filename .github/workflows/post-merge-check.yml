@@ -99,23 +99,32 @@ jobs:
       RESULTS: ${{ needs.core.result }} ${{ needs.gui.result }} ${{ needs.binary.result }}
       TITLE: "main is red: post-merge check failed"
     steps:
-      - name: Open, update or close the tracking issue
+      - name: Report the result
         run: |
           set -eu
-          existing=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title \
-            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+          red=no
           case " $RESULTS " in
-            *" failure "*|*" skipped "*)
+            *" failure "*|*" skipped "*) red=yes ;;
+          esac
+          if [ "$red" = yes ]; then
+            echo "main is red at $SHA (core, gui, binary: $RESULTS). Run: $RUN_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "main is green at $SHA (core, gui, binary: $RESULTS)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # A tracking issue is a convenience, only where the repository has issues turned on
+          # (this fork does not): the red run itself is the signal either way.
+          if [ "$(gh api "repos/$GH_REPO" --jq .has_issues)" = true ]; then
+            existing=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title               --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+            if [ "$red" = yes ]; then
               body="Commit $SHA on main failed the post-merge check (results in order core, gui, binary: $RESULTS). Run: $RUN_URL. Usually two pull requests that were each green alone; find the pair with node scripts/ci/merge-ready.mjs --trial."
               if [ -n "$existing" ]; then
                 gh issue comment "$existing" --body "$body"
               else
                 gh issue create --title "$TITLE" --body "$body"
               fi
-              ;;
-            *)
-              if [ -n "$existing" ]; then
-                gh issue close "$existing" --comment "Green again at $SHA: $RUN_URL"
-              fi
-              ;;
-          esac
+            elif [ -n "$existing" ]; then
+              gh issue close "$existing" --comment "Green again at $SHA: $RUN_URL"
+            fi
+          fi
+          # The run is the alarm: red when main is red, green when it is green.
+          [ "$red" = no ]
