@@ -165,7 +165,10 @@ export interface CliScenarioRequest {
 export async function buildCliScenario(
   spec: CliScenarioSpec,
 ): Promise<CliScenarioRequest> {
-  const { constructSystemMessage } = await import("../systemMessage.js");
+  // vitest.setup.ts mocks the module for other tests: take the real one
+  const { constructSystemMessage } = await vi.importActual<
+    typeof import("../systemMessage.js")
+  >("../systemMessage.js");
   const { buildChatRequestBody } = await import("./requestBody.js");
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(`${spec.date ?? "2026-11-10"}T09:00:00Z`));

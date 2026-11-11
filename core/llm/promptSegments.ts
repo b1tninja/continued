@@ -274,3 +274,35 @@ export function createSegmentDump(
     prev = segments;
   };
 }
+
+/** Budget of one segment id (ids with a ":name" suffix share the base id's). */
+export interface SegmentBudgets {
+  [id: string]: { maxTokens: number };
+}
+
+export const budgetKey = (id: string): string => id.split(":")[0];
+
+/** Segments over their budget; a segment with no budget is not checked. */
+export function overBudget(
+  segments: readonly PromptSegment[],
+  budgets: SegmentBudgets,
+): string[] {
+  return segments
+    .filter((s) => {
+      const b = budgets[budgetKey(s.id)];
+      return b !== undefined && s.tokens > b.maxTokens;
+    })
+    .map(
+      (s) =>
+        `${s.id}: ${s.tokens} tokens > ${budgets[budgetKey(s.id)].maxTokens}`,
+    );
+}
+
+/** Static segment hashes by id: what the hash goldens record. */
+export function staticHashes(
+  segments: readonly PromptSegment[],
+): Record<string, string> {
+  return Object.fromEntries(
+    segments.filter((s) => s.stability === "static").map((s) => [s.id, s.hash]),
+  );
+}
