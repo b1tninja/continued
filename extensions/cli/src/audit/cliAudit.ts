@@ -2,7 +2,9 @@ import { getAuditTrail } from "core/tools/permissions/audit/global.js";
 import { mainAuditAgent } from "core/tools/permissions/audit/identity.js";
 import type { AuditAgent } from "core/tools/permissions/audit/record.js";
 import type { AuditTrail } from "core/tools/permissions/audit/trail.js";
+import { taintedField } from "core/tools/permissions/taint/taintWiring.js";
 
+import { CLI_SESSION_ID } from "../permissions/coreRules.js";
 import { getCurrentSession } from "../session.js";
 import { logger } from "../util/logger.js";
 
@@ -69,6 +71,7 @@ export function recordCliDecision(
     const base = {
       session: cliAuditSession(),
       agent: cliAuditAgent(),
+      ...taintedField(CLI_SESSION_ID),
       callId: call.id,
       tool: call.name,
       args: safeJson(call.arguments),

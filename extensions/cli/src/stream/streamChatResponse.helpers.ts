@@ -19,6 +19,7 @@ import {
 import { startShadowReview } from "../audit/shadowHook.js";
 import { itemBudgetNoteNow } from "../loop/loopBudget.js";
 import { holdLoopCall, loopRepeatGuard } from "../loop/loopHolds.js";
+import { noteCliToolResult } from "../permissions/cliTaint.js";
 import {
   evaluateWithCoreRules,
   keepCoreVerdict,
@@ -980,6 +981,7 @@ export async function executeStreamedToolCalls(
               approvedCall,
               flagToolResult(rawResult),
             );
+            noteCliToolResult(approvedCall, approvedCall.tool?.mcpServer);
             recordCliOutcome(approvedCall, {
               ran: true,
               durMs: Date.now() - startedAt,
