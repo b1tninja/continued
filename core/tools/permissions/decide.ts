@@ -55,6 +55,7 @@ export type DecisionSource =
   | "safety-floor"
   | "permissive"
   | "yolo"
+  | "trusted-host"
   | "manual"
   | "tool-setting"
   | "default";
