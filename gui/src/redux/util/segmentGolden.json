@@ -1,10 +1,10 @@
 {
   "ide-agent-claude": {
-    "tools.builtin@agent": "8d88f34238bc",
+    "tools.builtin@agent": "25a1d7345667",
     "turn.agent@full": "85ef5288de58"
   },
   "ide-agent-claude-tasklist": {
-    "tools.builtin@agent": "ea03a84dec87",
+    "tools.builtin@agent": "e1081d8610f5",
     "turn.agent@full": "85ef5288de58"
   },
   "ide-plan-claude": {
@@ -13,22 +13,22 @@
   },
   "ide-agent-qwen-prompted": {
     "turn.agent@tailored": "318c4dd200eb",
-    "format.agent": "fe01dc79d63f"
+    "format.agent": "f6d793648874"
   },
   "ide-agent-nova": {
-    "tools.builtin@agent": "8d88f34238bc",
+    "tools.builtin@agent": "25a1d7345667",
     "turn.agent@full": "85ef5288de58"
   },
   "ide-loop-item": {
-    "tools.builtin@agent": "8d88f34238bc",
+    "tools.builtin@agent": "25a1d7345667",
     "turn.agent@full": "85ef5288de58"
   },
   "ide-agent-scoped-rule": {
-    "tools.builtin@agent": "8d88f34238bc",
+    "tools.builtin@agent": "25a1d7345667",
     "turn.agent@full": "85ef5288de58"
   },
   "ide-compacted": {
-    "tools.builtin@agent": "8d88f34238bc",
+    "tools.builtin@agent": "25a1d7345667",
     "turn.agent@full": "85ef5288de58"
   }
 }

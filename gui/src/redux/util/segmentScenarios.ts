@@ -1,5 +1,6 @@
 import type {
   ChatHistoryItem,
+  Tool,
   ModelDescription,
   RuleWithSource,
   TaskPlan,
@@ -8,7 +9,7 @@ import { editFileTool } from "core/tools/definitions/editFile";
 import { multiEditTool } from "core/tools/definitions/multiEdit";
 import { presentPlanTool } from "core/tools/definitions/presentPlan";
 import { readFileTool } from "core/tools/definitions/readFile";
-import { runTerminalCommandTool } from "core/tools/definitions/runTerminalCommand";
+import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
 import { taskListTool } from "core/tools/definitions/taskList";
 import { createLoop, startItemRun } from "core/util/loopMode";
 import { getEmptyRootState } from "../../util/test/mockStore";
@@ -63,11 +64,32 @@ export const RULES: RuleWithSource[] = [
   },
 ];
 
+// The real terminal tool describes the host OS and shell, so a fixed stand-in
+// keeps the goldens the same on every platform.
+const terminalStandIn: Tool = {
+  type: "function",
+  displayTitle: "Run Terminal Command",
+  wouldLikeTo: "run a command",
+  isCurrently: "running a command",
+  hasAlready: "ran a command",
+  readonly: false,
+  group: BUILT_IN_GROUP_NAME,
+  function: {
+    name: "run_terminal_command",
+    description: "Run a shell command and return its output.",
+    parameters: {
+      type: "object",
+      required: ["command"],
+      properties: { command: { type: "string" } },
+    },
+  },
+};
+
 const TOOLS = [
   readFileTool,
   editFileTool,
   multiEditTool,
-  runTerminalCommandTool,
+  terminalStandIn,
   presentPlanTool,
   taskListTool,
 ];

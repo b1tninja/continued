@@ -1,10 +1,10 @@
 {
-  "ide-agent-claude": "2661085f909c61f80e9681b03c52f82048cb550f736a904e03b65775b1e58a87",
-  "ide-agent-claude-tasklist": "874424ceede05dd173d25902308058b7094073fb69a0f7246ee4d48d308e8275",
+  "ide-agent-claude": "fe7a2cf323501ceaa25a41d925c606795e2611752e309e830460c063adf889d2",
+  "ide-agent-claude-tasklist": "e09bef5a6c4f1d1d140854633a10f1343dfe9ab5ab7a2a0970c7db5b7b004b9e",
   "ide-plan-claude": "91a7fff8b7360d2481203c93f241608fe665b9d13d7298cba0d72d817e3416d5",
-  "ide-agent-qwen-prompted": "8da9611fdc2109874e99c9dc3ca9a5ec6e0d4f6d004cd4677cb20bc6dc1f0f99",
-  "ide-agent-nova": "2661085f909c61f80e9681b03c52f82048cb550f736a904e03b65775b1e58a87",
-  "ide-loop-item": "4fba256afd3e383df4e1b4e891163961b37f365bcd21ad5bff9b0397e3f621db",
-  "ide-agent-scoped-rule": "0cf928697e4709af79ea6978bf7528fcacd00c448cd47174ead04aa2bbadd066",
-  "ide-compacted": "3b3c67a6e713c886d0bd60aee7be4d6542b04056d78652fbbded54c1bb31b4d4"
+  "ide-agent-qwen-prompted": "6b984b4464ab9752fb8bae0441b63abe7c38ff3900bdf553a7eb77ee6b998ccd",
+  "ide-agent-nova": "fe7a2cf323501ceaa25a41d925c606795e2611752e309e830460c063adf889d2",
+  "ide-loop-item": "dab32c3ab8530cb0dc80a8a64c5b68cfa794895d1a6a7993facfa17b3c127826",
+  "ide-agent-scoped-rule": "adb8992860a1bb727f32c388d429d0a4be7f379fd22f9026b9464170744574df",
+  "ide-compacted": "a57789f22fdacd2c7536c0ca9fa01a828b3cb9d6a59f1691985fe0e79662640d"
 }
