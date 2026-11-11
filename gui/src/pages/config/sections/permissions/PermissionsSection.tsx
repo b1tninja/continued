@@ -1,8 +1,10 @@
+import type { AuditOverview } from "core/tools/permissions/audit/auditOverview";
 import type {
   AreaReport,
   EffectiveRulesReport,
 } from "core/tools/permissions/effectiveRules";
 import {
+  areaOfTool,
   DEFAULT_MAX_NEW_PLAN_ITEMS,
   POLICY_AREA_LABELS,
   POLICY_AREAS,
@@ -18,12 +20,14 @@ import { useAppDispatch, useAppSelector } from "../../../../redux/hooks";
 import { updateConfig } from "../../../../redux/slices/configSlice";
 import { modifyAnyConfigWithSharedConfig } from "core/config/sharedConfig";
 import { ConfigHeader } from "../../components/ConfigHeader";
+import { AuditOverviewPanel, type ReviewRequest } from "./AuditOverviewPanel";
 import { EditableRules, type EditorEnv } from "./EditableRules";
 import { FirstRunOverview } from "./FirstRunOverview";
 import { LocksSection } from "./Locks";
 import { PermissionsError, PermissionsSkeleton } from "./PermissionsStates";
 import { BuiltinList, RuleList } from "./RuleList";
 import { RuleTester } from "./RuleTester";
+import { auditKeyOf, useAuditOverview } from "./useAuditOverview";
 import { usePermissionsReport } from "./usePermissionsReport";
 
 function PlanSettings({ area }: { area: AreaReport }) {
@@ -94,10 +98,16 @@ function AreaPanel({
   area,
   report,
   env,
+  audit,
+  review,
+  onReviewOpened,
 }: {
   area: PolicyArea;
   report: EffectiveRulesReport;
   env: EditorEnv;
+  audit?: AuditOverview;
+  review?: ReviewRequest & { nonce: number };
+  onReviewOpened?: () => void;
 }) {
   const levels = useAppSelector((s) => s.ui.policyLevels);
   const [result, setResult] = useState<ToolCallTestResult | undefined>();
@@ -152,6 +162,9 @@ function AreaPanel({
               rules={a.rules}
               highlight={result?.matchedRules.map((m) => m.raw)}
               env={env}
+              audit={audit}
+              review={review}
+              onReviewOpened={onReviewOpened}
             />
           )}
           <RuleTester area={area} levels={levels} onResult={setResult} />
@@ -179,6 +192,20 @@ export function PermissionsSection() {
     levels,
   );
   const [active, setActive] = useState<PolicyArea>("tools");
+  const [review, setReview] = useState<
+    (ReviewRequest & { nonce: number }) | undefined
+  >();
+  const ruleTexts = report
+    ? [
+        ...new Set(
+          [
+            ...Object.values(report.areas).flatMap((a) => a.rules),
+            ...report.unscoped,
+          ].map(auditKeyOf),
+        ),
+      ]
+    : [];
+  const audit = useAuditOverview(ideMessenger, ruleTexts, Boolean(report));
   const [introHidden, setIntroHidden] = useState(false);
   const [status, setStatus] = useState<
     { text: string; error?: boolean } | undefined
@@ -202,6 +229,14 @@ export function PermissionsSection() {
       setStatus({ text });
       reload();
     },
+  };
+
+  // Review opens the editor in the rule's own area, with the rule filled in
+  const onReview = (r: ReviewRequest) => {
+    setActive(
+      areaOfTool(r.rule.split("(")[0]) === "context" ? "context" : "tools",
+    );
+    setReview({ ...r, nonce: Date.now() });
   };
 
   const undo = async () => {
@@ -313,7 +348,26 @@ export function PermissionsSection() {
         </div>
       )}
       {report && (
-        <AreaPanel key={active} area={active} report={report} env={env} />
+        <AuditOverviewPanel
+          overview={audit.overview}
+          loading={audit.loading}
+          slow={audit.slow}
+          error={audit.error}
+          canEdit={env.editable}
+          onReview={onReview}
+          onRetry={audit.reload}
+        />
+      )}
+      {report && (
+        <AreaPanel
+          key={active}
+          area={active}
+          report={report}
+          env={env}
+          audit={audit.overview}
+          review={review}
+          onReviewOpened={() => setReview(undefined)}
+        />
       )}
       {report && report.unscoped.length > 0 && (
         <section aria-label="Rules with no area" className="mt-3">
