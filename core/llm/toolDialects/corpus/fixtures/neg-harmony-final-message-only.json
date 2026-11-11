@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-harmony-final-message-only",
+  "family": "gpt-oss",
+  "dialect": "harmony",
+  "kind": "negative",
+  "failureMode": "no-call",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://github.com/openai/harmony/blob/main/docs/format.md and https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<|channel|>final<|message|>It is sunny in Paris.<|return|>",
+  "markers": [
+    "<|channel|>",
+    "<|constrain|>",
+    "<|message|>",
+    "<|call|>",
+    "<|start|>",
+    "<|end|>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["<|channel|>final<|message|>It is sunny in Paris.<|return|>"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "c",
+        "h",
+        "a",
+        "n",
+        "n",
+        "e",
+        "l",
+        "|",
+        ">",
+        "f",
+        "i",
+        "n",
+        "a",
+        "l",
+        "<",
+        "|",
+        "m",
+        "e",
+        "s",
+        "s",
+        "a",
+        "g",
+        "e",
+        "|",
+        ">",
+        "I",
+        "t",
+        " ",
+        "i",
+        "s",
+        " ",
+        "s",
+        "u",
+        "n",
+        "n",
+        "y",
+        " ",
+        "i",
+        "n",
+        " ",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        ".",
+        "<",
+        "|",
+        "r",
+        "e",
+        "t",
+        "u",
+        "r",
+        "n",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|cha",
+        "nnel|>final<|message|>It is sunny in Paris.<|return|>"
+      ],
+      "splitInside": "<|channel|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|channel|>",
+        "final",
+        "<|message|>",
+        "It is sunny in Paris.<|return|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|",
+        "ch",
+        "anne",
+        "l",
+        "|>fi",
+        "nal<|",
+        "messa",
+        "ge|",
+        ">It ",
+        "is s",
+        "unny ",
+        "in P",
+        "aris.",
+        "<|re",
+        "turn",
+        "|>"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<|channel|>final<|message|>It is sunny in Paris.<|return|>"
+  }
+}

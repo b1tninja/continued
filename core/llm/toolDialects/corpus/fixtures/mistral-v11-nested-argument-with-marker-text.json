@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "id": "mistral-v11-nested-argument-with-marker-text",
+  "family": "mistral",
+  "dialect": "mistral",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://github.com/mistralai/mistral-common/blob/main/src/mistral_common/tokens/tokenizers/instruct.py and https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3/blob/main/tokenizer_config.json, not observed",
+    "retrieved": "2026-11-10",
+    "note": "A marker spelled inside a JSON string is part of the string."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "write_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"]
+      }
+    }
+  ],
+  "text": "[TOOL_CALLS]write_file[ARGS]{\"path\": \"a.md\", \"content\": \"use [TOOL_CALLS] then [ARGS] {x}\"}",
+  "markers": ["[TOOL_CALLS]", "[ARGS]", "[CALL_ID]"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_CALLS]write_file[ARGS]{\"path\": \"a.md\", \"content\": \"use [TOOL_CALLS] then [ARGS] {x}\"}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "T",
+        "O",
+        "O",
+        "L",
+        "_",
+        "C",
+        "A",
+        "L",
+        "L",
+        "S",
+        "]",
+        "w",
+        "r",
+        "i",
+        "t",
+        "e",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        "[",
+        "A",
+        "R",
+        "G",
+        "S",
+        "]",
+        "{",
+        "\"",
+        "p",
+        "a",
+        "t",
+        "h",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "a",
+        ".",
+        "m",
+        "d",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "c",
+        "o",
+        "n",
+        "t",
+        "e",
+        "n",
+        "t",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "u",
+        "s",
+        "e",
+        " ",
+        "[",
+        "T",
+        "O",
+        "O",
+        "L",
+        "_",
+        "C",
+        "A",
+        "L",
+        "L",
+        "S",
+        "]",
+        " ",
+        "t",
+        "h",
+        "e",
+        "n",
+        " ",
+        "[",
+        "A",
+        "R",
+        "G",
+        "S",
+        "]",
+        " ",
+        "{",
+        "x",
+        "}",
+        "\"",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_",
+        "CALLS]write_file[ARGS]{\"path\": \"a.md\", \"content\": \"use [TOOL_CALLS] then [ARGS] {x}\"}"
+      ],
+      "splitInside": "[TOOL_CALLS]"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_CALLS]",
+        "write_file",
+        "[ARGS]",
+        "{\"path\": \"a.md\", \"content\": \"use ",
+        "[TOOL_CALLS]",
+        " then ",
+        "[ARGS]",
+        " {x}\"}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[TO",
+        "OL",
+        "_CALL",
+        "S]wr",
+        "ite",
+        "_fil",
+        "e[A",
+        "R",
+        "G",
+        "S]{\"p",
+        "ath\"",
+        ": \"a.",
+        "md\"",
+        ", \"",
+        "con",
+        "ten",
+        "t\"",
+        ":",
+        " \"u",
+        "s",
+        "e [T",
+        "OO",
+        "L",
+        "_CALL",
+        "S]",
+        " th",
+        "en ",
+        "[A",
+        "RGS] ",
+        "{x",
+        "}\"",
+        "}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "write_file",
+        "arguments": {
+          "path": "a.md",
+          "content": "use [TOOL_CALLS] then [ARGS] {x}"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

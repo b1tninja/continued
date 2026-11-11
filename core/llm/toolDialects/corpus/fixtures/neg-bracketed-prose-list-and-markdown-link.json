@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-bracketed-prose-list-and-markdown-link",
+  "family": "llama4",
+  "dialect": "pythonic",
+  "kind": "negative",
+  "failureMode": "not-a-call",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/unsloth/Llama-4-Scout-17B-16E-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "See [the docs](https://example.com) and [get_weather] for details.\n[1, 2, 3]",
+  "markers": [],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "See [the docs](https://example.com) and [get_weather] for details.\n[1, 2, 3]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "S",
+        "e",
+        "e",
+        " ",
+        "[",
+        "t",
+        "h",
+        "e",
+        " ",
+        "d",
+        "o",
+        "c",
+        "s",
+        "]",
+        "(",
+        "h",
+        "t",
+        "t",
+        "p",
+        "s",
+        ":",
+        "/",
+        "/",
+        "e",
+        "x",
+        "a",
+        "m",
+        "p",
+        "l",
+        "e",
+        ".",
+        "c",
+        "o",
+        "m",
+        ")",
+        " ",
+        "a",
+        "n",
+        "d",
+        " ",
+        "[",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "]",
+        " ",
+        "f",
+        "o",
+        "r",
+        " ",
+        "d",
+        "e",
+        "t",
+        "a",
+        "i",
+        "l",
+        "s",
+        ".",
+        "\n",
+        "[",
+        "1",
+        ",",
+        " ",
+        "2",
+        ",",
+        " ",
+        "3",
+        "]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "See",
+        " [th",
+        "e doc",
+        "s](ht",
+        "tps:",
+        "/",
+        "/e",
+        "xampl",
+        "e.co",
+        "m) an",
+        "d",
+        " [get",
+        "_",
+        "weat",
+        "her",
+        "] f",
+        "o",
+        "r d",
+        "e",
+        "tails",
+        ".",
+        "\n[",
+        "1, 2",
+        ", ",
+        "3]"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "See [the docs](https://example.com) and [get_weather] for details.\n[1, 2, 3]"
+  }
+}

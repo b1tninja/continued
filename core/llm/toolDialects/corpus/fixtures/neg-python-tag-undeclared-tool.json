@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-python-tag-undeclared-tool",
+  "family": "llama3",
+  "dialect": "pythonic",
+  "kind": "negative",
+  "failureMode": "undeclared-tool",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/unsloth/Llama-3.3-70B-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<|python_tag|>wolfram_alpha.call(query=\"2+2\")",
+  "markers": ["<|python_tag|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["<|python_tag|>wolfram_alpha.call(query=\"2+2\")"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "p",
+        "y",
+        "t",
+        "h",
+        "o",
+        "n",
+        "_",
+        "t",
+        "a",
+        "g",
+        "|",
+        ">",
+        "w",
+        "o",
+        "l",
+        "f",
+        "r",
+        "a",
+        "m",
+        "_",
+        "a",
+        "l",
+        "p",
+        "h",
+        "a",
+        ".",
+        "c",
+        "a",
+        "l",
+        "l",
+        "(",
+        "q",
+        "u",
+        "e",
+        "r",
+        "y",
+        "=",
+        "\"",
+        "2",
+        "+",
+        "2",
+        "\"",
+        ")"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": ["<|pytho", "n_tag|>wolfram_alpha.call(query=\"2+2\")"],
+      "splitInside": "<|python_tag|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": ["<|python_tag|>", "wolfram_alpha.call(query=\"2+2\")"],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|",
+        "p",
+        "yth",
+        "on_ta",
+        "g|>wo",
+        "lfram",
+        "_alp",
+        "h",
+        "a.",
+        "cal",
+        "l(qu",
+        "er",
+        "y",
+        "=",
+        "\"2+2\"",
+        ")"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<|python_tag|>wolfram_alpha.call(query=\"2+2\")"
+  }
+}

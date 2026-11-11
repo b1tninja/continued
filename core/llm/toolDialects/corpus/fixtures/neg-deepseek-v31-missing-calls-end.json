@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-deepseek-v31-missing-calls-end",
+  "family": "deepseek-v3.1",
+  "dialect": "deepseek-v31",
+  "kind": "negative",
+  "failureMode": "truncated",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{\"city\": \"Paris\"}<｜tool▁call▁end｜>",
+  "markers": [
+    "<｜tool▁calls▁begin｜>",
+    "<｜tool▁calls▁end｜>",
+    "<｜tool▁call▁begin｜>",
+    "<｜tool▁call▁end｜>",
+    "<｜tool▁sep｜>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{\"city\": \"Paris\"}<｜tool▁call▁end｜>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "｜",
+        "t",
+        "o",
+        "o",
+        "l",
+        "▁",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        "▁",
+        "b",
+        "e",
+        "g",
+        "i",
+        "n",
+        "｜",
+        ">",
+        "<",
+        "｜",
+        "t",
+        "o",
+        "o",
+        "l",
+        "▁",
+        "c",
+        "a",
+        "l",
+        "l",
+        "▁",
+        "b",
+        "e",
+        "g",
+        "i",
+        "n",
+        "｜",
+        ">",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "<",
+        "｜",
+        "t",
+        "o",
+        "o",
+        "l",
+        "▁",
+        "s",
+        "e",
+        "p",
+        "｜",
+        ">",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "<",
+        "｜",
+        "t",
+        "o",
+        "o",
+        "l",
+        "▁",
+        "c",
+        "a",
+        "l",
+        "l",
+        "▁",
+        "e",
+        "n",
+        "d",
+        "｜",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<｜tool▁cal",
+        "ls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{\"city\": \"Paris\"}<｜tool▁call▁end｜>"
+      ],
+      "splitInside": "<｜tool▁calls▁begin｜>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<｜tool▁calls▁begin｜>",
+        "<｜tool▁call▁begin｜>",
+        "get_weather",
+        "<｜tool▁sep｜>",
+        "{\"city\": \"Paris\"}",
+        "<｜tool▁call▁end｜>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<｜t",
+        "ool",
+        "▁call",
+        "s",
+        "▁begi",
+        "n｜><｜",
+        "tool",
+        "▁c",
+        "all▁b",
+        "egin｜",
+        ">ge",
+        "t_wea",
+        "ther",
+        "<｜too",
+        "l▁s",
+        "ep｜>",
+        "{\"ci",
+        "ty\":",
+        " \"Par",
+        "i",
+        "s\"}<｜",
+        "t",
+        "ool",
+        "▁c",
+        "all",
+        "▁end｜",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-multibyte-char",
+      "encoding": "base64",
+      "chunks": [
+        "PO8=",
+        "vZx0b29s4paBY2FsbHPiloFiZWdpbu+9nD48772cdG9vbOKWgWNhbGziloFiZWdpbu+9nD5nZXRfd2VhdGhlcjzvvZx0b29s4paBc2Vw772cPnsiY2l0eSI6ICJQYXJpcyJ9PO+9nHRvb2ziloFjYWxs4paBZW5k772cPg=="
+      ],
+      "splitInside": "utf8-codepoint"
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{\"city\": \"Paris\"}<｜tool▁call▁end｜>"
+  }
+}

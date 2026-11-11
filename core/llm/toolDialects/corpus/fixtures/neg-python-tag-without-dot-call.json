@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-python-tag-without-dot-call",
+  "family": "llama3",
+  "dialect": "pythonic",
+  "kind": "negative",
+  "failureMode": "malformed",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/unsloth/Llama-3.3-70B-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<|python_tag|>{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}",
+  "markers": ["<|python_tag|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|python_tag|>{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "p",
+        "y",
+        "t",
+        "h",
+        "o",
+        "n",
+        "_",
+        "t",
+        "a",
+        "g",
+        "|",
+        ">",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|pytho",
+        "n_tag|>{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": "<|python_tag|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|python_tag|>",
+        "{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|p",
+        "ython",
+        "_t",
+        "ag",
+        "|>{\"",
+        "name",
+        "\"",
+        ": \"",
+        "ge",
+        "t_w",
+        "e",
+        "a",
+        "ther\"",
+        ", \"p",
+        "arame",
+        "ters\"",
+        ": {\"",
+        "city\"",
+        ": \"",
+        "Pari",
+        "s",
+        "\"}}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<|python_tag|>{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\"}}"
+  }
+}
