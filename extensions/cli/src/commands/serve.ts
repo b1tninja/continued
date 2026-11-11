@@ -5,6 +5,7 @@ import express, { Request, Response } from "express";
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
 import { prependPrompt } from "src/util/promptProcessor.js";
 
+import { startRunLimits } from "../budget/runLimits.js";
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
 import { setAgentId } from "../index.js";
@@ -93,6 +94,7 @@ function logServeConfiguration(
   }
 }
 
+// eslint-disable-next-line max-statements
 export async function serve(prompt?: string, options: ServeOptions = {}) {
   // Set agent ID for error reporting if provided
   setAgentId(options.id);
@@ -153,6 +155,9 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   };
 
   logServeConfiguration(config.name, model, options.config);
+
+  // Run limits cover the whole serve process; see docs/cli/run-limits.mdx
+  startRunLimits(options, { provider: model.provider, model: model.model });
 
   // Initialize session with system message
   const systemMessage = await constructSystemMessage(

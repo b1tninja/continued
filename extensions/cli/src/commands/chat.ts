@@ -4,6 +4,7 @@ import chalk from "chalk";
 import { ChatHistoryItem, Session } from "core";
 import { ChatDescriber } from "core/util/chatDescriber.js";
 
+import * as runLimits from "../budget/runLimits.js";
 import { compactChatHistory, findCompactionIndex } from "../compaction.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
 import {
@@ -475,6 +476,13 @@ async function runHeadlessMode(
     throw new Error("No LLM API instance found.");
   }
 
+  // Run limits (--max-budget-usd, --max-turns, --max-duration): refuses a
+  // dollar budget on an unpriced model before anything is sent
+  runLimits.startRunLimits(options, {
+    provider: model.provider,
+    model: model.model,
+  });
+
   // Initialize service-driven history (resume if requested)
   const chatHistory = await initializeChatHistory(options);
   let compactionIndex: number | null = null;
@@ -553,8 +561,8 @@ async function runHeadlessMode(
     }
   }
 
-  // exit after headless mode completes
-  await gracefulExit(0);
+  // exit after headless mode completes: a run limit has its own exit code
+  await gracefulExit(runLimits.exitCodeOfRun(options.format));
 }
 
 export async function chat(prompt?: string, options: ChatOptions = {}) {
@@ -578,6 +586,8 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
       await runHeadlessMode(prompt, options);
       return;
     }
+
+    runLimits.assertLimitsEnforceable(options);
 
     // Interactive path - requires TTY for Ink rendering
     // If not in headless mode, use unified initialization with TUI

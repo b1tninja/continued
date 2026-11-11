@@ -6,10 +6,12 @@ import chalk from "chalk";
 import { maskArgsForDisplay } from "core/tools/permissions/displayMask.js";
 import type { Express, Request, Response } from "express";
 
+import { currentRunStop, reportRunStop } from "../budget/runLimits.js";
 import {
   describePromptBlocked,
   runUserPromptSubmitHooks,
 } from "../hooks/promptHook.js";
+import { safeStderr } from "../init.js";
 import { runLoopCheck } from "../loop/loopChecks.js";
 import { loopWakeDelay, nextLoopTurn } from "../loop/loopDriver.js";
 import { prepareLoopTurn } from "../loop/loopSession.js";
@@ -29,7 +31,7 @@ import {
   type CacheTallySnapshot,
   describeCacheTally,
 } from "../util/cacheTally.js";
-import { updateAgentMetadata } from "../util/exit.js";
+import { gracefulExit, updateAgentMetadata } from "../util/exit.js";
 import { formatError } from "../util/formatError.js";
 import { logger } from "../util/logger.js";
 import {
@@ -434,6 +436,14 @@ async function drainMessages(ctx: ServeMessageContext) {
   const { state } = ctx;
   let processedMessage = false;
   while (state.serverRunning) {
+    // A run limit (--max-budget-usd, --max-turns, --max-duration) ends the
+    // server with its own exit code
+    const runStop = currentRunStop();
+    if (runStop) {
+      state.serverRunning = false;
+      await gracefulExit(reportRunStop(runStop, safeStderr));
+      break;
+    }
     // Everything queued while the last turn ran goes as one message;
     // nothing goes while paused.
     const queuedMessage = mergeQueuedMessages(messageQueue.takeNextBatch());
