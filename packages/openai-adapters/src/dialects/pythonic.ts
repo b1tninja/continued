@@ -33,6 +33,7 @@
  * call is accepted only for a tool the request declares.
  */
 import type { DialectTool, RecoveredCall, RecoveryEvent } from "./qwenXml.js";
+import { FenceTracker } from "./fenceTracker.js";
 import { hasProseBefore } from "./heldRecovery.js";
 import { fittedCall } from "./schemaCheck.js";
 
@@ -336,11 +337,7 @@ export class PythonicRecovery {
   private pending = "";
   private held: string | undefined;
   private atLineStart = true;
-  // Code fences in the released text, kept as it goes so a line is not a
-  // rescan of everything shown: whole runs of backticks (three to a fence)
-  // and the run still open at the end of the text.
-  private fenceRuns = 0;
-  private tickRun = 0;
+  private readonly fences = new FenceTracker();
   private readonly openers: string[];
 
   constructor(private readonly tools: DialectTool[]) {
@@ -365,23 +362,8 @@ export class PythonicRecovery {
   private release(out: RecoveryEvent[], text: string): void {
     if (!text) return;
     this.shown += text;
-    this.countFences(text);
+    this.fences.add(text);
     out.push({ type: "text", text });
-  }
-
-  private countFences(text: string): void {
-    for (const m of text.matchAll(/`+|[^`]+/g)) {
-      if (m[0][0] === "`") {
-        this.tickRun += m[0].length;
-      } else {
-        this.fenceRuns += Math.floor(this.tickRun / 3);
-        this.tickRun = 0;
-      }
-    }
-  }
-
-  private inFence(): boolean {
-    return (this.fenceRuns + Math.floor(this.tickRun / 3)) % 2 === 1;
   }
 
   push(chunk: string): RecoveryEvent[] {
@@ -404,7 +386,7 @@ export class PythonicRecovery {
         this.atLineStart = true;
         continue;
       }
-      if (!this.inFence()) {
+      if (!this.fences.inFence) {
         const opens = this.opening(buffer);
         if (opens === "yes") {
           this.held = buffer;
