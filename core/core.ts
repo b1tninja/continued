@@ -741,6 +741,7 @@ export class Core {
           toolName: data.toolName,
           parsedArgs: data.parsedArgs,
           approval: data.approval,
+          agent: data.agent,
         },
         reply,
       );
@@ -1965,6 +1966,7 @@ export class Core {
           approval,
           callId,
           sessionId,
+          agent,
         },
       }) => {
         const { config } = await this.configHandler.loadConfig();
@@ -1997,7 +1999,7 @@ export class Core {
         });
         recordPolicyDecision(
           getAuditTrail(),
-          { session: sessionId, callId, toolName, parsedArgs, approval },
+          { session: sessionId, callId, toolName, parsedArgs, approval, agent },
           basePolicy,
           result,
         );

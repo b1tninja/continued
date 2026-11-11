@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { AuditRecord, DecisionEvent, OutcomeEvent } from "./record";
+import type {
+  AuditAgent,
+  AuditRecord,
+  DecisionEvent,
+  OutcomeEvent,
+} from "./record";
 import { readAuditFile } from "./writer";
 
 /**
@@ -86,6 +91,8 @@ export interface AuditCallRow {
   reason?: string;
   reviewerModel?: string;
   argsMasked: string;
+  /** Which agent made the call; absent for a record that predates it */
+  agent?: AuditAgent;
   ran?: boolean;
   exit?: number;
   durMs?: number;
@@ -114,6 +121,7 @@ export function callRows(records: readonly AuditRecord[]): AuditCallRow[] {
           reason: r.reason,
           reviewerModel: r.reviewer?.model,
           argsMasked: r.argsMasked,
+          ...(r.agent ? { agent: r.agent } : {}),
           decisions: [r],
         });
       } else {
@@ -143,6 +151,8 @@ export interface AuditFilter {
   /** allow, ask, deny, or reviewer */
   decision?: string;
   tool?: string;
+  /** An agent's role, id or kind ("Explore", "sub-call_1", "loop-worker") */
+  agent?: string;
   /** Inclusive, ISO date or timestamp */
   since?: string;
   /** Inclusive, ISO date or timestamp; a bare date covers that whole day */
@@ -159,6 +169,12 @@ function endOfDay(until: string): number {
 export function matchesFilter(row: AuditCallRow, f: AuditFilter): boolean {
   if (f.session && row.session !== f.session) return false;
   if (f.tool && row.tool !== f.tool) return false;
+  if (f.agent) {
+    const a = row.agent;
+    if (!a || (a.role !== f.agent && a.id !== f.agent && a.kind !== f.agent)) {
+      return false;
+    }
+  }
   if (f.decision) {
     const d = f.decision;
     const hit =

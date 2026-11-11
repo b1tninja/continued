@@ -7,6 +7,7 @@ import type {
 import type { SubagentRunStatus } from "core/subagents/result";
 import { resolveSubagentTools } from "core/subagents/tools";
 import { applyToolOverrides } from "core/tools/applyToolOverrides";
+import { loopWorkerAuditAgent } from "core/tools/permissions/audit/identity";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import { ContinueError, ContinueErrorReason } from "core/util/errors";
 import {
@@ -290,6 +291,10 @@ export async function runLoopItemSubagent(
       approvals: "refuse",
       handleCall,
       workspaceDirs: [localPathUri(input.worktree)],
+      audit: {
+        sessionId: getState().session.id,
+        agent: loopWorkerAuditAgent(getState().session.id, input.itemId),
+      },
     });
     status = outcome.status;
     error = outcome.error;
