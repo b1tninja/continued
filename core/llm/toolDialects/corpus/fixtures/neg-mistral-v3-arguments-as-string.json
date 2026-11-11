@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-mistral-v3-arguments-as-string",
+  "family": "mistral",
+  "dialect": "mistral-json",
+  "kind": "negative",
+  "failureMode": "string-arguments",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://github.com/mistralai/mistral-common/blob/main/src/mistral_common/tokens/tokenizers/instruct.py and https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3/blob/main/tokenizer_config.json, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "[TOOL_CALLS] [{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Paris\\\"}\"}]",
+  "markers": ["[TOOL_CALLS]", "[ARGS]", "[CALL_ID]"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_CALLS] [{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Paris\\\"}\"}]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "T",
+        "O",
+        "O",
+        "L",
+        "_",
+        "C",
+        "A",
+        "L",
+        "L",
+        "S",
+        "]",
+        " ",
+        "[",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "{",
+        "\\",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\\",
+        "\"",
+        ":",
+        " ",
+        "\\",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\\",
+        "\"",
+        "}",
+        "\"",
+        "}",
+        "]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_",
+        "CALLS] [{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Paris\\\"}\"}]"
+      ],
+      "splitInside": "[TOOL_CALLS]"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_CALLS]",
+        " [{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Paris\\\"}\"}]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[TO",
+        "OL_C",
+        "ALLS]",
+        " [{\"n",
+        "ame\"",
+        ":",
+        " \"",
+        "get_w",
+        "eath",
+        "er\", ",
+        "\"",
+        "argum",
+        "e",
+        "nts\"",
+        ": \"",
+        "{\\\"",
+        "c",
+        "ity",
+        "\\",
+        "\": \\\"",
+        "P",
+        "ar",
+        "is\\\"",
+        "}\"",
+        "}]"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "[TOOL_CALLS] [{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Paris\\\"}\"}]"
+  }
+}

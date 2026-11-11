@@ -12,6 +12,24 @@
  * argument is present; and the held text is nothing but such calls. Values are
  * read by a small parser over Python literals (strings, numbers, True, False,
  * None, lists, tuples, dicts with string keys). Nothing is ever evaluated.
+ *
+ * Three layouts are read, each as nothing but calls (prose before the first
+ * one is kept as text):
+ *
+ *   get_weather(city="Paris")                          one call per line
+ *   [get_weather(city="Paris"), get_time(tz="UTC")]    Llama 4's list
+ *   <|python_tag|>brave_search.call(query="weather")   Llama 3.x built-in tools
+ *
+ * Sources, read 2026-11-10: the Llama 4 chat template
+ * (https://huggingface.co/unsloth/Llama-4-Scout-17B-16E-Instruct/blob/main/
+ * chat_template.jinja, the system prompt: "Use exact format: [func_name1(
+ * param1=value1, param2=value2), func_name2(...)]" and "NEVER combine text and
+ * function calls in the same response"); the Llama 3.3 chat template
+ * (https://huggingface.co/unsloth/Llama-3.3-70B-Instruct/blob/main/
+ * chat_template.jinja, which renders a built-in tool call as
+ * `<|python_tag|>` + name + `.call(` + `k="v", ...` + `)`). A list must be
+ * well formed (no trailing comma, every element a valid call); a built-in
+ * call is accepted only for a tool the request declares.
  */
 import type { DialectTool, RecoveredCall, RecoveryEvent } from "./qwenXml.js";
 import { fittedCall } from "./schemaCheck.js";
@@ -165,16 +183,28 @@ class Literals {
   }
 }
 
-/** One call at `at`, or undefined when it is not a complete valid call. */
+/** Llama 3.x writes this token before a built-in tool call (`NAME.call(...)`). */
+const PYTHON_TAG = "<|python_tag|>";
+const DOT_CALL = ".call";
+
+/**
+ * One call at `at`, or undefined when it is not a complete valid call. With
+ * `dotCall` the callee is written `NAME.call` (the python_tag form).
+ */
 function parseCall(
   text: string,
   at: number,
   tools: DialectTool[],
+  dotCall = false,
 ): { call: RecoveredCall; end: number } | undefined {
   try {
     const lit = new Literals(text, at);
     const name = lit.ident();
     const tool = tools.find((t) => t.name === name);
+    if (dotCall) {
+      if (!text.startsWith(DOT_CALL, lit.pos)) return undefined;
+      lit.pos += DOT_CALL.length;
+    }
     if (!tool || lit.peek() !== "(") return undefined;
     lit.pos++;
     const args: Record<string, unknown> = {};
@@ -201,6 +231,53 @@ function parseCall(
   }
 }
 
+/** A bracketed list of calls, `[a(x=1), b(y=2)]`, starting at `at`. */
+function parseList(
+  text: string,
+  at: number,
+  tools: DialectTool[],
+): { calls: RecoveredCall[]; end: number } | undefined {
+  const calls: RecoveredCall[] = [];
+  let pos = at + 1;
+  for (;;) {
+    pos = skipWs(text, pos);
+    const one = parseCall(text, pos, tools);
+    if (!one) return undefined;
+    calls.push(one.call);
+    pos = skipWs(text, one.end);
+    if (text[pos] === ",") pos++;
+    else if (text[pos] === "]") return { calls, end: pos + 1 };
+    else return undefined;
+  }
+}
+
+function skipWs(text: string, from: number): number {
+  let at = from;
+  while (at < text.length && /\s/.test(text[at])) at++;
+  return at;
+}
+
+/**
+ * The calls at `at`, in any of the three layouts: one `NAME(...)`, a list
+ * `[NAME(...), NAME(...)]` (Llama 4), or `<|python_tag|>NAME.call(...)`
+ * (Llama 3.x built-in tools).
+ */
+function parseAt(
+  text: string,
+  at: number,
+  tools: DialectTool[],
+): { calls: RecoveredCall[]; end: number } | undefined {
+  if (text[at] === "[") return parseList(text, at, tools);
+  const tagged = text.startsWith(PYTHON_TAG, at);
+  const one = parseCall(
+    text,
+    tagged ? at + PYTHON_TAG.length : at,
+    tools,
+    tagged,
+  );
+  return one ? { calls: [one.call], end: one.end } : undefined;
+}
+
 /** The calls in `text` when all of it is calls and whitespace, else undefined. */
 export function recoverPythonicCalls(
   text: string,
@@ -211,9 +288,9 @@ export function recoverPythonicCalls(
   for (;;) {
     while (at < text.length && /\s/.test(text[at])) at++;
     if (at >= text.length) break;
-    const one = parseCall(text, at, tools);
+    const one = parseAt(text, at, tools);
     if (!one) return undefined;
-    calls.push(one.call);
+    calls.push(...one.calls);
     at = one.end;
   }
   return calls.length > 0 ? calls : undefined;
@@ -263,6 +340,21 @@ export class PythonicRecovery {
     this.openers = tools.map((t) => `${t.name}(`);
   }
 
+  /** Whether a line starting with `buffer` is, or may become, a call. */
+  private opening(buffer: string): "yes" | "maybe" | "no" {
+    const starts = (s: string) => {
+      if (this.openers.some((o) => s.startsWith(o))) return "yes";
+      return this.openers.some((o) => o.startsWith(s)) ? "maybe" : "no";
+    };
+    if (buffer.startsWith(PYTHON_TAG)) return "yes";
+    if (PYTHON_TAG.startsWith(buffer)) return "maybe";
+    if (buffer.startsWith("[")) {
+      const rest = buffer.slice(1).trimStart();
+      return rest === "" ? "maybe" : starts(rest);
+    }
+    return starts(buffer);
+  }
+
   private release(out: RecoveryEvent[], text: string): void {
     if (!text) return;
     this.shown += text;
@@ -294,11 +386,12 @@ export class PythonicRecovery {
         continue;
       }
       if (!this.inFence()) {
-        if (this.openers.some((o) => buffer.startsWith(o))) {
+        const opens = this.opening(buffer);
+        if (opens === "yes") {
           this.held = buffer;
           return out;
         }
-        if (this.openers.some((o) => o.startsWith(buffer))) {
+        if (opens === "maybe") {
           this.pending = buffer; // could still become an opener
           return out;
         }

@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-python-tag-truncated",
+  "family": "llama3",
+  "dialect": "pythonic",
+  "kind": "negative",
+  "failureMode": "truncated",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/unsloth/Llama-3.3-70B-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<|python_tag|>read_file.call(path=\"a",
+  "markers": ["<|python_tag|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["<|python_tag|>read_file.call(path=\"a"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "p",
+        "y",
+        "t",
+        "h",
+        "o",
+        "n",
+        "_",
+        "t",
+        "a",
+        "g",
+        "|",
+        ">",
+        "r",
+        "e",
+        "a",
+        "d",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        ".",
+        "c",
+        "a",
+        "l",
+        "l",
+        "(",
+        "p",
+        "a",
+        "t",
+        "h",
+        "=",
+        "\"",
+        "a"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": ["<|pytho", "n_tag|>read_file.call(path=\"a"],
+      "splitInside": "<|python_tag|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": ["<|python_tag|>", "read_file.call(path=\"a"],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|",
+        "py",
+        "th",
+        "on_",
+        "tag|>",
+        "read",
+        "_fi",
+        "le.",
+        "ca",
+        "ll(pa",
+        "t",
+        "h=",
+        "\"a"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<|python_tag|>read_file.call(path=\"a"
+  }
+}

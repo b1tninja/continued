@@ -9,6 +9,7 @@ export type Dialect =
   | "hermes-json" // <tool_call>{"name":..,"arguments":{..}}</tool_call>
   | "glm-xml" // <tool_call>NAME<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>
   | "dsml" // DeepSeek V3.2 fullwidth-bar function_calls / invoke / parameter
+  | "deepseek-v31" // <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>NAME<｜tool▁sep｜>{json}<｜tool▁call▁end｜>
   | "kimi-tokens" // <|tool_call_begin|>functions.NAME:IDX<|tool_call_argument_begin|>{json}
   | "harmony" // <|channel|>commentary to=functions.NAME <|constrain|>json<|message|>{json}<|call|>
   | "llama-function-tag" // Llama 3.1: <function=NAME>{json}</function>
@@ -80,6 +81,11 @@ const FINGERPRINTS: Fingerprint[] = [
     label: "DSML marker",
   },
   {
+    dialect: "deepseek-v31",
+    strong: new RegExp(`<[${BAR}|]tool▁calls?▁begin[${BAR}|]>`),
+    label: "DeepSeek tool-call tokens",
+  },
+  {
     dialect: "kimi-tokens",
     strong: new RegExp(
       String.raw`<\|tool_calls?_section_begin\|>|<\|tool_call_begin\|>\s*functions\.${NAME}:\d+`,
@@ -112,7 +118,7 @@ const FINGERPRINTS: Fingerprint[] = [
   },
   {
     dialect: "mistral",
-    strong: /\[TOOL_CALLS\]\s*[\[{]/,
+    strong: /\[TOOL_CALLS\]\s*(?:[[{]|[\w.-]+(?:\[CALL_ID\]\w+)?\[ARGS\])/,
     weak: /\[TOOL_CALLS\]/,
     label: "[TOOL_CALLS]",
   },
@@ -171,7 +177,7 @@ function scan(
     if (f.strong.test(text)) {
       // Opening and closing markers both present means a finished call.
       const closed =
-        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>/.test(
+        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>|<[｜|]tool▁calls▁end[｜|]>|<\/[｜|]DSML[｜|](?:function_calls|tool_calls)>/.test(
           text,
         );
       return {

@@ -11,6 +11,10 @@ const DIALECTS = [
   "llama-json",
   "hermes-json",
   "glm-xml",
+  "harmony",
+  "mistral",
+  "dsml",
+  "deepseek-v31",
 ];
 const FIXTURES = path.resolve(
   __dirname,

@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-deepseek-v31-truncated-no-end-token",
+  "family": "deepseek-v3.1",
+  "dialect": "deepseek-v31",
+  "kind": "negative",
+  "failureMode": "truncated",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{\"city\": \"Par",
+  "markers": [
+    "<｜tool▁calls▁begin｜>",
+    "<｜tool▁calls▁end｜>",
+    "<｜tool▁call▁begin｜>",
+    "<｜tool▁call▁end｜>",
+    "<｜tool▁sep｜>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{\"city\": \"Par"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "｜",
+        "t",
+        "o",
+        "o",
+        "l",
+        "▁",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        "▁",
+        "b",
+        "e",
+        "g",
+        "i",
+        "n",
+        "｜",
+        ">",
+        "<",
+        "｜",
+        "t",
+        "o",
+        "o",
+        "l",
+        "▁",
+        "c",
+        "a",
+        "l",
+        "l",
+        "▁",
+        "b",
+        "e",
+        "g",
+        "i",
+        "n",
+        "｜",
+        ">",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "<",
+        "｜",
+        "t",
+        "o",
+        "o",
+        "l",
+        "▁",
+        "s",
+        "e",
+        "p",
+        "｜",
+        ">",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<｜tool▁cal",
+        "ls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{\"city\": \"Par"
+      ],
+      "splitInside": "<｜tool▁calls▁begin｜>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<｜tool▁calls▁begin｜>",
+        "<｜tool▁call▁begin｜>",
+        "get_weather",
+        "<｜tool▁sep｜>",
+        "{\"city\": \"Par"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<｜t",
+        "o",
+        "o",
+        "l▁c",
+        "alls▁",
+        "begin",
+        "｜>",
+        "<｜t",
+        "o",
+        "ol▁",
+        "call▁",
+        "b",
+        "e",
+        "gin｜>",
+        "get_w",
+        "ea",
+        "t",
+        "her",
+        "<",
+        "｜too",
+        "l▁",
+        "se",
+        "p｜>{\"",
+        "city\"",
+        ":",
+        " \"Par"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-multibyte-char",
+      "encoding": "base64",
+      "chunks": [
+        "PO8=",
+        "vZx0b29s4paBY2FsbHPiloFiZWdpbu+9nD48772cdG9vbOKWgWNhbGziloFiZWdpbu+9nD5nZXRfd2VhdGhlcjzvvZx0b29s4paBc2Vw772cPnsiY2l0eSI6ICJQYXI="
+      ],
+      "splitInside": "utf8-codepoint"
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{\"city\": \"Par"
+  }
+}

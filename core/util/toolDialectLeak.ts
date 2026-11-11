@@ -19,6 +19,10 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   "llama-json": "llama-json",
   "hermes-json": "hermes-json",
   "glm-xml": "glm-xml",
+  harmony: "harmony",
+  mistral: "mistral",
+  dsml: "dsml",
+  "deepseek-v31": "deepseek-v31",
 };
 
 /**
@@ -91,7 +95,10 @@ export function leakHintText(model: string, dialect: string): string {
 
 function mentionsTool(text: string, name: string): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-  return new RegExp(String.raw`(?<![\w.-])${escaped}(?![\w-])`).test(text);
+  // `functions.NAME` is how Harmony addresses a call, so that prefix counts.
+  return new RegExp(
+    String.raw`(?:(?<=\bfunctions\.)|(?<![\w.-]))${escaped}(?![\w-])`,
+  ).test(text);
 }
 
 function jsonNamesTool(text: string, known: string[]): boolean {

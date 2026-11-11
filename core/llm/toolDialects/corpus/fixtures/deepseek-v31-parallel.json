@@ -2,16 +2,16 @@
   "schemaVersion": 1,
   "id": "deepseek-v31-parallel",
   "family": "deepseek-v3.x",
-  "dialect": "deepseek-tokens",
+  "dialect": "deepseek-v31",
   "kind": "positive",
   "failureMode": "parallel-merged",
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json, not observed",
     "retrieved": "2026-11-10",
-    "note": ""
+    "note": "Prose before the call block: the template writes content then the block, but the strict parser requires the whole reply to be calls, so this is left as text (policy either)."
   },
-  "policy": "must",
+  "policy": "either",
   "tools": [
     {
       "name": "get_weather",

@@ -58,6 +58,12 @@ const CALLS: Record<string, string> = {
     '<tool_call>{"name": "Read", "arguments": {"filepath": "a.txt"}}</tool_call>',
   "glm-xml":
     "<tool_call>Read<arg_key>filepath</arg_key><arg_value>a.txt</arg_value></tool_call>",
+  harmony:
+    '<|channel|>commentary to=functions.Read <|constrain|>json<|message|>{"filepath": "a.txt"}<|call|>',
+  mistral: '[TOOL_CALLS]Read[ARGS]{"filepath": "a.txt"}',
+  dsml: '<｜DSML｜function_calls>\n<｜DSML｜invoke name="Read">\n<｜DSML｜parameter name="filepath" string="true">a.txt</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>',
+  "deepseek-v31":
+    '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>Read<｜tool▁sep｜>{"filepath": "a.txt"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
 };
 
 const refusedStreaming = () =>

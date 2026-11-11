@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { recoverGlmXmlFromText } from "./glmXml.js";
+import { recoverDeepseekV31FromText } from "./deepseekV31.js";
+import { recoverDsmlFromText } from "./dsml.js";
+import { recoverHarmonyFromText } from "./harmony.js";
+import { recoverMistralFromText } from "./mistral.js";
 import { recoverHermesJsonFromText } from "./hermesJson.js";
 import { recoverLlamaJsonFromText } from "./llamaJson.js";
 import { recoverPythonicFromText } from "./pythonic.js";
@@ -132,6 +136,34 @@ const dialects: [string, (timeout: string) => string, (t: string) => any][] = [
     (t) =>
       `<tool_call>run_command<arg_key>command</arg_key><arg_value>10</arg_value><arg_key>timeout</arg_key><arg_value>${t}</arg_value></tool_call>`,
     (t) => recoverGlmXmlFromText(t, tools),
+  ],
+  [
+    "harmony",
+    (t) =>
+      `<|channel|>commentary to=functions.run_command <|constrain|>json<|message|>{"command": "10", "timeout": "${t}"}<|call|>`,
+    (t) => recoverHarmonyFromText(t, tools),
+  ],
+  [
+    "mistral",
+    (t) => `[TOOL_CALLS]run_command[ARGS]{"command": "10", "timeout": "${t}"}`,
+    (t) => recoverMistralFromText(t, tools),
+  ],
+  [
+    "dsml",
+    (t) =>
+      `<｜DSML｜function_calls>
+<｜DSML｜invoke name="run_command">
+<｜DSML｜parameter name="command" string="true">10</｜DSML｜parameter>
+<｜DSML｜parameter name="timeout" string="true">${t}</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜function_calls>`,
+    (t) => recoverDsmlFromText(t, tools),
+  ],
+  [
+    "deepseek-v31",
+    (t) =>
+      `<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>run_command<｜tool▁sep｜>{"command": "10", "timeout": "${t}"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>`,
+    (t) => recoverDeepseekV31FromText(t, tools),
   ],
 ];
 

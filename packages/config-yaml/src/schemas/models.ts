@@ -249,6 +249,10 @@ export const TOOL_DIALECT_VALUES = [
   "llama-json",
   "hermes-json",
   "glm-xml",
+  "harmony",
+  "mistral",
+  "dsml",
+  "deepseek-v31",
   "off",
 ] as const;
 export const toolDialectSchema = z.enum(TOOL_DIALECT_VALUES, {
