@@ -12,7 +12,11 @@ export const NewSessionButton = styled.div`
 
   border-radius: ${defaultBorderRadius};
   padding: 2px 6px;
-  color: ${lightGray};
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  /* 4.5:1 on both themes; lightGray was 2.7:1 on white */
+  color: var(--vscode-descriptionForeground, #b3b3b3);
 
   &:hover {
     background-color: ${lightGray}33;

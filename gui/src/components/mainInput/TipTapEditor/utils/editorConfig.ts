@@ -382,6 +382,9 @@ export function createEditorConfig(options: {
     ],
     editorProps: {
       attributes: {
+        role: "textbox",
+        "aria-multiline": "true",
+        "aria-label": "Message",
         "data-testid": props.isMainInput
           ? "editor-input-main"
           : `editor-input-${props.inputId}`,

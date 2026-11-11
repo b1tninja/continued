@@ -225,7 +225,9 @@ describe("BedrockConnectionTester tool-call line", () => {
         label: "Tool calls: native",
         kind: "native",
         preset:
-          "GLM-4.7: text dialect glm-xml (recoverable with toolDialect: glm-xml)",
+          "Known format for this model family: glm-xml (tools written as text)",
+        facts:
+          "Provider facts: Bedrock Converse: tool_choice supported (declared, read 2026-11-10)",
       }),
     });
     await user.click(screen.getByRole("button", { name: "Test connection" }));
@@ -233,6 +235,9 @@ describe("BedrockConnectionTester tool-call line", () => {
       expect(screen.getByTestId("tool-calls-preset").textContent).toContain(
         "glm-xml",
       ),
+    );
+    expect(screen.getByTestId("tool-calls-facts").textContent).toContain(
+      "Provider facts: Bedrock Converse",
     );
     expect(screen.getByTestId("tool-calls-result").textContent).toBe(
       "Tool calls: native",

@@ -27,7 +27,8 @@ export type ProtectedKind =
   | "network"
   | "private-url"
   | "fetch-and-run"
-  | "mcp-definition-changed";
+  | "mcp-definition-changed"
+  | "hidden-command";
 
 export interface ProtectedHit {
   kind: ProtectedKind;
@@ -176,6 +177,9 @@ export function protectedPathHit(
 export function protectedReason(hit: ProtectedHit): string {
   if (hit.kind === "fetch-and-run") {
     return `This downloads something and runs it (${hit.path}), so it always asks first. At Automatic it is refused.`;
+  }
+  if (hit.kind === "hidden-command") {
+    return `This runs ${hit.path}, so no rule can tell which program it is, and it always asks first.`;
   }
   if (hit.kind === "mcp-definition-changed") {
     return hit.path.startsWith("launch definition changed")

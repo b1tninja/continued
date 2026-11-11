@@ -19,6 +19,22 @@ export const VIEWS = {
     fixture: "tool-call-done",
     note: "the same command after it ran",
   },
+  held: {
+    fixture: "held",
+    note: "a reply held back while it is checked for a tool request",
+  },
+  dialect: {
+    fixture: "dialect",
+    note: "the notice that a model wrote a tool request as plain text",
+  },
+  "attach-open": {
+    fixture: "attach-open",
+    note: 'the "+" menu at the left of the prompt, open',
+  },
+  "overflow-open": {
+    fixture: "overflow-open",
+    note: 'the "..." menu under the prompt, open',
+  },
   loop: {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",

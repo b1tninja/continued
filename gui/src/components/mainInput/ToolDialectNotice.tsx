@@ -43,10 +43,10 @@ export function ToolDialectNotice() {
       {!failed && (
         <NoticeAction
           testId="tool-dialect-turn-on"
-          title={`Sets toolDialect: ${dialect} on this model in config.yaml`}
+          title={`Looks like ${dialect}. Sets toolDialect: ${dialect} on this model in config.yaml`}
           onClick={() => void turnOn()}
         >
-          Turn on recovery
+          Read it for this model
         </NoticeAction>
       )}
     </NoticeBar>

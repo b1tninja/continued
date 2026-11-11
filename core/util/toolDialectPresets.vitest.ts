@@ -443,7 +443,17 @@ describe("toolDialectHint", () => {
 
   it("describes a preset in one line", () => {
     const p = resolveToolDialectPreset("qwen3-coder");
-    expect(p && describePreset(p)).toContain("qwen-xml");
+    expect(p && describePreset(p)).toBe(
+      "Known format for this model family: qwen-xml (tools written as text)",
+    );
+    const glm = resolveToolDialectPreset("zai.glm-4.7");
+    expect(glm && describePreset(glm)).toBe(
+      "Known format for this model family: glm-xml (tools written as text)",
+    );
+    const none = resolveToolDialectPreset("gemma-3-27b");
+    expect(none && describePreset(none)).toBe(
+      "Known format for this model family: none (native tools only)",
+    );
   });
 });
 

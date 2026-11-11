@@ -35,7 +35,7 @@ function ModeModelHint({ mode }: { mode: "chat" | "agent" | "plan" }) {
   const label = effort && effort !== "off" ? `${title} · ${effort}` : title;
   return (
     <span
-      className="max-w-24 truncate text-xs text-description-muted"
+      className="max-w-24 truncate text-xs text-description"
       title={`Model for ${mode} mode: ${label}`}
       data-testid={`mode-model-${mode}`}
     >
@@ -152,7 +152,8 @@ export function ModeSelect() {
       >
         <ListboxButton
           data-testid="mode-select-button"
-          className="gap-1 rounded-full border-none bg-lightgray/20 px-1.5 py-0.5 text-description transition-colors duration-200 hover:brightness-110 xs:px-2"
+          data-roving=""
+          className="min-h-6 gap-1 rounded-full border-none bg-lightgray/20 px-2 text-foreground transition-colors duration-200 hover:brightness-110"
         >
           <ModeIcon mode={mode} />
           <span className="hidden sm:block">{ENTRY_LABELS[mode]}</span>
@@ -176,7 +177,7 @@ export function ModeSelect() {
                 />
               </ToolTip>
               <span
-                className={`text-description-muted text-[${getFontSize() - 3}px] mr-auto`}
+                className={`text-description text-[${getFontSize() - 3}px] mr-auto`}
               >
                 {getMetaKeyLabel()}L
               </span>
@@ -251,7 +252,7 @@ export function ModeSelect() {
               </div>
               {mode === "loop" && loopStatus && (
                 <span
-                  className="truncate text-xs text-description-muted"
+                  className="truncate text-xs text-description"
                   data-testid="mode-loop-status"
                 >
                   {loopStatus}
@@ -263,7 +264,7 @@ export function ModeSelect() {
             />
           </ListboxOption>
 
-          <div className="px-2 py-1 text-description-muted">
+          <div className="px-2 py-1 text-description">
             {`${metaKeyLabel} . for next mode`}
           </div>
           <ModeSwitchCacheNotice />
