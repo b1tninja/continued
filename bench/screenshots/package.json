@@ -1,0 +1,14 @@
+{
+  "name": "@b1tninja/continuous-gui-screenshots",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dev-only: pictures of the gui/ webview in named states (light and dark, narrow and wide) with before/after comparison. Not part of any workspace or release artifact.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "shots": "node screenshot.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.64.0"
+  }
+}
