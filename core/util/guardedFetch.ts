@@ -16,6 +16,14 @@ export interface GuardedFetchOptions {
    * favicon link): refuse it when it is non-public.
    */
   refuseNonPublicStart?: boolean;
+  /**
+   * How a host is classified. Default: `classifyHost` (an address decides).
+   * The fetch tool passes a stricter one that also treats a name that
+   * resolves to nothing and has no delegated TLD as non-public.
+   */
+  classify?: (
+    hostname: string,
+  ) => Promise<{ addresses: string[]; nonPublic: boolean }>;
 }
 
 /**
@@ -31,8 +39,9 @@ export async function fetchWithGuardedRedirects(
   options: GuardedFetchOptions = {},
   init: Record<string, unknown> = {},
 ): Promise<any> {
+  const classify = options.classify ?? classifyHost;
   let current = start;
-  let checked = await classifyHost(current.hostname);
+  let checked = await classify(current.hostname);
   const startsNonPublic = checked.nonPublic;
   if (startsNonPublic && options.refuseNonPublicStart) {
     throw new Error(`Refused to fetch a non-public address (${start.host})`);
@@ -52,7 +61,7 @@ export async function fetchWithGuardedRedirects(
     if (next.protocol !== "http:" && next.protocol !== "https:") {
       throw new Error(`Refused to follow a redirect to ${next.protocol} URL`);
     }
-    checked = await classifyHost(next.hostname);
+    checked = await classify(next.hostname);
     const leavesStartHost =
       options.stayOnStartHost && next.hostname !== start.hostname;
     if (checked.nonPublic && (!startsNonPublic || leavesStartHost)) {
