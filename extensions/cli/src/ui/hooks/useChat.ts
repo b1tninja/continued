@@ -162,6 +162,8 @@ export function useChat({
   }, []);
 
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  // The reply is held while recovery looks for a tool call written as text
+  const [isReadingReply, setIsReadingReply] = useState(false);
   const [responseStartTime, setResponseStartTime] = useState<number | null>(
     null,
   );
@@ -369,6 +371,7 @@ export function useChat({
         llmApi: turnLlmApi,
         model: turnModel,
         onShowStatusMessage,
+        onRecoveryHold: setIsReadingReply,
       });
       // Steering: deliver queued messages at the next tool boundary when the
       // person asked for it (Enter on an empty prompt while the agent works),
@@ -424,6 +427,7 @@ export function useChat({
 
       setAbortController(null);
       setIsWaitingForResponse(false);
+      setIsReadingReply(false);
       setResponseStartTime(null);
       setInputMode(true);
 
@@ -1040,6 +1044,7 @@ export function useChat({
     chatHistory,
     setChatHistory: setChatHistory,
     isWaitingForResponse,
+    isReadingReply,
     responseStartTime,
     isCompacting,
     compactionStartTime,

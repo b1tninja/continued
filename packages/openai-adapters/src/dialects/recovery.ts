@@ -25,10 +25,23 @@ export interface TextToolRecovery {
   end(): RecoveryEvent[];
   /** Whether a block is held right now (so `end` judges it). */
   isHolding?(): boolean;
+  /**
+   * The hold that began or ended since this was last called, once each: a
+   * `"start"` after the push that began holding text, an `"end"` after the
+   * `end()` that judged it, whatever the outcome (released as text, recovered
+   * as calls, refused). Undefined when nothing changed. Call it after every
+   * `push` and `end`; a stage that never holds text has none.
+   */
+  takeHoldSignal?(): HoldPhase | undefined;
 }
+
+/** A held reply began (`start`) or was judged (`end`). */
+export type HoldPhase = "start" | "end";
 
 /** Counts a stage's outcomes (recoveryStats.ts); behaviour is unchanged. */
 class CountedRecovery implements TextToolRecovery {
+  private pendingHold: HoldPhase | undefined;
+
   constructor(
     private readonly inner: TextToolRecovery,
     private readonly model: string,
@@ -36,17 +49,27 @@ class CountedRecovery implements TextToolRecovery {
   ) {}
 
   push(chunk: string): RecoveryEvent[] {
-    return this.inner.push(chunk);
+    const wasHolding = this.isHolding();
+    const events = this.inner.push(chunk);
+    if (!wasHolding && this.isHolding()) this.pendingHold = "start";
+    return events;
   }
 
   isHolding(): boolean {
     return this.inner.isHolding?.() ?? false;
   }
 
+  takeHoldSignal(): HoldPhase | undefined {
+    const phase = this.pendingHold;
+    this.pendingHold = undefined;
+    return phase;
+  }
+
   end(): RecoveryEvent[] {
     const held = this.isHolding();
     const events = this.inner.end();
     if (held) {
+      this.pendingHold = "end";
       const recovered = events.filter((e) => e.type === "call").length;
       recordRecovery(this.model, this.dialect, {
         held: 1,
