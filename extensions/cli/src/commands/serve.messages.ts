@@ -3,7 +3,7 @@ import {
   type RecoveryStatRow,
 } from "@continuedev/openai-adapters";
 import chalk from "chalk";
-import { maskDeep } from "core/tools/permissions/audit/mask.js";
+import { maskArgsForDisplay } from "core/tools/permissions/displayMask.js";
 import type { Express, Request, Response } from "express";
 
 import {
@@ -130,7 +130,7 @@ export function getServeStateSnapshot(
   return {
     // Masked: a supervisor reads this, and a pending approval carries the
     // call's arguments (plans/ROADMAP.md X10, "no secrets on a supervisor surface").
-    ...maskDeep(
+    ...maskArgsForDisplay(
       getCompleteStateSnapshot(
         state.session,
         state.isProcessing,

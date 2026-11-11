@@ -1,3 +1,4 @@
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import { useContext, useState } from "react";
 import { IdeMessengerContext } from "../../../../context/IdeMessenger";
 import { useAppDispatch } from "../../../../redux/hooks";
@@ -97,10 +98,10 @@ export function AlwaysAllowButton({ toolCallId, toolName, parsedArgs }: Props) {
       {state.kind === "confirm" && (
         <span
           className="max-w-64 truncate font-mono text-2xs text-warning"
-          title={`The safety check would still ask about this. Saves: ${state.rule}`}
+          title={`The safety check would still ask about this. Saves: ${maskCommandForDisplay(state.rule)}`}
           data-testid={`always-allow-confirm-${toolCallId}`}
         >
-          {state.rule}
+          {maskCommandForDisplay(state.rule)}
         </span>
       )}
       <Button

@@ -20,6 +20,7 @@ export const UNTRUSTED_LOOSENING_KEYS: readonly string[] = [
   // restriction, so a repository's text there could carry any instruction.
   "toolPermissions.auto.guidance.block",
   "toolPermissions.auto.environment.trustedDomains",
+  "toolPermissions.auto.environment.envNames.allow",
   "toolPermissions.auto.environment.largeChangeLines",
 ];
 

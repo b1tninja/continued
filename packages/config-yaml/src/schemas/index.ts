@@ -233,6 +233,13 @@ export const toolPermissionsSchema = z.object({
         .object({
           trustedDomains: z.array(z.string()).optional(),
           productionMarkers: z.array(z.string()).optional(),
+          /** Environment variable names that always ask or never ask in a command; only your own config.yaml is read for it. */
+          envNames: z
+            .object({
+              ask: z.array(z.string()).optional(),
+              allow: z.array(z.string()).optional(),
+            })
+            .optional(),
           /** Changed lines above which the built-in large-change check asks (default 300). Read from the personal config only. */
           largeChangeLines: z.number().int().min(1).optional(),
         })
