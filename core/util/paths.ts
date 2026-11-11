@@ -14,11 +14,12 @@ import { defaultConfig } from "../config/default";
 import Types from "../config/types";
 import { editYamlText } from "./yamlEdit";
 
-// The CLI sets this before importing core so a working-directory .env is not
-// copied into the process. Secrets are read with dotenv.parse instead.
-if (process.env.CONTINUOUS_IGNORE_CWD_ENV !== "1") {
-  dotenv.config();
-}
+// A working-directory .env is never copied into this process. The core can be
+// started with a workspace as its cwd (an editor launched from a project
+// folder), and a repository file must not choose the global directory, the
+// terminal environment mode, the shell or the audit setting (the CLI refuses
+// it too, #425). Secrets come from the global folder's own .env through
+// getContinueDotEnv, which parses without touching process.env.
 
 export function setConfigFilePermissions(filePath: string): void {
   try {
