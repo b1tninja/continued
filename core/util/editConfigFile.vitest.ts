@@ -92,6 +92,21 @@ describe("editConfigFile (config.yaml)", () => {
     expect(fs.readdirSync(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
   });
 
+  it("returns what happened: changed, unchanged, or a refusal with the reason", () => {
+    expect(
+      editConfigFile(identityJson, (c: any) => ({ ...c, name: "y" })),
+    ).toEqual({ ok: true, changed: true });
+    expect(editConfigFile(identityJson, (c: any) => c)).toEqual({
+      ok: true,
+      changed: false,
+    });
+    fs.writeFileSync(cfgPath, "name: [broken\n");
+    const res = editConfigFile(identityJson, (c: any) => c);
+    expect(res?.ok).toBe(false);
+    expect(res && !res.ok && res.error).toContain("Not editing");
+    expect(fs.readFileSync(cfgPath, "utf8")).toBe("name: [broken\n");
+  });
+
   it("does not hide other write errors", () => {
     renameError = Object.assign(new Error("disk full"), { code: "ENOSPC" });
     expect(() =>

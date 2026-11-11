@@ -32,7 +32,10 @@ import {
 } from "./util/terminalEnvironment";
 import { saveUserTerminalSettings } from "./util/userTerminalSettings";
 import { readUserGuidance } from "./util/userGuidance";
-import { addToolRule } from "./tools/permissions/addRule";
+import {
+  registerRuleEditorHandlers,
+  undoAvailable,
+} from "./tools/permissions/ruleEditorHandlers";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import { getAuditTrail } from "./tools/permissions/audit/global";
 import {
@@ -662,12 +665,26 @@ export class Core {
 
     on("policy/rules", async ({ data }) => {
       const { config } = await this.configHandler.loadConfig();
-      return listEffectiveRules(
+      const report = listEffectiveRules(
         readRuleSources({
           merged: config?.toolPermissions,
           levels: data?.levels,
         }),
       );
+      if (report.userFile) report.userFile.undoable = undoAvailable();
+      return report;
+    });
+
+    registerRuleEditorHandlers(on as never, {
+      mergedRules: async () =>
+        (await this.configHandler.loadConfig()).config?.toolPermissions,
+      cwd: async () => {
+        const dirs = await this.ide.getWorkspaceDirs();
+        return dirs[0] ? uriToPath(dirs[0]) : undefined;
+      },
+      reload: async (reason) => {
+        await this.configHandler.reloadConfig(reason);
+      },
     });
 
     on("policy/test", async ({ data }) => {
@@ -955,21 +972,6 @@ export class Core {
             : undefined,
       });
       return withLoosensCheck(suggestion, tool, parsedArgs);
-    });
-
-    on("config/addToolRule", async (msg) => {
-      const result = addToolRule(msg.data.decision, msg.data.rule);
-      if (result === "added") {
-        await this.configHandler.reloadConfig(
-          "Tool rule added (config/addToolRule message)",
-        );
-      } else if (result === "no-config") {
-        void this.ide.showToast(
-          "warning",
-          "Tool rules can only be saved to a local YAML config, and the selected config is not one.",
-        );
-      }
-      return { result };
     });
 
     on("config/newPromptFile", async (msg) => {

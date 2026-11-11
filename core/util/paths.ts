@@ -480,19 +480,34 @@ export function getEditableConfigYamlPath(): string | undefined {
 /** Where an edit goes: the selected config (default) or the main config. */
 export type ConfigEditTarget = "selected" | "main";
 
+/** What an edit of a config file did. A failed edit never throws and never passes as a success. */
+export type ConfigEditResult =
+  | { ok: true; changed: boolean }
+  | { ok: false; error: string; cause?: unknown };
+
 function editConfigYaml(
   callback: (config: ConfigYaml) => ConfigYaml,
   configPath: string,
-): void {
-  const source = fs.readFileSync(configPath, "utf8");
+): ConfigEditResult {
+  let source: string;
+  try {
+    source = fs.readFileSync(configPath, "utf8");
+  } catch (e) {
+    const error = `Could not read ${path.basename(configPath)}: ${errorText(e)}`;
+    console.warn(error);
+    return { ok: false, error, cause: e };
+  }
   // Edit the parsed document so comments and key order survive. The old
   // parse -> stringify round trip dropped every comment on each GUI save.
   const { text, error } = editYamlText<ConfigYaml>(source, callback);
   if (error) {
     console.warn(`Not editing ${path.basename(configPath)}: ${error}`);
-    return;
+    return {
+      ok: false,
+      error: `Not editing ${path.basename(configPath)}: ${error}`,
+    };
   }
-  if (text === undefined) return; // nothing changed, skip the write
+  if (text === undefined) return { ok: true, changed: false }; // nothing changed, skip the write
 
   // Keep one copy from before the first GUI edit, for users who version the file.
   // Only for files in ~/.continuous: a .bak next to a workspace config would
@@ -508,7 +523,48 @@ function editConfigYaml(
       console.warn(`Could not write ${backupPath}:`, e);
     }
   }
-  writeFileAtomically(configPath, text);
+  try {
+    writeFileAtomically(configPath, text);
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Could not write ${path.basename(configPath)}: ${errorText(e)}`,
+      cause: e,
+    };
+  }
+  return { ok: true, changed: true };
+}
+
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * Edit one config.yaml and say whether it worked, for callers that must not
+ * claim a save that did not happen (the Permissions page, `continuous
+ * permissions`). The file must exist.
+ */
+export function editConfigYamlFile(
+  file: string,
+  callback: (config: ConfigYaml) => ConfigYaml,
+): ConfigEditResult {
+  return editConfigYaml(callback, file);
+}
+
+/** Put back the exact text of a config file (undo). Never throws. */
+export function restoreConfigFileText(
+  file: string,
+  text: string,
+): ConfigEditResult {
+  try {
+    writeFileAtomically(file, text);
+    return { ok: true, changed: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Could not write ${path.basename(file)}: ${errorText(e)}`,
+    };
+  }
 }
 
 /**
@@ -547,24 +603,35 @@ function writeFileAtomically(filePath: string, text: string): void {
   setConfigFilePermissions(target);
 }
 
+/**
+ * Edit the config file. Returns what happened so a caller that must not claim
+ * a save that failed can say so; the callers that did not look still work.
+ * `undefined` means there was no YAML file to edit.
+ */
 export function editConfigFile(
   configJsonCallback: (
     config: SerializedContinueConfig,
   ) => SerializedContinueConfig,
   configYamlCallback: (config: ConfigYaml) => ConfigYaml,
   target: ConfigEditTarget = "selected",
-): void {
+): ConfigEditResult | undefined {
+  const done = (r: ConfigEditResult): ConfigEditResult => {
+    // A file that cannot be read or written throws, as it always did; the
+    // result carries the same failure for callers that ask for it instead
+    if (!r.ok && r.cause !== undefined) throw r.cause;
+    return r;
+  };
   if (target === "selected" && selectedConfigFile !== undefined) {
     const file = getEditableConfigYamlPath();
-    if (file) editConfigYaml(configYamlCallback, file);
-    return;
+    return file ? done(editConfigYaml(configYamlCallback, file)) : undefined;
   }
   const yamlPath = getConfigYamlPath();
   if (fs.existsSync(yamlPath)) {
-    editConfigYaml(configYamlCallback, yamlPath);
+    return done(editConfigYaml(configYamlCallback, yamlPath));
   } else if (fs.existsSync(getConfigJsonPath())) {
     editConfigJson(configJsonCallback);
   }
+  return undefined;
 }
 
 function getMigrationsFolderPath(): string {
