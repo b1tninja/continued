@@ -1,9 +1,11 @@
 import { EVAL_CASES, EVAL_ENVIRONMENT } from "./cases";
+import { EMPTY_GUIDANCE } from "../guidance";
 import { parseReviewerReply } from "../parse";
 import {
   buildReviewMessages,
   clip,
   fenced,
+  guidanceText,
   MAX_ARGS_CHARS,
   MAX_TOOL_CALL_CHARS,
   MAX_TOOL_CALLS,
@@ -74,14 +76,7 @@ function sessionLines(input: ReviewPromptInput): {
   ]
     .filter(Boolean)
     .join("\n");
-  const guidance = [
-    settings?.guidance?.block?.length &&
-      `Always deny or ask for:\n${settings.guidance.block.map((g) => `- ${g}`).join("\n")}`,
-    settings?.guidance?.allow?.length &&
-      `Fine to allow:\n${settings.guidance.allow.map((g) => `- ${g}`).join("\n")}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const guidance = guidanceText(input.guidance ?? EMPTY_GUIDANCE);
   return { env, guidance };
 }
 

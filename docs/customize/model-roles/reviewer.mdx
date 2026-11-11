@@ -102,10 +102,14 @@ toolPermissions:
 
 - `trustedDomains` and `productionMarkers` tell the reviewer what counts as an unknown destination and as production.
 - `guidance.block` and `guidance.allow` are added to the reviewer's prompt as plain sentences. They guide it; only rules are enforced.
+- **Only your own `config.yaml` can set guidance.** Guidance counts as something you said, so it can make the reviewer more willing to allow. Text that comes from an assistant, a hub block or a file in the project folder is ignored, and a notice tells you how many entries were left out. Move the text into your own `config.yaml` to use it. To make a project stricter, write `deny` or `ask` rules; a project may add those.
+- Each entry is cleaned before use: it is normalised (Unicode NFKC), hidden and direction-control characters are removed, and line breaks become spaces. An entry may be at most 2,000 characters and all entries together at most 8,000.
+- An entry is refused, and the reviewer does not run until you fix it, if it contains the reviewer prompt's own markers (`[[...]]`, `<<<` or `>>>`), a section name such as `USER-MESSAGES`, text shaped like the reviewer's JSON verdict (`"decision": ...`), or text that looks like a tool call (`<tool_call>`, `<function=`). The error names the entry. Until then calls that would go to the reviewer are left to you (refused when no one can be asked).
+- Changing guidance takes effect on the next call: an earlier answer is not reused under different guidance, and each reviewer entry in the audit trail carries a `promptVersion`, a short hash of the reviewer's instructions and the guidance it was given, so you can tell which text decided a call.
 - After `consecutiveDenials` refusals in a row (default 3) or `totalDenials` in a session (default 20), the next refusal becomes an ask with `denial-limit`, so you decide. Counts are kept in memory for the session and are not written to disk.
 - Across shared and personal configs, lists are combined and the lower limit wins.
 
-An identical call in the same session reuses the earlier answer.
+An identical call in the same session reuses the earlier answer, as long as what you have said and your guidance are unchanged.
 
 ## Limits
 
