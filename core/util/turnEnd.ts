@@ -75,6 +75,18 @@ export function announcesNextStep(text: string): boolean {
 export const ACT_TURN_NUDGE =
   "You named the next step and then stopped. Take it now: call the tool. If the request is done, say what you changed and what you ran; if you are blocked on something only the person has, say exactly what.";
 
+/**
+ * Nudges for a tool call written as text, per turn: one. A model that cannot
+ * call the tool after being told so would only be told again, so the second
+ * such reply ends the turn (H13). Nothing is recovered from the text and
+ * nothing in it runs.
+ */
+export const LEAKED_CALL_NUDGE_LIMIT = 1;
+
+/** The nudge for a reply that was a tool call written as text. */
+export const LEAKED_CALL_NUDGE =
+  "Your last reply wrote a tool call as plain text, so nothing was run. Call the tool again using the tool-call format of this API, not text. If you did not mean to call a tool, say what you did instead.";
+
 /** The nudge for a Loop item run that ended without its report. */
 export function finishItemNudge(finishItem: string): string {
   return `You ended without reporting. Call ${finishItem} now with the outcome and a one-line summary.`;

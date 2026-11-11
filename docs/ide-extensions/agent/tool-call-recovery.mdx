@@ -21,6 +21,10 @@ Set the variable in the environment that starts the editor or the CLI. It takes 
 
 The same setting can be given per model as `x_continue_recover_text_tool_calls` in `requestOptions.extraBodyProperties`; it takes the same values. Recovery applies to Amazon Bedrock models only, and a model whose id does not match gets no recovery whatever the setting says.
 
+## When recovery is off
+
+Recovery is not needed for the agent to notice. On every provider, a reply that is a tool call written as text, such as `<function=Write>...</function>`, a `<tool_call>` block, a JSON object naming a tool or a call like `present_plan(title="...")`, no longer ends the turn silently. The agent counts it as a stopped turn and sends the model one message saying that nothing was run and asking it to call the tool in the API's own tool-call format. Nothing is parsed from the text and nothing in it is run. The nudge is sent once per turn, so a model that cannot comply is not asked again, and it applies only to a tool that was offered in that request. A tool call quoted in a code block or in inline code is an example, not a call, and is left alone. In the CLI it applies to headless runs (`cn -p`); in the extension, to agent turns outside a Loop run, which has its own nudge for a run that ends without its report.
+
 ## Per-model setting
 
 A model entry in `config.yaml` can turn recovery on without environment variables:

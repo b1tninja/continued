@@ -73,6 +73,7 @@ import {
   refuseTruncatedToolCalls,
 } from "./preprocessToolCallArgs";
 import { checkToolDialectLeak } from "./noteToolDialectLeak";
+import { nudgeLeakedToolCall } from "./nudgeLeakedToolCall";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
 
 export const streamNormalInput = createAsyncThunk<
@@ -501,6 +502,20 @@ export const streamNormalInput = createAsyncThunk<
 
     // 4. Execute remaining tool calls
     if (originalToolCalls.length === 0) {
+      // A tool call written as text did nothing: tell the model once, then
+      // let it answer in the same turn (H13)
+      if (
+        await nudgeLeakedToolCall({
+          state: getState(),
+          toolNames: activeTools.map((t) => t.function.name),
+          dispatch,
+          getState,
+          ideMessenger: extra.ideMessenger,
+        })
+      ) {
+        unwrapResult(await dispatch(streamNormalInput({ depth: depth + 1 })));
+        return;
+      }
       dispatch(setInactive());
       // A reply without tool calls ends the agent's turn: messages queued
       // while it worked can go now (waiting for approval is not an end)
