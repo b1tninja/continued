@@ -22,16 +22,20 @@ export function pinNotices(server: string, events: ApprovalEvents): string[] {
   return out;
 }
 
-/** Print the notices and record a re-pinned launch definition. Never throws. */
+/**
+ * Print the notices (through `print`, so a terminal UI can route them) and
+ * record a re-pinned launch definition. Never throws.
+ */
 export function announcePins(
   server: string,
   events: ApprovalEvents,
   sink: string[],
+  print: (message: string) => void = (m) => console.warn(m),
 ): void {
   const notices = pinNotices(server, events);
   for (const n of notices) {
     sink.push(n);
-    console.warn(n);
+    print(n);
   }
   if (!events.launchAccepted) return;
   try {
