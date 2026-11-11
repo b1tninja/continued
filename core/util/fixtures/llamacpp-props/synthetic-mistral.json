@@ -1,0 +1,17 @@
+{
+  "default_generation_settings": {
+    "n_ctx": 4096,
+    "params": {
+      "temperature": 0.8,
+      "top_k": 40
+    }
+  },
+  "total_slots": 1,
+  "model_path": "/models/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+  "chat_template": "{{- '[TOOL_CALLS] [' }}{{- '[AVAILABLE_TOOLS] ' }}",
+  "chat_template_caps": {},
+  "modalities": {
+    "vision": false
+  },
+  "build_info": "b0-synthetic"
+}

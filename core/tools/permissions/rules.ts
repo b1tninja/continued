@@ -43,6 +43,8 @@ export interface ToolPermissions {
       productionMarkers?: string[];
       /** Variable names that always ask (`ask`) or never ask (`allow`); read from the person's own config only */
       envNames?: { ask?: string[]; allow?: string[] };
+      /** Changed lines above which `ask-large-change` asks; read from the person's own file only */
+      largeChangeLines?: number;
     };
     guidance?: { block?: string[]; allow?: string[] };
     limits?: { consecutiveDenials?: number; totalDenials?: number };
@@ -276,7 +278,7 @@ export function matchTerminalCommand(
 
   // Allow only what is fully understood.
   if (
-    hasUnsafeShellConstruct(command) ||
+    hasUnsafeShellConstruct(command, shell) ||
     parsed.unparsable ||
     parsed.hasFileRedirect ||
     parsed.parts.length === 0

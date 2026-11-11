@@ -12,8 +12,6 @@ import type {
 import { listEffectiveRules } from "core/tools/permissions/effectiveRules";
 import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { parsePolicyFile } from "core/tools/permissions/settingsFile";
-import { listEffectiveRules } from "core/tools/permissions/effectiveRules";
-import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { createLoop, enterWait } from "core/util/loopMode";
 import type { MockIdeMessenger } from "@gui/context/MockIdeMessenger";
 import {
@@ -525,6 +523,41 @@ Object.assign(FIXTURES, {
   ]),
   "bedrock-ok": bedrock(true),
   "bedrock-fail": bedrock(false),
+});
+
+const permissionsReport = () =>
+  listEffectiveRules({
+    levels: DEFAULT_POLICY_LEVELS,
+    floor: ["runTerminalCommand(rm -rf /*)"],
+    user: { ask: ["runTerminalCommand(git push*)"] },
+    maxNewPlanItems: 3,
+  } as never);
+
+Object.assign(FIXTURES, {
+  /** The rules are still being read: the skeleton, then the slow line */
+  "permissions-loading": async (ctx: FixtureContext) => {
+    ctx.messenger.responseHandlers["policy/rules"] = (() =>
+      new Promise(() => {})) as never;
+    await settingsTab("permissions")(ctx);
+    await sleep(4500);
+  },
+  /** The read failed: an error that names the files, with Retry */
+  "permissions-error": async (ctx: FixtureContext) => {
+    ctx.messenger.responseHandlers["policy/rules"] = (async () => {
+      throw new Error("unreadable");
+    }) as never;
+    await settingsTab("permissions")(ctx);
+  },
+  /** The first-run overview card on the Permissions page */
+  "permissions-intro": async (ctx: FixtureContext) => {
+    ctx.messenger.responseHandlers["policy/rules"] = (async () =>
+      permissionsReport()) as never;
+    await settingsTab("permissions")(ctx);
+  },
+  /** An empty chat with the one-line first-run notice (flag not set) */
+  "chat-first-run": ({ store }: FixtureContext) => {
+    store.dispatch(newSession());
+  },
 });
 
 export const FIXTURE_NAMES = Object.keys(FIXTURES);

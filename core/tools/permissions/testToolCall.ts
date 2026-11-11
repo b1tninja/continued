@@ -662,6 +662,7 @@ export function testToolCall(input: TestToolCallInput): ToolCallTestResult {
       input.sources.trustedDomains ??
       input.sources.user?.auto?.environment?.trustedDomains,
     envNames: input.envNames,
+    largeChangeLines: input.sources.user?.auto?.environment?.largeChangeLines,
     cwd,
     shell,
   });

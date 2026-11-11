@@ -1479,6 +1479,98 @@ describe("BedrockApi tools through Converse (Llama 4, Qwen3 32B; probed live 202
     expect(sent.map((s) => s.command)).toEqual(["ConverseStreamCommand"]);
   });
 
+  describe("repairing streamed tool input (opt-in, CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT)", () => {
+    const qwen = "qwen.qwen3-coder-30b-a3b-v1:0";
+    const readTools = [
+      {
+        type: "function" as const,
+        function: {
+          name: "Read",
+          parameters: {
+            type: "object",
+            properties: { filepath: { type: "string" } },
+          },
+        },
+      },
+    ];
+    const withEnv = async (
+      value: string | undefined,
+      run: () => Promise<void>,
+    ) => {
+      const saved = process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT;
+      if (value === undefined) {
+        delete process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT;
+      } else {
+        process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT = value;
+      }
+      try {
+        await run();
+      } finally {
+        if (saved === undefined) {
+          delete process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT;
+        } else {
+          process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT = saved;
+        }
+      }
+    };
+    const idsOf = (chunks: any[]) =>
+      chunks
+        .flatMap((c) => c.choices?.[0]?.delta?.tool_calls ?? [])
+        .map((c) => c.id);
+
+    it("is off by default: a broken input is retried, and only the retry's id reaches the caller", async () => {
+      await withEnv(undefined, async () => {
+        const first = client(converseReply, [
+          ...toolBlock('filepath": "a.ts"}'),
+          stopped,
+        ]);
+        const out = await first.collect(`${qwen}-off`, { tools: readTools });
+        expect(first.sent.map((s) => s.command)).toEqual([
+          "ConverseStreamCommand",
+          "ConverseCommand",
+        ]);
+        expect(argsOf(out)).toBe('{"filepath":"a.ts"}{"filepath":"b.ts"}');
+        // Q47: the ids the history and the tool results use are the retry's
+        expect(idsOf(out)).toEqual(["tooluse_1", "tooluse_2"]);
+        expect(JSON.stringify(out)).not.toContain('"t1"');
+      });
+    });
+
+    it("repairs the missing opening when on, without a second request, and keeps the streamed id", async () => {
+      await withEnv("1", async () => {
+        const { collect, sent } = client(converseReply, [
+          ...toolBlock('filepath": "a.ts"}'),
+          stopped,
+        ]);
+        const out = await collect(`${qwen}-on`, { tools: readTools });
+        expect(sent.map((s) => s.command)).toEqual(["ConverseStreamCommand"]);
+        expect(argsOf(out)).toBe('{"filepath": "a.ts"}');
+        expect(idsOf(out).filter(Boolean)).toEqual(["t1"]);
+      });
+    });
+
+    it("still retries what is not safe to repair, and other families", async () => {
+      await withEnv("1", async () => {
+        const retried = ["ConverseStreamCommand", "ConverseCommand"];
+        const cut = client(converseReply, [...toolBlock("{"), stopped]);
+        await cut.collect(`${qwen}-cut`, { tools: readTools });
+        expect(cut.sent.map((s) => s.command)).toEqual(retried);
+        const other = client(converseReply, [
+          ...toolBlock('filepath": "a.ts"}'),
+          stopped,
+        ]);
+        await other.collect("mistral.repair-not-listed", { tools: readTools });
+        expect(other.sent.map((s) => s.command)).toEqual(retried);
+        const unknownKey = client(converseReply, [
+          ...toolBlock('path": "a.ts"}'),
+          stopped,
+        ]);
+        await unknownKey.collect(`${qwen}-key`, { tools: readTools });
+        expect(unknownKey.sent.map((s) => s.command)).toEqual(retried);
+      });
+    });
+  });
+
   it("streams a Claude tool input progressively, not held to block end", async () => {
     const { collect, sent } = client(converseReply, [
       toolBlock()[0],

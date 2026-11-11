@@ -4,6 +4,7 @@ import { builtinRuleOn, type BuiltinRuleId } from "./policy";
 import { commandCandidateSet } from "./candidates";
 import { dependencyCommandHit, dependencyFileHit } from "./dependencyChange";
 import { destructiveCommandHit } from "./destructiveCommands";
+import { existingLineCount } from "./fileFacts";
 import type { ProtectedHit } from "./protected";
 
 /**
@@ -15,7 +16,8 @@ import type { ProtectedHit } from "./protected";
  * protected path. A call that is already refused stays refused.
  *
  * - `ask-destructive-commands`  history rewrites and recursive deletes
- * - `ask-large-change`          one call that changes many lines
+ * - `ask-large-change`          one call that changes many lines, among them
+ *                               a `create_new_file` over a file that exists
  * - `ask-dependency-change`     manifests, lockfiles, installs, registries
  * - `ask-unknown-host`          a host outside `trustedDomains`, when the
  *                               person set that list in their own config
@@ -65,6 +67,23 @@ export function changedLineCount(
   return 0;
 }
 
+/**
+ * Lines one write call changes. A `create_new_file` over a file that exists
+ * counts the larger of what it writes and what it replaces, read from the
+ * resolved path; a file that is absent or unreadable is a new file and counts
+ * nothing (ROADMAP B57).
+ */
+function writtenLineCount(input: AskProtectionInput): number {
+  const { toolName, parsedArgs } = input;
+  if (toolName !== "create_new_file") {
+    return changedLineCount(toolName, parsedArgs);
+  }
+  const existing = existingLineCount(input.resolvedPath);
+  if (existing === undefined) return 0;
+  const written = lineCount(parsedArgs.contents);
+  return parsedArgs.append === true ? written : Math.max(written, existing);
+}
+
 export interface AskProtectionInput {
   toolName: string;
   parsedArgs: Record<string, unknown>;
@@ -76,6 +95,10 @@ export interface AskProtectionInput {
    * person did not say, and no host asks.
    */
   trustedDomains?: readonly string[];
+  /** Changed lines above which `ask-large-change` asks, from the person's own config only. */
+  largeChangeLines?: number;
+  /** The folder a command runs in; lets `npm install <name>` read the nearest package.json */
+  cwd?: string;
 }
 
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
@@ -157,7 +180,7 @@ export function askProtectionHit(
   }
   if (on("ask-dependency-change")) {
     if (command !== undefined) {
-      const why = dependencyCommandHit(command, input.shell);
+      const why = dependencyCommandHit(command, input.shell, input.cwd);
       if (why) return { kind: "dependency-change", path: why };
     } else if (ALL_WRITE_TOOLS.has(toolName)) {
       const why = dependencyFileHit(
@@ -167,9 +190,9 @@ export function askProtectionHit(
       if (why) return { kind: "dependency-change", path: why };
     }
   }
-  if (WRITE_TOOLS_WITH_TEXT.has(toolName) && on("ask-large-change")) {
-    const lines = changedLineCount(toolName, parsedArgs);
-    if (lines > LARGE_CHANGE_LINES) {
+  if (ALL_WRITE_TOOLS.has(toolName) && on("ask-large-change")) {
+    const lines = writtenLineCount(input);
+    if (lines > (input.largeChangeLines ?? LARGE_CHANGE_LINES)) {
       return { kind: "large-change", path: `${lines} changed lines` };
     }
   }

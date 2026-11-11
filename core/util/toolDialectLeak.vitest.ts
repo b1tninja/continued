@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TOOL_DIALECT_VALUES } from "@continuedev/config-yaml";
 import { loadCorpus } from "../llm/toolDialects/corpus/corpus";
 import {
   detectToolDialectLeak,
@@ -265,8 +266,8 @@ ${call}
       f.provenance.note.includes("Declined by owner rule"),
     );
     expect(declined.length).toBeGreaterThan(5);
-    // Not every declined dialect is classified by the nudge yet (the Kimi,
-    // DeepSeek V3.1 and Harmony shapes); the ones that are must stay counted.
+    // Every declined shape is counted for Kimi, DeepSeek V3.1 and Harmony too
+    // (the table test below); these are the Qwen and Mistral ones.
     const counted = declined.filter((f) => leak(f.id));
     for (const id of [
       "qwen3-coder-prose-then-call",
@@ -337,5 +338,95 @@ ${call}
         knownTools: ["read"],
       }),
     ).toBe(false);
+  });
+});
+
+describe("isLeakedToolCall covers every dialect the recovery parsers know (H21)", () => {
+  const tools = (id: string) => corpus.get(id)!.tools.map((t) => t.name);
+  // Llama JSON shapes the classifier still reads as prose (a bare list of
+  // strings, calls joined by semicolons): recorded, not nudged.
+  const KNOWN_GAP = new Set(["llama33-bedrock-json-array-of-strings"]);
+  const markup = TOOL_DIALECT_VALUES.filter(
+    (v) => v !== "auto" && v !== "native" && v !== "off",
+  );
+
+  it.each(markup)(
+    "%s: every must-pass positive fixture is a leaked call, bare or with prose around it",
+    (dialect) => {
+      const fixtures = [...corpus.values()].filter(
+        (f) =>
+          f.dialect === dialect &&
+          f.kind === "positive" &&
+          f.policy === "must" &&
+          !KNOWN_GAP.has(f.id),
+      );
+      expect(fixtures.length, `no fixture for ${dialect}`).toBeGreaterThan(0);
+      for (const f of fixtures) {
+        const knownTools = tools(f.id);
+        expect(isLeakedToolCall({ content: f.text, knownTools }), f.id).toBe(
+          true,
+        );
+        // recovery is strict (whole reply); the nudge is not, for the marker
+        // dialects. A bare list or object is a call only as the whole reply.
+        if (dialect === "pythonic" || dialect === "llama-json") continue;
+        expect(
+          isLeakedToolCall({ content: `Sure. ${f.text}`, knownTools }),
+          `${f.id} with prose before`,
+        ).toBe(true);
+      }
+    },
+  );
+
+  it.each(markup)(
+    "%s: the same call in a code fence, in inline code or explained is not a leak",
+    (dialect) => {
+      const f = [...corpus.values()].find(
+        (x) =>
+          x.dialect === dialect && x.kind === "positive" && x.policy === "must",
+      )!;
+      const knownTools = tools(f.id);
+      const inline = f.text.includes("`")
+        ? []
+        : [
+            "The model writes `" +
+              f.text.replaceAll(String.fromCharCode(10), " ") +
+              "` when it calls a tool.",
+          ];
+      for (const content of [
+        ...inline,
+        `Here is the format:
+
+\`\`\`
+${f.text}
+\`\`\`
+
+It is what the model writes.`,
+      ]) {
+        expect(isLeakedToolCall({ content, knownTools }), content).toBe(false);
+      }
+    },
+  );
+
+  it("counts the Harmony call whose recipient sits in the role section", () => {
+    const id = "harmony-template-form-recipient-in-role";
+    expect(isLeakedToolCall({ content: text(id), knownTools: tools(id) })).toBe(
+      true,
+    );
+  });
+
+  it("does not count prose that names the Kimi, DeepSeek or Harmony tokens, or a tool call that names no offered tool", () => {
+    const known = ["get_weather"];
+    for (const content of [
+      "Kimi K2 wraps calls in <|tool_calls_section_begin|> and ends them with <|tool_calls_section_end|>; see get_weather.",
+      "DeepSeek V3.1 uses the <｜tool▁calls▁begin｜> token before get_weather.",
+      "Harmony routes a call with to=functions.get_weather after the commentary channel.",
+      "The <|call|> token ends a Harmony call to get_weather.",
+      text("kimi-k2-canonical").replace("get_weather", "not_offered"),
+      text("harmony-commentary-call").replace("get_weather", "not_offered"),
+    ]) {
+      expect(isLeakedToolCall({ content, knownTools: known }), content).toBe(
+        false,
+      );
+    }
   });
 });

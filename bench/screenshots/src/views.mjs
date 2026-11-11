@@ -85,6 +85,22 @@ export const VIEWS = {
     fixture: "permissions-editor",
     note: "Settings, Permissions, with the add-rule form open on a rule that allows every command",
   },
+  "permissions-loading": {
+    fixture: "permissions-loading",
+    note: "Settings, Permissions, while the rules are read, with the slow-read line",
+  },
+  "permissions-error": {
+    fixture: "permissions-error",
+    note: "Settings, Permissions, when the read failed: the error and Retry",
+  },
+  "permissions-intro": {
+    fixture: "permissions-intro",
+    note: "Settings, Permissions, with the first-run overview card",
+  },
+  "chat-first-run": {
+    fixture: "chat-first-run",
+    note: "a new chat for a first-time user, with the one-line first-run notice",
+  },
   "settings-tools": {
     fixture: "settings-tools",
     note: "Settings, Tools tab, with Commands and secrets",

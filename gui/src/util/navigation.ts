@@ -1,6 +1,13 @@
 // Valid config tab names
 export type ConfigTab =
-  "models" | "rules" | "tools" | "configs" | "indexing" | "settings" | "help";
+  | "models"
+  | "rules"
+  | "tools"
+  | "permissions"
+  | "configs"
+  | "indexing"
+  | "settings"
+  | "help";
 
 // TODO: Move all the routes here
 export const ROUTES = {
@@ -22,6 +29,7 @@ export const CONFIG_ROUTES = {
   MODELS: buildConfigRoute("models"),
   RULES: buildConfigRoute("rules"),
   TOOLS: buildConfigRoute("tools"),
+  PERMISSIONS: buildConfigRoute("permissions"),
   CONFIGS: buildConfigRoute("configs"),
   INDEXING: buildConfigRoute("indexing"),
   SETTINGS: buildConfigRoute("settings"),

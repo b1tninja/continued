@@ -27,40 +27,95 @@ import { looksSecret } from "./secretCommands";
  * `readUserEnvNames` (userEnvNames.ts). An `allow` entry never lowers a name
  * the built-in policy marks dangerous.
  *
- * Sources, one per family. The git, Node.js and ld.so pages were re-read on
- * 2026-11-11 (GIT_CONFIG_COUNT and GIT_EXEC_PATH were not visible in the page
- * text fetched); the others are listed from the named documents and not
- * re-read:
+ * Sources, one per family. Every page below was re-read on 2026-11-11 (the
+ * fetch date is the same for all) and each classified name was checked against
+ * it; what a page did not show is said in the line, and such a name keeps the
+ * class it had (nothing was loosened by the re-read). Where a page documents
+ * a name as inert (for example every `DYLD_PRINT_*` switch), the name still
+ * asks because a whole prefix is dangerous and a name moves to harmless only
+ * with its own reason and test:
  *   ld.so(8) and the dynamic linker: LD_PRELOAD, LD_LIBRARY_PATH, LD_AUDIT
  *     https://man7.org/linux/man-pages/man8/ld.so.8.html
- *   dyld(1) on macOS: DYLD_INSERT_LIBRARIES, DYLD_LIBRARY_PATH and the rest
+ *   dyld(1) on macOS (read as the man page text of the Xcode man pages,
+ *     https://keith.github.io/xcode-man-pages/dyld.1.html; Apple's archive
+ *     page below was not reachable as text): DYLD_INSERT_LIBRARIES runs code,
+ *     the *_PATH, *_SUFFIX and cache variables redirect loading
  *     https://developer.apple.com/library/archive/documentation/DeveloperTools/Conceptual/DynamicLibraries/
- *   Bash manual, "Bash Variables" and "Bash Startup Files": BASH_ENV, ENV,
- *     PROMPT_COMMAND, PS4, IFS, SHELLOPTS, BASHOPTS, CDPATH, BASH_FUNC_*
- *     https://www.gnu.org/software/bash/manual/bash.html
- *   POSIX.1-2017 Shell Command Language, "Environment Variables": PATH, IFS,
- *     ENV, HOME, TMPDIR, LANG, LC_*, TZ
- *     https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html
- *   git(1), "Environment Variables": GIT_DIR, GIT_WORK_TREE, GIT_CONFIG_*,
- *     GIT_SSH, GIT_SSH_COMMAND, GIT_ASKPASS, GIT_EXTERNAL_DIFF, GIT_PAGER,
- *     GIT_EDITOR, GIT_EXEC_PATH, GIT_TERMINAL_PROMPT
+ *   Bash manual, "Bash Variables" (5.2) and "Bash Startup Files" (6.2), read at
+ *     https://tiswww.case.edu/php/chet/bash/bashref.html (the same text as
+ *     https://www.gnu.org/software/bash/manual/bash.html, which refused the
+ *     connection): BASH_ENV and ENV are sourced, PROMPT_COMMAND runs; PS4,
+ *     SHELLOPTS, BASHOPTS, CDPATH, GLOBIGNORE are read as data and stay
+ *     dangerous because they change how the shell reads a command.
+ *     BASH_FUNC_* is not in the manual text (exported functions are `export
+ *     -f` only), so that prefix rests on bash's own behaviour, not on a page.
+ *     HISTFILE, INPUTRC and BASH_XTRACEFD are documented and unlisted here.
+ *   POSIX.1-2024 (Issue 8), Environment Variables:
+ *     https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html
+ *     defines HOME, PATH, TMPDIR, SHELL, LANG, LANGUAGE, LC_*, TZ, COLUMNS,
+ *     LINES and NLSPATH. It does NOT define IFS, ENV or LOCPATH: IFS and ENV
+ *     are in the shell command language,
+ *     https://pubs.opengroup.org/onlinepubs/9799919799/utilities/sh.html
+ *     (ENV is expanded and run by interactive shells), and LOCPATH is glibc's.
+ *   git(1), "Environment Variables" (git 2.56.0) and git-config(1):
  *     https://git-scm.com/docs/git#_environment_variables
+ *     https://git-scm.com/docs/git-config#_environment
+ *     Every GIT_* name is classified one by one in gitEnvClasses.ts, checked
+ *     against corpus/gitEnvNames.json by gitEnvNames.vitest.ts. GIT_EXEC_PATH
+ *     and GIT_CONFIG_PARAMETERS are not in the fetched text.
  *   Node.js CLI: NODE_OPTIONS, NODE_PATH, NODE_EXTRA_CA_CERTS,
  *     NODE_TLS_REJECT_UNAUTHORIZED
  *     https://nodejs.org/api/cli.html#environment-variables
- *   Python CLI: PYTHONPATH, PYTHONSTARTUP, PYTHONHOME, PYTHONUSERBASE
+ *   Python CLI (3.15 text): PYTHONPATH, PYTHONSTARTUP, PYTHONHOME,
+ *     PYTHONUSERBASE, PYTHONBREAKPOINT, PYTHON_PRESITE run or find code.
+ *     PYTHONWARNINGS is NOT inert: a filter category is a class name and the
+ *     warnings module imports its module (Lib/warnings.py; the page does not
+ *     say so), so it left the harmless list
  *     https://docs.python.org/3/using/cmdline.html#environment-variables
- *   Ruby (RUBYOPT, RUBYLIB), perlrun (PERL5OPT, PERL5LIB), java launcher
- *     (JAVA_TOOL_OPTIONS, _JAVA_OPTIONS, JDK_JAVA_OPTIONS)
- *   npm config (npm_config_*), pip (PIP_*), cargo (CARGO_*), each documented
- *     as a way to set any option, which includes a script shell, a registry
- *     or a wrapper program
- *   curl(1) (CURL_CA_BUNDLE, http_proxy and the *_PROXY family) and
- *     OpenSSL (SSL_CERT_FILE, SSL_CERT_DIR, OPENSSL_CONF)
- *   AWS CLI environment variables: AWS_* (credentials, profile, endpoint and
- *     config file overrides)
- *   Windows: COMSPEC, PATHEXT, SystemRoot (cmd.exe), PSModulePath
- *     (about_PSModulePath), NoDefaultCurrentDirectoryInExePath (cmd.exe)
+ *   Ruby: RUBYOPT (can hold -r), RUBYLIB (load path); the man page
+ *     https://manpages.debian.org/unstable/ruby/ruby.1.en.html (the
+ *     docs.ruby-lang.org options page lists RUBYOPT only)
+ *   perlrun: PERL5OPT (-M, -d), PERL5LIB, PERLLIB, PERL5DB, PERL5SHELL
+ *     https://perldoc.perl.org/perlrun
+ *   java launcher: JDK_JAVA_OPTIONS
+ *     https://docs.oracle.com/en/java/javase/21/docs/specs/man/java.html
+ *     JAVA_TOOL_OPTIONS (loads agents), JVM TI specification
+ *     https://docs.oracle.com/en/java/javase/21/docs/specs/jvmti.html
+ *     _JAVA_OPTIONS is in no primary page and stays dangerous
+ *   npm config: any `npm_config_*` is a config option (case-insensitive),
+ *     including script-shell, registry, node-options, prefix, git, editor
+ *     https://docs.npmjs.com/cli/v10/using-npm/config
+ *   pip: `PIP_<UPPER_LONG_NAME>` sets any option, `PIP_CONFIG_FILE` names a
+ *     config file
+ *     https://pip.pypa.io/en/stable/topics/configuration/
+ *   cargo: RUSTC, RUSTC_WRAPPER, RUSTC_WORKSPACE_WRAPPER, RUSTDOC, RUSTFMT,
+ *     BROWSER and CARGO_TARGET_<triple>_RUNNER/LINKER run programs; any config
+ *     key is `CARGO_<KEY>`. RUST_BACKTRACE and RUST_LOG are not in this page
+ *     (they stay harmless on the strength of what they do, not a citation)
+ *     https://doc.rust-lang.org/cargo/reference/environment-variables.html
+ *   curl(1), ENVIRONMENT: http_proxy (lowercase only), HTTPS_PROXY,
+ *     ALL_PROXY, NO_PROXY, CURL_CA_BUNDLE, SSL_CERT_FILE, SSL_CERT_DIR,
+ *     CURL_HOME, SSLKEYLOGFILE, QLOGDIR
+ *     https://curl.se/docs/manpage.html
+ *   OpenSSL openssl-env(7): OPENSSL_CONF, OPENSSL_CONF_INCLUDE,
+ *     OPENSSL_MODULES (providers load), SSL_CERT_FILE, SSL_CERT_DIR,
+ *     SSLKEYLOGFILE, and `OPENSSL` (the program scripts run)
+ *     https://docs.openssl.org/master/man7/openssl-env/
+ *   AWS CLI environment variables: AWS_* (credentials, profile, endpoints,
+ *     AWS_PAGER runs a program, AWS_CONFIG_FILE and AWS_SHARED_CREDENTIALS_FILE
+ *     name files whose profile can hold `credential_process`)
+ *     https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html
+ *     https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html
+ *   Windows: PATHEXT, PSModulePath, PSModuleAnalysisCachePath,
+ *     PSExecutionPolicyPreference (about_Environment_Variables), the module
+ *     search (about_PSModulePath), COMSPEC and PATH (set command), SystemRoot,
+ *     windir, APPDATA, USERPROFILE (USMT recognized variables).
+ *     NoDefaultCurrentDirectoryInExePath was not on any page fetched and keeps
+ *     its class
+ *     https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables
+ *     https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_psmodulepath
+ *     https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/set_1
+ *     https://learn.microsoft.com/en-us/windows/deployment/usmt/usmt-recognized-environment-variables
  */
 export type EnvRisk = "dangerous" | "sensitive" | "harmless" | "unknown";
 
@@ -111,7 +166,6 @@ const HARMLESS = new Set(
     "PYTHONUTF8",
     "PYTHONIOENCODING",
     "PYTHONHASHSEED",
-    "PYTHONWARNINGS",
     "RUST_BACKTRACE",
     "RUST_LOG",
     "GIT_TERMINAL_PROMPT",
@@ -211,6 +265,19 @@ const DANGEROUS_EXACT: Record<string, string> = {
   sslkeylogfile: "writes TLS keys to a file",
   openssl_conf: "decides which OpenSSL config loads",
   openssl_modules: "decides which OpenSSL modules load",
+  openssl_conf_include: "decides which OpenSSL config loads",
+  openssl_config: "decides which OpenSSL config loads",
+  openssl_engines: "decides which OpenSSL engines load",
+  openssl: "names the openssl program that scripts run",
+  aws_config_file:
+    "a file whose profile can name a program that supplies credentials",
+  aws_shared_credentials_file:
+    "a file whose profile can name a program that supplies credentials",
+  psmoduleanalysiscachepath:
+    "decides which cached command list PowerShell reads",
+  rustdoc: "names the documentation tool",
+  rustfmt: "names the formatter",
+  rustdocflags: "flags for the documentation tool",
 };
 
 /** `[prefix, why]`: any name that starts with the prefix. */

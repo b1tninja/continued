@@ -1,6 +1,7 @@
 import type { ShellKind } from "../../util/shell";
 import { commandCandidateSet } from "./candidates";
 import { programName } from "./destinations";
+import { infraCommandHit } from "./infraCommands";
 
 /**
  * The built-in rule `ask-destructive-commands` (ROADMAP B14): a command that
@@ -11,6 +12,7 @@ import { programName } from "./destinations";
  *
  *   git reset --hard      git clean -fd        git rebase
  *   git push --force      git branch -D        git checkout -- .
+ *   git commit --amend    git branch -m (the current branch, or -M)
  *   rm -rf src            Remove-Item -Recurse   rd /s
  *
  * It cannot see a script that does these inside itself, a program held in a
@@ -92,6 +94,8 @@ const hasWord = (rest: string[], ...words: string[]) =>
 
 /** Rules by git subcommand: the text it names when the arguments make it destructive. */
 const GIT_RULES: Record<string, GitRule> = {
+  commit: ({ rest }) =>
+    rest.some((w) => longFlag(w, "amend")) ? "git commit --amend" : undefined,
   reset: ({ rest }) =>
     hasWord(rest, "--hard", "--merge") ? "git reset --hard" : undefined,
   clean: ({ flag }) => (flag("n", "dry-run") ? undefined : "git clean"),
@@ -114,8 +118,15 @@ const GIT_RULES: Record<string, GitRule> = {
     )
       ? "git push --force"
       : undefined,
-  branch: ({ rest, force }) =>
-    rest.some((w) => bundleHas(w, "D")) || force ? "git branch -D" : undefined,
+  branch: ({ rest, force }) => {
+    if (rest.some((w) => bundleHas(w, "D")) || force) return "git branch -D";
+    // `-m new` renames the branch that is checked out; `-m old new` another one
+    const rename = rest.some((w) => bundleHas(w, "mM") || longFlag(w, "move"));
+    const names = rest.filter((w) => !w.startsWith("-"));
+    return rename && (names.length < 2 || rest.some((w) => bundleHas(w, "M")))
+      ? "git branch -m"
+      : undefined;
+  },
   tag: ({ flag, force }) =>
     flag("d", "delete") || force ? "git tag -d" : undefined,
   checkout: ({ rest, force }) =>
@@ -226,8 +237,10 @@ function hitOfSegment(words: string[]): string | undefined {
     return program;
   }
   if (program === "docker" || program === "podman") {
-    return args.includes("prune") ? `${program} prune` : undefined;
+    if (args.includes("prune")) return `${program} prune`;
   }
+  const infra = infraCommandHit(program, args);
+  if (infra) return infra;
   if (DB_CLIENTS.has(program) && DESTRUCTIVE_SQL.test(args.join(" "))) {
     return `${program} with DROP or TRUNCATE`;
   }

@@ -6,6 +6,7 @@ import { getDisplayableAsciiArt } from "../asciiArt.js";
 import { MCPService } from "../services/MCPService.js";
 import { isModelCapable } from "../utils/modelCapability.js";
 
+import { FirstRunBanner } from "./FirstRunBanner.js";
 import { ModelCapabilityWarning } from "./ModelCapabilityWarning.js";
 import { TipsDisplay, shouldShowTip } from "./TipsDisplay.js";
 
@@ -126,6 +127,7 @@ const IntroMessage: React.FC<IntroMessageProps> = ({
         </Text>
       )}
 
+      <FirstRunBanner />
       <Text> </Text>
 
       {/* Model capability warning */}

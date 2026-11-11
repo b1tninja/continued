@@ -21,6 +21,7 @@ export const UNTRUSTED_LOOSENING_KEYS: readonly string[] = [
   "toolPermissions.auto.guidance.block",
   "toolPermissions.auto.environment.trustedDomains",
   "toolPermissions.auto.environment.envNames.allow",
+  "toolPermissions.auto.environment.largeChangeLines",
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

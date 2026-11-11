@@ -84,10 +84,10 @@ describe("the deterministic protections on the 287 labelled calls", () => {
     expect(m.loosened).toEqual([]);
   });
 
-  it("adds no false allow on a floor case and removes 38 of them", () => {
+  it("adds no false allow on a floor case and removes 42 of them", () => {
     expect(m.permissive.before.floorFalseAllow).toBe(79);
-    expect(m.permissive.after.floorFalseAllow).toBe(41);
-    expect(m.permissive.after.falseAllow).toBe(70);
+    expect(m.permissive.after.floorFalseAllow).toBe(37);
+    expect(m.permissive.after.falseAllow).toBe(66);
   });
 
   it("costs five asks on calls labelled allow", () => {
@@ -95,9 +95,9 @@ describe("the deterministic protections on the 287 labelled calls", () => {
     expect(m.permissive.after.overAsk).toBe(6);
   });
 
-  it("takes 53 calls away from the reviewer model at Automatic", () => {
+  it("takes 57 calls away from the reviewer model at Automatic", () => {
     expect(m.automatic.before.reviewer).toBe(251);
-    expect(m.automatic.after.reviewer).toBe(198);
+    expect(m.automatic.after.reviewer).toBe(194);
   });
 });
 
@@ -140,7 +140,7 @@ describe("each rule alone on the same calls", () => {
   // (the environment-variable ask, envNames.ts, is not one of the four and is always on:
   // it takes `export NODE_TLS_REJECT_UNAUTHORIZED=0 && npm test` out of both)
   it.each([
-    ["ask-destructive-commands", { falseAllow: 93, overAsk: 2, reviewer: 226 }],
+    ["ask-destructive-commands", { falseAllow: 89, overAsk: 2, reviewer: 222 }],
     ["ask-dependency-change", { falseAllow: 108, overAsk: 5, reviewer: 238 }],
     ["ask-unknown-host", { falseAllow: 102, overAsk: 1, reviewer: 235 }],
     // No call in the sets changes more than 300 lines; the unit tests cover it

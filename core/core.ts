@@ -28,6 +28,7 @@ import {
 import { readUserEnvNames } from "./tools/permissions/userEnvNames";
 import { listEffectiveRules } from "./tools/permissions/effectiveRules";
 import { testToolCall } from "./tools/permissions/testToolCall";
+import { readUserLargeChangeLines } from "./tools/permissions/userLimits";
 import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
 import { resolveShell } from "./util/shell";
 import {
@@ -2013,6 +2014,7 @@ export class Core {
           approval,
           trustedDomains: readUserTrustedDomains(),
           envNames: readUserEnvNames(),
+          largeChangeLines: readUserLargeChangeLines(),
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
           // The shell terminal commands run in
           shell: resolveShell().kind,
