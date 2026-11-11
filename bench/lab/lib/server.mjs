@@ -22,7 +22,13 @@ export const VRAM_HEADROOM_GB = 2; // beyond the file: KV cache, compute buffers
 
 export class ServerError extends Error {}
 
-const FORBIDDEN_EXTRA = new Set(["--host", "--port", "-m", "--model", "--no-jinja"]);
+const FORBIDDEN_EXTRA = new Set([
+  "--host",
+  "--port",
+  "-m",
+  "--model",
+  "--no-jinja",
+]);
 
 /** The argument vector. Nothing here is taken on trust from `extra`. */
 export function buildArgs({
@@ -41,16 +47,25 @@ export function buildArgs({
   if (!gguf) throw new ServerError("a GGUF path is required");
   for (const e of extra)
     if (FORBIDDEN_EXTRA.has(e.split("=")[0]))
-      throw new ServerError(`${e} is set by the helper and cannot be passed through`);
+      throw new ServerError(
+        `${e} is set by the helper and cannot be passed through`,
+      );
   const a = [
-    "-m", gguf,
-    "--host", "127.0.0.1",
-    "--port", String(port),
+    "-m",
+    gguf,
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(port),
     "--jinja",
-    "-ngl", String(ngl),
-    "-c", String(ctx),
-    "-np", String(parallel),
-    "-a", alias ?? slug(path.basename(gguf).replace(/\.gguf$/i, "")),
+    "-ngl",
+    String(ngl),
+    "-c",
+    String(ctx),
+    "-np",
+    String(parallel),
+    "-a",
+    alias ?? slug(path.basename(gguf).replace(/\.gguf$/i, "")),
     "--no-webui",
   ];
   if (chatTemplate) a.push("--chat-template", chatTemplate);
@@ -61,11 +76,21 @@ export function buildArgs({
 }
 
 /** Kill a process and its children. Windows: taskkill /T /F; elsewhere SIGKILL. */
-export function killTree(pid, { platform = process.platform, exec = execFileSync, kill = process.kill } = {}) {
+export function killTree(
+  pid,
+  {
+    platform = process.platform,
+    exec = execFileSync,
+    kill = process.kill,
+  } = {},
+) {
   if (!pid) return false;
   try {
     if (platform === "win32")
-      exec("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+      exec("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
     else kill(pid, "SIGKILL");
     return true;
   } catch {
@@ -84,7 +109,9 @@ const alive = (pid) => {
 
 async function health(fetchImpl, base) {
   try {
-    const r = await fetchImpl(`${base}/health`, { signal: AbortSignal.timeout(2000) });
+    const r = await fetchImpl(`${base}/health`, {
+      signal: AbortSignal.timeout(2000),
+    });
     return r.status;
   } catch {
     return undefined;
@@ -112,24 +139,37 @@ export async function preflight({
   if (exists(pidFile)) {
     const pid = Number(fs.readFileSync(pidFile, "utf8").trim());
     if (pid && isAlive(pid))
-      why.push(`a llama-server started by the lab is still running (pid ${pid}); run \`server stop\` first`);
+      why.push(
+        `a llama-server started by the lab is still running (pid ${pid}); run \`server stop\` first`,
+      );
   }
   if ((await health(fetchImpl, `http://127.0.0.1:${port}`)) !== undefined)
     why.push(`something already answers on 127.0.0.1:${port}`);
   try {
-    const r = await fetchImpl(`${ollamaUrl}/api/ps`, { signal: AbortSignal.timeout(5000) });
-    const loaded = r.ok ? ((await r.json()).models ?? []).map((m) => m.name) : [];
+    const r = await fetchImpl(`${ollamaUrl}/api/ps`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    const loaded = r.ok
+      ? ((await r.json()).models ?? []).map((m) => m.name)
+      : [];
     if (loaded.length)
-      why.push(`Ollama has a model loaded (${loaded.join(", ")}): \`ollama stop\` it first; 32 GB VRAM cannot hold both`);
+      why.push(
+        `Ollama has a model loaded (${loaded.join(", ")}): \`ollama stop\` it first; 32 GB VRAM cannot hold both`,
+      );
   } catch {
     /* no Ollama answering: nothing of Ollama's is loaded */
   }
   if (checkVram && exists(gguf)) {
     const gpus = readGpu();
     const need = fileSize(gguf) / GB + VRAM_HEADROOM_GB;
-    if (!gpus?.length) why.push("nvidia-smi is unavailable: cannot verify free VRAM (pass --no-vram-check to override)");
+    if (!gpus?.length)
+      why.push(
+        "nvidia-smi is unavailable: cannot verify free VRAM (pass --no-vram-check to override)",
+      );
     else if (gpus[0].freeGB < need)
-      why.push(`needs about ${need.toFixed(1)} GB of VRAM (file + ${VRAM_HEADROOM_GB} GB), ${gpus[0].freeGB.toFixed(1)} GB free`);
+      why.push(
+        `needs about ${need.toFixed(1)} GB of VRAM (file + ${VRAM_HEADROOM_GB} GB), ${gpus[0].freeGB.toFixed(1)} GB free`,
+      );
   }
   return why;
 }
@@ -150,16 +190,30 @@ export async function startServer(opts, roots, deps = {}) {
   const exe = opts.exe ?? DEFAULT_EXE;
   const port = opts.port ?? DEFAULT_PORT;
   const logDir = roots.logs;
-  const why = await preflight({ ...opts, exe, port, logDir, fetchImpl, ...deps.preflight });
-  if (why.length) throw new ServerError("refusing to start llama-server: " + why.join("; "));
+  const why = await preflight({
+    ...opts,
+    exe,
+    port,
+    logDir,
+    fetchImpl,
+    ...deps.preflight,
+  });
+  if (why.length)
+    throw new ServerError("refusing to start llama-server: " + why.join("; "));
   const args = buildArgs({ ...opts, port });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const logFile = assertWritable(path.join(logDir, `llama-server-${port}-${stamp}.log`), roots);
+  const logFile = assertWritable(
+    path.join(logDir, `llama-server-${port}-${stamp}.log`),
+    roots,
+  );
   const pidFile = assertWritable(path.join(logDir, "llama-server.pid"), roots);
   fs.mkdirSync(logDir, { recursive: true });
   const fd = fs.openSync(logFile, "a");
   fs.writeSync(fd, `# ${exe} ${args.join(" ")}\n`);
-  const child = spawn(exe, args, { stdio: ["ignore", fd, fd], windowsHide: true });
+  const child = spawn(exe, args, {
+    stdio: ["ignore", fd, fd],
+    windowsHide: true,
+  });
   fs.closeSync(fd);
   let exited = child.exitCode != null ? child.exitCode : undefined;
   child.on?.("exit", (code) => {
@@ -200,11 +254,17 @@ export async function startServer(opts, roots, deps = {}) {
   const deadline = now() + (opts.readyTimeoutMs ?? 300_000);
   try {
     for (;;) {
-      if (signal?.aborted) throw new ServerError("interrupted while waiting for /health");
+      if (signal?.aborted)
+        throw new ServerError("interrupted while waiting for /health");
       if (exited !== undefined)
-        throw new ServerError(`llama-server exited with code ${exited} before it was ready; see ${logFile}`);
+        throw new ServerError(
+          `llama-server exited with code ${exited} before it was ready; see ${logFile}`,
+        );
       if ((await health(fetchImpl, base)) === 200) break; // 503 = still loading
-      if (now() > deadline) throw new ServerError(`no /health 200 within the timeout; see ${logFile}`);
+      if (now() > deadline)
+        throw new ServerError(
+          `no /health 200 within the timeout; see ${logFile}`,
+        );
       await wait(opts.pollMs ?? 1000, signal);
     }
   } catch (e) {
@@ -220,7 +280,9 @@ export async function startServer(opts, roots, deps = {}) {
     /** The `Chat format:` line llama.cpp prints when it picks a tool-call handler. */
     chatFormat() {
       try {
-        const m = [...fs.readFileSync(logFile, "utf8").matchAll(/Chat format:\s*(.+)/g)];
+        const m = [
+          ...fs.readFileSync(logFile, "utf8").matchAll(/Chat format:\s*(.+)/g),
+        ];
         return m.length ? m[m.length - 1][1].trim() : undefined;
       } catch {
         return undefined;

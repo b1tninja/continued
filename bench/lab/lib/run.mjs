@@ -141,12 +141,28 @@ export async function warmup(client, model) {
   };
 }
 
-function recordFor({ suite, model, c, pass, reply, cls, score, error, ms, cfg, engine }) {
+function recordFor({
+  suite,
+  model,
+  c,
+  pass,
+  reply,
+  cls,
+  score,
+  error,
+  ms,
+  cfg,
+  engine,
+}) {
   const u = reply?.usage ?? {};
   return {
     key: keyFor(suite.suite, model, c, pass, cfg),
     api: cfg.api,
-    cfg: { ...cfg, temperature: cfg.temperature ?? c.temperature, numPredict: cfg.numPredict ?? c.numPredict },
+    cfg: {
+      ...cfg,
+      temperature: cfg.temperature ?? c.temperature,
+      numPredict: cfg.numPredict ?? c.numPredict,
+    },
     engine,
     request: reply?.meta?.request,
     ts: new Date().toISOString(),

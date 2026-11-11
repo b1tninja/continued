@@ -42,7 +42,11 @@ export function expandCache(suite, { nonce, agentTools } = {}) {
       { label: "cold", messages: msgs(sys("sp"), A), tools: real },
       { label: "repeat-1", messages: msgs(sys("sp"), A), tools: real },
       { label: "repeat-2", messages: msgs(sys("sp"), A), tools: real },
-      { label: "new-last-user-message", messages: msgs(sys("sp"), B), tools: real },
+      {
+        label: "new-last-user-message",
+        messages: msgs(sys("sp"), B),
+        tools: real,
+      },
     ],
   });
   for (const where of ["first", "last"])
@@ -51,7 +55,10 @@ export function expandCache(suite, { nonce, agentTools } = {}) {
       arm: `volatile-${where}`,
       steps: [1, 2, 3].map((n) => ({
         label: n === 1 ? "cold" : `time-changed-${n - 1}`,
-        messages: msgs(sys(`vol-${where}`, `Current time: ${stamp(n)}`, where), A),
+        messages: msgs(
+          sys(`vol-${where}`, `Current time: ${stamp(n)}`, where),
+          A,
+        ),
         tools: real,
       })),
     });
@@ -62,16 +69,36 @@ export function expandCache(suite, { nonce, agentTools } = {}) {
     steps: [
       { label: "cold", messages: msgs(sys("tr"), A), tools: real },
       { label: "same-order", messages: msgs(sys("tr"), A), tools: real },
-      { label: "reversed-order", messages: msgs(sys("tr"), A), tools: reversed },
-      { label: "original-order-again", messages: msgs(sys("tr"), A), tools: real },
+      {
+        label: "reversed-order",
+        messages: msgs(sys("tr"), A),
+        tools: reversed,
+      },
+      {
+        label: "original-order-again",
+        messages: msgs(sys("tr"), A),
+        tools: real,
+      },
     ],
   });
   return out;
 }
 
-export const cacheRequestCount = (suite) => expandCache(suite, { nonce: "n" }).reduce((n, s) => n + s.steps.length, 0);
+export const cacheRequestCount = (suite) =>
+  expandCache(suite, { nonce: "n" }).reduce((n, s) => n + s.steps.length, 0);
 
-export function cacheRecord({ model, cfg, engine, nonce, seq, step, i, reply, error, ms }) {
+export function cacheRecord({
+  model,
+  cfg,
+  engine,
+  nonce,
+  seq,
+  step,
+  i,
+  reply,
+  error,
+  ms,
+}) {
   const u = reply?.usage ?? {};
   return {
     ts: new Date().toISOString(),
@@ -91,8 +118,13 @@ export function cacheRecord({ model, cfg, engine, nonce, seq, step, i, reply, er
     promptChars: step.messages.reduce((n, m) => n + m.content.length, 0),
     usage: u,
     ms,
-    error: error ? { kind: error.kind, message: String(error.message).slice(0, 300) } : undefined,
-    reply: reply && { text: reply.text.slice(0, 200), doneReason: reply.doneReason },
+    error: error
+      ? { kind: error.kind, message: String(error.message).slice(0, 300) }
+      : undefined,
+    reply: reply && {
+      text: reply.text.slice(0, 200),
+      doneReason: reply.doneReason,
+    },
   };
 }
 
@@ -125,7 +157,12 @@ export async function runCache({
       break;
     }
     const guard = modelGuard(
-      { name: m.name, sizeBytes: m.size, capabilities: m.capabilities, family: m.family },
+      {
+        name: m.name,
+        sizeBytes: m.size,
+        capabilities: m.capabilities,
+        family: m.family,
+      },
       limits,
       facts,
     );
@@ -135,9 +172,14 @@ export async function runCache({
       continue;
     }
     try {
-      const loaded = ((await client.ps()).models ?? []).map((x) => x.name).filter((n) => n !== m.name);
+      const loaded = ((await client.ps()).models ?? [])
+        .map((x) => x.name)
+        .filter((n) => n !== m.name);
       if (loaded.length) {
-        summary.refused.push({ model: m.name, reasons: [`another model is loaded: ${loaded.join(", ")}`] });
+        summary.refused.push({
+          model: m.name,
+          reasons: [`another model is loaded: ${loaded.join(", ")}`],
+        });
         log(`REFUSED ${m.name}: another model is loaded: ${loaded.join(", ")}`);
         continue;
       }
@@ -192,10 +234,23 @@ export async function runCache({
             error = e;
             consecutive++;
           }
-          const rec = cacheRecord({ model: m.name, cfg, engine, nonce, seq, step, i, reply, error, ms: Date.now() - t0 });
+          const rec = cacheRecord({
+            model: m.name,
+            cfg,
+            engine,
+            nonce,
+            seq,
+            step,
+            i,
+            reply,
+            error,
+            ms: Date.now() - t0,
+          });
           appendRecord(file, rec, roots);
           error ? summary.errors++ : summary.ran++;
-          log(`cache ${seq.id}/${seq.arm} #${i} ${step.label}: ${error ? "error " + error.message : cacheCells(rec).join(" ")}`);
+          log(
+            `cache ${seq.id}/${seq.arm} #${i} ${step.label}: ${error ? "error " + error.message : cacheCells(rec).join(" ")}`,
+          );
           if (consecutive >= 3) {
             summary.stopped = `3 consecutive errors; last: ${error.message}`;
             break outer;
@@ -239,8 +294,13 @@ export function buildCacheReport(records) {
   for (const rs of groups.values()) {
     rs.sort((a, b) => a.step - b.step);
     const r0 = rs[0];
-    L.push(`## ${r0.seq}${r0.arm !== "default" ? ` (${r0.arm})` : ""}: ${r0.model} via ${r0.api}`, "");
-    L.push("| # | step | prompt tokens | cached | evaluated | evaluated vs cold | prompt ms | ttft ms | output tokens |");
+    L.push(
+      `## ${r0.seq}${r0.arm !== "default" ? ` (${r0.arm})` : ""}: ${r0.model} via ${r0.api}`,
+      "",
+    );
+    L.push(
+      "| # | step | prompt tokens | cached | evaluated | evaluated vs cold | prompt ms | ttft ms | output tokens |",
+    );
     L.push("| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
     const cold = rs[0].usage?.promptEvalTokens ?? rs[0].usage?.promptTokens;
     for (const r of rs) {

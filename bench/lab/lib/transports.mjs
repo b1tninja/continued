@@ -14,7 +14,12 @@
 //   { text, thinking, toolCalls: [{name, arguments: "<json>"}], doneReason,
 //     usage, chunks?, meta: { reasoningField?, request } }
 import crypto from "node:crypto";
-import { LabError, OllamaClient, assertLoopback, toOllamaTools } from "./ollama.mjs";
+import {
+  LabError,
+  OllamaClient,
+  assertLoopback,
+  toOllamaTools,
+} from "./ollama.mjs";
 import { renderToolsPrompt } from "./prompts.mjs";
 
 export const APIS = [
@@ -24,7 +29,8 @@ export const APIS = [
   "openai-chat",
   "llamacpp-raw",
 ];
-export const isLlamaApi = (api) => api === "openai-chat" || api === "llamacpp-raw";
+export const isLlamaApi = (api) =>
+  api === "openai-chat" || api === "llamacpp-raw";
 export const isRawApi = (api) => api === "ollama-raw" || api === "llamacpp-raw";
 export const THINK_VALUES = ["on", "off", "default", "low", "medium", "high"];
 export const TOOL_CHOICES = ["auto", "required", "none"];
@@ -71,7 +77,9 @@ export function rawMessages(messages, tools, style = "codeblock") {
 }
 
 const sha = (s) =>
-  s ? crypto.createHash("sha256").update(String(s)).digest("hex").slice(0, 16) : undefined;
+  s
+    ? crypto.createHash("sha256").update(String(s)).digest("hex").slice(0, 16)
+    : undefined;
 
 /**
  * The request for one surface: { path, body, stream, notes }. `notes` lists
@@ -104,7 +112,8 @@ export function buildRequest(api, a) {
     if (hasTools) body.tools = toOllamaTools(tools);
     const t = thinkValue(think);
     if (t !== undefined) body.think = t;
-    if (toolChoice != null) notes.push("tool_choice not documented on /api/chat: not sent");
+    if (toolChoice != null)
+      notes.push("tool_choice not documented on /api/chat: not sent");
     if (temperature != null) body.options.temperature = temperature;
     if (!noPredict) body.options.num_predict = numPredict;
     if (numCtx != null) body.options.num_ctx = numCtx;
@@ -114,15 +123,21 @@ export function buildRequest(api, a) {
     path = "/api/generate";
     body = {
       model,
-      prompt: prompt ?? renderChatml(rawMessages(messages, hasTools ? tools : [], style)),
+      prompt:
+        prompt ??
+        renderChatml(rawMessages(messages, hasTools ? tools : [], style)),
       raw: true,
       stream,
       options: {},
     };
     const t = thinkValue(think);
     if (t !== undefined) body.think = t;
-    if (hasTools) notes.push("tools rendered into the system text (no tools field in raw mode)");
-    if (toolChoice != null) notes.push("tool_choice has no meaning in raw mode: not sent");
+    if (hasTools)
+      notes.push(
+        "tools rendered into the system text (no tools field in raw mode)",
+      );
+    if (toolChoice != null)
+      notes.push("tool_choice has no meaning in raw mode: not sent");
     if (temperature != null) body.options.temperature = temperature;
     if (!noPredict) body.options.num_predict = numPredict;
     if (numCtx != null) body.options.num_ctx = numCtx;
@@ -143,13 +158,19 @@ export function buildRequest(api, a) {
       if (t === false) body.reasoning_effort = "none";
       else if (t === true) body.reasoning_effort = "medium";
       else if (t !== undefined) body.reasoning_effort = t;
-      if (numCtx != null) notes.push("num_ctx cannot be set on /v1: the server's context applies");
-      if (keepAlive !== undefined) notes.push("keep_alive cannot be set on /v1");
+      if (numCtx != null)
+        notes.push(
+          "num_ctx cannot be set on /v1: the server's context applies",
+        );
+      if (keepAlive !== undefined)
+        notes.push("keep_alive cannot be set on /v1");
     } else {
       if (t === false) body.chat_template_kwargs = { enable_thinking: false };
-      else if (t === true) body.chat_template_kwargs = { enable_thinking: true };
+      else if (t === true)
+        body.chat_template_kwargs = { enable_thinking: true };
       else if (t !== undefined) body.reasoning_effort = t;
-      if (numCtx != null) notes.push("context is the server's -c: num_ctx not sent");
+      if (numCtx != null)
+        notes.push("context is the server's -c: num_ctx not sent");
     }
   } else if (api === "llamacpp-raw") {
     path = "/completion";
@@ -161,8 +182,10 @@ export function buildRequest(api, a) {
     if (temperature != null) body.temperature = temperature;
     if (!noPredict) body.n_predict = numPredict;
     if (seed != null) body.seed = seed;
-    if (hasTools) notes.push("tools rendered into the system text before /apply-template");
-    if (toolChoice != null) notes.push("tool_choice has no meaning on /completion: not sent");
+    if (hasTools)
+      notes.push("tools rendered into the system text before /apply-template");
+    if (toolChoice != null)
+      notes.push("tool_choice has no meaning on /completion: not sent");
     if (stream) notes.push("llamacpp-raw is not streamed");
   } else throw new LabError("refused", `unknown --api ${api}`);
   if (bodyExtra) Object.assign(body, bodyExtra);
@@ -226,12 +249,15 @@ export function takeOpenAI(obj, out, acc, mark) {
       }
     }
     for (const tc of m.tool_calls ?? []) {
-      const i = tc.index ?? (tc.id && acc.byId.has(tc.id) ? acc.byId.get(tc.id) : acc.list.length);
+      const i =
+        tc.index ??
+        (tc.id && acc.byId.has(tc.id) ? acc.byId.get(tc.id) : acc.list.length);
       if (tc.id) acc.byId.set(tc.id, i);
       const cur = (acc.list[i] ??= { name: "", arguments: "" });
       if (tc.function?.name && !cur.name) cur.name = tc.function.name;
       const a = tc.function?.arguments;
-      if (a != null) cur.arguments += typeof a === "string" ? a : JSON.stringify(a);
+      if (a != null)
+        cur.arguments += typeof a === "string" ? a : JSON.stringify(a);
       mark?.();
     }
     if (ch.finish_reason) out.doneReason = ch.finish_reason;
@@ -242,7 +268,10 @@ export function takeOpenAI(obj, out, acc, mark) {
 
 function takeOllama(obj, out, mark, key) {
   if (obj.error) throw new LabError("http", errText(obj.error));
-  const m = key === "chat" ? (obj.message ?? {}) : { content: obj.response, thinking: obj.thinking };
+  const m =
+    key === "chat"
+      ? (obj.message ?? {})
+      : { content: obj.response, thinking: obj.thinking };
   if (m.content) {
     out.text += m.content;
     out.chunks?.push(m.content);
@@ -273,9 +302,14 @@ export class Engine extends OllamaClient {
    * baseUrl is the engine being measured. For the llama-server surfaces,
    * `ollamaUrl` is where Ollama would be, only ever asked "is a model loaded".
    */
-  constructor({ api = "ollama-chat", ollamaUrl = "http://127.0.0.1:11434", ...rest } = {}) {
+  constructor({
+    api = "ollama-chat",
+    ollamaUrl = "http://127.0.0.1:11434",
+    ...rest
+  } = {}) {
     super(rest);
-    if (!APIS.includes(api)) throw new LabError("refused", `unknown --api ${api}`);
+    if (!APIS.includes(api))
+      throw new LabError("refused", `unknown --api ${api}`);
     this.api = api;
     this.ollamaOrigin = assertLoopback(ollamaUrl, rest.allowRemote);
   }
@@ -300,7 +334,10 @@ export class Engine extends OllamaClient {
   /** Read-only GET returning JSON, or undefined when the endpoint is absent. */
   async get(pathname) {
     try {
-      return await this.json(pathname, undefined, { method: "GET", timeoutMs: 15_000 });
+      return await this.json(pathname, undefined, {
+        method: "GET",
+        timeoutMs: 15_000,
+      });
     } catch {
       return undefined;
     }
@@ -321,7 +358,11 @@ export class Engine extends OllamaClient {
       };
     }
     const version = await this.get("/api/version");
-    const show = model ? await this.json("/api/show", { model }, { timeoutMs: 30_000 }).catch(() => undefined) : undefined;
+    const show = model
+      ? await this.json("/api/show", { model }, { timeoutMs: 30_000 }).catch(
+          () => undefined,
+        )
+      : undefined;
     return {
       engine: "ollama",
       api: this.api,
@@ -335,7 +376,9 @@ export class Engine extends OllamaClient {
 
   async roundtrip(pathname, body, { timeoutMs, stream, sse, take }) {
     const t0 = Date.now();
-    const { res, done, timedOut } = await this.call(pathname, body, { timeoutMs });
+    const { res, done, timedOut } = await this.call(pathname, body, {
+      timeoutMs,
+    });
     let first;
     const mark = () => {
       first ??= Date.now() - t0;
@@ -348,7 +391,11 @@ export class Engine extends OllamaClient {
         const line = (raw) => {
           const l = raw.trim();
           if (!l || l.startsWith(":")) return;
-          const data = sse ? (l.startsWith("data:") ? l.slice(5).trim() : null) : l;
+          const data = sse
+            ? l.startsWith("data:")
+              ? l.slice(5).trim()
+              : null
+            : l;
           if (data == null || data === "[DONE]") return;
           take(JSON.parse(data), mark);
         };
@@ -364,9 +411,16 @@ export class Engine extends OllamaClient {
       }
     } catch (e) {
       if (e instanceof LabError) throw e;
-      if (timedOut()) throw new LabError("timeout", `no reply within ${timeoutMs ?? this.requestTimeoutMs} ms`);
+      if (timedOut())
+        throw new LabError(
+          "timeout",
+          `no reply within ${timeoutMs ?? this.requestTimeoutMs} ms`,
+        );
       if (this.signal?.aborted) throw new LabError("aborted", "aborted");
-      throw new LabError("network", `reply cut off: ${String(e?.message ?? e)}`);
+      throw new LabError(
+        "network",
+        `reply cut off: ${String(e?.message ?? e)}`,
+      );
     } finally {
       done();
     }
@@ -375,7 +429,14 @@ export class Engine extends OllamaClient {
 
   async chat(args) {
     const api = args.api ?? this.api;
-    const out = { text: "", thinking: "", toolCalls: [], doneReason: undefined, usage: {}, meta: {} };
+    const out = {
+      text: "",
+      thinking: "",
+      toolCalls: [],
+      doneReason: undefined,
+      usage: {},
+      meta: {},
+    };
     const a = { ...args };
     // options-style callers (runSuite) pass sampling inside `options`
     const o = args.options ?? {};
@@ -384,8 +445,16 @@ export class Engine extends OllamaClient {
     a.numCtx ??= o.num_ctx;
     a.seed ??= o.seed;
     if (api === "llamacpp-raw") {
-      const msgs = rawMessages(a.messages, a.tools?.length ? a.tools : [], a.style);
-      const tpl = await this.call("/apply-template", { messages: msgs }, { timeoutMs: args.timeoutMs });
+      const msgs = rawMessages(
+        a.messages,
+        a.tools?.length ? a.tools : [],
+        a.style,
+      );
+      const tpl = await this.call(
+        "/apply-template",
+        { messages: msgs },
+        { timeoutMs: args.timeoutMs },
+      );
       let rendered;
       try {
         rendered = (await tpl.res.json()).prompt; // README: response is {prompt}
@@ -397,12 +466,18 @@ export class Engine extends OllamaClient {
       a.prompt = rendered;
     }
     const req = buildRequest(api, a);
-    out.meta.request = { api, path: req.path, notes: req.notes, toolChoice: a.toolChoice };
+    out.meta.request = {
+      api,
+      path: req.path,
+      notes: req.notes,
+      toolChoice: a.toolChoice,
+    };
     if (req.stream) out.chunks = [];
     const acc = { list: [], byId: new Map() };
     let kind = api === "ollama-chat" ? "chat" : "generate";
     const take = (obj, mark) => {
-      if (api === "ollama-v1" || api === "openai-chat") takeOpenAI(obj, out, acc, mark);
+      if (api === "ollama-v1" || api === "openai-chat")
+        takeOpenAI(obj, out, acc, mark);
       else if (api === "llamacpp-raw") {
         if (obj.error) throw new LabError("http", errText(obj.error));
         out.text += obj.content ?? "";
@@ -410,7 +485,10 @@ export class Engine extends OllamaClient {
         out.doneReason = obj.stop_type ?? out.doneReason; // none|eos|limit|word
         out.usage = {
           ...openaiUsage(
-            { prompt_tokens: obj.tokens_evaluated, completion_tokens: obj.timings?.predicted_n },
+            {
+              prompt_tokens: obj.tokens_evaluated,
+              completion_tokens: obj.timings?.predicted_n,
+            },
             obj.timings,
           ),
           cachedTokens: obj.timings?.cache_n ?? obj.tokens_cached,

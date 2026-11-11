@@ -199,7 +199,8 @@ export async function main(argv, env = process.env) {
     return die(`--think must be one of ${THINK_VALUES.join(", ")}`);
   const cfg = { api: v.api };
   if (v.think) cfg.think = v.think;
-  if (v.temperature != null) cfg.temperature = num(v.temperature, "temperature");
+  if (v.temperature != null)
+    cfg.temperature = num(v.temperature, "temperature");
   if (v["num-predict"] != null) {
     cfg.numPredict = Number(v["num-predict"]);
     if (!Number.isInteger(cfg.numPredict))
@@ -271,7 +272,9 @@ export async function main(argv, env = process.env) {
     chatTemplate: v["chat-template"],
     chatTemplateFile: v["chat-template-file"],
     cacheReuse:
-      v["cache-reuse"] != null ? num(v["cache-reuse"], "cache-reuse") : undefined,
+      v["cache-reuse"] != null
+        ? num(v["cache-reuse"], "cache-reuse")
+        : undefined,
     reasoningFormat: v["reasoning-format"],
     extra: v["server-arg"] ?? [],
     ollamaUrl: v["ollama-url"],
@@ -359,7 +362,9 @@ export async function main(argv, env = process.env) {
     // server already holds its VRAM, so the free-VRAM check belongs to the
     // server helper (before it starts), not to the model guard.
     if (!v.gguf)
-      return die(`--api ${v.api} needs --gguf FILE (its size is the guard; --serve starts it)`);
+      return die(
+        `--api ${v.api} needs --gguf FILE (its size is the guard; --serve starts it)`,
+      );
     if (v.serve && cmd === "run" && v.run) {
       server = await startServer(serverOpts(), roots, { signal: ctl.signal });
       log(
@@ -401,42 +406,117 @@ export async function main(argv, env = process.env) {
   }
 
   async function runCommand() {
+    if (cmd === "fixtures") {
+      const suite = loadSuite(v.suite ?? die("--suite is required"));
+      const files = writeFixtures({
+        product,
+        suite,
+        records: readRecords(resultFile(roots, suite.suite)),
+        roots,
+        opts: { ...suiteOptions(v), onlyLeaks: v["only-leaks"] },
+        agentTools: agentTools(),
+      });
+      return log(
+        `wrote ${files.length} fixture(s) under ${path.join(roots.results, "fixtures")}`,
+      );
+    }
 
-  if (cmd === "fixtures") {
+    if (cmd !== "plan" && cmd !== "run")
+      return die(`unknown command ${cmd}\n\n${HELP}`);
     const suite = loadSuite(v.suite ?? die("--suite is required"));
-    const files = writeFixtures({
-      product,
-      suite,
-      records: readRecords(resultFile(roots, suite.suite)),
-      roots,
-      opts: { ...suiteOptions(v), onlyLeaks: v["only-leaks"] },
-      agentTools: agentTools(),
-    });
-    return log(
-      `wrote ${files.length} fixture(s) under ${path.join(roots.results, "fixtures")}`,
-    );
-  }
-
-  if (cmd !== "plan" && cmd !== "run")
-    return die(`unknown command ${cmd}\n\n${HELP}`);
-  const suite = loadSuite(v.suite ?? die("--suite is required"));
-  const models = await pickModels(v.models, inv);
-  const opts = suiteOptions(v);
-  if (suite.kind === "cache") {
-    const n = cacheRequestCount(suite);
-    log(
-      `${cmd === "run" && v.run ? "RUN" : "DRY RUN"}: cache suite, ${n} requests per model via ${cfg.api}${cfgTag(cfg)}, results ${resultFile(roots, "cache")}`,
-    );
-    if (cmd === "plan" || !v.run)
-      return log("dry: nothing was sent. Add --run to run for real.");
+    const models = await pickModels(v.models, inv);
+    const opts = suiteOptions(v);
+    if (suite.kind === "cache") {
+      const n = cacheRequestCount(suite);
+      log(
+        `${cmd === "run" && v.run ? "RUN" : "DRY RUN"}: cache suite, ${n} requests per model via ${cfg.api}${cfgTag(cfg)}, results ${resultFile(roots, "cache")}`,
+      );
+      if (cmd === "plan" || !v.run)
+        return log("dry: nothing was sent. Add --run to run for real.");
+      const budget = new Budget({
+        maxRequests: num(v["max-requests"], "max-requests"),
+        maxMs: num(v["max-minutes"], "max-minutes") * 60_000,
+      });
+      const s = await runCache({
+        client,
+        suite,
+        models,
+        roots,
+        budget,
+        signal: ctl.signal,
+        log,
+        facts: llama ? { ...facts, gpus: undefined } : facts,
+        limits,
+        cfg,
+        stream: (v.streams ?? "false").split(",")[0] === "true",
+        agentTools: agentTools(),
+        numCtx: opts.numCtx,
+        cooldownMs: num(v.cooldown, "cooldown") * 1000,
+      });
+      log(
+        `done: ${s.ran} ran, ${s.errors} errors, ${s.refused.length} model(s) refused${s.stopped ? `; stopped: ${s.stopped}` : ""}`,
+      );
+      if (s.stopped === "interrupted") process.exitCode = 130;
+      return;
+    }
+    const passes = num(v.passes, "passes") || 1;
     const budget = new Budget({
       maxRequests: num(v["max-requests"], "max-requests"),
       maxMs: num(v["max-minutes"], "max-minutes") * 60_000,
     });
-    const s = await runCache({
-      client,
+    const history = readRecords(resultFile(roots, suite.suite));
+    const warm = {};
+    if (cmd === "plan" && v.warmup) {
+      for (const m of models) {
+        const g = inv.models.find((x) => x.name === m.name);
+        if (!g?.safe) {
+          log(`warmup skipped for ${m.name}: not safe under the limits`);
+          continue;
+        }
+        log(`warmup ${m.name} (1 request)`);
+        try {
+          budget.spend(1);
+          warm[m.name] = await warmup(client, m.name);
+        } catch (e) {
+          log(`warmup failed: ${e.message}`);
+        }
+        await client.unload(m.name);
+      }
+    }
+    const plan = makePlan({
       suite,
       models,
+      passes,
+      opts,
+      product,
+      history,
+      warm,
+      agentTools: agentTools(),
+      cfg,
+    });
+    log(
+      `${cmd === "run" && v.run ? "RUN" : "DRY RUN"}: suite ${suite.suite}, results ${resultFile(roots, suite.suite)}`,
+    );
+    let total = 0;
+    for (const p of plan) {
+      const g = inv.models.find((x) => x.name === p.model);
+      total += p.estSeconds;
+      log(
+        `  ${p.model}: ${p.cases} cases x ${p.passes} = ${p.total}, ${p.remaining} to run, ~${(p.estSeconds / 60).toFixed(1)} min at ${p.tps ? p.tps.toFixed(1) : "20 (assumed)"} tok/s (${p.tpsSource}); ${g?.safe ? "safe" : "REFUSED: " + (g?.guard.reasons.join("; ") ?? "?")}`,
+      );
+    }
+    log(
+      `  total ~${(total / 60).toFixed(1)} min, ${plan.reduce((s, p) => s + p.remaining, 0)} requests; budget ${budget.maxRequests} requests, ${(budget.maxMs / 60000).toFixed(0)} min`,
+    );
+    if (cmd === "plan") return;
+    if (!v.run) return log("dry: nothing was sent. Add --run to run for real.");
+    const summary = await runSuite({
+      client,
+      product,
+      suite,
+      models,
+      passes,
+      opts,
       roots,
       budget,
       signal: ctl.signal,
@@ -444,90 +524,14 @@ export async function main(argv, env = process.env) {
       facts: llama ? { ...facts, gpus: undefined } : facts,
       limits,
       cfg,
-      stream: (v.streams ?? "false").split(",")[0] === "true",
-      agentTools: agentTools(),
-      numCtx: opts.numCtx,
       cooldownMs: num(v.cooldown, "cooldown") * 1000,
+      modelMaxMs: num(v["model-minutes"], "model-minutes") * 60_000,
+      agentTools: agentTools(),
     });
     log(
-      `done: ${s.ran} ran, ${s.errors} errors, ${s.refused.length} model(s) refused${s.stopped ? `; stopped: ${s.stopped}` : ""}`,
+      `done: ${summary.ran} ran, ${summary.skipped} already done, ${summary.errors} errors, ${summary.refused.length} model(s) refused${summary.stopped ? `; stopped: ${summary.stopped}` : ""}`,
     );
-    if (s.stopped === "interrupted") process.exitCode = 130;
-    return;
-  }
-  const passes = num(v.passes, "passes") || 1;
-  const budget = new Budget({
-    maxRequests: num(v["max-requests"], "max-requests"),
-    maxMs: num(v["max-minutes"], "max-minutes") * 60_000,
-  });
-  const history = readRecords(resultFile(roots, suite.suite));
-  const warm = {};
-  if (cmd === "plan" && v.warmup) {
-    for (const m of models) {
-      const g = inv.models.find((x) => x.name === m.name);
-      if (!g?.safe) {
-        log(`warmup skipped for ${m.name}: not safe under the limits`);
-        continue;
-      }
-      log(`warmup ${m.name} (1 request)`);
-      try {
-        budget.spend(1);
-        warm[m.name] = await warmup(client, m.name);
-      } catch (e) {
-        log(`warmup failed: ${e.message}`);
-      }
-      await client.unload(m.name);
-    }
-  }
-  const plan = makePlan({
-    suite,
-    models,
-    passes,
-    opts,
-    product,
-    history,
-    warm,
-    agentTools: agentTools(),
-    cfg,
-  });
-  log(
-    `${cmd === "run" && v.run ? "RUN" : "DRY RUN"}: suite ${suite.suite}, results ${resultFile(roots, suite.suite)}`,
-  );
-  let total = 0;
-  for (const p of plan) {
-    const g = inv.models.find((x) => x.name === p.model);
-    total += p.estSeconds;
-    log(
-      `  ${p.model}: ${p.cases} cases x ${p.passes} = ${p.total}, ${p.remaining} to run, ~${(p.estSeconds / 60).toFixed(1)} min at ${p.tps ? p.tps.toFixed(1) : "20 (assumed)"} tok/s (${p.tpsSource}); ${g?.safe ? "safe" : "REFUSED: " + (g?.guard.reasons.join("; ") ?? "?")}`,
-    );
-  }
-  log(
-    `  total ~${(total / 60).toFixed(1)} min, ${plan.reduce((s, p) => s + p.remaining, 0)} requests; budget ${budget.maxRequests} requests, ${(budget.maxMs / 60000).toFixed(0)} min`,
-  );
-  if (cmd === "plan") return;
-  if (!v.run) return log("dry: nothing was sent. Add --run to run for real.");
-  const summary = await runSuite({
-    client,
-    product,
-    suite,
-    models,
-    passes,
-    opts,
-    roots,
-    budget,
-    signal: ctl.signal,
-    log,
-    facts: llama ? { ...facts, gpus: undefined } : facts,
-    limits,
-    cfg,
-    cooldownMs: num(v.cooldown, "cooldown") * 1000,
-    modelMaxMs: num(v["model-minutes"], "model-minutes") * 60_000,
-    agentTools: agentTools(),
-  });
-  log(
-    `done: ${summary.ran} ran, ${summary.skipped} already done, ${summary.errors} errors, ${summary.refused.length} model(s) refused${summary.stopped ? `; stopped: ${summary.stopped}` : ""}`,
-  );
-  if (summary.stopped === "interrupted") process.exitCode = 130;
+    if (summary.stopped === "interrupted") process.exitCode = 130;
   }
 }
 

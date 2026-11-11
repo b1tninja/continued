@@ -9,8 +9,17 @@
     "Read the file src/util.ts and tell me its first line."
   ],
   "sequences": [
-    { "id": "same-prefix", "what": "identical request three times, then the same prefix with a new last user message" },
-    { "id": "volatile-first-vs-last", "what": "a changing timestamp at the start of the system text against at the end" },
-    { "id": "tool-reorder", "what": "the same tools in the same order, then reversed, then the original order again" }
+    {
+      "id": "same-prefix",
+      "what": "identical request three times, then the same prefix with a new last user message"
+    },
+    {
+      "id": "volatile-first-vs-last",
+      "what": "a changing timestamp at the start of the system text against at the end"
+    },
+    {
+      "id": "tool-reorder",
+      "what": "the same tools in the same order, then reversed, then the original order again"
+    }
   ]
 }
