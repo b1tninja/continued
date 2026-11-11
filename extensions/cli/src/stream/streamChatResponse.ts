@@ -55,6 +55,7 @@ import {
 import {
   cacheReadTokens,
   processChunkContent,
+  recoveryHoldOf,
   processToolCallDelta,
   recordStreamTelemetry,
   trackFirstTokenTime,
@@ -136,6 +137,8 @@ function processChunk(options: ProcessChunkOptions): {
     callbacks,
     isHeadless,
   } = options;
+  const holding = recoveryHoldOf(chunk);
+  if (holding !== undefined) callbacks?.onRecoveryHold?.(holding);
   // Safety check: ensure chunk has the expected structure
   if (!chunk.choices || !chunk.choices[0]) {
     return { aiResponse, shouldContinue: true };

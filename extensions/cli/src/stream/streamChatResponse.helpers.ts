@@ -385,6 +385,23 @@ export function trackFirstTokenTime(
   return firstTokenTime;
 }
 
+/**
+ * The field the adapters' recovery stage sets on the empty chunk that says a
+ * reply is held (RECOVERY_HOLD_FIELD in packages/openai-adapters; a test
+ * there pins the two equal).
+ */
+const RECOVERY_HOLD_FIELD = "x_continue_recovery_hold";
+
+/** Whether this chunk says a reply is held (true) or no longer held (false). */
+export function recoveryHoldOf(chunk: unknown): boolean | undefined {
+  const phase = (chunk as Record<string, unknown> | undefined)?.[
+    RECOVERY_HOLD_FIELD
+  ];
+  if (phase === "start") return true;
+  if (phase === "end") return false;
+  return undefined;
+}
+
 // Helper function to process content from a chunk
 export function processChunkContent(
   content: string,

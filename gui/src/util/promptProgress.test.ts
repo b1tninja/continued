@@ -22,6 +22,22 @@ describe("splitPromptProgress", () => {
     expect(reply).toEqual([{ role: "assistant", content: "Hello" }]);
   });
 
+  it("takes the recovery hold signals out of the reply, the latest winning", () => {
+    const batch: ChatMessage[] = [
+      { role: "assistant", content: "", recoveryHold: "start" },
+      { role: "assistant", content: "", recoveryHold: "end" },
+      { role: "assistant", content: "Hello" },
+    ];
+    const { hold, reply } = splitPromptProgress(batch);
+    expect(hold).toBe("end");
+    expect(reply).toEqual([{ role: "assistant", content: "Hello" }]);
+    expect(
+      splitPromptProgress([
+        { role: "assistant", content: "", recoveryHold: "start" },
+      ]),
+    ).toEqual({ progress: undefined, hold: "start", reply: [] });
+  });
+
   it("passes a batch without updates through", () => {
     const batch: ChatMessage[] = [{ role: "assistant", content: "Hi" }];
     expect(splitPromptProgress(batch)).toEqual({

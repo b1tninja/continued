@@ -1170,6 +1170,14 @@ export interface AssistantChatMessage {
    */
   promptProgress?: PromptProgress;
   /**
+   * Set only on the signal a stream sends when it holds back the model's text
+   * to look for a tool call the model wrote as text (text tool call
+   * recovery): `start` when it begins to hold, `end` when it has decided what
+   * the held text was. Such a message has no content and is not part of the
+   * reply. Never sent when recovery is off.
+   */
+  recoveryHold?: "start" | "end";
+  /**
    * The account that answered, for a model with routes (models.yaml). Set
    * on the message that carries the usage.
    */

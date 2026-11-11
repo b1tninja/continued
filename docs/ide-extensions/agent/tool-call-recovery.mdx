@@ -70,7 +70,7 @@ Recovery is strict, because text that looks like a call is sometimes an example.
 - For `llama-json`, the reply is nothing but one call object or an array of them, with exactly the keys `name` and `parameters` (and an optional `type` of `function`).
 - For `hermes-json` and `glm-xml`, the reply is nothing but calls (an opening `<think>` block is kept as text), and for `glm-xml` a value is a string unless the schema declares another type, in which case it must be JSON of that type. Both were built from the model chat templates and checked on synthesised fixtures; no live leak of either was captured, so treat them as untested against real replies.
 
-Anything else stays text, exactly as the model wrote it. While a reply streams, text that might be the start of a call is held back until the reply ends, so a recovered call never shows as text first; with recovery on, replies from a matching model can appear later than without it.
+Anything else stays text, exactly as the model wrote it. While a reply streams, text that might be the start of a call is held back until the reply ends, so a recovered call never shows as text first; with recovery on, replies from a matching model can appear later than without it. While a reply is held, the chat shows "Reading the model's reply" where it would show "Generating", and the CLI spinner says "Reading the model's reply..."; the line goes away as soon as the held text has been shown or turned into a call. Nothing changes when recovery is off.
 
 A recovered call goes through the same tool permissions as any other call.
 

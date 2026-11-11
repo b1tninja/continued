@@ -59,6 +59,7 @@ import {
   normalizeToolUseIds,
   ThinkingSplit,
 } from "./bedrockHelpers.js";
+import { holdChunk } from "../dialects/holdSignal.js";
 import type { RecoveredCall } from "../dialects/qwenXml.js";
 import {
   createTextToolRecovery,
@@ -1220,6 +1221,10 @@ export class BedrockApi implements BaseLlmApi {
           if (event.type === "call") recovered.push(event.call);
           else yield chatChunk({ content: event.text, model: body.model, id });
         }
+        // Say when text starts being held and when it is judged, so a reader
+        // can show that the reply is being read rather than stalled.
+        const phase = recovery?.takeHoldSignal?.();
+        if (phase) yield holdChunk(phase, { id, model: body.model });
       };
       // Answer text after the filters above: shown, or given to the recovery
       // stage when there is one. The filters come first, as cleanReplyText

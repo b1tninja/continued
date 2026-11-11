@@ -1,6 +1,9 @@
 import { useAppSelector } from "../../../../redux/hooks";
 import { getAltKeyLabel, getMetaKeyLabel, isJetBrains } from "../../../../util";
-import { formatPromptProgress } from "../../../../util/promptProgress";
+import {
+  formatPromptProgress,
+  RECOVERY_HOLD_TEXT,
+} from "../../../../util/promptProgress";
 import { GeneratingIndicator } from "./GeneratingIndicator";
 
 interface StreamingToolbarProps {
@@ -15,6 +18,8 @@ export function StreamingToolbar({
   const jetbrains = isJetBrains();
   // While a local server reads a long prompt, say how far it is
   const progress = useAppSelector((state) => state.session.promptProgress);
+  // While the reply is held for tool call recovery nothing else would show
+  const held = useAppSelector((state) => state.session.recoveryHold);
 
   return (
     <div className="flex w-full items-center justify-between">
@@ -23,6 +28,8 @@ export function StreamingToolbar({
           text={formatPromptProgress(progress)}
           testId="prompt-progress"
         />
+      ) : held ? (
+        <GeneratingIndicator text={RECOVERY_HOLD_TEXT} testId="recovery-hold" />
       ) : (
         <GeneratingIndicator />
       )}
