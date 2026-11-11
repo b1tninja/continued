@@ -80,8 +80,23 @@ cn ls --json
 
 ## Environment Variables
 
-- `CONTINUE_CLI_DISABLE_COMMIT_SIGNATURE`: Disable adding the Continue commit signature to generated commit messages
 - `FORCE_NO_TTY`: Force TTY-less mode, prevents stdin reading (useful for testing and automation)
+
+## Commit and pull request attribution
+
+The CLI adds no attribution to commits or pull request text. To ask for it, set this in your own `settings.json` in the global directory (project settings are ignored):
+
+```json
+{
+  "attribution": {
+    "commit": true,
+    "pullRequest": true,
+    "text": "Co-Authored-By: Me <me@example.com>"
+  }
+}
+```
+
+`text` is optional; the default is `Co-Authored-By: Continuous <noreply@continuous.invalid>`.
 
 ## Commands
 
