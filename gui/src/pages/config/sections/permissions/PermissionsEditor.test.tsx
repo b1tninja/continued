@@ -283,10 +283,10 @@ describe("Permissions editor", () => {
         name: "Remove rule runTerminalCommand(git push*)",
       }),
     );
-    await waitFor(() => screen.getByRole("checkbox"));
+    // The editor's own dialog is the confirmation; there is no box on the page
+    await waitFor(() => screen.getByTestId("native-notice"));
+    expect(screen.queryByRole("checkbox")).toBeNull();
     const save = screen.getByTestId("rule-save") as HTMLButtonElement;
-    expect(save.disabled).toBe(true);
-    fireEvent.click(screen.getByRole("checkbox"));
     expect(save.disabled).toBe(false);
     await act(async () => {
       fireEvent.click(save);
@@ -295,7 +295,6 @@ describe("Permissions editor", () => {
       expect(remove.mock.calls.at(-1)![0]).toMatchObject({
         decision: "ask",
         rule: "runTerminalCommand(git push*)",
-        confirm: "yes",
       }),
     );
   });

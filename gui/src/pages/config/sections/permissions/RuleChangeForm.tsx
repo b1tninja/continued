@@ -4,9 +4,17 @@ import {
   CONFIRM_PHRASE,
   DECISION_WORDS,
 } from "core/tools/permissions/ruleWords";
+import { parseWrittenRule } from "core/tools/permissions/writtenRule";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../../../components/ui";
 import { DecisionChip } from "./badges";
+import {
+  DiffView,
+  NativeNotice,
+  TypedConfirmation,
+  Verdict,
+  WrittenRuleLine,
+} from "./RuleFormParts";
 import { useRuleChange, type RuleChange } from "./useRuleChange";
 
 /** What the form is for: a new rule, a change to one of yours, or adopting one from elsewhere. */
@@ -17,101 +25,6 @@ export type FormMode =
   | { kind: "remove"; decision: RuleDecision; rule: string };
 
 const DECISIONS: RuleDecision[] = ["deny", "ask", "allow"];
-
-function DiffView({
-  diff,
-}: {
-  diff: NonNullable<ToolRuleEditResponse["diff"]>;
-}) {
-  if (diff.length === 0) return null;
-  return (
-    <pre
-      className="m-0 max-h-40 overflow-auto rounded-sm border border-solid border-border bg-input p-1 font-mono text-2xs"
-      aria-label="What will change in config.yaml"
-      data-testid="rule-diff"
-    >
-      {diff.map((l, i) => (
-        <div
-          key={i}
-          className={
-            l.kind === "add"
-              ? "text-success"
-              : l.kind === "remove"
-                ? "text-error"
-                : "text-description-muted"
-          }
-        >
-          {l.kind === "add" ? "+ " : l.kind === "remove" ? "- " : "  "}
-          {l.text}
-        </div>
-      ))}
-    </pre>
-  );
-}
-
-function Verdict({
-  verdict,
-}: {
-  verdict: NonNullable<ToolRuleEditResponse["verdict"]>;
-}) {
-  const word = (d: string) =>
-    d === "allow" ? "runs" : d === "deny" ? "is refused" : "asks";
-  return (
-    <p className="m-0 text-xs" data-testid="rule-verdict">
-      Try <code className="font-mono">{verdict.probe}</code>: now it{" "}
-      <strong>{word(verdict.before.decision)}</strong>
-      {verdict.before.decision === verdict.after.decision
-        ? ", and it still will."
-        : `, with this rule it ${word(verdict.after.decision)}.`}
-    </p>
-  );
-}
-
-function Confirmation({
-  friction,
-  broadReason,
-  value,
-  onChange,
-}: {
-  friction: "confirm" | "typed";
-  broadReason?: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const id = useId();
-  if (friction === "typed") {
-    return (
-      <div className="flex flex-col gap-1" data-testid="typed-confirmation">
-        <p className="m-0 text-xs text-warning" role="alert">
-          This is a very wide Always rule. {broadReason} Anything it matches
-          will run without asking.
-        </p>
-        <label htmlFor={id} className="text-2xs">
-          Type <strong>{CONFIRM_PHRASE}</strong> to confirm
-        </label>
-        <input
-          id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-          className="box-border w-full min-w-0 rounded border border-solid border-border bg-input px-1 text-xs text-foreground"
-        />
-      </div>
-    );
-  }
-  return (
-    <label className="flex items-center gap-1 text-xs" htmlFor={id}>
-      <input
-        id={id}
-        type="checkbox"
-        checked={value === "yes"}
-        onChange={(e) => onChange(e.target.checked ? "yes" : "")}
-      />
-      This makes a rule looser. I understand.
-    </label>
-  );
-}
 
 function changeOf(
   mode: FormMode,
@@ -164,13 +77,27 @@ export function RuleChangeForm({
   const state = useRuleChange(change, baseHash);
   const { preview } = state;
   const friction = preview?.analysis?.friction ?? "none";
+  // The typed phrase is the page's part; whatever loosens is also confirmed
+  // in the editor's own dialog, which this page cannot answer.
   const confirmed =
-    friction === "none" ||
-    (friction === "typed"
-      ? confirm.trim().toLowerCase() === CONFIRM_PHRASE
-      : confirm === "yes");
+    friction !== "typed" || confirm.trim().toLowerCase() === CONFIRM_PHRASE;
   const canSave =
     Boolean(preview?.result === "preview") && confirmed && !state.busy;
+  const [waiting, setWaiting] = useState(false);
+  // Text pasted from `continuous audit suggest` or the CLI sets both fields
+  const onRuleText = (value: string) => {
+    const written =
+      mode.kind === "add" &&
+      /^\s*(continuous|cn)\s|^\s*(never|ask|always)\s/i.test(value)
+        ? parseWrittenRule(value)
+        : undefined;
+    if (written?.ok && written.decision) {
+      setDecision(written.decision);
+      setRule(written.rule);
+    } else {
+      setRule(value);
+    }
+  };
 
   useEffect(() => {
     if (mode.kind === "add" || mode.kind === "edit") input.current?.focus();
@@ -189,7 +116,9 @@ export function RuleChangeForm({
           ? "Remove this rule"
           : "Adopt this rule";
   const submit = async () => {
+    setWaiting(Boolean(preview?.analysis?.loosens));
     const res = await state.save(confirm || undefined);
+    setWaiting(false);
     if (
       res &&
       ["added", "updated", "removed", "adopted"].includes(res.result)
@@ -268,7 +197,7 @@ export function RuleChangeForm({
               id={`${id}-rule`}
               ref={input}
               value={rule}
-              onChange={(e) => setRule(e.target.value)}
+              onChange={(e) => onRuleText(e.target.value)}
               placeholder={mode.kind === "add" ? mode.example : undefined}
               aria-describedby={`${id}-help`}
               autoComplete="off"
@@ -277,7 +206,8 @@ export function RuleChangeForm({
             />
             <span id={`${id}-help`} className="text-2xs text-description-muted">
               Write toolName(pattern), or just toolName. * matches any
-              characters.
+              characters. You can paste a command from{" "}
+              <code>continuous audit suggest</code>.
             </span>
           </div>
         </>
@@ -324,24 +254,30 @@ export function RuleChangeForm({
           ))}
         {preview?.verdict && <Verdict verdict={preview.verdict} />}
         {preview?.diff && <DiffView diff={preview.diff} />}
-        {preview?.analysis?.loosens && friction === "none" && (
-          <p className="m-0 text-2xs text-description-muted">
-            This lets something run without asking that did not before.
-          </p>
-        )}
+        {preview?.analysis?.loosens && <NativeNotice waiting={waiting} />}
       </div>
-      {friction !== "none" && (
-        <Confirmation
-          friction={friction}
+      {friction === "typed" && (
+        <TypedConfirmation
           broadReason={preview?.analysis?.broadReason}
           value={confirm}
           onChange={setConfirm}
         />
       )}
+      <WrittenRuleLine
+        decision={
+          mode.kind === "adopt" || mode.kind === "remove"
+            ? mode.decision
+            : decision
+        }
+        rule={
+          mode.kind === "adopt" || mode.kind === "remove" ? mode.rule : rule
+        }
+      />
       <div className="flex gap-2">
         <Button
           type="submit"
           size="sm"
+          className="min-h-6"
           disabled={!canSave}
           data-testid="rule-save"
         >
@@ -351,7 +287,13 @@ export function RuleChangeForm({
               ? "Remove"
               : "Save to config.yaml"}
         </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={onCancel}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="min-h-6"
+          onClick={onCancel}
+        >
           Cancel
         </Button>
       </div>

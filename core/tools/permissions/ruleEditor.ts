@@ -22,6 +22,7 @@ import type { RuleDecision, ToolPermissions } from "./rules";
 import { testToolCall, type TestDecision } from "./testToolCall";
 import { canonicalRuleName } from "./names";
 import { readUserEnvNames } from "./userEnvNames";
+import { refusalFor } from "./ruleRefusal";
 
 /**
  * The write side of the Permissions page and `continuous permissions add|remove|adopt`
@@ -58,6 +59,11 @@ export interface ToolRuleEdit {
   dryRun?: boolean;
   /** A sample call, typed as the tester takes it, to show what the rule changes */
   probe?: string;
+  /**
+   * A person confirmed this change in a dialog the page cannot reach (the
+   * IDE's own). Only the host sets it, never a message from the page.
+   */
+  confirmedNatively?: boolean;
   source: ChangeSource;
 }
 
@@ -80,6 +86,8 @@ export type ToolRuleEditResult =
 export interface VerdictLite {
   decision: TestDecision;
   source?: string;
+  /** Where the deciding rule came from, when a rule decided */
+  ruleSource?: string;
   reason: string;
 }
 
@@ -244,7 +252,13 @@ function verdictOf(
       envNames: readUserEnvNames(),
       ...(cwd ? { cwd } : {}),
     } as never);
-    return { decision: r.decision, source: r.source, reason: r.reason };
+    const deciding = r.matchedRules.find((m) => m.deciding);
+    return {
+      decision: r.decision,
+      source: r.source,
+      ...(deciding ? { ruleSource: deciding.source } : {}),
+      reason: r.reason,
+    };
   } catch {
     return undefined;
   }
@@ -305,11 +319,19 @@ interface UndoEntry {
   beforeHash: string | undefined;
   decision: RuleDecision;
   rule: string;
+  /** Putting the file back lets something run that the change had stopped */
+  loosensOnUndo: boolean;
 }
 
 /** Earlier file texts of this session, newest last, per file. */
 const undoStacks = new Map<string, UndoEntry[]>();
 const MAX_UNDO = 20;
+
+/** Whether the next undo would loosen, for the host to confirm; false when there is none. */
+export function undoWouldLoosen(file: string): boolean {
+  const stack = undoStacks.get(file) ?? [];
+  return stack[stack.length - 1]?.loosensOnUndo ?? false;
+}
 
 export function hasUndo(file: string): boolean {
   return (undoStacks.get(file)?.length ?? 0) > 0;
@@ -327,7 +349,23 @@ function pushUndo(file: string, entry: UndoEntry): void {
   undoStacks.set(file, stack);
 }
 
-function confirmedKind(analysis: RuleAnalysis): "typed" | "click" | undefined {
+/**
+ * Whether undoing this change loosens: taking back an Always tightens, taking
+ * back a removed Always or an added Never or Ask loosens, and a changed rule
+ * is treated as loosening when unsure.
+ */
+function undoLoosens(edit: ToolRuleEdit): boolean {
+  if (edit.op === "add" || edit.op === "adopt")
+    return edit.decision !== "allow";
+  if (edit.op === "remove") return edit.decision === "allow";
+  return true;
+}
+
+function confirmedKind(
+  analysis: RuleAnalysis,
+  native?: boolean,
+): "typed" | "click" | "native" | undefined {
+  if (native && analysis.loosens) return "native";
   if (analysis.friction === "none") return undefined;
   return analysis.friction === "typed" ? "typed" : "click";
 }
@@ -347,6 +385,42 @@ function adoptSourceOf(
     return "assistant";
   }
   return undefined;
+}
+
+/** Why an Always rule is refused (an always-on rule, protected path or built-in rule holds the calls), or undefined. */
+function refusalOf(
+  edit: ToolRuleEdit,
+  sources: RuleSourcesInput,
+  verdict: RuleVerdict | undefined,
+): string | undefined {
+  if (edit.op === "remove") return undefined;
+  const updating = edit.op === "update";
+  return refusalFor({
+    decision: updating ? (edit.newDecision ?? edit.decision) : edit.decision,
+    rule: updating ? (edit.newRule ?? edit.rule) : edit.rule,
+    peers: peersOf(sources),
+    ...(verdict ? { after: verdict.after } : {}),
+  });
+}
+
+/** What the editor says about this change: validity, friction, loosening, warnings. */
+function analysisOf(
+  edit: ToolRuleEdit,
+  sources: RuleSourcesInput,
+  home: string,
+): RuleAnalysis {
+  const removing = edit.op === "remove";
+  const updating = edit.op === "update";
+  return analyzeRule({
+    decision: updating ? (edit.newDecision ?? edit.decision) : edit.decision,
+    rule: updating ? (edit.newRule ?? edit.rule) : edit.rule,
+    removing,
+    ...(updating
+      ? { replaces: { decision: edit.decision, rule: edit.rule } }
+      : {}),
+    peers: peersOf(sources),
+    home,
+  });
 }
 
 /**
@@ -381,21 +455,7 @@ export function editToolRule(
   }
 
   const sources = deps.sources();
-  const removing = edit.op === "remove";
-  const ruleForFriction =
-    edit.op === "update" ? (edit.newRule ?? edit.rule) : edit.rule;
-  const decisionForFriction =
-    edit.op === "update" ? (edit.newDecision ?? edit.decision) : edit.decision;
-  const analysis = analyzeRule({
-    decision: removing ? edit.decision : decisionForFriction,
-    rule: removing ? edit.rule : ruleForFriction,
-    removing,
-    ...(edit.op === "update"
-      ? { replaces: { decision: edit.decision, rule: edit.rule } }
-      : {}),
-    peers: peersOf(sources),
-    home: deps.home,
-  });
+  const analysis = analysisOf(edit, sources, deps.home);
   if (!analysis.valid) {
     return { result: "invalid", error: analysis.error, analysis };
   }
@@ -454,6 +514,16 @@ export function editToolRule(
   const afterPerms = applied.config.toolPermissions as
     ToolPermissions | undefined;
   const verdict = computeVerdict(edit, afterPerms, deps, sources);
+  const refusal = refusalOf(edit, sources, verdict);
+  if (refusal) {
+    return {
+      result: "refused",
+      error: refusal,
+      analysis,
+      ...(verdict ? { verdict } : {}),
+      beforeHash: file.hash,
+    };
+  }
 
   if (edit.dryRun) {
     return {
@@ -526,6 +596,7 @@ export function editToolRule(
       beforeHash: file.hash,
       decision: edit.decision,
       rule: edit.rule.trim(),
+      loosensOnUndo: undoLoosens(edit),
     });
   }
   const auditWritten = deps.audit
@@ -542,8 +613,8 @@ export function editToolRule(
           : {}),
         ...(from ? { from } : {}),
         loosens: analysis.loosens,
-        ...(confirmedKind(analysis)
-          ? { confirmed: confirmedKind(analysis) }
+        ...(confirmedKind(analysis, edit.confirmedNatively)
+          ? { confirmed: confirmedKind(analysis, edit.confirmedNatively) }
           : {}),
         ...(file.hash ? { beforeHash: file.hash } : {}),
         ...(written.hash ? { afterHash: written.hash } : {}),
@@ -613,8 +684,7 @@ export function undoToolRuleChange(
         op: "undo",
         decision: entry.decision,
         rule: entry.rule,
-        // Putting back an older file can loosen (a removed Never) or tighten; say loosens when unsure
-        loosens: true,
+        loosens: entry.loosensOnUndo,
         ...(now.hash ? { beforeHash: now.hash } : {}),
         ...(after.hash ? { afterHash: after.hash } : {}),
       })
