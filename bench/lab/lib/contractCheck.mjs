@@ -5,7 +5,7 @@
 import { wilson as ownWilson } from "./stats.mjs";
 
 /** The contract version this lab was written against. */
-export const EXPECTED_CONTRACT_VERSION = 1;
+export const EXPECTED_CONTRACT_VERSION = 2;
 
 const close = (a, b) => Math.abs(a - b) < 1e-12;
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

@@ -10,8 +10,18 @@
  * lab's start-up check both run against their own loaded copy.
  */
 
-/** Bump when anything exported here changes shape or meaning. */
-export const LAB_CONTRACT_VERSION = 1;
+/**
+ * Bump when anything exported here changes shape or meaning.
+ * 2: a request may send no sampling option (`TEMPERATURE_INHERITED`).
+ */
+export const LAB_CONTRACT_VERSION = 2;
+
+/**
+ * The temperature recorded for a request that sent none, so the engine's own
+ * (or the Modelfile's) sampling applied. Distinct from `"default"`, which
+ * names the product's default setting, and from 0, which is sent.
+ */
+export const TEMPERATURE_INHERITED = "inherited" as const;
 
 /** What one captured reply was, for the rates. Errors stay out of denominators. */
 export const PROBE_OUTCOMES = [
@@ -33,7 +43,7 @@ export interface CaptureRequestShape {
   model: string;
   transport: "bedrock" | "openai" | "ollama" | "llamacpp";
   streamed: boolean;
-  temperature: "default" | 0;
+  temperature: "default" | typeof TEMPERATURE_INHERITED | 0;
   promptId: string;
 }
 
@@ -109,7 +119,7 @@ export function captureFixtureId(parts: {
   model: string;
   transport: string;
   streamed: boolean;
-  temperature: "default" | 0;
+  temperature: "default" | typeof TEMPERATURE_INHERITED | 0;
   pass: number;
   promptId: string;
 }): string {

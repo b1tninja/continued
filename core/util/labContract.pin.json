@@ -1,11 +1,14 @@
 {
-  "version": 1,
+  "version": 2,
   "surface": {
     "LAB_CONTRACT_VERSION": {
-      "value": 1
+      "value": 2
     },
     "PROBE_OUTCOMES": {
       "value": ["structured", "leak", "refused", "error"]
+    },
+    "TEMPERATURE_INHERITED": {
+      "value": "inherited"
     },
     "Z95": {
       "value": 1.959963984540054
