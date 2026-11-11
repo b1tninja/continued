@@ -160,6 +160,8 @@ export interface RuleSourcesInput extends PolicyInput {
   user?: ToolPermissions;
   /** What state that file is in */
   userFile?: UserFileState;
+  /** `toolPermissions.auto.environment.trustedDomains` of that file (not part of `user`, which holds the rule lists) */
+  trustedDomains?: string[];
   /** `toolPermissions` that came from an assistant or hub configuration */
   assistant?: ToolPermissions;
   /** `toolPermissions` of files that came with the workspace, as written */
