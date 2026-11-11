@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-llama4-list-one-bad-call",
+  "family": "llama4",
+  "dialect": "pythonic",
+  "kind": "negative",
+  "failureMode": "one-bad-call",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/unsloth/Llama-4-Scout-17B-16E-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "[get_weather(city=\"Paris\"), get_time(zone=\"UTC\")]",
+  "markers": [],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["[get_weather(city=\"Paris\"), get_time(zone=\"UTC\")]"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "(",
+        "c",
+        "i",
+        "t",
+        "y",
+        "=",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        ")",
+        ",",
+        " ",
+        "g",
+        "e",
+        "t",
+        "_",
+        "t",
+        "i",
+        "m",
+        "e",
+        "(",
+        "z",
+        "o",
+        "n",
+        "e",
+        "=",
+        "\"",
+        "U",
+        "T",
+        "C",
+        "\"",
+        ")",
+        "]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[g",
+        "et_",
+        "wea",
+        "ther(",
+        "city",
+        "=\"Par",
+        "is\")",
+        ", ge",
+        "t_ti",
+        "m",
+        "e(",
+        "zon",
+        "e=",
+        "\"UTC",
+        "\")",
+        "]"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "[get_weather(city=\"Paris\"), get_time(zone=\"UTC\")]"
+  }
+}

@@ -29,7 +29,7 @@ function describe(cwd: string, files: ProjectHookFile[]): void {
   out(`Project hooks in ${cwd}:`);
   for (const file of files) out(`  ${file.path}`);
   out();
-  for (const line of listProjectHandlers(files)) out(`  ${line}`);
+  for (const line of listProjectHandlers(files, cwd)) out(`  ${line}`);
   out();
 }
 

@@ -19,6 +19,12 @@ import {
   type GitRunner,
   type WorktreeInfo,
 } from "./worktree.js";
+import {
+  readScopeFilesFromDisk,
+  decideFromFiles,
+  setProjectConfigTrustedForRun,
+  trustProjectScopes,
+} from "../config/projectTrust.js";
 
 const hasGit = (() => {
   try {
@@ -46,7 +52,7 @@ const git: GitRunner = (args, cwd) =>
     );
   });
 
-const deps = { git };
+let deps: { git: GitRunner; globalDir?: string } = { git };
 
 async function samePath(a: string, b: string): Promise<boolean> {
   const [ra, rb] = await Promise.all([fs.realpath(a), fs.realpath(b)]);
@@ -85,14 +91,23 @@ describe.skipIf(!hasGit)("worktree helper against a real repository", () => {
     base = await fs.mkdtemp(path.join(os.tmpdir(), "continued-worktree-"));
     repo = await makeRepo(base);
     root = path.join(base, "worktrees");
+    deps = { git, globalDir: path.join(base, "global") };
   });
 
   afterEach(async () => {
+    setProjectConfigTrustedForRun(false);
     await fs.rm(base, { recursive: true, force: true });
   });
 
   async function create(itemId = "t1"): Promise<WorktreeInfo> {
     return createItemWorktree({ repo, slug: "demo", itemId, root }, deps);
+  }
+
+  /** Approve the repository's worktree config as it is now. */
+  function approve(): void {
+    const files = readScopeFilesFromDisk(repo, "worktree");
+    const { fingerprint } = decideFromFiles(repo, "worktree", files);
+    trustProjectScopes(repo, { worktree: fingerprint }, deps.globalDir);
   }
 
   test("create copies the dirty state and makes a baseline commit", async () => {
@@ -284,9 +299,10 @@ describe.skipIf(!hasGit)("worktree helper against a real repository", () => {
         ],
       }),
     );
+    approve();
     const ran: { command: string; cwd: string }[] = [];
     const recording = {
-      git,
+      ...deps,
       shell: async (command: string, cwd: string) => {
         ran.push({ command, cwd });
         return "";
@@ -316,12 +332,147 @@ describe.skipIf(!hasGit)("worktree helper against a real repository", () => {
     ]);
   });
 
+  const canaryConfig = (canary: string) =>
+    JSON.stringify({
+      "setup-worktree": [
+        `node -e "require('fs').writeFileSync(process.argv[1], 'pwned')" "${canary.replace(/\\/g, "/")}"`,
+      ],
+    });
+
+  async function writeRepoConfig(content: string): Promise<void> {
+    await fs.mkdir(path.join(repo, ".continue"), { recursive: true });
+    await fs.writeFile(path.join(repo, ".continue", "worktrees.json"), content);
+  }
+
+  test("an untrusted repository's setup commands do not run; the worktree is still made and a notice says why", async () => {
+    const canary = path.join(base, "canary.txt");
+    await writeRepoConfig(canaryConfig(canary));
+    const notices: string[] = [];
+    const wt = await createItemWorktree(
+      { repo, slug: "demo", itemId: "t1", root },
+      { ...deps, notify: (m) => notices.push(m) },
+    );
+    expect(await fs.stat(wt.path).then(() => true)).toBe(true);
+    expect(
+      await fs.stat(canary).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain(".continue/worktrees.json");
+    expect(notices[0]).toContain("continuous project trust");
+    expect(wt.setupNotice).toBe(notices[0]);
+  });
+
+  test("an approved fingerprint runs the commands", async () => {
+    const canary = path.join(base, "canary.txt");
+    await writeRepoConfig(canaryConfig(canary));
+    approve();
+    const wt = await create();
+    expect(wt.setupNotice).toBeUndefined();
+    expect(await fs.readFile(canary, "utf8")).toBe("pwned");
+  });
+
+  test("a config changed after approval is not run until approved again", async () => {
+    const canary = path.join(base, "canary.txt");
+    await writeRepoConfig(canaryConfig(canary));
+    approve();
+    const evil = path.join(base, "canary2.txt");
+    await writeRepoConfig(canaryConfig(evil));
+    const wt = await create();
+    expect(wt.setupNotice).toBeDefined();
+    expect(
+      await fs.stat(evil).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+    expect(
+      await fs.stat(canary).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+    approve();
+    await create("t2");
+    expect(await fs.readFile(evil, "utf8")).toBe("pwned");
+  });
+
+  test("a headless run (no saved trust) refuses unless the run flag is set", async () => {
+    const canary = path.join(base, "canary.txt");
+    await writeRepoConfig(canaryConfig(canary));
+    const refused = await create("t1");
+    expect(refused.setupNotice).toBeDefined();
+    expect(
+      await fs.stat(canary).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+    setProjectConfigTrustedForRun(true);
+    await create("t2");
+    expect(await fs.readFile(canary, "utf8")).toBe("pwned");
+  });
+
+  test("the user's own global worktrees.json runs without trust", async () => {
+    const canary = path.join(base, "global-canary.txt");
+    await fs.mkdir(path.join(base, "global"), { recursive: true });
+    await fs.writeFile(
+      path.join(base, "global", "worktrees.json"),
+      canaryConfig(canary),
+    );
+    const wt = await create();
+    expect(wt.setupNotice).toBeUndefined();
+    expect(await fs.readFile(canary, "utf8")).toBe("pwned");
+  });
+
+  test("a global folder inside the repository is not the user's", async () => {
+    const canary = path.join(base, "inside-canary.txt");
+    const inside = path.join(repo, "fake-global");
+    await fs.mkdir(inside, { recursive: true });
+    await fs.writeFile(
+      path.join(inside, "worktrees.json"),
+      canaryConfig(canary),
+    );
+    await createItemWorktree(
+      { repo, slug: "demo", itemId: "t1", root },
+      { git, globalDir: inside },
+    );
+    expect(
+      await fs.stat(canary).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+  });
+
+  test("setup runs with the scrubbed environment", async () => {
+    const out = path.join(base, "env.txt");
+    process.env.N6_SECRET_TOKEN = "hunter2";
+    try {
+      await writeRepoConfig(
+        JSON.stringify({
+          "setup-worktree": [
+            `node -e "require('fs').writeFileSync(process.argv[1], process.env.N6_SECRET_TOKEN || 'absent')" "${out.replace(/\\/g, "/")}"`,
+          ],
+        }),
+      );
+      approve();
+      await create();
+      expect(await fs.readFile(out, "utf8")).toBe("absent");
+    } finally {
+      delete process.env.N6_SECRET_TOKEN;
+    }
+  });
+
   test("a failing setup command removes the half-made worktree and rethrows", async () => {
     await fs.mkdir(path.join(repo, ".continue"), { recursive: true });
     await fs.writeFile(
       path.join(repo, ".continue", "worktrees.json"),
       JSON.stringify({ "setup-worktree": ['node -e "process.exit(3)"'] }),
     );
+    approve();
     await expect(create()).rejects.toThrow();
     expect(await listLoopWorktrees(repo, deps)).toEqual([]);
     const branches = await git(["branch", "--list", "continued/loop-*"], repo);

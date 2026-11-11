@@ -378,7 +378,7 @@ test("suites expand: probes both ways, variants, leaks grid, tool sets", () => {
   assert.equal(toolSet(60).length, 60);
   assert.equal(toolSet(2).length, 2);
   assert.equal(toolSet("agent").length, 21);
-  assert.deepEqual(SUITE_NAMES.length, 4);
+  assert.deepEqual(SUITE_NAMES.length, 5);
 });
 
 test(

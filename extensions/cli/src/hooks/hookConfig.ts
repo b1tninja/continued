@@ -144,6 +144,21 @@ export interface LoadedHooksConfig {
 }
 
 /**
+ * Mark every handler as coming from the project. The mark is set here, over
+ * whatever the file says, so a repository cannot claim to be the user.
+ */
+function markAsProject(hooks: HooksConfig): HooksConfig {
+  const marked: HooksConfig = {};
+  for (const [event, groups] of Object.entries(hooks)) {
+    marked[event as keyof HooksConfig] = (groups ?? []).map((group) => ({
+      ...group,
+      hooks: group.hooks.map((h) => ({ ...h, origin: "project" as const })),
+    }));
+  }
+  return marked;
+}
+
+/**
  * Load hook configurations and merge them. The user's own files always load.
  * The project's files load only if the user trusted this project with these
  * exact hooks, or passed --trust-project-hooks for this run; otherwise they
@@ -179,7 +194,9 @@ export function loadHooksConfig(
     isProjectHooksTrustedForRun() ||
     isProjectTrusted(cwd, fingerprint, homeDir)
   ) {
-    projectFiles.forEach(apply);
+    projectFiles.forEach((file) =>
+      apply({ ...file, hooks: markAsProject(file.hooks) }),
+    );
     return { hooks: mergedHooks, disabled };
   }
 
@@ -189,7 +206,7 @@ export function loadHooksConfig(
     untrustedProject: {
       files: projectFiles,
       fingerprint,
-      handlers: listProjectHandlers(projectFiles),
+      handlers: listProjectHandlers(projectFiles, cwd),
     },
   };
 }

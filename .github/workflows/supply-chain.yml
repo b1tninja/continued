@@ -1,0 +1,60 @@
+name: Supply Chain
+
+# Advisory checks, NOT required: the merge gate (docs/ci-merge-gate.md) waits only for the two
+# aggregate jobs in its REQUIRED_CHECKS, so nothing here can block or stall a merge. Do not add these
+# jobs to an aggregate `needs`. Policy: docs/supply-chain.md.
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "docs/**"
+      - "docs-site/**"
+      - "plans/**"
+      - "**/*.md"
+      - "**/*.mdx"
+      - "LICENSE"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft != true
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # v5.0.0
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
+          license-check: false
+
+  pins-and-notice:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft != true
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Pin policy
+        run: |
+          node scripts/ci/check-pins.mjs
+          node --test scripts/ci/check-pins.test.mjs
+      - name: Fixture provenance and licences (advisory; --strict later)
+        run: |
+          node scripts/ci/check-notice.mjs
+          node --test scripts/ci/check-notice.test.mjs

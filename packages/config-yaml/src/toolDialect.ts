@@ -23,6 +23,10 @@ export function recoveryValueFor(
     case "llama-json":
     case "hermes-json":
     case "glm-xml":
+    case "harmony":
+    case "mistral":
+    case "dsml":
+    case "deepseek-v31":
     case "kimi-tokens":
     case "kimi-xtml":
     case "minimax-xml":

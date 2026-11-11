@@ -19,6 +19,10 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   "llama-json": "llama-json",
   "hermes-json": "hermes-json",
   "glm-xml": "glm-xml",
+  harmony: "harmony",
+  mistral: "mistral",
+  dsml: "dsml",
+  "deepseek-v31": "deepseek-v31",
   "kimi-tokens": "kimi-tokens",
   "kimi-xtml": "kimi-xtml",
   "minimax-xml": "minimax-xml",
@@ -95,8 +99,9 @@ export function detectToolDialectLeak(args: {
 }
 
 /** The notice's text. */
-export function leakNoticeText(dialect: string): string {
-  return `This model wrote a tool call as text (looks like ${dialect}). Turn on recovery for this model?`;
+export function leakNoticeText(_dialect: string): string {
+  // The format name goes in the button tooltip, where it does not crowd the line
+  return "This model typed a tool request as plain text, so it did not run. Let Continue read that format for this model?";
 }
 
 /** The CLI's one-line hint. */
@@ -106,7 +111,10 @@ export function leakHintText(model: string, dialect: string): string {
 
 function mentionsTool(text: string, name: string): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-  return new RegExp(String.raw`(?<![\w.-])${escaped}(?![\w-])`).test(text);
+  // `functions.NAME` is how Harmony addresses a call, so that prefix counts.
+  return new RegExp(
+    String.raw`(?:(?<=\bfunctions\.)|(?<![\w.-]))${escaped}(?![\w-])`,
+  ).test(text);
 }
 
 function jsonNamesTool(text: string, known: string[]): boolean {

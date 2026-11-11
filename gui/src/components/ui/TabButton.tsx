@@ -8,6 +8,8 @@ interface TabButtonProps {
   tabId?: string;
   /** A command (Back), not one of the tabs: no tab role and no selection. */
   action?: boolean;
+  /** The element id, unique per group (TabGroup passes one). */
+  domId?: string;
 }
 
 /**
@@ -23,6 +25,7 @@ export function TabButton({
   onClick,
   tabId,
   action = false,
+  domId,
 }: TabButtonProps) {
   return (
     <ToolTip
@@ -45,6 +48,7 @@ export function TabButton({
             ? "bg-vsc-input-background px-2 py-2"
             : "bg-transparent px-2 py-2 text-description"
         }`}
+        id={domId}
         onClick={onClick}
         data-testid={tabId ? `tab-${tabId}` : undefined}
       >

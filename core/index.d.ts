@@ -2041,7 +2041,10 @@ export interface Tool {
    * approved its server. It asks again at every level but YOLO until a call to
    * it is approved. `summary` says what changed.
    */
-  mcpDefinitionChange?: { kind: "changed" | "added"; summary: string };
+  mcpDefinitionChange?: {
+    kind: "changed" | "added" | "launch";
+    summary: string;
+  };
 }
 
 /**

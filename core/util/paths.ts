@@ -12,13 +12,21 @@ import dotenv from "dotenv";
 import { IdeType, SerializedContinueConfig } from "../";
 import { defaultConfig } from "../config/default";
 import Types from "../config/types";
+import {
+  GLOBAL_DIR_NAME,
+  LEGACY_GLOBAL_DIR_NAME,
+  loadedFile,
+  type LoadedDirName,
+  type StatePathName,
+} from "./productPaths";
 import { editYamlText } from "./yamlEdit";
 
-// The CLI sets this before importing core so a working-directory .env is not
-// copied into the process. Secrets are read with dotenv.parse instead.
-if (process.env.CONTINUOUS_IGNORE_CWD_ENV !== "1") {
-  dotenv.config();
-}
+// A working-directory .env is never copied into this process. The core can be
+// started with a workspace as its cwd (an editor launched from a project
+// folder), and a repository file must not choose the global directory, the
+// terminal environment mode, the shell or the audit setting (the CLI refuses
+// it too, #425). Secrets come from the global folder's own .env through
+// getContinueDotEnv, which parses without touching process.env.
 
 export function setConfigFilePermissions(filePath: string): void {
   try {
@@ -30,9 +38,7 @@ export function setConfigFilePermissions(filePath: string): void {
   }
 }
 
-/** The global folder's name in the home directory, and its name before 2.4.2. */
-export const GLOBAL_DIR_NAME = ".continuous";
-export const LEGACY_GLOBAL_DIR_NAME = ".continue";
+export { GLOBAL_DIR_NAME, LEGACY_GLOBAL_DIR_NAME };
 
 /**
  * What a first start copies from ~/.continue: everything but what is rebuilt
@@ -206,10 +212,16 @@ export function getContinueUtilsPath(): string {
 }
 
 export function getGlobalContinueIgnorePath(): string {
-  const ignorePath = path.join(getContinueGlobalPath(), ".continuousignore");
+  const ignorePath = path.join(
+    getContinueGlobalPath(),
+    loadedFile(".continuousignore"),
+  );
   if (!fs.existsSync(ignorePath)) {
     // A folder copied from ~/.continue has the file under its old name
-    const legacy = path.join(getContinueGlobalPath(), ".continueignore");
+    const legacy = path.join(
+      getContinueGlobalPath(),
+      loadedFile(".continueignore"),
+    );
     fs.writeFileSync(
       ignorePath,
       fs.existsSync(legacy) ? fs.readFileSync(legacy) : "",
@@ -254,7 +266,7 @@ export function getGlobalContextFilePath(): string {
 }
 
 export function getSharedConfigFilePath(): string {
-  return path.join(getContinueGlobalPath(), "sharedConfig.json");
+  return path.join(getContinueGlobalPath(), loadedFile("sharedConfig.json"));
 }
 
 export function getSessionFilePath(sessionId: string): string {
@@ -270,12 +282,12 @@ export function getSessionsListPath(): string {
 }
 
 export function getConfigJsonPath(): string {
-  const p = path.join(getContinueGlobalPath(), "config.json");
+  const p = path.join(getContinueGlobalPath(), loadedFile("config.json"));
   return p;
 }
 
 export function getConfigYamlPath(ideType?: IdeType): string {
-  const p = path.join(getContinueGlobalPath(), "config.yaml");
+  const p = path.join(getContinueGlobalPath(), loadedFile("config.yaml"));
   const exists = fs.existsSync(p);
   const isEmpty = exists && fs.readFileSync(p, "utf8").trim() === "";
   const needsCreation = !exists && !fs.existsSync(getConfigJsonPath());
@@ -296,7 +308,7 @@ export function getPrimaryConfigFilePath(): string {
 }
 
 export function getConfigTsPath(): string {
-  const p = path.join(getContinueGlobalPath(), "config.ts");
+  const p = path.join(getContinueGlobalPath(), loadedFile("config.ts"));
   if (!fs.existsSync(p)) {
     fs.writeFileSync(p, DEFAULT_CONFIG_TS_CONTENTS);
   }
@@ -641,7 +653,7 @@ export function getConfigJsPathForRemote(
 }
 
 export function getContinueDotEnv(): { [key: string]: string } {
-  const filepath = path.join(getContinueGlobalPath(), ".env");
+  const filepath = path.join(getContinueGlobalPath(), loadedFile(".env"));
   if (fs.existsSync(filepath)) {
     return dotenv.parse(fs.readFileSync(filepath));
   }
@@ -664,7 +676,9 @@ export function getPromptLogsPath(): string {
   return path.join(getLogsDirPath(), "prompt.log");
 }
 
-export function getGlobalFolderWithName(name: string): string {
+export function getGlobalFolderWithName(
+  name: LoadedDirName | StatePathName,
+): string {
   return path.join(getContinueGlobalPath(), name);
 }
 

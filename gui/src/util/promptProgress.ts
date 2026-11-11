@@ -29,7 +29,7 @@ export function splitPromptProgress(messages: ChatMessage[]): {
 }
 
 /** The line shown while a reply is held for tool call recovery. */
-export const RECOVERY_HOLD_TEXT = "Reading the model's reply";
+export const RECOVERY_HOLD_TEXT = "Checking the reply for a tool request";
 
 function formatSeconds(ms: number): string {
   const s = Math.max(1, Math.round(ms / 1000));

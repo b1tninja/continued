@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "id": "mistral-v11-call-id",
+  "family": "mistral",
+  "dialect": "mistral",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://github.com/mistralai/mistral-common/blob/main/src/mistral_common/tokens/tokenizers/instruct.py and https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3/blob/main/tokenizer_config.json, not observed",
+    "retrieved": "2026-11-10",
+    "note": "InstructTokenizerV11 writes [CALL_ID] and the id between the name and [ARGS]; V13 drops it."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "[TOOL_CALLS]get_weather[CALL_ID]AbCdEf123[ARGS]{\"city\": \"Paris\"}",
+  "markers": ["[TOOL_CALLS]", "[ARGS]", "[CALL_ID]"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_CALLS]get_weather[CALL_ID]AbCdEf123[ARGS]{\"city\": \"Paris\"}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "T",
+        "O",
+        "O",
+        "L",
+        "_",
+        "C",
+        "A",
+        "L",
+        "L",
+        "S",
+        "]",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "[",
+        "C",
+        "A",
+        "L",
+        "L",
+        "_",
+        "I",
+        "D",
+        "]",
+        "A",
+        "b",
+        "C",
+        "d",
+        "E",
+        "f",
+        "1",
+        "2",
+        "3",
+        "[",
+        "A",
+        "R",
+        "G",
+        "S",
+        "]",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_",
+        "CALLS]get_weather[CALL_ID]AbCdEf123[ARGS]{\"city\": \"Paris\"}"
+      ],
+      "splitInside": "[TOOL_CALLS]"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "[TOOL_CALLS]",
+        "get_weather",
+        "[CALL_ID]",
+        "AbCdEf123",
+        "[ARGS]",
+        "{\"city\": \"Paris\"}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[TO",
+        "O",
+        "L_C",
+        "ALLS",
+        "]get",
+        "_w",
+        "e",
+        "ather",
+        "[",
+        "C",
+        "ALL_I",
+        "D]A",
+        "bCdEf",
+        "123[",
+        "AR",
+        "GS",
+        "]{",
+        "\"c",
+        "i",
+        "ty\"",
+        ":",
+        " ",
+        "\"P",
+        "ar",
+        "i",
+        "s\"}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

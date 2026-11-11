@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-llama4-list-fenced-example",
+  "family": "llama4",
+  "dialect": "pythonic",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/unsloth/Llama-4-Scout-17B-16E-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "Use this form:\n\n```\n[get_weather(city=\"Paris\")]\n```",
+  "markers": [],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["Use this form:\n\n```\n[get_weather(city=\"Paris\")]\n```"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "U",
+        "s",
+        "e",
+        " ",
+        "t",
+        "h",
+        "i",
+        "s",
+        " ",
+        "f",
+        "o",
+        "r",
+        "m",
+        ":",
+        "\n",
+        "\n",
+        "`",
+        "`",
+        "`",
+        "\n",
+        "[",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "(",
+        "c",
+        "i",
+        "t",
+        "y",
+        "=",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        ")",
+        "]",
+        "\n",
+        "`",
+        "`",
+        "`"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "Us",
+        "e thi",
+        "s",
+        " f",
+        "orm:\n",
+        "\n`",
+        "``\n[g",
+        "et_w",
+        "eath",
+        "er(ci",
+        "ty=\"",
+        "P",
+        "a",
+        "r",
+        "is\"",
+        ")]\n``",
+        "`"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "Use this form:\n\n```\n[get_weather(city=\"Paris\")]\n```"
+  }
+}

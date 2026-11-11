@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-llama4-list-missing-close-bracket",
+  "family": "llama4",
+  "dialect": "pythonic",
+  "kind": "negative",
+  "failureMode": "truncated",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/unsloth/Llama-4-Scout-17B-16E-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "[get_weather(city=\"Paris\")",
+  "markers": [],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["[get_weather(city=\"Paris\")"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "(",
+        "c",
+        "i",
+        "t",
+        "y",
+        "=",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        ")"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[g",
+        "et_we",
+        "at",
+        "her(c",
+        "it",
+        "y=\"",
+        "Pa",
+        "ri",
+        "s\")"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "[get_weather(city=\"Paris\")"
+  }
+}
