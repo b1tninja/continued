@@ -49,6 +49,6 @@ Licence ids were read from the Hugging Face model API on 2026-11-10 (from `datas
 | **Restrictive: Llama community licences** (`llama3.3`, `other` with the llama4 licence) | unsloth/Llama-3.3-70B-Instruct (2), unsloth/Llama-4-Scout-17B-16E-Instruct (1)                                                                                                                                                                                                                                                   |
 | **Restrictive: `other`**                                                                | moonshotai/Kimi-K2-Thinking, Kimi-K2-Instruct, Kimi-K3; MiniMaxAI/MiniMax-M2, MiniMax-M2.5 (`modified-mit`), MiniMax-M3; nvidia/NVIDIA-Nemotron-Nano-9B-v2; LiquidAI/LFM2-8B-A1B (LFM 1.0 licence); upstage/Solar-Open-100B (Upstage Solar licence)                                                                              |
 
-Totals as the check prints them: 252 corpus fixtures, 0 missing `provenance.source`, 181 Hugging Face sourced, 181 with `provenance.license` (backfilled by `scripts/ci/backfill-fixture-licence.mjs`; `--strict` now passes).
+Totals as the check prints them: 314 corpus fixtures, 0 missing `provenance.source`, 242 Hugging Face sourced, 242 with `provenance.license` (backfilled by `scripts/ci/backfill-fixture-licence.mjs`; `--strict` now passes).
 
 One reduced template, `meituan-longcat__LongCat-Flash-Chat.jinja`, was 1,224 characters; a clause of the code-interpreter tool description was cut and it is now 1,193.
