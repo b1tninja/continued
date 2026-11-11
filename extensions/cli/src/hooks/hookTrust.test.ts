@@ -9,6 +9,7 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { tryLink } from "core/tools/permissions/testLinks.js";
 import { getProjectHookFiles, loadHooksConfig } from "./hookConfig.js";
 import {
   fingerprintProjectHooks,
@@ -346,13 +347,10 @@ describe("a repository cannot choose where the user's settings live", () => {
     expect(getGlobalDir(project, home)).toBe(sibling);
   });
 
-  it("is not fooled by a symlink into the project", () => {
+  it("is not fooled by a symlink into the project", (ctx) => {
     const link = path.join(root, "link-to-project");
-    try {
-      fs.symlinkSync(project, link, "junction");
-    } catch {
-      return; // symlinks are not allowed here
-    }
+    const made = tryLink(project, link);
+    if (!made.ok) return ctx.skip(made.reason);
     process.env.CONTINUE_GLOBAL_DIR = link;
     expect(getGlobalDir(project, home)).toBeUndefined();
   });

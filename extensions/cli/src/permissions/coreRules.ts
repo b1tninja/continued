@@ -17,6 +17,7 @@ import {
 import { mcpRuleName } from "core/tools/permissions/names.js";
 import { readUserTrustedDomains } from "core/tools/permissions/readRuleSources.js";
 import { processedPathArgs } from "core/tools/permissions/realPath.js";
+import { deputyWorkspace } from "core/tools/permissions/workspaceRoots.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
 import { resolveShell } from "core/util/shell.js";
 import { readUserGuidance } from "core/util/userGuidance.js";
@@ -234,6 +235,8 @@ export interface CoreRulesInput {
    * Floor rules use that form either way.
    */
   mcp?: { serverName: string; toolName: string };
+  /** The MCP tool's JSON schema: a string it calls a path is judged as one */
+  mcpSchema?: Record<string, unknown>;
   /** The MCP tool's definition or launch changed since it was approved: it asks again */
   mcpDefinitionChange?: {
     kind: "changed" | "added" | "launch";
@@ -281,6 +284,9 @@ export async function evaluateWithCoreRules(
         group: mcp.serverName,
         originalFunctionName: mcp.toolName,
         uri: `mcp:${mcp.serverName}`,
+        ...(input.mcpSchema
+          ? { function: { name: mcp.toolName, parameters: input.mcpSchema } }
+          : {}),
         evaluateToolCallPolicy: input.evaluateToolCallPolicy as never,
         ...(input.mcpDefinitionChange
           ? { mcpDefinitionChange: input.mcpDefinitionChange }
@@ -360,6 +366,7 @@ export async function evaluateWithCoreRules(
     approval: input.approval,
     trustedDomains: readUserTrustedDomains(),
     cwd: input.cwd ?? process.cwd(),
+    ...deputyWorkspace([input.cwd ?? process.cwd()]),
     // The shell the CLI runs commands in: its login shell, PowerShell on Windows
     shell: resolveShell().kind,
   });

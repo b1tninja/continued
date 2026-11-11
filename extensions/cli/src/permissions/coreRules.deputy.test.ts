@@ -6,6 +6,7 @@ import type { ApprovalSettings } from "core/tools/permissions/approval.js";
 import type { PolicyLevel } from "core/tools/permissions/policy.js";
 import { afterAll, describe, expect, it } from "vitest";
 
+import { needsLink, tryLink } from "core/tools/permissions/testLinks.js";
 import { evaluateWithCoreRules, toCoreCall } from "./coreRules.js";
 
 /**
@@ -22,16 +23,7 @@ fs.mkdirSync(ws);
 fs.mkdirSync(outside);
 fs.writeFileSync(path.join(outside, "target.txt"), "x");
 fs.writeFileSync(path.join(ws, "a.ts"), "x");
-let linked = true;
-try {
-  fs.symlinkSync(
-    outside,
-    path.join(ws, "link"),
-    process.platform === "win32" ? "junction" : "dir",
-  );
-} catch {
-  linked = false;
-}
+const link = tryLink(outside, path.join(ws, "link"));
 afterAll(() => fs.rmSync(base, { recursive: true, force: true }));
 
 const levels = (l: PolicyLevel) => ({
@@ -96,21 +88,26 @@ describe("the confused-deputy rule through the CLI", () => {
     }
   });
 
-  it("asks for a write or read through a link that leaves the working folder", async () => {
-    expect(linked).toBe(true);
-    for (const [tool, args] of [
-      ["Write", { filepath: "link/target.txt" }],
-      ["Write", { filepath: "link/not-yet.txt" }],
-      ["Edit", { file_path: "link/target.txt" }],
-      ["Read", { filepath: "link/target.txt" }],
-      ["List", { dirpath: "link" }],
-      ["Search", { pattern: "x", path: "link" }],
-    ] as const) {
-      const v = await decide(tool, args);
-      expect(v?.decision, `${tool} ${JSON.stringify(args)}`).toBe("ask");
-      expect(v?.source).toBe("protected-path");
-    }
-  });
+  it.skipIf(!link.ok)(
+    needsLink(
+      "asks for a write or read through a link that leaves the working folder",
+      link,
+    ),
+    async () => {
+      for (const [tool, args] of [
+        ["Write", { filepath: "link/target.txt" }],
+        ["Write", { filepath: "link/not-yet.txt" }],
+        ["Edit", { file_path: "link/target.txt" }],
+        ["Read", { filepath: "link/target.txt" }],
+        ["List", { dirpath: "link" }],
+        ["Search", { pattern: "x", path: "link" }],
+      ] as const) {
+        const v = await decide(tool, args);
+        expect(v?.decision, `${tool} ${JSON.stringify(args)}`).toBe("ask");
+        expect(v?.source).toBe("protected-path");
+      }
+    },
+  );
 
   it("asks for a search outside the working folder", async () => {
     const v = await decide("Search", { pattern: "x", path: outside });
