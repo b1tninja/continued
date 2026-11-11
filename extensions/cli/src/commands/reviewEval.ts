@@ -11,6 +11,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
+import type { Command } from "commander";
 import {
   datasetFormat,
   parseDataset,
@@ -108,9 +109,8 @@ async function loadReviewer(
   reviewer: string | undefined,
   configPath: string | undefined,
 ) {
-  const { initializeServices, getService, SERVICE_NAMES } = await import(
-    "../services/index.js"
-  );
+  const { initializeServices, getService, SERVICE_NAMES } =
+    await import("../services/index.js");
   const { reviewerModel } = await import("../permissions/coreRules.js");
   await initializeServices({
     headless: true,
