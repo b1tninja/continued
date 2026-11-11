@@ -34,7 +34,9 @@ describe("First-run chat notice", () => {
     const note = screen.getByTestId("first-run-notice");
     expect(note.textContent).toContain("Always on");
     expect(note.textContent).toContain("preset");
-    expect(screen.getByTestId("first-run-notice-link")).toBeDefined();
+    expect(
+      screen.getByTestId("first-run-notice-link").getAttribute("href"),
+    ).toBe("/config?tab=permissions");
     const dismiss = screen.getByRole("button", {
       name: "Dismiss the first-run tip",
     });

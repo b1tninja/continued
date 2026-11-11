@@ -39,10 +39,10 @@ export function FirstRunNotice() {
         New here? Each area has a level and a preset sets them all; Always on
         rules apply first.{" "}
         <a
-          href={CONFIG_ROUTES.TOOLS}
+          href={CONFIG_ROUTES.PERMISSIONS}
           onClick={(e) => {
             e.preventDefault();
-            void navigate(CONFIG_ROUTES.TOOLS);
+            void navigate(CONFIG_ROUTES.PERMISSIONS);
           }}
           className="inline-flex min-h-6 items-center text-link underline"
           data-testid="first-run-notice-link"
