@@ -1,17 +1,50 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import Alert from "../../components/gui/Alert";
 import { Divider } from "../../components/ui/Divider";
 import { TabGroup } from "../../components/ui/TabGroup";
 import { useNavigationListener } from "../../hooks/useNavigationListener";
 import { bottomTabSections, getAllTabs, topTabSections } from "./configTabs";
 import { AccountDropdown } from "./features/account/AccountDropdown";
 
+const isCommandSection = (section: { tabs: { action?: boolean }[] }) =>
+  section.tabs.every((tab) => tab.action);
+
+/** Arrow keys (and Home/End) move between tabs; the focused tab opens. */
+function moveBetweenTabs(e: React.KeyboardEvent<HTMLDivElement>) {
+  const keys = [
+    "ArrowRight",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowUp",
+    "Home",
+    "End",
+  ];
+  if (!keys.includes(e.key)) return;
+  const tabs = [
+    ...e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]'),
+  ];
+  const at = tabs.indexOf(document.activeElement as HTMLElement);
+  if (at < 0) return;
+  e.preventDefault();
+  const next =
+    e.key === "Home"
+      ? 0
+      : e.key === "End"
+        ? tabs.length - 1
+        : (at +
+            (e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1) +
+            tabs.length) %
+          tabs.length;
+  tabs[next]?.focus();
+  tabs[next]?.click();
+}
+
 function ConfigPage() {
   useNavigationListener();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "settings";
+  const tablistRef = useRef<HTMLDivElement>(null);
 
   const allTabs = getAllTabs();
 
@@ -23,62 +56,70 @@ function ConfigPage() {
     }
   };
 
+  // In the narrow strip the selected tab may be off screen.
+  useEffect(() => {
+    tablistRef.current
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [activeTab]);
+
+  const renderGroup = (section: (typeof topTabSections)[number]) => (
+    <TabGroup
+      key={section.id}
+      tabs={section.tabs}
+      activeTab={activeTab}
+      onTabClick={handleTabClick}
+      showTopDivider={section.showTopDivider}
+      showBottomDivider={section.showBottomDivider}
+      className={section.className}
+    />
+  );
+  const sections = [...topTabSections, ...bottomTabSections];
+
   return (
-    <div className="flex h-full flex-row overflow-hidden">
-      {/* Vertical Sidebar - full height */}
-      <div className="flex w-12 shrink-0 flex-col border-0 bg-vsc-background md:w-40">
-        <div className="flex flex-1 flex-col overflow-y-auto border-t-0 border-r-2 border-b-0 border-l-0 border-solid border-r-border p-2 text-xs">
-          {topTabSections.map((section) => (
-            <React.Fragment key={section.id}>
-              <TabGroup
-                tabs={section.tabs}
-                activeTab={activeTab}
-                onTabClick={handleTabClick}
-                showTopDivider={section.showTopDivider}
-                showBottomDivider={section.showBottomDivider}
-                className={section.className}
-              />
-            </React.Fragment>
-          ))}
+    <div className="flex h-full flex-col overflow-hidden sm:flex-row">
+      {/* Below `sm`: a strip along the top that scrolls sideways. From `sm`: the vertical sidebar. */}
+      <nav
+        aria-label="Settings"
+        className="flex shrink-0 flex-row border-0 bg-vsc-background sm:w-12 sm:flex-col md:w-40"
+      >
+        <div className="thin-scrollbar flex flex-1 flex-row items-center gap-1 overflow-x-auto border-0 border-b-2 border-solid border-b-border p-1 text-xs sm:flex-col sm:items-stretch sm:gap-0 sm:overflow-x-hidden sm:overflow-y-auto sm:border-r-2 sm:border-b-0 sm:border-r-border sm:p-2">
+          {sections.filter(isCommandSection).map(renderGroup)}
 
-          <div className="flex-1" />
+          <div
+            ref={tablistRef}
+            role="tablist"
+            aria-label="Settings sections"
+            className="flex flex-row items-center gap-1 sm:flex-1 sm:flex-col sm:items-stretch sm:gap-0"
+            onKeyDown={moveBetweenTabs}
+          >
+            {topTabSections
+              .filter((s) => !isCommandSection(s))
+              .map((section) => (
+                <React.Fragment key={section.id}>
+                  {renderGroup(section)}
+                </React.Fragment>
+              ))}
 
-          {bottomTabSections.map((section) => (
-            <TabGroup
-              key={section.id}
-              tabs={section.tabs}
-              activeTab={activeTab}
-              onTabClick={handleTabClick}
-              showTopDivider={section.showTopDivider}
-              showBottomDivider={section.showBottomDivider}
-              className={section.className}
-            />
-          ))}
+            <div className="hidden flex-1 sm:block" />
 
-          <Divider />
+            {bottomTabSections.map(renderGroup)}
+          </div>
+
+          <Divider className="hidden sm:block" />
 
           <AccountDropdown />
         </div>
-      </div>
+      </nav>
 
       {/* Main content area */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Alert for small screens (sm and below) */}
-        <div className="block px-4 py-4 sm:hidden">
-          <Alert type="warning" className="max-w-md">
-            <div className="flex flex-col">
-              <div className="font-medium">Screen width too small</div>
-              <div className="mt-1 text-sm text-description">
-                To view settings, please expand the sidebar by dragging the
-                left/right border
-              </div>
-            </div>
-          </Alert>
-        </div>
-
-        {/* Tab Content for larger screens (md and above) */}
-        <div className="thin-scrollbar relative hidden flex-1 overflow-y-auto sm:block">
-          <div className="space-y-6 px-4 py-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div
+          role="tabpanel"
+          aria-label={allTabs.find((tab) => tab.id === activeTab)?.label}
+          className="thin-scrollbar relative flex-1 overflow-x-hidden overflow-y-auto"
+        >
+          <div className="min-w-0 space-y-6 px-4 py-4">
             {allTabs.find((tab) => tab.id === activeTab)?.component}
           </div>
         </div>

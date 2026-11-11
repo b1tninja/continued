@@ -18,6 +18,7 @@
  */
 import { decodeBase64Url } from "./heuristics";
 import type { SecretRule } from "./types";
+import { plausibleUrlPassword } from "./valueShape";
 
 /** The gitleaks tail `(?:[`'"\s;]|\\[nr]|$)`, as a lookahead. */
 const END = String.raw`(?=[\x60'"\s;]|\\[nr]|$)`;
@@ -175,6 +176,9 @@ export const PROVIDER_RULES: readonly SecretRule[] = [
     entropy: 3.5,
     keywords: ["aiza"],
     allowlist: { substrings: ["abcdefghijklmnopqrstuvwxyz"] },
+    // Browser, Maps and Firebase keys are public by design and 5 of 7 distinct
+    // values in the X11 corpus were test data: report, do not rewrite the text.
+    outboundAction: "warn",
     origin: "gitleaks:gcp-api-key (entropy 3.5 instead of 4)",
   },
   {
@@ -352,6 +356,23 @@ export const PROVIDER_RULES: readonly SecretRule[] = [
     entropy: 3,
     keywords: ["sk"],
     origin: "gitleaks:twilio-api-key",
+  },
+  {
+    id: "url-credential",
+    kind: "url-credential",
+    description:
+      "Password in a URL of a known credentialed scheme (scheme://user:password@host)",
+    class: "structural",
+    confidence: "high",
+    // The password is the capture. A host that is a placeholder (host, server,
+    // example, your...) is excluded here; the password's own shape (length,
+    // not a placeholder word or a variable, mixed characters) in `validate`.
+    regex:
+      /\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?|https?|ftps?|sftp|ssh|smtps?|ldaps?|mssql|sqlserver|clickhouse|cockroachdb|git\+https?):\/\/[^\s:/@'"<>]{1,64}:([^\s@/'"<>]{8,128})@(?!(?:host(?:name)?|server|example|domain|(?:your|my)[\w-]*)(?:[.:/\s'"]|$))[A-Za-z0-9[]/g,
+    group: 1,
+    keywords: ["://"],
+    validate: (value) => plausibleUrlPassword(value),
+    origin: "own (masker URL_USERINFO), X11c shape checks",
   },
   {
     id: "private-key",

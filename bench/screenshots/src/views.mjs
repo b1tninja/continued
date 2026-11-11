@@ -39,6 +39,44 @@ export const VIEWS = {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",
   },
+  "settings-models": {
+    fixture: "settings-models",
+    note: "Settings, Models tab",
+  },
+  "settings-rules": { fixture: "settings-rules", note: "Settings, Rules tab" },
+  "settings-permissions": {
+    fixture: "settings-permissions",
+    note: "Settings, Permissions tab (render only)",
+  },
+  "settings-configs": {
+    fixture: "settings-configs",
+    note: "Settings, Configs tab",
+  },
+  "settings-indexing": {
+    fixture: "settings-indexing",
+    note: "Settings, Indexing tab",
+  },
+  "settings-general": {
+    fixture: "settings-general",
+    note: "Settings, Settings tab",
+  },
+  "settings-help": { fixture: "settings-help", note: "Settings, Help tab" },
+  "agents-running": {
+    fixture: "agents-running",
+    note: "the agents tree with long names and unknown costs",
+  },
+  "agents-ended": {
+    fixture: "agents-ended",
+    note: "the agents tree after every agent ended, one interrupted",
+  },
+  "bedrock-ok": {
+    fixture: "bedrock-ok",
+    note: "Bedrock Test connection, success",
+  },
+  "bedrock-fail": {
+    fixture: "bedrock-fail",
+    note: "Bedrock Test connection, failure",
+  },
   "permissions-editor": {
     fixture: "permissions-editor",
     note: "Settings, Permissions, with the add-rule form open on a rule that allows every command",

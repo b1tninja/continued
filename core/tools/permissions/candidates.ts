@@ -40,7 +40,10 @@ const MAX_CANDIDATES = 800;
 
 /** An alias's cmdlet in its usual capitalisation: `Remove-Item`, not `remove-item`. */
 function canonicalCmdletName(alias: string): string {
-  return (canonicalCmdlet(alias) ?? alias)
+  const cmdlet = canonicalCmdlet(alias) ?? alias;
+  // `ise` stands for a program, not a Verb-Noun cmdlet: leave its name alone
+  if (!cmdlet.includes("-")) return cmdlet;
+  return cmdlet
     .split("-")
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
     .join("-");

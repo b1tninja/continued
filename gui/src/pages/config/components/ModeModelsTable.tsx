@@ -141,7 +141,10 @@ export function ModeModelsTable() {
         </p>
       </div>
 
-      <table className="w-full text-sm" data-testid="mode-models-table">
+      <table
+        className="block w-full overflow-x-auto text-sm"
+        data-testid="mode-models-table"
+      >
         <thead>
           <tr className="text-left text-xs text-description">
             <th className="py-1 font-normal">Model</th>

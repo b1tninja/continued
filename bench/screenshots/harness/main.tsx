@@ -9,6 +9,7 @@ import { setupStore } from "@gui/redux/store";
 import { setLocalStorage } from "@gui/util/localStorage";
 import { shouldForwardProp } from "@gui/styles/shouldForwardProp";
 import App from "@gui/App";
+import { BedrockConnectionTester } from "@gui/forms/BedrockConnectionTester";
 import "@gui/index.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -61,7 +62,18 @@ async function main() {
         <StyleSheetManager shouldForwardProp={shouldForwardProp}>
           <IdeMessengerProvider messenger={messenger}>
             <Provider store={store}>
-              <App />
+              {fixtureName.startsWith("bedrock") ? (
+                <div className="bg-background text-foreground p-2">
+                  <BedrockConnectionTester
+                    connection={{ region: "eu-west-1" }}
+                    model="anthropic.claude-sonnet-4-5-20250929-v1:0"
+                    canTest
+                    onModelsLoaded={() => {}}
+                  />
+                </div>
+              ) : (
+                <App />
+              )}
             </Provider>
           </IdeMessengerProvider>
         </StyleSheetManager>

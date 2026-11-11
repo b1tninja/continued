@@ -113,20 +113,29 @@ function isMarked(ctx: Context, start: number): boolean {
 function acceptedValue(
   rule: SecretRule,
   value: string | undefined,
+  context: string,
 ): string | undefined {
   if (!value) return undefined;
   if (isAllowed(value, GLOBAL_ALLOWLIST, rule.allowlist)) return undefined;
   if (rule.entropy !== undefined && shannonEntropy(value) < rule.entropy) {
     return undefined;
   }
-  if (rule.validate && !rule.validate(value)) return undefined;
+  if (rule.validate && !rule.validate(value, context)) return undefined;
   return value;
 }
 
-function runRule(rule: SecretRule, ctx: Context): SecretFinding[] {
+function runRule(
+  rule: SecretRule,
+  ctx: Context,
+  profile: SecretProfile,
+): SecretFinding[] {
   if (rule.keywords && !rule.keywords.some((k) => ctx.lower.includes(k))) {
     return [];
   }
+  const path = ctx.options.path?.split(String.fromCharCode(92)).join("/");
+  if (path && rule.skipPaths?.some((re) => re.test(path))) return [];
+  const action =
+    profile === "outbound" ? (rule.outboundAction ?? "redact") : "redact";
   const out: SecretFinding[] = [];
   const re = withIndices(rule.regex);
   const group = rule.group ?? 0;
@@ -134,8 +143,13 @@ function runRule(rule: SecretRule, ctx: Context): SecretFinding[] {
     if (m[0].length === 0) re.lastIndex++;
     const span = (m as RegExpExecArray & { indices?: [number, number][] })
       .indices?.[group];
-    const value = acceptedValue(rule, m[group]);
-    if (!span || value === undefined) continue;
+    if (!span) continue;
+    const value = acceptedValue(
+      rule,
+      m[group],
+      ctx.text.slice(m.index, span[0]),
+    );
+    if (value === undefined) continue;
     const fingerprint = fingerprintOf(value, ctx.salt);
     if (ctx.options.allowFingerprints?.has(fingerprint)) continue;
     if (isMarked(ctx, span[0])) continue;
@@ -146,6 +160,7 @@ function runRule(rule: SecretRule, ctx: Context): SecretFinding[] {
       start: span[0],
       end: span[1],
       confidence: rule.confidence,
+      action,
       fingerprint,
     });
   }
@@ -195,7 +210,7 @@ export function scanText(
   };
   const all: SecretFinding[] = [];
   for (const rule of options.rules ?? DEFAULT_RULES) {
-    if (ruleAppliesTo(rule, profile)) all.push(...runRule(rule, ctx));
+    if (ruleAppliesTo(rule, profile)) all.push(...runRule(rule, ctx, profile));
   }
   for (const k of options.known?.find(text, ctx.salt) ?? []) {
     if (options.allowFingerprints?.has(k.fingerprint)) continue;
@@ -206,6 +221,7 @@ export function scanText(
       start: k.start,
       end: k.end,
       confidence: "high",
+      action: "redact",
       fingerprint: k.fingerprint,
     });
   }
@@ -220,7 +236,8 @@ export function placeholderFor(finding: SecretFinding): string {
 /**
  * Replace each finding's span with its placeholder. The same value under the
  * same salt always gets the same placeholder, so a model can refer to it.
- * Findings must come from `scanText` on this same `text`.
+ * Findings must come from `scanText` on this same `text`. Findings whose
+ * action is `warn` are left in the text: the caller reports them instead.
  */
 export function redact(
   text: string,
@@ -229,7 +246,7 @@ export function redact(
   let out = "";
   let at = 0;
   for (const f of [...findings].sort((a, b) => a.start - b.start)) {
-    if (f.start < at) continue;
+    if (f.start < at || f.action === "warn") continue;
     out += text.slice(at, f.start) + placeholderFor(f);
     at = f.end;
   }

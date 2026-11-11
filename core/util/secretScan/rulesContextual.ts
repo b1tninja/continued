@@ -11,6 +11,19 @@
  */
 import { hasLetterAndDigit } from "./heuristics";
 import type { SecretRule } from "./types";
+import { looksLikePath, plausibleAssignedSecret } from "./valueShape";
+
+/**
+ * Files where a `NAME=value` is a fixture, an example or a sample: tests,
+ * mocks, fixtures, examples, docs and the like. The provider-key rules still
+ * run there; only the name-based guess is skipped.
+ */
+export const TEST_AND_EXAMPLE_PATHS: readonly RegExp[] = [
+  /(?:^|\/)(?:tests?|__tests__|__mocks__|__fixtures__|fixtures?|testdata|mocks?|examples?|samples?|e2e)\//i,
+  /\.(?:test|spec|vitest|e2e|stories)\.[cm]?[jt]sx?$/i,
+  /(?:^|[._-])(?:test|tests|spec|fixture|fixtures|mock|example|sample)\.[a-z]+$/i,
+  /\.(?:example|sample|template|dist)$/i,
+];
 
 const NOT_A_VALUE =
   /^(?:\$|\{\{|<|%|process\.|os\.|env\.|config\.|self\.|this\.|args\.|settings\.|secrets\.|getenv|\.{0,2}\/)/i;
@@ -55,7 +68,7 @@ export const CONTEXTUAL_RULES: readonly SecretRule[] = [
     group: 1,
     entropy: 3.5,
     keywords: ["bearer"],
-    validate: (value) => !NOT_A_VALUE.test(value),
+    validate: (value) => !NOT_A_VALUE.test(value) && !looksLikePath(value),
     origin: "own (masker HEADER)",
   },
   {
@@ -66,13 +79,17 @@ export const CONTEXTUAL_RULES: readonly SecretRule[] = [
     class: "contextual",
     confidence: "medium",
     regex: new RegExp(
-      String.raw`(?<![A-Za-z0-9_.-])[A-Za-z0-9_.-]*(?:${NAME_WORDS})(?:[_-](?:key|value|id|secret|token|str|string)){0,2}["']?\s*[:=]\s*["'\x60]?([^\s"'\x60,;#]{8,})`,
+      String.raw`(?<![A-Za-z0-9_.-])[A-Za-z0-9_.-]*(?:${NAME_WORDS})(?:[_-](?:key|value|id|secret|token|str|string)){0,2}["']?\s*[:=]\s*["'\x60]?([^\s"'\x60,;#&]{8,})`,
       "gi",
     ),
     group: 1,
     entropy: 3,
     keywords: ["key", "secret", "token", "passw", "pwd", "credential", "auth"],
-    validate: looksGenerated,
+    // looksGenerated drops the obvious non-values; plausibleAssignedSecret then
+    // applies the X11a shape tests (code, paths, ids, length and entropy by name).
+    validate: (value, context) =>
+      looksGenerated(value) && plausibleAssignedSecret(value, context),
+    skipPaths: TEST_AND_EXAMPLE_PATHS,
     origin: "own (masker ASSIGN, scrubEnvironment names)",
   },
   {
@@ -89,7 +106,8 @@ export const CONTEXTUAL_RULES: readonly SecretRule[] = [
     group: 1,
     entropy: 4,
     keywords: ["key", "secret", "token", "passw", "pwd", "credential"],
-    validate: looksGenerated,
+    validate: (value) => looksGenerated(value) && !looksLikePath(value),
+    skipPaths: TEST_AND_EXAMPLE_PATHS,
     origin: "own",
   },
 ];

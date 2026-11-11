@@ -146,6 +146,7 @@ export function scanFileList(
     report.filesScanned++;
     const found = scanText(read.text, options.profile, {
       salt,
+      path: file,
       known: options.known,
       allowFingerprints: options.allowFingerprints,
     });

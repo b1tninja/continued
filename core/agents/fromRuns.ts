@@ -59,6 +59,7 @@ export function subagentRunToNode(
       cacheWrite: 0,
     };
   }
+  if (run.status === "interrupted") node.interrupted = true;
   if (run.status === "completed") node.returnedLength = run.text.length;
   return node;
 }
