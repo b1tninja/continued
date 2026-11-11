@@ -98,3 +98,67 @@ and the gate will then be able to wait on real queue runs.
 and which of the shared files are hot. Nothing is checked out and the index and working tree are not
 touched; it only writes unreferenced objects. It proves textual conflicts only, not that the combined
 tree builds or passes tests, so it does not replace "Update branch" plus a green `merge-gate`.
+
+## 6. Building the merged result (CI15)
+
+Evidence: #553 x #557 (TS2741 in core, fixed in #573) and #587 x #588 (`evaluateRules` complexity 53 > 52,
+fixed in #592) each passed every check alone and broke `main` together.
+
+What ran on a push to `main` before this section: `Main Branch Build` (`main-build.yaml`) only republishes
+the VS Code artifact of the merged PR's check run, and `Publish Extension` runs on release. Neither
+type-checks or lints anything. The jobs that lint and type-check core (`core-checks`: `npx tsc --noEmit`
+and `npm run lint` in `core`; likewise `gui-checks`, `binary-checks`) run only on `pull_request`, on a
+05:23 UTC schedule and on dispatch, so a bad combination stays red until the next night. `merge-gate`
+only waits for the PR head's own aggregates, so it cannot see the combination either.
+
+| Option                                                          | Cost                                                                                                                                            | Catches                                                                        | Decision                    |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------- |
+| (a) `post-merge-check.yml` on `push` to `main`                  | three small jobs (about the PR check time for tsc and lint, no tests), one issue                                                                | the break within minutes of the merge, with the commit named; does not stop it | built                       |
+| (b) `strict: true` (up to date with `main`)                     | owner action; every merge needs "Update branch" and a fresh gate run, which multiplies runs on a slow queue                                     | the break before it lands, for every pair                                      | owner action, command below |
+| (c) `merge-ready.mjs --trial`                                   | local, no CI cost; needs a checkout with `node_modules` to run the checks                                                                       | the break before it lands, for the PRs the person lists                        | built                       |
+| (d) `merge-gate` re-run through `workflow_run` after each merge | re-runs every open PR's gate per merge and needs a token that can re-run workflows; a re-run proves nothing unless the PR head is updated first | nothing that (b) does not do better                                            | not built                   |
+
+### (a) The post-merge check
+
+`.github/workflows/post-merge-check.yml` runs on `push` to `main` and on dispatch (never on
+`pull_request_target`). Jobs `core`, `gui` and `binary` run the same commands and local setup actions as
+the PR checks (type-check and lint; no vitest, which takes longest and has not been what broke). A
+`report` job keeps one open issue titled `main is red: post-merge check failed`: it comments on it when a
+later run fails too, and closes it when a run is green. Permissions are `contents: read` for the
+checks, plus `issues: write` in the report job only; there are no new secrets, no new actions and the
+report job has no checkout. A newer push cancels the run in flight (only the latest tip matters), and a
+cancelled run does not touch the issue. Not a required status: it reports after the merge, so it
+shortens the time to notice, not the time to break.
+
+### (c) The trial merge before merging
+
+```sh
+node scripts/ci/merge-ready.mjs 593 594 --trial            # plan: conflicts, projects to check
+node scripts/ci/merge-ready.mjs 593 594 --trial --run      # type-check and lint the merged result
+node scripts/ci/merge-ready.mjs 593 --trial --run --deps D:/code/some-checkout-with-node_modules
+```
+
+For each PR it fetches `main` and the head into `refs/combine/*`, merges them with
+`git merge-tree --write-tree` (no checkout), and compares what each side changed since the merge base to
+pick `core`, `gui` and `binary` (a `core` or `packages` change checks all three; docs-only checks
+nothing; a head that already contains `main` needs nothing). With `--run` it creates a temporary
+detached worktree of the merged commit, links `node_modules` from `--deps` (default: the current
+directory) and runs the PR-check commands; afterwards it removes only the links (never the target), the
+worktree and the temporary directory. It exits 1 on a conflict or a failing check. It never installs,
+merges, pushes or touches the working tree or index. Run it for the PR you are about to merge after the
+previous one landed, instead of waiting for "Update branch" and a full gate.
+
+### (b) Strict mode, owner action (not applied by the PR)
+
+Run after the commands in section 4 are decided. It replaces only the required status checks of the
+protection that section 4 creates, so apply section 4 first; `strict` is already `true` there. Auto-merge
+needs nothing further: it starts working as soon as a
+required check exists, and with `strict: true` it waits for the branch to be up to date.
+
+```sh
+gh api -X PATCH repos/b1tninja/continuous/branches/main/protection/required_status_checks \
+  -F strict=true -f 'contexts[]=merge-gate'
+```
+
+Do not add `post-merge-check` to `contexts`: it only runs on `main`, so a required check by that name
+would block every PR.
