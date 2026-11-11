@@ -12,8 +12,8 @@ import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy.js";
 import {
   compileSandboxConfig,
   describeSandboxPlan,
-  type SandboxCompileResult,
 } from "core/util/sandboxPolicy.js";
+import type { SandboxCompileResult } from "core/util/sandboxPolicyTypes.js";
 import { effectivePolicyPreview } from "core/util/srtPolicyPreview.js";
 import { detectSrt, type SrtStatus } from "core/util/srtStatus.js";
 import { windowsSandboxStatus } from "core/util/windowsSandboxStatus.js";

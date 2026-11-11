@@ -59,7 +59,12 @@ import type {
   SandboxSource,
 } from "./sandboxPolicyTypes";
 
-export type * from "./sandboxPolicyTypes";
+export type {
+  SandboxCompileInput,
+  SandboxCompileResult,
+  SandboxPlan,
+  SandboxPlanFailure,
+} from "./sandboxPolicyTypes";
 export {
   sandboxAutoApproval,
   type AreaDecision,
