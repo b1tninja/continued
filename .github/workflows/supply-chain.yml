@@ -54,9 +54,9 @@ jobs:
         run: |
           node scripts/ci/check-pins.mjs
           node --test scripts/ci/check-pins.test.mjs
-      - name: Fixture provenance and licences (advisory; --strict later)
+      - name: Fixture provenance and licences (strict)
         run: |
-          node scripts/ci/check-notice.mjs
-          node --test scripts/ci/check-notice.test.mjs
+          node scripts/ci/check-notice.mjs --strict
+          node --test scripts/ci/check-notice.test.mjs scripts/ci/backfill-fixture-licence.test.mjs
       - name: Process-guard scripts (merge-tree matrix, worktree hygiene, stash guard, checkpoint)
         run: node --test scripts/ci/combine.test.mjs scripts/ci/check-stash.test.mjs scripts/ci/worktree-hygiene.test.mjs "scripts/agents/*.test.mjs"

@@ -7,6 +7,7 @@
 export { CONTEXTUAL_RULES } from "./rulesContextual";
 export { PROVIDER_RULES } from "./rules";
 export { secretValuesFromEnv, plausibleSecretValue } from "./envValues";
+export { SECRET_NAME_PATTERNS, isSecretName } from "./secretNames";
 export { shannonEntropy } from "./heuristics";
 export { knownValueMatcher, MIN_KNOWN_LENGTH } from "./knownValues";
 export {
@@ -31,3 +32,4 @@ export type {
   SecretRule,
   SecretRuleClass,
 } from "./types";
+export { scrubDeep, scrubForDisk } from "./scrubForDisk";

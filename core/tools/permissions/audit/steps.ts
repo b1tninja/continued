@@ -38,7 +38,7 @@ export function auditToSteps(records: readonly AuditRecord[]): StuckStep[] {
       // an ask answered by the person writes a second decision: the later wins
       decisions.set(r.callId, r);
     } else if (r.ev === "outcome") outcomes.push(r);
-    else turns.push(r);
+    else if (r.ev === "turn") turns.push(r);
   }
 
   // Steps in order of turn; a record with no turn is a step of its own.

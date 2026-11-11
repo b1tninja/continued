@@ -187,6 +187,14 @@ export function BedrockConnectionTester({
               {toolCalls.preset}
             </span>
           )}
+          {toolCalls.ok && toolCalls.facts && (
+            <span
+              className="block text-xs opacity-80"
+              data-testid="tool-calls-facts"
+            >
+              {toolCalls.facts}
+            </span>
+          )}
         </Alert>
       )}
 

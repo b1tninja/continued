@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from the Nano-9B-v2 chat template https://huggingface.co/nvidia/NVIDIA-Nemotron-Nano-9B-v2/raw/main/tokenizer_config.json, not observed (the template shows \"arguments\": \"tool_args1\", a string placeholder)",
+    "license": "other",
     "retrieved": "2026-11-10",
     "note": ""
   },

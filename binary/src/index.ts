@@ -5,6 +5,8 @@ import { LLMLogFormatter } from "core/llm/logFormatter";
 import { FromCoreProtocol, ToCoreProtocol } from "core/protocol";
 import { IMessenger } from "core/protocol/messenger";
 import { getCoreLogsPath, getPromptLogsPath } from "core/util/paths";
+import { appendPrivate } from "core/util/privateFiles";
+import { createScrubbedFileStream } from "core/util/scrubStream";
 import fs from "node:fs";
 import { IpcIde } from "./IpcIde";
 import { IpcMessenger } from "./IpcMessenger";
@@ -42,7 +44,10 @@ program.action(async () => {
     const promptLogsPath = getPromptLogsPath();
 
     const core = new Core(messenger, ide);
-    new LLMLogFormatter(core.llmLogger, fs.createWriteStream(promptLogsPath));
+    new LLMLogFormatter(
+      core.llmLogger,
+      createScrubbedFileStream(promptLogsPath),
+    );
 
     console.log("[binary] Core started");
   } catch (e) {

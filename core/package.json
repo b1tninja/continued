@@ -17,7 +17,7 @@
     "lint:fix": "eslint . --fix"
   },
   "type": "module",
-  "author": "Continue Dev, Inc",
+  "author": "b1tninja",
   "license": "Apache-2.0",
   "devDependencies": {
     "@biomejs/biome": "2.6.6",

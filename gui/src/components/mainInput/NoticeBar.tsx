@@ -13,7 +13,7 @@ export function NoticeBar(props: {
     <div
       role="status"
       data-testid={props.testId}
-      className="mx-1 mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded border border-solid border-border bg-transparent px-2 py-1 text-xs text-description"
+      className="mx-1 mb-1 flex flex-wrap items-center gap-x-1 gap-y-0 rounded border border-solid border-border bg-transparent py-0.5 pl-2 text-xs text-description"
     >
       {props.children}
       <button
@@ -21,7 +21,7 @@ export function NoticeBar(props: {
         data-testid={`${props.testId}-dismiss`}
         aria-label="Dismiss"
         onClick={props.onDismiss}
-        className="ml-auto cursor-pointer border-none bg-transparent p-0 text-description-muted hover:text-foreground"
+        className="ml-auto min-h-6 cursor-pointer border-none bg-transparent px-2 text-description hover:text-foreground"
       >
         Dismiss
       </button>
@@ -41,7 +41,7 @@ export function NoticeAction(props: {
       data-testid={props.testId}
       title={props.title}
       onClick={props.onClick}
-      className="cursor-pointer border-none bg-transparent p-0 text-xs text-link underline hover:brightness-125"
+      className="min-h-6 cursor-pointer border-none bg-transparent px-2 text-xs text-link underline hover:brightness-125"
     >
       {props.children}
     </button>

@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja, not observed and https://developers.openai.com/cookbook/articles/openai-harmony",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": "Output after the generation prompt <|start|>assistant. <|call|> is a stop token."
   },

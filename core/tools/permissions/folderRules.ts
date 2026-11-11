@@ -9,6 +9,8 @@ import type { ToolPermissions } from "./rules";
  * loader kept.
  */
 const recorded = new Map<string, ToolPermissions>();
+/** `allow` rules the loader removed because an assistant or hub configuration set them */
+let assistantAllows: string[] = [];
 
 function strings(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
@@ -19,6 +21,17 @@ function strings(value: unknown): string[] | undefined {
 /** Forget what the last load recorded; the loader calls this before it records. */
 export function clearFolderRules(): void {
   recorded.clear();
+  assistantAllows = [];
+}
+
+/** Remember the `allow` rules an assistant set that the loader dropped. */
+export function recordAssistantAllows(rules: string[]): void {
+  assistantAllows = [...new Set(rules)];
+}
+
+/** The `allow` rules of the last load that only an assistant set. */
+export function recordedAssistantAllows(): string[] {
+  return [...assistantAllows];
 }
 
 /** Remember the rules in one workspace file (a parsed YAML block). */

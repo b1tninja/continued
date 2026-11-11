@@ -22,7 +22,7 @@ export type AuditBy = "rules" | "reviewer" | "person" | "system";
 
 export interface AuditEnvelope {
   v: typeof AUDIT_VERSION;
-  ev: "decision" | "outcome" | "turn";
+  ev: "decision" | "outcome" | "turn" | "policy";
   /** UTC, ISO 8601 */
   ts: string;
   session: string;
@@ -123,7 +123,43 @@ export interface TurnEvent extends AuditEnvelope {
   calls: number;
 }
 
-export type AuditRecord = DecisionEvent | OutcomeEvent | TurnEvent;
+/** Who changed a permission rule: the Permissions page, the CLI or the Always allow button. */
+export type PolicyChangeSource =
+  "permissions-page" | "cli" | "always-allow-button";
+
+export type PolicyChangeOp = "add" | "update" | "remove" | "adopt" | "undo";
+
+/**
+ * A change to the person's own permission rules (plans/rule-editor.md, B22).
+ * It records what changed and who asked, never the file: the rule is masked
+ * like call arguments, and the before and after hashes (of the whole file's
+ * text) let a reader see that two changes were or were not adjacent.
+ */
+export interface PolicyEvent extends AuditEnvelope {
+  ev: "policy";
+  source: PolicyChangeSource;
+  op: PolicyChangeOp;
+  /** The list the rule was in or went to: deny, ask or allow */
+  decision: AuditPolicy;
+  /** The rule, with arguments masked */
+  rule: string;
+  /** For an update, the list and text it became */
+  newDecision?: AuditPolicy;
+  newRule?: string;
+  /** Adopt: where the rule came from (assistant, workspace) */
+  from?: string;
+  /** The change lets something run that did not before */
+  loosens: boolean;
+  /** How the change was confirmed, when it needed it */
+  confirmed?: "typed" | "click";
+  /** SHA-256 of the file's text before and after, or undefined when it did not exist */
+  beforeHash?: string;
+  afterHash?: string;
+  maskedKinds?: string[];
+}
+
+export type AuditRecord =
+  DecisionEvent | OutcomeEvent | TurnEvent | PolicyEvent;
 
 /** A record as the builders produce it: the writer adds `v`, `ts` and `seq`. */
 export type AuditDraft = DistributiveOmit<AuditRecord, "v" | "seq" | "ts"> & {
@@ -237,4 +273,38 @@ export function turnDraft(input: {
   calls: number;
 }): AuditDraft {
   return clean({ ...input, ev: "turn" as const }) as AuditDraft;
+}
+
+export interface PolicyInput {
+  session?: string;
+  source: PolicyChangeSource;
+  op: PolicyChangeOp;
+  decision: AuditPolicy;
+  rule: string;
+  newDecision?: AuditPolicy;
+  newRule?: string;
+  from?: string;
+  loosens: boolean;
+  confirmed?: "typed" | "click";
+  beforeHash?: string;
+  afterHash?: string;
+}
+
+/** The session name policy changes are written under: one file a month, not one per window. */
+export const POLICY_SESSION = "policy-changes";
+
+export function policyDraft(input: PolicyInput): AuditDraft {
+  const rule = maskText(input.rule);
+  const newRule =
+    input.newRule === undefined ? undefined : maskText(input.newRule);
+  const kinds = [...new Set([...rule.kinds, ...(newRule?.kinds ?? [])])];
+  const { session, ...rest } = input;
+  return clean({
+    ...rest,
+    session: session ?? POLICY_SESSION,
+    ev: "policy" as const,
+    rule: clipMasked(rule.text, MAX_ARGS_CHARS),
+    newRule: newRule ? clipMasked(newRule.text, MAX_ARGS_CHARS) : undefined,
+    maskedKinds: kinds.length ? kinds : undefined,
+  }) as AuditDraft;
 }

@@ -2,7 +2,7 @@
 title: "Permissions page"
 ---
 
-**Settings, Permissions** shows every permission rule in effect, where it came from, whether it is being obeyed, and lets you try a call against them. It answers "why did this ask?" and "which rule refused that?" without reading the config files. It is read-only: you still edit rules in `config.yaml`.
+**Settings, Permissions** shows every permission rule in effect, where it came from, whether it is being obeyed, and lets you try a call against them. It answers "why did this ask?" and "which rule refused that?" without reading the config files. You can also add, change and remove your own rules here, and adopt a rule that came from elsewhere.
 
 ## Five areas
 
@@ -18,7 +18,7 @@ The page has one tab for each policy area. Each tab shows the area's level (chan
 
 The tool name in a rule decides the tab. A terminal command rule is listed under Tool use, but a command the parser can show only reads is Context use for that one call, so the page says the area is decided per command. Rules for tools that only touch the session (the task list, Loop's tools) and rules that cannot be read are listed at the bottom under "Rules with no area".
 
-Rules are shown grouped as Deny, Ask and Allow. The order does not matter: a call is weighed by decision (floor, then deny, then protected paths, then ask, then allow, then the level), never by where a rule sits in a list.
+Rules are shown grouped as Never, Ask and Always (the files keep the names `deny`, `ask` and `allow`). The order does not matter, and there is no way to reorder them: a call is weighed by decision (floor, then deny, then protected paths, then ask, then allow, then the level), never by where a rule sits in a list.
 
 ## Where a rule came from
 
@@ -32,6 +32,35 @@ Rules are shown grouped as Deny, Ask and Allow. The order does not matter: a cal
 | Built-in | a protection that ships with the product, listed per area with its on or off state |
 
 A rule that is **Ignored** is struck through with the reason: an `allow` rule that came with the workspace is ignored (a repository can add deny and ask rules, not allow rules), allow rules are not consulted while an area is Manual (file edits excepted), and every rule but the floor is ignored while an area is at YOLO. A rule the page can warn about says so: a pattern after an MCP tool name never matches, and an allow rule written with `host:`, `net:` or `effect:` never allows anything.
+
+## Edit your rules
+
+Each area with rules has **Add a rule**, and your own rules have **Change** and **Remove**. Rules are saved to the `toolPermissions` of your own `config.yaml`, with its comments kept. Only that dialect is written: rules in the CLI's `Bash(...)` form in `permissions.yaml` are still read and shown, never written, and say so.
+
+Every change is checked by the same code before anything is written, and the form shows the result as you type:
+
+- the rule must be readable (`toolName(pattern)` or a bare tool name, no control or invisible characters)
+- warnings: a rule you already have, an Always rule that a Never or Ask rule covers (it can never take effect, because Never beats Ask beats Always whatever the order), a more specific Never that takes a part out of an Always, a new Never that makes an Always of yours dead
+- what a sample call gets now and with the rule (type your own under **Try a call**, or one is made from the pattern)
+- the lines of `config.yaml` that would change
+
+Nothing is written until you press **Save**. If the file cannot be written, or was changed by someone else since the page read it, you are told and nothing changes. After a save, **Undo last change** puts the file back as it was, as long as it is unchanged since; if you edited it in between, it is left alone and you are told.
+
+If `config.yaml` cannot be read (a syntax error, or `toolPermissions` of the wrong shape) the page shows the reason, says your rules cannot be shown, and turns editing off. It never shows a broken file as "no rules".
+
+### Friction
+
+An Always rule that matches everything or a broad wildcard needs a typed confirmation: you type `allow everything` before Save turns on, and the form says plainly what the rule would allow. That covers a bare tool name (`runTerminalCommand`), a pattern of only `*`, a command rule whose first word is a wildcard or an interpreter that runs whatever follows (`bash*`, `sudo*`, `python*`), an MCP rule for every server, a fetch rule for every host, and a path rule that covers `/`, your home folder or a credentials folder such as `~/.ssh`. Removing a Never, or moving a rule to a looser list, asks for one confirmation.
+
+What no rule can change is shown under **Locks**: floor rules, protected paths (credentials always ask), and your policy files (`config.yaml`, `permissions.yaml` and the files that change what runs later), which the agent cannot write without asking you. The page's write is a message from the page to the app, not a tool, so the model cannot reach it.
+
+### Rules from elsewhere: Adopt
+
+Only your own `config.yaml` can add an Always rule. An Always rule that came with the workspace or an assistant is shown as ignored, with **Adopt**. Adopt first shows what the rule changes (a sample call, now and after), then copies the rule into your own `config.yaml`; that is the only way such a rule takes effect.
+
+### The audit trail
+
+Every add, change, remove, adopt and undo is written to the audit trail as a `policy` record: where it came from (`permissions-page` or `cli`), what it did, the rule with its arguments masked like a command's, whether it loosens anything, how it was confirmed, and a hash of the file before and after. Secrets are masked and the file's text is never stored.
 
 ## Try a call
 
@@ -49,6 +78,11 @@ The test runs the same check the agent uses. Nothing is run, written or sent, an
 ```text
 continuous permissions list [--area context|tools|edits|plan|questions] [--json]
 continuous permissions test <tool> <arg...> [--mode agent|plan|chat] [--level tools=permissive] [--json]
+continuous permissions add <never|ask|always> '<rule>' [--yes-allow-everything] [--dry-run] [--probe <call>]
+continuous permissions remove '<rule>' [--decision never|ask|always] [--yes]
+continuous permissions adopt '<rule>' --from <file> [--yes-allow-everything] [--dry-run]
 ```
 
 `list` prints the same data as the page. `test` takes a tool (`runTerminalCommand` or `Bash`, `readFile`, `writeFile`, `listDirectory`, `fetchUrl`, `grepSearch`, `searchWeb`, or `mcp__server__tool`) and the call's argument, for example `continuous permissions test Bash git push origin main`. `--level area=level` tries another level for one area and may be repeated. The command reads your `config.yaml` and `permissions.yaml` and does not load an assistant, so rules that come from an assistant are not listed by the terminal command.
+
+`add`, `remove` and `adopt` change your own `config.yaml` with the same checks and friction as the page, and write the same audit record (source `cli`). They exit 0 when the change was made (or previewed with `--dry-run`), 2 when a confirmation is missing and 1 on any refusal: a rule that cannot be read, a file that cannot be read or written, or a rule that is not there. A broad Always rule needs `--yes-allow-everything`; removing a Never needs `--yes`. `adopt` reads the rule from the workspace or assistant file you name with `--from`, shows what it changes, and copies it.

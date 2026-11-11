@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/main/tokenizer_config.json, not observed",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": "Expected prose keeps the think block because a dialect parser does not own reasoning extraction; a reasoning splitter would remove it first."
   },

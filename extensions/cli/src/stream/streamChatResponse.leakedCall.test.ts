@@ -1,12 +1,19 @@
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
-import { LEAKED_CALL_NUDGE } from "core/util/turnEnd.js";
+import {
+  LEAKED_CALL_NUDGE,
+  LEAKED_CALL_NUDGE_SESSION_LIMIT,
+} from "core/util/turnEnd.js";
 import type { ChatCompletionTool } from "openai/resources.mjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { services } from "../services/index.js";
 
+import {
+  NUDGE_LEAKED_CALLS_ENV,
+  resetLeakedCallNudges,
+} from "./leakedCallNudge.js";
 import { streamChatResponse } from "./streamChatResponse.js";
 
 /*
@@ -100,6 +107,8 @@ describe("a tool call written as text in a headless turn", () => {
   beforeEach(() => {
     vi.mocked(services.toolPermissions.isHeadless).mockReturnValue(true);
     handleToolCalls.mockClear();
+    resetLeakedCallNudges();
+    delete process.env[NUDGE_LEAKED_CALLS_ENV];
   });
 
   it("gets one nudge, and the turn ends when the model writes it again", async () => {
@@ -135,5 +144,44 @@ describe("a tool call written as text in a headless turn", () => {
     const llmApi = llmApiReplying([LEAK.replace("Write", "Other")]);
     await run(llmApi);
     expect(llmApi.chatCompletionStream).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the nudge outside a headless turn, and its limits", () => {
+  beforeEach(() => {
+    vi.mocked(services.toolPermissions.isHeadless).mockReturnValue(false);
+    handleToolCalls.mockClear();
+    resetLeakedCallNudges();
+    delete process.env[NUDGE_LEAKED_CALLS_ENV];
+  });
+
+  it("nudges once in an interactive turn too", async () => {
+    const llmApi = llmApiReplying([LEAK]);
+    await run(llmApi);
+    expect(llmApi.chatCompletionStream).toHaveBeenCalledTimes(2);
+    expect(lastUser(llmApi, 1)).toContain(LEAKED_CALL_NUDGE);
+  });
+
+  it("does not nudge an interactive turn that only announces a step", async () => {
+    const llmApi = llmApiReplying(["Let me check the file."]);
+    await run(llmApi);
+    expect(llmApi.chatCompletionStream).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends nothing extra when the setting is off", async () => {
+    process.env[NUDGE_LEAKED_CALLS_ENV] = "0";
+    const llmApi = llmApiReplying([LEAK]);
+    await run(llmApi);
+    expect(llmApi.chatCompletionStream).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops after the session limit", async () => {
+    let extra = 0;
+    for (let i = 0; i < LEAKED_CALL_NUDGE_SESSION_LIMIT + 2; i++) {
+      const llmApi = llmApiReplying([LEAK]);
+      await run(llmApi);
+      extra += vi.mocked(llmApi.chatCompletionStream).mock.calls.length - 1;
+    }
+    expect(extra).toBe(LEAKED_CALL_NUDGE_SESSION_LIMIT);
   });
 });

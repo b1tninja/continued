@@ -55,6 +55,12 @@ export function AlwaysAllowButton({ toolCallId, toolName, parsedArgs }: Props) {
       if (result === "invalid") {
         return setState({ kind: "message", text: "That rule is not valid." });
       }
+      if (result !== "added" && result !== "exists") {
+        return setState({
+          kind: "message",
+          text: saved.content.error ?? COULD_NOT_SAVE,
+        });
+      }
       setState({ kind: "idle" });
       void dispatch(callToolById({ toolCallId }));
     } catch {
@@ -100,7 +106,7 @@ export function AlwaysAllowButton({ toolCallId, toolName, parsedArgs }: Props) {
       <Button
         variant="ghost"
         size="sm"
-        className="my-1 font-medium text-description-muted"
+        className="my-0.5 min-h-6 font-medium text-description"
         disabled={state.kind === "working"}
         onClick={onClick}
         title={
@@ -118,7 +124,7 @@ export function AlwaysAllowButton({ toolCallId, toolName, parsedArgs }: Props) {
         <Button
           variant="ghost"
           size="sm"
-          className="my-1 font-medium text-description-muted"
+          className="my-0.5 min-h-6 font-medium text-description"
           onClick={() => setState({ kind: "idle" })}
           data-testid={`always-allow-cancel-${toolCallId}`}
         >

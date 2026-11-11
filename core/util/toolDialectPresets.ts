@@ -169,12 +169,16 @@ export function toolDialectHint(
   return { dialect: preset.textDialect, from: "preset", preset };
 }
 
-/** One-line description of a preset for a result line or a log. */
+/**
+ * One-line description of a preset for a result line or a log: the text form
+ * the family writes calls in, or that it has none.
+ */
 export function describePreset(p: DialectPreset): string {
-  const recover = p.recoverWith
-    ? `recoverable with toolDialect: ${p.recoverWith}`
-    : "no recovery built";
-  return `${p.label}: text dialect ${p.textDialect} (${recover})`;
+  const form =
+    p.textDialect === "none"
+      ? "none (native tools only)"
+      : `${p.textDialect} (tools written as text)`;
+  return `Known format for this model family: ${form}`;
 }
 
 /**

@@ -81,6 +81,7 @@ import {
   bedrockOmitUnsupportedInference,
   bedrockReasoningFields,
   bedrockSamplingParams,
+  bedrockStreamsToolInputCleanly,
   bedrockToolsNeedNonStreaming,
   bedrockUsageToUsage,
   buildModelCatalog,
@@ -102,6 +103,7 @@ import {
   normalizeToolUseIds,
   ThinkingSplit,
   ThinkingTagSplitter,
+  ToolInputGate,
 } from "./bedrockHelpers.js";
 
 /** The use-case lookup is advisory, so listing never waits on it for long. */
@@ -687,49 +689,58 @@ class Bedrock extends BaseLLM {
       this.region,
     );
     const client = await this._getClient();
-    return probeToolDialect(async (probe) => {
-      const response = await client.send(
-        new ConverseCommand({
-          modelId,
-          system: [{ text: probe.messages[0].content }],
-          messages: [
-            { role: "user", content: [{ text: probe.messages[1].content }] },
-          ],
-          toolConfig: {
-            tools: probe.tools.map((t) => ({
-              toolSpec: {
-                name: t.function.name,
-                description: t.function.description,
-                inputSchema: { json: t.function.parameters },
-              },
-            })),
-            toolChoice: { auto: {} },
-          },
-          inferenceConfig: {
-            temperature: probe.params.temperature,
-            maxTokens: probe.params.max_tokens,
-          },
-          ...this._extraConverseFields(),
-        } as any),
-      );
-      const blocks = response.output?.message?.content ?? [];
-      return {
-        content: blocks
-          .map((b) => ("text" in b ? (b.text ?? "") : ""))
-          .join(""),
-        toolCalls: blocks.flatMap((b, i) =>
-          "toolUse" in b && b.toolUse
-            ? [
-                {
-                  id: b.toolUse.toolUseId ?? `call_${i}`,
-                  name: b.toolUse.name ?? "",
-                  arguments: JSON.stringify(b.toolUse.input ?? {}),
+    return probeToolDialect(
+      async (probe) => {
+        const response = await client.send(
+          new ConverseCommand({
+            modelId,
+            system: [{ text: probe.messages[0].content }],
+            messages: [
+              { role: "user", content: [{ text: probe.messages[1].content }] },
+            ],
+            toolConfig: {
+              tools: probe.tools.map((t) => ({
+                toolSpec: {
+                  name: t.function.name,
+                  description: t.function.description,
+                  inputSchema: { json: t.function.parameters },
                 },
-              ]
-            : [],
-        ),
-      };
-    }, this.model);
+              })),
+              toolChoice: { auto: {} },
+            },
+            inferenceConfig: bedrockOmitUnsupportedInference(modelId, {
+              temperature: probe.params.temperature,
+              maxTokens: probe.params.max_tokens,
+            }),
+            ...this._extraConverseFields(),
+          } as any),
+        );
+        const blocks = response.output?.message?.content ?? [];
+        return {
+          content: blocks
+            .map((b) => ("text" in b ? (b.text ?? "") : ""))
+            .join(""),
+          toolCalls: blocks.flatMap((b, i) =>
+            "toolUse" in b && b.toolUse
+              ? [
+                  {
+                    id: b.toolUse.toolUseId ?? `call_${i}`,
+                    name: b.toolUse.name ?? "",
+                    arguments: JSON.stringify(b.toolUse.input ?? {}),
+                  },
+                ]
+              : [],
+          ),
+        };
+      },
+      this.model,
+      {
+        surface: {
+          query: { provider: "bedrock", api: "converse" },
+          label: "Bedrock Converse",
+        },
+      },
+    );
   }
 
   /** Send a tiny request to verify credentials, region and access to `model`. */
@@ -1015,7 +1026,25 @@ class Bedrock extends BaseLLM {
       );
       const state = streamTextState(options.model, recovery);
       let sawToolUse = false;
+      // A toolUse block is held until its input is known to parse (see
+      // ToolInputGate): a model that streams it broken is retried once
+      // through Converse, before any of it has reached the caller.
+      const gate = new ToolInputGate<ChatMessage>(
+        !bedrockStreamsToolInputCleanly(options.model),
+      );
       for await (const chunk of response.stream) {
+        if (chunk.contentBlockStart?.start?.toolUse) {
+          const retry = yield* this._settleToolCall(gate, options.model);
+          if (retry) {
+            yield* this._converseWholeMessage(
+              client,
+              input,
+              signal,
+              fallbackModelId,
+            );
+            return;
+          }
+        }
         if (chunk.metadata?.usage) {
           usage = bedrockUsageToUsage(chunk.metadata.usage);
         }
@@ -1026,18 +1055,47 @@ class Bedrock extends BaseLLM {
           stopReason = chunk.messageStop.stopReason;
         }
         if (chunk.contentBlockStop || chunk.messageStop) {
-          yield* flushHeldText(state);
+          for (const held of flushHeldText(state)) {
+            gate.noteOutput();
+            yield held;
+          }
+          const retry = yield* this._settleToolCall(gate, options.model);
+          if (retry) {
+            yield* this._converseWholeMessage(
+              client,
+              input,
+              signal,
+              fallbackModelId,
+            );
+            return;
+          }
         }
         if (chunk.contentBlockDelta?.delta) {
           const delta = chunk.contentBlockDelta.delta;
-          yield* deltaMessages(delta, state);
+          for (const message of deltaMessages(delta, state)) {
+            if (delta.toolUse && gate.holding) {
+              gate.add(message, delta.toolUse.input);
+              continue;
+            }
+            gate.noteOutput();
+            yield message;
+          }
           continue;
         }
         const started = toolCallStartMessage(chunk.contentBlockStart);
         if (started) {
           sawToolUse = true;
-          yield started;
+          yield* gate.open(started);
         }
+      }
+      if (yield* this._settleToolCall(gate, options.model)) {
+        yield* this._converseWholeMessage(
+          client,
+          input,
+          signal,
+          fallbackModelId,
+        );
+        return;
       }
       if (!sawToolUse) {
         for (const [index, call] of state.recovered.entries()) {
@@ -1061,6 +1119,30 @@ class Bedrock extends BaseLLM {
       // Clean up state and let the original error bubble up for retry handling
       throw error;
     }
+  }
+
+  /**
+   * Ends the toolUse block held in the gate: yields it when its input parses.
+   * When it does not, the model is remembered as one whose tool input must not
+   * be streamed, and the result says whether the turn is to be retried through
+   * Converse (nothing has gone out that a retry would repeat). Otherwise the
+   * block is yielded as streamed, since text or an earlier call went out.
+   */
+  private *_settleToolCall(
+    gate: ToolInputGate<ChatMessage>,
+    model: string,
+  ): Generator<ChatMessage, boolean> {
+    const closed = gate.close();
+    if (closed.broken) {
+      modelsWithoutStreamingTools.add(model);
+      console.debug(
+        `Bedrock: ${model} streamed tool input that is not JSON; ${
+          closed.retry ? "retrying through Converse" : "too late to retry"
+        }`,
+      );
+    }
+    yield* closed.parts;
+    return closed.retry;
   }
 
   /**

@@ -83,6 +83,13 @@ export const ACT_TURN_NUDGE =
  */
 export const LEAKED_CALL_NUDGE_LIMIT = 1;
 
+/**
+ * Nudges for a tool call written as text in one session, however many turns:
+ * the per-turn limit stops a loop inside a turn, this one stops a model that
+ * cannot make the call from costing an extra request in every turn (H13).
+ */
+export const LEAKED_CALL_NUDGE_SESSION_LIMIT = 5;
+
 /** The nudge for a reply that was a tool call written as text. */
 export const LEAKED_CALL_NUDGE =
   "Your last reply wrote a tool call as plain text, so nothing was run. Call the tool again using the tool-call format of this API, not text. If you did not mean to call a tool, say what you did instead.";

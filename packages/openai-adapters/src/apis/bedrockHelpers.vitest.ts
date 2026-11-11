@@ -5,6 +5,7 @@ import {
   bedrockModelAccessMessage,
   bedrockReasoningFields,
   bedrockSamplingParams,
+  bedrockStreamsToolInputCleanly,
   bedrockToolsNeedNonStreaming,
   bedrockUsageToCompletionUsage,
   budgetTokensToEffort,
@@ -377,8 +378,21 @@ describe("tools through Converse for models that cannot stream them", () => {
   it.each([
     "us.meta.llama4-maverick-17b-instruct-v1:0",
     "meta.llama4-scout-17b-instruct-v1:0",
+    // measured 2026-11-10: refused in ConverseStream 8 of 8
+    "meta.llama3-1-70b-instruct-v1:0",
+    "us.meta.llama3-1-70b-instruct-v1:0",
+    "us.meta.llama3-3-70b-instruct-v1:0",
+    "eu.meta.llama3-3-70b-instruct-v1:0",
+    "mistral.mistral-large-2407-v1:0",
+    "us.mistral.pixtral-large-2502-v1:0",
+    "global.mistral.pixtral-large-2502-v1:0",
+    // documented only (AWS tool-use-client-side page), not measured
+    "meta.llama3-1-8b-instruct-v1:0",
+    "mistral.mistral-large-2402-v1:0",
+    "writer.palmyra-x4-v1:0",
+    "us.writer.palmyra-x5-v1:0",
+    // measured: input opens without `{` in about half the requests
     "qwen.qwen3-32b-v1:0",
-    "us.qwen.qwen3-32b-v1:0",
   ])("%s needs the non-streaming route", (id) => {
     expect(bedrockToolsNeedNonStreaming(id)).toBe(true);
   });
@@ -388,7 +402,14 @@ describe("tools through Converse for models that cannot stream them", () => {
     "amazon.nova-pro-v1:0",
     "qwen.qwen3-coder-next",
     "qwen.qwen3-coder-30b-a3b-v1:0",
-    "us.meta.llama3-3-70b-instruct-v1:0",
+    // Mistral Large 3 streams tools cleanly (measured 2026-11-10)
+    "mistral.mistral-large-3-675b-instruct",
+    "us.mistral.mistral-large-3-675b-instruct",
+    "mistral.mistral-small-2402-v1:0",
+    "mistral.mixtral-8x7b-instruct-v0:1",
+    "meta.llama3-2-90b-instruct-v1:0",
+    "meta.llama3-70b-instruct-v1:0",
+    "writer.palmyra-x3-v1:0",
   ])("%s streams tools as usual", (id) => {
     expect(bedrockToolsNeedNonStreaming(id)).toBe(false);
   });
@@ -400,6 +421,30 @@ describe("tools through Converse for models that cannot stream them", () => {
       ),
     ).toBe(true);
     expect(isStreamingToolUseUnsupportedError(new Error("boom"))).toBe(false);
+  });
+});
+
+describe("bedrockStreamsToolInputCleanly", () => {
+  it.each([
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "amazon.nova-pro-v1:0",
+    "us.amazon.nova-2-lite-v1:0",
+  ])("%s keeps progressive tool-argument deltas", (id) => {
+    expect(bedrockStreamsToolInputCleanly(id)).toBe(true);
+  });
+
+  it.each([
+    "qwen.qwen3-32b-v1:0",
+    "qwen.qwen3-coder-30b-a3b-v1:0",
+    "minimax.minimax-m2",
+    "mistral.some-new-model",
+    "cohere.command-r-v1:0",
+    // reported corrupted on re:Post and in AgentCore issue 425, though 8/8 here
+    "openai.gpt-oss-120b-1:0",
+    "mistral.mistral-large-3-675b-instruct",
+    "us.moonshotai.kimi-k3",
+  ])("%s is held until the input parses", (id) => {
+    expect(bedrockStreamsToolInputCleanly(id)).toBe(false);
   });
 });
 

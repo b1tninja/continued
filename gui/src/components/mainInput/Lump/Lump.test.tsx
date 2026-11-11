@@ -1,5 +1,8 @@
 import { act, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { PolicyCard } from "../../PolicyControls";
+import { LoopPhaseMark } from "../../LoopPhaseMark";
+import { ModeIcon } from "../../ModeSelect/ModeIcon";
 import { MockIdeMessenger } from "../../../context/MockIdeMessenger";
 import { setIsInEdit } from "../../../redux/slices/sessionSlice";
 import { setupStore } from "../../../redux/store";
@@ -22,7 +25,7 @@ async function setup(ui = <Lump />) {
 describe("Lump session controls", () => {
   it("holds the mode and policy controls above the input, before the toolbox", async () => {
     await setup();
-    const group = screen.getByRole("group", { name: "Session controls" });
+    const group = screen.getByRole("toolbar", { name: "Session controls" });
     expect(within(group).getByTestId("mode-select-button")).toBeTruthy();
     const controls = within(group).getByTestId("policy-controls");
     expect(within(controls).getByTestId("policy-preset")).toBeTruthy();
@@ -41,7 +44,9 @@ describe("Lump session controls", () => {
   it("folds the five area dropdowns behind a toggle that reports its state", async () => {
     const { user } = await setup();
     const toggle = screen.getByTestId("policy-areas-toggle");
-    const areas = document.getElementById("policy-areas")!;
+    const areas = document.getElementById(
+      toggle.getAttribute("aria-controls")!,
+    )!;
     expect(toggle).toHaveAttribute("aria-label", "Show policy areas");
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(areas.className).toContain("hidden");
@@ -78,5 +83,85 @@ describe("input bottom row", () => {
     expect(screen.getByTestId("submit-input-button")).toBeTruthy();
     expect(screen.queryByTestId("mode-select-button")).toBeNull();
     expect(screen.queryByTestId("policy-controls")).toBeNull();
+  });
+});
+
+describe("Lump session toolbar", () => {
+  it("is one toolbar with every control named", async () => {
+    await setup();
+    const bar = screen.getByRole("toolbar", { name: "Session controls" });
+    const names = within(bar)
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
+    expect(names.some((n) => n.includes("Careful"))).toBe(true);
+    expect(names).toContain("Context use: Permissive");
+    expect(names).toContain("Plan edits: Cautious");
+    expect(within(bar).getByTestId("mode-select-button")).toBeTruthy();
+  });
+
+  it("has one Tab stop; arrows, Home and End move it", async () => {
+    const { user } = await setup();
+    const bar = screen.getByRole("toolbar", { name: "Session controls" });
+    const stops = () =>
+      Array.from(bar.querySelectorAll<HTMLElement>("[data-roving]")).filter(
+        (e) => e.tabIndex === 0,
+      );
+    const all = bar.querySelectorAll("[data-roving]");
+    // Mode, preset, fold toggle and five areas: 8 controls, 1 Tab stop (was 8)
+    expect(all).toHaveLength(8);
+    expect(stops()).toHaveLength(1);
+    expect(stops()[0].getAttribute("data-testid")).toBe("mode-select-button");
+    stops()[0].focus();
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(
+      within(bar).getByTestId("policy-preset"),
+    );
+    expect(stops()).toEqual([document.activeElement]);
+    await user.keyboard("{End}");
+    expect(document.activeElement).toBe(
+      within(bar).getByTestId("policy-select-questions"),
+    );
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(
+      within(bar).getByTestId("mode-select-button"),
+    );
+    await user.keyboard("{ArrowLeft}");
+    expect(document.activeElement).toBe(
+      within(bar).getByTestId("policy-select-questions"),
+    );
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toBe(
+      within(bar).getByTestId("mode-select-button"),
+    );
+  });
+
+  it("a chip opens its menu from the keyboard, and each level has a one-line tooltip", async () => {
+    const { user } = await setup();
+    screen.getByTestId("policy-select-edits").focus();
+    await user.keyboard("{ArrowDown}");
+    const option = screen.getByTestId("policy-option-edits-manual");
+    expect(option.querySelector("[title]")?.getAttribute("title")).toBe(
+      "Manual: You review each diff.",
+    );
+  });
+
+  it("no id or test id is used twice when Settings shows the same controls", async () => {
+    await setup(
+      <>
+        <Lump />
+        <PolicyCard />
+        <ModeIcon mode="loop" />
+        <LoopPhaseMark />
+      </>,
+    );
+    const ids = Array.from(document.querySelectorAll("[id]")).map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const testIds = Array.from(document.querySelectorAll("[data-testid]")).map(
+      (e) => e.getAttribute("data-testid"),
+    );
+    const dupes = testIds.filter((t, i) => testIds.indexOf(t) !== i);
+    expect(dupes).toEqual([]);
+    expect(screen.getByTestId("policy-preset-settings")).toBeTruthy();
+    expect(screen.getByTestId("loop-phase-mode")).toBeTruthy();
   });
 });

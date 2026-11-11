@@ -1,3 +1,4 @@
+import { maskText } from "../../../tools/permissions/audit/mask";
 import type { ToolCallLike } from "../../../util/toolDialectDetect";
 import type { CorpusFixture, CorpusStream, CorpusTool } from "../corpus/corpus";
 import type { Classified } from "./classify";
@@ -117,6 +118,13 @@ const FAILURE_MODE = {
   error: "live-capture-error",
 } as const;
 
+/** The reply with credentials masked; the chunks are kept only if they still join to the text. */
+function maskReply(reply: RawReply): RawReply {
+  const text = maskText(reply.text).text;
+  if (text === reply.text) return reply;
+  return { ...reply, text, chunks: undefined };
+}
+
 /**
  * An observed corpus fixture for one reply, or undefined when the reply has no
  * text (nothing for a text parser to read; the raw record still keeps it).
@@ -126,10 +134,13 @@ const FAILURE_MODE = {
  * for the same reason.
  */
 export function buildFixture(
-  reply: RawReply,
+  rawReply: RawReply,
   ctx: FixtureContext,
 ): CorpusFixture | undefined {
-  if (!reply.text || ctx.classified.outcome === "error") return undefined;
+  if (!rawReply.text || ctx.classified.outcome === "error") return undefined;
+  // A model can echo a credential it was shown. A fixture is committed, so the
+  // text is masked here, once, and every stream below is built from it.
+  const reply = maskReply(rawReply);
   const where =
     ctx.transport === "bedrock"
       ? "Bedrock Converse"

@@ -54,6 +54,30 @@ export function shellKindOf(executable: string | undefined): ShellKind {
   }
 }
 
+/**
+ * `command` followed by a PowerShell tail that exits with the code the
+ * command's last native program chose. `powershell -Command` reports 1 for
+ * any failing native command, so a check that exits 3 would come back as 1.
+ * `$LASTEXITCODE` is cleared first so a stale code from an earlier statement
+ * is not reported, and `$?` decides success so `node -e "process.exit(3)";
+ * echo hi` is still 0, as it is without the tail. A failing cmdlet leaves
+ * `$LASTEXITCODE` null and exits 1. Other shells report the real code
+ * already and get `command` back unchanged. Opt-in: ordinary Bash tool calls
+ * do not use it.
+ */
+export function withRealExitCode(command: string, kind: ShellKind): string {
+  if (kind !== "powershell") return command;
+  // Newlines, not `;`: a trailing `# comment` must not swallow the tail
+  return [
+    "$global:LASTEXITCODE = $null",
+    command,
+    "$__ok = $?",
+    "if ($__ok) { exit 0 }",
+    "if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+    "exit 1",
+  ].join("\n");
+}
+
 export interface ResolvedShell {
   kind: ShellKind;
   executable: string;

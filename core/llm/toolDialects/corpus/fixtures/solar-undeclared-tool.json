@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/upstage/Solar-Open-100B/blob/main/chat_template.jinja and UpstageAI/vllm solar_open_tool_parser.py, not observed",
+    "license": "other",
     "retrieved": "2026-11-10",
     "note": ""
   },

@@ -88,6 +88,7 @@ export type ModelCategory = keyof typeof MODEL_CATEGORIES;
 export const SYSTEM_CATEGORIES = [
   "reviewer-unavailable",
   "denial-limit",
+  "reviewer-addressed-text",
 ] as const;
 export type SystemCategory = (typeof SYSTEM_CATEGORIES)[number];
 
