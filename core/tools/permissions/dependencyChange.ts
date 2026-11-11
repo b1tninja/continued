@@ -1,6 +1,7 @@
 import type { ShellKind } from "../../util/shell";
 import { commandCandidateSet } from "./candidates";
 import { programName } from "./destinations";
+import { declaredPackages } from "./fileFacts";
 
 /**
  * The built-in rule `ask-dependency-change` (ROADMAP B14): a call that changes
@@ -16,6 +17,13 @@ import { programName } from "./destinations";
  * Installing what the lockfile already names (`npm ci`, a bare `npm install`,
  * `pip install -r requirements.txt`, `pip install -e .`) does not ask: it
  * adds nothing new. A package manager this does not know is not covered.
+ *
+ * `npm install <name>` also does not ask when every name is a bare package
+ * name that the nearest `package.json` above the call's folder already lists
+ * (ROADMAP B61): it adds nothing a bare `npm install` would not. That needs
+ * the folder, a plain read of one file, and every other part of the command to
+ * stand still: a version or a URL after the name, a registry or prefix flag, a
+ * `cd` before it, or an `npm_config_*` assignment before it asks as before.
  */
 
 const MANIFEST_NAMES = new Set([
@@ -104,7 +112,37 @@ const PYTHON_INSTALLERS = new Set([
 
 const operands = (args: string[]) => args.filter((a) => !a.startsWith("-"));
 
-function nodeHit(program: string, args: string[]): string | undefined {
+/** What the exemption needs to know about the rest of the command. */
+interface InstallContext {
+  cwd?: string;
+  /** A `cd`, an `npm_config_*` assignment or similar earlier in the command */
+  unsettled: boolean;
+}
+
+const SAFE_INSTALL_FLAGS =
+  /^(-[DSEOP]+|--save(-dev|-prod|-exact|-optional)?|--no-save|--no-audit|--no-fund|--legacy-peer-deps|--prefer-offline|--no-progress|--silent)$/;
+const BARE_PACKAGE = /^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i;
+
+/** True when every operand is a bare name that package.json already lists. */
+function alreadyDeclared(
+  named: string[],
+  args: string[],
+  ctx: InstallContext,
+): boolean {
+  if (ctx.unsettled || !ctx.cwd || named.length === 0) return false;
+  if (args.some((a) => a.startsWith("-") && !SAFE_INSTALL_FLAGS.test(a))) {
+    return false;
+  }
+  if (!named.every((n) => BARE_PACKAGE.test(n))) return false;
+  const declared = declaredPackages(ctx.cwd);
+  return !!declared && named.every((n) => declared.has(n));
+}
+
+function nodeHit(
+  program: string,
+  args: string[],
+  ctx: InstallContext,
+): string | undefined {
   const sub = operands(args)[0]?.toLowerCase();
   if (!sub) return undefined;
   if (sub === "config" || sub === "set" || sub === "c") {
@@ -126,6 +164,9 @@ function nodeHit(program: string, args: string[]): string | undefined {
     // Packages named after the subcommand are new dependencies; none means "what the lockfile says"
     const named = operands(args).slice(1);
     const global = args.some((a) => a === "-g" || a === "--global");
+    if (program === "npm" && !global && alreadyDeclared(named, args, ctx)) {
+      return undefined;
+    }
     return named.length > 0 || global
       ? `${program} install <package>`
       : undefined;
@@ -222,7 +263,7 @@ function otherHit(program: string, args: string[]): string | undefined {
   }
 }
 
-function segmentHit(words: string[]): string | undefined {
+function segmentHit(words: string[], ctx: InstallContext): string | undefined {
   let i = 0;
   while (
     i < words.length &&
@@ -236,7 +277,7 @@ function segmentHit(words: string[]): string | undefined {
   if (i >= words.length) return undefined;
   const program = programName(words[i]).toLowerCase();
   const args = words.slice(i + 1);
-  if (NODE_MANAGERS.has(program)) return nodeHit(program, args);
+  if (NODE_MANAGERS.has(program)) return nodeHit(program, args, ctx);
   if (PYTHON_INSTALLERS.has(program)) return pythonHit(program, args);
   if (/^python[\d.]*$/.test(program) && args[0] === "-m" && args[1]) {
     const mod = args[1].toLowerCase();
@@ -248,15 +289,24 @@ function segmentHit(words: string[]): string | undefined {
 const SEGMENT_BREAK = /\s*(?:&&|\|\||[|;&\n])\s*/;
 const strip = (w: string) => w.replace(/^['"({]+|['")}]+$/g, "");
 
-/** What changes the dependencies, or undefined. */
+/** A folder change or an npm setting in the environment: the folder is no longer the one the call names. */
+const UNSETTLING =
+  /(^|[\s;&|(])(cd|pushd|popd|chdir|set-location|sl|npm_config_\w+=|NODE_OPTIONS=)/i;
+
+/**
+ * What changes the dependencies, or undefined. `cwd` is the folder the
+ * command runs in; without it no install is exempt.
+ */
 export function dependencyCommandHit(
   command: string,
   shell?: ShellKind,
+  cwd?: string,
 ): string | undefined {
   for (const candidate of commandCandidateSet(command, shell).list) {
+    const ctx = { cwd, unsettled: UNSETTLING.test(candidate) };
     for (const segment of candidate.split(SEGMENT_BREAK)) {
       const words = segment.trim().split(/\s+/).map(strip).filter(Boolean);
-      const hit = words.length ? segmentHit(words) : undefined;
+      const hit = words.length ? segmentHit(words, ctx) : undefined;
       if (hit) return hit;
     }
   }

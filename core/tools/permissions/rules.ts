@@ -38,7 +38,12 @@ export interface ToolPermissions {
   deny?: string[];
   /** Settings for the experimental reviewer (Auto mode). Never loosens a rule. */
   auto?: {
-    environment?: { trustedDomains?: string[]; productionMarkers?: string[] };
+    environment?: {
+      trustedDomains?: string[];
+      productionMarkers?: string[];
+      /** Changed lines above which `ask-large-change` asks; read from the person's own file only */
+      largeChangeLines?: number;
+    };
     guidance?: { block?: string[]; allow?: string[] };
     limits?: { consecutiveDenials?: number; totalDenials?: number };
   };

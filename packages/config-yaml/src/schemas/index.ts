@@ -233,6 +233,8 @@ export const toolPermissionsSchema = z.object({
         .object({
           trustedDomains: z.array(z.string()).optional(),
           productionMarkers: z.array(z.string()).optional(),
+          /** Changed lines above which the built-in large-change check asks (default 300). Read from the personal config only. */
+          largeChangeLines: z.number().int().min(1).optional(),
         })
         .optional(),
       /** Plain-language guidance added to the reviewer's prompt. */
