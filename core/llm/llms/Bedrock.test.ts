@@ -1873,6 +1873,95 @@ describe("Bedrock tools through Converse and Nova <thinking> tags", () => {
     expect(out.flatMap((m) => m.toolCalls ?? [])).toHaveLength(1);
   });
 
+  describe("repairing streamed tool input (opt-in, CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT)", () => {
+    const qwen = "qwen.qwen3-coder-30b-a3b-v1:0";
+    const readTools = [
+      {
+        type: "function" as const,
+        function: {
+          name: "Read",
+          parameters: {
+            type: "object",
+            properties: { filepath: { type: "string" } },
+          },
+        },
+      },
+    ];
+    const withEnv = async (
+      value: string | undefined,
+      run: () => Promise<void>,
+    ) => {
+      const saved = process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT;
+      if (value === undefined) {
+        delete process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT;
+      } else {
+        process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT = value;
+      }
+      try {
+        await run();
+      } finally {
+        if (saved === undefined) {
+          delete process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT;
+        } else {
+          process.env.CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT = saved;
+        }
+      }
+    };
+    const idsOf = (out: any[]) =>
+      out.flatMap((m) => m.toolCalls ?? []).map((c) => c.id);
+
+    it("is off by default: a broken input is retried, and only the retry's id reaches the caller", async () => {
+      await withEnv(undefined, async () => {
+        const first = routed(`${qwen}-off`, converseReply, [
+          ...toolBlock('filepath": "a.ts"}'),
+          stopped,
+        ]);
+        const out = await first.collect({ tools: readTools });
+        expect(first.sent).toEqual(["ConverseStream", "Converse"]);
+        expect(argsOf(out)).toBe('{"filepath":"a.ts"}');
+        // Q47: the id the history and the tool result use is the retry's
+        expect(idsOf(out)).toEqual(["tooluse_1"]);
+        expect(JSON.stringify(out)).not.toContain('"t1"');
+      });
+    });
+
+    it("repairs the missing opening when on, without a second request, and keeps the streamed id", async () => {
+      await withEnv("1", async () => {
+        const { collect, sent } = routed(`${qwen}-on`, converseReply, [
+          ...toolBlock('filepath": "a.ts"}'),
+          stopped,
+        ]);
+        const out = await collect({ tools: readTools });
+        expect(sent).toEqual(["ConverseStream"]);
+        expect(argsOf(out)).toBe('{"filepath": "a.ts"}');
+        expect(idsOf(out).filter(Boolean)).toEqual(["t1"]);
+      });
+    });
+
+    it("still retries what is not safe to repair, and other families", async () => {
+      await withEnv("1", async () => {
+        const cut = routed(qwen + "-cut", converseReply, [
+          ...toolBlock("{"),
+          stopped,
+        ]);
+        await cut.collect({ tools: readTools });
+        expect(cut.sent).toEqual(["ConverseStream", "Converse"]);
+        const other = routed("mistral.repair-not-listed", converseReply, [
+          ...toolBlock('filepath": "a.ts"}'),
+          stopped,
+        ]);
+        await other.collect({ tools: readTools });
+        expect(other.sent).toEqual(["ConverseStream", "Converse"]);
+        const unknownKey = routed(qwen + "-key", converseReply, [
+          ...toolBlock('path": "a.ts"}'),
+          stopped,
+        ]);
+        await unknownKey.collect({ tools: readTools });
+        expect(unknownKey.sent).toEqual(["ConverseStream", "Converse"]);
+      });
+    });
+  });
+
   it("streams a Claude tool input progressively, not held to block end", async () => {
     const { collect, sent } = routed(
       "us.anthropic.claude-haiku-4-5",

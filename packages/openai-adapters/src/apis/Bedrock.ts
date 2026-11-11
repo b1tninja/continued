@@ -41,6 +41,7 @@ import {
   bedrockModelAccessMessage,
   bedrockMinMaxTokens,
   bedrockOmitUnsupportedInference,
+  bedrockRepairsStreamedToolInput,
   bedrockReasoningFields,
   bedrockSamplingParams,
   bedrockStreamsToolInputCleanly,
@@ -58,8 +59,10 @@ import {
   isStreamingToolUseUnsupportedError,
   leaksDsmlMarker,
   normalizeToolUseIds,
+  repairStreamedToolInput,
   ThinkingSplit,
   ToolInputGate,
+  toolSchemaKeys,
 } from "./bedrockHelpers.js";
 import { holdChunk } from "../dialects/holdSignal.js";
 import type { RecoveredCall } from "../dialects/qwenXml.js";
@@ -1275,8 +1278,37 @@ export class BedrockApi implements BaseLlmApi {
       // A toolUse block is held until its input is known to parse (see
       // ToolInputGate): a model that streams it broken is retried once
       // through Converse, before any of it has reached the caller.
+      // With CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT=1, input that can be
+      // repaired without inventing a value is released instead (see
+      // repairStreamedToolInput); the rest is retried as before.
+      let toolName: string | undefined;
       const gate = new ToolInputGate<ChatCompletionChunk>(
         !bedrockStreamsToolInputCleanly(body.model),
+        bedrockRepairsStreamedToolInput(body.model)
+          ? {
+              input: (text) =>
+                repairStreamedToolInput(text, {
+                  allowedKeys: toolSchemaKeys(
+                    requestBody.toolConfig?.tools,
+                    toolName,
+                  ),
+                }),
+              fragment: (text) =>
+                chatChunkFromDelta({
+                  model: body.model,
+                  id,
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: Math.max(toolIndex, 0),
+                        type: "function",
+                        function: { arguments: text },
+                      },
+                    ],
+                  },
+                }),
+            }
+          : undefined,
       );
       const retryThroughConverse = () =>
         this.converseWholeMessage(
@@ -1370,6 +1402,7 @@ export class BedrockApi implements BaseLlmApi {
 
           if (start.toolUse) {
             toolIndex++;
+            toolName = start.toolUse.name;
             const opened = chatChunkFromDelta({
               model: body.model,
               id,

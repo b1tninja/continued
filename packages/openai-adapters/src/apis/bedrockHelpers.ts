@@ -725,6 +725,109 @@ export function toolInputParses(input: string): boolean {
   }
 }
 
+/** The env variable that turns streamed tool input repair on ("1"). Off by default. */
+export const REPAIR_STREAMED_TOOL_INPUT_ENV =
+  "CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT";
+
+/**
+ * Families whose broken streamed tool input may be repaired when the repair
+ * switch is on. Deliberately the two Qwen3 families measured broken
+ * (bsf-2026-11-10); a family is added only with recorded broken streams the
+ * repair recovers exactly. Two copies, as `bedrockToolsNeedNonStreaming`.
+ */
+const REPAIRABLE_TOOL_STREAM_MODELS: RegExp[] = [/(^|\.)qwen\.qwen3-/i];
+
+/** Whether to try `repairStreamedToolInput` on this model's broken tool input. */
+export function bedrockRepairsStreamedToolInput(
+  modelId: string,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return (
+    env[REPAIR_STREAMED_TOOL_INPUT_ENV] === "1" &&
+    REPAIRABLE_TOOL_STREAM_MODELS.some((m) => m.test(modelId))
+  );
+}
+
+function plainObjectKeys(text: string): string[] | undefined {
+  try {
+    const value: unknown = JSON.parse(text);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return undefined;
+    }
+    return Object.keys(value);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The closers that end every bracket still open, or undefined inside a string. */
+function openClosers(text: string): string | undefined {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (const ch of text) {
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === "{") stack.push("}");
+    else if (ch === "[") stack.push("]");
+    else if (ch === "}" || ch === "]") {
+      if (stack.pop() !== ch) return undefined;
+    }
+  }
+  return inString ? undefined : stack.reverse().join("");
+}
+
+/**
+ * A deterministic repair of the tool input a stream delivered, or undefined
+ * when it is not safe. Never invents a value: the result is the input with
+ * one of two changes, and anything else is rejected (the caller then retries
+ * through Converse).
+ *
+ * 1. The opening `{"` missing (Qwen3 32B, 4 of 8 streams, bsf-2026-11-10:
+ *    `path": "src/main.ts"}`): the repair is `{"` before the input, accepted
+ *    only when the result is an object and every top-level key is one the tool
+ *    declares (`allowedKeys`), so a key that lost its first letters is never
+ *    accepted. Without `allowedKeys` this rule does not apply.
+ * 2. Brackets left open after a complete member (`{"a": "x"`): the repair is
+ *    the closing brackets after the input, accepted only when the input ends
+ *    in a string, `true`, `false`, `null` or a closer (not in a string, after
+ *    a number that may be cut short, or after `{`, `,` or `:`, where a
+ *    truncated stream would be turned into an empty or shorter call, as
+ *    Qwen3 Coder 30B's `{` would become `{}`).
+ *
+ * Input that already parses, and empty input, is returned unchanged.
+ */
+export function repairStreamedToolInput(
+  input: string,
+  options: { allowedKeys?: readonly string[] } = {},
+): string | undefined {
+  if (input.trim() === "") return input;
+  if (toolInputParses(input)) return input;
+  const { allowedKeys } = options;
+  const keysAllowed = (keys: string[]) =>
+    allowedKeys !== undefined && keys.every((k) => allowedKeys.includes(k));
+
+  if (/^[A-Za-z_][\w-]*"\s*:/.test(input)) {
+    const candidate = `{"${input}`;
+    const keys = plainObjectKeys(candidate);
+    return keys && keys.length > 0 && keysAllowed(keys) ? candidate : undefined;
+  }
+
+  const trimmed = input.trimEnd();
+  if (!trimmed.startsWith("{")) return undefined;
+  if (!/(["el}\]])$/.test(trimmed) || /[0-9]$/.test(trimmed)) return undefined;
+  const closers = openClosers(trimmed);
+  if (!closers) return undefined;
+  const candidate = trimmed + closers;
+  const keys = plainObjectKeys(candidate);
+  if (!keys || keys.length === 0) return undefined;
+  if (allowedKeys !== undefined && !keysAllowed(keys)) return undefined;
+  return candidate;
+}
+
 /**
  * Families whose tool-argument deltas are passed on as they arrive, without
  * the hold-and-parse check of `ToolInputGate`. The list is deliberately short:
@@ -747,6 +850,26 @@ export function bedrockStreamsToolInputCleanly(modelId: string): boolean {
 }
 
 /**
+ * The top-level property names the tool `name` declares in its input schema
+ * (toolConfig.tools), or undefined when the tool or its schema is unknown.
+ */
+export function toolSchemaKeys(
+  tools: unknown,
+  name: string | undefined,
+): string[] | undefined {
+  if (!name || !Array.isArray(tools)) return undefined;
+  for (const tool of tools) {
+    const spec = tool?.toolSpec;
+    if (spec?.name !== name) continue;
+    const properties = spec.inputSchema?.json?.properties;
+    return properties && typeof properties === "object"
+      ? Object.keys(properties)
+      : undefined;
+  }
+  return undefined;
+}
+
+/**
  * Holds one streamed toolUse block (its start and input fragments) until the
  * block ends, so its input can be checked before any of it reaches the caller,
  * who runs the tool only once the reply is over. `close` says what to do with
@@ -759,7 +882,19 @@ export function bedrockStreamsToolInputCleanly(modelId: string): boolean {
  * `bedrockToolsNeedNonStreaming`.
  */
 export class ToolInputGate<T> {
-  constructor(private readonly hold: boolean) {}
+  /**
+   * `repair`, when given (see `bedrockRepairsStreamedToolInput`), is tried on
+   * input that does not parse: a repaired input is released as the block's
+   * start and one fragment made by `repair.fragment`, with the id the stream
+   * gave, so nothing is retried and the id the history keeps is unchanged.
+   */
+  constructor(
+    private readonly hold: boolean,
+    private readonly repair?: {
+      input: (input: string) => string | undefined;
+      fragment: (input: string) => T;
+    },
+  ) {}
 
   private held: { parts: T[]; input: string } | undefined;
   private released = false;
@@ -792,6 +927,15 @@ export class ToolInputGate<T> {
     this.held = undefined;
     if (!held) return { parts: [], broken: false, retry: false };
     const broken = !toolInputParses(held.input);
+    const repaired = broken ? this.repair?.input(held.input) : undefined;
+    if (repaired !== undefined && this.repair) {
+      this.released = true;
+      return {
+        parts: [held.parts[0], this.repair.fragment(repaired)],
+        broken: false,
+        retry: false,
+      };
+    }
     const retry = broken && !this.output && !this.released;
     if (retry) return { parts: [], broken, retry };
     this.released = true;

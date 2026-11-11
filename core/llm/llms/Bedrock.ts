@@ -79,6 +79,7 @@ import {
   bedrockCacheTtl,
   bedrockMinMaxTokens,
   bedrockOmitUnsupportedInference,
+  bedrockRepairsStreamedToolInput,
   bedrockReasoningFields,
   bedrockSamplingParams,
   bedrockStreamsToolInputCleanly,
@@ -101,9 +102,11 @@ import {
   modelAccessFromAvailability,
   modelsNeedingAccessCheck,
   normalizeToolUseIds,
+  repairStreamedToolInput,
   ThinkingSplit,
   ThinkingTagSplitter,
   ToolInputGate,
+  toolSchemaKeys,
 } from "./bedrockHelpers.js";
 
 /** The use-case lookup is advisory, so listing never waits on it for long. */
@@ -1029,8 +1032,33 @@ class Bedrock extends BaseLLM {
       // A toolUse block is held until its input is known to parse (see
       // ToolInputGate): a model that streams it broken is retried once
       // through Converse, before any of it has reached the caller.
+      // With CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT=1, input that can be
+      // repaired without inventing a value is released instead (see
+      // repairStreamedToolInput); the rest is retried as before.
+      let toolName: string | undefined;
       const gate = new ToolInputGate<ChatMessage>(
         !bedrockStreamsToolInputCleanly(options.model),
+        bedrockRepairsStreamedToolInput(options.model)
+          ? {
+              input: (text) =>
+                repairStreamedToolInput(text, {
+                  allowedKeys: toolSchemaKeys(
+                    input.toolConfig?.tools,
+                    toolName,
+                  ),
+                }),
+              fragment: (text) => ({
+                role: "assistant",
+                content: "",
+                toolCalls: [
+                  {
+                    type: "function",
+                    function: { name: undefined, arguments: text },
+                  },
+                ],
+              }),
+            }
+          : undefined,
       );
       for await (const chunk of response.stream) {
         if (chunk.contentBlockStart?.start?.toolUse) {
@@ -1085,6 +1113,10 @@ class Bedrock extends BaseLLM {
         const started = toolCallStartMessage(chunk.contentBlockStart);
         if (started) {
           sawToolUse = true;
+          toolName =
+            started.role === "assistant"
+              ? started.toolCalls?.[0]?.function?.name
+              : undefined;
           yield* gate.open(started);
         }
       }
