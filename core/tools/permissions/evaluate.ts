@@ -257,6 +257,65 @@ function lockPolicyFiles(
   };
 }
 
+interface ProtectedHitParts {
+  resolved: ResolvedPath | null | undefined;
+  resolvedPath: string | undefined;
+  privateUrl: ProtectedHit | undefined;
+  changedDefinition: ProtectedHit | undefined;
+  hiddenName: ProtectedHit | undefined;
+  envHit: ProtectedHit | undefined;
+}
+
+/**
+ * The first protection that applies, in the order the checks run. Kept apart
+ * from evaluateRules so each new protection does not push that function over
+ * the complexity limit.
+ */
+function firstProtectedHit(
+  input: EvaluateInput,
+  parts: ProtectedHitParts,
+): ProtectedHit | undefined {
+  const { tool, toolName, parsedArgs } = input;
+  const { resolved, resolvedPath } = parts;
+  return [
+    findProtected({
+      toolName,
+      parsedArgs,
+      resolvedPath,
+      skip: skippedProtections(input.approval),
+      cwd: input.cwd,
+      shell: input.shell,
+    }),
+    parts.privateUrl,
+    parts.changedDefinition,
+    parts.hiddenName,
+    parts.envHit,
+    askProtectionHit({
+      toolName,
+      parsedArgs,
+      resolvedPath,
+      shell: input.shell,
+      approval: input.approval,
+      trustedDomains: input.trustedDomains,
+    }),
+    deputyCallHit({
+      toolName,
+      parsedArgs,
+      resolved: resolved
+        ? {
+            path: resolvedPath,
+            withinWorkspace: resolved.isWithinWorkspace,
+          }
+        : undefined,
+      cwd: input.cwd,
+      approval: input.approval,
+      flavor: input.platform,
+      home: input.home,
+      mcp: !!tool?.uri?.startsWith("mcp:") && !!tool?.originalFunctionName,
+    }),
+  ].find((hit) => hit !== undefined);
+}
+
 function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   const { tool, toolName, basePolicy, parsedArgs, processedArgs } = input;
 
@@ -331,43 +390,14 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   const envHit = floorOn
     ? envAssignmentProtection(commandText, input.shell, input.envNames)
     : undefined;
-  const protectedHit = [
-    findProtected({
-      toolName,
-      parsedArgs,
-      resolvedPath,
-      skip: skippedProtections(input.approval),
-      cwd: input.cwd,
-      shell: input.shell,
-    }),
+  const protectedHit = firstProtectedHit(input, {
+    resolved,
+    resolvedPath,
     privateUrl,
     changedDefinition,
     hiddenName,
     envHit,
-    askProtectionHit({
-      toolName,
-      parsedArgs,
-      resolvedPath,
-      shell: input.shell,
-      approval: input.approval,
-      trustedDomains: input.trustedDomains,
-    }),
-    deputyCallHit({
-      toolName,
-      parsedArgs,
-      resolved: resolved
-        ? {
-            path: resolvedPath,
-            withinWorkspace: resolved.isWithinWorkspace,
-          }
-        : undefined,
-      cwd: input.cwd,
-      approval: input.approval,
-      flavor: input.platform,
-      home: input.home,
-      mcp: !!tool.uri?.startsWith("mcp:") && !!tool.originalFunctionName,
-    }),
-  ].find((hit) => hit !== undefined);
+  });
 
   // The floor: deny rules the person wrote to bind even at YOLO
   const floorRules = parsePermissions({ deny: input.approval?.floor }, "floor");
