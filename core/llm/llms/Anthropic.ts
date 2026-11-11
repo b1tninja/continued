@@ -26,6 +26,10 @@ import {
   Usage,
 } from "../../index.js";
 import { safeParseToolCallArgs } from "../../tools/parseArgs.js";
+import {
+  anthropicSurface,
+  namedToolChoiceAllowed,
+} from "../../util/forcedToolChoice.js";
 import { renderChatMessage, stripImages } from "../../util/messageContent.js";
 import { extractBase64FromDataUrl } from "../../util/url.js";
 import { BaseLLM } from "../index.js";
@@ -108,12 +112,14 @@ class Anthropic extends BaseLLM {
       stream: options.stream ?? true,
       tools: options.tools?.map(this.convertToolToAnthropicTool),
       ...thinking,
-      tool_choice: options.toolChoice
-        ? {
-            type: "tool" as const,
-            name: options.toolChoice.function.name,
-          }
-        : undefined,
+      tool_choice:
+        options.toolChoice &&
+        namedToolChoiceAllowed(anthropicSurface(options.model))
+          ? {
+              type: "tool" as const,
+              name: options.toolChoice.function.name,
+            }
+          : undefined,
     };
 
     return finalOptions;

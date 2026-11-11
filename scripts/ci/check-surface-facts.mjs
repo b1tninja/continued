@@ -20,7 +20,13 @@ export const FACT_NAMES = [
   "toolForce",
   "toolForceThinking",
   "toolStrictArgs",
+  "schemaOutput",
+  "grammar",
 ];
+const ENUMS = {
+  schemaOutput: ["json-schema", "json-object", "per-model", "none"],
+  grammar: ["gbnf", "grammar", "none"],
+};
 const LEVELS = ["declared", "measured", "derived"];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MODES = ["auto", "required", "named", "none"];
@@ -74,6 +80,9 @@ function checkFact(where, name, f, errors) {
         );
       }
     }
+  }
+  if (ENUMS[name] && !ENUMS[name].includes(f.value)) {
+    errors.push(`${where}: ${name} must be one of ${ENUMS[name].join(", ")}`);
   }
   if (!LEVELS.includes(f.level)) {
     errors.push(`${where}: level must be one of ${LEVELS.join(", ")}`);

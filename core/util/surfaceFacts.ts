@@ -37,6 +37,15 @@ export interface FactValues {
   toolForce: "honoured" | "ignored" | "rejected";
   toolForceThinking: "kept" | "skipped";
   toolStrictArgs: "engine" | "provider-strict" | "none";
+  /**
+   * Whether the reply text can be constrained to a JSON schema by the server
+   * (Anthropic `output_config.format`, OpenAI `text.format`/`response_format`,
+   * Ollama `format`, Bedrock `outputConfig.textFormat`). "per-model" when the
+   * surface offers it for some models only.
+   */
+  schemaOutput: "json-schema" | "json-object" | "per-model" | "none";
+  /** Whether a raw grammar is accepted: "gbnf" (llama.cpp), "grammar" (vLLM, any dialect its backend takes), "none". */
+  grammar: "gbnf" | "grammar" | "none";
 }
 
 export type FactName = keyof FactValues;
@@ -244,6 +253,8 @@ export const FACT_NAMES: FactName[] = [
   "toolForce",
   "toolForceThinking",
   "toolStrictArgs",
+  "schemaOutput",
+  "grammar",
 ];
 
 export type ResolvedFacts = { [N in FactName]: ResolvedFact<N> };
