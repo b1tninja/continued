@@ -213,13 +213,7 @@ describe("masking", () => {
     const trail2 = trailAt();
     recordPolicyDecision(
       trail2,
-      ctx(
-        "c2",
-        command.replace(
-          secret,
-          "sk-ant-api03-ZZZZZZZZZZZZZZZZZZZZZZZZZZ0123456789",
-        ),
-      ),
+      ctx("c2", command.replace(secret, canarySecrets(99).anthropicKey)),
       "allowedWithPermission",
       { policy: "allowedWithPermission" },
     );

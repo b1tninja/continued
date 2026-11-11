@@ -19,6 +19,7 @@ import {
   type AuditCallRow,
   type AuditFilter,
 } from "core/tools/permissions/audit/reader.js";
+import { maskText } from "core/tools/permissions/audit/mask.js";
 import type { DecisionEvent } from "core/tools/permissions/audit/record.js";
 
 export interface AuditCommandOptions {
