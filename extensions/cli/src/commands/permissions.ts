@@ -28,13 +28,14 @@ import {
 } from "core/tools/permissions/testToolCall.js";
 
 import { env } from "../env.js";
+import { PERMISSIONS_YAML_PATH } from "../permissions/permissionsYamlLoader.js";
+
 import {
   addCommand,
   adoptCommand,
   removeCommand,
   type PermissionsEditOptions,
 } from "./permissionsEdit.js";
-import { PERMISSIONS_YAML_PATH } from "../permissions/permissionsYamlLoader.js";
 
 export interface PermissionsCommandOptions extends PermissionsEditOptions {
   json?: boolean;
