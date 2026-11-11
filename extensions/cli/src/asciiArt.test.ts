@@ -1,8 +1,15 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-import { bannerWidth, getDisplayableAsciiArt } from "./asciiArt.js";
+import {
+  bannerWidth,
+  getDisplayableAsciiArt,
+  LOOP_DOT_HEX,
+  LOOP_GRADIENT,
+} from "./asciiArt.js";
 
 const plain = (s: string) => stripVTControlCharacters(s);
 const LOOP_TOP = "▄████▄";
@@ -77,5 +84,40 @@ describe("getDisplayableAsciiArt", () => {
         /CONTINUE(?!US)|\bcontinue\b/,
       );
     }
+  });
+});
+
+describe("the loop gradient is the GUI's too", () => {
+  const gui = readFileSync(
+    join(
+      __dirname,
+      "..",
+      "..",
+      "..",
+      "gui",
+      "src",
+      "components",
+      "svg",
+      "loopGradient.ts",
+    ),
+    "utf8",
+  );
+  const hex = (rgb: number[]) =>
+    "#" + rgb.map((n) => n.toString(16).padStart(2, "0")).join("");
+
+  it("has the same stops and dot colour as gui/src/components/svg/loopGradient.ts", () => {
+    const stops = [
+      ...gui
+        .match(/LOOP_GRADIENT_STOPS = \[([^\]]*)\]/)![1]
+        .matchAll(/#[0-9A-Fa-f]{6}/g),
+    ].map((m) => m[0].toLowerCase());
+    expect(stops).toEqual(LOOP_GRADIENT.map(hex));
+    expect(
+      gui.match(/LOOP_DOT_COLOR = "(#[0-9A-Fa-f]{6})"/)![1].toLowerCase(),
+    ).toBe(LOOP_DOT_HEX.toLowerCase());
+  });
+
+  it("still paints the loop art", () => {
+    expect(plain(getDisplayableAsciiArt(120))).toContain(LOOP_TOP);
   });
 });
