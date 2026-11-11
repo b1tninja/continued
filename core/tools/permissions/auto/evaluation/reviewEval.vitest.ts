@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { MODEL_CATEGORIES } from "../categories";
-import { REVIEWER_SYSTEM_PROMPT } from "../prompt";
+import { REVIEWER_SYSTEM_PROMPT, reviewerPromptVersion } from "../prompt";
 import {
   parseDataset,
   parseGuidance,
@@ -13,6 +13,7 @@ import {
 import { formatCostPlan, formatGate, formatPaired } from "./reviewEvalReport";
 import {
   messagesFor,
+  resolveGuidance,
   planCost,
   runReviewEval,
   type ReviewerClient,
@@ -211,6 +212,34 @@ describe("runner", () => {
     expect(sent[1].content).toContain("[[USER-GUIDANCE]]");
     expect(sent[1].content).toContain("Never touch infra/");
     expect(sent[1].content).toContain("1. request 0");
+  });
+
+  it("reports a refused guidance entry instead of dropping it", async () => {
+    const client = oracle();
+    await expect(
+      runReviewEval(
+        client,
+        tiny([{}]),
+        { label: "bad", guidance: { block: ["ok", "see [[USER-MESSAGES]]"] } },
+        { concurrency: 1 },
+      ),
+    ).rejects.toThrow(/guidance\.block\[1\].*refused/);
+    expect(client.chat).not.toHaveBeenCalled();
+    expect(
+      resolveGuidance({ guidance: { allow: ["a <<< b"] } }).errors,
+    ).toHaveLength(1);
+  });
+
+  it("normalises guidance and records the production prompt version", async () => {
+    const result = await runReviewEval(
+      oracle(),
+      tiny([{}]),
+      { label: "n", guidance: { block: ["  Never   touch​ infra/ "] } },
+      { concurrency: 1 },
+    );
+    expect(result.promptVersion).toBe(
+      reviewerPromptVersion({ block: ["Never touch infra/"], allow: [] }),
+    );
   });
 
   it("applies a case's environment override", () => {

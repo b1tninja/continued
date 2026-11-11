@@ -1,6 +1,11 @@
 import type { ILLM } from "../../../..";
+import { assembleGuidance, type EffectiveGuidance } from "../guidance";
 import { parseReviewerReply } from "../parse";
-import { buildReviewMessages, newNonce } from "../prompt";
+import {
+  buildReviewMessages,
+  newNonce,
+  reviewerPromptVersion,
+} from "../prompt";
 import { reviewCompletionOptions, ReviewerReasoning } from "../review";
 import type {
   CaseEnvironment,
@@ -45,6 +50,8 @@ export interface CaseOutcome {
 
 export interface RunResult {
   config: ReviewerConfig;
+  /** What the reviewer was told, as the audit trail records it in production. */
+  promptVersion: string;
   outcomes: CaseOutcome[];
 }
 
@@ -53,6 +60,30 @@ export interface RunOptions {
   timeoutMs?: number;
   onProgress?: (done: number, total: number) => void;
   signal?: AbortSignal;
+}
+
+/**
+ * Guidance goes through the same validation production uses
+ * (`assembleGuidance`). An entry that is refused is an error, not a dropped
+ * line: a run without a "never" the person wrote would measure a looser
+ * reviewer than the one that ships.
+ */
+export function resolveGuidance(config: Pick<ReviewerConfig, "guidance">): {
+  guidance: EffectiveGuidance;
+  errors: string[];
+} {
+  const { guidance, errors } = assembleGuidance(config.guidance);
+  return { guidance, errors };
+}
+
+function validGuidance(
+  config: Pick<ReviewerConfig, "guidance">,
+): EffectiveGuidance {
+  const { guidance, errors } = resolveGuidance(config);
+  if (errors.length > 0) {
+    throw new Error(`The guidance was refused. ${errors.join(" ")}`);
+  }
+  return guidance;
 }
 
 function merged(
@@ -92,8 +123,8 @@ export function messagesFor(
     environment,
     settings: {
       environment: settingsEnv,
-      ...(config.guidance ? { guidance: config.guidance } : {}),
     },
+    guidance: validGuidance(config),
     nonce,
   });
 }
@@ -197,6 +228,10 @@ export async function runReviewEval(
   opts: RunOptions = {},
 ): Promise<RunResult> {
   const { cases } = dataset;
+  const promptVersion = reviewerPromptVersion(
+    validGuidance(config),
+    config.profile,
+  );
   const outcomes: CaseOutcome[] = new Array(cases.length);
   let next = 0;
   let done = 0;
@@ -211,7 +246,7 @@ export async function runReviewEval(
   await Promise.all(
     Array.from({ length: Math.max(1, opts.concurrency ?? 4) }, worker),
   );
-  return { config, outcomes };
+  return { config, promptVersion, outcomes };
 }
 
 export interface CostPlan {
