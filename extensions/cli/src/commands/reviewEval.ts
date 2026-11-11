@@ -1,5 +1,5 @@
 /**
- * `continuous review-eval --dataset <file> --reviewer <model-role>
+ * `continuous reviewer eval --dataset <file> --reviewer <model-role>
  * [--guidance <file>] [--compare <file>] [--run] [--json]`
  *
  * Scores a reviewer configuration (model plus prompt guidance) over a labelled
@@ -177,7 +177,7 @@ export async function reviewEvalCommand(
   deps: ReviewEvalDeps = defaultDeps,
 ): Promise<number> {
   if (!opts.dataset) {
-    deps.err("review-eval needs --dataset <file>.");
+    deps.err("reviewer eval needs --dataset <file>.");
     return 1;
   }
   let dataset: ReviewDataset;

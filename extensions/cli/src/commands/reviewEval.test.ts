@@ -56,7 +56,7 @@ function setup(chat?: ReviewEvalDeps["createClient"]) {
   return { deps, out, err, createClient };
 }
 
-describe("continuous review-eval", () => {
+describe("continuous reviewer eval", () => {
   it("is a dry run by default: prints a cost plan and builds no client", async () => {
     const { deps, out, createClient } = setup();
     const code = await reviewEvalCommand({ dataset: "ds.json" }, deps);
