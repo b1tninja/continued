@@ -246,14 +246,18 @@ function statementWord(
   let i = start;
   while (i < command.length && /\s/.test(command[i])) i++;
   // the call operator and the dot-source operator stand before the name
+  let called = false;
   if (
     (command[i] === "&" || command[i] === ".") &&
     /\s/.test(command[i + 1] ?? "")
   ) {
+    called = true;
     i++;
     while (i < command.length && /\s/.test(command[i])) i++;
   }
   if (i >= command.length) return undefined;
+  // a quoted string or a variable is a command only after the call operator
+  if (!called && /['"$]/.test(command[i])) return undefined;
   const end = wordEnd(command, i, true);
   return { word: command.slice(i, end).replace(/[`'"]/g, ""), end };
 }
@@ -270,6 +274,11 @@ function definesCommandName(
   start: number,
   keywords: boolean,
 ): boolean {
+  // the text after an `=` starts a statement only in an assignment (`$x = sal ...`)
+  if (command[start - 1] === "=") {
+    const token = /(\S*)\s*$/.exec(command.slice(0, start - 1))?.[1] ?? "";
+    if (!/^[$[@]/.test(token)) return false;
+  }
   const first = statementWord(command, start);
   if (!first) return false;
   const lower = first.word.toLowerCase();
