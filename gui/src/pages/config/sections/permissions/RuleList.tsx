@@ -111,7 +111,7 @@ export function RuleList({
     return (
       <p className="my-1 text-xs text-description" data-testid="no-rules">
         {emptyText ??
-          "No rules here. Calls are decided by the built-in protections and the level above."}
+          "No rules here. Calls are decided by the built-in rules and the level above."}
       </p>
     );
   }
@@ -153,8 +153,8 @@ export function BuiltinList({
 }) {
   if (builtins.length === 0) return null;
   return (
-    <section aria-label="Built-in protections" data-testid="builtins">
-      <h5 className="my-1 text-xs font-semibold">Built-in protections</h5>
+    <section aria-label="Built-in rules" data-testid="builtins">
+      <h5 className="my-1 text-xs font-semibold">Built-in rules</h5>
       <ul className="m-0 flex flex-col gap-1 p-0">
         {builtins.map((b) => (
           <li

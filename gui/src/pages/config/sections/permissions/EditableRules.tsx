@@ -190,7 +190,7 @@ export function EditableRules({
         extraFor={extraFor}
         emptyText={
           env.editable
-            ? "No rules from anyone. The locks and built-in protections above apply, then the level."
+            ? "No rules yet. Press Add a rule to say what this area should never do, always ask about, or always allow. Until then the locks and built-in rules above apply, then the level."
             : undefined
         }
       />

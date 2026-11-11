@@ -4,34 +4,53 @@ title: "Permissions page"
 
 **Settings, Permissions** shows every permission rule in effect, where it came from, whether it is being obeyed, and lets you try a call against them. It answers "why did this ask?" and "which rule refused that?" without reading the config files. You can also add, change and remove your own rules here, and adopt a rule that came from elsewhere.
 
+## Words used here
+
+One word for each idea, in the page, the toolbar, `/policy` in the terminal agent and these docs. No stored key changed: the files keep the names on the right.
+
+| Word           | It means                                                                                                                                                                                     | Stored as                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Area           | One of the five things the agent can do: Context use, Tool use, File edits, Plan edits, Questions                                                                                            | `context`, `tools`, `edits`, `plan`, `questions`       |
+| Level          | How far one area is trusted, from Manual (you decide everything) through Cautious, Automatic and Permissive to YOLO (nothing asks; IDGAF on Plan edits and Questions). Each area has its own | `levels.<area>`                                        |
+| Preset         | A named bundle that sets all five levels at once: Careful, Accept edits, Hands off, Reviewer, YOLO. Custom is any set of levels that matches no preset                                       | the five levels; the preset is worked out, never saved |
+| Rule           | A line `toolName(pattern)` that gives a call one decision. Yours live in `config.yaml`; others come from elsewhere                                                                           | `toolPermissions`                                      |
+| Never          | A rule that refuses the call                                                                                                                                                                 | `deny`                                                 |
+| Ask            | A rule that stops and asks you                                                                                                                                                               | `ask`                                                  |
+| Always         | A rule that lets the call run without asking                                                                                                                                                 | `allow`                                                |
+| Built-in rule  | A protection that ships with the product, listed per area with its on or off state. It cannot be edited here                                                                                 | `builtin`                                              |
+| Always-on rule | A Never rule in `permissions.yaml` that binds at every level, YOLO included. Locked on this page                                                                                             | `floor`                                                |
+| Lock           | Something no rule can change: always-on rules, protected paths, your policy files                                                                                                            |                                                        |
+
+A level and a preset are different ideas: "Cautious" is a level, "Careful" is a preset. The Careful preset is the default set: Permissive for Context use, Manual for File edits and Cautious for the other three.
+
 ## Five areas
 
 The page has one tab for each policy area. Each tab shows the area's level (change it in **Settings, Tools** or the toolbar), the built-in protections that apply to it, and its rules.
 
-| Tab | Rules that appear here |
-| --- | --- |
-| Context use | `readFile`, `listDirectory`, `grepSearch`, `globSearch` |
-| Tool use | `runTerminalCommand`, `fetchUrl`, `searchWeb`, every `mcp__server__tool`, and any tool name this version does not know |
-| File edits | `writeFile` |
-| Plan edits | none: a level, the number of new to-dos a re-plan may add, and the check-keeping switch |
-| Questions | none: a level and the two lists of question types you or the agent decide |
+| Tab         | Rules that appear here                                                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Context use | `readFile`, `listDirectory`, `grepSearch`, `globSearch`                                                                |
+| Tool use    | `runTerminalCommand`, `fetchUrl`, `searchWeb`, every `mcp__server__tool`, and any tool name this version does not know |
+| File edits  | `writeFile`                                                                                                            |
+| Plan edits  | none: a level, the number of new to-dos a re-plan may add, and the check-keeping switch                                |
+| Questions   | none: a level and the two lists of question types you or the agent decide                                              |
 
 The tool name in a rule decides the tab. A terminal command rule is listed under Tool use, but a command the parser can show only reads is Context use for that one call, so the page says the area is decided per command. Rules for tools that only touch the session (the task list, Loop's tools) and rules that cannot be read are listed at the bottom under "Rules with no area".
 
-Rules are shown grouped as Never, Ask and Always (the files keep the names `deny`, `ask` and `allow`). The order does not matter, and there is no way to reorder them: a call is weighed by decision (floor, then deny, then protected paths, then ask, then allow, then the level), never by where a rule sits in a list.
+Rules are shown grouped as Never, Ask and Always (the files keep the names `deny`, `ask` and `allow`). The order does not matter, and there is no way to reorder them: a call is weighed by decision (always-on rules, then Never rules, then protected paths, then Ask rules, then Always rules, then the level), never by where a rule sits in a list.
 
 ## Where a rule came from
 
-| Badge | Source |
-| --- | --- |
-| You | the `toolPermissions` of your own `config.yaml` |
-| CLI file | the `allow`, `ask` and `exclude` lists in `permissions.yaml`, written in the CLI's dialect (`Bash(npm test)`). The CLI weighs them first, and the page shows the config.yaml form beside them |
-| Floor | the `floor:` deny rules in `permissions.yaml`. They bind at every level, YOLO included, and are locked here |
-| Assistant | a hub or assistant configuration |
-| Workspace | a file that came with the folder you opened |
-| Built-in | a protection that ships with the product, listed per area with its on or off state |
+| Badge     | Source                                                                                                                                                                                        |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| You       | the `toolPermissions` of your own `config.yaml`                                                                                                                                               |
+| CLI file  | the `allow`, `ask` and `exclude` lists in `permissions.yaml`, written in the CLI's dialect (`Bash(npm test)`). The CLI weighs them first, and the page shows the config.yaml form beside them |
+| Always on | the `floor:` rules in `permissions.yaml`. They bind at every level, YOLO included, and are locked here                                                                                        |
+| Assistant | a hub or assistant configuration                                                                                                                                                              |
+| Workspace | a file that came with the folder you opened                                                                                                                                                   |
+| Built-in  | a built-in rule that ships with the product, listed per area with its on or off state                                                                                                         |
 
-A rule that is **Ignored** is struck through with the reason: an `allow` rule that came with the workspace is ignored (a repository can add deny and ask rules, not allow rules), allow rules are not consulted while an area is Manual (file edits excepted), and every rule but the floor is ignored while an area is at YOLO. A rule the page can warn about says so: a pattern after an MCP tool name never matches, and an allow rule written with `host:`, `net:` or `effect:` never allows anything.
+A rule that is **Ignored** is struck through with the reason: an `allow` rule that came with the workspace is ignored (a repository can add deny and ask rules, not allow rules), allow rules are not consulted while an area is Manual (file edits excepted), and every rule but the always-on rules is ignored while an area is at YOLO. A rule the page can warn about says so: a pattern after an MCP tool name never matches, and an allow rule written with `host:`, `net:` or `effect:` never allows anything.
 
 ## Edit your rules
 
@@ -52,7 +71,7 @@ If `config.yaml` cannot be read (a syntax error, or `toolPermissions` of the wro
 
 An Always rule that matches everything or a broad wildcard needs a typed confirmation: you type `allow everything` before Save turns on, and the form says plainly what the rule would allow. That covers a bare tool name (`runTerminalCommand`), a pattern of only `*`, a command rule whose first word is a wildcard or an interpreter that runs whatever follows (`bash*`, `sudo*`, `python*`), an MCP rule for every server, a fetch rule for every host, and a path rule that covers `/`, your home folder or a credentials folder such as `~/.ssh`. Removing a Never, or moving a rule to a looser list, asks for one confirmation.
 
-What no rule can change is shown under **Locks**: floor rules, protected paths (credentials always ask), and your policy files (`config.yaml`, `permissions.yaml` and the files that change what runs later), which the agent cannot write without asking you. The page's write is a message from the page to the app, not a tool, so the model cannot reach it.
+What no rule can change is shown under **Locks**: always-on rules, protected paths (credentials always ask), and your policy files (`config.yaml`, `permissions.yaml` and the files that change what runs later), which the agent cannot write without asking you. The page's write is a message from the page to the app, not a tool, so the model cannot reach it.
 
 ### Rules from elsewhere: Adopt
 
@@ -68,10 +87,18 @@ Each of Context use, Tool use and File edits has a **Try a call** box. Choose wh
 
 - the decision: runs, asks or refused, and the sentence the agent would be given, naming the file the matching rule came from
 - every rule that matches, with its source, and the one that decided
-- a step-by-step explanation: the command check, the built-in safety check, floor rules, deny rules, protected paths, ask rules, allow rules, the area's level, and whether the reviewer would be consulted
+- a step-by-step explanation: the command check, the built-in rule check, always-on rules, Never rules, protected paths, Ask rules, Always rules, the area's level, and whether the reviewer would be consulted
 - command-check findings, and whether a tool result with the text you give would be marked by the injection notice
 
 The test runs the same check the agent uses. Nothing is run, written or sent, and no model is asked: when the call would reach the reviewer model, the result says "would ask the reviewer".
+
+## While it loads, and when it fails
+
+The page shows grey placeholders while it reads your rules. If that takes more than eight seconds it says so and offers **Try again**. If the read fails, it says the rules could not be read, names `config.yaml` and `permissions.yaml`, and offers **Retry**; it never shows a failed read as "no rules". An area with no rules says to press **Add a rule**.
+
+## First-run overview
+
+The first time you open the page, a short card explains the five areas, the five levels and the presets, using the same glyph and colour as the toolbar chips. Press **Got it** and it does not come back: the choice is saved as `permissionsIntroDismissed` in your own settings.
 
 ## From the terminal agent
 

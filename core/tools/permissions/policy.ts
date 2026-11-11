@@ -267,7 +267,7 @@ export const POLICY_LEVEL_DESCRIPTIONS: Record<
   context: {
     manual: "Asks before each read.",
     cautious:
-      "Reads what your allow rules and tool settings cover, asks otherwise.",
+      "Reads what your Always rules and tool settings cover, asks otherwise.",
     automatic: "As Cautious, and a reviewer model decides what is left.",
     permissive: "Reads anything no rule stops.",
     yolo: "Reads anything. Every rule is ignored.",
@@ -275,14 +275,14 @@ export const POLICY_LEVEL_DESCRIPTIONS: Record<
   tools: {
     manual: "Asks before each command and tool.",
     cautious:
-      "Runs what your allow rules and tool settings cover, asks otherwise.",
+      "Runs what your Always rules and tool settings cover, asks otherwise.",
     automatic: "As Cautious, and a reviewer model decides what is left.",
     permissive: "Runs anything no rule stops.",
     yolo: "Runs anything. Every rule is ignored.",
   },
   edits: {
     manual: "You review each diff.",
-    cautious: "Accepts what your allow rules cover, you review the rest.",
+    cautious: "Accepts what your Always rules cover, you review the rest.",
     automatic: "A reviewer model accepts, refuses or sends it to you.",
     permissive: "Accepts anything no rule stops.",
     yolo: "Accepts everything. Every rule is ignored.",
