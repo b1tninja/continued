@@ -6,6 +6,7 @@ import net from "node:net";
 import type { AddressInfo } from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { Duplex } from "node:stream";
 
 export function hasOpenssl(): boolean {
   try {
@@ -113,7 +114,7 @@ export async function startTlsProxyFixture(
   const serverPort = (server.address() as AddressInfo).port;
 
   const connects: string[] = [];
-  const tunnels = new Set<net.Socket>();
+  const tunnels = new Set<Duplex>();
   const proxy = http.createServer();
   proxy.on("connect", (req, clientSocket, head) => {
     connects.push(req.url ?? "");
