@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "neg-mistral-v11-missing-args-marker",
   "family": "mistral",
-  "dialect": "mistral-args",
+  "dialect": "mistral",
   "kind": "negative",
   "failureMode": "no-args-marker",
   "flag": "synthesised",

@@ -27,6 +27,7 @@ export function recoveryValueFor(
     case "mistral":
     case "dsml":
     case "deepseek-v31":
+    case "toolcall-json":
       return `force:${toolDialect}`;
     case "native":
     case "off":

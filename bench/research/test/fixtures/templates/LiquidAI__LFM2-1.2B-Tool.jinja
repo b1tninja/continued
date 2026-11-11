@@ -1,0 +1,3 @@
+{%- if tools -%} 
+ystem_prompt + ("\n" if ns.system_prompt else "") + "List of tools: <|tool_list_start|>[" -%} 
+{%- for tool in tools -%} 

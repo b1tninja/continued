@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "neg-mistral-v11-truncated",
   "family": "mistral",
-  "dialect": "mistral-args",
+  "dialect": "mistral",
   "kind": "negative",
   "failureMode": "truncated",
   "flag": "synthesised",

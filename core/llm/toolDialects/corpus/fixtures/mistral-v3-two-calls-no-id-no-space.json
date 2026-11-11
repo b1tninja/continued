@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "mistral-v3-two-calls-no-id-no-space",
   "family": "mistral",
-  "dialect": "mistral-json",
+  "dialect": "mistral",
   "kind": "positive",
   "failureMode": "none",
   "flag": "synthesised",

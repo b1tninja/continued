@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "neg-mistral-v3-arguments-as-string",
   "family": "mistral",
-  "dialect": "mistral-json",
+  "dialect": "mistral",
   "kind": "negative",
   "failureMode": "string-arguments",
   "flag": "synthesised",

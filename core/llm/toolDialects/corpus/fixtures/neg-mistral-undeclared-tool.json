@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "neg-mistral-undeclared-tool",
   "family": "mistral",
-  "dialect": "mistral-json",
+  "dialect": "mistral",
   "kind": "negative",
   "failureMode": "undeclared-tool",
   "flag": "synthesised",

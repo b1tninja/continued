@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "neg-mistral-mixed-layouts",
   "family": "mistral",
-  "dialect": "mistral-json",
+  "dialect": "mistral",
   "kind": "negative",
   "failureMode": "malformed",
   "flag": "synthesised",

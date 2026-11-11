@@ -143,14 +143,49 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     readOn: READ,
   },
   {
+    id: "qwen3.5-3.8",
+    label: "Qwen3.5, 3.6 and 3.8 (not Qwen3 or Qwen3-Next)",
+    // Qwen3.5 and later write the Qwen3-Coder XML, not the Qwen3 Hermes JSON.
+    // Read on 3.5, 3.6 and 3.8; Qwen3.7 has no open weights to read.
+    match: [/qwen[-._ ]?3\.[5-9]/],
+    bedrockTools: "yes",
+    toolsEvidence: "proved",
+    nativeOnConverse: "all",
+    measured:
+      "Strata Qwen3.8 Flash and Ollama Qwen3.6: structured 100%, no leak",
+    textDialect: "qwen-xml",
+    promptStyle: {
+      style: "qwen-xml",
+      evidence:
+        "Qwen3.5, 3.6 and 3.8 templates instruct <tool_call><function=NAME><parameter=KEY> (read 2026-11-10); 100% structured on Converse, so unprompted",
+    },
+    recoverWith: "qwen-xml",
+    thinkingTags: THINK,
+    serverParser: {
+      vllm: "qwen3_coder",
+      basis: "model-card",
+      note: "the Qwen3.5-27B and Qwen3.6-27B cards launch vLLM and SGLang with --tool-call-parser qwen3_coder (read 2026-11-10); the vLLM docs name qwen3_xml for Qwen3-Coder",
+    },
+    source: [
+      "https://huggingface.co/Qwen/Qwen3.5-27B/blob/main/chat_template.jinja",
+      "https://huggingface.co/Qwen/Qwen3.6-27B/blob/main/chat_template.jinja",
+      "https://huggingface.co/Qwen/Qwen3.8-27B/blob/main/chat_template.jinja",
+      "https://huggingface.co/Qwen/Qwen3.6-27B/raw/main/README.md",
+      LIVE,
+    ],
+    readOn: READ,
+    unverified: [
+      "Qwen3.7 has no open weights, so its template was not read; 3.7 ids resolve here by pattern",
+    ],
+  },
+  {
     id: "qwen3",
     label: "Qwen3 (incl. Qwen3-Next), Qwen2.5, QwQ and Hermes",
     match: [/qwen[-._ ]?(?:3|2[.-]?5)|qwq|hermes/],
     bedrockTools: "yes",
     toolsEvidence: "proved",
     nativeOnConverse: "all",
-    measured:
-      "Qwen3 32B, Strata Qwen3.8 Flash and Ollama Qwen3.6: structured 100%, no leak",
+    measured: "Qwen3 32B: structured 100%, no leak",
     textDialect: "hermes-json",
     promptStyle: {
       style: "hermes-json",
@@ -173,8 +208,8 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     ],
     readOn: READ,
     unverified: [
-      "Qwen3-Next-80B-A3B-Instruct template read 2026-11-10 (Hermes JSON: 'return a json object with function name and arguments within <tool_call></tool_call> XML tags'); the Thinking variant was not read; Bedrock tool support for Qwen3-Next was not measured",
-      "Qwen3.5 and 3.6 templates were not read (issues report them on the Hermes or Coder pipeline)",
+      "Qwen3-Next-80B-A3B-Instruct template re-read 2026-11-10 (Hermes JSON: 'return a json object with function name and arguments within <tool_call></tool_call> XML tags'); the Thinking variant was not read; Bedrock tool support for Qwen3-Next was not measured",
+      "Qwen3.5 and later are a different row (qwen3.5-3.8): they write the Qwen3-Coder XML",
     ],
   },
   {
@@ -189,14 +224,23 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     promptStyle: {
       style: "glm-xml",
       evidence:
-        "assumed to follow GLM-4.7; 100% structured on Converse, so unprompted",
+        "GLM-5 template instructs <tool_call>{function-name}<arg_key>{arg-key-1}</arg_key><arg_value>{arg-value-1}</arg_value>...</tool_call> (read 2026-11-10); 100% structured on Converse, so unprompted",
     },
     recoverWith: "glm-xml",
     thinkingTags: THINK,
-    source: [LIVE, REF],
+    serverParser: {
+      vllm: "glm47",
+      basis: "model-card",
+      note: "the GLM-5 card launches vLLM with --tool-call-parser glm47 --reasoning-parser glm45 (read 2026-11-10)",
+    },
+    source: [
+      "https://huggingface.co/zai-org/GLM-5/blob/main/chat_template.jinja",
+      "https://huggingface.co/zai-org/GLM-5/raw/main/README.md",
+      LIVE,
+    ],
     readOn: READ,
     unverified: [
-      "GLM-5 template and parser were not read; the text dialect is assumed to follow GLM-4.7",
+      "GLM-5.1 and later were not read; 5.x ids resolve here by pattern",
     ],
   },
   {
@@ -284,26 +328,37 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
   },
   {
     id: "kimi-k3",
-    label: "Kimi K3 and K3.1",
+    label: "Kimi K3 and K3.1 (XTML tags)",
     match: [/kimi[-._ ]?k3/],
     bedrockTools: "yes",
     toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "Kimi K3 and K3.1: structured 100%, no leak",
-    textDialect: "kimi-tokens",
+    // Not kimi-tokens: K3 writes its own tag form (encoding_k3.py), which no
+    // TextDialect value names yet. `none` here means "no recoverable text
+    // dialect"; a value for it needs the dialect enum.
+    textDialect: "none",
     promptStyle: {
       style: "native",
-      evidence: "100% structured on Converse (live 2026-11-10)",
+      evidence:
+        "100% structured on Converse (live 2026-11-10); the text form is the XTML call block <|open|>tools<|sep|><|open|>call tool=NAME index=N<|sep|><|open|>argument key=K type=T<|sep|>VALUE<|close|>argument<|sep|>...<|close|>call<|sep|><|close|>tools<|sep|> (encoding_k3.py, read 2026-11-10); not yet recoverable, no parser",
     },
     serverParser: {
       vllm: "kimi_k3",
       basis: "registered-only",
-      note: "the name is in vLLM's parser registry; the docs and the K3 template were not read",
+      note: "the name is in vLLM's parser registry; the K3 card (read 2026-11-10) has no --tool-call-parser line",
     },
-    source: [LIVE, REF],
+    source: [
+      "https://huggingface.co/moonshotai/Kimi-K3/blob/main/encoding_k3.py",
+      "https://huggingface.co/moonshotai/Kimi-K3/raw/main/README.md",
+      LIVE,
+    ],
     readOn: READ,
     unverified: [
-      "Kimi K3 template not read; the text dialect is assumed to follow K2",
+      "the repository ships a Python encoder, not a Jinja template, so the template classifier cannot decide it",
+      "encoding_k3.py renders history; the token ids of <|open|>, <|close|> and <|sep|> and what the model actually emits were not measured",
+      "a call may carry a single <|open|>json type=object<|sep|> body in place of argument tags (_xtml_json_block); not exercised",
+      "needs a dialect value for the XTML form (the dialect enum was not touched)",
     ],
   },
   {
@@ -331,6 +386,36 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
       LIVE,
     ],
     readOn: READ,
+  },
+  {
+    id: "minimax-m3",
+    label: "MiniMax M3 (namespaced invoke tags)",
+    match: [/minimax[-._ ]?m3/],
+    // No M3 run exists: the answer is the M2 family's, by analogy. Marked
+    // inferred so it is not read as a measurement; it keeps M3 on the tools
+    // path the shared minimax row gave it.
+    bedrockTools: "yes",
+    toolsEvidence: "inferred",
+    nativeOnConverse: "unmeasured",
+    // Not minimax-xml: M3 changed the call block (see promptStyle) and no
+    // TextDialect value names it, so `none` means "no recoverable text dialect".
+    textDialect: "none",
+    promptStyle: {
+      style: "native",
+      evidence:
+        'M3 template instructs ]<]minimax[>[<tool_call> then ]<]minimax[>[<invoke name="tool-name-1"> with each parameter as ]<]minimax[>[<param>value]<]minimax[>[</param>, closed by ]<]minimax[>[</invoke> and ]<]minimax[>[</tool_call> (read 2026-11-10; the namespace marker ]<]minimax[>[ is prepended to every tag); thinking is <mm:think>; not yet recoverable, no parser',
+    },
+    thinkingTags: ["<mm:think>", "</mm:think>"],
+    source: [
+      "https://huggingface.co/MiniMaxAI/MiniMax-M3/blob/main/chat_template.jinja",
+    ],
+    readOn: READ,
+    unverified: [
+      "never run live: bedrockTools is inferred from the M2 family, and M2 uses <minimax:tool_call> (a different form)",
+      "no serverParser read: the M3 card has no --tool-call-parser line",
+      "the call form is read from the template's instruction text and history renderer, not from model output",
+      "needs a dialect value for this form (the dialect enum was not touched)",
+    ],
   },
   {
     id: "minimax-m2",
@@ -389,18 +474,47 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     ],
   },
   {
+    id: "deepseek-v4",
+    label: "DeepSeek V4 (DSML tool_calls block)",
+    match: [/deepseek[-._ ]?(?:chat[-._ ]?)?v?4/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "dsml",
+    recoverWith: "dsml",
+    promptStyle: {
+      style: "native",
+      evidence:
+        'V4 encoder instructs <｜DSML｜tool_calls><｜DSML｜invoke name="$TOOL_NAME"><｜DSML｜parameter name="$PARAMETER_NAME" string="true|false"> (encoding_dsv4.py, read 2026-11-10); the block is tool_calls where V3.2 writes function_calls',
+    },
+    thinkingTags: THINK,
+    source: [
+      "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/main/encoding/encoding_dsv4.py",
+      "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/raw/main/README.md",
+    ],
+    readOn: READ,
+    unverified: [
+      "undecided by the template classifier: the V4 card says 'This release does not include a Jinja-format chat template' and ships encoding/encoding_dsv4.py, which the research tool does not fetch",
+      "V4-Flash and V4-Pro exist on the Hub; only V4-Flash's encoder was read",
+      "not run live; the V3.2 text filter marker (function_calls) does not match V4's tool_calls block",
+      "no serverParser read (vLLM's registry has deepseek_v4; the pairing was not read)",
+    ],
+  },
+  {
     id: "deepseek-v3.2",
-    label: "DeepSeek V3.2 and V4",
-    match: [/deepseek[-._ ]?(?:chat[-._ ]?)?v?(?:3[.-]?2|4)/],
+    label: "DeepSeek V3.2",
+    match: [/deepseek[-._ ]?(?:chat[-._ ]?)?v?3[.-]?2/],
     bedrockTools: "yes",
     toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured:
       "DeepSeek V3.2: structured 8/8; all 8 also ended the text with a DSML function_calls fragment (always dropped)",
     textDialect: "dsml",
+    recoverWith: "dsml",
     promptStyle: {
       style: "native",
-      evidence: "8/8 structured on Converse (live 2026-11-10)",
+      evidence:
+        '8/8 structured on Converse (live 2026-11-10); the encoder instructs <｜DSML｜function_calls><｜DSML｜invoke name="$FUNCTION_NAME"><｜DSML｜parameter name="$PARAMETER_NAME" string="true|false"> (encoding_dsv32.py, read 2026-11-10)',
     },
     observedLeak: "DSML fragment after the structured call",
     thinkingTags: THINK,
@@ -414,7 +528,9 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
       LIVE,
     ],
     readOn: READ,
-    unverified: ["DeepSeek V4 was not read"],
+    unverified: [
+      "undecided by the template classifier: the repository has no Jinja template and ships encoding/encoding_dsv32.py, which the research tool does not fetch",
+    ],
   },
   {
     id: "deepseek-v3",
@@ -424,6 +540,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     toolsEvidence: "inferred",
     nativeOnConverse: "unmeasured",
     textDialect: "deepseek-tokens",
+    recoverWith: "deepseek-v31",
     promptStyle: {
       style: "native",
       evidence:
@@ -453,6 +570,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     nativeOnConverse: "all",
     measured: "gpt-oss 20B and 120B: structured 100%, no leak",
     textDialect: "harmony",
+    recoverWith: "harmony",
     promptStyle: {
       style: "native",
       evidence: "100% structured on Converse (live 2026-11-10)",
@@ -597,6 +715,192 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     ],
   },
   {
+    id: "granite-4.2",
+    label: "IBM Granite 4.2 (Qwen3-Coder XML)",
+    match: [/granite[-._ ]?4[-._ ]?[2-9]/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "qwen-xml",
+    promptStyle: {
+      style: "qwen-xml",
+      evidence:
+        "granite-4.2-8b template instructs <tool_call>\\n<function=example_function_name>\\n<parameter=example_parameter_1> (read 2026-11-10); never prompted for it by us",
+    },
+    recoverWith: "qwen-xml",
+    serverParser: {
+      vllm: "qwen3_coder",
+      basis: "model-card",
+      note: "the card: 'Use --tool-call-parser auto, which resolves to qwen3_coder for this checkpoint'",
+    },
+    source: [
+      "https://huggingface.co/ibm-granite/granite-4.2-8b/blob/main/chat_template.jinja",
+      "https://huggingface.co/ibm-granite/granite-4.2-8b/raw/main/README.md",
+    ],
+    readOn: READ,
+    unverified: [
+      "granite-4.2-8b only; other 4.2 sizes and 4.1 were not read (4.1 resolves to the granite-4 row)",
+      "not run on Bedrock, Ollama or OpenRouter: tools support is undecided here",
+    ],
+  },
+  {
+    id: "granite-4",
+    label: "IBM Granite 4.0 (Hermes JSON)",
+    match: [/granite[-._ ]?4/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "hermes-json",
+    promptStyle: {
+      style: "hermes-json",
+      evidence:
+        "granite-4.0-h-small template instructs 'return a json object with function name and arguments within <tool_call></tool_call> XML tags' (read 2026-11-10); never prompted for it by us",
+    },
+    recoverWith: "hermes-json",
+    source: [
+      "https://huggingface.co/ibm-granite/granite-4.0-h-small/blob/main/chat_template.jinja",
+    ],
+    readOn: READ,
+    unverified: [
+      "granite-4.0-h-small only; Granite 4.0 Micro, Tiny, 4.1 and the vLLM parser pairing were not read",
+      "Granite 3.x writes <|tool_call|> and is not covered by any row",
+    ],
+  },
+  {
+    id: "mimo-v2",
+    label: "Xiaomi MiMo V2.5 and V2.6 (Qwen3-Coder XML)",
+    match: [/mimo[-._ ]?v2/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "qwen-xml",
+    promptStyle: {
+      style: "qwen-xml",
+      evidence:
+        "MiMo-V2.5 template instructs <tool_call>\\n<function=example_function_name>\\n<parameter=example_parameter_1>value_1</parameter> (read 2026-11-10); MiMo-V2.6-Flash-RL writes <tool_call><function=NAME><parameter=KEY>VALUE</parameter></function></tool_call> in its history renderer",
+    },
+    recoverWith: "qwen-xml",
+    thinkingTags: THINK,
+    source: [
+      "https://huggingface.co/XiaomiMiMo/MiMo-V2.5/blob/main/tokenizer_config.json",
+      "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/main/chat_template.jinja",
+    ],
+    readOn: READ,
+    unverified: [
+      "the V2.5 card names --tool-call-parser mimo in an SGLang command only; no vLLM pairing was read",
+      "MiMo-V2.6-Flash-RL was read for its call writer only, not for an instruction block",
+      "the Qwen3-Coder parser is not known to read the MiMo markup exactly; the arguments are not tested",
+    ],
+  },
+  {
+    id: "mimo",
+    label: "Xiaomi MiMo (7B, Hermes JSON)",
+    match: [/mimo(?![a-z])/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "hermes-json",
+    promptStyle: {
+      style: "hermes-json",
+      evidence:
+        "MiMo-7B-RL template instructs 'return a json object with function name and arguments within <tool_call></tool_call> XML tags' (read 2026-11-10)",
+    },
+    recoverWith: "hermes-json",
+    source: [
+      "https://huggingface.co/XiaomiMiMo/MiMo-7B-RL/blob/main/tokenizer_config.json",
+    ],
+    readOn: READ,
+    unverified: ["MiMo-7B-RL only; other MiMo V1 checkpoints were not read"],
+  },
+  {
+    id: "step-3.5-3.7",
+    label: "StepFun Step 3.5 and 3.7 (Qwen3-Coder XML)",
+    match: [/step[-._ ]?3[-._ ]?[57]/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "qwen-xml",
+    promptStyle: {
+      style: "qwen-xml",
+      evidence:
+        "Step-3.5-Flash and Step-3.7-Flash templates instruct <tool_call>\\n<function=example_function_name>\\n<parameter=example_parameter_1> (read 2026-11-10); never prompted for it by us",
+    },
+    recoverWith: "qwen-xml",
+    serverParser: {
+      vllm: "step3p5",
+      basis: "model-card",
+      note: "the Step-3.7-Flash card launches vLLM with --tool-call-parser step3p5 --reasoning-parser step3p5 (read 2026-11-10): its own parser name for the Qwen3-Coder markup",
+    },
+    source: [
+      "https://huggingface.co/stepfun-ai/Step-3.5-Flash/blob/main/chat_template.jinja",
+      "https://huggingface.co/stepfun-ai/Step-3.7-Flash/blob/main/chat_template.jinja",
+      "https://huggingface.co/stepfun-ai/Step-3.7-Flash/raw/main/README.md",
+    ],
+    readOn: READ,
+    unverified: [
+      "Step-3.5-Flash and Step-3.7-Flash only; Step 4, 5 and the Step 3 VL models were not read",
+    ],
+  },
+  {
+    id: "liquid-lfm",
+    label: "Liquid LFM2 and LFM2.5 (Pythonic list between call tokens)",
+    match: [/lfm[-._ ]?[23]/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    // The call is a Python-style list wrapped in <|tool_call_start|> and
+    // <|tool_call_end|>; no TextDialect value names the wrapped form, so
+    // `none` means "no recoverable text dialect".
+    textDialect: "none",
+    promptStyle: {
+      style: "native",
+      evidence:
+        'LFM2.5-24B-A2B and LFM2-8B-A1B templates write <|tool_call_start|>[name(arg="v"), ...]<|tool_call_end|> (render_tool_calls, read 2026-11-10); the tool list is rendered as "List of tools: [" in the system prompt; not yet recoverable, no parser',
+    },
+    source: [
+      "https://huggingface.co/LiquidAI/LFM2.5-24B-A2B/blob/main/chat_template.jinja",
+      "https://huggingface.co/LiquidAI/LFM2-8B-A1B/blob/main/chat_template.jinja",
+    ],
+    readOn: READ,
+    unverified: [
+      "whether the pythonic recovery reads the wrapped list was not tested; the dialect enum was not touched",
+      "LFM3 (on OpenRouter as liquid/lfm-3-1.7b) was not read",
+      "the argument rendering inside the parentheses was not read in detail",
+    ],
+  },
+  {
+    id: "hy3",
+    label: "Tencent Hy3 (suffixed arg_key tags)",
+    match: [/(?:^|[^a-z])hy[-._ ]?3(?!\d)/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    // GLM-like markup whose tags carry a ':opensource' suffix, so glm-xml does
+    // not parse it; `none` means "no recoverable text dialect".
+    textDialect: "none",
+    promptStyle: {
+      style: "native",
+      evidence:
+        "Hy3 template instructs <tool_calls:opensource> then <tool_call:opensource>{function-name}<tool_sep:opensource> with <arg_key:opensource>/<arg_value:opensource> pairs, closed by </tool_call:opensource> and </tool_calls:opensource> (HYTK = ':opensource', read 2026-11-10); not yet recoverable, no parser",
+    },
+    thinkingTags: ["<think:opensource>", "</think:opensource>"],
+    serverParser: {
+      vllm: "hy_v3",
+      basis: "model-card",
+      note: "the Hy3 card launches vLLM with --tool-call-parser hy_v3 --reasoning-parser hy_v3 and SGLang with hunyuan (read 2026-11-10)",
+    },
+    source: [
+      "https://huggingface.co/tencent/Hy3/blob/main/chat_template.jinja",
+      "https://huggingface.co/tencent/Hy3/raw/main/README.md",
+    ],
+    readOn: READ,
+    unverified: [
+      "Hy4 and Hy3-preview were not read (the Hy4 repository answered 401, so it is missing or private)",
+      "the HYTK suffix may differ between the open and hosted checkpoints",
+      "the dialect enum was not touched",
+    ],
+  },
+  {
     id: "mistral",
     label: "Mistral, Mistral Large 3, Devstral, Codestral, Ministral",
     match: [/devstral|mistral|mixtral|ministral|magistral|codestral/],
@@ -605,6 +909,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     nativeOnConverse: "all",
     measured: "Devstral 2 and Mistral Large 3: structured 100%, no leak",
     textDialect: "mistral",
+    recoverWith: "mistral",
     promptStyle: {
       style: "native",
       evidence:
@@ -623,7 +928,8 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     ],
     readOn: READ,
     unverified: [
-      "official Mistral repositories ship a mistral-common encoding that was not read; templates are from mirrors",
+      'undecided upstream: Devstral-Small-2507 and Mistral-Small-3.2-24B-Instruct-2506 declare library_name mistral-common and carry no chat template in the API config or as chat_template.jinja (404, read 2026-11-10); their cards say "Supports Mistral\'s function calling format" and link the mistral-common docs, and serve with --tokenizer_mode mistral --tool-call-parser mistral',
+      "the [TOOL_CALLS] [ form is read in the Mistral-7B-Instruct-v0.3 template (an older format) and in the unsloth mirror, not in any current official repository; Mistral Large 3, Devstral 2 and Ministral 3 were not read",
     ],
   },
   {

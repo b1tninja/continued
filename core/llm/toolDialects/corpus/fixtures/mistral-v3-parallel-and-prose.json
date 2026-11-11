@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "mistral-v3-parallel-and-prose",
   "family": "mistral",
-  "dialect": "mistral-json",
+  "dialect": "mistral",
   "kind": "positive",
   "failureMode": "parallel-merged",
   "flag": "synthesised",

@@ -36,7 +36,7 @@ const DIALECTS: {
   {
     file: "mistral.ts",
     className: "MistralRecovery",
-    dialects: ["mistral-json", "mistral-args"],
+    dialects: ["mistral"],
   },
   { file: "dsml.ts", className: "DsmlRecovery", dialects: ["dsml"] },
   {

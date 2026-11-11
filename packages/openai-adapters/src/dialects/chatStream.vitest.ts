@@ -15,6 +15,7 @@ const DIALECTS = [
   "mistral",
   "dsml",
   "deepseek-v31",
+  "toolcall-json",
 ];
 const FIXTURES = path.resolve(
   __dirname,

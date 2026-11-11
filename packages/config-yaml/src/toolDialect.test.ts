@@ -23,6 +23,7 @@ describe("toolDialect schema", () => {
     "mistral",
     "dsml",
     "deepseek-v31",
+    "toolcall-json",
     "off",
   ])("accepts %s", (v) => {
     expect(modelSchema.parse({ ...base, toolDialect: v }).toolDialect).toBe(v);
@@ -36,7 +37,7 @@ describe("toolDialect schema", () => {
     const r = modelSchema.safeParse({ ...base, toolDialect: "xml" });
     expect(r.success).toBe(false);
     expect(JSON.stringify(r.error?.issues)).toContain(
-      "toolDialect must be one of: auto, native, qwen-xml, pythonic, llama-json, hermes-json, glm-xml, harmony, mistral, dsml, deepseek-v31, off",
+      "toolDialect must be one of: auto, native, qwen-xml, pythonic, llama-json, hermes-json, glm-xml, harmony, mistral, dsml, deepseek-v31, toolcall-json, off",
     );
   });
 });

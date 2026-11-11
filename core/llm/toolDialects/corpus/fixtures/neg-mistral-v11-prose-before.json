@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "neg-mistral-v11-prose-before",
   "family": "mistral",
-  "dialect": "mistral-args",
+  "dialect": "mistral",
   "kind": "negative",
   "failureMode": "prose-around-call",
   "flag": "synthesised",

@@ -9,6 +9,7 @@ import { recoverLlamaJsonFromText } from "./llamaJson.js";
 import { recoverPythonicFromText } from "./pythonic.js";
 import { type DialectTool, recoverQwenXmlFromText } from "./qwenXml.js";
 import { coerceString, coerceToSchema } from "./schemaCheck.js";
+import { recoverToolcallJsonFromText } from "./toolcallJson.js";
 
 describe("coerceString", () => {
   it.each([
@@ -164,6 +165,12 @@ const dialects: [string, (timeout: string) => string, (t: string) => any][] = [
     (t) =>
       `<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>run_command<｜tool▁sep｜>{"command": "10", "timeout": "${t}"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>`,
     (t) => recoverDeepseekV31FromText(t, tools),
+  ],
+  [
+    "toolcall-json",
+    (t) =>
+      `<TOOLCALL>[{"name": "run_command", "arguments": {"command": "10", "timeout": "${t}"}}]</TOOLCALL>`,
+    (t) => recoverToolcallJsonFromText(t, tools),
   ],
 ];
 

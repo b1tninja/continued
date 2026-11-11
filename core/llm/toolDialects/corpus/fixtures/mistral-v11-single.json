@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "mistral-v11-single",
   "family": "mistral",
-  "dialect": "mistral-args",
+  "dialect": "mistral",
   "kind": "positive",
   "failureMode": "none",
   "flag": "synthesised",

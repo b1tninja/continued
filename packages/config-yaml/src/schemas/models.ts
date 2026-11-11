@@ -253,6 +253,7 @@ export const TOOL_DIALECT_VALUES = [
   "mistral",
   "dsml",
   "deepseek-v31",
+  "toolcall-json",
   "off",
 ] as const;
 export const toolDialectSchema = z.enum(TOOL_DIALECT_VALUES, {
