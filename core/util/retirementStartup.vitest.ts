@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -81,11 +81,15 @@ describe("startupRetirementLine", () => {
   });
 
   it("never throws on an unwritable state file", () => {
+    // A path below a regular file cannot be created on any platform (a
+    // drive-letter path is only unwritable on Windows).
+    const blocker = join(mkdtempSync(join(tmpdir(), "startup-")), "plain");
+    writeFileSync(blocker, "");
     expect(
       startupRetirementLine({
         ...sonnet,
         now: "2026-11-11",
-        file: "Z:/no/such/dir/n.json",
+        file: join(blocker, "dir", "n.json"),
       }),
     ).toContain("retires");
   });
