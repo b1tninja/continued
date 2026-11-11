@@ -3,76 +3,10 @@
  * (plans/command-analysis.md, P3). A text rule on `Remove-Item` has to see
  * `rm`, `del` and `ri`; a flag list has to see `-Rec` and `-Recurse:$true`
  * as the same parameter; and a command is only known to read if every
- * parameter it passes is one the cmdlet is known to have.
+ * parameter it passes is one the cmdlet is known to have. The alias table
+ * itself is in powershellAliases.ts.
  */
-
-/** Windows PowerShell 5.1's default aliases, lower case, by the cmdlet they stand for. */
-const ALIASES: Record<string, string> = {
-  ac: "add-content",
-  cat: "get-content",
-  cd: "set-location",
-  chdir: "set-location",
-  clc: "clear-content",
-  copy: "copy-item",
-  cp: "copy-item",
-  cpi: "copy-item",
-  curl: "invoke-webrequest",
-  del: "remove-item",
-  dir: "get-childitem",
-  diff: "compare-object",
-  echo: "write-output",
-  erase: "remove-item",
-  fl: "format-list",
-  foreach: "foreach-object",
-  ft: "format-table",
-  gc: "get-content",
-  gci: "get-childitem",
-  gi: "get-item",
-  gl: "get-location",
-  gp: "get-itemproperty",
-  gps: "get-process",
-  gsv: "get-service",
-  iex: "invoke-expression",
-  ii: "invoke-item",
-  irm: "invoke-restmethod",
-  iwr: "invoke-webrequest",
-  kill: "stop-process",
-  ls: "get-childitem",
-  md: "new-item",
-  measure: "measure-object",
-  mi: "move-item",
-  mkdir: "new-item",
-  move: "move-item",
-  mv: "move-item",
-  ni: "new-item",
-  popd: "pop-location",
-  ps: "get-process",
-  pushd: "push-location",
-  pwd: "get-location",
-  rd: "remove-item",
-  ri: "remove-item",
-  rm: "remove-item",
-  rmdir: "remove-item",
-  rni: "rename-item",
-  rp: "remove-itemproperty",
-  rvpa: "resolve-path",
-  sc: "set-content",
-  select: "select-object",
-  si: "set-item",
-  sl: "set-location",
-  sls: "select-string",
-  sort: "sort-object",
-  sp: "set-itemproperty",
-  start: "start-process",
-  saps: "start-process",
-  spps: "stop-process",
-  tee: "tee-object",
-  type: "get-content",
-  wget: "invoke-webrequest",
-  where: "where-object",
-  "%": "foreach-object",
-  "?": "where-object",
-};
+import { isAliasName, resolveAlias } from "./powershellAliases";
 
 /**
  * The cmdlet a command word stands for, lower case: through an alias, or the
@@ -81,13 +15,14 @@ const ALIASES: Record<string, string> = {
  */
 export function canonicalCmdlet(word: string): string | undefined {
   const w = word.toLowerCase();
-  if (w in ALIASES) return ALIASES[w];
+  const aliased = resolveAlias(w);
+  if (aliased) return aliased;
   return /^[a-z]+-[a-z][a-z0-9]*$/.test(w) ? w : undefined;
 }
 
 /** True when the word is an alias PowerShell defines (and not itself a cmdlet name). */
 export function isPowerShellAlias(word: string): boolean {
-  return word.toLowerCase() in ALIASES;
+  return isAliasName(word);
 }
 
 /** The short names PowerShell gives the common parameters. */

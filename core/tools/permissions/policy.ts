@@ -118,7 +118,7 @@ export const LOCKED_FLOOR_RULES: readonly {
     id: "protect-policy-files",
     label: "Never change the permission files",
     description:
-      "Every file the product loads as config, code, rules or hooks: the global folder, a project's .continue and .continuous folders, .claude settings, agents and skills, and .continuerc. A write or delete asks, and is refused at Automatic and YOLO.",
+      "Every file the product loads as config, code, rules or hooks: the global folder, a project's .continue and .continuous folders, .claude settings, agents and skills, and .continuerc. A write or delete that names the path asks, and is refused at Automatic and YOLO. A terminal command is read as it is written: a path built when it runs (a variable, a wildcard, a backtick, a cd into your home folder) cannot be seen, so at YOLO such a command asks. A sandbox that denies writes to these folders is what holds for certain.",
   },
 ];
 

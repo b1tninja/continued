@@ -14,7 +14,7 @@
   "type": "commonjs",
   "devDependencies": {
     "@types/node": "^24.19.2",
-    "mintlify": "^4.2.1210",
+    "mintlify": "^4.3.14",
     "typescript": "^5.9.3"
   },
   "dependencies": {

@@ -91,3 +91,10 @@ is user-owned (`gh api repos/b1tninja/continuous` reports owner type `User`), an
 merge queue rule can be added here. If the repository moves to an organization, create a ruleset
 with the `merge_queue` rule, add `merge_group` triggers to `pr-checks.yaml` and `cli-pr-checks.yml`,
 and the gate will then be able to wait on real queue runs.
+
+`--combine` (read-only): `node scripts/ci/merge-ready.mjs 518 519 520 --combine` first does a fresh
+`git fetch origin` of `main` and every PR head into `refs/combine/*`, then prints a pairwise matrix computed with
+`git merge-tree --write-tree` (git 2.38 or newer): does PR A conflict when merged after PR B, which files,
+and which of the shared files are hot. Nothing is checked out and the index and working tree are not
+touched; it only writes unreferenced objects. It proves textual conflicts only, not that the combined
+tree builds or passes tests, so it does not replace "Update branch" plus a green `merge-gate`.
