@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-toolcall-json-truncated",
+  "family": "nemotron-toolcall",
+  "dialect": "toolcall-json",
+  "kind": "negative",
+  "failureMode": "truncated",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: a reply cut off inside the array",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"",
+  "markers": ["<TOOLCALL>", "</TOOLCALL>", "<think>", "</think>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \""
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">",
+        "[",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\""
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<TO",
+        "OLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \""
+      ],
+      "splitInside": "<TOOLCALL>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<TOOLCALL>",
+        "[{\"name\": \"get_weather\", \"arguments\": {\"city\": \""
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<TOOL",
+        "CA",
+        "LL",
+        ">[",
+        "{",
+        "\"n",
+        "ame\"",
+        ": \"g",
+        "et_",
+        "wea",
+        "the",
+        "r\", ",
+        "\"argu",
+        "ment",
+        "s\":",
+        " {\"ci",
+        "t",
+        "y",
+        "\": \""
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \""
+  }
+}

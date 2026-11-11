@@ -249,6 +249,7 @@ export const TOOL_DIALECT_VALUES = [
   "llama-json",
   "hermes-json",
   "glm-xml",
+  "toolcall-json",
   "off",
 ] as const;
 export const toolDialectSchema = z.enum(TOOL_DIALECT_VALUES, {
