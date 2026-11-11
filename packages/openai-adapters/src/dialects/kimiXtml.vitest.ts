@@ -43,13 +43,20 @@ describe("kimi-xtml recovery", () => {
     );
   });
 
-  it("keeps think and response parts as text and takes the message tail", () => {
+  it("keeps a think part and an empty response part as text and takes the message tail", () => {
     const lead =
-      "<|open|>think<|sep|>hm<|close|>think<|sep|><|open|>response<|sep|>ok<|close|>response<|sep|>";
+      "<|open|>think<|sep|>hm<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|>";
     const text = `${lead}${part(call(1, q))}<|close|>message<|sep|><|end_of_msg|>`;
     const r = recoverKimiXtmlFromText(text, tools);
     expect(r.text).toBe(lead);
     expect(r.calls).toHaveLength(1);
+  });
+
+  it("leaves a reply with a response part that has text as text (the whole reply must be calls)", () => {
+    const text = `<|open|>think<|sep|>hm<|close|>think<|sep|><|open|>response<|sep|>ok<|close|>response<|sep|>${part(call(1, q))}`;
+    const r = recoverKimiXtmlFromText(text, tools);
+    expect(r.calls).toEqual([]);
+    expect(r.text).toBe(text);
   });
 
   it("accepts a reply whose think opening the server removed", () => {

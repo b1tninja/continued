@@ -1,6 +1,5 @@
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { loadCorpus } from "./corpus";
 import { failures, runCorpus, type CorpusParser } from "./runCorpus";
 
 type RecoveryEvent =
@@ -25,16 +24,6 @@ const KIMITOKENS = path.resolve(
 );
 type RecoveryClass = new (tools: unknown[]) => Recovery;
 let KimiTokensRecovery: RecoveryClass;
-
-/**
- * Fixtures written for a looser reading than this parser takes (strict: the whole
- * reply is calls, after an optional think block). They stay in the corpus for
- * other parsers.
- */
-const NOT_STRICT: Record<string, string> = {
-  "kimi-k2-parallel":
-    "prose before the section; this parser refuses a reply that is not only the section",
-};
 
 const kimiTokens: CorpusParser = ({ chunks, tools }) => {
   const parser = new KimiTokensRecovery(tools);
@@ -61,7 +50,6 @@ describe("KimiTokensRecovery against the corpus", () => {
     report = runCorpus(kimiTokens, {
       dialects: ["kimi-tokens"],
       negativesFromAllDialects: true,
-      fixtures: loadCorpus().filter((f) => !(f.id in NOT_STRICT)),
     });
   });
 

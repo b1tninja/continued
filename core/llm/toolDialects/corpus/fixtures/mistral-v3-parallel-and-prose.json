@@ -3,13 +3,13 @@
   "id": "mistral-v3-parallel-and-prose",
   "family": "mistral",
   "dialect": "mistral-json",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "parallel-merged",
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3/blob/main/tokenizer_config.json, not observed",
     "retrieved": "2026-11-10",
-    "note": "Related reported bug: vLLM#48318 (Mistral v11 streaming merges parallel calls when content precedes [TOOL_CALLS] in one delta)."
+    "note": "Related reported bug: vLLM#48318 (Mistral v11 streaming merges parallel calls when content precedes [TOOL_CALLS] in one delta). Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 2 call(s) and the text \"Checking.\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
   "policy": "must",
   "tools": [
@@ -306,20 +306,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "get_weather",
-        "arguments": {
-          "city": "Paris"
-        }
-      },
-      {
-        "name": "get_time",
-        "arguments": {
-          "tz": "UTC"
-        }
-      }
-    ],
-    "text": "Checking."
+    "calls": [],
+    "text": "Checking.[TOOL_CALLS] [{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}, \"id\": \"AbCdEf123\"}, {\"name\": \"get_time\", \"arguments\": {\"tz\": \"UTC\"}, \"id\": \"GhIjKl456\"}]"
   }
 }

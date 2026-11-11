@@ -3,16 +3,16 @@
   "id": "qwen3-coder-missing-open-tag-ollama-16686",
   "family": "qwen3-coder",
   "dialect": "qwen-xml",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "missing-open-tag",
   "flag": "observed",
   "provenance": {
     "source": "https://github.com/ollama/ollama/issues/16686",
     "retrieved": "2026-11-10",
     "reportDate": "2026-06-12",
-    "note": "Verbatim text field of the /v1/messages response captured by the reporter (qwen3-coder:30b, Ollama 0.30.7). Opening <tool_call> absent, closing present."
+    "note": "Verbatim text field of the /v1/messages response captured by the reporter (qwen3-coder:30b, Ollama 0.30.7). Opening <tool_call> absent, closing present. Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 1 call(s) and the text \"I'll fetch the example.com webpage and report its title using the WebFetch tool.\\n\\n\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
-  "policy": "should",
+  "policy": "must",
   "tools": [
     {
       "name": "WebFetch",
@@ -415,15 +415,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "WebFetch",
-        "arguments": {
-          "url": "https://example.com",
-          "prompt": "What is the title of this webpage?"
-        }
-      }
-    ],
-    "text": "I'll fetch the example.com webpage and report its title using the WebFetch tool.\n\n"
+    "calls": [],
+    "text": "I'll fetch the example.com webpage and report its title using the WebFetch tool.\n\n<function=WebFetch>\n<parameter=url>\nhttps://example.com\n</parameter>\n<parameter=prompt>\nWhat is the title of this webpage?\n</parameter>\n</function>\n</tool_call>"
   }
 }

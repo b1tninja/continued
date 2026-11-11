@@ -17,6 +17,7 @@
  * schema and every required one is present. Anything else stays text.
  */
 
+import { hasProseBefore } from "./heldRecovery.js";
 import { coerceString, repairNote } from "./schemaCheck.js";
 
 export interface DialectTool {
@@ -273,7 +274,8 @@ function startsCall(text: string, at: number): boolean {
  * Stream-safe recovery for one text block. `push` takes each text delta and
  * returns what can be shown now. Once a marker that begins a call is seen,
  * everything from it on is held until `end`, where it is either parsed as
- * calls (and not shown) or released unchanged as text. A trailing fragment
+ * calls (and not shown) or released unchanged as text; a call that follows
+ * prose (more than a leading think block) is released, never recovered. A trailing fragment
  * that could still become a marker is held too, so a split marker never
  * leaks. Chunk boundaries do not change the result.
  */
@@ -333,7 +335,9 @@ export class QwenXmlRecovery {
   end(): RecoveryEvent[] {
     const out: RecoveryEvent[] = [];
     if (this.held !== undefined) {
-      const calls = recoverQwenXmlCalls(this.held, this.tools);
+      const calls = hasProseBefore(this.shown)
+        ? undefined
+        : recoverQwenXmlCalls(this.held, this.tools);
       if (calls) {
         for (const call of calls) out.push({ type: "call", call });
       } else {

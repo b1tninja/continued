@@ -153,7 +153,7 @@ function skipPart(text: string, pos: number, open: string, close: string) {
   return end === -1 ? -1 : skipSpace(text, end + close.length);
 }
 
-/** End of the think and response parts at the start of `text`, or -1. */
+/** End of the think part and an empty response part at the start of `text`, or -1. */
 function leadEnd(text: string): number {
   let pos = skipSpace(text, 0);
   if (text.startsWith(THINK_CLOSE, pos)) {
@@ -161,7 +161,13 @@ function leadEnd(text: string): number {
   } else {
     pos = skipPart(text, pos, THINK_OPEN, THINK_CLOSE);
   }
-  return pos === -1 ? -1 : skipPart(text, pos, RESPONSE_OPEN, RESPONSE_CLOSE);
+  if (pos === -1 || !text.startsWith(RESPONSE_OPEN, pos)) return pos;
+  // A response part is the reply's prose: only an empty one may precede the
+  // calls (the whole reply must be calls, Q28).
+  const close = text.indexOf(RESPONSE_CLOSE, pos + RESPONSE_OPEN.length);
+  if (close === -1) return -1;
+  if (text.slice(pos + RESPONSE_OPEN.length, close).trim() !== "") return -1;
+  return skipSpace(text, close + RESPONSE_CLOSE.length);
 }
 
 /** The calls in `text` when all of it is one K3 assistant turn, else undefined. */

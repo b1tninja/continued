@@ -9,11 +9,13 @@
  * column 0, outside a code fence; the callee is exactly the name of a tool in
  * the request; every argument is a keyword argument whose name the schema
  * declares and whose value has the type the schema asks for; every required
- * argument is present; and the held text is nothing but such calls. Values are
+ * argument is present; and the reply is nothing but such calls, after at most
+ * a think block (a call that follows prose is not recovered). Values are
  * read by a small parser over Python literals (strings, numbers, True, False,
  * None, lists, tuples, dicts with string keys). Nothing is ever evaluated.
  */
 import type { DialectTool, RecoveredCall, RecoveryEvent } from "./qwenXml.js";
+import { hasProseBefore } from "./heldRecovery.js";
 import { fittedCall } from "./schemaCheck.js";
 
 const MAX_DEPTH = 20;
@@ -322,7 +324,9 @@ export class PythonicRecovery {
   end(): RecoveryEvent[] {
     const out: RecoveryEvent[] = [];
     if (this.held !== undefined) {
-      const calls = recoverPythonicCalls(this.held, this.tools);
+      const calls = hasProseBefore(this.shown)
+        ? undefined
+        : recoverPythonicCalls(this.held, this.tools);
       if (calls) {
         for (const call of calls) out.push({ type: "call", call });
       } else {

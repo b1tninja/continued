@@ -136,6 +136,21 @@ describe("BedrockApi: a reply streamed or whole gives the same result", () => {
       });
     }
 
+    for (const [label, reply] of [
+      ["prose then a call", `Reading it now.\n${call}`],
+      ["a call then prose", `${call}\nThat reads it.`],
+    ]) {
+      it(`${dialect}: ${label} stays text in both paths (the whole reply must be calls)`, async () => {
+        const whole = await run(dialect, reply, "whole");
+        for (const size of [1, 7, 1000]) {
+          const streamed = await run(dialect, reply, size);
+          expect(whole.calls).toEqual([]);
+          expect(whole.visible).toBe(reply);
+          expect(streamed).toEqual(whole);
+        }
+      });
+    }
+
     it(`${dialect}: thinking then prose gives the same text`, async () => {
       const reply = THINKING + "All done, nothing to read.";
       const whole = await run(dialect, reply, "whole");
