@@ -348,6 +348,14 @@ export const FIXTURES: Record<string, Fixture> = {
       ) as HTMLElement
     )?.click();
   },
+  /** The preset picker in the toolbar, open: glyph, what each sets, the check */
+  "preset-open": async ({ store }) => {
+    store.dispatch(newSession());
+    await new Promise((r) => setTimeout(r, 800));
+    (
+      document.querySelector("[data-testid=policy-preset]") as HTMLElement
+    )?.click();
+  },
   /** Loop mode: the plan card, the per-item budgets and the loop controls */
   loop: ({ store }) => {
     store.dispatch(newSession(session([], "Fix parseConfig")));

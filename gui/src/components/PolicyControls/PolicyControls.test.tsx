@@ -147,6 +147,81 @@ describe("PolicyControls", () => {
     expect(screen.getByTestId("yolo-banner")).toBeDefined();
   });
 
+  it("the preset chip has a glyph, a tone from its levels and a name for screen readers", async () => {
+    const { user, store } = await setup();
+    const chip = () => screen.getAllByTestId("policy-preset")[0];
+    // Careful: the loosest level outside Context use is Cautious, so green
+    expect(chip().className).toContain("bg-success/20");
+    expect(chip().className).toContain("text-foreground");
+    expect(chip().className).toContain("min-h-6");
+    expect(chip().querySelector("svg")).not.toBeNull();
+    expect(chip().getAttribute("aria-label")).toContain("Preset: Careful.");
+    expect(chip().getAttribute("aria-label")).toContain("Manual: File edits.");
+    expect(screen.getAllByTestId("policy-preset-tone")[0].className).toContain(
+      "sr-only",
+    );
+    await user.click(chip());
+    await user.click(screen.getByTestId("policy-preset-acceptEdits"));
+    expect(chip().className).toContain("bg-warning/20");
+    await user.click(chip());
+    await user.click(screen.getByTestId("policy-preset-reviewer"));
+    expect(chip().className).toContain("bg-link/20");
+    await user.click(chip());
+    await user.click(screen.getByTestId("policy-preset-yolo"));
+    expect(chip().className).toContain("bg-error/20");
+    expect(store.getState().ui.policyLevels.tools).toBe("yolo");
+  });
+
+  it("a set of levels that matches no preset reads as Custom, neutral unless one is YOLO", async () => {
+    const { user, store } = await setup();
+    await act(async () => {
+      store.dispatch(setPolicyLevel({ area: "tools", level: "permissive" }));
+    });
+    const chip = screen.getAllByTestId("policy-preset")[0];
+    expect(chip.textContent).toContain("Custom");
+    expect(chip.className).toContain("bg-lightgray/20");
+    expect(chip.getAttribute("aria-label")).toContain("Preset: Custom.");
+    expect(
+      screen.getAllByTestId("policy-preset-tone")[0].textContent,
+    ).toContain("matches no preset");
+    await act(async () => {
+      store.dispatch(setPolicyLevel({ area: "edits", level: "yolo" }));
+    });
+    expect(chip.className).toContain("bg-error/20");
+    expect(chip.textContent).toContain("Custom");
+    await user.click(chip);
+    expect(
+      screen.getByTestId("policy-preset-custom-note").textContent,
+    ).toContain("your current set");
+  });
+
+  it("each preset row has a glyph, what it sets and a check on the current one", async () => {
+    const { user } = await setup();
+    await user.click(screen.getAllByTestId("policy-preset")[0]);
+    for (const name of [
+      "careful",
+      "acceptEdits",
+      "handsOff",
+      "reviewer",
+      "yolo",
+    ]) {
+      const row = screen.getByTestId(`policy-preset-${name}`);
+      expect(row.querySelector("svg[aria-hidden=true]")).not.toBeNull();
+    }
+    expect(screen.getByTestId("policy-preset-careful").textContent).toContain(
+      "Cautious: Tool use, Plan edits, Questions.",
+    );
+    expect(screen.getByTestId("policy-preset-yolo").textContent).toContain(
+      "All five areas YOLO.",
+    );
+    const checks = (name: string) =>
+      screen
+        .getByTestId(`policy-preset-${name}`)
+        .querySelector("svg:last-of-type")!.classList;
+    expect(checks("careful").contains("opacity-0")).toBe(false);
+    expect(checks("yolo").contains("opacity-0")).toBe(true);
+  });
+
   it("Settings shows the same five rows", async () => {
     await setup();
     for (const area of ["context", "tools", "edits", "plan", "questions"]) {
