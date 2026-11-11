@@ -19,7 +19,15 @@ export type Dialect =
   | "minimax-ns-xml" // MiniMax-M3: ]<]minimax[>[<tool_call> ... namespaced tags
   | "kimi-xtml" // Kimi K3: <|open|>tools<|sep|><|open|>call tool=".." index="1"<|sep|>..
   | "functiongemma" // <start_function_call>call:NAME{k:<escape>v<escape>}<end_function_call>
-  | "pythonic"; // [name(arg=1), other(arg="x")]
+  | "pythonic" // [name(arg=1), other(arg="x")]
+  | "granite-tokens" // Granite 3.x: <|tool_call|>[{"name":..,"arguments":{..}}]
+  | "lfm-tokens" // Liquid LFM2: <|tool_call_start|>[name(arg=..)]<|tool_call_end|>
+  | "hy3-tags" // Tencent Hy3: <tool_calls:opensource><tool_call:opensource>NAME<tool_sep:opensource>..
+  | "solar-tokens" // Solar Open: <|tool_call:begin|>ID<|tool_call:name|>NAME<|tool_call:args|>{json}<|tool_call:end|>
+  | "longcat-json" // LongCat: <longcat_tool_call>{"name":..,"arguments":{..}}</longcat_tool_call>
+  | "olmo-function-calls" // Olmo 3: <function_calls>name(arg=1)</function_calls>
+  | "seed-xml" // Seed-OSS: <seed:tool_call><function=NAME><parameter=KEY>v</parameter></function></seed:tool_call>
+  | "cohere-action"; // Cohere Command: <|START_ACTION|>[{"tool_name":..,"parameters":{..}}]<|END_ACTION|>
 
 export type DetectKind = Dialect | "native-structured" | "prose" | "unknown";
 
@@ -122,6 +130,49 @@ const FINGERPRINTS: Fingerprint[] = [
     label: "<start_function_call>call:",
   },
   {
+    dialect: "lfm-tokens",
+    strong: /<\|tool_call_start\|>/,
+    label: "<|tool_call_start|>",
+  },
+  {
+    dialect: "hy3-tags",
+    strong: /<tool_calls?:opensource>/,
+    label: "<tool_calls:opensource>",
+  },
+  {
+    dialect: "solar-tokens",
+    strong: /<\|tool_call:begin\|>|<\|tool_calls\|>/,
+    label: "Solar tool-call tokens",
+  },
+  {
+    dialect: "longcat-json",
+    strong: /<longcat_tool_call>/,
+    label: "<longcat_tool_call>",
+  },
+  {
+    dialect: "seed-xml",
+    strong: /<seed:tool_call>/,
+    label: "<seed:tool_call>",
+  },
+  {
+    dialect: "cohere-action",
+    strong: /<\|START_ACTION\|>/,
+    label: "<|START_ACTION|>",
+  },
+  {
+    // Claude-style <function_calls><invoke ...> is a different form: only a
+    // Python call right after the tag is Olmo's.
+    dialect: "olmo-function-calls",
+    strong: new RegExp(String.raw`<function_calls>\s*${NAME}\(`),
+    label: "<function_calls>name(",
+  },
+  {
+    dialect: "granite-tokens",
+    strong: /<\|tool_call\|>\s*\[/,
+    weak: /<\|tool_call\|>/,
+    label: "<|tool_call|>[",
+  },
+  {
     dialect: "llama-python-tag",
     strong: /<\|python_tag\|>/,
     label: "<|python_tag|>",
@@ -187,7 +238,7 @@ function scan(
     if (f.strong.test(text)) {
       // Opening and closing markers both present means a finished call.
       const closed =
-        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>|<\|close\|>tools/.test(
+        /<\/function>|<\/tool_call>|<\/invoke>|<\|call\|>|<\|tool_call_end\|>|<end_function_call>|<\/minimax:tool_call>|<\/arg_value>|<\/tool_calls:opensource>|<\|tool_call:end\|>|<\|calls\|>|<\/longcat_tool_call>|<\/seed:tool_call>|<\|END_ACTION\|>|<\/function_calls>|<\|close\|>tools/.test(
           text,
         );
       return {
@@ -354,6 +405,18 @@ export function dialectFromChatTemplate(
     ["functiongemma", /start_function_call/, "start_function_call"],
     ["llama-python-tag", /<\|python_tag\|>/, "python_tag"],
     ["mistral", /\[TOOL_CALLS\]/, "[TOOL_CALLS]"],
+    ["lfm-tokens", /<\|tool_call_start\|>/, "<|tool_call_start|>"],
+    [
+      "hy3-tags",
+      /tool_calls\{\}>|tool_calls:opensource>/,
+      "<tool_calls:opensource>",
+    ],
+    ["solar-tokens", /<\|tool_call:begin\|>/, "<|tool_call:begin|>"],
+    ["longcat-json", /<longcat_tool_call>/, "<longcat_tool_call>"],
+    ["seed-xml", /<seed:tool_call>/, "<seed:tool_call>"],
+    ["cohere-action", /<\|START_ACTION\|>/, "<|START_ACTION|>"],
+    ["olmo-function-calls", /<function_calls>/, "<function_calls>"],
+    ["granite-tokens", /<\|tool_call\|>/, "<|tool_call|>"],
     ["glm-xml", /<arg_key>/, "<arg_key>"],
     ["qwen-xml", /<function=[\s\S]*<parameter=/, "<function=/<parameter="],
     ["llama-function-tag", /<function=/, "<function= without <parameter="],

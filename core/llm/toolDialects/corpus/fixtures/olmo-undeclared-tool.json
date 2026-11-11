@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "id": "olmo-undeclared-tool",
+  "family": "olmo-3",
+  "dialect": "olmo-function-calls",
+  "kind": "negative",
+  "failureMode": "undeclared-tool",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/allenai/Olmo-3-7B-Instruct/blob/main/chat_template.jinja and vLLM docs tool_calling.md (Olmo 3), not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<function_calls>delete_everything(city=\"Paris\")</function_calls>",
+  "markers": ["<function_calls>", "</function_calls>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<function_calls>delete_everything(city=\"Paris\")</function_calls>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">",
+        "d",
+        "e",
+        "l",
+        "e",
+        "t",
+        "e",
+        "_",
+        "e",
+        "v",
+        "e",
+        "r",
+        "y",
+        "t",
+        "h",
+        "i",
+        "n",
+        "g",
+        "(",
+        "c",
+        "i",
+        "t",
+        "y",
+        "=",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        ")",
+        "<",
+        "/",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<functio",
+        "n_calls>delete_everything(city=\"Paris\")</function_calls>"
+      ],
+      "splitInside": "<function_calls>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<function_calls>",
+        "delete_everything(city=\"Paris\")",
+        "</function_calls>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<func",
+        "tion",
+        "_ca",
+        "ll",
+        "s>del",
+        "ete_",
+        "e",
+        "v",
+        "eryt",
+        "hin",
+        "g(ci",
+        "ty=\"",
+        "P",
+        "ar",
+        "is\")",
+        "<",
+        "/func",
+        "t",
+        "ion_",
+        "calls",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<function_calls>delete_everything(city=\"Paris\")</function_calls>"
+  }
+}

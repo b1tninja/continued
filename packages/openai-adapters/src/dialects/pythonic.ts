@@ -168,7 +168,7 @@ class Literals {
 }
 
 /** One call at `at`, or undefined when it is not a complete valid call. */
-function parseCall(
+export function parsePythonicCall(
   text: string,
   at: number,
   tools: DialectTool[],
@@ -213,7 +213,7 @@ export function recoverPythonicCalls(
   for (;;) {
     while (at < text.length && /\s/.test(text[at])) at++;
     if (at >= text.length) break;
-    const one = parseCall(text, at, tools);
+    const one = parsePythonicCall(text, at, tools);
     if (!one) return undefined;
     calls.push(one.call);
     at = one.end;

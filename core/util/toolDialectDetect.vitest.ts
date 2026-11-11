@@ -102,6 +102,43 @@ describe("classifyToolReply: structured and mixed", () => {
   });
 });
 
+describe("the Group C forms", () => {
+  test("a Claude-style <function_calls><invoke> block is not Olmo's form", () => {
+    const r = classifyToolReply({
+      content:
+        '<function_calls>\n<invoke name="Read">\n<parameter name="path">a</parameter>\n</invoke>\n</function_calls>',
+      knownTools: ["Read"],
+    });
+    expect(r.dialect).not.toBe("olmo-function-calls");
+  });
+
+  test("a reply that merely mentions a token is not accepted as a call", () => {
+    const r = classifyToolReply({
+      content: "The <|tool_call|> token starts a call.",
+    });
+    expect(r.confidence).toBeLessThan(ACCEPT_THRESHOLD);
+  });
+
+  test.each([
+    ["{{ '<tool_calls{}>'.format(HYTK) }}", "hy3-tags"],
+    ["<|tool_call_start|>[", "lfm-tokens"],
+    ["<|tool_call:begin|>", "solar-tokens"],
+    ["<longcat_tool_call>", "longcat-json"],
+    ["<seed:tool_call>", "seed-xml"],
+    ["<|START_ACTION|>", "cohere-action"],
+    [
+      "Output any function calls within <function_calls></function_calls>",
+      "olmo-function-calls",
+    ],
+    [
+      "respond only with <|tool_call|> followed by a JSON list",
+      "granite-tokens",
+    ],
+  ])("reads the template marker %s", (template, dialect) => {
+    expect(dialectFromChatTemplate(template)?.dialect).toBe(dialect);
+  });
+});
+
 describe("dialectFromChatTemplate", () => {
   test("qwen3-coder template literals", () => {
     expect(

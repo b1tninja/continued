@@ -12,6 +12,7 @@ import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
 import { MinimaxNsRecovery } from "./minimaxNs.js";
 import { MinimaxXmlRecovery } from "./minimaxXml.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
+import { WRAPPER_ROWS, WrapperRecovery } from "./wrapperDialects.js";
 import { ToolcallJsonRecovery } from "./toolcallJson.js";
 import {
   type DialectTool,
@@ -164,6 +165,11 @@ function chooseRecovery(
   }
   if (wants(settings, "toolcall-json", model, /nemotron/i)) {
     return { dialect: "toolcall-json", stage: new ToolcallJsonRecovery(tools) };
+  }
+  for (const row of WRAPPER_ROWS) {
+    if (wants(settings, row.dialect, model, row.nameRe)) {
+      return { dialect: row.dialect, stage: new WrapperRecovery(tools, row) };
+    }
   }
   return undefined;
 }

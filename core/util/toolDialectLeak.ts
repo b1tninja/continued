@@ -23,6 +23,14 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   "kimi-xtml": "kimi-xtml",
   "minimax-xml": "minimax-xml",
   "minimax-ns-xml": "minimax-ns-xml",
+  "granite-tokens": "granite-tokens",
+  "lfm-tokens": "lfm-tokens",
+  "hy3-tags": "hy3-tags",
+  "solar-tokens": "solar-tokens",
+  "longcat-json": "longcat-json",
+  "olmo-function-calls": "olmo-function-calls",
+  "seed-xml": "seed-xml",
+  "cohere-action": "cohere-action",
 };
 
 /**

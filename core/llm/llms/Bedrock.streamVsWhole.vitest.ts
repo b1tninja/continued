@@ -68,6 +68,21 @@ const CALLS: Record<string, string> = {
     ']<]minimax[>[<tool_call>\n]<]minimax[>[<invoke name="Read">]<]minimax[>[<filepath>a.txt]<]minimax[>[</filepath>]<]minimax[>[</invoke>\n]<]minimax[>[</tool_call>',
   "toolcall-json":
     '<TOOLCALL>[{"name": "Read", "arguments": {"filepath": "a.txt"}}]</TOOLCALL>',
+  "granite-tokens":
+    '<|tool_call|>[{"name": "Read", "arguments": {"filepath": "a.txt"}}]',
+  "lfm-tokens": "<|tool_call_start|>[Read(filepath='a.txt')]<|tool_call_end|>",
+  "hy3-tags":
+    "<tool_calls:opensource><tool_call:opensource>Read<tool_sep:opensource><arg_key:opensource>filepath</arg_key:opensource><arg_value:opensource>a.txt</arg_value:opensource></tool_call:opensource></tool_calls:opensource>",
+  "solar-tokens":
+    '<|tool_calls|><|tool_call:begin|>a1b2c3d4e5<|tool_call:name|>Read<|tool_call:args|>{"filepath": "a.txt"}<|tool_call:end|><|calls|>',
+  "longcat-json":
+    '<longcat_tool_call>{"name": "Read", "arguments": {"filepath": "a.txt"}}</longcat_tool_call>',
+  "olmo-function-calls":
+    '<function_calls>Read(filepath="a.txt")</function_calls>',
+  "seed-xml":
+    "<seed:tool_call><function=Read><parameter=filepath>a.txt</parameter></function></seed:tool_call>",
+  "cohere-action":
+    '<|START_ACTION|>[{"tool_name": "Read", "parameters": {"filepath": "a.txt"}}]<|END_ACTION|>',
 };
 
 const refusedStreaming = () =>

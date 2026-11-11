@@ -202,12 +202,25 @@ describe("tool dialect presets", () => {
     ["stepfun-ai/Step-3.5-Flash", "step-3.5-3.7", "qwen-xml"],
     ["stepfun/step-3.7-flash", "step-3.5-3.7", "qwen-xml"],
     // Liquid LFM
-    ["LiquidAI/LFM2.5-24B-A2B", "liquid-lfm", "none"],
-    ["liquid/lfm-2.5-2.6b:free", "liquid-lfm", "none"],
-    ["lfm2:8b", "liquid-lfm", "none"],
+    ["LiquidAI/LFM2.5-24B-A2B", "liquid-lfm", "lfm-tokens"],
+    ["liquid/lfm-2.5-2.6b:free", "liquid-lfm", "lfm-tokens"],
+    ["lfm2:8b", "liquid-lfm", "lfm-tokens"],
     // Tencent Hy3
-    ["tencent/Hy3", "hy3", "none"],
-    ["tencent/hy3-preview", "hy3", "none"],
+    ["tencent/Hy3", "hy3", "hy3-tags"],
+    ["tencent/hy3-preview", "hy3", "hy3-tags"],
+    // Group C families
+    ["ibm-granite/granite-3.3-8b-instruct", "granite-3", "granite-tokens"],
+    ["granite3.3:8b", "granite-3", "granite-tokens"],
+    ["upstage/Solar-Open-100B", "solar-open", "solar-tokens"],
+    ["meituan-longcat/LongCat-Flash-Chat", "longcat-flash", "longcat-json"],
+    ["allenai/Olmo-3-7B-Instruct", "olmo-3", "olmo-function-calls"],
+    ["ByteDance-Seed/Seed-OSS-36B-Instruct", "seed-oss", "seed-xml"],
+    [
+      "CohereLabs/command-a-reasoning-08-2025",
+      "cohere-command",
+      "cohere-action",
+    ],
+    ["cohere.command-r7b-12-2024", "cohere-command", "cohere-action"],
   ];
   it.each(FAMILIES)(
     "%s resolves to %s with text dialect %s",
@@ -219,13 +232,9 @@ describe("tool dialect presets", () => {
   );
 
   it("does not recover a form no parser exists for, and says so", () => {
-    for (const id of ["deepseek-v4", "liquid-lfm", "hy3"]) {
+    for (const id of ["deepseek-v4"]) {
       const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
       expect(p?.recoverWith, id).toBeUndefined();
-    }
-    for (const id of ["liquid-lfm", "hy3"]) {
-      const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
-      expect(p?.promptStyle.evidence, id).toMatch(/not yet recoverable/);
     }
   });
 
@@ -296,7 +305,11 @@ describe("tool dialect presets", () => {
     expect(resolveToolDialectPreset("innovator-7b")).toBeUndefined();
     expect(resolveToolDialectPreset("mimosa-7b")).toBeUndefined();
     expect(resolveToolDialectPreset("stepper-3b")).toBeUndefined();
-    expect(resolveToolDialectPreset("granite-3.3-8b-instruct")).toBeUndefined();
+    expect(resolveToolDialectPreset("granite-2b")).toBeUndefined();
+    expect(
+      resolveToolDialectPreset("cohere.command-r-plus-v1:0"),
+    ).toBeUndefined();
+    expect(resolveToolDialectPreset("command-a")?.id).toBe("cohere-command");
     expect(resolveToolDialectPreset("")).toBeUndefined();
     expect(resolveToolDialectPreset(undefined)).toBeUndefined();
   });
@@ -345,6 +358,14 @@ describe("tool dialect presets", () => {
       "kimi-xtml",
       "minimax-xml",
       "minimax-ns-xml",
+      "granite-tokens",
+      "lfm-tokens",
+      "hy3-tags",
+      "solar-tokens",
+      "longcat-json",
+      "olmo-function-calls",
+      "seed-xml",
+      "cohere-action",
     ];
     for (const p of TOOL_DIALECT_PRESETS) {
       if (p.recoverWith) expect(built, p.id).toContain(p.recoverWith);

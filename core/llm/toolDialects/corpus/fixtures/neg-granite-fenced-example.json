@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-granite-fenced-example",
+  "family": "granite-3.x",
+  "dialect": "granite-tokens",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/ibm-granite/granite-3.3-8b-instruct/blob/main/tokenizer_config.json and vLLM granite_tool_parser.py, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "The model must reply with:\n\n```\n<|tool_call|>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]\n```",
+  "markers": ["<|tool_call|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "The model must reply with:\n\n```\n<|tool_call|>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]\n```"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "T",
+        "h",
+        "e",
+        " ",
+        "m",
+        "o",
+        "d",
+        "e",
+        "l",
+        " ",
+        "m",
+        "u",
+        "s",
+        "t",
+        " ",
+        "r",
+        "e",
+        "p",
+        "l",
+        "y",
+        " ",
+        "w",
+        "i",
+        "t",
+        "h",
+        ":",
+        "\n",
+        "\n",
+        "`",
+        "`",
+        "`",
+        "\n",
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">",
+        "[",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        "]",
+        "\n",
+        "`",
+        "`",
+        "`"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "The model must reply with:\n\n```\n<|tool",
+        "_call|>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]\n```"
+      ],
+      "splitInside": "<|tool_call|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "The model must reply with:\n\n```\n",
+        "<|tool_call|>",
+        "[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]\n```"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "The",
+        " ",
+        "mod",
+        "el mu",
+        "s",
+        "t re",
+        "p",
+        "ly wi",
+        "th",
+        ":",
+        "\n\n``",
+        "`\n<|t",
+        "o",
+        "ol_ca",
+        "ll|",
+        ">",
+        "[{",
+        "\"nam",
+        "e\"",
+        ": \"ge",
+        "t_we",
+        "ath",
+        "er",
+        "\",",
+        " \"a",
+        "r",
+        "gume",
+        "nts\":",
+        " {\"c",
+        "ity\":",
+        " \"Par",
+        "i",
+        "s\"}}",
+        "]\n",
+        "```"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "The model must reply with:\n\n```\n<|tool_call|>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]\n```"
+  }
+}

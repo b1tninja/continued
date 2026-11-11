@@ -16,6 +16,14 @@ const DIALECTS = [
   "minimax-xml",
   "minimax-ns-xml",
   "toolcall-json",
+  "granite-tokens",
+  "lfm-tokens",
+  "hy3-tags",
+  "solar-tokens",
+  "longcat-json",
+  "olmo-function-calls",
+  "seed-xml",
+  "cohere-action",
 ];
 const FIXTURES = path.resolve(
   __dirname,

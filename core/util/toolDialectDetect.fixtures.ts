@@ -157,6 +157,70 @@ export const POSITIVE: Fixture[] = [
       "minimax:tool_call tag from the vLLM minimax_m2 page via the design doc; body assembled by us",
     text: '<minimax:tool_call>\n<invoke name="Read">\n<parameter name="path">a.ts</parameter>\n</invoke>\n</minimax:tool_call>',
   },
+  {
+    name: "granite 3.x call",
+    dialect: "granite-tokens",
+    origin: "template",
+    source:
+      "https://huggingface.co/ibm-granite/granite-3.3-8b-instruct/raw/main/tokenizer_config.json ('respond only with <|tool_call|> followed by a JSON list of tools used'); item shape from vLLM granite_tool_parser.py",
+    text: '<|tool_call|>[{"name": "get_weather", "arguments": {"city": "Paris"}}]',
+  },
+  {
+    name: "liquid lfm2 call",
+    dialect: "lfm-tokens",
+    origin: "verbatim",
+    source:
+      "https://docs.liquid.ai/lfm/key-concepts/tool-use (the example output line)",
+    text: '<|tool_call_start|>[get_candidate_status(candidate_id="12345")]<|tool_call_end|>',
+  },
+  {
+    name: "hy3 call",
+    dialect: "hy3-tags",
+    origin: "template",
+    source:
+      "https://huggingface.co/tencent/Hy3/raw/main/chat_template.jinja (tool_calls_begin, toolcall_begin, toolsep, argkey and argvalue tokens, suffix :opensource)",
+    text: "<tool_calls:opensource>\n<tool_call:opensource>get_weather<tool_sep:opensource>\n<arg_key:opensource>city</arg_key:opensource>\n<arg_value:opensource>Paris</arg_value:opensource>\n</tool_call:opensource>\n</tool_calls:opensource>",
+  },
+  {
+    name: "solar open call",
+    dialect: "solar-tokens",
+    origin: "template",
+    source:
+      "https://huggingface.co/upstage/Solar-Open-100B/raw/main/chat_template.jinja ('Tool Call Format' and the assistant tool_calls renderer)",
+    text: '<|tool_calls|><|tool_call:begin|>a1b2c3d4e5<|tool_call:name|>get_weather<|tool_call:args|>{"city": "Paris"}<|tool_call:end|><|calls|>',
+  },
+  {
+    name: "longcat call",
+    dialect: "longcat-json",
+    origin: "template",
+    source:
+      "https://huggingface.co/meituan-longcat/LongCat-Flash-Chat/raw/main/tokenizer_config.json (the 'Note' on function calls)",
+    text: '<longcat_tool_call>\n{"name": "get_weather", "arguments": {"city": "Paris"}}\n</longcat_tool_call>',
+  },
+  {
+    name: "olmo 3 call",
+    dialect: "olmo-function-calls",
+    origin: "template",
+    source:
+      "https://huggingface.co/allenai/Olmo-3-7B-Instruct/raw/main/chat_template.jinja (the assistant tool_calls renderer)",
+    text: '<function_calls>get_weather(city="Paris")</function_calls>',
+  },
+  {
+    name: "seed-oss call",
+    dialect: "seed-xml",
+    origin: "template",
+    source:
+      "https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct/raw/main/chat_template.jinja (the tool call format line)",
+    text: "<seed:tool_call>\n<function=get_weather>\n<parameter=city>Paris</parameter>\n</function>\n</seed:tool_call>",
+  },
+  {
+    name: "cohere command action",
+    dialect: "cohere-action",
+    origin: "verbatim",
+    source:
+      "https://docs.cohere.com/docs/command-a-hf (the rendered prompt example)",
+    text: '<|START_ACTION|> [ {"tool_call_id": "0", "tool_name": "get_weather", "parameters": {"city": "Paris"}} ] <|END_ACTION|>',
+  },
 ];
 
 /** Replies that must never classify as a dialect. Written by us. */
