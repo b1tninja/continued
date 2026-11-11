@@ -170,7 +170,7 @@ npm run eval:reviewer -- --ollama --model qwen2.5-coder:7b --out ollama.md
 Before you rely on new `guidance` text or a different reviewer model, score it against labelled calls:
 
 ```bash
-continuous review-eval --dataset core/tools/permissions/auto/evaluation/datasets/reviewer-starter.json \
+continuous reviewer eval --dataset core/tools/permissions/auto/evaluation/datasets/reviewer-starter.json \
   --reviewer reviewer --guidance my-guidance.md --compare default
 ```
 

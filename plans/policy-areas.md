@@ -246,16 +246,17 @@ Protected paths and the safety check become rules you can see and switch off, by
 
 Two things are not switchable:
 
-- **Writes to the policy itself** (`~/.continue/permissions.yaml`, `toolPermissions` in `config.yaml`, the `.continue` and `.claude` directories) ask at every level but YOLO. A repository or the agent must not be able to turn this off.
+- **Writes to the policy itself** (`config.yaml`, `permissions.yaml`, `mcp-tool-pins.json`, the audit files, and project `.continue` or `.continuous` rule and block files and `.continuerc.*`; PR #516, `selfProtect`) ask below Automatic and are refused at Automatic and YOLO. No setting switches this off, and `protect-config` does not govern it. It covers edit tools, terminal commands that name the path and non-read-only MCP tools naming it. A repository or the agent must not be able to turn this off. Decided 2026-11-10: files the product loads as hooks, rules or settings join this list as locks (ROADMAP B6a, B18).
 - **YOLO and IDGAF are never read from disk.** They are set from the picker or a flag and last for the session (see "Settings"). So an agent that writes `yolo` into the policy file changes nothing for the next session.
 
 Built-ins are stored as switches by id, never copied into your file, so new built-ins arrive with updates and nothing is lost by omission. Switching one off is how a false alarm such as `\\w.py` gets fixed.
 
 ## YOLO
 
-YOLO approves everything: no rule, built-in or reviewer is consulted. This is by decision. Three things still bind, because they are not approval:
+YOLO approves everything: no rule, built-in or reviewer is consulted. This is by decision. Four things still bind, because they are not approval:
 
 - a tool that is switched off stays off;
+- the locked policy files, which are refused at YOLO (PR #516, see "Writes to the policy itself");
 - an organisation ceiling (below);
 - hooks, which are the user's own programs.
 

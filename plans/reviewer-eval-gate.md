@@ -5,7 +5,7 @@ A runnable check of a reviewer configuration (model plus prompt guidance) over l
 ## Running it
 
 ```bash
-continuous review-eval --dataset <file> --reviewer <model-role> [--guidance <file>] [--compare <file>|default] [--profile <id>] [--run] [--json]
+continuous reviewer eval --dataset <file> --reviewer <model-role> [--guidance <file>] [--compare <file>|default] [--profile <id>] [--run] [--json]
 ```
 
 Without `--run` nothing is sent: the command builds every request with `buildReviewMessages` and prints the number of calls, an estimated input size (four characters a token) and the output ceiling. With `--run` it prints the same plan first, then calls the reviewer through the same path the CLI's Auto mode uses (`createReviewer`), reads each reply with `parseReviewerReply`, and scores. The rules engine is not in the loop: this measures the model and its prompt, not the floor before it. `--profile` is an opaque id carried into the report for the per-model profiles that come later.
