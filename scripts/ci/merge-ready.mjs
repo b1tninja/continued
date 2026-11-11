@@ -1,33 +1,36 @@
 #!/usr/bin/env node
 // Read-only merge planner for the serial-merge protocol (docs/ci-merge-gate.md).
-//   node scripts/ci/merge-ready.mjs 518 519 520 [--repo owner/name]
+//   node scripts/ci/merge-ready.mjs 518 519 520 [--repo owner/name] [--combine]
+// --combine: fresh `git fetch origin` of main and each PR head into refs/combine/*, then a pairwise
+// `git merge-tree --write-tree` matrix (does A conflict when merged after B) and the hot-file list.
+// No checkout; nothing is written to the working tree or index.
 // For each PR: is the head up to date with main, what is the `merge-gate` state, does it conflict.
 // Then prints a safe merge order. It never merges, updates a branch, or reruns anything.
 import { execFileSync } from "node:child_process";
+import { HOT, combineMatrix, fetchPrRefs, formatMatrix } from "./combine.mjs";
 
 const args = process.argv.slice(2);
 let repo = "b1tninja/continuous";
 const ri = args.indexOf("--repo");
 if (ri >= 0) repo = args.splice(ri, 2)[1];
+const ci = args.indexOf("--combine");
+const combine = ci >= 0;
+if (combine) args.splice(ci, 1);
 const numbers = args.filter((a) => /^\d+$/.test(a)).map(Number);
 if (!numbers.length) {
   console.error("usage: merge-ready.mjs <pr> [<pr> ...] [--repo owner/name]");
   process.exit(2);
 }
 
+if (combine) {
+  const { main, prs } = fetchPrRefs(process.cwd(), numbers);
+  console.log(formatMatrix(combineMatrix(process.cwd(), main, prs)) + "
+");
+}
+
 const gh = (...a) =>
   execFileSync("gh", a, { encoding: "utf8", maxBuffer: 1 << 28 });
 const json = (...a) => JSON.parse(gh(...a));
-
-// Files that feature branches tend to share; two PRs sharing one must be merged serially.
-const HOT = [
-  /dialect/i,
-  /loadYaml\.ts$/,
-  /evaluate\.ts$/,
-  /extensions\/cli\/src\/index\.ts$/,
-  /ROADMAP/i,
-  /recovery/i,
-];
 
 function gateState(sha) {
   const pages = json(
