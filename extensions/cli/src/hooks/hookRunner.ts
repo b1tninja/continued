@@ -4,6 +4,7 @@ import type { ChildProcess } from "child_process";
 import { terminalEnvironment } from "core/util/terminalEnvironment.js";
 
 import { logger } from "../util/logger.js";
+import { cliFetch } from "../util/networkFetch.js";
 
 import { getMatchingHookGroups } from "./hookConfig.js";
 import {
@@ -263,7 +264,7 @@ async function executeHttpHook(
       }
     }
 
-    const response = await fetch(handler.url, {
+    const response = await cliFetch(handler.url, {
       method: "POST",
       headers,
       body: JSON.stringify(input),

@@ -13,6 +13,7 @@ import { addAuditSuggestOptions } from "./commands/auditSuggest.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { registerCleanCommand } from "./commands/clean.js";
+import { doctorCommand } from "./commands/doctor.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
@@ -426,6 +427,16 @@ program
   .action(async (action: string | undefined, options) => {
     const code = await hooksCommand(action, { yes: options.yes });
     await gracefulExit(code);
+  });
+
+// Connection diagnostics
+program
+  .command("doctor [topic] [urls...]")
+  .description(
+    "Diagnose proxy and certificate problems (doctor network [url...])",
+  )
+  .action(async (topic: string | undefined, urls: string[]) => {
+    await gracefulExit(await doctorCommand(topic, urls));
   });
 
 // Reviewer evaluation: dry by default, --run sends the requests
