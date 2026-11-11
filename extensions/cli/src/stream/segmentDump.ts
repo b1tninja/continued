@@ -1,8 +1,8 @@
+import { promptProfile } from "core/llm/prompts/turns.js";
 import {
   createSegmentDump,
   promptSegmentsEnabled,
 } from "core/llm/promptSegments.js";
-import { promptProfile } from "core/llm/prompts/turns.js";
 import type {
   ChatCompletionCreateParamsStreaming,
   ChatCompletionTool,

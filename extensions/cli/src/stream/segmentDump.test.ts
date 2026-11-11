@@ -23,8 +23,7 @@ afterEach(() => {
 });
 
 async function run(env: string | undefined): Promise<string> {
-  if (env !== undefined) vi.stubEnv("CONTINUE_PROMPT_SEGMENTS", env);
-  else vi.stubEnv("CONTINUE_PROMPT_SEGMENTS", "");
+  vi.stubEnv("CONTINUE_PROMPT_SEGMENTS", env ?? "");
   vi.resetModules();
   const write = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   const { dumpPromptSegments } = await import("./segmentDump.js");
