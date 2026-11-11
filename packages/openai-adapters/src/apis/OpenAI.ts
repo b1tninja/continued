@@ -16,6 +16,11 @@ import type {
   ResponseStreamEvent,
 } from "openai/resources/responses/responses.js";
 import { z } from "zod";
+import {
+  recoverChatCompletion,
+  recoverChatStream,
+  takeChatRecovery,
+} from "../dialects/chatStream.js";
 import { OpenAIConfigSchema } from "../types.js";
 import { customFetch } from "../util.js";
 import {
@@ -162,13 +167,13 @@ export class OpenAIApi implements BaseLlmApi {
       const response = await this.responsesNonStream(body, signal);
       return responseToChatCompletion(response);
     }
-    const response = await this.openai.chat.completions.create(
-      this.modifyChatBody(body),
-      {
-        signal,
-      },
-    );
-    return response;
+    // Off unless asked for: see dialects/chatStream.ts.
+    const modified = this.modifyChatBody(body);
+    const { stage, tools, ask } = takeChatRecovery(modified);
+    const response = await this.openai.chat.completions.create(modified, {
+      signal,
+    });
+    return stage ? recoverChatCompletion(response, tools, ask) : response;
   }
 
   async *chatCompletionStream(
@@ -181,14 +186,15 @@ export class OpenAIApi implements BaseLlmApi {
       }
       return;
     }
-    const response = await this.openai.chat.completions.create(
-      this.modifyChatBody(body),
-      {
-        signal,
-      },
-    );
+    const modified = this.modifyChatBody(body);
+    const { stage } = takeChatRecovery(modified);
+    const response = await this.openai.chat.completions.create(modified, {
+      signal,
+    });
     let lastChunkWithUsage: ChatCompletionChunk | undefined;
-    for await (const result of response) {
+    for await (const result of stage
+      ? recoverChatStream(response, stage)
+      : response) {
       // Check if this chunk contains usage information
       if (result.usage) {
         // Store it to emit after all content chunks

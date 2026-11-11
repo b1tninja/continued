@@ -20,9 +20,36 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   "glm-xml": "glm-xml",
 };
 
-/** Only the Bedrock handlers recover calls from text. */
-export function providerRecoversText(provider: string | undefined): boolean {
-  return provider === "bedrock";
+/**
+ * Providers whose chat stream goes through the OpenAI-compatible adapter
+ * (packages/openai-adapters, apis/OpenAI.ts), which recovers calls from text
+ * when asked. The IDE reaches it for these providers; Ollama's IDE path is its
+ * own native chat and does not (the CLI reaches it for Ollama too).
+ */
+const OPENAI_COMPATIBLE = new Set([
+  "openai",
+  "lmstudio",
+  "llama.cpp",
+  "llamafile",
+  "vllm",
+  "text-gen-webui",
+  "msty",
+]);
+
+/**
+ * Whether this provider recovers calls from text: the Bedrock handlers and
+ * the OpenAI-compatible adapter. `surface` is where the request is made.
+ */
+export function providerRecoversText(
+  provider: string | undefined,
+  surface: "ide" | "cli" = "ide",
+): boolean {
+  if (!provider) return false;
+  return (
+    provider === "bedrock" ||
+    OPENAI_COMPATIBLE.has(provider) ||
+    (surface === "cli" && provider === "ollama")
+  );
 }
 
 export interface ToolDialectLeak {

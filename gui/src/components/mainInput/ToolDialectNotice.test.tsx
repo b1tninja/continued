@@ -85,7 +85,7 @@ describe("ToolDialectNotice", () => {
     const a = await setup(leaked, model("bedrock", "off"));
     await a.check();
     expect(screen.queryByTestId("tool-dialect-notice")).toBeNull();
-    const b = await setup(leaked, model("openai"));
+    const b = await setup(leaked, model("anthropic"));
     await b.check();
     expect(screen.queryByTestId("tool-dialect-notice")).toBeNull();
   });

@@ -53,7 +53,7 @@ describe("CLI tool dialect hint", () => {
     });
     hintToolDialectLeak({
       ...base,
-      model: model({ provider: "openai" }),
+      model: model({ provider: "anthropic" }),
       content: leaked,
     });
     expect(print).not.toHaveBeenCalled();

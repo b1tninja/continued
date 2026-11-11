@@ -101,9 +101,22 @@ describe("buildChatRequestBody and toolDialect", () => {
     });
   });
 
+  it.each(["openai", "ollama", "lmstudio", "vllm"])(
+    "maps toolDialect onto the recovery field for %s",
+    (provider) => {
+      delete process.env.CONTINUE_RECOVER_TEXT_TOOL_CALLS;
+      const body = buildChatRequestBody({
+        model: { ...model(provider), toolDialect: "qwen-xml" } as ModelConfig,
+        chatHistory: [user("hi")],
+        systemMessage: "sys",
+      }) as any;
+      expect(body.x_continue_recover_text_tool_calls).toBe("force:qwen-xml");
+    },
+  );
+
   it("leaves other providers alone", () => {
     const body = buildChatRequestBody({
-      model: { ...model("openai"), toolDialect: "qwen-xml" } as ModelConfig,
+      model: { ...model("anthropic"), toolDialect: "qwen-xml" } as ModelConfig,
       chatHistory: [user("hi")],
       systemMessage: "sys",
     }) as any;

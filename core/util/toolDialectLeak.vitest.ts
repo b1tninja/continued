@@ -52,9 +52,15 @@ describe("detectToolDialectLeak", () => {
     expect(detectToolDialectLeak({ content, current: "auto" })).toBeDefined();
   });
 
-  it("covers Bedrock only, and words the notice as agreed", () => {
+  it("covers Bedrock and the OpenAI-compatible adapter, and words the notice as agreed", () => {
     expect(providerRecoversText("bedrock")).toBe(true);
-    expect(providerRecoversText("openai")).toBe(false);
+    expect(providerRecoversText("openai")).toBe(true);
+    expect(providerRecoversText("lmstudio")).toBe(true);
+    expect(providerRecoversText("anthropic")).toBe(false);
+    expect(providerRecoversText(undefined)).toBe(false);
+    // Ollama's IDE path is native chat; the CLI goes through the adapter.
+    expect(providerRecoversText("ollama")).toBe(false);
+    expect(providerRecoversText("ollama", "cli")).toBe(true);
     expect(leakNoticeText("qwen-xml")).toBe(
       "This model wrote a tool call as text (looks like qwen-xml). Turn on recovery for this model?",
     );
