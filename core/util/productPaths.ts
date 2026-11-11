@@ -80,7 +80,7 @@ export const PRODUCT_LOADED_DIRS = {
  * config. These are locked too (the folder is locked as a whole), but listed
  * so that a new name has to be put in one list or the other on purpose.
  */
-export const PRODUCT_STATE_PATHS: readonly string[] = [
+export const PRODUCT_STATE_PATHS = [
   "sessions",
   "index",
   "logs",
@@ -96,7 +96,18 @@ export const PRODUCT_STATE_PATHS: readonly string[] = [
   ".onboarding_complete",
   "node_modules",
   "plans",
-];
+] as const;
+
+export type LoadedDirName = keyof typeof PRODUCT_LOADED_DIRS;
+export type LoadedFileName = keyof typeof PRODUCT_LOADED_FILES;
+export type StatePathName = (typeof PRODUCT_STATE_PATHS)[number];
+
+/**
+ * A loader names its folder or file through these, so a name that is in no
+ * list is a type error, not a path that escapes the lock.
+ */
+export const loadedDir = <K extends LoadedDirName>(name: K): K => name;
+export const loadedFile = <K extends LoadedFileName>(name: K): K => name;
 
 /** `.claude` is another tool's folder that this product also reads. */
 export const FOREIGN_CONFIG_DIR = ".claude";
