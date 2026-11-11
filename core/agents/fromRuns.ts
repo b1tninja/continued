@@ -1,5 +1,7 @@
 import type { LoopParallelRun, SubagentRunState } from "..";
 import type { SubagentRunStatus } from "../subagents/result";
+import { findLastIndex } from "../util/findLast";
+import { activityForTool } from "./activity";
 import type { AgentNode, AgentState } from "./types";
 
 /**
@@ -40,6 +42,12 @@ export function subagentRunToNode(
   if (waiting) {
     node.blockedOn = { kind: "approval" };
     node.activity = "waiting for you";
+  }
+  // Only the name of the call in progress is read, never its summary.
+  const callingAt = findLastIndex(run.toolCalls, (c) => c.status === "calling");
+  const calling = callingAt >= 0 ? run.toolCalls[callingAt] : undefined;
+  if (run.status === "running" && !waiting && calling) {
+    node.activity = activityForTool(calling.name);
   }
   if (run.startedAt !== undefined) node.startedAt = run.startedAt;
   if (run.endedAt !== undefined) node.endedAt = run.endedAt;

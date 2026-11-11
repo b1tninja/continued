@@ -58,7 +58,7 @@ function spawn(event: Extract<AgentEvent, { type: "spawned" }>): AgentNode {
     ...(event.blockedOn ? { blockedOn: { kind: event.blockedOn } } : {}),
     ...(event.workspace ? { workspace: cleanWorkspace(event.workspace) } : {}),
     ...(event.budget ? { budget: cleanBudget(event.budget) } : {}),
-    ...(event.at !== undefined ? { startedAt: event.at } : {}),
+    ...(event.at === undefined ? {} : { startedAt: event.at }),
   };
 }
 
@@ -92,7 +92,7 @@ function setUsage(
       cacheRead: count(t.cacheRead) ?? 0,
       cacheWrite: count(t.cacheWrite) ?? 0,
     },
-    ...(event.costUsd !== undefined ? { costUsd: event.costUsd } : {}),
+    ...(event.costUsd === undefined ? {} : { costUsd: event.costUsd }),
   };
 }
 
