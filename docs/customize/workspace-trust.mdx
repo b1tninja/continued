@@ -8,13 +8,16 @@ Configuration that comes with a folder is not applied until you trust the folder
 
 These files, under the folder's `.continuous/` (or the older `.continue/`) directory, are not applied until the folder is trusted:
 
-| Files                                           | Held back                                                           |
-| ----------------------------------------------- | ------------------------------------------------------------------- |
-| `mcpServers/*.yaml`, `*.yml`, `*.json`          | MCP servers are not started, and their secret values are removed |
-| `models/*.yaml`, `*.yml`                        | Model blocks are left out, so they get none of your secrets          |
-| `providers.yaml` and `models.yaml`              | Ignored, in the editor and in the terminal agent                     |
-| `data/*.yaml`, `*.yml`                          | Data destinations are left out                                       |
-| `*.continuousrc.json`, `*.continuerc.json` at the repository root | Not merged; a symlinked file is always ignored        |
+| Files                                                             | Held back                                                              |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `mcpServers/*.yaml`, `*.yml`, `*.json`                            | MCP servers are not started, and their secret values are removed       |
+| `models/*.yaml`, `*.yml`                                          | Model blocks are left out, so they get none of your secrets            |
+| `providers.yaml` and `models.yaml`                                | Ignored, in the editor and in the terminal agent                       |
+| `data/*.yaml`, `*.yml`                                            | Data destinations are left out                                         |
+| `worktrees.json`                                                  | Loop worktrees are still created, but their setup commands are not run |
+| `*.continuousrc.json`, `*.continuerc.json` at the repository root | Not merged; a symlinked file is always ignored                         |
+
+A repository's `worktrees.json` (`setup-worktree`, `setup-worktree-unix`, `setup-worktree-windows`) holds shell commands that run in each new Loop worktree, so they run only once this exact file has been approved. If it is not approved, or changed since you approved it, the worktree is still created, the commands are skipped, and a notice names the file and how to approve it. A run with no terminal, such as `continuous serve`, skips them unless the folder was trusted before or you pass `--trust-project-config`. A `worktrees.json` in your own Continuous folder is yours and always runs. Setup commands run without your API keys and other secrets in their environment.
 
 Your own configuration always wins a name collision: a folder cannot replace a model, provider or MCP server you already have by giving it the same name. A server from a folder also does not receive the sign-in you saved for your own server at the same URL.
 

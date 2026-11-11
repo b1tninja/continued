@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "neg-prose-mentions-mistral-marker",
   "family": "mistral",
-  "dialect": "mistral-json",
+  "dialect": "mistral",
   "kind": "negative",
   "failureMode": "quoted-not-called",
   "flag": "synthesised",

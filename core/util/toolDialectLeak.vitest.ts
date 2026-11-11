@@ -21,6 +21,21 @@ describe("detectToolDialectLeak", () => {
     );
   });
 
+  it("sees Harmony, Mistral and DeepSeek calls written as text", () => {
+    for (const [id, dialect] of [
+      ["harmony-commentary-call", "harmony"],
+      ["mistral-v3-tool-calls-json", "mistral"],
+      ["devstral-args-marker", "mistral"],
+      ["deepseek-v32-dsml-canonical", "dsml"],
+      ["deepseek-v4-dsml-tool-calls-block", "dsml"],
+      ["deepseek-v31-canonical", "deepseek-v31"],
+    ] as const) {
+      expect(detectToolDialectLeak({ content: text(id) }), id).toEqual({
+        dialect,
+      });
+    }
+  });
+
   it("sees the Kimi and MiniMax forms written as text", () => {
     for (const [id, dialect] of [
       ["kimi-k2-canonical", "kimi-tokens"],
@@ -117,6 +132,18 @@ describe("detectToolDialectLeak", () => {
   });
 });
 
+/** Failure modes of a negative that is still a call written as text. */
+const DECLINED_CALL = new Set([
+  "argument-type-mismatch",
+  "malformed",
+  "truncated",
+  "prose-around-call",
+  "undeclared-argument",
+  "one-bad-call",
+  "string-arguments",
+  "bad-constrain",
+]);
+
 describe("isLeakedToolCall", () => {
   const tools = (id: string) => corpus.get(id)!.tools.map((t) => t.name);
   const leak = (id: string, extra?: { toolCalls?: never }) =>
@@ -136,6 +163,9 @@ describe("isLeakedToolCall", () => {
       "nova-python-call-syntax",
       "deepseek-v32-dsml-canonical",
       "mistral-v3-tool-calls-json",
+      "devstral-args-marker",
+      "harmony-commentary-call",
+      "deepseek-v31-canonical",
       "llama3-python-tag-builtin",
       "granite-canonical",
       "lfm-canonical",
@@ -153,10 +183,21 @@ describe("isLeakedToolCall", () => {
   it("does not count negatives, fenced examples or inline mentions", () => {
     for (const f of corpus.values()) {
       if (!f.id.startsWith("neg-")) continue;
-      // Recovery leaves a call with a mistyped argument as text, but it is
-      // still a call written as text, so the nudge applies (next test).
-      if (f.failureMode === "argument-type-mismatch") continue;
+      // Recovery leaves a malformed or refused call as text, but it is still
+      // a call written as text, so the nudge applies (next test).
+      if (DECLINED_CALL.has(f.failureMode)) continue;
       expect(leak(f.id), f.id).toBe(false);
+    }
+  });
+
+  it("counts a malformed, truncated or partly bad call: strict recovery declines it, the nudge does not", () => {
+    for (const f of corpus.values()) {
+      if (!f.id.startsWith("neg-") || !DECLINED_CALL.has(f.failureMode)) {
+        continue;
+      }
+      // The TOOLCALL form has no fingerprint in the classifier yet.
+      if (f.dialect === "toolcall-json") continue;
+      expect(leak(f.id), f.id).toBe(true);
     }
   });
 
@@ -187,6 +228,27 @@ describe("isLeakedToolCall", () => {
         counted.map((f) => f.id),
         id,
       ).toContain(id);
+    }
+  });
+
+  it("counts a declined call of the Kimi, DeepSeek and Harmony shapes, whose tool name follows `functions.` or a separator", () => {
+    const declined: [string, (t: string) => string][] = [
+      // truncated, undeclared argument, prose around: recovery refuses each.
+      ["kimi-k2-canonical", (t) => t.slice(0, t.length - 12)],
+      ["kimi-k2-canonical", (t) => `Reading it. ${t}`],
+      ["harmony-commentary-call", (t) => t.slice(0, t.length - 8)],
+      ["harmony-commentary-call", (t) => `${t} Done.`],
+      ["deepseek-v32-dsml-canonical", (t) => `Sure.\n\n${t}`],
+      ["deepseek-v32-dsml-canonical", (t) => t.slice(0, t.length - 20)],
+      ["deepseek-v31-canonical", (t) => `Sure. ${t}`],
+      ["deepseek-v31-canonical", (t) => t.slice(0, t.length - 30)],
+    ];
+    for (const [id, make] of declined) {
+      const content = make(text(id));
+      expect(
+        isLeakedToolCall({ content, knownTools: tools(id) }),
+        `${id}: ${content}`,
+      ).toBe(true);
     }
   });
 

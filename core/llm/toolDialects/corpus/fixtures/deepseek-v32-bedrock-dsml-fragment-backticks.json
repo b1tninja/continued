@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "id": "deepseek-v32-bedrock-dsml-fragment-backticks",
+  "family": "deepseek-v3.2",
+  "dialect": "dsml",
+  "kind": "negative",
+  "failureMode": "special-token-leak",
+  "flag": "observed",
+  "provenance": {
+    "source": "Observed live on Bedrock Converse 2026-11-10, model deepseek.v3.2",
+    "retrieved": "2026-11-10",
+    "reportDate": "2026-11-10",
+    "note": "The text block before the structured toolUse block ends with the unclosed DSML marker; the call itself arrived as toolUse."
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "run_command",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "timeout": {
+            "type": "integer"
+          }
+        },
+        "required": ["command"]
+      }
+    }
+  ],
+  "text": "I'll run the `ls -la` command first and then read the README.md file.\n\n<｜DSML｜function_calls",
+  "markers": ["<｜DSML｜function_calls"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "I'll run the `ls -la` command first and then read the README.md file.\n\n<｜DSML｜function_calls"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "I",
+        "'",
+        "l",
+        "l",
+        " ",
+        "r",
+        "u",
+        "n",
+        " ",
+        "t",
+        "h",
+        "e",
+        " ",
+        "`",
+        "l",
+        "s",
+        " ",
+        "-",
+        "l",
+        "a",
+        "`",
+        " ",
+        "c",
+        "o",
+        "m",
+        "m",
+        "a",
+        "n",
+        "d",
+        " ",
+        "f",
+        "i",
+        "r",
+        "s",
+        "t",
+        " ",
+        "a",
+        "n",
+        "d",
+        " ",
+        "t",
+        "h",
+        "e",
+        "n",
+        " ",
+        "r",
+        "e",
+        "a",
+        "d",
+        " ",
+        "t",
+        "h",
+        "e",
+        " ",
+        "R",
+        "E",
+        "A",
+        "D",
+        "M",
+        "E",
+        ".",
+        "m",
+        "d",
+        " ",
+        "f",
+        "i",
+        "l",
+        "e",
+        ".",
+        "\n",
+        "\n",
+        "<",
+        "｜",
+        "D",
+        "S",
+        "M",
+        "L",
+        "｜",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "I'll run the `ls -la` command first and then read the README.md file.\n\n<｜DSML｜fun",
+        "ction_calls"
+      ],
+      "splitInside": "<｜DSML｜function_calls"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "I'll run the `ls -la` command first and then read the README.md file.\n\n",
+        "<｜DSML｜function_calls"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "I'l",
+        "l run",
+        " the",
+        " `ls ",
+        "-l",
+        "a` co",
+        "mma",
+        "nd ",
+        "firs",
+        "t ",
+        "and t",
+        "hen ",
+        "rea",
+        "d ",
+        "t",
+        "he R",
+        "EA",
+        "DM",
+        "E.m",
+        "d ",
+        "fil",
+        "e.",
+        "\n\n<｜",
+        "DS",
+        "M",
+        "L｜f",
+        "unct",
+        "ion",
+        "_ca",
+        "lls"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-multibyte-char",
+      "encoding": "base64",
+      "chunks": [
+        "SSdsbCBydW4gdGhlIGBscyAtbGFgIGNvbW1hbmQgZmlyc3QgYW5kIHRoZW4gcmVhZCB0aGUgUkVBRE1FLm1kIGZpbGUuCgo87w==",
+        "vZxEU01M772cZnVuY3Rpb25fY2FsbHM="
+      ],
+      "splitInside": "utf8-codepoint"
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "I'll run the `ls -la` command first and then read the README.md file.\n\n<｜DSML｜function_calls"
+  }
+}

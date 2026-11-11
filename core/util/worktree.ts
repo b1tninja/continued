@@ -3,6 +3,13 @@ import * as nodeFs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 
+import {
+  decideFromFiles,
+  readScopeFilesFromDisk,
+  realPath,
+  relativeProjectPath,
+} from "../config/projectTrust.js";
+
 import { getContinueGlobalPath } from "./paths.js";
 import { terminalEnvironment } from "./terminalEnvironment.js";
 
@@ -101,12 +108,18 @@ export interface WorktreeInfo {
   branch: string;
   /** The baseline commit: HEAD plus the main checkout's uncommitted state. */
   baseline: string;
+  /** Set when the repository's setup commands were skipped because they are not trusted. */
+  setupNotice?: string;
 }
 
 export interface WorktreeDeps {
   git: GitRunner;
   fs?: WorktreeFs;
   shell?: ShellRunner;
+  /** The user's global folder (their own `worktrees.json`, the trust record); the default one when absent. */
+  globalDir?: string;
+  /** Told when the repository's setup commands were skipped, so the person sees it. */
+  notify?: (message: string) => void;
 }
 
 export interface CreateItemWorktreeOptions {
@@ -225,28 +238,91 @@ export function setupCommands(
     );
 }
 
+const SETUP_TRUST_HINT =
+  "Review it and run `continuous project trust` (or trust the folder in the editor) to approve it; `--trust-project-config` approves it for one run.";
+
+function parseWorktreesConfig(content: string, label: string): WorktreesConfig {
+  try {
+    return JSON.parse(content) as WorktreesConfig;
+  } catch (e) {
+    throw new Error(`${label} is not valid JSON: ${(e as Error).message}`);
+  }
+}
+
+function isPathInside(child: string, parent: string): boolean {
+  const rel = path.relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+/**
+ * The user's own `worktrees.json` in the global folder. It is theirs, so it
+ * runs without trust; a folder inside the repository does not count as global.
+ */
+async function globalSetupCommands(
+  deps: WorktreeDeps,
+  repo: string,
+): Promise<string[]> {
+  const fs = deps.fs ?? defaultWorktreeFs;
+  const dir = deps.globalDir ?? getContinueGlobalPath();
+  if (isPathInside(realPath(dir), realPath(repo))) {
+    return [];
+  }
+  const file = path.join(dir, "worktrees.json");
+  if (!(await fs.exists(file))) {
+    return [];
+  }
+  return setupCommands(
+    parseWorktreesConfig(await fs.readFile(file), file),
+    repo,
+  );
+}
+
+/**
+ * The repository's own setup commands, only when this exact content has been
+ * approved (the `worktree` scope of the project trust record). The content
+ * that is fingerprinted is the content that runs. When it is not approved the
+ * commands are skipped and the returned notice says so.
+ */
+function repoSetupCommands(
+  deps: WorktreeDeps,
+  repo: string,
+): { commands: string[]; notice?: string } {
+  const files = readScopeFilesFromDisk(repo, "worktree");
+  if (files.length === 0) {
+    return { commands: [] };
+  }
+  const { trusted } = decideFromFiles(repo, "worktree", files, deps.globalDir);
+  if (!trusted) {
+    const names = files.map((f) => relativeProjectPath(repo, f.path));
+    return {
+      commands: [],
+      notice: `Worktree setup commands in ${names.join(", ")} were not run: this folder's worktree setup is not trusted. ${SETUP_TRUST_HINT}`,
+    };
+  }
+  const commands = files.flatMap((file) =>
+    setupCommands(
+      parseWorktreesConfig(file.content, relativeProjectPath(repo, file.path)),
+      repo,
+    ),
+  );
+  return { commands };
+}
+
 async function runSetup(
   deps: WorktreeDeps,
   repo: string,
   worktree: string,
-): Promise<void> {
-  const fs = deps.fs ?? defaultWorktreeFs;
-  const configFile = path.join(repo, WORKTREES_CONFIG_PATH);
-  if (!(await fs.exists(configFile))) {
-    return;
-  }
-  let config: WorktreesConfig;
-  try {
-    config = JSON.parse(await fs.readFile(configFile)) as WorktreesConfig;
-  } catch (e) {
-    throw new Error(
-      `${WORKTREES_CONFIG_PATH} is not valid JSON: ${(e as Error).message}`,
-    );
-  }
+): Promise<string | undefined> {
   const shell = deps.shell ?? defaultShellRunner;
-  for (const command of setupCommands(config, repo)) {
+  const own = await globalSetupCommands(deps, repo);
+  const { commands, notice } = repoSetupCommands(deps, repo);
+  for (const command of [...own, ...commands]) {
     await shell(command, worktree, { [ROOT_WORKTREE_VAR]: repo });
   }
+  if (notice) {
+    deps.notify?.(notice);
+  }
+  return notice;
 }
 
 /**
@@ -307,9 +383,11 @@ export async function createItemWorktree(
     );
     const baseline = (await git(["rev-parse", "HEAD"], dir)).trim();
 
-    await runSetup(deps, repo, dir);
+    const setupNotice = await runSetup(deps, repo, dir);
 
-    return { path: dir, branch, baseline };
+    return setupNotice
+      ? { path: dir, branch, baseline, setupNotice }
+      : { path: dir, branch, baseline };
   } catch (e) {
     await removeWorktree(
       repo,

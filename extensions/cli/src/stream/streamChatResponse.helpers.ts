@@ -177,6 +177,15 @@ function currentPermissionMode(): "normal" | "plan" | "auto" {
   }
 }
 
+/** Set when the server's tool or launch definition changed since approval (core pins). */
+function mcpPinChange(server: string, tool: string) {
+  try {
+    return services.mcp?.getPinChange(server, tool);
+  } catch {
+    return undefined;
+  }
+}
+
 async function coreRulesVerdict(
   toolCall: PreprocessedToolCall,
   cliPermission: "allow" | "ask",
@@ -212,7 +221,10 @@ async function coreRulesVerdict(
       isHeadless: !!isHeadless,
       history: autoReview ? services.chatHistory.getHistory() : undefined,
       ...(mcpServer
-        ? { mcp: { serverName: mcpServer, toolName: toolCall.name } }
+        ? {
+            mcp: { serverName: mcpServer, toolName: toolCall.name },
+            mcpDefinitionChange: mcpPinChange(mcpServer, toolCall.name),
+          }
         : {}),
     });
     return keepCoreVerdict(verdict, {

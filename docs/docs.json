@@ -43,6 +43,7 @@
                   "ide-extensions/agent/audit-trail",
                   "ide-extensions/agent/secret-scanning",
                   "ide-extensions/agent/mcp-tool-changes",
+                  "ide-extensions/agent/hooks-trust",
                   "ide-extensions/agent/terminal-in-wsl",
                   "ide-extensions/agent/terminal-in-container",
                   "ide-extensions/agent/terminal-environment",

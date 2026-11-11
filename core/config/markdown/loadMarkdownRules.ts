@@ -55,7 +55,7 @@ export async function loadMarkdownRules(ide: IDE): Promise<{
   }
 
   // Load markdown files from both .continuous/rules and .continuous/prompts
-  const dirsToCheck = [RULES_DIR_NAME, PROMPTS_DIR_NAME];
+  const dirsToCheck = [RULES_DIR_NAME, PROMPTS_DIR_NAME] as const;
 
   for (const dirName of dirsToCheck) {
     try {

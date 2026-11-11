@@ -221,6 +221,11 @@ export interface CoreRulesInput {
    * Floor rules use that form either way.
    */
   mcp?: { serverName: string; toolName: string };
+  /** The MCP tool's definition or launch changed since it was approved: it asks again */
+  mcpDefinitionChange?: {
+    kind: "changed" | "added" | "launch";
+    summary: string;
+  };
   isHeadless: boolean;
   history?: ChatHistoryItem[];
   cwd?: string;
@@ -253,6 +258,9 @@ export async function evaluateWithCoreRules(
         originalFunctionName: mcp.toolName,
         uri: `mcp:${mcp.serverName}`,
         evaluateToolCallPolicy: input.evaluateToolCallPolicy as never,
+        ...(input.mcpDefinitionChange
+          ? { mcpDefinitionChange: input.mcpDefinitionChange }
+          : {}),
       }
     : {
         group: "Built-In",

@@ -256,7 +256,7 @@ Built-ins are stored as switches by id, never copied into your file, so new buil
 YOLO approves everything: no rule, built-in or reviewer is consulted. This is by decision. Four things still bind, because they are not approval:
 
 - a tool that is switched off stays off;
-- the locked policy files, which are refused at YOLO (PR #516, see "Writes to the policy itself");
+- the locked files, which are refused at YOLO: the policy files (PR #516) and, since B6a, every file the product loads as config, code, rules or hooks, read from one registry (`core/util/productPaths.ts`; see "Writes to the policy itself");
 - an organisation ceiling (below);
 - hooks, which are the user's own programs.
 

@@ -612,7 +612,12 @@ export class Core {
    */
   private registerLoopWorktreeHandlers() {
     const on = this.messenger.on.bind(this.messenger);
-    const worktreeDeps = { git: execFileGit };
+    const worktreeDeps = {
+      git: execFileGit,
+      notify: (message: string) => {
+        void this.ide.showToast("warning", message);
+      },
+    };
     on("loop/worktreeCreate", async ({ data }) => {
       // What a wave interrupted by a reload left on this item's branch goes
       // first; the new worktree takes the branch

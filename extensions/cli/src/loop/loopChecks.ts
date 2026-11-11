@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "child_process";
 
 import { getCommandExecutor } from "core/util/commandExecutor.js";
 import { holdCheck, recordCheck } from "core/util/loopMode.js";
+import { withRealExitCode } from "core/util/shell.js";
 
 import {
   SERVICE_NAMES,
@@ -31,8 +32,15 @@ import { commitLoop } from "./loopSession.js";
 /** How long a check may run before it counts as failed. */
 export const LOOP_CHECK_TIMEOUT_MS = 10 * 60 * 1000;
 
+/** How long a POSIX process group gets after SIGTERM before SIGKILL. */
+export const LOOP_CHECK_KILL_GRACE_MS = 2000;
+
 /** Same cap `exec` used: past this, the check is stopped. */
 const LOOP_CHECK_MAX_BUFFER = 10 * 1024 * 1024;
+
+function describeDuration(ms: number): string {
+  return ms >= 60000 ? `${ms / 60000} minutes` : `${ms / 1000} seconds`;
+}
 
 export interface LoopCheckStep {
   kind: "check";
@@ -79,7 +87,18 @@ export function killCheckProcess(
     } catch {
       // already gone
     }
+    return;
   }
+  // A command that ignores SIGTERM is killed once the grace has passed, if
+  // its group is still there
+  setTimeout(() => {
+    try {
+      process.kill(-pid, 0);
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      // the group ended
+    }
+  }, LOOP_CHECK_KILL_GRACE_MS).unref();
 }
 
 /**
@@ -93,6 +112,7 @@ export function killCheckProcess(
 export function runCheckCommand(
   command: string,
   cwd = process.cwd(),
+  timeoutMs = LOOP_CHECK_TIMEOUT_MS,
 ): Promise<CheckRun> {
   return new Promise((resolve) => {
     const executor = getCommandExecutor();
@@ -102,7 +122,9 @@ export function runCheckCommand(
     }
     let child: ChildProcess;
     try {
-      child = executor.spawn(command, {
+      // PowerShell reports 1 for any failing native command: the tail
+      // restores the code the check chose
+      child = executor.spawn(withRealExitCode(command, executor.shell.kind), {
         cwd,
         windowsHide: true,
         // A new process group on POSIX, so a timeout can signal the command
@@ -129,7 +151,7 @@ export function runCheckCommand(
       clearTimeout(timer);
       const output = [stdout, stderr].filter(Boolean).join("\n").trim();
       const note = timedOut
-        ? `(stopped after ${LOOP_CHECK_TIMEOUT_MS / 60000} minutes)`
+        ? `(stopped after ${describeDuration(timeoutMs)})`
         : overflow
           ? "stdout maxBuffer length exceeded"
           : "";
@@ -141,7 +163,7 @@ export function runCheckCommand(
     const timer = setTimeout(() => {
       timedOut = true;
       killCheckProcess(child);
-    }, LOOP_CHECK_TIMEOUT_MS);
+    }, timeoutMs);
     const take = (into: "out" | "err", chunk: string) => {
       bytes += chunk.length;
       if (bytes > LOOP_CHECK_MAX_BUFFER) {
@@ -158,7 +180,11 @@ export function runCheckCommand(
     child.stdout?.on("data", (chunk: string) => take("out", chunk));
     child.stderr?.on("data", (chunk: string) => take("err", chunk));
     child.on("error", (error) => finish(null, error.message));
-    child.on("close", (code) => finish(typeof code === "number" ? code : null));
+    // A command that was stopped has no exit code of its own: taskkill makes
+    // it 1, and that is not what the check chose
+    child.on("close", (code) =>
+      finish(typeof code === "number" && !timedOut ? code : null),
+    );
   });
 }
 

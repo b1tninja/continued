@@ -23,6 +23,12 @@ const CALLS: Record<string, string> = {
     '<minimax:tool_call>\n<invoke name="Read">\n<parameter name="filepath">a.txt</parameter>\n</invoke>\n</minimax:tool_call>',
   "minimax-ns-xml":
     ']<]minimax[>[<tool_call>\n]<]minimax[>[<invoke name="Read">]<]minimax[>[<filepath>a.txt]<]minimax[>[</filepath>]<]minimax[>[</invoke>\n]<]minimax[>[</tool_call>',
+  harmony:
+    '<|channel|>commentary to=functions.Read <|constrain|>json<|message|>{"filepath": "a.txt"}<|call|>',
+  mistral: '[TOOL_CALLS]Read[ARGS]{"filepath": "a.txt"}',
+  dsml: '<｜DSML｜function_calls>\n<｜DSML｜invoke name="Read">\n<｜DSML｜parameter name="filepath" string="true">a.txt</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>',
+  "deepseek-v31":
+    '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>Read<｜tool▁sep｜>{"filepath": "a.txt"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
   "toolcall-json":
     '<TOOLCALL>[{"name": "Read", "arguments": {"filepath": "a.txt"}}]</TOOLCALL>',
 };
@@ -56,7 +62,12 @@ function stream(dialect: string, reply: string, size: number) {
 }
 
 /** Dialects whose parser does not take a leading `<think>` block today. */
-const NO_THINK_LEAD = new Set(["llama-json", "kimi-xtml", "minimax-ns-xml"]);
+const NO_THINK_LEAD = new Set([
+  "llama-json",
+  "kimi-xtml",
+  "minimax-ns-xml",
+  "harmony",
+]);
 
 const SIZES = [1, 7, 10_000];
 

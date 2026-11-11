@@ -49,11 +49,15 @@ import {
   getOauthCallbackUrl,
 } from "./MCPOauth";
 import {
+  adoptLegacyPin,
   evaluatePins,
   getToolPinStore,
+  launchSpec,
   pinKey,
   recordApproval,
+  type ApprovalEvents,
 } from "./mcpToolPins";
+import { announcePins } from "./mcpPinNotices";
 import { oauthScopeForMcpServer } from "./workspaceMcpPolicy";
 
 const DEFAULT_MCP_TIMEOUT = 20_000; // 20 seconds
@@ -120,7 +124,7 @@ class MCPConnection {
    */
   public changedTools: Map<
     string,
-    { kind: "changed" | "added"; summary: string }
+    { kind: "changed" | "added" | "launch"; summary: string }
   > = new Map();
   /** Told when the tool list or its pin state changed after connect. */
   public onToolsChanged?: () => void;
@@ -195,10 +199,12 @@ class MCPConnection {
   /** Compare the current tools with the pins and set `changedTools`. */
   async refreshPins(): Promise<void> {
     try {
+      await adoptLegacyPin(this.options, getToolPinStore());
       const { flagged } = await evaluatePins(
         pinKey(this.options),
         this.tools,
         getToolPinStore(),
+        launchSpec(this.options),
       );
       this.changedTools = flagged;
     } catch (e) {
@@ -217,13 +223,19 @@ class MCPConnection {
    */
   async recordToolUse(toolName: string): Promise<void> {
     try {
+      await adoptLegacyPin(this.options, getToolPinStore());
+      const events: ApprovalEvents = {};
       const changed = await recordApproval(
         pinKey(this.options),
         this.tools,
         getToolPinStore(),
         toolName,
+        new Date(),
+        launchSpec(this.options),
+        events,
       );
       if (!changed) return;
+      announcePins(this.options.name, events, this.infos);
       const before = this.changedTools.size;
       await this.refreshPins();
       if (this.changedTools.size !== before) this.onToolsChanged?.();

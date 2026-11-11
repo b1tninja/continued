@@ -19,6 +19,7 @@ export const SUITE_NAMES = [
   "prompt-variants",
   "reviewer",
   "leaks",
+  "cache",
 ];
 
 export function loadSuite(nameOrFile) {
