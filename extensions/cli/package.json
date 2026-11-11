@@ -38,7 +38,7 @@
     "watch:logs": "touch ~/.continuous/logs/cn.log && tail -f ~/.continuous/logs/cn.log",
     "prepare": "npm run build"
   },
-  "author": "Continue Dev, Inc.",
+  "author": "b1tninja",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

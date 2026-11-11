@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json, not observed and the README ToolCall section",
+    "license": "mit",
     "retrieved": "2026-11-10",
     "note": "V3.1 README: name, separator, JSON arguments; chained calls with no separators."
   },

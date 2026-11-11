@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json, not observed",
+    "license": "mit",
     "retrieved": "2026-11-10",
     "note": "Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 2 call(s) and the text \"Checking both.\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },

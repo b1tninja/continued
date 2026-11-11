@@ -776,6 +776,7 @@ export class Core {
           label: result.label,
           kind: result.support.kind,
           preset: result.preset,
+          facts: result.facts,
         };
       } catch (e) {
         return {

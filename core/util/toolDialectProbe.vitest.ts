@@ -111,4 +111,18 @@ describe("tool-call probe result line", () => {
       (await probeToolDialect(send, "unknown-model")).preset,
     ).toBeUndefined();
   });
+
+  it("adds a provider facts line only when a surface is given, and never changes the verdict", async () => {
+    const send = async () => ({ content: "", toolCalls: good });
+    const surface = {
+      query: { provider: "ollama", engine: "ollama", api: "openai-chat" },
+      label: "Ollama /v1",
+    };
+    const withFacts = await probeToolDialect(send, "zai.glm-4.7", { surface });
+    expect(withFacts.label).toBe("Tool calls: native");
+    expect(withFacts.facts).toContain(
+      "Provider facts: Ollama /v1: tools honoured (declared, read 2026-11-10); tool_choice required/named/none not supported (declared, read 2026-11-10)",
+    );
+    expect((await probeToolDialect(send, "zai.glm-4.7")).facts).toBeUndefined();
+  });
 });
