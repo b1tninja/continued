@@ -260,14 +260,41 @@ describe("auditInboxPage", () => {
     ).toEqual(["b"]);
   });
 
-  it("suggests a rule only for plain one-line text", () => {
-    expect(suggestedRuleFor("runTerminalCommand", "git push origin x")).toBe(
-      "runTerminalCommand(git push origin x)",
+  it("suggests the narrow Always rule only when the arguments are plain", () => {
+    expect(
+      suggestedRuleFor(
+        "run_terminal_command",
+        JSON.stringify({ command: "git push origin x" }),
+      ),
+    ).toBe("runTerminalCommand(git push origin x)");
+    expect(
+      suggestedRuleFor(
+        "run_terminal_command",
+        JSON.stringify({ command: "rm -rf *" }),
+      ),
+    ).toBeUndefined();
+    expect(
+      suggestedRuleFor("run_terminal_command", '{"command":"echo «secret»"}'),
+    ).toBeUndefined();
+    expect(
+      suggestedRuleFor("run_terminal_command", "not json"),
+    ).toBeUndefined();
+    expect(suggestedRuleFor("run_terminal_command", "[1]")).toBeUndefined();
+  });
+
+  it("puts the suggestion on the item", () => {
+    write([
+      {
+        id: "p",
+        minutesAgo: 5,
+        policy: "ask",
+        tool: "run_terminal_command",
+        args: JSON.stringify({ command: "make build" }),
+      },
+    ]);
+    expect(auditInboxPage(dir, {}, { now: NOW }).items[0].suggestedRule).toBe(
+      "runTerminalCommand(make build)",
     );
-    expect(suggestedRuleFor("runTerminalCommand", "rm -rf *")).toBeUndefined();
-    expect(suggestedRuleFor("x", "echo «secret:key»")).toBeUndefined();
-    expect(suggestedRuleFor("x", "a (b)")).toBeUndefined();
-    expect(suggestedRuleFor("x", undefined)).toBeUndefined();
   });
 });
 

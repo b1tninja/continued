@@ -1,3 +1,4 @@
+import { suggestAllowRule } from "../suggest";
 import { clipMasked, maskDeep } from "./mask";
 import {
   callRows,
@@ -176,7 +177,11 @@ export function listedCall(row: AuditCallRow): ListedCall {
     policy: row.policy,
     by: row.by,
     asked: row.asked,
-    summary: oneLine(maskDeep(row.argsMasked), SUMMARY_CHARS),
+    summary: oneLine(
+      safe(row.decisions[0]?.displayValue, SUMMARY_CHARS) ??
+        maskDeep(row.argsMasked),
+      SUMMARY_CHARS,
+    ),
     source: row.source,
     rule: safe(row.rule),
     reason: safe(row.reason),
@@ -316,19 +321,34 @@ export function auditListPage(
   };
 }
 
-const SAFE_RULE = /^[^\n\r*«»()]{1,200}$/;
-
 /**
- * A rule to start the editor from, only when the call's text can stand in a
- * rule as it is: one line, nothing masked, no wildcard or bracket. Otherwise
- * none, and the person writes it.
+ * A rule to start the editor from: the same narrow allow rule "Always allow"
+ * would write, built from the masked arguments only when they parse and hold
+ * nothing masked. Otherwise none, and the person writes it.
  */
 export function suggestedRuleFor(
   tool: string,
-  text: string | undefined,
+  argsMasked: string,
 ): string | undefined {
-  if (!text || !SAFE_RULE.test(text)) return undefined;
-  return `${tool}(${text})`;
+  if (argsMasked.includes("«")) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(argsMasked);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return undefined;
+  }
+  try {
+    const s = suggestAllowRule({
+      toolName: tool,
+      parsedArgs: parsed as Record<string, unknown>,
+    });
+    return s.ok ? s.rule : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Open asks: the last decision is an ask and the call has no outcome. Oldest first. */
@@ -365,11 +385,7 @@ export function auditInboxPage(
       askedAt: r.ts,
       ageMs,
       possiblyEnded: ageMs > INBOX_LIVE_WINDOW_MS && quiet,
-      suggestedRule: suggestedRuleFor(
-        r.tool,
-        safe(r.decisions[0]?.displayValue, 200) ??
-          (r.tool === "runTerminalCommand" ? call.summary : undefined),
-      ),
+      suggestedRule: suggestedRuleFor(r.tool, maskDeep(r.argsMasked)),
     });
   });
   return {
