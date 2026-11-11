@@ -105,6 +105,23 @@ export const BUILTIN_RULES: readonly {
   },
 ];
 
+/**
+ * Rules that cannot be switched off, by config, by a level or by YOLO. They
+ * are listed beside the built-in rules, without a switch.
+ */
+export const LOCKED_FLOOR_RULES: readonly {
+  id: "protect-policy-files";
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "protect-policy-files",
+    label: "Never change the permission files",
+    description:
+      "config.yaml, permissions.yaml, rule files, .continuerc and the MCP pins. A write or delete asks, and is refused at Automatic and YOLO.",
+  },
+];
+
 export interface PolicySettings {
   levels: PolicyLevels;
   /** Permissive on Plan edits: new to-dos a re-plan may add by itself. */

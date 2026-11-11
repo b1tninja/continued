@@ -15,6 +15,7 @@ import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
+import { policyFileHit, POLICY_FILE_REASON } from "./selfProtect";
 import type { ProtectedHit, ProtectedKind } from "./protected";
 import type { ToolPermissions } from "./rules";
 
@@ -162,6 +163,50 @@ export interface EvaluateInput {
 export function evaluateToolPolicyWithRules(
   input: EvaluateInput,
 ): ToolPolicyResult {
+  return lockPolicyFiles(input, evaluateRules(input));
+}
+
+/**
+ * The locked floor (selfProtect.ts): a call that would write or delete a
+ * permission or policy file asks, and is refused at Automatic and YOLO, where
+ * nobody is there to say yes to a change that undoes the other protections.
+ * It runs after everything else and only tightens, so no rule, level or
+ * built-in switch can loosen it.
+ */
+function lockPolicyFiles(
+  input: EvaluateInput,
+  result: ToolPolicyResult,
+): ToolPolicyResult {
+  const { tool, toolName } = input;
+  if (!tool || result.policy === "disabled") return result;
+  const resolved = input.processedArgs?.resolvedPath as
+    ResolvedPath | null | undefined;
+  const isMcp = !!tool.uri?.startsWith("mcp:") && !!tool.originalFunctionName;
+  const hit = policyFileHit({
+    toolName,
+    parsedArgs: input.parsedArgs,
+    resolvedPath: resolved ? uriToPath(resolved.uri) : undefined,
+    mcp: isMcp ? { readonly: !!tool.readonly } : undefined,
+    cwd: input.cwd,
+    shell: input.shell,
+  });
+  if (!hit) return result;
+  const level = levelOfCall(input.approval, toolName, tool, {
+    parsedArgs: input.parsedArgs,
+    cwd: input.cwd,
+    shell: input.shell,
+  })?.level;
+  const refuse = level === "automatic" || level === "yolo";
+  if (!refuse && result.policy === "allowedWithPermission") return result;
+  return {
+    ...result,
+    policy: refuse ? "disabled" : "allowedWithPermission",
+    source: "floor",
+    reason: `${POLICY_FILE_REASON} (${hit.path})`,
+  };
+}
+
+function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   const { tool, toolName, basePolicy, parsedArgs, processedArgs } = input;
 
   // A tool we do not know has nothing to check, as before.

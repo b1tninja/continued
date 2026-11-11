@@ -82,7 +82,9 @@ function withoutUntrustedLoosening(
   return YAML.stringify(config);
 }
 import { loadModelCatalog } from "../providers/modelsFile";
+import { resolveToolPermissions } from "../../tools/permissions/ruleTrust";
 import { resolveTerminalSettings } from "../../util/terminalEnvironment";
+import { readUserToolPermissions } from "../../util/userToolPermissions";
 import { readUserTerminalSettings } from "../../util/userTerminalSettings";
 import { loadProviderInstances } from "../providers/providersFile";
 import { LocalPlatformClient } from "./LocalPlatformClient";
@@ -513,7 +515,16 @@ export async function configYamlToContinueConfig(options: {
 
   // Tool rules. Kept even when some entries are unreadable: those are skipped
   // and reported, rather than failing the config.
-  continueConfig.toolPermissions = config.toolPermissions;
+  // Only the person's own config.yaml may add allow rules; deny and ask from
+  // any source are kept (core/tools/permissions/ruleTrust.ts).
+  const ruleTrust = resolveToolPermissions(
+    readUserToolPermissions(),
+    config.toolPermissions,
+  );
+  continueConfig.toolPermissions = ruleTrust.permissions;
+  localErrors.push(
+    ...ruleTrust.notices.map((message) => ({ fatal: false, message })),
+  );
   // Only the person's own config.yaml may loosen what commands inherit; what
   // the assistant or a folder sets is held to the default or tighter.
   localErrors.push(
