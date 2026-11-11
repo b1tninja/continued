@@ -45,3 +45,11 @@ test("counts missing source, missing licence, restrictive and long excerpts", ()
   assert.deepEqual([...r.restrictive], [["moonshotai/Kimi-K3", "other"]]);
   assert.equal(r.longExcerpts.length, 1);
 });
+
+test("the repository itself passes --strict: every Hugging Face fixture names a licence, no excerpt is too long", () => {
+  const r = inspect(join(import.meta.dirname, "..", ".."));
+  assert.deepEqual(r.missingSource, []);
+  assert.deepEqual(r.missingLicence, []);
+  assert.deepEqual(r.longExcerpts, []);
+  assert.ok(r.hf > 0);
+});

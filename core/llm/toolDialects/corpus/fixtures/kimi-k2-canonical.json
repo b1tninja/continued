@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/moonshotai/Kimi-K2-Thinking/blob/main/chat_template.jinja, not observed and https://github.com/MoonshotAI/Kimi-K2/blob/main/docs/tool_call_guidance.md",
+    "license": "other",
     "retrieved": "2026-11-10",
     "note": ""
   },

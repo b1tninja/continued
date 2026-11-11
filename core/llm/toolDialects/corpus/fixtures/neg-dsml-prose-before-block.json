@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from https://huggingface.co/deepseek-ai/DeepSeek-V3.2/blob/main/encoding/encoding_dsv32.py and https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/main/encoding/encoding_dsv4.py, not observed",
+    "license": "mit",
     "retrieved": "2026-11-10",
     "note": "The reference parser accepts prose before the block; this parser leaves the reply as text."
   },

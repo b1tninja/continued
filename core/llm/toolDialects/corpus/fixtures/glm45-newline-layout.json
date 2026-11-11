@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "https://huggingface.co/zai-org/GLM-4.5/blob/main/chat_template.jinja (instruction block layout), not observed",
+    "license": "mit",
     "retrieved": "2026-11-10",
     "note": "GLM-4.5 template shows arguments on separate lines; 4.7 compacts them. A parser must accept both."
   },
