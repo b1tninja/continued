@@ -1,4 +1,5 @@
 import type { ShellKind } from "../../util/shell";
+import { isAliasDefiner, resolveAlias } from "./powershellAliases";
 
 /**
  * Is the program a command runs named by a variable? Then no rule written
@@ -29,14 +30,16 @@ export function hiddenCommandName(
   shell?: ShellKind,
 ): string | undefined {
   if (shell === "cmd") return undefined;
-  if (shell === "powershell") return powershellHit(command);
+  if (shell === "powershell") return powershellHit(command, true);
   const bash = posixHit(command);
   if (bash || (shell !== undefined && shell !== "unknown")) return bash;
-  return powershellHit(command);
+  return powershellHit(command, false);
 }
 
 const REASON_VAR = "a command whose name is a variable";
 const REASON_CALL = "a command run from a variable or an expression";
+const REASON_ALIAS =
+  "a command that defines an alias or a function, so a later name may not mean what the alias table says";
 
 /** The characters that end a word outside quotes. */
 const WORD_END = /[\s;|&<>()]/;
@@ -218,8 +221,81 @@ function posixHit(command: string): string | undefined {
   return undefined;
 }
 
-function powershellHit(command: string): string | undefined {
-  for (const start of statementStarts(command, true)) {
+/** The cmdlets that only read, which may be handed an `Alias:` path without defining anything. */
+const ALIAS_DRIVE_READERS = new Set([
+  "get-childitem",
+  "get-item",
+  "get-content",
+  "get-alias",
+  "test-path",
+  "resolve-path",
+  "get-itemproperty",
+  "select-string",
+  "format-table",
+  "format-list",
+]);
+
+/** A word naming the `Alias:` drive: `alias:rm`, `'Alias:\x'`, `-Path:alias:x`, `Microsoft.PowerShell.Core\Alias::x`. */
+const ALIAS_DRIVE_WORD = /^(?:-\w+:)?['"]?(?:[\w.]+\\)?alias:/i;
+
+/** The first word of a PowerShell statement as typed, without quotes and backticks, and where it ends. */
+function statementWord(
+  command: string,
+  start: number,
+): { word: string; end: number } | undefined {
+  let i = start;
+  while (i < command.length && /\s/.test(command[i])) i++;
+  // the call operator and the dot-source operator stand before the name
+  if (
+    (command[i] === "&" || command[i] === ".") &&
+    /\s/.test(command[i + 1] ?? "")
+  ) {
+    i++;
+    while (i < command.length && /\s/.test(command[i])) i++;
+  }
+  if (i >= command.length) return undefined;
+  const end = wordEnd(command, i, true);
+  return { word: command.slice(i, end).replace(/[`'"]/g, ""), end };
+}
+
+/**
+ * Does a statement define or replace an alias or a function: `Set-Alias`,
+ * `New-Alias`, `Import-Alias`, `sal`, `nal` (module-qualified or not), a
+ * `function` or `filter`, or a command that writes to the `Alias:` drive. A
+ * name that follows one is not the name the alias table gives, so the whole
+ * command asks. A floor never loosens: ambiguity here only adds an ask.
+ */
+function definesCommandName(
+  command: string,
+  start: number,
+  keywords: boolean,
+): boolean {
+  const first = statementWord(command, start);
+  if (!first) return false;
+  const lower = first.word.toLowerCase();
+  if (isAliasDefiner(lower)) return true;
+  // bash has `function` too, and a command of unknown shell must not ask for it
+  if (keywords && (lower === "function" || lower === "filter")) return true;
+  if (ALIAS_DRIVE_READERS.has(resolveAlias(lower) ?? lower)) return false;
+  // the rest of the statement, word by word, outside quotes
+  let i = first.end;
+  while (i < command.length && !/[\n;|]/.test(command[i])) {
+    while (i < command.length && /[ \t]/.test(command[i])) i++;
+    if (i >= command.length || /[\n;|]/.test(command[i])) break;
+    const end = wordEnd(command, i, true);
+    if (end === i) break;
+    if (ALIAS_DRIVE_WORD.test(command.slice(i, end))) return true;
+    i = end;
+  }
+  return false;
+}
+
+function powershellHit(command: string, keywords: boolean): string | undefined {
+  const starts = statementStarts(command, true);
+  for (const start of starts) {
+    if (definesCommandName(command, start, keywords)) return REASON_ALIAS;
+  }
+  for (const start of starts) {
     let i = start;
     while (i < command.length && /\s/.test(command[i])) i++;
     const op = command[i];

@@ -1,5 +1,6 @@
 import type { ShellKind } from "../../util/shell";
 import { isPosixShell } from "../../util/shell";
+import { isAliasName } from "./powershellAliases";
 import { scanCommand } from "./shellScan";
 
 /**
@@ -48,19 +49,6 @@ const POSIX_KEYWORDS = new Set(
   "if then else elif fi for while until do done case esac in select function { } ! [[ ]] time coproc".split(
     " ",
   ),
-);
-// The cmdlet aliases Windows PowerShell 5.1 defines (lowercase)
-const POWERSHELL_ALIASES = new Set(
-  (
-    "ac asnp cat cd chdir clc clear clhy cli clp cls clv cnsn compare copy cp cpi cpp curl cvpa dbp " +
-    "del diff dir dnsn ebp echo epal epcsv epsn erase etsn exsn fc fhx fl foreach ft fw gal gbp gc " +
-    "gcb gci gcm gcs gdr ghy gi gin gjb gl gm gmo gp gps gpv group gsn gsnp gsv gtz gu gv gwmi h " +
-    "history icm iex ihy ii ipal ipcsv ipmo ipsn irm ise iwmi iwr kill lp ls man md measure mi " +
-    "mount move mp mv nal ndr ni nmo npssc nsn nv ogv oh popd ps pushd pwd r rbp rcjb rcsn rd rdr " +
-    "ren ri rjb rm rmdir rmo rni rnp rp rsn rsnp rujb rv rvpa rwmi sajb sal saps sasv sbp sc " +
-    "select set shcm si sl sleep sls sort sp spjb spps spsv start sv swmi tee trcm type wget where " +
-    "wjb write"
-  ).split(" "),
 );
 const POWERSHELL_KEYWORDS = new Set(
   (
@@ -163,7 +151,7 @@ function isBuiltin(name: string, shell: ShellKind): boolean {
   if (shell === "powershell") {
     // Verb-Noun is a cmdlet or a function: not for this check to doubt
     return (
-      POWERSHELL_ALIASES.has(lower) ||
+      isAliasName(lower) ||
       POWERSHELL_KEYWORDS.has(lower) ||
       /^[a-z]+-[a-z]/i.test(name)
     );
