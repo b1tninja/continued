@@ -1,0 +1,88 @@
+{
+  "_note": "Sample: generated against the fake server. Not a measurement of any model.",
+  "schema": 1,
+  "model": "fake-small:1b",
+  "generatedAt": "2026-11-10T00:00:00.000Z",
+  "records": 24,
+  "presetMatched": null,
+  "native": {
+    "k": 4,
+    "n": 12,
+    "rate": 0.3333333333333333,
+    "lo": 0.13812009109121315,
+    "hi": 0.6093779111272004,
+    "structured": 2,
+    "leaked": 0
+  },
+  "ranking": [
+    {
+      "arm": "native",
+      "mode": "native",
+      "style": null,
+      "variant": null,
+      "k": 4,
+      "n": 12,
+      "rate": 0.3333333333333333,
+      "lo": 0.13812009109121315,
+      "hi": 0.6093779111272004
+    },
+    {
+      "arm": "text / codeblock",
+      "mode": "text",
+      "style": "codeblock",
+      "variant": null,
+      "k": 4,
+      "n": 12,
+      "rate": 0.3333333333333333,
+      "lo": 0.13812009109121315,
+      "hi": 0.6093779111272004
+    }
+  ],
+  "best": {
+    "arm": "native",
+    "mode": "native",
+    "style": null,
+    "variant": null,
+    "k": 4,
+    "n": 12,
+    "rate": 0.3333333333333333,
+    "lo": 0.13812009109121315,
+    "hi": 0.6093779111272004
+  },
+  "bestTextStyle": {
+    "arm": "text / codeblock",
+    "mode": "text",
+    "style": "codeblock",
+    "variant": null,
+    "k": 4,
+    "n": 12,
+    "rate": 0.3333333333333333,
+    "lo": 0.13812009109121315,
+    "hi": 0.6093779111272004
+  },
+  "bestVariant": null,
+  "comparison": "native and text are not separable at this sample size",
+  "leakDialects": [],
+  "parsersThatRecovered": [
+    {
+      "parser": "codeblock",
+      "n": 2
+    }
+  ],
+  "row": {
+    "id": "fake-small_1b",
+    "match": ["^fake-small:1b$"],
+    "nativeToolCalls": "none",
+    "textDialect": null,
+    "promptStyle": {
+      "style": "codeblock",
+      "evidence": "local lab 2026-11-10: 4/12 valid, 95% CI 14-61%"
+    },
+    "recoverWith": "codeblock",
+    "readOn": "2026-11-10",
+    "unverified": [
+      "measured on a local Ollama build and quantisation; the hosted model and its template may differ",
+      "fewer than 2 replies per arm decide nothing"
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "suite": "dialect-probe",
+  "kind": "dialect-probe",
+  "description": "Tier 1 shape probes sent two ways: with the tools field (native) and without it, asking in the family's trained-in dialect through the system prompt (text). Answers: does asking in the trained-in form raise the valid-call rate when native tools are off (the R3 experiment), and would a recovery parser read what the model wrote.",
+  "system": "You are a coding agent working in a repository. When a task needs a tool, call the tool; do not describe the call in prose.",
+  "defaults": { "temperature": 0, "numPredict": 400, "stream": false },
+  "estOutTokens": 60,
+  "tools": {
+    "read_file": {
+      "name": "read_file",
+      "description": "Read a text file from the workspace and return its contents.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Workspace-relative path" }
+        },
+        "required": ["path"]
+      }
+    },
+    "list_lines": {
+      "name": "list_lines",
+      "description": "Show the first lines of a file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Workspace-relative path"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "How many lines to show"
+          }
+        },
+        "required": ["path", "limit"]
+      }
+    },
+    "save_note": {
+      "name": "save_note",
+      "description": "Save a note with exactly the given text.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string", "description": "The note text, verbatim" }
+        },
+        "required": ["text"]
+      }
+    },
+    "create_issue": {
+      "name": "create_issue",
+      "description": "Create a tracker issue.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "Issue title" },
+          "assignee": {
+            "type": "object",
+            "description": "Who owns it",
+            "properties": {
+              "name": { "type": "string" },
+              "team": { "type": "string" }
+            },
+            "required": ["name", "team"]
+          }
+        },
+        "required": ["title", "assignee"]
+      }
+    }
+  },
+  "probes": [
+    {
+      "id": "native-call",
+      "group": "single-call",
+      "tools": ["read_file"],
+      "user": "Read the file notes.txt.",
+      "expect": { "tool": "read_file", "args": { "path": "notes.txt" } }
+    },
+    {
+      "id": "parallel-calls",
+      "group": "parallel-calls",
+      "tools": ["read_file"],
+      "user": "Read both a.txt and b.txt. They are independent, so ask for both reads in the same reply.",
+      "expect": {
+        "calls": [
+          { "tool": "read_file", "args": { "path": "a.txt" } },
+          { "tool": "read_file", "args": { "path": "b.txt" } }
+        ]
+      }
+    },
+    {
+      "id": "integer-arg",
+      "group": "argument-types",
+      "tools": ["list_lines"],
+      "user": "Show me the first 25 lines of build.log.",
+      "expect": {
+        "tool": "list_lines",
+        "args": { "path": "build.log", "limit": 25 }
+      }
+    },
+    {
+      "id": "quotes-newlines-unicode",
+      "group": "argument-escaping",
+      "tools": ["save_note"],
+      "user": "Save this note exactly as written, the two lines between the markers.\n---\nsay \"hi\"\ncafé ☃ \\ done\n---",
+      "expect": {
+        "tool": "save_note",
+        "args": { "text": "say \"hi\"\ncafé ☃ \\ done" }
+      }
+    },
+    {
+      "id": "nested-object",
+      "group": "argument-types",
+      "tools": ["create_issue"],
+      "user": "Create an issue titled \"Flaky login test\" and assign it to Ana Ruiz on the core team.",
+      "expect": {
+        "tool": "create_issue",
+        "args": {
+          "title": "Flaky login test",
+          "assignee": { "name": "Ana Ruiz", "team": "core" }
+        }
+      }
+    },
+    {
+      "id": "no-tool-needed",
+      "group": "no-tool",
+      "tools": ["read_file", "list_lines"],
+      "user": "In one word, what is the capital of France?",
+      "expect": { "none": true }
+    }
+  ]
+}
