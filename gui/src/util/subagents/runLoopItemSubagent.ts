@@ -7,7 +7,10 @@ import type {
 import type { SubagentRunStatus } from "core/subagents/result";
 import { resolveSubagentTools } from "core/subagents/tools";
 import { applyToolOverrides } from "core/tools/applyToolOverrides";
-import { loopWorkerAuditAgent } from "core/tools/permissions/audit/identity";
+import {
+  LOOP_WORKER_MODE,
+  loopWorkerAuditAgent,
+} from "core/tools/permissions/audit/identity";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import { ContinueError, ContinueErrorReason } from "core/util/errors";
 import {
@@ -126,7 +129,7 @@ export function loopWorkerTools(
   // Agent mode's active tools with the loop's three, whether or not an
   // inline item is running in the session
   let parentTools = selectActiveTools.resultFunc(
-    "agent",
+    LOOP_WORKER_MODE,
     state.config.config.tools,
     state.ui.toolSettings,
     state.ui.toolGroupSettings,
