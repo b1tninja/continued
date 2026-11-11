@@ -55,6 +55,8 @@ export const PRODUCT_LOADED_FILES = {
 /** Folders read from the global folder or from a project's config folder. */
 export const PRODUCT_LOADED_DIRS = {
   rules: "rule files",
+  context: "context provider blocks",
+  docs: "doc blocks",
   agents: "agent definitions and subagents",
   prompts: "prompt files",
   checks: "review checks",
