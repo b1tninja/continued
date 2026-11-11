@@ -45,6 +45,54 @@ const OWN_SOURCES: ReadonlySet<RuleSource> = new Set([
   "permissions-yaml",
 ]);
 
+/** Programs that run another program or script from their arguments. */
+const WRAPPERS: ReadonlySet<string> = new Set([
+  "sudo",
+  "doas",
+  "env",
+  "exec",
+  "time",
+  "nice",
+  "nohup",
+  "timeout",
+  "stdbuf",
+  "ionice",
+  "setsid",
+  "watch",
+  "command",
+  "builtin",
+  "xargs",
+  "busybox",
+  "npx",
+  "pnpx",
+  "bunx",
+  "yarn dlx",
+  "eval",
+  "bash",
+  "sh",
+  "zsh",
+  "dash",
+  "ksh",
+  "fish",
+  "cmd",
+  "powershell",
+  "pwsh",
+  "python",
+  "python3",
+  "node",
+  "deno",
+  "bun",
+  "perl",
+  "ruby",
+  "php",
+  "lua",
+  "start",
+  "call",
+  "runas",
+  "find",
+  "git-shell",
+]);
+
 const FIRST_WORD = /^[A-Za-z][\w.+-]*$/;
 const LATER_WORD = /^[\w@.+,:=-][\w@.+,:=/-]*$/;
 
@@ -74,8 +122,14 @@ export function exemptionRefusal(
   if (dest.destinations.length || dest.unresolved.length) {
     return "it names a network host or a destination that cannot be read";
   }
+  if (WRAPPERS.has(words[0].toLowerCase().replace(/\.exe$/, ""))) {
+    return "it starts with a wrapper, shell or interpreter, which runs something else";
+  }
+  // The parser lists the command and each tail of its words; anything else
+  // (`git -C x push` read as `git push`) means it reads the line differently.
   const { list, truncated } = commandCandidateSet(command, shell);
-  if (truncated || list.length !== 1 || list[0] !== command) {
+  const tails = new Set(words.map((_, i) => words.slice(i).join(" ")));
+  if (truncated || list.some((c) => !tails.has(c))) {
     return "the rule parser reads it as something other than what is written (a wrapper, an alias or quoting)";
   }
   return undefined;
@@ -166,4 +220,15 @@ export function exemptedRules(
 /** The built-in rule's own words for a person, for the Permissions page and the CLI. */
 export function exemptionLine(e: BuiltinExemption): string {
   return `${e.rule} exempts ${e.exempts.join(", ")}`;
+}
+
+/** `{ exemptedBy: [...] }` for a built-in rule some exemption relaxes, or nothing. */
+export function exemptedByOf(
+  id: string,
+  exemptions: readonly BuiltinExemption[],
+): { exemptedBy?: string[] } {
+  const rules = exemptions
+    .filter((e) => (e.exempts as readonly string[]).includes(id))
+    .map((e) => e.rule);
+  return rules.length ? { exemptedBy: rules } : {};
 }

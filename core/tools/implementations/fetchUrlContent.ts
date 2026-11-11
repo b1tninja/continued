@@ -3,14 +3,30 @@ import type { ContextItem } from "../..";
 import { createSpotlight, type Spotlight } from "../permissions/spotlight";
 import { getUrlContextItems } from "../../context/providers/URLContextProvider";
 import { getStringArg } from "../parseArgs";
+import { hostTrusted } from "../permissions/askProtections";
+import { readUserTrustedDomains } from "../permissions/userTrustedDomains";
 
 const DEFAULT_FETCH_URL_CHAR_LIMIT = 20000;
 
 export const fetchUrlContentImpl: ToolImpl = async (args, extras) => {
   const url = getStringArg(args, "url");
 
+  // A host the person trusts may be fetched without a review (B56), so it
+  // cannot hand the request to a host they do not trust.
+  const trusted = readUserTrustedDomains();
+  let startHost = "";
+  try {
+    startHost = new URL(url).hostname;
+  } catch {
+    // the fetch below reports a bad URL
+  }
+  const confined = trusted.length > 0 && hostTrusted(startHost, trusted);
+
   const contextItems = await getUrlContextItems(url, extras.fetch, {
     guardRedirects: true,
+    ...(confined
+      ? { allowRedirectHost: (h: string) => hostTrusted(h, trusted) }
+      : {}),
   });
 
   // Track truncated content
