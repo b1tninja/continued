@@ -33,6 +33,7 @@
     "scripts/probeWindowsSandbox.ts",
     "scripts/runEscapeProbes.ts",
     "scripts/sandboxRun.ts",
+    "scripts/secretScan.ts",
     "vitest.setup.ts",
     "vitest.global-dir-setup.ts"
   ]
