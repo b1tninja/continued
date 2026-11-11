@@ -1,3 +1,7 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { afterAll, beforeAll } from "vitest";
 import { evaluateTerminalCommandSecurity } from "@continuedev/terminal-security";
 import { describe, expect, it } from "vitest";
 import type { ShellKind } from "../../util/shell";
@@ -317,7 +321,7 @@ describe("a variable worked out from known pieces is read, not asked about", () 
   it("says why", () => {
     expect(
       runtimeWriteTarget(
-        "$f = Join-Path $env:TEMP 'x'; Set-Content $f x",
+        "$f = 'C:/other/x'; Set-Content $f x",
         "powershell",
         ps,
       ),
@@ -329,5 +333,148 @@ describe("a variable worked out from known pieces is read, not asked about", () 
         ps,
       ),
     ).toContain("policy file");
+  });
+});
+
+describe("the user's own temp folder is a safe root, when it is certain", () => {
+  let base = "";
+  let temp = "";
+  let env: Record<string, string>;
+  const ps = "C:/work/proj";
+  const where = () => ({ env, platform: "win32" });
+  const run = (command: string, cwd: string | undefined = ps, w = where()) =>
+    runtimeWriteTarget(command, "powershell", cwd, w);
+
+  beforeAll(() => {
+    base = fs.mkdtempSync(path.join(os.tmpdir(), "rwt-")).replace(/\\/g, "/");
+    temp = `${base}/AppData/Local/Temp`;
+    fs.mkdirSync(temp, { recursive: true });
+    fs.mkdirSync(`${base}/Other`, { recursive: true });
+    env = {
+      LOCALAPPDATA: `${base}/AppData/Local`,
+      TEMP: temp.replace(/\//g, "\\"),
+      TMP: temp,
+    };
+  });
+  afterAll(() => {
+    fs.rmSync(base, { recursive: true, force: true });
+  });
+
+  it.each([
+    "$f = Join-Path $env:TEMP 'x.ps1'; Set-Content -Path $f -Value x",
+    "$f = Join-Path $env:TMP 'x.ps1'; Set-Content -Path $f -Value x",
+    "$f = Join-Path $env:TEMP 'sub' 'x.ps1'; Set-Content $f x",
+    "$f = Join-Path $env:TEMP 'a/../b.ps1'; Set-Content $f x",
+    '$f = "$env:TEMP/x.ps1"; Set-Content $f x',
+    'Set-Content "$env:TEMP/x.ps1" x',
+    "Remove-Item $env:TEMP/x.ps1",
+    "echo hi > $env:TMP/log.txt",
+  ])("%s runs", (command) => {
+    expect(run(command)).toBeUndefined();
+  });
+
+  it("needs no workspace to be known", () => {
+    expect(
+      run("$f = Join-Path $env:TEMP 'x.ps1'; Set-Content $f x", undefined),
+    ).toBeUndefined();
+  });
+
+  it.each([
+    "$f = Join-Path $env:TEMP '../x'; Set-Content $f x",
+    "$f = Join-Path $env:TEMP '..\\x'; Set-Content $f x",
+    "$f = Join-Path $env:TEMP 'a/../../x'; Set-Content $f x",
+    "Set-Content $env:TEMP/../x y",
+    "$f = Join-Path $env:LOCALAPPDATA 'x'; Set-Content $f x",
+    "$f = Join-Path $env:USERPROFILE 'x'; Set-Content $f x",
+    "$f = Join-Path $env:TEMP $unknown; Set-Content $f x",
+    "$f = Join-Path $env:TEMP 'x'; $f = 'y'; Set-Content $f x",
+  ])("%s asks", (command) => {
+    expect(run(command)).toBeDefined();
+  });
+
+  it("asks when $env:TEMP cannot be proven to be %LOCALAPPDATA%/Temp", () => {
+    const cmd = "$f = Join-Path $env:TEMP 'x.ps1'; Set-Content $f x";
+    expect(
+      run(cmd, ps, { env: { ...env, TEMP: "D:/temp" }, platform: "win32" }),
+    ).toBeDefined();
+    expect(
+      run(cmd, ps, {
+        env: { ...env, TEMP: undefined as never },
+        platform: "win32",
+      }),
+    ).toBeDefined();
+    expect(
+      run(cmd, ps, {
+        env: { ...env, LOCALAPPDATA: undefined as never },
+        platform: "win32",
+      }),
+    ).toBeDefined();
+    expect(
+      run(cmd, ps, {
+        env: { ...env, LOCALAPPDATA: `${base}/Other` },
+        platform: "win32",
+      }),
+    ).toBeDefined();
+    expect(run(cmd, ps, { env, platform: "linux" })).toBeDefined();
+    expect(run(cmd, ps, { env: {}, platform: "win32" })).toBeDefined();
+  });
+
+  it("proves each variable on its own", () => {
+    const only = { ...env, TMP: "D:/elsewhere" };
+    expect(
+      run("Set-Content $env:TEMP/x y", ps, { env: only, platform: "win32" }),
+    ).toBeUndefined();
+    expect(
+      run("Set-Content $env:TMP/x y", ps, { env: only, platform: "win32" }),
+    ).toBeDefined();
+  });
+
+  it("asks for a link or junction inside the temp folder that points elsewhere", () => {
+    try {
+      fs.symlinkSync(`${base}/Other`, `${temp}/lnk`, "junction");
+    } catch {
+      return; // links cannot be made here
+    }
+    expect(run("Set-Content $env:TEMP/lnk/x y")).toBeDefined();
+    expect(run("Set-Content $env:TEMP/lnk y")).toBeDefined();
+    expect(run("Set-Content $env:TEMP/plain/x y")).toBeUndefined();
+  });
+
+  it("a locked policy path still asks, wherever it is", () => {
+    fs.mkdirSync(`${temp}/proj/.continuous`, { recursive: true });
+    expect(
+      runtimeWriteTarget(
+        "$f = Join-Path $env:TEMP 'proj/.continuous/config.yaml'; Set-Content $f x",
+        "powershell",
+        `${temp}/proj`,
+        where(),
+      ),
+    ).toBeDefined();
+  });
+
+  it("is not used for another shell", () => {
+    expect(
+      runtimeWriteTarget("Set-Content $env:TEMP/x y", "bash", ps, where()),
+    ).toBeDefined();
+  });
+});
+
+describe("the word read does not hide an assignment, the read builtin does", () => {
+  it("prose that says read is not the builtin", () => {
+    expect(
+      runtimeWriteTarget(
+        "# read the file, then write it\n$d = 'out'; Set-Content $d x",
+        "powershell",
+        "C:/work/proj",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("read, mapfile and readarray at the start of a statement still hide it", () => {
+    for (const hide of ["read D", "mapfile D", "readarray D"]) {
+      expect(
+        runtimeWriteTarget(`D=build; ${hide}; rm $D`, "bash", "/work/proj"),
+      ).toBeDefined();
+    }
   });
 });

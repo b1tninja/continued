@@ -1,4 +1,4 @@
-import { tmpdir } from "node:os";
+import * as fs from "node:fs";
 import * as posix from "node:path/posix";
 import type { ShellKind } from "../../util/shell";
 import { parseCommand } from "./command";
@@ -208,7 +208,7 @@ const LITERAL_POSIX =
 
 /** Constructs that change a variable behind the scanner's back. */
 const HIDDEN_ASSIGNMENT =
-  /\b(?:set-variable|new-variable|clear-variable|remove-variable|sv|nv|clv|rv|read-host|read|mapfile|readarray)\b|printf\s+-v|\[ref\]|-(?:out|error|warning|information|pipeline)?variable\b|\s-(?:ov|ev|wv|iv|pv)\b/i;
+  /\b(?:set-variable|new-variable|clear-variable|remove-variable|sv|nv|clv|rv|read-host)\b|(?:^|[;&|\n({]\s*)(?:read|mapfile|readarray)\s|printf\s+-v|\[ref\]|-(?:out|error|warning|information|pipeline)?variable\b|\s-(?:ov|ev|wv|iv|pv)\b/i;
 
 /** The key a variable is kept under: PowerShell and cmd ignore case, the others do not. */
 function keyOf(name: string, shell?: ShellKind): string {
@@ -302,7 +302,8 @@ function substitute(
   return word.replace(
     /\$env:(temp|tmp)\b|\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/gi,
     (whole, env?: string, braced?: string, plain?: string) => {
-      if (env !== undefined) return powershell ? tmpdir() : whole;
+      if (env !== undefined)
+        return known.get(`env:${env.toLowerCase()}`) ?? whole;
       const name = keyOf(braced ?? plain ?? "", shell);
       if (name === "pwd" && powershell && cwd !== undefined) return cwd;
       return known.get(name) ?? whole;
@@ -310,11 +311,75 @@ function substitute(
   );
 }
 
+/** A path with forward slashes, `..` folded away, no trailing slash, lower case. */
+function norm(path: string): string {
+  return posix
+    .normalize(path.replace(/\\/g, "/"))
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
+function within(path: string, root: string): boolean {
+  return path === root || path.startsWith(`${root}/`);
+}
+
+/**
+ * The user's temp folder, when it is certain: on Windows `%LOCALAPPDATA%\Temp`,
+ * and `$env:TEMP` or `$env:TMP` is that very folder. Each variable that is
+ * proven is entered in `known`, so `$env:TEMP` reads as its value; the rest stay
+ * unresolved and ask. Elsewhere, or with anything unset or different, nothing
+ * is proven.
+ */
+function provenTemp(
+  known: Known,
+  env: Record<string, string | undefined>,
+  platform: string,
+): string | undefined {
+  const local = env.LOCALAPPDATA;
+  if (platform !== "win32" || !local) return undefined;
+  const root = norm(`${local}/Temp`);
+  let proven = false;
+  for (const name of ["TEMP", "TMP"]) {
+    const value = env[name];
+    if (value && norm(value) === root) {
+      known.set(`env:${name.toLowerCase()}`, value);
+      proven = true;
+    }
+  }
+  return proven ? `${local}/Temp` : undefined;
+}
+
+/**
+ * Does a path under `root` leave it through a link or a junction? The deepest
+ * part that exists is looked at: a link there, or a real location outside the
+ * root, escapes. Anything that cannot be read is taken to escape.
+ */
+function escapesThroughLink(path: string, root: string): boolean {
+  try {
+    let probe = path.replace(/\\/g, "/");
+    let entry: fs.Stats | undefined;
+    while (!entry) {
+      try {
+        entry = fs.lstatSync(probe);
+      } catch {
+        const up = posix.dirname(probe);
+        if (up === probe) return true;
+        probe = up;
+      }
+    }
+    if (entry.isSymbolicLink()) return true;
+    return !within(
+      norm(fs.realpathSync.native(probe)),
+      norm(fs.realpathSync.native(root)),
+    );
+  } catch {
+    return true;
+  }
+}
+
 /** Is a path that was worked out inside the workspace, with no `..` leaving it? */
 function insideWorkspace(path: string, cwd: string | undefined): boolean {
   if (cwd === undefined) return false;
-  const norm = (p: string) =>
-    posix.normalize(p.replace(/\\/g, "/")).replace(/\/+$/, "").toLowerCase();
   const root = norm(cwd);
   const full = /^(?:[A-Za-z]:)?\//.test(path.replace(/\\/g, "/"))
     ? norm(path)
@@ -350,9 +415,21 @@ export function runtimeWriteTarget(
   command: string,
   shell?: ShellKind,
   cwd?: string,
+  where: {
+    env?: Record<string, string | undefined>;
+    platform?: string;
+  } = {},
 ): string | undefined {
   let homeCd = false;
   const known: Known = new Map();
+  const tempRoot =
+    shell === "powershell" || shell === undefined
+      ? provenTemp(
+          known,
+          where.env ?? process.env,
+          where.platform ?? process.platform,
+        )
+      : undefined;
   // script blocks and loop bodies hold statements of their own
   const statements = parseCommand(command).parts.flatMap((part) =>
     part
@@ -373,8 +450,12 @@ export function runtimeWriteTarget(
       }
       if (target === typed) continue;
       const path = target.replace(/^(['"])(.*)\1$/s, "$2");
-      if (!insideWorkspace(path, cwd)) {
-        return `a write to ${short(typed)}, which is outside the workspace once its variable is read`;
+      const inTemp =
+        tempRoot !== undefined &&
+        within(norm(path), norm(tempRoot)) &&
+        !escapesThroughLink(path, tempRoot);
+      if (!inTemp && !insideWorkspace(path, cwd)) {
+        return `a write to ${short(typed)}, which is outside the workspace and the temp folder once its variable is read`;
       }
       if (namesPolicyFile(path, shell, cwd)) {
         return `a write to ${short(typed)}, which is a policy file once its variable is read`;
