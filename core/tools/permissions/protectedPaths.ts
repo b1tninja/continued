@@ -23,7 +23,7 @@ export const HOME_SECRET_DIRS = new Set([
 ]);
 
 /** Home files that are themselves credentials. */
-const HOME_SECRET_FILES = new Set([
+export const HOME_SECRET_FILES = new Set([
   ".git-credentials",
   ".pgpass",
   ".my.cnf",
@@ -39,7 +39,7 @@ const HOME_SECRET_FILES = new Set([
 ]);
 
 /** File names that are credentials wherever they sit. */
-const SECRET_BASENAMES = new Set([
+export const SECRET_BASENAMES = new Set([
   ".netrc",
   ".npmrc",
   ".pypirc",
@@ -62,7 +62,7 @@ const SECRET_BASENAMES = new Set([
   "secret.yml",
 ]);
 
-const SECRET_EXTENSIONS = new Set([
+export const SECRET_EXTENSIONS = new Set([
   ".pem",
   ".key",
   ".pfx",
@@ -159,7 +159,7 @@ export function isSecretPath(p: string): boolean {
 }
 
 /** Directories whose contents change what runs later, or configure a tool. */
-const CONFIG_DIRS = new Set([
+export const CONFIG_DIRS = new Set([
   ".git",
   ".continuous",
   ".continue",
@@ -181,7 +181,7 @@ const CONFIG_DIRS = new Set([
 ]);
 
 /** Directory pairs, for locations that sit under a shared parent. */
-const CONFIG_DIR_PAIRS: [string, string][] = [
+export const CONFIG_DIR_PAIRS: [string, string][] = [
   [".github", "workflows"],
   [".github", "actions"],
   [".config", "git"],
@@ -199,7 +199,7 @@ const CONFIG_DIR_PAIRS: [string, string][] = [
  * .gitattributes / .gitmodules, which cannot run code on their own. A rule can
  * add any of them: writeFile(AGENTS.md) in toolPermissions.ask.
  */
-const CONFIG_BASENAMES = new Set([
+export const CONFIG_BASENAMES = new Set([
   ".continuousrc.json",
   ".continuousrc.yaml",
   ".continuousrc.yml",

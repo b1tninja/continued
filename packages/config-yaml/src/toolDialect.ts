@@ -27,7 +27,19 @@ export function recoveryValueFor(
     case "mistral":
     case "dsml":
     case "deepseek-v31":
+    case "kimi-tokens":
+    case "kimi-xtml":
+    case "minimax-xml":
+    case "minimax-ns-xml":
     case "toolcall-json":
+    case "granite-tokens":
+    case "lfm-tokens":
+    case "hy3-tags":
+    case "solar-tokens":
+    case "longcat-json":
+    case "olmo-function-calls":
+    case "seed-xml":
+    case "cohere-action":
       return `force:${toolDialect}`;
     case "native":
     case "off":

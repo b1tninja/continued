@@ -1,0 +1,243 @@
+{
+  "schemaVersion": 1,
+  "id": "olmo-claude-style-invoke",
+  "family": "olmo-3",
+  "dialect": "olmo-function-calls",
+  "kind": "negative",
+  "failureMode": "wrong-form",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/allenai/Olmo-3-7B-Instruct/blob/main/chat_template.jinja and vLLM docs tool_calling.md (Olmo 3), not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<function_calls>\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Paris</parameter>\n</invoke>\n</function_calls>",
+  "markers": ["<function_calls>", "</function_calls>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<function_calls>\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Paris</parameter>\n</invoke>\n</function_calls>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">",
+        "\n",
+        "<",
+        "i",
+        "n",
+        "v",
+        "o",
+        "k",
+        "e",
+        " ",
+        "n",
+        "a",
+        "m",
+        "e",
+        "=",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ">",
+        "\n",
+        "<",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        " ",
+        "n",
+        "a",
+        "m",
+        "e",
+        "=",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ">",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "<",
+        "/",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        ">",
+        "\n",
+        "<",
+        "/",
+        "i",
+        "n",
+        "v",
+        "o",
+        "k",
+        "e",
+        ">",
+        "\n",
+        "<",
+        "/",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<functio",
+        "n_calls>\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Paris</parameter>\n</invoke>\n</function_calls>"
+      ],
+      "splitInside": "<function_calls>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<function_calls>",
+        "\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Paris</parameter>\n</invoke>\n",
+        "</function_calls>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<fun",
+        "cti",
+        "on_ca",
+        "ll",
+        "s",
+        ">\n<",
+        "invok",
+        "e ",
+        "name=",
+        "\"get",
+        "_we",
+        "a",
+        "t",
+        "her\"",
+        ">\n",
+        "<pa",
+        "ramet",
+        "er ",
+        "na",
+        "me=\"",
+        "city",
+        "\">",
+        "Paris",
+        "</",
+        "pa",
+        "r",
+        "a",
+        "mete",
+        "r>\n</",
+        "invok",
+        "e>",
+        "\n</f",
+        "unct",
+        "io",
+        "n_ca",
+        "lls",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<function_calls>\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Paris</parameter>\n</invoke>\n</function_calls>"
+  }
+}

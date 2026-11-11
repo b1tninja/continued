@@ -40,3 +40,40 @@ A browser page cannot call the server, even on loopback with no token. To call i
 ```bash
 curl http://127.0.0.1:8000/state
 ```
+
+## Agents
+
+`GET /agents` lists the agents of the session: the session itself, the subagents it started and the workers of a Loop wave. It answers the same Host, Origin and token checks as the other routes.
+
+```bash
+curl http://127.0.0.1:8000/agents
+continuous agents list              # the same list as a tree
+continuous agents list --json       # the JSON as the server sent it
+continuous agents list --url http://127.0.0.1:9000 --token "$CONTINUOUS_SERVE_TOKEN"
+```
+
+`GET /state` returns the whole conversation and the arguments of a pending permission. `GET /agents` does not: it is built from an allow-list of names, states and numbers, and has no field that could hold a prompt, a command, a URL, a file's contents or an agent's own words.
+
+Each node has:
+
+| Field                         | Meaning                                                                                                              |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `id`, `parentId`, `rootId`    | Where it sits in the tree. The session is the root                                                                   |
+| `kind`                        | `main`, `subagent`, `loop-worker` or `external-reserved` (no producer yet)                                           |
+| `role`, `mode`, `model`       | The agent's name (or `item 3` for a worker), its permission mode and the model's title                               |
+| `state`                       | `running`, `waiting-approval`, `blocked`, `done`, `failed`, `stopped` or `over-budget`                               |
+| `blockedOn`                   | What a waiting agent waits on, as a kind only: `approval`, `question`, `slot`, `dependency` or `budget`             |
+| `activity`                    | One of a fixed list of phrases: `reading files`, `searching`, `editing`, `running a command`, `fetching`, `working`, `waiting for you` |
+| `startedAt`, `endedAt`        | Milliseconds since the epoch                                                                                         |
+| `tokens`                      | Input, output, cache read and cache write tokens                                                                     |
+| `cost.self`, `cost.subtree`   | USD of this agent alone and of it with everything below it, or `"unknown"`                                           |
+| `workspace`                   | For a worker, the worktree's folder name, never its path                                                             |
+| `returnedLength`              | How long the agent's answer was. The answer is not kept                                                              |
+
+Cost is never guessed. A model without a price makes the agent's cost `"unknown"`, and so the cost of everything above it. The session's total already holds what its subagents and workers spent, so the session's own cost is the total minus theirs, not the total plus theirs.
+
+`needsYou` lists the ids of agents waiting for you, and `totals` counts agents by state. If the list cannot be built, the answer is an empty list with a fixed `error` sentence, never the exception.
+
+In the IDE the same list appears above the chat input once an agent has started, as a read-only tree you can collapse. Stop stays on a subagent's card and in the Loop inbox.
+
+The agent map observes; it does not change what agents do or ask. Subagents in the terminal agent run one at a time, so a second one shows as `blocked` on a `slot` until the first ends. A Loop worker's activity and approvals are not shown yet, and its cost is `"unknown"`.

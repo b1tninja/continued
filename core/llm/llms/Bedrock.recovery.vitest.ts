@@ -101,8 +101,8 @@ describe("Bedrock: Qwen XML tool calls written as text (recovery, off by default
 
   it("makes the call from the text with the environment variable", async () => {
     process.env.CONTINUE_RECOVER_TEXT_TOOL_CALLS = "qwen-xml";
-    const r = await run(reply());
-    expect(r.content).toBe("I will read it.\n");
+    const r = await run(reply().slice(1));
+    expect(r.content).toBe("");
     expect(r.calls).toHaveLength(1);
     expect(r.calls[0].function.name).toBe("Read");
     expect(JSON.parse(r.calls[0].function.arguments)).toEqual({
@@ -110,8 +110,15 @@ describe("Bedrock: Qwen XML tool calls written as text (recovery, off by default
     });
   });
 
+  it("leaves a call after prose as text: the whole reply must be calls", async () => {
+    process.env.CONTINUE_RECOVER_TEXT_TOOL_CALLS = "qwen-xml";
+    const r = await run(reply());
+    expect(r.content).toBe("I will read it.\n" + leaked);
+    expect(r.calls).toEqual([]);
+  });
+
   it("makes the call with extraBodyProperties", async () => {
-    const r = await run(reply(), {
+    const r = await run(reply().slice(1), {
       x_continue_recover_text_tool_calls: "qwen-xml",
     });
     expect(r.calls).toHaveLength(1);

@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-olmo-fenced-example",
+  "family": "olmo-3",
+  "dialect": "olmo-function-calls",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/allenai/Olmo-3-7B-Instruct/blob/main/chat_template.jinja and vLLM docs tool_calling.md (Olmo 3), not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "The model must reply with:\n\n```\n<function_calls>get_weather(city=\"Paris\")</function_calls>\n```",
+  "markers": ["<function_calls>", "</function_calls>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "The model must reply with:\n\n```\n<function_calls>get_weather(city=\"Paris\")</function_calls>\n```"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "T",
+        "h",
+        "e",
+        " ",
+        "m",
+        "o",
+        "d",
+        "e",
+        "l",
+        " ",
+        "m",
+        "u",
+        "s",
+        "t",
+        " ",
+        "r",
+        "e",
+        "p",
+        "l",
+        "y",
+        " ",
+        "w",
+        "i",
+        "t",
+        "h",
+        ":",
+        "\n",
+        "\n",
+        "`",
+        "`",
+        "`",
+        "\n",
+        "<",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "(",
+        "c",
+        "i",
+        "t",
+        "y",
+        "=",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        ")",
+        "<",
+        "/",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "s",
+        ">",
+        "\n",
+        "`",
+        "`",
+        "`"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "The model must reply with:\n\n```\n<functio",
+        "n_calls>get_weather(city=\"Paris\")</function_calls>\n```"
+      ],
+      "splitInside": "<function_calls>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "The model must reply with:\n\n```\n",
+        "<function_calls>",
+        "get_weather(city=\"Paris\")",
+        "</function_calls>",
+        "\n```"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "T",
+        "he m",
+        "odel ",
+        "mu",
+        "st re",
+        "ply ",
+        "w",
+        "ith:\n",
+        "\n```\n",
+        "<fun",
+        "c",
+        "t",
+        "ion_c",
+        "all",
+        "s",
+        ">ge",
+        "t_we",
+        "at",
+        "her",
+        "(city",
+        "=\"P",
+        "ar",
+        "is\")<",
+        "/f",
+        "un",
+        "cti",
+        "on_",
+        "call",
+        "s>\n``",
+        "`"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "The model must reply with:\n\n```\n<function_calls>get_weather(city=\"Paris\")</function_calls>\n```"
+  }
+}

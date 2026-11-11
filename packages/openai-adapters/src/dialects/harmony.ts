@@ -31,8 +31,9 @@
  *   `json`), a body that is one JSON object, terminator `<|call|>`;
  * - an analysis message (channel `analysis`, no recipient, `<|end|>`) is the
  *   model's reasoning and is dropped;
- * - a preamble (channel `commentary`, no recipient, `<|end|>`) before the
- *   first call is kept as text.
+ * - any other message with no recipient (a commentary preamble, which is prose
+ *   for the user) makes the whole reply text: the reply must be calls only
+ *   (plans/ROADMAP.md Q28).
  *
  * Messages after the first begin with `<|start|>assistant`. Nothing else is
  * accepted: a `final` message, another recipient (`browser.search`, `python`),
@@ -102,7 +103,6 @@ export function recoverHarmonyCalls(
   text: string,
   tools: DialectTool[],
 ): ParsedReply | undefined {
-  const preambles: string[] = [];
   const calls: RecoveredCall[] = [];
   let pos = skipSpace(text, 0);
   for (let first = true; pos < text.length; first = false) {
@@ -120,11 +120,7 @@ export function recoverHarmonyCalls(
     const raw = text.slice(begin, stop.at + stop.token.length);
     if (header.recipient === undefined) {
       if (stop.token !== "<|end|>" || calls.length > 0) return undefined;
-      if (header.channel === "commentary" && header.constrain === undefined) {
-        preambles.push(body);
-      } else if (header.channel !== "analysis") {
-        return undefined;
-      }
+      if (header.channel !== "analysis") return undefined;
     } else {
       const call = callFrom(header, stop.token, body, tools, raw);
       if (!call) return undefined;
@@ -132,7 +128,7 @@ export function recoverHarmonyCalls(
     }
     pos = skipSpace(text, stop.at + stop.token.length);
   }
-  return calls.length > 0 ? { lead: preambles.join("\n\n"), calls } : undefined;
+  return calls.length > 0 ? { lead: "", calls } : undefined;
 }
 
 function callFrom(

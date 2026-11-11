@@ -29,10 +29,58 @@ describe("detectToolDialectLeak", () => {
       ["deepseek-v32-dsml-canonical", "dsml"],
       ["deepseek-v4-dsml-tool-calls-block", "dsml"],
       ["deepseek-v31-canonical", "deepseek-v31"],
-    ]) {
+    ] as const) {
       expect(detectToolDialectLeak({ content: text(id) }), id).toEqual({
         dialect,
       });
+    }
+  });
+
+  it("sees the Kimi and MiniMax forms written as text", () => {
+    for (const [id, dialect] of [
+      ["kimi-k2-canonical", "kimi-tokens"],
+      ["kimi-k3-canonical", "kimi-xtml"],
+      ["minimax-m2-canonical", "minimax-xml"],
+      ["minimax-m3-canonical", "minimax-ns-xml"],
+    ] as const) {
+      expect(detectToolDialectLeak({ content: text(id) }), id).toEqual({
+        dialect,
+      });
+    }
+  });
+
+  it("does not offer recovery for a fenced Kimi K3 or MiniMax M3 example", () => {
+    for (const id of [
+      "neg-kimi-k3-fenced-example",
+      "neg-minimax-m3-fenced-example",
+    ]) {
+      expect(detectToolDialectLeak({ content: text(id) }), id).toBeUndefined();
+    }
+  });
+
+  it("sees the Group C forms written as text", () => {
+    for (const [id, dialect] of [
+      ["granite-canonical", "granite-tokens"],
+      ["lfm-canonical", "lfm-tokens"],
+      ["hy3-canonical", "hy3-tags"],
+      ["solar-canonical", "solar-tokens"],
+      ["longcat-canonical", "longcat-json"],
+      ["olmo-canonical", "olmo-function-calls"],
+      ["seed-canonical", "seed-xml"],
+      ["cohere-canonical", "cohere-action"],
+    ] as const) {
+      expect(detectToolDialectLeak({ content: text(id) }), id).toEqual({
+        dialect,
+      });
+    }
+  });
+
+  it("does not offer recovery for a fenced Kimi K3 or MiniMax M3 example", () => {
+    for (const id of [
+      "neg-kimi-k3-fenced-example",
+      "neg-minimax-m3-fenced-example",
+    ]) {
+      expect(detectToolDialectLeak({ content: text(id) }), id).toBeUndefined();
     }
   });
 
@@ -119,6 +167,14 @@ describe("isLeakedToolCall", () => {
       "harmony-commentary-call",
       "deepseek-v31-canonical",
       "llama3-python-tag-builtin",
+      "granite-canonical",
+      "lfm-canonical",
+      "hy3-canonical",
+      "solar-canonical",
+      "longcat-canonical",
+      "olmo-canonical",
+      "seed-canonical",
+      "cohere-canonical",
     ]) {
       expect(leak(id), id).toBe(true);
     }
@@ -149,6 +205,50 @@ describe("isLeakedToolCall", () => {
     for (const f of corpus.values()) {
       if (f.failureMode !== "argument-type-mismatch") continue;
       expect(leak(f.id), f.id).toBe(true);
+    }
+  });
+
+  it("counts a call that recovery declined because prose came before or after it (Q28): the turn must not end silently", () => {
+    const declined = [...corpus.values()].filter((f) =>
+      f.provenance.note.includes("Declined by owner rule"),
+    );
+    expect(declined.length).toBeGreaterThan(5);
+    // Not every declined dialect is classified by the nudge yet (the Kimi,
+    // DeepSeek V3.1 and Harmony shapes); the ones that are must stay counted.
+    const counted = declined.filter((f) => leak(f.id));
+    for (const id of [
+      "qwen3-coder-prose-then-call",
+      "qwen3-coder-prose-after-call",
+      "qwen3-coder-two-calls-with-prose-between",
+      "qwen3-coder-missing-open-tag-ollama-16686",
+      "qwen3-coder-30b-bedrock-function-xml-as-text",
+      "mistral-v3-parallel-and-prose",
+    ]) {
+      expect(
+        counted.map((f) => f.id),
+        id,
+      ).toContain(id);
+    }
+  });
+
+  it("counts a declined call of the Kimi, DeepSeek and Harmony shapes, whose tool name follows `functions.` or a separator", () => {
+    const declined: [string, (t: string) => string][] = [
+      // truncated, undeclared argument, prose around: recovery refuses each.
+      ["kimi-k2-canonical", (t) => t.slice(0, t.length - 12)],
+      ["kimi-k2-canonical", (t) => `Reading it. ${t}`],
+      ["harmony-commentary-call", (t) => t.slice(0, t.length - 8)],
+      ["harmony-commentary-call", (t) => `${t} Done.`],
+      ["deepseek-v32-dsml-canonical", (t) => `Sure.\n\n${t}`],
+      ["deepseek-v32-dsml-canonical", (t) => t.slice(0, t.length - 20)],
+      ["deepseek-v31-canonical", (t) => `Sure. ${t}`],
+      ["deepseek-v31-canonical", (t) => t.slice(0, t.length - 30)],
+    ];
+    for (const [id, make] of declined) {
+      const content = make(text(id));
+      expect(
+        isLeakedToolCall({ content, knownTools: tools(id) }),
+        `${id}: ${content}`,
+      ).toBe(true);
     }
   });
 

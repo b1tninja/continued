@@ -3,16 +3,16 @@
   "id": "qwen3-coder-missing-open-tag-hf-discussion-19",
   "family": "qwen3-coder",
   "dialect": "qwen-xml",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "missing-open-tag",
   "flag": "observed",
   "provenance": {
     "source": "https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct/discussions/19",
     "retrieved": "2026-11-10",
     "reportDate": "2025-08-18",
-    "note": "Pasted by the reporter (vLLM, Qwen3-Coder-30B-A3B-Instruct-FP8, qwen3_coder parser)."
+    "note": "Pasted by the reporter (vLLM, Qwen3-Coder-30B-A3B-Instruct-FP8, qwen3_coder parser). Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 1 call(s) and the text \"I will use the knowledge_search_agent tool to retrieve a list of all documents in your knowledge base.\\n\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
-  "policy": "should",
+  "policy": "must",
   "tools": [
     {
       "name": "knowledge_search_agent",
@@ -419,14 +419,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "knowledge_search_agent",
-        "arguments": {
-          "prompt": "List all the documents in the user's knowledge base."
-        }
-      }
-    ],
-    "text": "I will use the knowledge_search_agent tool to retrieve a list of all documents in your knowledge base.\n"
+    "calls": [],
+    "text": "I will use the knowledge_search_agent tool to retrieve a list of all documents in your knowledge base.\n<function=knowledge_search_agent>\n<parameter=prompt>\nList all the documents in the user's knowledge base.\n</parameter>\n</function>\n</tool_call>"
   }
 }

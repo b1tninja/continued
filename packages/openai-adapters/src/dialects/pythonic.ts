@@ -9,7 +9,8 @@
  * column 0, outside a code fence; the callee is exactly the name of a tool in
  * the request; every argument is a keyword argument whose name the schema
  * declares and whose value has the type the schema asks for; every required
- * argument is present; and the held text is nothing but such calls. Values are
+ * argument is present; and the reply is nothing but such calls, after at most
+ * a think block (a call that follows prose is not recovered). Values are
  * read by a small parser over Python literals (strings, numbers, True, False,
  * None, lists, tuples, dicts with string keys). Nothing is ever evaluated.
  *
@@ -32,6 +33,7 @@
  * call is accepted only for a tool the request declares.
  */
 import type { DialectTool, RecoveredCall, RecoveryEvent } from "./qwenXml.js";
+import { hasProseBefore } from "./heldRecovery.js";
 import { fittedCall } from "./schemaCheck.js";
 
 const MAX_DEPTH = 20;
@@ -191,7 +193,7 @@ const DOT_CALL = ".call";
  * One call at `at`, or undefined when it is not a complete valid call. With
  * `dotCall` the callee is written `NAME.call` (the python_tag form).
  */
-function parseCall(
+export function parsePythonicCall(
   text: string,
   at: number,
   tools: DialectTool[],
@@ -241,7 +243,7 @@ function parseList(
   let pos = at + 1;
   for (;;) {
     pos = skipWs(text, pos);
-    const one = parseCall(text, pos, tools);
+    const one = parsePythonicCall(text, pos, tools);
     if (!one) return undefined;
     calls.push(one.call);
     pos = skipWs(text, one.end);
@@ -269,7 +271,7 @@ function parseAt(
 ): { calls: RecoveredCall[]; end: number } | undefined {
   if (text[at] === "[") return parseList(text, at, tools);
   const tagged = text.startsWith(PYTHON_TAG, at);
-  const one = parseCall(
+  const one = parsePythonicCall(
     text,
     tagged ? at + PYTHON_TAG.length : at,
     tools,
@@ -415,7 +417,9 @@ export class PythonicRecovery {
   end(): RecoveryEvent[] {
     const out: RecoveryEvent[] = [];
     if (this.held !== undefined) {
-      const calls = recoverPythonicCalls(this.held, this.tools);
+      const calls = hasProseBefore(this.shown)
+        ? undefined
+        : recoverPythonicCalls(this.held, this.tools);
       if (calls) {
         for (const call of calls) out.push({ type: "call", call });
       } else {

@@ -303,10 +303,11 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     measured:
       "structured 8/8; one <think>...</think> block leaked into the text of a reply to a tool result",
     textDialect: "kimi-tokens",
+    recoverWith: "kimi-tokens",
     promptStyle: {
       style: "native",
       evidence:
-        "8/8 structured on Converse (live 2026-11-10); the token form has no parser here",
+        "8/8 structured on Converse (live 2026-11-10); the token form is recovered by kimi-tokens (self-hosted servers)",
     },
     observedLeak:
       "<think> block in text (lifted into reasoning by the Bedrock handlers)",
@@ -334,14 +335,14 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "Kimi K3 and K3.1: structured 100%, no leak",
-    // Not kimi-tokens: K3 writes its own tag form (encoding_k3.py), which no
-    // TextDialect value names yet. `none` here means "no recoverable text
-    // dialect"; a value for it needs the dialect enum.
-    textDialect: "none",
+    // Not kimi-tokens: K3 writes its own tag form (encoding_k3.py), recovered
+    // by kimi-xtml.
+    textDialect: "kimi-xtml",
+    recoverWith: "kimi-xtml",
     promptStyle: {
       style: "native",
       evidence:
-        "100% structured on Converse (live 2026-11-10); the text form is the XTML call block <|open|>tools<|sep|><|open|>call tool=NAME index=N<|sep|><|open|>argument key=K type=T<|sep|>VALUE<|close|>argument<|sep|>...<|close|>call<|sep|><|close|>tools<|sep|> (encoding_k3.py, read 2026-11-10); not yet recoverable, no parser",
+        "100% structured on Converse (live 2026-11-10); the text form is the XTML call block <|open|>tools<|sep|><|open|>call tool=NAME index=N<|sep|><|open|>argument key=K type=T<|sep|>VALUE<|close|>argument<|sep|>...<|close|>call<|sep|><|close|>tools<|sep|> (encoding_k3.py, read 2026-11-10); recovered by kimi-xtml (self-hosted servers)",
     },
     serverParser: {
       vllm: "kimi_k3",
@@ -357,8 +358,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     unverified: [
       "the repository ships a Python encoder, not a Jinja template, so the template classifier cannot decide it",
       "encoding_k3.py renders history; the token ids of <|open|>, <|close|> and <|sep|> and what the model actually emits were not measured",
-      "a call may carry a single <|open|>json type=object<|sep|> body in place of argument tags (_xtml_json_block); not exercised",
-      "needs a dialect value for the XTML form (the dialect enum was not touched)",
+      "a call may carry a single <|open|>json type=object<|sep|> body in place of argument tags (_xtml_json_block); kimi-xtml refuses it",
     ],
   },
   {
@@ -370,6 +370,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     nativeOnConverse: "all",
     measured: "Kimi K2.5: structured 100%, no leak",
     textDialect: "kimi-tokens",
+    recoverWith: "kimi-tokens",
     promptStyle: {
       style: "native",
       evidence: "100% structured on Converse (live 2026-11-10)",
@@ -397,13 +398,14 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     bedrockTools: "yes",
     toolsEvidence: "inferred",
     nativeOnConverse: "unmeasured",
-    // Not minimax-xml: M3 changed the call block (see promptStyle) and no
-    // TextDialect value names it, so `none` means "no recoverable text dialect".
-    textDialect: "none",
+    // Not minimax-xml: M3 changed the call block (see promptStyle); the
+    // namespaced form is recovered by minimax-ns-xml.
+    textDialect: "minimax-ns-xml",
+    recoverWith: "minimax-ns-xml",
     promptStyle: {
       style: "native",
       evidence:
-        'M3 template instructs ]<]minimax[>[<tool_call> then ]<]minimax[>[<invoke name="tool-name-1"> with each parameter as ]<]minimax[>[<param>value]<]minimax[>[</param>, closed by ]<]minimax[>[</invoke> and ]<]minimax[>[</tool_call> (read 2026-11-10; the namespace marker ]<]minimax[>[ is prepended to every tag); thinking is <mm:think>; not yet recoverable, no parser',
+        'M3 template instructs ]<]minimax[>[<tool_call> then ]<]minimax[>[<invoke name="tool-name-1"> with each parameter as ]<]minimax[>[<param>value]<]minimax[>[</param>, closed by ]<]minimax[>[</invoke> and ]<]minimax[>[</tool_call> (read 2026-11-10; the namespace marker ]<]minimax[>[ is prepended to every tag); thinking is <mm:think>; recovered by minimax-ns-xml (self-hosted servers)',
     },
     thinkingTags: ["<mm:think>", "</mm:think>"],
     source: [
@@ -414,7 +416,6 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
       "never run live: bedrockTools is inferred from the M2 family, and M2 uses <minimax:tool_call> (a different form)",
       "no serverParser read: the M3 card has no --tool-call-parser line",
       "the call form is read from the template's instruction text and history renderer, not from model output",
-      "needs a dialect value for this form (the dialect enum was not touched)",
     ],
   },
   {
@@ -426,6 +427,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     nativeOnConverse: "all",
     measured: "MiniMax M2 and M2.5: structured 100%, no leak",
     textDialect: "minimax-xml",
+    recoverWith: "minimax-xml",
     promptStyle: {
       style: "native",
       evidence:
@@ -763,7 +765,8 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     readOn: READ,
     unverified: [
       "granite-4.0-h-small only; Granite 4.0 Micro, Tiny, 4.1 and the vLLM parser pairing were not read",
-      "Granite 3.x writes <|tool_call|> and is not covered by any row",
+      "Granite 3.x writes <|tool_call|> and has its own row (granite-3)",
+      "SmolLM3 writes the same <tool_call> JSON as Hermes (its template was read 2026-11-10) but has no row of its own",
     ],
   },
   {
@@ -849,23 +852,23 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     toolsEvidence: "unmeasured",
     nativeOnConverse: "unmeasured",
     // The call is a Python-style list wrapped in <|tool_call_start|> and
-    // <|tool_call_end|>; no TextDialect value names the wrapped form, so
-    // `none` means "no recoverable text dialect".
-    textDialect: "none",
+    // <|tool_call_end|>; `lfm-tokens` recovers it (wrapperDialects.ts).
+    textDialect: "lfm-tokens",
     promptStyle: {
       style: "native",
       evidence:
-        'LFM2.5-24B-A2B and LFM2-8B-A1B templates write <|tool_call_start|>[name(arg="v"), ...]<|tool_call_end|> (render_tool_calls, read 2026-11-10); the tool list is rendered as "List of tools: [" in the system prompt; not yet recoverable, no parser',
+        'LFM2.5-24B-A2B and LFM2-8B-A1B templates write <|tool_call_start|>[name(arg="v"), ...]<|tool_call_end|> (render_tool_calls, read 2026-11-10); the tool list is rendered as "List of tools: [" in the system prompt; never prompted for it by us',
     },
+    recoverWith: "lfm-tokens",
     source: [
       "https://huggingface.co/LiquidAI/LFM2.5-24B-A2B/blob/main/chat_template.jinja",
       "https://huggingface.co/LiquidAI/LFM2-8B-A1B/blob/main/chat_template.jinja",
     ],
     readOn: READ,
     unverified: [
-      "whether the pythonic recovery reads the wrapped list was not tested; the dialect enum was not touched",
       "LFM3 (on OpenRouter as liquid/lfm-3-1.7b) was not read",
-      "the argument rendering inside the parentheses was not read in detail",
+      "the JSON call mode LFM's docs mention (switched on by a system prompt line) is not recovered: its exact shape is not documented",
+      "no live capture: lfm-tokens is built from the templates and docs.liquid.ai, corpus fixtures are synthesised",
     ],
   },
   {
@@ -876,13 +879,14 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     toolsEvidence: "unmeasured",
     nativeOnConverse: "unmeasured",
     // GLM-like markup whose tags carry a ':opensource' suffix, so glm-xml does
-    // not parse it; `none` means "no recoverable text dialect".
-    textDialect: "none",
+    // not parse it; `hy3-tags` does (wrapperDialects.ts).
+    textDialect: "hy3-tags",
     promptStyle: {
       style: "native",
       evidence:
-        "Hy3 template instructs <tool_calls:opensource> then <tool_call:opensource>{function-name}<tool_sep:opensource> with <arg_key:opensource>/<arg_value:opensource> pairs, closed by </tool_call:opensource> and </tool_calls:opensource> (HYTK = ':opensource', read 2026-11-10); not yet recoverable, no parser",
+        "Hy3 template instructs <tool_calls:opensource> then <tool_call:opensource>{function-name}<tool_sep:opensource> with <arg_key:opensource>/<arg_value:opensource> pairs, closed by </tool_call:opensource> and </tool_calls:opensource> (HYTK = ':opensource', read 2026-11-10); never prompted for it by us",
     },
+    recoverWith: "hy3-tags",
     thinkingTags: ["<think:opensource>", "</think:opensource>"],
     serverParser: {
       vllm: "hy_v3",
@@ -896,8 +900,173 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     readOn: READ,
     unverified: [
       "Hy4 and Hy3-preview were not read (the Hy4 repository answered 401, so it is missing or private)",
-      "the HYTK suffix may differ between the open and hosted checkpoints",
-      "the dialect enum was not touched",
+      "the HYTK suffix may differ between the open and hosted checkpoints; hy3-tags reads ':opensource' only",
+      "no live capture: hy3-tags is built from the template and vLLM's hy_v3 parser, corpus fixtures are synthesised",
+    ],
+  },
+  {
+    id: "granite-3",
+    label: "IBM Granite 3.x (<|tool_call|> JSON list)",
+    match: [/granite[-._ ]?3/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "granite-tokens",
+    promptStyle: {
+      style: "native",
+      evidence:
+        "granite-3.3-8b-instruct template: 'respond only with <|tool_call|> followed by a JSON list of tools used' (read 2026-11-10); never prompted for it by us",
+    },
+    recoverWith: "granite-tokens",
+    serverParser: {
+      vllm: "granite",
+      basis: "vllm-docs",
+      note: "the vLLM tool-calling docs list granite-3.1-8b-instruct with --tool-call-parser granite and the Hub template used directly",
+    },
+    source: [
+      "https://huggingface.co/ibm-granite/granite-3.3-8b-instruct/raw/main/tokenizer_config.json",
+      VLLM_DOCS,
+    ],
+    readOn: READ,
+    unverified: [
+      "granite-3.3-8b-instruct only; 3.0 and 3.1 were not read (vLLM's parser also accepts a <tool_call> prefix for 3.1, which granite-tokens does not)",
+      "the shape of one list item comes from vLLM's granite parser and example template, not from the Hub card",
+      "no live capture: corpus fixtures are synthesised",
+    ],
+  },
+  {
+    id: "solar-open",
+    label: "Upstage Solar Open (<|tool_call:begin|> tokens)",
+    match: [/solar[-._ ]?open/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "solar-tokens",
+    promptStyle: {
+      style: "native",
+      evidence:
+        "Solar-Open-100B template ('Tool Call Format'): <|tool_call:begin|><id><|tool_call:name|><name><|tool_call:args|><args-json-object><|tool_call:end|> (read 2026-11-10); never prompted for it by us",
+    },
+    recoverWith: "solar-tokens",
+    serverParser: {
+      vllm: "solar_open",
+      basis: "model-card",
+      note: "the card launches Upstage's vLLM fork with --tool-call-parser solar_open; the parser is not in vLLM's own registry",
+    },
+    source: [
+      "https://huggingface.co/upstage/Solar-Open-100B/blob/main/chat_template.jinja",
+      "https://huggingface.co/upstage/Solar-Open-100B/raw/main/README.md",
+    ],
+    readOn: READ,
+    unverified: [
+      "no live capture: corpus fixtures are synthesised",
+      "the reasoning block (<|think|>...<|end|>) is not recovered around a call",
+    ],
+  },
+  {
+    id: "longcat-flash",
+    label: "Meituan LongCat-Flash (<longcat_tool_call> JSON)",
+    match: [/longcat/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "longcat-json",
+    promptStyle: {
+      style: "native",
+      evidence:
+        "LongCat-Flash-Chat template: 'return a json object with function name and arguments within <longcat_tool_call></longcat_tool_call> XML tags' (read 2026-11-10); never prompted for it by us",
+    },
+    recoverWith: "longcat-json",
+    thinkingTags: ["<longcat_think>", "</longcat_think>"],
+    serverParser: {
+      vllm: "longcat",
+      basis: "vllm-docs",
+      note: "named for LongCat-Flash-Chat in the vLLM tool-calling docs",
+    },
+    source: [
+      "https://huggingface.co/meituan-longcat/LongCat-Flash-Chat/raw/main/tokenizer_config.json",
+      VLLM_DOCS,
+    ],
+    readOn: READ,
+    unverified: [
+      "LongCat-Flash-Chat only; Thinking and Lite variants were not read",
+      "no live capture: corpus fixtures are synthesised",
+    ],
+  },
+  {
+    id: "olmo-3",
+    label: "AI2 Olmo 3 (<function_calls> Python calls)",
+    match: [/olmo[-._ ]?3/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "olmo-function-calls",
+    promptStyle: {
+      style: "native",
+      evidence:
+        "Olmo-3-7B-Instruct template: 'Output any function calls within <function_calls></function_calls> XML tags', calls rendered as name(key=<json>) one per line (read 2026-11-10); never prompted for it by us",
+    },
+    recoverWith: "olmo-function-calls",
+    serverParser: {
+      vllm: "olmo3",
+      basis: "vllm-docs",
+      note: "named for Olmo-3-7B-Instruct and Olmo-3-32B-Think in the vLLM tool-calling docs",
+    },
+    source: [
+      "https://huggingface.co/allenai/Olmo-3-7B-Instruct/blob/main/chat_template.jinja",
+      VLLM_DOCS,
+    ],
+    readOn: READ,
+    unverified: [
+      "Olmo-3-7B-Instruct only; the Think variants were not read",
+      "no live capture: corpus fixtures are synthesised",
+    ],
+  },
+  {
+    id: "seed-oss",
+    label: "ByteDance Seed-OSS (<seed:tool_call> XML)",
+    match: [/seed[-._ ]?oss/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "seed-xml",
+    promptStyle: {
+      style: "native",
+      evidence:
+        "Seed-OSS-36B-Instruct template: <seed:tool_call><function=NAME><parameter=KEY>value</parameter></function></seed:tool_call> (read 2026-11-10); never prompted for it by us",
+    },
+    recoverWith: "seed-xml",
+    thinkingTags: ["<seed:think>", "</seed:think>"],
+    source: [
+      "https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct/blob/main/chat_template.jinja",
+    ],
+    readOn: READ,
+    unverified: [
+      "Seed-OSS-36B-Instruct only",
+      "no live capture: corpus fixtures are synthesised",
+    ],
+  },
+  {
+    id: "cohere-command",
+    label: "Cohere Command A and R7B (<|START_ACTION|> JSON)",
+    match: [/command[-._ ]?(?:a(?![a-z])|r7b)/],
+    bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
+    nativeOnConverse: "unmeasured",
+    textDialect: "cohere-action",
+    promptStyle: {
+      style: "native",
+      evidence:
+        'Cohere docs (command-a-hf): "write <|START_ACTION|> followed by a list of JSON-formatted tool calls, with each one containing tool_name and parameters fields ... close it out with <|END_ACTION|>" (read 2026-11-10); never prompted for it by us',
+    },
+    recoverWith: "cohere-action",
+    thinkingTags: ["<|START_THINKING|>", "<|END_THINKING|>"],
+    source: ["https://docs.cohere.com/docs/command-a-hf"],
+    readOn: READ,
+    unverified: [
+      "the Hub repositories are gated, so the template was not read: the form comes from the public docs",
+      "Command R and R+ (2024) write a different, fenced form and are not matched",
+      "no live capture: corpus fixtures are synthesised",
     ],
   },
   {

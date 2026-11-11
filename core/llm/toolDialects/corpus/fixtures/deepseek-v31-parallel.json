@@ -3,15 +3,15 @@
   "id": "deepseek-v31-parallel",
   "family": "deepseek-v3.x",
   "dialect": "deepseek-v31",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "parallel-merged",
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json, not observed",
     "retrieved": "2026-11-10",
-    "note": "Prose before the call block: the template writes content then the block, but the strict parser requires the whole reply to be calls, so this is left as text (policy either)."
+    "note": "Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 2 call(s) and the text \"Checking both.\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
-  "policy": "either",
+  "policy": "must",
   "tools": [
     {
       "name": "get_weather",
@@ -374,20 +374,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "get_weather",
-        "arguments": {
-          "city": "Paris"
-        }
-      },
-      {
-        "name": "get_time",
-        "arguments": {
-          "tz": "UTC"
-        }
-      }
-    ],
-    "text": "Checking both."
+    "calls": [],
+    "text": "Checking both.<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{\"city\": \"Paris\"}<｜tool▁call▁end｜><｜tool▁call▁begin｜>get_time<｜tool▁sep｜>{\"tz\": \"UTC\"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>"
   }
 }

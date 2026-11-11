@@ -1553,10 +1553,10 @@ describe("BedrockApi Qwen XML tool calls written as text (recovery, off by defau
   });
 
   it("makes the call from the text when the request asks for it", async () => {
-    const choices = await streaming(reply)({
+    const choices = await streaming(reply.slice(1))({
       x_continue_recover_text_tool_calls: "qwen-xml",
     });
-    expect(content(choices)).toBe("I will read it.\n");
+    expect(content(choices)).toBe("");
     const calls = callsOf(choices);
     expect(calls).toHaveLength(1);
     expect(calls[0].index).toBe(0);
@@ -1566,6 +1566,15 @@ describe("BedrockApi Qwen XML tool calls written as text (recovery, off by defau
     });
     expect(calls[0].id).toMatch(/^recovered_0_/);
     expect(finish(choices)).toEqual(["tool_calls"]);
+  });
+
+  it("leaves a call after prose as text: the whole reply must be calls", async () => {
+    const choices = await streaming(reply)({
+      x_continue_recover_text_tool_calls: "qwen-xml",
+    });
+    expect(content(choices)).toBe("I will read it.\n" + leaked);
+    expect(callsOf(choices)).toEqual([]);
+    expect(finish(choices)).toEqual(["stop"]);
   });
 
   it("does not make a call from prose that quotes the markup", async () => {
@@ -1674,10 +1683,10 @@ describe("BedrockApi Python-syntax tool calls written as text (Nova 2 Lite, reco
   });
 
   it("makes the call when asked for pythonic", async () => {
-    const r = await run(reply(), {
+    const r = await run(reply().slice(1), {
       x_continue_recover_text_tool_calls: "pythonic",
     });
-    expect(r.content).toBe("Here is the plan.\n");
+    expect(r.content).toBe("");
     expect(r.calls).toHaveLength(1);
     expect(r.calls[0].function.name).toBe("present_plan");
     expect(JSON.parse(r.calls[0].function.arguments)).toEqual({
@@ -1685,6 +1694,14 @@ describe("BedrockApi Python-syntax tool calls written as text (Nova 2 Lite, reco
       decisions: [{ q: "a" }],
     });
     expect(r.finish).toBe("tool_calls");
+  });
+
+  it("leaves a call after prose as text: the whole reply must be calls", async () => {
+    const r = await run(reply(), {
+      x_continue_recover_text_tool_calls: "pythonic",
+    });
+    expect(r.content).toBe("Here is the plan.\n" + leaked);
+    expect(r.calls).toEqual([]);
   });
 
   it("does not make a call from prose that mentions one", async () => {

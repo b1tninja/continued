@@ -23,8 +23,31 @@ const CALLS: Record<string, string> = {
   dsml: '<｜DSML｜function_calls>\n<｜DSML｜invoke name="Read">\n<｜DSML｜parameter name="filepath" string="true">a.txt</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>',
   "deepseek-v31":
     '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>Read<｜tool▁sep｜>{"filepath": "a.txt"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+  "kimi-tokens":
+    '<|tool_calls_section_begin|><|tool_call_begin|>functions.Read:0<|tool_call_argument_begin|>{"filepath": "a.txt"}<|tool_call_end|><|tool_calls_section_end|>',
+  "kimi-xtml":
+    '<|open|>tools<|sep|><|open|>call tool="Read" index="1"<|sep|><|open|>argument key="filepath" type="string"<|sep|>a.txt<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|>',
+  "minimax-xml":
+    '<minimax:tool_call>\n<invoke name="Read">\n<parameter name="filepath">a.txt</parameter>\n</invoke>\n</minimax:tool_call>',
+  "minimax-ns-xml":
+    ']<]minimax[>[<tool_call>\n]<]minimax[>[<invoke name="Read">]<]minimax[>[<filepath>a.txt]<]minimax[>[</filepath>]<]minimax[>[</invoke>\n]<]minimax[>[</tool_call>',
   "toolcall-json":
     '<TOOLCALL>[{"name": "Read", "arguments": {"filepath": "a.txt"}}]</TOOLCALL>',
+  "granite-tokens":
+    '<|tool_call|>[{"name": "Read", "arguments": {"filepath": "a.txt"}}]',
+  "lfm-tokens": "<|tool_call_start|>[Read(filepath='a.txt')]<|tool_call_end|>",
+  "hy3-tags":
+    "<tool_calls:opensource><tool_call:opensource>Read<tool_sep:opensource><arg_key:opensource>filepath</arg_key:opensource><arg_value:opensource>a.txt</arg_value:opensource></tool_call:opensource></tool_calls:opensource>",
+  "solar-tokens":
+    '<|tool_calls|><|tool_call:begin|>a1b2c3d4e5<|tool_call:name|>Read<|tool_call:args|>{"filepath": "a.txt"}<|tool_call:end|><|calls|>',
+  "longcat-json":
+    '<longcat_tool_call>{"name": "Read", "arguments": {"filepath": "a.txt"}}</longcat_tool_call>',
+  "olmo-function-calls":
+    '<function_calls>Read(filepath="a.txt")</function_calls>',
+  "seed-xml":
+    "<seed:tool_call><function=Read><parameter=filepath>a.txt</parameter></function></seed:tool_call>",
+  "cohere-action":
+    '<|START_ACTION|>[{"tool_name": "Read", "parameters": {"filepath": "a.txt"}}]<|END_ACTION|>',
 };
 
 const tools = [
@@ -131,6 +154,21 @@ describe("BedrockApi: a reply streamed or whole gives the same result", () => {
         expect(whole.visible).toBe("");
         expect(whole.reasoning).toContain("a.txt read");
         expect(streamed).toEqual(whole);
+      });
+    }
+
+    for (const [label, reply] of [
+      ["prose then a call", `Reading it now.\n${call}`],
+      ["a call then prose", `${call}\nThat reads it.`],
+    ]) {
+      it(`${dialect}: ${label} stays text in both paths (the whole reply must be calls)`, async () => {
+        const whole = await run(dialect, reply, "whole");
+        for (const size of [1, 7, 1000]) {
+          const streamed = await run(dialect, reply, size);
+          expect(whole.calls).toEqual([]);
+          expect(whole.visible).toBe(reply);
+          expect(streamed).toEqual(whole);
+        }
       });
     }
 

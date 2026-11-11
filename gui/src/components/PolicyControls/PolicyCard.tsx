@@ -1,5 +1,6 @@
 import {
   BUILTIN_RULES,
+  LOCKED_FLOOR_RULES,
   DEFAULT_AGENT_DECIDES,
   DEFAULT_MAX_NEW_PLAN_ITEMS,
   DEFAULT_YOU_DECIDE,
@@ -122,6 +123,14 @@ export function PolicyCard() {
               />
               <div className="text-2xs text-description-muted">
                 {rule.description}
+              </div>
+            </div>
+          ))}
+          {LOCKED_FLOOR_RULES.map((rule) => (
+            <div key={rule.id} data-testid={`locked-${rule.id}`}>
+              <div className="text-xs">{rule.label} (locked)</div>
+              <div className="text-2xs text-description-muted">
+                {rule.description} No setting, including YOLO, turns this off.
               </div>
             </div>
           ))}

@@ -15,7 +15,10 @@ const base = {
   credentialUrlNames: [] as string[],
 };
 
-async function setup(status: Record<string, unknown> = {}) {
+async function setup(
+  status: Record<string, unknown> = {},
+  opts: { noProcess?: boolean } = {},
+) {
   const ideMessenger = new MockIdeMessenger();
   const set = vi.fn(async () => ({ saved: true }));
   ideMessenger.responseHandlers["config/getTerminalEnvironment"] = vi.fn(
@@ -23,11 +26,30 @@ async function setup(status: Record<string, unknown> = {}) {
   ) as any;
   ideMessenger.responseHandlers["config/setTerminalEnvironment"] = set as any;
   const store = setupStore({ ideMessenger });
-  await renderWithProviders(<TerminalEnvironmentControl />, {
-    store,
-    mockIdeMessenger: ideMessenger,
-  });
-  await act(async () => {});
+  // A webview has no `process`; the build replaces only process.env.NODE_ENV
+  // (libraries read it in dev mode). Stand in for that: NODE_ENV works and any
+  // other read fails the way it does in the webview.
+  const saved = globalThis.process;
+  if (opts.noProcess) {
+    const webview = new Proxy({ env: { NODE_ENV: "test" } } as object, {
+      get(target, key) {
+        if (key === "env") return (target as any).env;
+        throw new ReferenceError(
+          `process.${String(key)}: process is not defined`,
+        );
+      },
+    });
+    (globalThis as any).process = webview;
+  }
+  try {
+    await renderWithProviders(<TerminalEnvironmentControl />, {
+      store,
+      mockIdeMessenger: ideMessenger,
+    });
+    await act(async () => {});
+  } finally {
+    globalThis.process = saved;
+  }
   return { set };
 }
 
@@ -88,5 +110,14 @@ describe("TerminalEnvironmentControl", () => {
       screen.getByText("Dismiss").click();
     });
     expect(screen.queryByTestId("terminal-env-note")).toBeNull();
+  });
+});
+
+describe("TerminalEnvironmentControl in a webview", () => {
+  it("renders the preview when there is no `process`", async () => {
+    await setup({}, { noProcess: true });
+    expect(screen.getByTestId("terminal-env-removed").textContent).toContain(
+      "GITHUB_TOKEN",
+    );
   });
 });

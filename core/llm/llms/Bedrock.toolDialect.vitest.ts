@@ -114,8 +114,15 @@ describe("Bedrock: per-model toolDialect reaches the recovery switch", () => {
   });
 
   it("toolDialect: qwen-xml recovers on a model whose id does not say qwen, no variable", async () => {
-    const r = await run(reply(), { toolDialect: "qwen-xml" });
-    expect(r.content).toBe("I will read it.\n");
+    const r = await run(
+      [
+        text(leaked),
+        { contentBlockStop: {} },
+        { messageStop: { stopReason: "end_turn" } },
+      ],
+      { toolDialect: "qwen-xml" },
+    );
+    expect(r.content).toBe("");
     expect(r.calls).toHaveLength(1);
     expect(r.calls[0].function.name).toBe("Read");
   });
@@ -138,7 +145,10 @@ describe("Bedrock: per-model toolDialect reaches the recovery switch", () => {
 
   it("the environment variable wins when set", async () => {
     process.env.CONTINUE_RECOVER_TEXT_TOOL_CALLS = "force:qwen-xml";
-    const r = await run(reply(), { toolDialect: "off" });
+    const r = await run(
+      reply().map((e, i) => (i === 0 ? text(leaked) : e)),
+      { toolDialect: "off" },
+    );
     expect(r.calls).toHaveLength(1);
   });
 });

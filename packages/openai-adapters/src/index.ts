@@ -318,6 +318,11 @@ export {
   type RecoveryStatRow,
 } from "./dialects/recoveryStats.js";
 export {
+  holdChunk,
+  holdPhaseOf,
+  RECOVERY_HOLD_FIELD,
+} from "./dialects/holdSignal.js";
+export {
   createTextToolRecovery,
   dialectToolsFromConverse,
   isRecoveredCallId,
@@ -326,6 +331,7 @@ export {
   recoveredCallId,
   recoverySetting,
   recoverySettings,
+  type HoldPhase,
   type TextToolRecovery,
 } from "./dialects/recovery.js";
 export {

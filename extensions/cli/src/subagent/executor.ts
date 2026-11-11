@@ -1,14 +1,18 @@
 import { randomUUID } from "node:crypto";
 
 import type { ChatHistoryItem } from "core";
+import { costMarkOf, costSince } from "core/util/loopCost.js";
 
+import { emitAgent, ensureMainAgent, tokensOf } from "../agents/feed.js";
 import { getSubagentModel } from "../contextManagement.js";
 import { fireSubagentStart, fireSubagentStop } from "../hooks/fireHook.js";
+import { usageSince } from "../loop/loopBudget.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import { services } from "../services/index.js";
 import { serviceContainer } from "../services/ServiceContainer.js";
 import type { ToolPermissionServiceState } from "../services/ToolPermissionService.js";
 import { ModelServiceState, SERVICE_NAMES } from "../services/types.js";
+import { getSessionUsage } from "../session.js";
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import type { StreamCallbacks } from "../stream/streamChatResponse.types.js";
 import type { ToolCallPreview, ToolPermissionPrompt } from "../tools/types.js";
@@ -107,6 +111,39 @@ function abortReason(signal: AbortSignal): string {
 
 let subagentRuns: Promise<unknown> = Promise.resolve();
 
+/** The run's end for the agent map: its usage and cost, then how it ended. */
+function reportAgentEnd(
+  agentId: string,
+  status: SubAgentStatus,
+  responseLength: number,
+  usageBefore: ReturnType<typeof getSessionUsage>,
+  markBefore: ReturnType<typeof costMarkOf>,
+): void {
+  try {
+    const after = getSessionUsage();
+    emitAgent({
+      type: "usage",
+      id: agentId,
+      tokens: tokensOf(usageSince(usageBefore, after)),
+      costUsd: costSince(markBefore, costMarkOf(after)).amount,
+    });
+  } catch {
+    // no usage to report
+  }
+  emitAgent({
+    type: "ended",
+    id: agentId,
+    state:
+      status === "completed"
+        ? "done"
+        : status === "failed"
+          ? "failed"
+          : "stopped",
+    ...(status === "completed" ? { returnedLength: responseLength } : {}),
+    at: Date.now(),
+  });
+}
+
 /**
  * Execute a subagent in a child session.
  *
@@ -122,9 +159,31 @@ let subagentRuns: Promise<unknown> = Promise.resolve();
 export function executeSubAgent(
   options: SubAgentExecutionOptions,
 ): Promise<SubAgentResult> {
+  // The agent map sees the run from the moment it is asked for, queued
+  // behind any run that is still going; the id is also the hooks' agent_id.
+  const agentId = `agent-${randomUUID()}`;
+  const parent = ensureMainAgent();
+  emitAgent({
+    type: "spawned",
+    id: agentId,
+    parentId: parent,
+    rootId: parent,
+    kind: "subagent",
+    role: options.agentName || options.agent.model?.name || "subagent",
+    model: options.agent.model?.name,
+    state: "blocked",
+    blockedOn: "slot",
+    at: Date.now(),
+  });
   const run = subagentRuns.then(() => {
     const { signal } = options.abortController;
     if (signal.aborted) {
+      emitAgent({
+        type: "ended",
+        id: agentId,
+        state: "stopped",
+        at: Date.now(),
+      });
       return {
         success: false,
         status: "cancelled" as const,
@@ -133,7 +192,7 @@ export function executeSubAgent(
         toolCalls: [],
       };
     }
-    return runSubAgent(options);
+    return runSubAgent(options, agentId);
   });
   subagentRuns = run.catch(() => undefined);
   return run;
@@ -239,11 +298,11 @@ function labelledPrompt(
 // eslint-disable-next-line complexity, max-statements
 async function runSubAgent(
   options: SubAgentExecutionOptions,
+  agentId: string,
 ): Promise<SubAgentResult> {
   const { agent: subAgent, prompt, abortController, onOutputUpdate } = options;
   const { signal } = abortController;
   const agentType = options.agentName || subAgent.model?.name || "subagent";
-  const agentId = `agent-${randomUUID()}`;
   const transcript = new SubAgentTranscript(onOutputUpdate);
 
   const mainAgentPermissionsState =
@@ -251,17 +310,25 @@ async function runSubAgent(
       SERVICE_NAMES.TOOL_PERMISSIONS,
     );
 
+  // Runs are serial, so what the session spent meanwhile is this run's.
+  const usageBefore = getSessionUsage();
+  const markBefore = costMarkOf(usageBefore);
+  emitAgent({ type: "state", id: agentId, state: "running" });
+
   const finish = (
     status: SubAgentStatus,
     response: string,
     error?: string,
-  ): SubAgentResult => ({
-    success: status === "completed",
-    status,
-    response,
-    ...(error ? { error } : {}),
-    toolCalls: transcript.toolCalls,
-  });
+  ): SubAgentResult => {
+    reportAgentEnd(agentId, status, response.length, usageBefore, markBefore);
+    return {
+      success: status === "completed",
+      status,
+      response,
+      ...(error ? { error } : {}),
+      toolCalls: transcript.toolCalls,
+    };
+  };
 
   try {
     logger.debug("Starting subagent execution", {
@@ -342,14 +409,28 @@ async function runSubAgent(
 
     const callbacks: StreamCallbacks = {
       onContent: (content) => transcript.onContent(content),
-      onToolStart: (name, args) => transcript.onToolStart(name, args),
+      onToolStart: (name, args) => {
+        transcript.onToolStart(name, args);
+        // The tool's name picks a fixed phrase; the arguments are not read.
+        emitAgent({ type: "state", id: agentId, state: "running" });
+        emitAgent({ type: "activity", id: agentId, tool: name });
+      },
       // The output stays in the subagent's own history; the parent gets the
       // tool's name and status.
       onToolResult: (_result, name, status) =>
         transcript.onToolResult(name, status),
       onToolError: (_error, name) =>
         transcript.onToolResult(name ?? "", "errored"),
-      onToolPermissionRequest: prompts?.prompt,
+      onToolPermissionRequest: prompts
+        ? (...args) => {
+            emitAgent({
+              type: "state",
+              id: agentId,
+              state: "waiting-approval",
+            });
+            prompts.prompt(...args);
+          }
+        : undefined,
     };
 
     try {

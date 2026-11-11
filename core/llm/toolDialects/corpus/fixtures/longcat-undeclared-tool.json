@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "id": "longcat-undeclared-tool",
+  "family": "longcat-flash",
+  "dialect": "longcat-json",
+  "kind": "negative",
+  "failureMode": "undeclared-tool",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/meituan-longcat/LongCat-Flash-Chat/blob/main/tokenizer_config.json and vLLM longcat_tool_parser.py, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<longcat_tool_call>\n{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}\n</longcat_tool_call>",
+  "markers": ["<longcat_tool_call>", "</longcat_tool_call>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<longcat_tool_call>\n{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}\n</longcat_tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "l",
+        "o",
+        "n",
+        "g",
+        "c",
+        "a",
+        "t",
+        "_",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "\n",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "d",
+        "e",
+        "l",
+        "e",
+        "t",
+        "e",
+        "_",
+        "e",
+        "v",
+        "e",
+        "r",
+        "y",
+        "t",
+        "h",
+        "i",
+        "n",
+        "g",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        "\n",
+        "<",
+        "/",
+        "l",
+        "o",
+        "n",
+        "g",
+        "c",
+        "a",
+        "t",
+        "_",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<longcat_",
+        "tool_call>\n{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}\n</longcat_tool_call>"
+      ],
+      "splitInside": "<longcat_tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<longcat_tool_call>",
+        "\n{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}\n",
+        "</longcat_tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<long",
+        "cat_",
+        "t",
+        "o",
+        "ol_ca",
+        "ll>\n{",
+        "\"name",
+        "\"",
+        ": \"",
+        "dele",
+        "te",
+        "_ev",
+        "ery",
+        "th",
+        "in",
+        "g\", \"",
+        "arg",
+        "um",
+        "e",
+        "nt",
+        "s\":",
+        " {\"",
+        "city",
+        "\":",
+        " ",
+        "\"Pari",
+        "s\"}}",
+        "\n<",
+        "/long",
+        "cat",
+        "_to",
+        "ol_",
+        "ca",
+        "ll",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<longcat_tool_call>\n{\"name\": \"delete_everything\", \"arguments\": {\"city\": \"Paris\"}}\n</longcat_tool_call>"
+  }
+}

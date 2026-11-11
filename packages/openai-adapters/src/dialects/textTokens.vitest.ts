@@ -151,14 +151,19 @@ describe("harmony", () => {
     }
   });
 
-  it("drops analysis, keeps a preamble, and refuses text after a call", () => {
+  it("drops analysis, refuses a preamble, and refuses text after a call", () => {
     const call1 = `${head} <|constrain|>json<|message|>${body}<|call|>`;
-    const out = recoverHarmonyFromText(
-      `<|channel|>analysis<|message|>hmm<|end|><|start|>assistant<|channel|>commentary<|message|>Looking.<|end|><|start|>assistant${call1.slice(0)}`,
+    const withAnalysis = recoverHarmonyFromText(
+      `<|channel|>analysis<|message|>hmm<|end|><|start|>assistant${call1}`,
       tools,
     );
-    expect(out.text).toBe("Looking.");
-    expect(out.calls).toHaveLength(1);
+    expect(withAnalysis.text).toBe("");
+    expect(withAnalysis.calls).toHaveLength(1);
+    const preamble = `<|channel|>commentary<|message|>Looking.<|end|><|start|>assistant${call1}`;
+    expect(recoverHarmonyFromText(preamble, tools)).toEqual({
+      text: preamble,
+      calls: [],
+    });
     const after = `${call1}<|start|>assistant<|channel|>commentary<|message|>More<|end|>`;
     expect(recoverHarmonyFromText(after, tools).calls).toEqual([]);
   });

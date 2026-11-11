@@ -9,9 +9,14 @@ import { DsmlRecovery } from "./dsml.js";
 import { GlmXmlRecovery, recoverGlmXmlFromText } from "./glmXml.js";
 import { HarmonyRecovery } from "./harmony.js";
 import { HermesJsonRecovery, recoverHermesJsonFromText } from "./hermesJson.js";
+import { KimiTokensRecovery } from "./kimiTokens.js";
+import { KimiXtmlRecovery } from "./kimiXtml.js";
 import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
+import { MinimaxNsRecovery } from "./minimaxNs.js";
+import { MinimaxXmlRecovery } from "./minimaxXml.js";
 import { MistralRecovery } from "./mistral.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
+import { WRAPPER_ROWS, WrapperRecovery } from "./wrapperDialects.js";
 import { ToolcallJsonRecovery } from "./toolcallJson.js";
 import {
   type DialectTool,
@@ -29,10 +34,23 @@ export interface TextToolRecovery {
   end(): RecoveryEvent[];
   /** Whether a block is held right now (so `end` judges it). */
   isHolding?(): boolean;
+  /**
+   * The hold that began or ended since this was last called, once each: a
+   * `"start"` after the push that began holding text, an `"end"` after the
+   * `end()` that judged it, whatever the outcome (released as text, recovered
+   * as calls, refused). Undefined when nothing changed. Call it after every
+   * `push` and `end`; a stage that never holds text has none.
+   */
+  takeHoldSignal?(): HoldPhase | undefined;
 }
+
+/** A held reply began (`start`) or was judged (`end`). */
+export type HoldPhase = "start" | "end";
 
 /** Counts a stage's outcomes (recoveryStats.ts); behaviour is unchanged. */
 class CountedRecovery implements TextToolRecovery {
+  private pendingHold: HoldPhase | undefined;
+
   constructor(
     private readonly inner: TextToolRecovery,
     private readonly model: string,
@@ -40,17 +58,27 @@ class CountedRecovery implements TextToolRecovery {
   ) {}
 
   push(chunk: string): RecoveryEvent[] {
-    return this.inner.push(chunk);
+    const wasHolding = this.isHolding();
+    const events = this.inner.push(chunk);
+    if (!wasHolding && this.isHolding()) this.pendingHold = "start";
+    return events;
   }
 
   isHolding(): boolean {
     return this.inner.isHolding?.() ?? false;
   }
 
+  takeHoldSignal(): HoldPhase | undefined {
+    const phase = this.pendingHold;
+    this.pendingHold = undefined;
+    return phase;
+  }
+
   end(): RecoveryEvent[] {
     const held = this.isHolding();
     const events = this.inner.end();
     if (held) {
+      this.pendingHold = "end";
       const recovered = events.filter((e) => e.type === "call").length;
       recordRecovery(this.model, this.dialect, {
         held: 1,
@@ -127,8 +155,25 @@ function chooseRecovery(
   if (wants(settings, "glm-xml", model, /glm/i)) {
     return { dialect: "glm-xml", stage: new GlmXmlRecovery(tools) };
   }
+  if (wants(settings, "kimi-tokens", model, /kimi|moonshot/i)) {
+    return { dialect: "kimi-tokens", stage: new KimiTokensRecovery(tools) };
+  }
+  if (wants(settings, "kimi-xtml", model, /kimi|moonshot/i)) {
+    return { dialect: "kimi-xtml", stage: new KimiXtmlRecovery(tools) };
+  }
+  if (wants(settings, "minimax-xml", model, /minimax/i)) {
+    return { dialect: "minimax-xml", stage: new MinimaxXmlRecovery(tools) };
+  }
+  if (wants(settings, "minimax-ns-xml", model, /minimax/i)) {
+    return { dialect: "minimax-ns-xml", stage: new MinimaxNsRecovery(tools) };
+  }
   if (wants(settings, "toolcall-json", model, /nemotron/i)) {
     return { dialect: "toolcall-json", stage: new ToolcallJsonRecovery(tools) };
+  }
+  for (const row of WRAPPER_ROWS) {
+    if (wants(settings, row.dialect, model, row.nameRe)) {
+      return { dialect: row.dialect, stage: new WrapperRecovery(tools, row) };
+    }
   }
   return chooseOtherRecovery(model, tools, settings);
 }

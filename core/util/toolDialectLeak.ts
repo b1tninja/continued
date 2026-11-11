@@ -23,6 +23,18 @@ const RECOVERABLE: Record<string, ToolDialectSetting> = {
   mistral: "mistral",
   dsml: "dsml",
   "deepseek-v31": "deepseek-v31",
+  "kimi-tokens": "kimi-tokens",
+  "kimi-xtml": "kimi-xtml",
+  "minimax-xml": "minimax-xml",
+  "minimax-ns-xml": "minimax-ns-xml",
+  "granite-tokens": "granite-tokens",
+  "lfm-tokens": "lfm-tokens",
+  "hy3-tags": "hy3-tags",
+  "solar-tokens": "solar-tokens",
+  "longcat-json": "longcat-json",
+  "olmo-function-calls": "olmo-function-calls",
+  "seed-xml": "seed-xml",
+  "cohere-action": "cohere-action",
 };
 
 /**
@@ -64,14 +76,17 @@ export interface ToolDialectLeak {
 /**
  * The dialect a reply leaked, or undefined: no markup, markup only in a code
  * fence, structured calls present, a dialect recovery cannot handle, or the
- * model already has a `toolDialect` set.
+ * model already has a `toolDialect` set, or the server parses the calls.
  */
 export function detectToolDialectLeak(args: {
   content: string | null | undefined;
   toolCalls?: ToolCallLike[];
   knownTools?: string[];
   current?: ToolDialectSetting;
+  /** The server parses this model's calls itself (MetadataHint.serverParses). */
+  serverParses?: boolean;
 }): ToolDialectLeak | undefined {
+  if (args.serverParses) return undefined;
   if (args.current && args.current !== "auto") return undefined;
   const c = classifyToolReply({
     content: args.content,

@@ -3,16 +3,16 @@
   "id": "qwen3-coder-missing-open-tag-ollama-18530",
   "family": "qwen3-coder",
   "dialect": "qwen-xml",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "missing-open-tag",
   "flag": "observed",
   "provenance": {
     "source": "https://github.com/ollama/ollama/issues/18530",
     "retrieved": "2026-11-10",
     "reportDate": "2026-09-18",
-    "note": "Raw model output (raw:true, temperature 0, seeds 1-6 reproduce); reporter shows the model omitted the opener after a prose preamble."
+    "note": "Raw model output (raw:true, temperature 0, seeds 1-6 reproduce); reporter shows the model omitted the opener after a prose preamble. Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 1 call(s) and the text \"I will first check for all Markdown files in the current directory and its subdirectories, and then list them using the glob tool.\\n\\n\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
-  "policy": "should",
+  "policy": "must",
   "tools": [
     {
       "name": "glob",
@@ -375,14 +375,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "glob",
-        "arguments": {
-          "pattern": "**/*.md"
-        }
-      }
-    ],
-    "text": "I will first check for all Markdown files in the current directory and its subdirectories, and then list them using the glob tool.\n\n"
+    "calls": [],
+    "text": "I will first check for all Markdown files in the current directory and its subdirectories, and then list them using the glob tool.\n\n<function=glob>\n<parameter=pattern>\n**/*.md\n</parameter>\n</function>\n</tool_call>"
   }
 }

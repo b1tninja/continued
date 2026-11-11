@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "id": "longcat-literal-close-tag-in-string",
+  "family": "longcat-flash",
+  "dialect": "longcat-json",
+  "kind": "positive",
+  "failureMode": "literal-close-marker",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/meituan-longcat/LongCat-Flash-Chat/blob/main/tokenizer_config.json and vLLM longcat_tool_parser.py, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<longcat_tool_call>\n{\"name\": \"read_file\", \"arguments\": {\"path\": \"</longcat_tool_call>.txt\"}}\n</longcat_tool_call>",
+  "markers": ["<longcat_tool_call>", "</longcat_tool_call>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<longcat_tool_call>\n{\"name\": \"read_file\", \"arguments\": {\"path\": \"</longcat_tool_call>.txt\"}}\n</longcat_tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "l",
+        "o",
+        "n",
+        "g",
+        "c",
+        "a",
+        "t",
+        "_",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "\n",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "r",
+        "e",
+        "a",
+        "d",
+        "_",
+        "f",
+        "i",
+        "l",
+        "e",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "p",
+        "a",
+        "t",
+        "h",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "<",
+        "/",
+        "l",
+        "o",
+        "n",
+        "g",
+        "c",
+        "a",
+        "t",
+        "_",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        ".",
+        "t",
+        "x",
+        "t",
+        "\"",
+        "}",
+        "}",
+        "\n",
+        "<",
+        "/",
+        "l",
+        "o",
+        "n",
+        "g",
+        "c",
+        "a",
+        "t",
+        "_",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<longcat_",
+        "tool_call>\n{\"name\": \"read_file\", \"arguments\": {\"path\": \"</longcat_tool_call>.txt\"}}\n</longcat_tool_call>"
+      ],
+      "splitInside": "<longcat_tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<longcat_tool_call>",
+        "\n{\"name\": \"read_file\", \"arguments\": {\"path\": \"",
+        "</longcat_tool_call>",
+        ".txt\"}}\n",
+        "</longcat_tool_call>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<lon",
+        "gca",
+        "t_too",
+        "l_",
+        "c",
+        "all",
+        ">\n{\"n",
+        "am",
+        "e\": \"",
+        "read",
+        "_fi",
+        "l",
+        "e",
+        "\", \"",
+        "ar",
+        "gum",
+        "ents\"",
+        ": {",
+        "\"p",
+        "ath\"",
+        ": \"<",
+        "/l",
+        "ongca",
+        "t_",
+        "to",
+        "o",
+        "l",
+        "_cal",
+        "l>.tx",
+        "t\"}}\n",
+        "</",
+        "long",
+        "cat_",
+        "to",
+        "ol_c",
+        "all",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "read_file",
+        "arguments": {
+          "path": "</longcat_tool_call>.txt"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

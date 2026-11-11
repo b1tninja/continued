@@ -1,0 +1,119 @@
+name: Merge Gate
+
+# The ONE status check to require on `main` (job name: `merge-gate`). See docs/ci-merge-gate.md.
+#
+# Why this exists: the real gates (`require-all-checks-to-pass` in PR Checks and
+# `require-all-checks-to-pass-cli` in CLI PR Checks) live in other workflows and are skipped
+# entirely by `paths-ignore` for docs-only PRs, so neither can be a *required* check (a required
+# check that never reports blocks the PR forever). This workflow has no path filter, so it always
+# reports, and it only goes green when those aggregate jobs concluded `success` for the same head
+# SHA. A plain `needs:` cannot be used: `needs` only links jobs inside one workflow file.
+#
+# No third-party action is used: only the preinstalled `gh` CLI and the built-in GITHUB_TOKEN.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: read
+
+concurrency:
+  group: merge-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  merge-gate:
+    runs-on: ubuntu-latest
+    # Hard ceiling. The polling loop below gives up earlier (GATE_TIMEOUT_MIN) with a clear message.
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      EVENT: ${{ github.event_name }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_DRAFT: ${{ github.event.pull_request.draft }}
+      # Minutes to wait for the aggregate jobs to appear and finish. The runner queue can hold
+      # jobs for hours, so this is generous; a gate that times out fails and can be re-run.
+      GATE_TIMEOUT_MIN: "200"
+      POLL_SECONDS: "30"
+      REQUIRED_CHECKS: "require-all-checks-to-pass require-all-checks-to-pass-cli"
+    steps:
+      - name: Wait for the aggregate gates on this head SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT" = "merge_group" ]; then
+            # The PR checks have no merge_group trigger, so nothing here could be waited on. The PR
+            # was already gated and (with "require up to date") tested against this base.
+            echo "::notice::merge_group: PR checks do not run for merge queue refs; passing."
+            exit 0
+          fi
+
+          if [ "$EVENT" = "pull_request" ]; then
+            SHA="$PR_HEAD_SHA"
+            if [ "$PR_DRAFT" = "true" ]; then
+              echo "::error::Draft PR: the aggregate gates are skipped for drafts. Mark it ready for review."
+              exit 1
+            fi
+
+            # Docs-only? Mirror the paths-ignore list of pr-checks.yaml / cli-pr-checks.yml.
+            # Both the new and the previous name of a renamed file count, as for path filters.
+            code_files=0
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              case "$f" in
+                docs/*|docs-site/*|plans/*|*.md|*.mdx|LICENSE) ;;
+                *) code_files=$((code_files + 1)); echo "code change: $f" ;;
+              esac
+            done < <(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files?per_page=100" \
+                       --jq '.[] | .filename, (.previous_filename // empty)')
+            if [ "$code_files" -eq 0 ]; then
+              echo "Docs-only change: the code checks are skipped by paths-ignore; nothing to wait for."
+              exit 0
+            fi
+          else
+            SHA="$GITHUB_SHA"
+          fi
+
+          echo "Waiting for [$REQUIRED_CHECKS] on $SHA (limit ${GATE_TIMEOUT_MIN} min)"
+          deadline=$(( $(date +%s) + GATE_TIMEOUT_MIN * 60 ))
+
+          while true; do
+            # The API returns the latest attempt per check name by default.
+            runs=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+                     --jq '.check_runs[] | [.name, .status, (.conclusion // "")] | @tsv')
+            pending=0
+            for name in $REQUIRED_CHECKS; do
+              line=$(printf '%s\n' "$runs" | awk -F'\t' -v n="$name" '$1 == n { l = $0 } END { print l }')
+              if [ -z "$line" ]; then
+                echo "  $name: not started yet"
+                pending=1
+                continue
+              fi
+              status=$(printf '%s' "$line" | cut -f2)
+              conclusion=$(printf '%s' "$line" | cut -f3)
+              echo "  $name: $status $conclusion"
+              if [ "$status" != "completed" ]; then
+                pending=1
+              elif [ "$conclusion" != "success" ]; then
+                echo "::error::$name concluded '$conclusion' for $SHA"
+                exit 1
+              fi
+            done
+            if [ "$pending" -eq 0 ]; then
+              echo "All required aggregate gates succeeded for $SHA."
+              exit 0
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Timed out after ${GATE_TIMEOUT_MIN} min waiting for the aggregate gates. Re-run this job once they finish."
+              exit 1
+            fi
+            sleep "$POLL_SECONDS"
+          done

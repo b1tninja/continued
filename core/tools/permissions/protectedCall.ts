@@ -13,12 +13,12 @@ const strip = (s: string) =>
   s.replace(/^[<>&|]+/, "").replace(/^['"]+|['"]+$/g, "");
 
 /** Words of a command, per candidate, so a command name knows whether it has arguments. */
-function wordsOf(candidates: string[]): string[][] {
+export function wordsOf(candidates: string[]): string[][] {
   return candidates.map((c) => c.split(/\s+/).map(strip).filter(Boolean));
 }
 
 /** The words of a command worth testing as paths: quotes, redirects and `--opt=` stripped. */
-function pathWords(candidates: string[]): string[] {
+export function pathWords(candidates: string[]): string[] {
   const words = new Set<string>();
   for (const list of wordsOf(candidates)) {
     for (const w of list) {

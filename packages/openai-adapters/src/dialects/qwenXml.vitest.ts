@@ -118,10 +118,11 @@ const golden: Golden[] = [
     ],
   },
   {
-    name: "prose before the call",
+    name: "prose before the call (declined: the whole reply must be calls)",
     text: "I'll write the file now.\n\n<tool_call>\n<function=Read>\n<parameter=filepath>\na.txt\n</parameter>\n</function>\n</tool_call>\n",
-    text_after: "I'll write the file now.\n\n",
-    calls: [{ name: "Read", arguments: { filepath: "a.txt" } }],
+    text_after:
+      "I'll write the file now.\n\n<tool_call>\n<function=Read>\n<parameter=filepath>\na.txt\n</parameter>\n</function>\n</tool_call>\n",
+    calls: [],
   },
   {
     name: "two calls in one reply",

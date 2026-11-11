@@ -3,15 +3,15 @@
   "id": "qwen3-coder-two-calls-with-prose-between",
   "family": "qwen3-coder",
   "dialect": "qwen-xml",
-  "kind": "positive",
+  "kind": "negative",
   "failureMode": "parallel-merged",
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct/blob/main/chat_template.jinja, not observed",
     "retrieved": "2026-11-10",
-    "note": ""
+    "note": "Declined by owner rule (Q28, 2026-11-10): the whole reply must be calls, so prose before or after the calls leaves the reply as text. It was a positive that expected 2 call(s) and the text \"\\nThen the second.\\n\"; the nudge (core/util/toolDialectLeak.ts) still counts the leaked call."
   },
-  "policy": "either",
+  "policy": "must",
   "tools": [
     {
       "name": "read",
@@ -365,20 +365,7 @@
     }
   ],
   "expected": {
-    "calls": [
-      {
-        "name": "read",
-        "arguments": {
-          "path": "a.txt"
-        }
-      },
-      {
-        "name": "read",
-        "arguments": {
-          "path": "b.txt"
-        }
-      }
-    ],
-    "text": "\nThen the second.\n"
+    "calls": [],
+    "text": "<tool_call>\n<function=read>\n<parameter=path>\na.txt\n</parameter>\n</function>\n</tool_call>\nThen the second.\n<tool_call>\n<function=read>\n<parameter=path>\nb.txt\n</parameter>\n</function>\n</tool_call>"
   }
 }

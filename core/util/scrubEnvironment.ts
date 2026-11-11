@@ -136,7 +136,10 @@ export function scrubEnvironment(
   env: Readonly<Record<string, string | undefined>>,
   policy: ScrubPolicy = {},
 ): ScrubResult {
-  const platform = policy.platform ?? process.platform;
+  // A webview has no `process`; callers there pass the platform.
+  const platform =
+    policy.platform ??
+    (typeof process === "undefined" ? undefined : process.platform);
   const fold = (s: string) => (platform === "win32" ? s.toLowerCase() : s);
   const passThrough = new Set((policy.passThrough ?? []).map(fold));
   const allowlist = policy.mode === "allowlist";

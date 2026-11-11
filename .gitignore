@@ -17,6 +17,7 @@ eggs/
 lib/
 !docs-site/lib/
 !bench/research/lib/
+!bench/lab/lib/
 lib64/
 parts/
 sdist/
@@ -180,3 +181,7 @@ keys
 .copy-status
 .copy-log
 
+
+# Local model lab: raw results and learned profiles stay on the machine that made them
+bench/lab/results/
+bench/lab/profiles/

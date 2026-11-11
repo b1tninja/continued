@@ -59,8 +59,8 @@ const LIVE: [
   ["mistral.devstral-2-123b", "mistral", "all", "yes", "mistral"],
   ["mistral.mistral-large-3-675b-instruct", "mistral", "all", "yes", "mistral"],
   ["moonshotai.kimi-k2.5", "kimi-k2", "all", "yes", "kimi-tokens"],
-  ["moonshotai.kimi-k3", "kimi-k3", "all", "yes", "none"],
-  ["moonshotai.kimi-k3.1", "kimi-k3", "all", "yes", "none"],
+  ["moonshotai.kimi-k3", "kimi-k3", "all", "yes", "kimi-xtml"],
+  ["moonshotai.kimi-k3.1", "kimi-k3", "all", "yes", "kimi-xtml"],
   ["minimax.minimax-m2", "minimax-m2", "all", "yes", "minimax-xml"],
   ["minimax.minimax-m2.5", "minimax-m2", "all", "yes", "minimax-xml"],
   ["nvidia.nemotron-super-3-120b", "nemotron-3", "all", "yes", "qwen-xml"],
@@ -173,12 +173,12 @@ describe("tool dialect presets", () => {
   // names is `none`, with the form written in promptStyle.evidence.
   const FAMILIES: [string, string, TextDialect][] = [
     // Kimi K3 (XTML) and MiniMax M3 (namespaced invoke) are not K2 and M2
-    ["moonshotai.kimi-k3", "kimi-k3", "none"],
-    ["moonshotai/Kimi-K3", "kimi-k3", "none"],
-    ["moonshotai/kimi-k3.1", "kimi-k3", "none"],
+    ["moonshotai.kimi-k3", "kimi-k3", "kimi-xtml"],
+    ["moonshotai/Kimi-K3", "kimi-k3", "kimi-xtml"],
+    ["moonshotai/kimi-k3.1", "kimi-k3", "kimi-xtml"],
     ["moonshotai/kimi-k2.5", "kimi-k2", "kimi-tokens"],
-    ["MiniMaxAI/MiniMax-M3", "minimax-m3", "none"],
-    ["minimax/minimax-m3", "minimax-m3", "none"],
+    ["MiniMaxAI/MiniMax-M3", "minimax-m3", "minimax-ns-xml"],
+    ["minimax/minimax-m3", "minimax-m3", "minimax-ns-xml"],
     ["minimax.minimax-m2.5", "minimax-m2", "minimax-xml"],
     ["minimax/minimax-m2.7", "minimax-m2", "minimax-xml"],
     // GLM-5 is sourced
@@ -202,12 +202,25 @@ describe("tool dialect presets", () => {
     ["stepfun-ai/Step-3.5-Flash", "step-3.5-3.7", "qwen-xml"],
     ["stepfun/step-3.7-flash", "step-3.5-3.7", "qwen-xml"],
     // Liquid LFM
-    ["LiquidAI/LFM2.5-24B-A2B", "liquid-lfm", "none"],
-    ["liquid/lfm-2.5-2.6b:free", "liquid-lfm", "none"],
-    ["lfm2:8b", "liquid-lfm", "none"],
+    ["LiquidAI/LFM2.5-24B-A2B", "liquid-lfm", "lfm-tokens"],
+    ["liquid/lfm-2.5-2.6b:free", "liquid-lfm", "lfm-tokens"],
+    ["lfm2:8b", "liquid-lfm", "lfm-tokens"],
     // Tencent Hy3
-    ["tencent/Hy3", "hy3", "none"],
-    ["tencent/hy3-preview", "hy3", "none"],
+    ["tencent/Hy3", "hy3", "hy3-tags"],
+    ["tencent/hy3-preview", "hy3", "hy3-tags"],
+    // Group C families
+    ["ibm-granite/granite-3.3-8b-instruct", "granite-3", "granite-tokens"],
+    ["granite3.3:8b", "granite-3", "granite-tokens"],
+    ["upstage/Solar-Open-100B", "solar-open", "solar-tokens"],
+    ["meituan-longcat/LongCat-Flash-Chat", "longcat-flash", "longcat-json"],
+    ["allenai/Olmo-3-7B-Instruct", "olmo-3", "olmo-function-calls"],
+    ["ByteDance-Seed/Seed-OSS-36B-Instruct", "seed-oss", "seed-xml"],
+    [
+      "CohereLabs/command-a-reasoning-08-2025",
+      "cohere-command",
+      "cohere-action",
+    ],
+    ["cohere.command-r7b-12-2024", "cohere-command", "cohere-action"],
   ];
   it.each(FAMILIES)(
     "%s resolves to %s with text dialect %s",
@@ -219,13 +232,9 @@ describe("tool dialect presets", () => {
   );
 
   it("does not recover a form no parser exists for, and says so", () => {
-    for (const id of ["kimi-k3", "minimax-m3", "liquid-lfm", "hy3"]) {
+    for (const id of ["deepseek-r1", "gemma-4"]) {
       const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
       expect(p?.recoverWith, id).toBeUndefined();
-    }
-    for (const id of ["kimi-k3", "minimax-m3", "liquid-lfm", "hy3"]) {
-      const p = TOOL_DIALECT_PRESETS.find((r) => r.id === id);
-      expect(p?.promptStyle.evidence, id).toMatch(/not yet recoverable/);
     }
   });
 
@@ -308,7 +317,11 @@ describe("tool dialect presets", () => {
     expect(resolveToolDialectPreset("innovator-7b")).toBeUndefined();
     expect(resolveToolDialectPreset("mimosa-7b")).toBeUndefined();
     expect(resolveToolDialectPreset("stepper-3b")).toBeUndefined();
-    expect(resolveToolDialectPreset("granite-3.3-8b-instruct")).toBeUndefined();
+    expect(resolveToolDialectPreset("granite-2b")).toBeUndefined();
+    expect(
+      resolveToolDialectPreset("cohere.command-r-plus-v1:0"),
+    ).toBeUndefined();
+    expect(resolveToolDialectPreset("command-a")?.id).toBe("cohere-command");
     expect(resolveToolDialectPreset("")).toBeUndefined();
     expect(resolveToolDialectPreset(undefined)).toBeUndefined();
   });
@@ -358,17 +371,23 @@ describe("tool dialect presets", () => {
       "dsml",
       "deepseek-v31",
       "toolcall-json",
+      "kimi-tokens",
+      "kimi-xtml",
+      "minimax-xml",
+      "minimax-ns-xml",
+      "granite-tokens",
+      "lfm-tokens",
+      "hy3-tags",
+      "solar-tokens",
+      "longcat-json",
+      "olmo-function-calls",
+      "seed-xml",
+      "cohere-action",
     ];
     for (const p of TOOL_DIALECT_PRESETS) {
       if (p.recoverWith) expect(built, p.id).toContain(p.recoverWith);
     }
-    for (const id of [
-      "kimi-k3",
-      "minimax-m2",
-      "minimax-m3",
-      "nemotron-h",
-      "llama-nemotron",
-    ]) {
+    for (const id of ["nemotron-h", "llama-nemotron"]) {
       expect(
         TOOL_DIALECT_PRESETS.find((p) => p.id === id)?.recoverWith,
         id,

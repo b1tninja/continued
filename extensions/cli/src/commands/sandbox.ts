@@ -5,6 +5,15 @@
  * or applied, and `srt` is never run (plans/ROADMAP.md W4a).
  */
 
+import os from "node:os";
+import path from "node:path";
+
+import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy.js";
+import {
+  compileSandboxConfig,
+  describeSandboxPlan,
+} from "core/util/sandboxPolicy.js";
+import type { SandboxCompileResult } from "core/util/sandboxPolicyTypes.js";
 import { effectivePolicyPreview } from "core/util/srtPolicyPreview.js";
 import { detectSrt, type SrtStatus } from "core/util/srtStatus.js";
 import { windowsSandboxStatus } from "core/util/windowsSandboxStatus.js";
@@ -26,10 +35,43 @@ function routesOnWindows(
   };
 }
 
+/**
+ * The compiled plan (W8a) for this host and workspace: what the OS layer would
+ * enforce, as configured. Never applied. A host kind srt does not support is a
+ * refusal, not a guess.
+ */
+function compiledPlan(
+  status: SrtStatus,
+  workspace: string,
+  modelHost: string | undefined,
+): SandboxCompileResult {
+  const kind = status.host.kind;
+  if (kind !== "linux" && kind !== "wsl2" && kind !== "macos") {
+    return {
+      ok: false,
+      reasons: [`srt does not run on this host kind (${kind})`],
+      conflicts: [],
+      warnings: [],
+    };
+  }
+  return compileSandboxConfig({
+    workspace,
+    tempDir: path.join(os.tmpdir(), "continuous-sandbox-status"),
+    homeDir: os.homedir(),
+    platform: kind,
+    levels: DEFAULT_POLICY_LEVELS,
+    readPolicy: "workspace-only",
+    egress: modelHost
+      ? { network: "allowlist", modelHost }
+      : { network: "none" },
+  });
+}
+
 function formatText(
   status: SrtStatus,
   routes: Record<string, string> | undefined,
   preview: ReturnType<typeof effectivePolicyPreview>,
+  plan: SandboxCompileResult,
 ): string[] {
   const lines = [
     `Sandbox runtime (srt): ${status.verdict}`,
@@ -69,6 +111,7 @@ function formatText(
     lines.push(`  - ${n.item}: ${n.srtDefault}`);
   }
   lines.push("", `Files created later: ${preview.createdLater}`);
+  lines.push("", ...describeSandboxPlan(plan));
   return lines;
 }
 
@@ -86,11 +129,19 @@ export function sandboxCommand(
     { modelHost: options.modelHost, hostKind: status.host.kind },
     options.workspace ?? process.cwd(),
   );
+  const workspace = options.workspace ?? process.cwd();
+  const plan = compiledPlan(status, workspace, options.modelHost);
   const routes = routesOnWindows(status);
   if (options.json) {
-    out(JSON.stringify({ status, routes, policyPreview: preview }, null, 2));
+    out(
+      JSON.stringify(
+        { status, routes, policyPreview: preview, compiledPlan: plan },
+        null,
+        2,
+      ),
+    );
   } else {
-    for (const line of formatText(status, routes, preview)) out(line);
+    for (const line of formatText(status, routes, preview, plan)) out(line);
   }
   // A status that is not ready is an answer, not an error; scripts read --json
   return 0;

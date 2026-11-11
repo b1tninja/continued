@@ -21,13 +21,13 @@ describe("stripUntrustedLoosening", () => {
     expect(removed).toEqual([
       "toolPermissions.allow",
       "toolPermissions.auto.guidance.allow",
+      "toolPermissions.auto.guidance.block",
       "toolPermissions.auto.environment.trustedDomains",
     ]);
     expect(config.toolPermissions).toEqual({
       ask: ["Bash(git push *)"],
       deny: ["Read(./.env)"],
       auto: {
-        guidance: { block: ["prod"] },
         environment: { productionMarkers: ["prod"] },
       },
     });

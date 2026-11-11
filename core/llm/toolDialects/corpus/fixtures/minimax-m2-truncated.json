@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "id": "minimax-m2-truncated",
+  "family": "minimax-m2",
+  "dialect": "minimax-xml",
+  "kind": "negative",
+  "failureMode": "unterminated-call",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from the MiniMax-M2 chat template and docs/tool_calling_guide.md https://huggingface.co/MiniMaxAI/MiniMax-M2, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<minimax:tool_call>\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Par",
+  "markers": [
+    "<minimax:tool_call>",
+    "</minimax:tool_call>",
+    "<invoke name=",
+    "</invoke>",
+    "<parameter name=",
+    "</parameter>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<minimax:tool_call>\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Par"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "m",
+        "i",
+        "n",
+        "i",
+        "m",
+        "a",
+        "x",
+        ":",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        ">",
+        "\n",
+        "<",
+        "i",
+        "n",
+        "v",
+        "o",
+        "k",
+        "e",
+        " ",
+        "n",
+        "a",
+        "m",
+        "e",
+        "=",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ">",
+        "\n",
+        "<",
+        "p",
+        "a",
+        "r",
+        "a",
+        "m",
+        "e",
+        "t",
+        "e",
+        "r",
+        " ",
+        "n",
+        "a",
+        "m",
+        "e",
+        "=",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ">",
+        "P",
+        "a",
+        "r"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<minimax:",
+        "tool_call>\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Par"
+      ],
+      "splitInside": "<minimax:tool_call>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<minimax:tool_call>",
+        "\n",
+        "<invoke name=",
+        "\"get_weather\">\n",
+        "<parameter name=",
+        "\"city\">Par"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "m",
+        "i",
+        "nimax",
+        ":to",
+        "ol_c",
+        "al",
+        "l>\n<",
+        "i",
+        "nv",
+        "oke n",
+        "am",
+        "e=",
+        "\"get_",
+        "weat",
+        "h",
+        "e",
+        "r\">\n",
+        "<pa",
+        "ram",
+        "eter",
+        " nam",
+        "e=\"",
+        "ci",
+        "t",
+        "y\"",
+        ">Par"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<minimax:tool_call>\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Par"
+  }
+}

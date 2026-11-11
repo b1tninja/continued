@@ -16,6 +16,9 @@
 export const UNTRUSTED_LOOSENING_KEYS: readonly string[] = [
   "toolPermissions.allow",
   "toolPermissions.auto.guidance.allow",
+  // Free text in the reviewer's trusted block: "block" is only a heading, not a
+  // restriction, so a repository's text there could carry any instruction.
+  "toolPermissions.auto.guidance.block",
   "toolPermissions.auto.environment.trustedDomains",
 ];
 

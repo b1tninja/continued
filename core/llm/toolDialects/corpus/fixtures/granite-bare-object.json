@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "id": "granite-bare-object",
+  "family": "granite-3.x",
+  "dialect": "granite-tokens",
+  "kind": "negative",
+  "failureMode": "malformed-keys",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from template https://huggingface.co/ibm-granite/granite-3.3-8b-instruct/blob/main/tokenizer_config.json and vLLM granite_tool_parser.py, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "read_file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "text": "<|tool_call|>{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}",
+  "markers": ["<|tool_call|>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call|>{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "t",
+        "o",
+        "o",
+        "l",
+        "_",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool",
+        "_call|>{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": "<|tool_call|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|tool_call|>",
+        "{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|t",
+        "ool_c",
+        "all",
+        "|>{\"",
+        "na",
+        "me",
+        "\": \"g",
+        "et_",
+        "wea",
+        "th",
+        "e",
+        "r\",",
+        " \"",
+        "a",
+        "rgu",
+        "m",
+        "e",
+        "nts",
+        "\": ",
+        "{",
+        "\"city",
+        "\": \"",
+        "P",
+        "a",
+        "r",
+        "is\"}",
+        "}"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "<|tool_call|>{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}"
+  }
+}

@@ -22,6 +22,7 @@ import {
   setAnsweredRoute,
   setPromptReadSpeed,
   setPromptProgress,
+  setRecoveryHold,
   setPromptCacheState,
   recordCacheMiss,
   recordCacheRequest,
@@ -246,11 +247,20 @@ export const streamNormalInput = createAsyncThunk<
 
         // A local server's prompt-reading updates go to the toolbar, not the
         // conversation; the first part of the reply clears them
-        const { progress, reply } = splitPromptProgress(next.value);
+        const { progress, hold, reply } = splitPromptProgress(next.value);
         if (progress) {
           dispatch(setPromptProgress(progress));
         } else if (getState().session.promptProgress) {
           dispatch(setPromptProgress(undefined));
+        }
+        // A reply held for tool call recovery shows a line while it is held;
+        // the hold ending, or any of the reply arriving, clears it
+        if (hold === "start") dispatch(setRecoveryHold(true));
+        else if (
+          (hold === "end" || reply.length > 0) &&
+          getState().session.recoveryHold
+        ) {
+          dispatch(setRecoveryHold(false));
         }
         if (reply.length > 0) dispatch(streamUpdate(reply));
 
@@ -363,6 +373,7 @@ export const streamNormalInput = createAsyncThunk<
       if (getState().session.promptProgress) {
         dispatch(setPromptProgress(undefined));
       }
+      if (getState().session.recoveryHold) dispatch(setRecoveryHold(false));
 
       if (next.done) checkToolDialectLeak(getState(), dispatch);
 
