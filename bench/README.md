@@ -14,15 +14,16 @@ outside the repository.
 
 ## Layout
 
-| Path               | What it is                                                                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scenarios/*.json` | One file per scenario: prompt, seed, config overrides, policy (serve flags and `toolPermissions` rules), surface, declarative expectations and budget. |
-| `matrix.yaml`      | The model rows: provider block, model id, price per million tokens where known, the family's effort levels and how the effort is written into config.  |
-| `seed/loopsbx/`    | The seed repository every run starts from (three files and `node --test`). The runner copies it and makes it a git repository per run.                 |
-| `runner.mjs`       | Tier 2: starts `cn serve`, plays the person, captures `/state` after every turn, enforces the budget, writes one result folder per run.                |
-| `score.mjs`        | Reads a results folder, evaluates expectations, writes `records.jsonl`, a scorecard per model and a comparison table.                                  |
-| `src/common.mjs`   | Shared helpers: scenario and matrix loading, history parsing, pricing, the `/state` to result mapping.                                                 |
-| `tier0/*.test.ts`  | Tier 0: the compliance expectations against the scripted model and the real serve routes, no provider needed.                                          |
+| Path                 | What it is                                                                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `scenarios/*.json`   | One file per scenario: prompt, seed, config overrides, policy (serve flags and `toolPermissions` rules), surface, declarative expectations and budget. |
+| `matrix.yaml`        | The model rows: provider block, model id, price per million tokens where known, the family's effort levels and how the effort is written into config.  |
+| `seed/loopsbx/`      | The seed repository every run starts from (three files and `node --test`). The runner copies it and makes it a git repository per run.                 |
+| `runner.mjs`         | Tier 2: starts `cn serve`, plays the person, captures `/state` after every turn, enforces the budget, writes one result folder per run.                |
+| `score.mjs`          | Reads a results folder, evaluates expectations, writes `records.jsonl`, a scorecard per model and a comparison table.                                  |
+| `src/common.mjs`     | Shared helpers: scenario and matrix loading, history parsing, pricing, the `/state` to result mapping.                                                 |
+| `src/sampleSize.mjs` | Runs per arm: exact power at the stuck experiment's bar, Wilson widths, sequential looks; tests in `src/sampleSize.test.mjs` (`node --test`).          |
+| `tier0/*.test.ts`    | Tier 0: the compliance expectations against the scripted model and the real serve routes, no provider needed.                                          |
 
 Live capture of raw tool-call replies (real tool list, streaming, passes, Wilson intervals) is a separate script: `plans/live-capture.md`.
 
@@ -186,6 +187,134 @@ Tier 1 probes are under 5 cents per model. Tier 3 (Sonnet or Opus class) is
 roughly ten times Haiku; run one slice, not three. The two runaway loops of
 the family survey (107 TaskList calls, 42 identical Reads) cost more than the
 rest of that survey together, which is what the per-scenario budgets are for.
+
+## How many runs per arm
+
+The scorer decides nothing: it prints counts and marks a cell with fewer than
+3 runs (`n<3`). The only significance bar in the repository is the stuck-check-in
+experiment's (`core/util/stuckExperiment.ts`): a one-sided Fisher exact test at
+alpha 0.10, plus a lift of at least 0.30. Everything below uses that bar and 80%
+power, computed exactly by enumerating the binomial outcomes
+(`src/sampleSize.mjs`; `node bench/src/sampleSize.mjs` prints the tables, and
+`node --test bench/src/sampleSize.test.mjs` checks them against exact integer
+arithmetic and a seeded Monte Carlo). No default in the bench was changed.
+
+**Warning: with fewer than 10 runs per arm the bench can only detect large
+effects.** At n=3 per arm the bar can only be passed by 3 of 3 against 0 of 3.
+At n=5 it needs 3 of 5 against 0 of 5 or 5 of 5 against 2 of 5; 4 of 5 against
+1 of 5 fails (p=0.103). "2 of 3 against 1 of 3" has a p of 0.5. Every n=3 to n=6
+claim in the plans is a hypothesis to test, not a result, and the n=10 per arm
+of the stuck check-in experiment has 42% power for a true lift from 0.3 to 0.6.
+
+### Runs per arm for 80% power
+
+Smallest n from which the power stays at 80% or more (the exact power curve is
+a sawtooth, so the first n that reaches it can be a few runs lower). The
+baseline is the rate in the control arm; where it plus the difference passes 1,
+the table moves the other way (a leak rate that falls). Worst case is the
+largest n over every baseline from 0 to 1.
+
+| Difference (absolute) | Worst case baseline | n per arm |
+| --------------------- | ------------------- | --------- |
+| 0.2                   | 40%                 | 67        |
+| 0.3                   | 35%                 | 33        |
+| 0.5                   | 20%                 | 13        |
+
+For the rates the plans actually report (the source of each is in
+`OBSERVED_RATES`):
+
+| Rate seen                                      | Where                            | d=0.2 | d=0.3 | d=0.5 |
+| ---------------------------------------------- | -------------------------------- | ----- | ----- | ----- |
+| Recovery, control arm 30% (3 of 10)            | `stuck-calibration.md` section 6 | 65    | 29    | 13    |
+| Loop completion 50% (1 to 2 of 3)              | `model-benchmark.md`             | 65    | 28    | 10    |
+| Loop completion 42% (5 of 12)                  | `model-benchmark.md`             | 67    | 29    | 10    |
+| Text leak 13% (1 of 8)                         | `live-capture.md`                | 47    | 25    | 11    |
+| Text leak 33% (8 of 24 runs)                   | `tool-dialects.md`               | 66    | 33    | 11    |
+| One-turn leak 67% (4 of 6, full profile)       | `model-benchmark.md`             | 49    | 19    | 11    |
+| Plan as a text call 40% (6 of 15, Nova short)  | `tool-dialects.md`               | 67    | 29    | 11    |
+| Finish nudge needed 33% (6 of 18)              | `model-benchmark.md`             | 66    | 33    | 11    |
+| Plan-ask, reserved choice decided 67% (2 of 3) | `model-benchmark.md`             | 49    | 19    | 11    |
+| False fire on healthy controls, bar of 5%      | `stuck-calibration.md` section 6 | 34    | 20    | 10    |
+
+Power of the bar at n per arm, for a true difference:
+
+| True rates (control to treatment) | n=3  | n=5  | n=8  | n=10 | n=20 | n=40 |
+| --------------------------------- | ---- | ---- | ---- | ---- | ---- | ---- |
+| 0.3 to 0.6                        | 0.07 | 0.17 | 0.30 | 0.42 | 0.61 | 0.90 |
+| 0.2 to 0.7                        | 0.18 | 0.38 | 0.64 | 0.79 | 0.96 | 1.00 |
+| 0.1 to 0.6                        | 0.16 | 0.43 | 0.69 | 0.80 | 0.98 | 1.00 |
+
+The test's true false-positive rate is under the 0.10 it is set at (0.02 to
+0.06 at n=10), because Fisher's test is conservative at small n.
+
+Wilson 95% interval width, for the rate a cell prints (`src/wilson.mjs`):
+
+| n                     | 3    | 5    | 8    | 10   | 20   | 40   |
+| --------------------- | ---- | ---- | ---- | ---- | ---- | ---- |
+| Width at 50% (widest) | 0.73 | 0.65 | 0.57 | 0.53 | 0.40 | 0.30 |
+| Width at 1 event      | 0.73 | 0.59 | 0.45 | 0.39 | 0.23 | 0.12 |
+
+### Recommended runs per arm
+
+These are proposals; nothing in the runner or scorer reads them.
+
+| Metric type                                                          | Screening (what is worth a follow-up)               | A claim (a decision rests on it)                                        |
+| -------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| Completion and compliance rates (done, recovered, nudge needed)      | 10, differences of 0.5 or more only                 | 13 for 0.5, 29 to 33 for 0.3 (or the sequential `large` design below)   |
+| Leak and wrong-call rates (text-leaked calls, invalid calls)         | 10, differences of 0.5 or more only                 | 25 to 33 for 0.3 from a 13 to 33% baseline                              |
+| False-allow, false-fire and other "must stay under X" bars           | 10 shows only a gross failure                       | 59 runs with zero events to show under 5%, 29 for under 10% (95% bound) |
+| Continuous per-run metrics (cache read ratio, cost, tokens, latency) | 5 shows about 1.7 standard deviations, 10 about 1.1 | 20 for about 0.7 standard deviations (normal approximation)             |
+| Tier 0 and anything deterministic (scripted model, parsers)          | 1                                                   | 1                                                                       |
+
+For a zero-tolerance bar ("no dangerous call allowed"), a clean run proves
+little: 0 events in 10 runs is compatible with a true rate up to 26%, in 20 up
+to 14%, in 40 up to 7% (95% one-sided).
+
+The unit is a run of one model and one build; requests within a run are not
+independent runs, so a cache ratio over 50 requests is one observation.
+
+### Sequential stopping for cheap runs
+
+For a cheap arm (cents per run) look at pre-registered counts and stop as soon
+as the treatment is decided at the bar, instead of fixing n. Fix the looks, the
+per-look alpha and the maximum before the first run; changing any of them
+afterwards is a new experiment.
+
+1. Interleave the arms and look only after every arm has `looks[i]` runs.
+2. At each look compute the one-sided Fisher p of "treatment better". If it is
+   at most the per-look alpha, stop and call it; otherwise continue. At the
+   last look, stop with no call. There is no stop for futility: the
+   pre-registered maximum is the stop.
+3. To catch harm as well, run the same rule with the arms swapped; the overall
+   false-call rate is then up to twice the one-sided figure.
+
+| Design                      | Looks (runs per arm) | Per-look alpha, Pocock style | Per-look alpha, Bonferroni | Overall false call, worst case over equal rates |
+| --------------------------- | -------------------- | ---------------------------- | -------------------------- | ----------------------------------------------- |
+| `small`, differences of 0.5 | 5, 10, 15, 20        | 0.0875                       | 0.025                      | 0.098 (Bonferroni: 0.025)                       |
+| `large`, differences of 0.3 | 10, 20, 30, 40       | 0.0775                       | 0.025                      | 0.095 (Bonferroni: 0.031)                       |
+
+The Pocock-style constant is calibrated exactly for these counts (the dynamic
+program in `sequentialOutcome`), not read from a normal-theory table.
+Bonferroni is plain "alpha divided by the number of looks": always safe by the
+union bound and simpler to state, and it gives up power (0.40 against 0.66 for
+0.3 to 0.6 in the `small` design). Peeking at four looks with the unadjusted
+0.10 gives a false call rate of 0.11 in the `small` design and 0.145 in the
+`large` one, which is why the looks are fixed.
+
+| Design (Pocock)  | True rates  | Chance of a call | Expected runs per arm |
+| ---------------- | ----------- | ---------------- | --------------------- |
+| `small` (max 20) | 0.3 to 0.8  | 0.96             | 9.8                   |
+| `small` (max 20) | 0.3 to 0.6  | 0.66             | 14.4                  |
+| `small` (max 20) | none (null) | 0.10             | 19.1                  |
+| `large` (max 40) | 0.3 to 0.8  | 1.00             | 14.0                  |
+| `large` (max 40) | 0.3 to 0.6  | 0.89             | 23.4                  |
+| `large` (max 40) | none (null) | 0.09             | 38.4                  |
+
+The `large` design has about the power of a fixed n=40 and uses about 40% fewer
+runs when the effect is real; when there is none it costs the whole maximum. A
+run stopped early overstates the effect (the first look to cross the line is
+the one that crossed by luck), so report the stopped count with its Wilson
+interval and say that it stopped early.
 
 ## Cadence
 
