@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadCorpus } from "../llm/toolDialects/corpus/corpus";
 import {
   detectToolDialectLeak,
+  isLeakedToolCall,
   leakHintText,
   leakNoticeText,
   providerRecoversText,
@@ -65,5 +66,71 @@ describe("detectToolDialectLeak", () => {
       "This model wrote a tool call as text (looks like qwen-xml). Turn on recovery for this model?",
     );
     expect(leakHintText("m", "qwen-xml")).toContain("toolDialect: qwen-xml");
+  });
+});
+
+describe("isLeakedToolCall", () => {
+  const tools = (id: string) => corpus.get(id)!.tools.map((t) => t.name);
+  const leak = (id: string, extra?: { toolCalls?: never }) =>
+    isLeakedToolCall({
+      content: text(id),
+      knownTools: tools(id),
+      ...extra,
+    });
+
+  it("counts the shapes that models write as text", () => {
+    for (const id of [
+      "qwen3-coder-30b-bedrock-function-xml-as-text",
+      "qwen3-coder-canonical",
+      "hermes-canonical",
+      "glm47-canonical",
+      "llama33-bedrock-json-text-single",
+      "nova-python-call-syntax",
+      "deepseek-v32-dsml-canonical",
+      "mistral-v3-tool-calls-json",
+      "llama3-python-tag-builtin",
+    ]) {
+      expect(leak(id), id).toBe(true);
+    }
+  });
+
+  it("does not count negatives, fenced examples or inline mentions", () => {
+    for (const f of corpus.values()) {
+      if (!f.id.startsWith("neg-")) continue;
+      expect(leak(f.id), f.id).toBe(false);
+    }
+  });
+
+  it("needs a tool that was actually offered", () => {
+    expect(
+      isLeakedToolCall({
+        content: text("qwen3-coder-30b-bedrock-function-xml-as-text"),
+        knownTools: ["something_else"],
+      }),
+    ).toBe(false);
+    expect(
+      isLeakedToolCall({
+        content: text("qwen3-coder-30b-bedrock-function-xml-as-text"),
+      }),
+    ).toBe(false);
+  });
+
+  it("does not count a reply that also made a structured call", () => {
+    expect(
+      isLeakedToolCall({
+        content: text("qwen3-coder-canonical"),
+        knownTools: tools("qwen3-coder-canonical"),
+        toolCalls: [{ name: "read", arguments: "{}" }],
+      }),
+    ).toBe(false);
+  });
+
+  it("does not count plain prose", () => {
+    expect(
+      isLeakedToolCall({
+        content: "Let me read the file next.",
+        knownTools: ["read"],
+      }),
+    ).toBe(false);
   });
 });

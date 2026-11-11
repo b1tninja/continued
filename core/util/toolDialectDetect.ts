@@ -146,7 +146,7 @@ const FINGERPRINTS: Fingerprint[] = [
   },
 ];
 
-function stripCode(text: string): { outside: string; fenced: string } {
+export function stripCode(text: string): { outside: string; fenced: string } {
   const fenced: string[] = [];
   const outside = text
     .replace(FENCE, (m) => {

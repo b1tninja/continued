@@ -2,9 +2,12 @@
 import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import type { ChatHistoryItem, ModelUse } from "core/index.js";
+import { isLeakedToolCall } from "core/util/toolDialectLeak.js";
 import {
   ACT_TURN_NUDGE,
   announcesNextStep,
+  LEAKED_CALL_NUDGE,
+  LEAKED_CALL_NUDGE_LIMIT,
   TURN_NUDGE_LIMIT,
   TURN_NUDGE_TOTAL,
 } from "core/util/turnEnd.js";
@@ -218,6 +221,8 @@ function noteTruncation(
 interface TurnNudges {
   sinceToolUse: number;
   thisTurn: number;
+  /** Nudges for a tool call written as text; one per turn (H13) */
+  leaked: number;
 }
 
 /**
@@ -237,6 +242,7 @@ function nudgeAnnouncedStep(args: {
   isCompacting: boolean;
   chatHistory: ChatHistoryItem[];
   nudges: TurnNudges;
+  toolNames: string[];
 }): ChatHistoryItem[] | undefined {
   const { nudges } = args;
   if (args.shouldContinue) nudges.sinceToolUse = 0;
@@ -248,20 +254,32 @@ function nudgeAnnouncedStep(args: {
     !loopRunGoing() &&
     nudges.sinceToolUse < TURN_NUDGE_LIMIT &&
     nudges.thisTurn < TURN_NUDGE_TOTAL;
-  if (!eligible || !announcesNextStep(args.content)) return undefined;
+  if (!eligible) return undefined;
+  // A tool call written as text counts as an announcement: it is the same
+  // stop with nothing done. It gets its own text and its own cap of one per
+  // turn, and nothing in it is parsed or run (isLeakedToolCall, H13).
+  const leaked =
+    nudges.leaked < LEAKED_CALL_NUDGE_LIMIT &&
+    isLeakedToolCall({ content: args.content, knownTools: args.toolNames });
+  if (!leaked && !announcesNextStep(args.content)) return undefined;
+  const text = leaked ? LEAKED_CALL_NUDGE : ACT_TURN_NUDGE;
   nudges.sinceToolUse++;
   nudges.thisTurn++;
-  logger.debug("Turn ended on an announced step; nudging", {
-    nudgesThisTurn: nudges.thisTurn,
-  });
+  if (leaked) nudges.leaked++;
+  logger.debug(
+    leaked
+      ? "Turn ended on a tool call written as text; nudging"
+      : "Turn ended on an announced step; nudging",
+    { nudgesThisTurn: nudges.thisTurn },
+  );
   const svc = services.chatHistory;
   if (typeof svc?.isReady === "function" && svc.isReady()) {
-    svc.addUserMessage(ACT_TURN_NUDGE);
+    svc.addUserMessage(text);
     return svc.getHistory();
   }
   return [
     ...args.chatHistory,
-    { message: { role: "user", content: ACT_TURN_NUDGE }, contextItems: [] },
+    { message: { role: "user", content: text }, contextItems: [] },
   ];
 }
 
@@ -638,7 +656,7 @@ export async function streamChatResponse(
   let compactionOccurredThisTurn = false; // Track if compaction happened during this conversation turn
   let autoContinuedLastIteration = false; // Whether the previous iteration only sent our own "continue"
   // End-of-turn nudges (core/util/turnEnd.ts): one between tool calls, a few per turn
-  const nudges: TurnNudges = { sinceToolUse: 0, thisTurn: 0 };
+  const nudges: TurnNudges = { sinceToolUse: 0, thisTurn: 0, leaked: 0 };
   resetTurnGuards(isCompacting);
 
   while (true) {
@@ -808,6 +826,7 @@ export async function streamChatResponse(
       isCompacting,
       chatHistory,
       nudges,
+      toolNames: tools.map((t) => t.function.name),
     });
     if (nudged) {
       chatHistory = nudged;
