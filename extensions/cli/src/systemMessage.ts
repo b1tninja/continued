@@ -46,6 +46,20 @@ Platform: ${process.platform}
 
 Today's date and the git status of the working tree are in a <context name="environment"> block in the first user message.`;
 
+/**
+ * The literal openings of the parts constructSystemMessage appends after the
+ * preamble, in order. The builder writes them and the prompt-segment manifest
+ * (src/promptSegments.ts) finds them, so the two cannot drift apart.
+ */
+export const SYSTEM_MARKERS = {
+  plan: '\n<context name="planMode">\n',
+  agent: '\n<context name="agentMode">\n',
+  commit: '\n<context name="commitSignature">',
+  headless: "\n\nIMPORTANT: You are running in headless mode.",
+  json: "\n\nIMPORTANT: You are operating in JSON output mode.",
+  rules: '\n\n<context name="userRules">',
+} as const;
+
 async function getConfigYamlRules(): Promise<string[]> {
   const configState = await serviceContainer.get<ConfigServiceState>(
     SERVICE_NAMES.CONFIG,
@@ -210,12 +224,12 @@ export async function constructSystemMessage(
   // use's prompt choice, else the model's prompt profile, picks the short
   // text for small models (Qwen) or a prompt block of the person's own.
   if (mode === "plan") {
-    systemMessage += `\n<context name="planMode">\n${planTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
+    systemMessage += `${SYSTEM_MARKERS.plan}${planTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
   } else {
-    systemMessage += `\n<context name="agentMode">\n${actTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
+    systemMessage += `${SYSTEM_MARKERS.agent}${actTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
     // Check if commit signature is disabled via environment variable
     if (!process.env.CONTINUE_CLI_DISABLE_COMMIT_SIGNATURE) {
-      systemMessage += `\n<context name="commitSignature">When creating commits using any CLI or tool, include the following in the commit message:
+      systemMessage += `${SYSTEM_MARKERS.commit}When creating commits using any CLI or tool, include the following in the commit message:
 Generated with [Continue](https://continue.dev)
 
 Co-Authored-By: Continue <noreply@continue.dev>
@@ -225,16 +239,12 @@ Co-Authored-By: Continue <noreply@continue.dev>
 
   // In headless mode, add instructions to be concise and only provide final answers
   if (headless) {
-    systemMessage += `
-
-IMPORTANT: You are running in headless mode. Provide ONLY your final answer to the user's question. Do not include explanations, reasoning, or additional commentary unless specifically requested. Be direct and concise.`;
+    systemMessage += `${SYSTEM_MARKERS.headless} Provide ONLY your final answer to the user's question. Do not include explanations, reasoning, or additional commentary unless specifically requested. Be direct and concise.`;
   }
 
   // Add JSON formatting instructions if format is json
   if (format === "json") {
-    systemMessage += `
-
-IMPORTANT: You are operating in JSON output mode. Your final response MUST be valid JSON that can be parsed by JSON.parse(). The JSON should contain properties relevant to answer the user's question. You don't need to include any general "response" or "answer" field. Do not include any text before or after the JSON - the entire response must be parseable JSON.
+    systemMessage += `${SYSTEM_MARKERS.json} Your final response MUST be valid JSON that can be parsed by JSON.parse(). The JSON should contain properties relevant to answer the user's question. You don't need to include any general "response" or "answer" field. Do not include any text before or after the JSON - the entire response must be parseable JSON.
 
 Example response format:
 {
@@ -244,7 +254,7 @@ Example response format:
 
   // Add rules section if we have any rules or agent content
   if (agentContent || processedRules.length > 0) {
-    systemMessage += '\n\n<context name="userRules">';
+    systemMessage += SYSTEM_MARKERS.rules;
 
     if (agentContent) {
       systemMessage += `\n${agentContent}`;
