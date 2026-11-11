@@ -1,10 +1,10 @@
 import type { ChatHistoryItem } from "core/index.js";
 import { getAuditTrail } from "core/tools/permissions/audit/global.js";
+import { sharedLedger } from "core/tools/permissions/audit/shadowLedger.js";
 import {
   shadowSeed,
   shadowSpend,
 } from "core/tools/permissions/audit/shadowReport.js";
-import { sharedLedger } from "core/tools/permissions/audit/shadowLedger.js";
 import {
   readShadowSettings,
   type ShadowSettings,
