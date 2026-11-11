@@ -1,6 +1,11 @@
 import * as os from "node:os";
 import type { ShellKind } from "../../util/shell";
+import {
+  GLOBAL_DIR_NAME,
+  LEGACY_GLOBAL_DIR_NAME,
+} from "../../util/productPaths";
 import { commandCandidateSet } from "./candidates";
+import { isLockedProductPath } from "./lockedPaths";
 import { normalizeProtectedPath } from "./protected";
 import { pathWords, wordsOf } from "./protectedCall";
 import { classifyReadOnly } from "./readOnlyCommand";
@@ -12,12 +17,12 @@ import { classifyReadOnly } from "./readOnlyCommand";
  * every other protection. `protect-config` is a separate, switchable rule over
  * the wider set of files that change what runs later; this one has no switch.
  *
- * What counts as a policy file (home-relative `~/.continue` and
- * `~/.continuous`, or a project directory of that name, at any depth):
- * any yaml/json file inside (config.yaml, permissions.yaml, rule and block
- * files), `mcp-tool-pins.json`, the `rules` and `audit` directories, and the
- * directory itself (deleting it deletes them all); plus `.continuerc.*` and
- * `.continuousrc.*` anywhere.
+ * What counts is every path the product loads as config, code, rules or hooks,
+ * read from PRODUCT_LOADED_PATHS (core/util/productPaths.ts, applied in
+ * lockedPaths.ts): the global folder (`~/.continuous`, `~/.continue` and the
+ * folder CONTINUOUS_GLOBAL_DIR or CONTINUE_GLOBAL_DIR names), a project's
+ * `.continuous` and `.continue` folders, `.claude` settings, agents and skills,
+ * and `.continuerc.*`.
  *
  * Like protected paths this reads the path as written and resolved, and a
  * terminal command by its words: it is a guard that sees what is visible, not
@@ -26,28 +31,31 @@ import { classifyReadOnly } from "./readOnlyCommand";
 export interface PolicyFileHit {
   /** The path as it was matched, for the message. */
   path: string;
+  /** The scan gave up (too large or too deep): the call asks, and is not refused. */
+  capped?: boolean;
 }
 
 export const POLICY_FILE_REASON =
-  "This would change your permission or policy files, which no setting lets the agent change without you.";
+  "This would change your permission or policy files, or a file the product loads as config, rules or hooks, which no setting lets the agent change without you.";
 
-const POLICY_DIRS = new Set([".continue", ".continuous"]);
-const POLICY_SUBTREES = new Set(["rules", "audit"]);
-const POLICY_EXT = /\.(ya?ml|json)$/i;
-const RC_FILE = /^\.(continue|continuous)rc(\..+)?$/;
+/** The default global folders and the one an env var names, as comparable paths. */
+export function globalDirsFor(
+  home: string,
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  const named = env.CONTINUOUS_GLOBAL_DIR || env.CONTINUE_GLOBAL_DIR;
+  const dirs = [`~/${GLOBAL_DIR_NAME}`, `~/${LEGACY_GLOBAL_DIR_NAME}`];
+  if (named) dirs.push(normalizeProtectedPath(named, home, process.cwd()));
+  return dirs;
+}
 
 /** A normalized (forward-slash, lower-cased on compare) path of a policy file. */
-export function isPolicyFilePath(p: string): boolean {
-  const segs = p.split("/").filter((s) => s !== "" && s !== ".");
-  const low = segs.map((s) => s.toLowerCase());
-  if (RC_FILE.test(low[low.length - 1] ?? "")) return true;
-  const i = low.findIndex((s) => POLICY_DIRS.has(s));
-  if (i < 0) return false;
-  const rest = low.slice(i + 1);
-  if (rest.length === 0) return true;
-  if (POLICY_SUBTREES.has(rest[0])) return true;
-  const base = rest[rest.length - 1];
-  return base === "mcp-tool-pins.json" || POLICY_EXT.test(base);
+export function isPolicyFilePath(
+  p: string,
+  globalDirs?: string[],
+  cwd?: string,
+): boolean {
+  return isLockedProductPath(p, { globalDirs, cwd });
 }
 
 function policyPathHit(
@@ -57,7 +65,10 @@ function policyPathHit(
 ): PolicyFileHit | undefined {
   if (!raw) return undefined;
   const path = normalizeProtectedPath(raw, home, cwd);
-  return path && isPolicyFilePath(path) ? { path } : undefined;
+  if (!path) return undefined;
+  const globalDirs = globalDirsFor(home);
+  const normCwd = cwd ? normalizeProtectedPath(cwd, home) : undefined;
+  return isPolicyFilePath(path, globalDirs, normCwd) ? { path } : undefined;
 }
 
 const WRITE_TOOLS = new Set([
@@ -107,11 +118,34 @@ function terminalHit(
   return undefined;
 }
 
-/** Every string in an MCP call's arguments, two levels deep. */
-function stringArgs(value: unknown, depth = 0): string[] {
-  if (typeof value === "string") return [value];
-  if (depth >= 2 || !value || typeof value !== "object") return [];
-  return Object.values(value).flatMap((v) => stringArgs(v, depth + 1));
+const MCP_MAX_DEPTH = 12;
+const MCP_MAX_STRINGS = 2000;
+
+/**
+ * Every string in an MCP call's arguments, keys included. `capped` is set when
+ * the tree is deeper or larger than the scan reads, which cannot be vouched for.
+ */
+function stringArgs(root: unknown): { strings: string[]; capped: boolean } {
+  const strings: string[] = [];
+  let capped = false;
+  const stack: [unknown, number][] = [[root, 0]];
+  while (stack.length > 0) {
+    const [value, depth] = stack.pop()!;
+    if (typeof value === "string") {
+      if (strings.length >= MCP_MAX_STRINGS) capped = true;
+      else strings.push(value);
+    } else if (value && typeof value === "object") {
+      if (depth >= MCP_MAX_DEPTH) {
+        capped = true;
+        continue;
+      }
+      for (const [k, v] of Object.entries(value)) {
+        strings.push(k);
+        stack.push([v, depth + 1]);
+      }
+    }
+  }
+  return { strings, capped };
 }
 
 /**
@@ -138,11 +172,17 @@ export function policyFileHit(args: {
   }
   if (args.mcp) {
     if (args.mcp.readonly) return undefined;
-    for (const value of stringArgs(parsedArgs)) {
-      const hit = policyPathHit(value, home, cwd);
-      if (hit) return hit;
+    const { strings, capped } = stringArgs(parsedArgs);
+    for (const value of strings) {
+      // A string may be a path or a sentence that holds one (`type x > C:/...`).
+      for (const word of [value, ...value.split(/[\s"'`=<>|;&,()]+/)]) {
+        const hit = policyPathHit(word, home, cwd);
+        if (hit) return hit;
+      }
     }
-    return undefined;
+    return capped
+      ? { path: "(arguments too large to read)", capped }
+      : undefined;
   }
   if (!WRITE_TOOLS.has(toolName)) return undefined;
   const written =

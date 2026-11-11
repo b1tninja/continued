@@ -3,14 +3,19 @@
  * one switch both Bedrock handlers (this package and core/llm/llms) use, so
  * the setting and the parsers exist once. Off unless asked for.
  */
+import { MAX_HELD_CHARS } from "./heldRecovery.js";
 import { recordRecovery } from "./recoveryStats.js";
+import { DeepseekV31Recovery } from "./deepseekV31.js";
+import { DsmlRecovery } from "./dsml.js";
 import { GlmXmlRecovery, recoverGlmXmlFromText } from "./glmXml.js";
+import { HarmonyRecovery } from "./harmony.js";
 import { HermesJsonRecovery, recoverHermesJsonFromText } from "./hermesJson.js";
 import { KimiTokensRecovery } from "./kimiTokens.js";
 import { KimiXtmlRecovery } from "./kimiXtml.js";
 import { LlamaJsonRecovery, recoverLlamaJsonFromText } from "./llamaJson.js";
 import { MinimaxNsRecovery } from "./minimaxNs.js";
 import { MinimaxXmlRecovery } from "./minimaxXml.js";
+import { MistralRecovery } from "./mistral.js";
 import { PythonicRecovery, recoverPythonicFromText } from "./pythonic.js";
 import { WRAPPER_ROWS, WrapperRecovery } from "./wrapperDialects.js";
 import { ToolcallJsonRecovery } from "./toolcallJson.js";
@@ -38,14 +43,29 @@ export interface TextToolRecovery {
    * `push` and `end`; a stage that never holds text has none.
    */
   takeHoldSignal?(): HoldPhase | undefined;
+  /** Whether the hold cap released held text since this was last called. */
+  takeCapReleased?(): boolean;
 }
 
 /** A held reply began (`start`) or was judged (`end`). */
 export type HoldPhase = "start" | "end";
 
-/** Counts a stage's outcomes (recoveryStats.ts); behaviour is unchanged. */
+/**
+ * Wraps a stage for one model and dialect. It counts outcomes
+ * (recoveryStats.ts) and is the one place a recovery failure is contained: a
+ * stage that throws, in `push` or `end`, must never end the turn or lose the
+ * reply, so the text it had not yet released goes out as text, the failure is
+ * counted as a recovery error, and the stage is not used again. Held text is
+ * also capped (MAX_HELD_CHARS) for stages that do not cap it themselves.
+ */
 class CountedRecovery implements TextToolRecovery {
   private pendingHold: HoldPhase | undefined;
+  /** Input the stage has taken but not yet released as text. */
+  private unreleased = "";
+  /** Set after a stage failure: from then on text passes straight through. */
+  private broken = false;
+  /** Set when the hold cap was hit: text passes through until `end`. */
+  private capped = false;
 
   constructor(
     private readonly inner: TextToolRecovery,
@@ -53,15 +73,67 @@ class CountedRecovery implements TextToolRecovery {
     private readonly dialect: string,
   ) {}
 
+  private text(text: string): RecoveryEvent[] {
+    return text ? [{ type: "text", text }] : [];
+  }
+
+  /** Release everything not yet released, and stop using the stage. */
+  private failOpen(): RecoveryEvent[] {
+    const out = this.text(this.unreleased);
+    this.unreleased = "";
+    this.broken = true;
+    this.pendingHold = "end";
+    recordRecovery(this.model, this.dialect, { recoveryErrors: 1 });
+    return out;
+  }
+
+  private settle(events: RecoveryEvent[]): void {
+    for (const e of events) {
+      if (e.type === "text") {
+        this.unreleased = this.unreleased.slice(e.text.length);
+      }
+    }
+    if (events.some((e) => e.type === "call")) this.unreleased = "";
+  }
+
+  private countCap(): void {
+    this.pendingHold = "end";
+    recordRecovery(this.model, this.dialect, {
+      held: 1,
+      releasedAsText: 1,
+      releasedAtCap: 1,
+    });
+  }
+
   push(chunk: string): RecoveryEvent[] {
+    if (this.broken || this.capped) return this.text(chunk);
     const wasHolding = this.isHolding();
-    const events = this.inner.push(chunk);
+    this.unreleased += chunk;
+    let events: RecoveryEvent[];
+    try {
+      events = this.inner.push(chunk);
+      this.settle(events);
+    } catch {
+      return this.failOpen();
+    }
     if (!wasHolding && this.isHolding()) this.pendingHold = "start";
+    if (this.inner.takeCapReleased?.()) {
+      this.countCap();
+    } else if (
+      !this.inner.takeCapReleased &&
+      this.isHolding() &&
+      this.unreleased.length > MAX_HELD_CHARS
+    ) {
+      events = [...events, ...this.text(this.unreleased)];
+      this.unreleased = "";
+      this.capped = true;
+      this.countCap();
+    }
     return events;
   }
 
   isHolding(): boolean {
-    return this.inner.isHolding?.() ?? false;
+    return !this.broken && !this.capped && (this.inner.isHolding?.() ?? false);
   }
 
   takeHoldSignal(): HoldPhase | undefined {
@@ -71,8 +143,20 @@ class CountedRecovery implements TextToolRecovery {
   }
 
   end(): RecoveryEvent[] {
+    if (this.broken) return [];
     const held = this.isHolding();
-    const events = this.inner.end();
+    let events: RecoveryEvent[];
+    try {
+      events = this.inner.end();
+    } catch {
+      return this.failOpen();
+    }
+    if (this.capped) {
+      // The held text went out when the cap was hit; the stage's copy is dropped.
+      this.capped = false;
+      return [];
+    }
+    this.unreleased = "";
     if (held) {
       this.pendingHold = "end";
       const recovered = events.filter((e) => e.type === "call").length;
@@ -170,6 +254,29 @@ function chooseRecovery(
     if (wants(settings, row.dialect, model, row.nameRe)) {
       return { dialect: row.dialect, stage: new WrapperRecovery(tools, row) };
     }
+  }
+  return chooseOtherRecovery(model, tools, settings);
+}
+
+/** The stages for the Harmony, Mistral and DeepSeek forms. */
+function chooseOtherRecovery(
+  model: string,
+  tools: DialectTool[],
+  settings: Set<string>,
+): { dialect: string; stage: TextToolRecovery } | undefined {
+  if (wants(settings, "harmony", model, /gpt-oss/i)) {
+    return { dialect: "harmony", stage: new HarmonyRecovery(tools) };
+  }
+  if (
+    wants(settings, "mistral", model, /mistral|mixtral|devstral|magistral/i)
+  ) {
+    return { dialect: "mistral", stage: new MistralRecovery(tools) };
+  }
+  if (wants(settings, "dsml", model, /deepseek/i)) {
+    return { dialect: "dsml", stage: new DsmlRecovery(tools) };
+  }
+  if (wants(settings, "deepseek-v31", model, /deepseek/i)) {
+    return { dialect: "deepseek-v31", stage: new DeepseekV31Recovery(tools) };
   }
   return undefined;
 }

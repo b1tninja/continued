@@ -27,7 +27,8 @@ export type ProtectedKind =
   | "network"
   | "private-url"
   | "fetch-and-run"
-  | "mcp-definition-changed";
+  | "mcp-definition-changed"
+  | "hidden-command";
 
 export interface ProtectedHit {
   kind: ProtectedKind;
@@ -89,6 +90,29 @@ function rewriteHome(p: string, home: string): string {
 }
 
 /**
+ * Spellings of one file that Windows treats alike: a file URI, the long-path
+ * and device prefixes (`//?/` and `//./`, and `//?/UNC/host/share` for
+ * `//host/share`), and the admin share `//localhost/C$/x`, which is `C:/x`.
+ * Slashes are already forward.
+ */
+function stripNamespacePrefixes(path: string): string {
+  let p = path;
+  if (/^file:\/\//i.test(p)) {
+    p = p.replace(/^file:\/\/(localhost)?/i, "");
+    try {
+      p = decodeURIComponent(p);
+    } catch {
+      // Not valid percent-encoding: judge it as written.
+    }
+  }
+  p = p.replace(/^\/\/[?.]\/UNC\//i, "//").replace(/^\/\/[?.]\//, "");
+  return p.replace(
+    /^\/\/(?:localhost|127\.0\.0\.1)\/([a-zA-Z])\$(?=\/|$)/i,
+    (_, drive: string) => `${drive}:`,
+  );
+}
+
+/**
  * Make a path comparable: forward slashes, `~` for the home dir, `.` and `..`
  * folded. Relative paths are resolved against `cwd` (the workspace, for a
  * tool call) before that, so a path that climbs out is still recognisable.
@@ -100,6 +124,7 @@ export function normalizeProtectedPath(
 ): string {
   let p = raw.trim().replace(/\\/g, "/");
   if (!p) return "";
+  p = stripNamespacePrefixes(p);
   // A file URI's path is `/C:/Users/...`; drop the slash so it compares as a drive path.
   p = p.replace(/^\/([a-zA-Z]:\/)/, "$1");
   p = p.replace(
@@ -153,8 +178,13 @@ export function protectedReason(hit: ProtectedHit): string {
   if (hit.kind === "fetch-and-run") {
     return `This downloads something and runs it (${hit.path}), so it always asks first. At Automatic it is refused.`;
   }
+  if (hit.kind === "hidden-command") {
+    return `This runs ${hit.path}, so no rule can tell which program it is, and it always asks first.`;
+  }
   if (hit.kind === "mcp-definition-changed") {
-    return `This MCP tool's definition changed since you approved it (${hit.path}), so it asks again. Approving this call accepts the new definition.`;
+    return hit.path.startsWith("launch definition changed")
+      ? `This MCP server is started differently than when you approved it (${hit.path}), so every one of its tools asks again. Approving this call accepts the new definition.`
+      : `This MCP tool's definition changed since you approved it (${hit.path}), so it asks again. Approving this call accepts the new definition.`;
   }
   if (hit.kind === "private-url") {
     return `This URL reaches a private or local address (${hit.path}), so it always asks first.`;

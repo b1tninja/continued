@@ -9,11 +9,17 @@
  *   or missing argument, a value the schema refuses, malformed text) and went
  *   to the person as text. A refusal by the schema is counted here; the
  *   parsers do not say which check refused.
+ * - releasedAtCap: held blocks released as text because they grew past the
+ *   hold cap (also counted in releasedAsText); absent until it happens
+ * - recoveryErrors: stages that threw and were failed open to plain text;
+ *   absent until it happens
  */
 export interface RecoveryCounts {
   held: number;
   recovered: number;
   releasedAsText: number;
+  releasedAtCap?: number;
+  recoveryErrors?: number;
 }
 
 export interface RecoveryStatRow extends RecoveryCounts {
@@ -39,6 +45,12 @@ export function recordRecovery(
   row.held += delta.held ?? 0;
   row.recovered += delta.recovered ?? 0;
   row.releasedAsText += delta.releasedAsText ?? 0;
+  if (delta.releasedAtCap) {
+    row.releasedAtCap = (row.releasedAtCap ?? 0) + delta.releasedAtCap;
+  }
+  if (delta.recoveryErrors) {
+    row.recoveryErrors = (row.recoveryErrors ?? 0) + delta.recoveryErrors;
+  }
 }
 
 export function recoveryStatsSnapshot(): RecoveryStatRow[] {
@@ -53,12 +65,14 @@ export function resetRecoveryStats(): void {
 export function formatRecoveryStats(
   snapshot: RecoveryStatRow[] = recoveryStatsSnapshot(),
 ): string | undefined {
-  const active = snapshot.filter((r) => r.held > 0);
+  const active = snapshot.filter((r) => r.held > 0 || r.recoveryErrors);
   if (active.length === 0) return undefined;
   const parts = active.map(
     (r) =>
       `${r.model} (${r.dialect}): ${r.held} held, ${r.recovered} recovered, ` +
-      `${r.releasedAsText} released as text`,
+      `${r.releasedAsText} released as text` +
+      (r.releasedAtCap ? ` (${r.releasedAtCap} at the hold cap)` : "") +
+      (r.recoveryErrors ? `, ${r.recoveryErrors} recovery errors` : ""),
   );
   return `Tool calls written as text: ${parts.join("; ")}`;
 }

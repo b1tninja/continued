@@ -1,0 +1,243 @@
+{
+  "schemaVersion": 1,
+  "id": "harmony-template-form-recipient-in-role",
+  "family": "gpt-oss",
+  "dialect": "harmony",
+  "kind": "positive",
+  "failureMode": "none",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://github.com/openai/harmony/blob/main/docs/format.md and https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": "The role-section recipient and bare json, as the chat template renders a call in history. The Harmony doc says the recipient may be in the role or the channel part of the header."
+  },
+  "policy": "should",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "<|start|>assistant to=functions.get_weather<|channel|>commentary json<|message|>{\"city\":\"Paris\"}<|call|>",
+  "markers": [
+    "<|channel|>",
+    "<|constrain|>",
+    "<|message|>",
+    "<|call|>",
+    "<|start|>",
+    "<|end|>"
+  ],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "<|start|>assistant to=functions.get_weather<|channel|>commentary json<|message|>{\"city\":\"Paris\"}<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "<",
+        "|",
+        "s",
+        "t",
+        "a",
+        "r",
+        "t",
+        "|",
+        ">",
+        "a",
+        "s",
+        "s",
+        "i",
+        "s",
+        "t",
+        "a",
+        "n",
+        "t",
+        " ",
+        "t",
+        "o",
+        "=",
+        "f",
+        "u",
+        "n",
+        "c",
+        "t",
+        "i",
+        "o",
+        "n",
+        "s",
+        ".",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "<",
+        "|",
+        "c",
+        "h",
+        "a",
+        "n",
+        "n",
+        "e",
+        "l",
+        "|",
+        ">",
+        "c",
+        "o",
+        "m",
+        "m",
+        "e",
+        "n",
+        "t",
+        "a",
+        "r",
+        "y",
+        " ",
+        "j",
+        "s",
+        "o",
+        "n",
+        "<",
+        "|",
+        "m",
+        "e",
+        "s",
+        "s",
+        "a",
+        "g",
+        "e",
+        "|",
+        ">",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "<",
+        "|",
+        "c",
+        "a",
+        "l",
+        "l",
+        "|",
+        ">"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "<|start|>assistant to=functions.get_weather<|cha",
+        "nnel|>commentary json<|message|>{\"city\":\"Paris\"}<|call|>"
+      ],
+      "splitInside": "<|channel|>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "<|start|>",
+        "assistant to=functions.get_weather",
+        "<|channel|>",
+        "commentary json",
+        "<|message|>",
+        "{\"city\":\"Paris\"}",
+        "<|call|>"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "<|s",
+        "tar",
+        "t",
+        "|",
+        ">a",
+        "ssis",
+        "tant",
+        " to",
+        "=fu",
+        "n",
+        "c",
+        "t",
+        "ion",
+        "s",
+        ".",
+        "get_w",
+        "e",
+        "ath",
+        "er<|",
+        "chan",
+        "nel|",
+        ">co",
+        "m",
+        "me",
+        "n",
+        "tary",
+        " ",
+        "j",
+        "son",
+        "<|m",
+        "essa",
+        "ge|>{",
+        "\"",
+        "city",
+        "\":\"",
+        "Pa",
+        "ri",
+        "s\"",
+        "}<|c",
+        "a",
+        "l",
+        "l|",
+        ">"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "text": ""
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-llama4-list-undeclared-tool",
+  "family": "llama4",
+  "dialect": "pythonic",
+  "kind": "negative",
+  "failureMode": "undeclared-tool",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised from https://huggingface.co/unsloth/Llama-4-Scout-17B-16E-Instruct/blob/main/chat_template.jinja, not observed",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "text": "[get_events(location=\"Singapore\")]",
+  "markers": [],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": ["[get_events(location=\"Singapore\")]"],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "[",
+        "g",
+        "e",
+        "t",
+        "_",
+        "e",
+        "v",
+        "e",
+        "n",
+        "t",
+        "s",
+        "(",
+        "l",
+        "o",
+        "c",
+        "a",
+        "t",
+        "i",
+        "o",
+        "n",
+        "=",
+        "\"",
+        "S",
+        "i",
+        "n",
+        "g",
+        "a",
+        "p",
+        "o",
+        "r",
+        "e",
+        "\"",
+        ")",
+        "]"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "[g",
+        "e",
+        "t_ev",
+        "ents(",
+        "loca",
+        "ti",
+        "on=",
+        "\"Si",
+        "n",
+        "g",
+        "apor",
+        "e\")]"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "[get_events(location=\"Singapore\")]"
+  }
+}

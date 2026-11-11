@@ -118,7 +118,7 @@ export const LOCKED_FLOOR_RULES: readonly {
     id: "protect-policy-files",
     label: "Never change the permission files",
     description:
-      "config.yaml, permissions.yaml, rule files, .continuerc and the MCP pins. A write or delete asks, and is refused at Automatic and YOLO.",
+      "Every file the product loads as config, code, rules or hooks: the global folder, a project's .continue and .continuous folders, .claude settings, agents and skills, and .continuerc. A write or delete asks, and is refused at Automatic and YOLO.",
   },
 ];
 
