@@ -10,6 +10,7 @@ import { agentsCommand } from "./commands/agents.js";
 import { auditCommand } from "./commands/audit.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
+import { registerCleanCommand } from "./commands/clean.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
@@ -17,7 +18,7 @@ import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
 import { reviewEvalCommand } from "./commands/reviewEval.js";
 import { sandboxCommand } from "./commands/sandbox.js";
-import { secretsCommand } from "./commands/secrets.js";
+import { registerSecretsCommand } from "./commands/secrets.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
 import {
@@ -499,31 +500,10 @@ program
   );
 
 // Secrets subcommand: scan files for secrets (exit 3 on a finding)
-program
-  .command("secrets [action] [paths...]")
-  .description(
-    "Scan files for secrets before they are committed or leave the machine; values are never printed (scan)",
-  )
-  .option("--profile <p>", "at-rest (default, recall first) or outbound")
-  .option("--json", "Machine-readable output")
-  .option("--staged", "Also scan the files staged in git")
-  .option("--salt <s>", "Fingerprint salt, to keep fingerprints comparable")
-  .option(
-    "--allow <fp>",
-    "A fingerprint to treat as not a secret (repeatable)",
-    (value: string, previous: string[] = []) => [...previous, value],
-  )
-  .option("--no-known", "Do not match this machine's own secret values")
-  .action(
-    async (
-      action: string | undefined,
-      paths: string[] | undefined,
-      options,
-    ) => {
-      const code = secretsCommand(action, paths ?? [], options);
-      await gracefulExit(code);
-    },
-  );
+registerSecretsCommand(program);
+
+// Clean: retention for the product's own persisted files (dry run unless --yes)
+registerCleanCommand(program);
 
 // Sandbox status subcommand
 program
