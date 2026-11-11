@@ -222,7 +222,14 @@ export function resolveFact<N extends FactName>(
   }
   const best = bestSurfaceFact(name, input, input.rows ?? SURFACE_FACTS.rows);
   const measured = input.measured?.[name] as Fact | undefined;
-  if (measured) {
+  // A weak measurement (a handful of probes, level "declared") never beats a
+  // stronger surface fact, which keeps answering.
+  const weak =
+    !!measured &&
+    measured.level === "declared" &&
+    !!best &&
+    LEVEL_RANK[best.fact.level] > LEVEL_RANK[measured.level];
+  if (measured && !weak) {
     const r = fromFact(name, "measured", measured, input.now);
     if (best && !sameValue(best.fact.value, measured.value)) {
       r.drift = `measured ${JSON.stringify(measured.value)} contradicts ${best.row.id} (${best.fact.level}, read ${best.fact.readOn}): ${JSON.stringify(best.fact.value)}`;

@@ -78,6 +78,15 @@ export function providerRecoversText(
   );
 }
 
+/** The `toolDialect` value that recovers this classifier dialect, or undefined when none does. */
+export function recoverableDialect(
+  dialect: string,
+): ToolDialectSetting | undefined {
+  return Object.hasOwn(RECOVERABLE, dialect)
+    ? (RECOVERABLE as Record<string, ToolDialectSetting>)[dialect]
+    : undefined;
+}
+
 export interface ToolDialectLeak {
   dialect: ToolDialectSetting;
 }
