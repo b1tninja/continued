@@ -309,8 +309,18 @@ export {
   renderLlamaJsonCall,
 } from "./dialects/llamaJson.js";
 export {
+  formatRecoveryStats,
+  recordRecovery,
+  recoveryStatsSnapshot,
+  resetRecoveryStats,
+  type RecoveryCounts,
+  type RecoveryStatRow,
+} from "./dialects/recoveryStats.js";
+export {
   createTextToolRecovery,
   dialectToolsFromConverse,
+  isRecoveredCallId,
+  RECOVERED_CALL_ID_PREFIX,
   recoverFromText,
   recoveredCallId,
   recoverySetting,

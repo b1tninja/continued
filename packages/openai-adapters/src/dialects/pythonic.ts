@@ -358,6 +358,10 @@ export class PythonicRecovery {
     return out;
   }
 
+  isHolding(): boolean {
+    return this.held !== undefined;
+  }
+
   end(): RecoveryEvent[] {
     const out: RecoveryEvent[] = [];
     if (this.held !== undefined) {
