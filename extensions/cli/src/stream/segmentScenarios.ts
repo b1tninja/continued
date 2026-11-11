@@ -183,12 +183,11 @@ export async function buildCliScenario(
   vi.setSystemTime(new Date(`${spec.date ?? "2026-11-10"}T09:00:00Z`));
   resetEnvironmentContextBlock();
   try {
-    const base = await constructSystemMessage(
-      spec.mode,
-      undefined,
-      undefined,
-      false,
-      { model: MODEL_ID },
+    // Machine facts (folder, platform) become fixed words: hashes are portable.
+    const base = normalize(
+      await constructSystemMessage(spec.mode, undefined, undefined, false, {
+        model: MODEL_ID,
+      }),
     );
     const systemMessage = spec.subagentPrompt
       ? `${base}\n\n${spec.subagentPrompt}`
