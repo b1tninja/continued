@@ -53,6 +53,7 @@ export type DecisionSource =
   | "protected-path"
   | "floor"
   | "safety-floor"
+  | "tainted-session"
   | "permissive"
   | "yolo"
   | "manual"

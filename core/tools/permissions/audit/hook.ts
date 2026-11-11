@@ -2,6 +2,7 @@ import type { ToolPolicy } from "@continuedev/terminal-security";
 import { levelOfCall, type ApprovalSettings } from "../approval";
 import type { AutoReviewReply } from "../auto/handler";
 import type { ToolPolicyResult } from "../evaluate";
+import { taintedField } from "../taint/taintWiring";
 import type { AuditAgent, AuditBy, AuditPolicy, DecisionInput } from "./record";
 import type { AuditTrail } from "./trail";
 
@@ -64,6 +65,7 @@ function baseInput(
     ...(level ? { level } : {}),
     ...(ctx.loopItem ? { loopItem: ctx.loopItem } : {}),
     ...(ctx.agent ? { agent: ctx.agent, mode: ctx.agent.mode } : {}),
+    ...taintedField(ctx.session),
   };
 }
 

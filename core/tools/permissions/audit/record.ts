@@ -117,6 +117,8 @@ export interface DecisionEvent extends AuditEnvelope {
   by: AuditBy;
   /** The `DecisionSource` that decided, when rules did */
   source?: string;
+  /** Source kinds of untrusted content in the session when the call was decided; absent when none or the rule is off */
+  tainted?: string[];
   /** The rule as written in config.yaml */
   rule?: string;
   area?: string;
@@ -258,6 +260,7 @@ export interface DecisionInput {
   level?: string;
   mode?: string;
   agent?: AuditAgent;
+  tainted?: string[];
   reason?: string;
   answers?: number;
   reviewer?: AuditReviewer;
