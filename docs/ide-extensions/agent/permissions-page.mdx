@@ -1,0 +1,54 @@
+---
+title: "Permissions page"
+---
+
+**Settings, Permissions** shows every permission rule in effect, where it came from, whether it is being obeyed, and lets you try a call against them. It answers "why did this ask?" and "which rule refused that?" without reading the config files. It is read-only: you still edit rules in `config.yaml`.
+
+## Five areas
+
+The page has one tab for each policy area. Each tab shows the area's level (change it in **Settings, Tools** or the toolbar), the built-in protections that apply to it, and its rules.
+
+| Tab | Rules that appear here |
+| --- | --- |
+| Context use | `readFile`, `listDirectory`, `grepSearch`, `globSearch` |
+| Tool use | `runTerminalCommand`, `fetchUrl`, `searchWeb`, every `mcp__server__tool`, and any tool name this version does not know |
+| File edits | `writeFile` |
+| Plan edits | none: a level, the number of new to-dos a re-plan may add, and the check-keeping switch |
+| Questions | none: a level and the two lists of question types you or the agent decide |
+
+The tool name in a rule decides the tab. A terminal command rule is listed under Tool use, but a command the parser can show only reads is Context use for that one call, so the page says the area is decided per command. Rules for tools that only touch the session (the task list, Loop's tools) and rules that cannot be read are listed at the bottom under "Rules with no area".
+
+Rules are shown grouped as Deny, Ask and Allow. The order does not matter: a call is weighed by decision (floor, then deny, then protected paths, then ask, then allow, then the level), never by where a rule sits in a list.
+
+## Where a rule came from
+
+| Badge | Source |
+| --- | --- |
+| You | the `toolPermissions` of your own `config.yaml` |
+| CLI file | the `allow`, `ask` and `exclude` lists in `permissions.yaml`, written in the CLI's dialect (`Bash(npm test)`). The CLI weighs them first, and the page shows the config.yaml form beside them |
+| Floor | the `floor:` deny rules in `permissions.yaml`. They bind at every level, YOLO included, and are locked here |
+| Assistant | a hub or assistant configuration |
+| Workspace | a file that came with the folder you opened |
+| Built-in | a protection that ships with the product, listed per area with its on or off state |
+
+A rule that is **Ignored** is struck through with the reason: an `allow` rule that came with the workspace is ignored (a repository can add deny and ask rules, not allow rules), allow rules are not consulted while an area is Manual (file edits excepted), and every rule but the floor is ignored while an area is at YOLO. A rule the page can warn about says so: a pattern after an MCP tool name never matches, and an allow rule written with `host:`, `net:` or `effect:` never allows anything.
+
+## Try a call
+
+Each of Context use, Tool use and File edits has a **Try a call** box. Choose what to try (a command, a file, a URL, an MCP tool), type it, pick a mode (Agent, Plan or Chat) and press **Test**. The result shows:
+
+- the decision: runs, asks or refused, and the sentence the agent would be given, naming the file the matching rule came from
+- every rule that matches, with its source, and the one that decided
+- a step-by-step explanation: the command check, the built-in safety check, floor rules, deny rules, protected paths, ask rules, allow rules, the area's level, and whether the reviewer would be consulted
+- command-check findings, and whether a tool result with the text you give would be marked by the injection notice
+
+The test runs the same check the agent uses. Nothing is run, written or sent, and no model is asked: when the call would reach the reviewer model, the result says "would ask the reviewer".
+
+## From the terminal agent
+
+```text
+continuous permissions list [--area context|tools|edits|plan|questions] [--json]
+continuous permissions test <tool> <arg...> [--mode agent|plan|chat] [--level tools=permissive] [--json]
+```
+
+`list` prints the same data as the page. `test` takes a tool (`runTerminalCommand` or `Bash`, `readFile`, `writeFile`, `listDirectory`, `fetchUrl`, `grepSearch`, `searchWeb`, or `mcp__server__tool`) and the call's argument, for example `continuous permissions test Bash git push origin main`. `--level area=level` tries another level for one area and may be repeated. The command reads your `config.yaml` and `permissions.yaml` and does not load an assistant, so rules that come from an assistant are not listed by the terminal command.

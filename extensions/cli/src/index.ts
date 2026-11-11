@@ -11,6 +11,7 @@ import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
+import { permissionsCommand } from "./commands/permissions.js";
 import { projectCommand } from "./commands/project.js";
 import { review } from "./commands/review.js";
 import { sandboxCommand } from "./commands/sandbox.js";
@@ -426,6 +427,30 @@ program
     await gracefulExit(code);
   });
 
+// Permissions subcommand (read-only)
+program
+  .command("permissions [action] [args...]")
+  .description(
+    "List every permission rule with its source and state, or test a call against them (list, test <tool> <arg...>)",
+  )
+  .option("--json", "Machine-readable output")
+  .option(
+    "--area <area>",
+    "list: only context, tools, edits, plan or questions",
+  )
+  .option("--mode <mode>", "test: agent, plan or chat")
+  .option(
+    "--level <area=level>",
+    "test: use this level for an area (repeatable)",
+    (value: string, previous: string[] = []) => [...previous, value],
+  )
+  .option("--output <text>", "test: text a tool returned, to check the notice")
+  .action(
+    async (action: string | undefined, args: string[] | undefined, options) => {
+      const code = permissionsCommand(action, args ?? [], options);
+      await gracefulExit(code);
+    },
+  );
 // Sandbox status subcommand
 program
   .command("sandbox [action]")

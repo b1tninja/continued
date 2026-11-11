@@ -150,6 +150,8 @@ class MessageTypes {
             "config/setToolDialect",
             "config/getTerminalEnvironment",
             "config/setTerminalEnvironment",
+            "policy/rules",
+            "policy/test",
             "llm/compileChat",
             "streamDiffLines",
             "getDiffLines",
