@@ -15,7 +15,35 @@ import {
   ParsedRule,
   RuleDecision,
   RuleMatch,
+  RuleSource,
 } from "./rules";
+
+/** Where a rule was written, in words, for a reason a person reads. */
+const SOURCE_TEXT: Record<RuleSource, string> = {
+  "user-config": "your config.yaml",
+  "permissions-yaml": "your permissions.yaml",
+  floor: "the floor in your permissions.yaml",
+  assistant: "the assistant configuration",
+  folder: "a configuration file that came with this workspace",
+  builtin: "the built-in rules",
+};
+
+/**
+ * "your rule" for a rule the person wrote, "the rule" for one from the
+ * assistant or the workspace: those are not theirs to be told they wrote.
+ */
+function ownerOf(rule: { origin?: RuleSource }): string {
+  return rule.origin === "assistant" || rule.origin === "folder"
+    ? "The rule"
+    : "Your rule";
+}
+
+/** `(toolPermissions.deny in your config.yaml)`, or without the file when the source is not known. */
+function whereOf(list: RuleDecision, rule: { origin?: RuleSource }): string {
+  return rule.origin
+    ? `toolPermissions.${list} in ${SOURCE_TEXT[rule.origin]}`
+    : `a toolPermissions.${list} rule`;
+}
 
 /** Where a decision came from, so the UI can say why. */
 export type DecisionSource =
@@ -155,7 +183,7 @@ export function decideToolCall(input: DecideInput): ToolDecision {
       policy: "disabled",
       source: "deny-rule",
       rule: match.rule.raw,
-      reason: `Blocked by your rule ${match.rule.raw} (toolPermissions.deny in config.yaml).`,
+      reason: `Blocked by ${ownerOf(match.rule).toLowerCase()} ${match.rule.raw} (${whereOf("deny", match.rule)}).`,
     };
   }
   if (evaluated === "disabled") {
@@ -181,7 +209,7 @@ export function decideToolCall(input: DecideInput): ToolDecision {
       policy: "allowedWithPermission",
       source: "ask-rule",
       rule: match.rule.raw,
-      reason: `Your rule ${match.rule.raw} asks before running this.`,
+      reason: `${ownerOf(match.rule)} ${match.rule.raw} asks before running this.`,
     };
   }
   if (match?.decision === "allow" && !input.manual) {
@@ -189,7 +217,7 @@ export function decideToolCall(input: DecideInput): ToolDecision {
       policy: "allowedWithoutPermission",
       source: "allow-rule",
       rule: match.rule.raw,
-      reason: `Allowed by your rule ${match.rule.raw}.`,
+      reason: `Allowed by ${ownerOf(match.rule).toLowerCase()} ${match.rule.raw}.`,
     };
   }
   // A level only acts on a call nothing above has settled.

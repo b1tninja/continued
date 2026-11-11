@@ -1,0 +1,159 @@
+import type {
+  AreaReport,
+  EffectiveRule,
+} from "core/tools/permissions/effectiveRules";
+import type { RuleDecision } from "core/tools/permissions/rules";
+import {
+  DECISION_LABEL,
+  DecisionChip,
+  ruleAccessibleName,
+  SourceBadge,
+  StateBadge,
+} from "./badges";
+
+const ORDER: RuleDecision[] = ["deny", "ask", "allow"];
+
+export function RuleRow({
+  rule,
+  highlighted,
+}: {
+  rule: EffectiveRule;
+  highlighted?: boolean;
+}) {
+  return (
+    <li
+      data-testid={`rule-${rule.id}`}
+      aria-label={ruleAccessibleName(rule)}
+      className={`list-none rounded-sm border border-solid px-2 py-1 ${
+        highlighted ? "border-warning" : "border-border"
+      } ${rule.state === "ignored" ? "opacity-75" : ""}`}
+    >
+      <div className="flex flex-wrap items-center gap-1">
+        <DecisionChip decision={rule.decision} />
+        <SourceBadge source={rule.source} />
+        <StateBadge state={rule.state} locked={rule.locked} />
+      </div>
+      <code
+        className={`mt-1 block font-mono text-2xs break-all ${
+          rule.state === "ignored" ? "line-through" : ""
+        }`}
+      >
+        {rule.raw}
+      </code>
+      {rule.dialect === "cli" && rule.core && (
+        <div className="text-2xs text-description-muted">
+          In config.yaml:{" "}
+          <code className="font-mono break-all">{rule.core}</code>
+        </div>
+      )}
+      {rule.dialect === "core" && rule.cli && (
+        <div className="text-2xs text-description-muted">
+          In the CLI file:{" "}
+          <code className="font-mono break-all">{rule.cli}</code>
+        </div>
+      )}
+      {rule.file && (
+        <div className="text-2xs break-all text-description-muted">
+          From {rule.file}
+        </div>
+      )}
+      {rule.areaNote && (
+        <div className="text-2xs text-description-muted">{rule.areaNote}</div>
+      )}
+      {rule.state === "ignored" && rule.ignoredReason && (
+        <div className="text-2xs text-warning" data-testid="ignored-reason">
+          {rule.ignoredReason}
+        </div>
+      )}
+      {rule.warnings.map((w) => (
+        <div key={w} className="text-2xs text-warning">
+          {w}
+        </div>
+      ))}
+    </li>
+  );
+}
+
+/** The rules of one area, grouped by decision (deny, ask, allow). */
+export function RuleList({
+  rules,
+  highlight,
+}: {
+  rules: EffectiveRule[];
+  highlight?: string[];
+}) {
+  if (rules.length === 0) {
+    return (
+      <p className="my-1 text-xs text-description" data-testid="no-rules">
+        No rules here. Calls are decided by the built-in protections and the
+        level above.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {ORDER.map((decision) => {
+        const group = rules.filter((r) => r.decision === decision);
+        if (group.length === 0) return null;
+        return (
+          <section
+            key={decision}
+            aria-label={`${DECISION_LABEL[decision]} rules`}
+            data-testid={`group-${decision}`}
+          >
+            <h5 className="my-1 text-xs font-semibold">
+              {DECISION_LABEL[decision]} ({group.length})
+            </h5>
+            <ul className="m-0 flex flex-col gap-1 p-0">
+              {group.map((r) => (
+                <RuleRow
+                  key={r.id}
+                  rule={r}
+                  highlighted={highlight?.includes(r.raw)}
+                />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+export function BuiltinList({
+  builtins,
+}: {
+  builtins: AreaReport["builtins"];
+}) {
+  if (builtins.length === 0) return null;
+  return (
+    <section aria-label="Built-in protections" data-testid="builtins">
+      <h5 className="my-1 text-xs font-semibold">Built-in protections</h5>
+      <ul className="m-0 flex flex-col gap-1 p-0">
+        {builtins.map((b) => (
+          <li
+            key={b.id}
+            className="list-none rounded-sm border border-solid border-border px-2 py-1"
+            data-testid={`builtin-row-${b.id}`}
+          >
+            <div className="flex flex-wrap items-center gap-1">
+              <SourceBadge source="builtin" />
+              <span className="inline-block rounded-sm border border-solid border-border px-1 text-2xs text-description">
+                Locked
+              </span>
+              <span
+                className={`text-2xs ${b.on ? "text-success" : "text-warning"}`}
+              >
+                {b.on ? "On" : "Off"}
+              </span>
+            </div>
+            <div className="text-xs">{b.label}</div>
+            <div className="text-2xs text-description-muted">
+              {b.description}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
