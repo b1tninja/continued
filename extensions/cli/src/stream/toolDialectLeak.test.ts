@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import type { ModelConfig } from "@continuedev/config-yaml";
-import qwenEmbedding from "core/util/fixtures/ollama-show/qwen3-embedding-8b.json";
-import qwen36 from "core/util/fixtures/ollama-show/qwen3.6-27b.json";
 import { resetOllamaShowCache } from "core/util/ollamaShowHint.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +9,21 @@ import {
   hintToolDialectLeak,
   resetToolDialectHints,
 } from "./toolDialectLeak.js";
+
+const fixture = (name: string): object =>
+  JSON.parse(
+    readFileSync(
+      fileURLToPath(
+        new URL(
+          `../../../../core/util/fixtures/ollama-show/${name}.json`,
+          import.meta.url,
+        ),
+      ),
+      "utf8",
+    ),
+  );
+const qwen36 = fixture("qwen3.6-27b");
+const qwenEmbedding = fixture("qwen3-embedding-8b");
 
 const leaked =
   "I will read it.\n\n<tool_call>\n<function=Read>\n<parameter=path>\na.txt\n</parameter>\n</function>\n</tool_call>";
