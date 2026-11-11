@@ -1,15 +1,9 @@
 import { createSelector } from "@reduxjs/toolkit";
 import { Tool } from "core";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "core/tools/builtIn";
+import { stableToolOrder as orderTools } from "core/tools/stableToolOrder";
 import { DEFAULT_TOOL_SETTING } from "../slices/uiSlice";
 import { RootState } from "../store";
-
-const byName = (a: Tool, b: Tool) =>
-  a.function.name < b.function.name
-    ? -1
-    : a.function.name > b.function.name
-      ? 1
-      : 0;
 
 /**
  * Built-in tools in their own fixed order, then the rest by name. MCP
@@ -19,10 +13,11 @@ const byName = (a: Tool, b: Tool) =>
  * conversation again.
  */
 function stableToolOrder(tools: Tool[]): Tool[] {
-  return [
-    ...tools.filter((t) => t.group === BUILT_IN_GROUP_NAME),
-    ...tools.filter((t) => t.group !== BUILT_IN_GROUP_NAME).sort(byName),
-  ];
+  return orderTools(
+    tools,
+    (t) => t.function.name,
+    (t) => t.group === BUILT_IN_GROUP_NAME,
+  );
 }
 
 export const selectActiveTools = createSelector(

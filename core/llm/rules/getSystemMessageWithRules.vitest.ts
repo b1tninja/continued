@@ -515,14 +515,15 @@ describe("Rules from earlier turns stay applied", () => {
       userMessage: user("now this"),
       contextItems: [file("src/b.py")],
     });
+    // Global rules first, then file rules in first-matched order
     expect(appliedRules.map((r) => r.name)).toEqual([
-      "tsx",
       "always",
+      "tsx",
       "python",
     ]);
     // A newly matched rule goes at the end: what came before is unchanged
     expect(systemMessage).toBe(
-      ["BASE", "RULE tsx", "RULE always", "RULE python"].join("\n\n"),
+      ["BASE", "RULE always", "RULE tsx", "RULE python"].join("\n\n"),
     );
   });
 
@@ -532,6 +533,20 @@ describe("Rules from earlier turns stay applied", () => {
       userMessage: user("now this"),
       contextItems: [file("src/b.py")],
     });
-    expect(appliedRules.map((r) => r.name)).toEqual(["python", "always"]);
+    expect(appliedRules.map((r) => r.name)).toEqual(["always", "python"]);
+  });
+
+  it("puts rules that always apply before file rules, whatever the config order", () => {
+    const { systemMessage } = getSystemMessageWithRules({
+      baseSystemMessage: "BASE",
+      availableRules: rules,
+      userMessage: user("now this"),
+      contextItems: [file("src/b.py")],
+    });
+    // Same text as the config order would give, only the order differs
+    expect(systemMessage).toBe("BASE\n\nRULE always\n\nRULE python");
+    expect(systemMessage.split("\n\n").sort()).toEqual(
+      ["BASE", "RULE python", "RULE always"].sort(),
+    );
   });
 });

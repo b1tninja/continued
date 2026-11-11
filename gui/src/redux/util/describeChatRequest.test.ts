@@ -1,6 +1,9 @@
 import budgets from "core/llm/promptSegmentBudgets.json";
 import {
+  CACHE_BREAKPOINTS,
+  type CacheProvider,
   type PromptSegment,
+  cacheOrderViolations,
   commonPrefixLength,
   firstChangedVsPrev,
   overBudget,
@@ -12,7 +15,9 @@ import {
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
+import { buildChatRequest } from "./buildChatRequest";
 import { describeChatRequest } from "./describeChatRequest";
+import { renderChatMessage } from "core/util/messageContent";
 import { CLAUDE, IDE_SCENARIOS, PLAN, ideState, msg } from "./segmentScenarios";
 
 /**
@@ -39,6 +44,11 @@ describe("IDE segment manifests", () => {
       });
       it("is within the per-segment token budgets", () => {
         expect(overBudget(manifests[name], budgets.ide)).toEqual([]);
+      });
+      it("puts stable segments before volatile ones at every breakpoint", () => {
+        for (const p of Object.keys(CACHE_BREAKPOINTS) as CacheProvider[]) {
+          expect(cacheOrderViolations(manifests[name], p)).toEqual([]);
+        }
       });
     });
   }
@@ -180,5 +190,19 @@ describe("IDE prefix stability (C62 a)", () => {
       "mode-switch",
       "summary-in-system",
     ]);
+  });
+
+  it("a scoped rule listed before a global one still comes after it (C62)", () => {
+    const first = manifests["ide-agent-scoped-first"];
+    expect(first.map((x) => x.id)).toEqual(
+      manifests["ide-agent-scoped-rule"].map((x) => x.id),
+    );
+    // Only the order was fixed: the system message is exactly the one the
+    // global-first listing builds, so no text was lost or added.
+    const system = (name: string) =>
+      renderChatMessage(buildChatRequest(IDE_SCENARIOS[name]()).messages[0]);
+    expect(system("ide-agent-scoped-first")).toBe(
+      system("ide-agent-scoped-rule"),
+    );
   });
 });
