@@ -693,6 +693,11 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       sessionId?: string;
       /** Which agent made the call (main, a subagent or a Loop worker), for the audit */
       agent?: import("../tools/permissions/audit/record").AuditAgent;
+      /**
+       * The conversation as the reviewer sees it. Offered only for a call that
+       * may be shadow-reviewed (off unless the person's config turns it on).
+       */
+      history?: import("../tools/permissions/auto/prompt").ReviewHistory;
     },
     {
       policy: ToolPolicy;

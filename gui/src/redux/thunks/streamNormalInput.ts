@@ -498,6 +498,7 @@ export const streamNormalInput = createAsyncThunk<
       state3.session.mode,
       state3.session.id,
       mainAuditAgent(state3.session.id, state3.session.mode),
+      buildReviewHistory(state3.session.history),
     );
     // Loop mode: a run past its turn limit that keeps calling tools ends here
     if (endRunAtTurnLimit(dispatch, getState)) {
