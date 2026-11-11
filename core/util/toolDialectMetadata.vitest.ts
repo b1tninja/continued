@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest";
-import { decideDialect } from "./toolDialectDetect.js";
 import {
   dialectFromModelName,
   hintFromLlamaCppProps,
@@ -129,14 +128,5 @@ describe("LM Studio and /v1/models", () => {
     expect(
       hintFromOpenAiModels({ data: [{ id: "gw-1" }] }, "gw-1").signal,
     ).toBeUndefined();
-  });
-});
-
-describe("feeds decideDialect", () => {
-  test("a template hint alone is advisory and leaves transport as default", () => {
-    const h = hintFromLlamaCppProps({ chat_template: QWEN_CODER_TEMPLATE });
-    const d = decideDialect({ metadata: h.signal });
-    expect(d.dialect).toBe("qwen-xml");
-    expect(d.mode).toBe("default");
   });
 });

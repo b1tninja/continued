@@ -25,6 +25,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "NVIDIA Nemotron 3 (Super, Nano, Ultra)",
     match: [/nemotron[-._ ]?(?:(?:super|nano|ultra)[-._ ]?)?3(?!\d)/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "Nemotron 3 Super and Nano 3: structured 100%, no leak",
     textDialect: "qwen-xml",
@@ -59,6 +60,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
       /nemotron[-._ ]?(?:nano[-._ ]?)?(?:9b|12b)[-._ ]?v2/,
     ],
     bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
     nativeOnConverse: "unmeasured",
     textDialect: "toolcall-json",
     promptStyle: {
@@ -85,6 +87,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
       /nemotron[-._ ](?:super|ultra|nano)[-._ ]?(?:49|51|70|8)b/,
     ],
     bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
     nativeOnConverse: "unmeasured",
     textDialect: "toolcall-json",
     promptStyle: {
@@ -111,10 +114,10 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
   {
     id: "qwen3-coder",
     label: "Qwen3-Coder (30B-A3B, 480B, Coder-Next)",
-    match: [
-      /qwen[-._ ]?3[-._ ]?coder|coder[-._ ]?next|qwen[-._ ]?3[-._ ]?next/,
-    ],
+    // Not Qwen3-Next: its template is the Hermes JSON form (qwen3 row).
+    match: [/qwen[-._ ]?3[-._ ]?coder|coder[-._ ]?next/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "most",
     measured:
       "Qwen3-Coder 30B: structured 7/8, 1/8 wrote a <function=...> block as text (qwen-xml recovered it); Coder-Next structured",
@@ -141,9 +144,10 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
   },
   {
     id: "qwen3",
-    label: "Qwen3, Qwen2.5, QwQ and Hermes",
+    label: "Qwen3 (incl. Qwen3-Next), Qwen2.5, QwQ and Hermes",
     match: [/qwen[-._ ]?(?:3|2[.-]?5)|qwq|hermes/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured:
       "Qwen3 32B, Strata Qwen3.8 Flash and Ollama Qwen3.6: structured 100%, no leak",
@@ -162,12 +166,14 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     },
     source: [
       "https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/main/tokenizer_config.json",
+      "https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct/raw/main/tokenizer_config.json",
       "https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-8B/blob/main/tokenizer_config.json",
       VLLM_DOCS,
       LIVE,
     ],
     readOn: READ,
     unverified: [
+      "Qwen3-Next-80B-A3B-Instruct template read 2026-11-10 (Hermes JSON: 'return a json object with function name and arguments within <tool_call></tool_call> XML tags'); the Thinking variant was not read; Bedrock tool support for Qwen3-Next was not measured",
       "Qwen3.5 and 3.6 templates were not read (issues report them on the Hermes or Coder pipeline)",
     ],
   },
@@ -176,6 +182,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "GLM-5",
     match: [/glm[-._ ]?5/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "GLM 5: structured 100%, no leak",
     textDialect: "glm-xml",
@@ -197,6 +204,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "GLM-4.7 and 4.7-Flash",
     match: [/glm[-._ ]?4[-._ ]?7/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "GLM 4.7: structured 100%, no leak",
     textDialect: "glm-xml",
@@ -220,6 +228,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "GLM-4.5, 4.5-Air and 4.6",
     match: [/glm[-._ ]?4[-._ ]?[56]/],
     bedrockTools: "yes",
+    toolsEvidence: "inferred",
     nativeOnConverse: "unmeasured",
     textDialect: "glm-xml",
     promptStyle: {
@@ -245,6 +254,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Kimi K2 Thinking",
     match: [/kimi[-._ ]?k2[-._ ]?thinking/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured:
       "structured 8/8; one <think>...</think> block leaked into the text of a reply to a tool result",
@@ -257,6 +267,8 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     observedLeak:
       "<think> block in text (lifted into reasoning by the Bedrock handlers)",
     thinkingTags: THINK,
+    // Leaked into the text of a reply to a tool result (seen live 2026-11-10).
+    thinkingInText: /kimi-k2-thinking/,
     serverParser: {
       vllm: "kimi_k2",
       basis: "vllm-docs",
@@ -275,6 +287,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Kimi K3 and K3.1",
     match: [/kimi[-._ ]?k3/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "Kimi K3 and K3.1: structured 100%, no leak",
     textDialect: "kimi-tokens",
@@ -298,6 +311,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Kimi K2 and K2.5",
     match: [/kimi[-._ ]?k2/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "Kimi K2.5: structured 100%, no leak",
     textDialect: "kimi-tokens",
@@ -323,6 +337,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "MiniMax M2 and M2.5",
     match: [/minimax/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "MiniMax M2 and M2.5: structured 100%, no leak",
     textDialect: "minimax-xml",
@@ -349,6 +364,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "DeepSeek R1",
     match: [/deepseek[-._ ]?r1/],
     bedrockTools: "no",
+    toolsEvidence: "proved",
     nativeOnConverse: "none",
     measured: "Bedrock refuses tools outright (2026-11-08)",
     textDialect: "deepseek-tokens",
@@ -377,6 +393,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "DeepSeek V3.2 and V4",
     match: [/deepseek[-._ ]?(?:chat[-._ ]?)?v?(?:3[.-]?2|4)/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured:
       "DeepSeek V3.2: structured 8/8; all 8 also ended the text with a DSML function_calls fragment (always dropped)",
@@ -404,6 +421,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "DeepSeek V3 and V3.1",
     match: [/deepseek[-._ ]?(?:chat[-._ ]?)?v?3/],
     bedrockTools: "yes",
+    toolsEvidence: "inferred",
     nativeOnConverse: "unmeasured",
     textDialect: "deepseek-tokens",
     promptStyle: {
@@ -431,6 +449,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "gpt-oss (Harmony)",
     match: [/gpt[-._ ]?oss/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "gpt-oss 20B and 120B: structured 100%, no leak",
     textDialect: "harmony",
@@ -453,6 +472,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Gemma 4",
     match: [/gemma[-._ ]?4/],
     bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
     nativeOnConverse: "unmeasured",
     textDialect: "gemma4",
     promptStyle: {
@@ -475,6 +495,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Gemma 3",
     match: [/gemma[-._ ]?3/],
     bedrockTools: "no",
+    toolsEvidence: "proved",
     nativeOnConverse: "none",
     measured: "Gemma 3 27B: 0/8 calls, prose, code and refusals",
     textDialect: "none",
@@ -494,6 +515,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Llama 4 (Scout, Maverick)",
     match: [/llama[-._ ]?4/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "most",
     measured:
       "Llama 4 Maverick: structured 6/8; 2/8 wrote a JSON array whose arguments were wrapped as {type,value} objects (not recoverable)",
@@ -522,6 +544,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Llama 3.3",
     match: [/llama[-._ ]?3[-._ ]?3/],
     bedrockTools: "with-recovery",
+    toolsEvidence: "proved",
     nativeOnConverse: "none",
     measured:
       "Llama 3.3 70B: structured 0/8; JSON call in the text 8/8, 6/8 recovered by llama-json (2/8 carry a numeric string for an integer)",
@@ -550,6 +573,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Llama 3.1 and 3.2",
     match: [/llama[-._ ]?3/],
     bedrockTools: "with-recovery",
+    toolsEvidence: "inferred",
     nativeOnConverse: "unmeasured",
     textDialect: "llama-json",
     promptStyle: {
@@ -577,6 +601,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Mistral, Mistral Large 3, Devstral, Codestral, Ministral",
     match: [/devstral|mistral|mixtral|ministral|magistral|codestral/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured: "Devstral 2 and Mistral Large 3: structured 100%, no leak",
     textDialect: "mistral",
@@ -606,6 +631,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Amazon Nova",
     match: [/amazon\.nova|(?:^|[^a-z])nova[-._ ]?(?:pro|lite|micro|premier|2)/],
     bedrockTools: "yes",
+    toolsEvidence: "proved",
     nativeOnConverse: "all",
     measured:
       "Nova Pro and Nova 2 Lite: structured 100% in the run; an earlier failure wrote present_plan(...) as text (ROADMAP H13)",
@@ -618,6 +644,8 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     observedLeak: "pythonic",
     recoverWith: "pythonic",
     thinkingTags: ["<thinking>", "</thinking>"],
+    // Nova Pro/Lite/Micro/Premier only (seen live 2026-11-08); Nova 2 uses reasoningContent.
+    thinkingInText: /nova-(?:pro|lite|micro|premier)/,
     source: [
       "https://docs.aws.amazon.com/nova/latest/userguide/tool-use.html",
       "https://docs.aws.amazon.com/nova/latest/userguide/prompting-tool-troubleshooting.html",
@@ -631,6 +659,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Claude",
     match: [/claude/],
     bedrockTools: "yes",
+    toolsEvidence: "inferred",
     nativeOnConverse: "all",
     textDialect: "none",
     promptStyle: {
@@ -648,6 +677,7 @@ export const TOOL_DIALECT_PRESETS: DialectPreset[] = [
     label: "Grok",
     match: [/grok/],
     bedrockTools: "unmeasured",
+    toolsEvidence: "unmeasured",
     nativeOnConverse: "unmeasured",
     textDialect: "none",
     promptStyle: {

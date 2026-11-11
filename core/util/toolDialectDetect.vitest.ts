@@ -6,7 +6,6 @@ import {
   type Classification,
   PROBE_TOOL_NAME,
   classifyToolReply,
-  decideDialect,
   dialectFromChatTemplate,
   probeRequestFor,
   verifyProbeCalls,
@@ -162,92 +161,5 @@ describe("probe", () => {
     expect(v.parallel).toBe(false);
     expect(v.argumentsIntact).toBe(false);
     expect(v.idsPresent).toBe(false);
-  });
-});
-
-describe("decideDialect", () => {
-  test("nothing known: default, as today", () => {
-    const d = decideDialect({});
-    expect(d).toMatchObject({ mode: "default", dialect: null, level: "none" });
-  });
-
-  test("table alone is advisory-or-better but never switches transport", () => {
-    const d = decideDialect({ table: { dialect: "qwen-xml" } });
-    expect(d.dialect).toBe("qwen-xml");
-    expect(d.mode).toBe("default");
-    expect(d.confidence).toBeGreaterThanOrEqual(ADVISORY_THRESHOLD);
-    expect(d.level).toBe("advisory");
-  });
-
-  test("native probe on a custom endpoint: native, accept", () => {
-    const d = decideDialect({ probe: cls("native-structured") });
-    expect(d).toMatchObject({ mode: "native", level: "accept" });
-  });
-
-  test("probe leak of qwen markup on an unknown model: recover", () => {
-    const d = decideDialect({ probe: cls("qwen-xml", 0.97) });
-    expect(d).toMatchObject({
-      mode: "recover",
-      dialect: "qwen-xml",
-      level: "accept",
-    });
-  });
-
-  test("a live leak beats a clean probe", () => {
-    const d = decideDialect({
-      probe: cls("native-structured"),
-      leaks: [cls("qwen-xml", 0.97)],
-    });
-    expect(d.mode).toBe("recover");
-    expect(d.dialect).toBe("qwen-xml");
-  });
-
-  test("table and template agree: family confidence rises", () => {
-    const one = decideDialect({ table: { dialect: "glm-xml" } });
-    const two = decideDialect({
-      table: { dialect: "glm-xml" },
-      metadata: { dialect: "glm-xml" },
-    });
-    expect(two.confidence).toBeGreaterThan(one.confidence);
-  });
-
-  test("table and metadata disagree: conflict, no family, default", () => {
-    const d = decideDialect({
-      table: { dialect: "hermes-json" },
-      metadata: { dialect: "qwen-xml" },
-    });
-    expect(d.conflict).toBe(true);
-    expect(d.dialect).toBeNull();
-    expect(d.mode).toBe("default");
-  });
-
-  test("a probe settles a table/metadata conflict", () => {
-    const d = decideDialect({
-      table: { dialect: "hermes-json" },
-      metadata: { dialect: "qwen-xml" },
-      probe: cls("qwen-xml", 0.97),
-    });
-    expect(d.dialect).toBe("qwen-xml");
-    expect(d.mode).toBe("recover");
-  });
-
-  test("prose probe with a known family: render", () => {
-    const d = decideDialect({
-      metadata: { dialect: "pythonic" },
-      table: { dialect: "pythonic" },
-      probe: cls("prose", 0.8),
-    });
-    expect(d.mode).toBe("render");
-    expect(d.dialect).toBe("pythonic");
-  });
-
-  test("prose probe with no family: falls back to default", () => {
-    const d = decideDialect({ probe: cls("prose", 0.8) });
-    expect(d.mode).toBe("default");
-  });
-
-  test("a weak, unclosed fingerprint does not trigger recovery", () => {
-    const d = decideDialect({ probe: cls("hermes-json", 0.6) });
-    expect(d.mode).toBe("default");
   });
 });

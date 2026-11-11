@@ -83,6 +83,12 @@ export interface ThinkingTags {
  * GUI showed the reasoning as the answer. Nova 2 uses reasoningContent and
  * does not match. Kimi K2 Thinking leaked a literal `<think>...</think>` into
  * the text of a reply to a tool result (seen live 2026-11-10).
+ *
+ * Mirrors `thinkingInText` and `thinkingTags` of the nova and kimi-k2-thinking
+ * rows in core/util/toolDialectPresetTable.ts, which core's copy reads
+ * directly (this package cannot import core). Change both together: the
+ * corpus test core/llm/toolDialects/corpus/textFilters.corpus.vitest.ts pins
+ * the two copies to each other.
  */
 export function thinkingTagsFor(modelId: string): ThinkingTags | undefined {
   if (/nova-(pro|lite|micro|premier)/i.test(modelId)) {

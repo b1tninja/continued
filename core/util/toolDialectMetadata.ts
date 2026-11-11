@@ -1,8 +1,8 @@
 /**
  * Table-lookup hints from the metadata a server already returns. Pure: the
  * caller fetches the JSON (llama.cpp /props, Ollama /api/show, LM Studio
- * /api/v0/models, vLLM or any /v1/models) and passes it in. The result feeds
- * `decideDialect({ metadata })`. Design: plans/tool-dialect-detection.md, section 2.
+ * /api/v0/models, vLLM or any /v1/models) and passes it in. The result is a
+ * `DialectSignal` (the combining function was removed unused, see ROADMAP Q21). Design: plans/tool-dialect-detection.md, section 2.
  */
 import {
   type Dialect,
