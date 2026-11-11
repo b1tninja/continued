@@ -154,7 +154,9 @@ export function protectedReason(hit: ProtectedHit): string {
     return `This downloads something and runs it (${hit.path}), so it always asks first. At Automatic it is refused.`;
   }
   if (hit.kind === "mcp-definition-changed") {
-    return `This MCP tool's definition changed since you approved it (${hit.path}), so it asks again. Approving this call accepts the new definition.`;
+    return hit.path.startsWith("launch definition changed")
+      ? `This MCP server is started differently than when you approved it (${hit.path}), so every one of its tools asks again. Approving this call accepts the new definition.`
+      : `This MCP tool's definition changed since you approved it (${hit.path}), so it asks again. Approving this call accepts the new definition.`;
   }
   if (hit.kind === "private-url") {
     return `This URL reaches a private or local address (${hit.path}), so it always asks first.`;

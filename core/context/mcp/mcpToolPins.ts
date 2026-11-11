@@ -33,9 +33,23 @@ export interface ToolParts {
   descriptionLength: number;
 }
 
+/**
+ * How a server is started or reached, as hashes. Secrets never enter: env is
+ * represented by its NAMES only, and the URL and arguments only as hashes.
+ */
+export interface LaunchSpec {
+  /** Hash of all parts */
+  hash: string;
+  parts: { command: string; args: string; url: string; env: string };
+  /** The program, shown when it changes. Arguments and URL are not shown. */
+  command?: string;
+}
+
 export interface PersistedPin extends PinRecord {
   /** Per-field hashes, to say what changed. Absent in records from older files. */
   parts?: Record<string, ToolParts>;
+  /** The launch definition that was approved (ROADMAP X1b). */
+  launch?: LaunchSpec;
 }
 
 export function toolParts(tool: McpToolDefinition): ToolParts {
@@ -50,12 +64,61 @@ export function toolParts(tool: McpToolDefinition): ToolParts {
 }
 
 /**
- * Identity of a server for trust purposes: its name and a hash of how it is
- * reached (command, arguments, environment, folder, URL, key). Another server
- * under the same name, or the same name pointed somewhere else, gets a new
- * key and so starts as `new`. Secrets only ever enter through the hash.
+ * The launch definition of a server: command, arguments, URL and the NAMES of
+ * its environment variables. Values, headers and the API key are not part of
+ * it, so a rotated secret does not count as a new program.
+ */
+export function launchSpec(options: InternalMcpOptions): LaunchSpec {
+  const o = options as Record<string, unknown>;
+  const env =
+    o.env && typeof o.env === "object"
+      ? Object.keys(o.env as object).sort()
+      : [];
+  const parts = {
+    command: sha256Hex(canonicalJson(o.command ?? null)),
+    args: sha256Hex(canonicalJson(o.args ?? null)),
+    url: sha256Hex(canonicalJson(o.url ?? null)),
+    env: sha256Hex(canonicalJson(env)),
+  };
+  return {
+    hash: sha256Hex(canonicalJson({ type: o.type ?? null, ...parts })),
+    parts,
+    ...(typeof o.command === "string" ? { command: o.command } : {}),
+  };
+}
+
+/** Which parts of the launch definition differ, by name. */
+export function launchDifference(
+  before: LaunchSpec,
+  now: LaunchSpec,
+): string[] {
+  const names: Record<keyof LaunchSpec["parts"], string> = {
+    command: "command",
+    args: "arguments",
+    url: "URL",
+    env: "environment variable names",
+  };
+  const out = (Object.keys(names) as (keyof LaunchSpec["parts"])[])
+    .filter((k) => before.parts[k] !== now.parts[k])
+    .map((k) => names[k]);
+  return out.length ? out : ["type"];
+}
+
+/**
+ * Identity of a server for trust purposes: its name and where its definition
+ * came from. How it is launched is NOT part of the key but is stored in the
+ * record (`launchSpec`), so a changed launch is noticed as a change instead of
+ * starting a fresh, unflagged identity.
  */
 export function pinKey(options: InternalMcpOptions): string {
+  const source = (options as Record<string, unknown>).configSource;
+  return typeof source === "string" && source
+    ? `${options.name}@${source}`
+    : options.name;
+}
+
+/** The key used before launch definitions were pinned (name plus a hash of everything). */
+export function legacyPinKey(options: InternalMcpOptions): string {
   const o = options as Record<string, unknown>;
   const connection = sha256Hex(
     canonicalJson({
@@ -70,6 +133,27 @@ export function pinKey(options: InternalMcpOptions): string {
     }),
   );
   return `${options.name}#${connection.slice(0, 32)}`;
+}
+
+/**
+ * A record approved under the old key described exactly this launch (the old
+ * key hashed it), so it is carried to the new key with the launch recorded.
+ */
+export async function adoptLegacyPin(
+  options: InternalMcpOptions,
+  store: ToolPinStore,
+): Promise<void> {
+  const key = pinKey(options);
+  if (await store.get(key)) return;
+  const old = (await store.get(legacyPinKey(options))) as
+    PersistedPin | undefined;
+  if (!old) return;
+  const adopted: PersistedPin = {
+    ...old,
+    serverId: key,
+    launch: launchSpec(options),
+  };
+  await store.set(adopted);
 }
 
 interface PinFile {
@@ -204,7 +288,10 @@ export function summarizeToolChanges(
 export interface PinEvaluation {
   report: ToolPinReport;
   /** Tools that must ask again (changed or added since approval). Empty for new/unchanged. */
-  flagged: Map<string, { kind: "changed" | "added"; summary: string }>;
+  flagged: Map<
+    string,
+    { kind: "changed" | "added" | "launch"; summary: string }
+  >;
 }
 
 /** Check a server's tools against the store and say which tools must ask. */
@@ -212,9 +299,24 @@ export async function evaluatePins(
   key: string,
   tools: McpToolDefinition[],
   store: ToolPinStore,
+  launch?: LaunchSpec,
 ): Promise<PinEvaluation> {
   const report = await checkToolPins(key, tools, store, sha256Hex);
   const flagged: PinEvaluation["flagged"] = new Map();
+  const approved = (await store.get(key)) as PersistedPin | undefined;
+  if (launch && approved?.launch && approved.launch.hash !== launch.hash) {
+    // A different program or address is not a call the person approved: every
+    // tool of the server asks until one call is approved.
+    const what = launchDifference(approved.launch, launch).join(", ");
+    const now = launch.command ? ` (command now "${launch.command}")` : "";
+    for (const t of tools) {
+      flagged.set(t.name, {
+        kind: "launch",
+        summary: `launch definition changed: ${what}${now}`,
+      });
+    }
+    return { report, flagged };
+  }
   if (report.status === "changed") {
     const summary = summarizeToolChanges(
       report,
@@ -229,6 +331,14 @@ export async function evaluatePins(
   return { report, flagged };
 }
 
+/** What an approval changed beyond the one tool, for the notice. */
+export interface ApprovalEvents {
+  /** The first approval pinned all of these tools */
+  firstPin?: string[];
+  /** The launch definition was re-pinned; the parts that differed */
+  launchAccepted?: string[];
+}
+
 /**
  * Record an approval. A `new` server is pinned as a whole on its first
  * successful use. A `changed` server only has the named tool re-pinned (and
@@ -241,6 +351,8 @@ export async function recordApproval(
   store: ToolPinStore,
   toolName: string,
   now: Date = new Date(),
+  launch?: LaunchSpec,
+  events: ApprovalEvents = {},
 ): Promise<boolean> {
   const existing = (await store.get(key)) as PersistedPin | undefined;
   const current = tools.find((t) => t.name === toolName);
@@ -251,7 +363,9 @@ export async function recordApproval(
       tools: {},
       parts: {},
       approvedAt: now.toISOString(),
+      ...(launch ? { launch } : {}),
     };
+    events.firstPin = tools.map((t) => t.name);
     for (const t of tools) {
       all.tools[t.name] = hashToolDefinition(t, sha256Hex);
       all.parts![t.name] = toolParts(t);
@@ -260,13 +374,21 @@ export async function recordApproval(
     return true;
   }
   const h = hashToolDefinition(current, sha256Hex);
-  if (existing.tools[toolName] === h) return false;
+  const launchMoved =
+    !!launch && !!existing.launch && existing.launch.hash !== launch.hash;
+  if (launchMoved) {
+    events.launchAccepted = launchDifference(existing.launch!, launch!);
+  }
+  if (existing.tools[toolName] === h && !launchMoved && existing.launch) {
+    return false;
+  }
   const live = new Set(tools.map((t) => t.name));
   const next: PersistedPin = {
     ...existing,
     tools: { ...existing.tools, [toolName]: h },
     parts: { ...(existing.parts ?? {}), [toolName]: toolParts(current) },
     approvedAt: now.toISOString(),
+    ...(launch ? { launch } : {}),
   };
   for (const n of Object.keys(next.tools)) {
     if (!live.has(n)) {

@@ -97,6 +97,35 @@ describe("an MCP tool whose definition changed since approval", () => {
     } as never);
     expect(r.policy).toBe("disabled");
   });
+
+  it("a changed launch definition asks at every level but YOLO and says so", () => {
+    const launchTool = {
+      group: "docs",
+      uri: "mcp://docs-id/search",
+      originalFunctionName: "search",
+      readonly: false,
+      mcpDefinitionChange: {
+        kind: "launch" as const,
+        summary: "launch definition changed: arguments",
+      },
+    } as never;
+    for (const level of LEVELS) {
+      const r = evaluateToolPolicyWithRules({
+        tool: launchTool,
+        toolName: "docs_search",
+        basePolicy: "allowedWithoutPermission",
+        parsedArgs: {},
+        permissions: undefined,
+        approval: { levels: { ...DEFAULT_POLICY_LEVELS, tools: level } },
+      } as never);
+      if (level === "yolo") {
+        expect(r.policy).toBe("allowedWithoutPermission");
+      } else {
+        expect(r.policy).toBe("allowedWithPermission");
+        expect(r.reason).toContain("started differently");
+      }
+    }
+  });
 });
 
 void parsePermissions;
