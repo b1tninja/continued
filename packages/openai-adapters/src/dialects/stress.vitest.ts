@@ -23,6 +23,7 @@ import { recoverDsmlFromText, renderDsmlCall } from "./dsml.js";
 import { recoverHarmonyFromText, renderHarmonyCall } from "./harmony.js";
 import { recoverMistralFromText, renderMistralCall } from "./mistral.js";
 import { DeepseekV31Recovery as HeldStage } from "./deepseekV31.js";
+import { recoverDeepseekR1FromText } from "./deepseekR1.js";
 import { WRAPPER_ROWS, recoverWrappedFromText } from "./wrapperDialects.js";
 import {
   PythonicRecovery,
@@ -165,6 +166,7 @@ const quotedCases: Array<[string, Recover, string]> = [
     recoverDeepseekV31FromText,
     markerOf(renderDeepseekV31Call(first), "<｜tool▁calls▁begin｜>".length),
   ],
+  ["deepseek-r1", recoverDeepseekR1FromText, "<｜tool▁calls▁begin｜>"],
   ...WRAPPER_ROWS.map(
     (row) =>
       [
