@@ -8,6 +8,7 @@
   "flag": "synthesised",
   "provenance": {
     "source": "synthesised from template https://huggingface.co/google/gemma-4-31B-it/blob/main/chat_template.jinja, not observed",
+    "license": "apache-2.0",
     "retrieved": "2026-11-10",
     "note": "Commas, braces and ordinary quotes inside a delimited string are data."
   },
