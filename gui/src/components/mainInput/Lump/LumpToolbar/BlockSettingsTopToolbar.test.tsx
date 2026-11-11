@@ -94,3 +94,36 @@ describe("toolbar warning for a key that is not set on this machine", () => {
     expect(screen.queryByTestId("missing-secrets-panel")).toBeNull();
   });
 });
+
+describe("rules, tools and models shortcuts at narrow widths", () => {
+  it("are in the DOM behind a toggle, reachable by keyboard, and navigate", async () => {
+    const { user } = await setup(undefined);
+    const group = document.getElementById("block-settings-shortcuts")!;
+    expect(group.className).toContain("hidden");
+    expect(group.className).toContain("md:flex");
+    const toggle = screen.getByTestId("block-settings-shortcuts-toggle");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle.className).toContain("md:hidden");
+
+    // Keyboard: the toggle takes focus and Enter opens the group
+    toggle.focus();
+    expect(document.activeElement).toBe(toggle);
+    await user.keyboard("{Enter}");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(group.className).not.toContain("hidden");
+
+    for (const name of [
+      "Configure rules",
+      "Configure tools",
+      "Configure models",
+    ]) {
+      const button = screen.getByRole("button", { name });
+      expect(button.tagName).toBe("BUTTON");
+      expect(group.contains(button)).toBe(true);
+    }
+    await user.tab();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Configure rules" }),
+    );
+  });
+});

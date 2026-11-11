@@ -1,10 +1,11 @@
 import {
   CubeIcon,
+  EllipsisHorizontalIcon,
   ExclamationTriangleIcon,
   PencilIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { IdeMessengerContext } from "../../../../context/IdeMessenger";
 import { useAppDispatch, useAppSelector } from "../../../../redux/hooks";
@@ -28,6 +29,8 @@ import {
 
 export function BlockSettingsTopToolbar() {
   const navigate = useNavigate();
+  // Below md the three shortcuts fold behind a toggle; not saved
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const dispatch = useAppDispatch();
   const { selectedProfile } = useAuth();
 
@@ -80,8 +83,14 @@ export function BlockSettingsTopToolbar() {
     navigate(CONFIG_ROUTES.MODELS);
   };
 
+  const SHORTCUTS: [string, typeof PencilIcon, () => void][] = [
+    ["Configure rules", PencilIcon, handleRulesClick],
+    ["Configure tools", WrenchScrewdriverIcon, handleToolsClick],
+    ["Configure models", CubeIcon, handleModelsClick],
+  ];
+
   return (
-    <div className="flex flex-1 items-center justify-between gap-1 md:gap-3">
+    <div className="flex flex-1 flex-wrap items-center justify-between gap-1 md:gap-3">
       <div className="flex items-center gap-1">
         {shouldShowError && onlyMissingSecrets && (
           <ToolTip
@@ -135,25 +144,45 @@ export function BlockSettingsTopToolbar() {
         )}
 
         {!hasActiveContent && (
-          <div className="hidden items-center gap-1.5 md:flex">
-            <ToolTip content="Configure rules">
-              <HoverItem onClick={handleRulesClick} px={2}>
-                <PencilIcon className="h-3 w-3 text-description-muted hover:brightness-125" />
-              </HoverItem>
-            </ToolTip>
-
-            <ToolTip content="Configure tools">
-              <HoverItem onClick={handleToolsClick} px={2}>
-                <WrenchScrewdriverIcon className="h-3 w-3 text-description-muted hover:brightness-125" />
-              </HoverItem>
-            </ToolTip>
-
-            <ToolTip content="Configure models">
-              <HoverItem onClick={handleModelsClick} px={2}>
-                <CubeIcon className="h-3 w-3 text-description-muted hover:brightness-125" />
-              </HoverItem>
-            </ToolTip>
-          </div>
+          <>
+            <button
+              type="button"
+              data-testid="block-settings-shortcuts-toggle"
+              aria-label={
+                shortcutsOpen
+                  ? "Hide rules, tools and models shortcuts"
+                  : "Show rules, tools and models shortcuts"
+              }
+              aria-expanded={shortcutsOpen}
+              aria-controls="block-settings-shortcuts"
+              onClick={() => setShortcutsOpen((open) => !open)}
+              className="hover:bg-list-item-hover flex h-5 w-5 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-description-muted md:hidden"
+            >
+              <EllipsisHorizontalIcon className="h-3 w-3" aria-hidden="true" />
+            </button>
+            <div
+              id="block-settings-shortcuts"
+              className={`${shortcutsOpen ? "flex" : "hidden"} items-center gap-1.5 md:flex`}
+            >
+              {SHORTCUTS.map(([label, Icon, go]) => (
+                <ToolTip key={label} content={label}>
+                  <HoverItem
+                    as="button"
+                    type="button"
+                    aria-label={label}
+                    onClick={() => go()}
+                    px={2}
+                    className="border-none bg-transparent"
+                  >
+                    <Icon
+                      className="h-3 w-3 text-description-muted hover:brightness-125"
+                      aria-hidden="true"
+                    />
+                  </HoverItem>
+                </ToolTip>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
