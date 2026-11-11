@@ -36,6 +36,8 @@ import { testToolCall } from "./tools/permissions/testToolCall";
 import { readUserLargeChangeLines } from "./tools/permissions/userLimits";
 import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
 import { resolveShell } from "./util/shell";
+import { modelToolFetch } from "./util/modelToolFetch";
+import { BuiltInToolNames } from "./tools/builtIn";
 import {
   credentialUrlNames,
   getTerminalEnvironmentStatus,
@@ -2201,8 +2203,14 @@ export class Core {
         ide: inWorkspace ? ideInWorkspace(this.ide, inWorkspace) : this.ide,
         workspaceDirs: inWorkspace,
         llm: config.selectedModelByRole.chat,
-        fetch: (url, init) =>
-          fetchwithRequestOptions(url, init, config.requestOptions),
+        // The model picks the URL of fetch_url_content: the global request
+        // headers go only to the configured model endpoints, not to any host
+        // it names. Other tools (HTTP tools, search) keep the global options.
+        fetch:
+          tool.function.name === BuiltInToolNames.FetchUrlContent
+            ? modelToolFetch(config)
+            : (url, init) =>
+                fetchwithRequestOptions(url, init, config.requestOptions),
         tool,
         toolCallId: toolCall.id,
         onPartialOutput,
