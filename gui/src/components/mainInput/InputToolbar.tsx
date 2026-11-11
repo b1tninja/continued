@@ -72,6 +72,7 @@ function InputToolbar(props: InputToolbarProps) {
           {!props.toolbarOptions?.hideUseCodebase && !isInEdit && (
             <div className="hidden transition-colors duration-200 hover:underline md:flex">
               <HoverButton
+                data-testid="active-file-button"
                 aria-label={`${getMetaKeyLabel()}⏎ ${
                   useActiveFile ? "No active file" : "Active file"
                 }`}
