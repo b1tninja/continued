@@ -3,9 +3,8 @@ import fs from "fs";
 import path from "path";
 
 import chalk from "chalk";
-import winston from "winston";
-
 import { scrubForDisk } from "core/util/secretScan/scrubForDisk.js";
+import winston from "winston";
 
 import { env } from "../env.js";
 

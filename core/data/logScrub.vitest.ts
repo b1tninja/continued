@@ -14,12 +14,11 @@ vi.mock("../util/paths.js", async (orig) => ({
   getDevDataFilePath: () => file,
 }));
 
-import { DataLogger } from "./log";
-
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 describe("dev data scrub-on-write (X15)", () => {
   it("a canary secret in a tool call never lands in the file", async () => {
+    const { DataLogger } = await import("./log");
     const c = canary();
     await DataLogger.getInstance().logLocalData({
       name: "toolUsage",
