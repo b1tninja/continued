@@ -1479,6 +1479,25 @@ describe("BedrockApi tools through Converse (Llama 4, Qwen3 32B; probed live 202
     expect(sent.map((s) => s.command)).toEqual(["ConverseStreamCommand"]);
   });
 
+  it("streams a Claude tool input progressively, not held to block end", async () => {
+    const { collect, sent } = client(converseReply, [
+      toolBlock()[0],
+      { contentBlockDelta: { delta: { toolUse: { input: '{"file' } } } },
+    ]);
+    const chunks = await collect("us.anthropic.claude-haiku-4-5", { tools });
+    expect(sent.map((s) => s.command)).toEqual(["ConverseStreamCommand"]);
+    expect(argsOf(chunks)).toBe('{"file');
+  });
+
+  it("does not check the input of a Claude stream, so no retry", async () => {
+    const { collect, sent } = client(converseReply, [
+      ...toolBlock("{"),
+      stopped,
+    ]);
+    await collect("us.anthropic.claude-haiku-4-5", { tools });
+    expect(sent.map((s) => s.command)).toEqual(["ConverseStreamCommand"]);
+  });
+
   it("does not retry other errors", async () => {
     const other = client(converseReply, [], new Error("ThrottlingException"));
     await expect(

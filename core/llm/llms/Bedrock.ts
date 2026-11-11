@@ -81,6 +81,7 @@ import {
   bedrockOmitUnsupportedInference,
   bedrockReasoningFields,
   bedrockSamplingParams,
+  bedrockStreamsToolInputCleanly,
   bedrockToolsNeedNonStreaming,
   bedrockUsageToUsage,
   buildModelCatalog,
@@ -1028,7 +1029,9 @@ class Bedrock extends BaseLLM {
       // A toolUse block is held until its input is known to parse (see
       // ToolInputGate): a model that streams it broken is retried once
       // through Converse, before any of it has reached the caller.
-      const gate = new ToolInputGate<ChatMessage>();
+      const gate = new ToolInputGate<ChatMessage>(
+        !bedrockStreamsToolInputCleanly(options.model),
+      );
       for await (const chunk of response.stream) {
         if (chunk.contentBlockStart?.start?.toolUse) {
           const retry = yield* this._settleToolCall(gate, options.model);
@@ -1082,7 +1085,7 @@ class Bedrock extends BaseLLM {
         const started = toolCallStartMessage(chunk.contentBlockStart);
         if (started) {
           sawToolUse = true;
-          gate.open(started);
+          yield* gate.open(started);
         }
       }
       if (yield* this._settleToolCall(gate, options.model)) {

@@ -43,6 +43,7 @@ import {
   bedrockOmitUnsupportedInference,
   bedrockReasoningFields,
   bedrockSamplingParams,
+  bedrockStreamsToolInputCleanly,
   bedrockToolsNeedNonStreaming,
   bedrockUsageToCompletionUsage,
   cleanReplyText,
@@ -1274,7 +1275,9 @@ export class BedrockApi implements BaseLlmApi {
       // A toolUse block is held until its input is known to parse (see
       // ToolInputGate): a model that streams it broken is retried once
       // through Converse, before any of it has reached the caller.
-      const gate = new ToolInputGate<ChatCompletionChunk>();
+      const gate = new ToolInputGate<ChatCompletionChunk>(
+        !bedrockStreamsToolInputCleanly(body.model),
+      );
       const retryThroughConverse = () =>
         this.converseWholeMessage(
           client,
@@ -1384,7 +1387,7 @@ export class BedrockApi implements BaseLlmApi {
                 ],
               },
             });
-            gate.open(opened);
+            yield* gate.open(opened);
           }
         }
 

@@ -1873,6 +1873,32 @@ describe("Bedrock tools through Converse and Nova <thinking> tags", () => {
     expect(out.flatMap((m) => m.toolCalls ?? [])).toHaveLength(1);
   });
 
+  it("streams a Claude tool input progressively, not held to block end", async () => {
+    const { collect, sent } = routed(
+      "us.anthropic.claude-haiku-4-5",
+      converseReply,
+      [
+        toolBlock()[0],
+        { contentBlockDelta: { delta: { toolUse: { input: '{"file' } } } },
+      ],
+    );
+    const out = await collect({ tools });
+    expect(sent).toEqual(["ConverseStream"]);
+    // the start and the first fragment came out although the block never closed
+    expect(out).toHaveLength(2);
+    expect(argsOf(out)).toBe('{"file');
+  });
+
+  it("does not check the input of a Claude stream, so no retry", async () => {
+    const { collect, sent } = routed(
+      "us.anthropic.claude-haiku-4-5",
+      converseReply,
+      [...toolBlock("{"), stopped],
+    );
+    await collect({ tools });
+    expect(sent).toEqual(["ConverseStream"]);
+  });
+
   it("does not retry other stream errors", async () => {
     const { collect, sent } = routed(
       "mistral.other-model",

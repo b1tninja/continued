@@ -641,16 +641,45 @@ export function toolInputParses(input: string): boolean {
 }
 
 /**
+ * Families measured to stream tool input intact (bsf-2026-11-10, 8 of 8 each:
+ * Claude, Nova, DeepSeek V3, Kimi, GLM, MiniMax M2.5, gpt-oss, Mistral Large 3,
+ * Devstral 2, Nemotron Nano 3). Their tool-argument deltas are passed on as
+ * they arrive; any other model, including unmeasured ones, goes through
+ * `ToolInputGate` holding. Qwen3 Coder (7 of 8) and MiniMax M2 are not
+ * listed. Two copies, as `bedrockToolsNeedNonStreaming`.
+ */
+const CLEAN_TOOL_STREAM_MODELS: RegExp[] = [
+  /(^|\.)anthropic\.claude/i,
+  /(^|\.)amazon\.nova/i,
+  /(^|\.)deepseek\.v3/i,
+  /(^|\.)moonshot(ai)?\.kimi-k/i,
+  /(^|\.)zai\.glm-/i,
+  /(^|\.)minimax\.minimax-m2\.5/i,
+  /(^|\.)openai\.gpt-oss/i,
+  /(^|\.)mistral\.mistral-large-3/i,
+  /(^|\.)mistral\.devstral-2/i,
+  /(^|\.)nvidia\.nemotron-nano-3/i,
+];
+
+export function bedrockStreamsToolInputCleanly(modelId: string): boolean {
+  return CLEAN_TOOL_STREAM_MODELS.some((m) => m.test(modelId));
+}
+
+/**
  * Holds one streamed toolUse block (its start and input fragments) until the
  * block ends, so its input can be checked before any of it reaches the caller,
  * who runs the tool only once the reply is over. `close` says what to do with
  * a block whose input does not parse: retry the turn through Converse when
  * nothing irreversible has gone out (no text or reasoning, no earlier tool
  * call), so no call can run twice; otherwise release the block as streamed.
- * The caller remembers the model either way. Two copies, as
+ * The caller remembers the model either way. A gate made with `hold` false
+ * (see `bedrockStreamsToolInputCleanly`) passes everything through, so those
+ * models keep progressive tool-argument deltas. Two copies, as
  * `bedrockToolsNeedNonStreaming`.
  */
 export class ToolInputGate<T> {
+  constructor(private readonly hold: boolean) {}
+
   private held: { parts: T[]; input: string } | undefined;
   private released = false;
   private output = false;
@@ -664,8 +693,11 @@ export class ToolInputGate<T> {
     this.output = true;
   }
 
-  open(part: T): void {
+  /** What to yield now: the block's start, unless the gate is holding it. */
+  open(part: T): T[] {
+    if (!this.hold) return [part];
     this.held = { parts: [part], input: "" };
+    return [];
   }
 
   add(part: T, fragment: string | undefined): void {
