@@ -11,6 +11,7 @@ const DIALECTS = [
   "llama-json",
   "hermes-json",
   "glm-xml",
+  "toolcall-json",
 ];
 const FIXTURES = path.resolve(
   __dirname,

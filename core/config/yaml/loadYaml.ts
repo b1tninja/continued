@@ -46,6 +46,10 @@ import { getAllDotContinueDefinitionFiles } from "../loadLocalAssistants";
 import { unrollLocalYamlBlocks } from "./loadLocalYamlBlocks";
 import * as YAML from "yaml";
 import {
+  clearFolderRules,
+  recordFolderRules,
+} from "../../tools/permissions/folderRules";
+import {
   stripUntrustedLoosening,
   untrustedLooseningNotice,
 } from "../../tools/permissions/trust";
@@ -72,6 +76,7 @@ function withoutUntrustedLoosening(
   } catch {
     return content;
   }
+  recordFolderRules(path, parsed);
   const { config, removed } = stripUntrustedLoosening(parsed);
   if (removed.length === 0) return content;
   notices.push({
@@ -86,6 +91,7 @@ import { resolveToolPermissions } from "../../tools/permissions/ruleTrust";
 import { resolveTerminalSettings } from "../../util/terminalEnvironment";
 import { readUserToolPermissions } from "../../util/userToolPermissions";
 import { readUserTerminalSettings } from "../../util/userTerminalSettings";
+import { readUserGuidance, withOwnGuidance } from "../../util/userGuidance";
 import { loadProviderInstances } from "../providers/providersFile";
 import { LocalPlatformClient } from "./LocalPlatformClient";
 import { llmsFromModelConfig } from "./models";
@@ -137,6 +143,7 @@ async function loadConfigYaml(options: {
     heldMcpServers,
     notices: trustNotices,
   } = await selectWorkspaceBlocks(ide, loadedBlocks, workspaceDirs);
+  clearFolderRules();
 
   const localPackageIdentifiers: PackageIdentifier[] = keptBlocks.map((b) => ({
     uriType: "file" as const,
@@ -516,14 +523,17 @@ export async function configYamlToContinueConfig(options: {
   // Tool rules. Kept even when some entries are unreadable: those are skipped
   // and reported, rather than failing the config.
   // Only the person's own config.yaml may add allow rules; deny and ask from
-  // any source are kept (core/tools/permissions/ruleTrust.ts).
+  // any source are kept (core/tools/permissions/ruleTrust.ts). Reviewer
+  // guidance is the person's own, never the assistant's or a folder's.
   const ruleTrust = resolveToolPermissions(
     readUserToolPermissions(),
     config.toolPermissions,
   );
-  continueConfig.toolPermissions = ruleTrust.permissions;
+  const own = withOwnGuidance(ruleTrust.permissions, readUserGuidance());
+  continueConfig.toolPermissions = own.permissions;
   localErrors.push(
     ...ruleTrust.notices.map((message) => ({ fatal: false, message })),
+    ...own.notices.map((message) => ({ fatal: false, message })),
   );
   // Only the person's own config.yaml may loosen what commands inherit; what
   // the assistant or a folder sets is held to the default or tighter.

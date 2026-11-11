@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "id": "neg-toolcall-json-fenced-example",
+  "family": "nemotron-toolcall",
+  "dialect": "toolcall-json",
+  "kind": "negative",
+  "failureMode": "quoted-not-called",
+  "flag": "synthesised",
+  "provenance": {
+    "source": "synthesised, not observed: a call quoted in a fence, not made",
+    "retrieved": "2026-11-10",
+    "note": ""
+  },
+  "policy": "must",
+  "tools": [
+    {
+      "name": "get_weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["city"]
+      }
+    },
+    {
+      "name": "get_time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": ["tz"]
+      }
+    }
+  ],
+  "text": "The model must reply with:\n\n```\n<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>\n```",
+  "markers": ["<TOOLCALL>", "</TOOLCALL>", "<think>", "</think>"],
+  "streams": [
+    {
+      "label": "whole",
+      "encoding": "utf8",
+      "chunks": [
+        "The model must reply with:\n\n```\n<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>\n```"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "char",
+      "encoding": "utf8",
+      "chunks": [
+        "T",
+        "h",
+        "e",
+        " ",
+        "m",
+        "o",
+        "d",
+        "e",
+        "l",
+        " ",
+        "m",
+        "u",
+        "s",
+        "t",
+        " ",
+        "r",
+        "e",
+        "p",
+        "l",
+        "y",
+        " ",
+        "w",
+        "i",
+        "t",
+        "h",
+        ":",
+        "\n",
+        "\n",
+        "`",
+        "`",
+        "`",
+        "\n",
+        "<",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">",
+        "[",
+        "{",
+        "\"",
+        "n",
+        "a",
+        "m",
+        "e",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "g",
+        "e",
+        "t",
+        "_",
+        "w",
+        "e",
+        "a",
+        "t",
+        "h",
+        "e",
+        "r",
+        "\"",
+        ",",
+        " ",
+        "\"",
+        "a",
+        "r",
+        "g",
+        "u",
+        "m",
+        "e",
+        "n",
+        "t",
+        "s",
+        "\"",
+        ":",
+        " ",
+        "{",
+        "\"",
+        "c",
+        "i",
+        "t",
+        "y",
+        "\"",
+        ":",
+        " ",
+        "\"",
+        "P",
+        "a",
+        "r",
+        "i",
+        "s",
+        "\"",
+        "}",
+        "}",
+        "]",
+        "<",
+        "/",
+        "T",
+        "O",
+        "O",
+        "L",
+        "C",
+        "A",
+        "L",
+        "L",
+        ">",
+        "\n",
+        "`",
+        "`",
+        "`"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "inside-marker",
+      "encoding": "utf8",
+      "chunks": [
+        "The model must reply with:\n\n```\n<TO",
+        "OLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>\n```"
+      ],
+      "splitInside": "<TOOLCALL>"
+    },
+    {
+      "label": "around-markers",
+      "encoding": "utf8",
+      "chunks": [
+        "The model must reply with:\n\n```\n",
+        "<TOOLCALL>",
+        "[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]",
+        "</TOOLCALL>",
+        "\n```"
+      ],
+      "splitInside": null
+    },
+    {
+      "label": "random-1-5",
+      "encoding": "utf8",
+      "chunks": [
+        "Th",
+        "e mod",
+        "e",
+        "l m",
+        "us",
+        "t rep",
+        "l",
+        "y ",
+        "with:",
+        "\n\n```",
+        "\n<TOO",
+        "LCA",
+        "LL>[{",
+        "\"",
+        "name\"",
+        ": \"",
+        "get",
+        "_",
+        "w",
+        "eath",
+        "er\",",
+        " ",
+        "\"argu",
+        "ments",
+        "\": ",
+        "{\"c",
+        "ity\":",
+        " \"Pa",
+        "ris\"}",
+        "}]</",
+        "TO",
+        "OLCA",
+        "LL",
+        ">\n`",
+        "``"
+      ],
+      "splitInside": null
+    }
+  ],
+  "expected": {
+    "calls": [],
+    "text": "The model must reply with:\n\n```\n<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\"}}]</TOOLCALL>\n```"
+  }
+}

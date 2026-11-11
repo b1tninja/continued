@@ -5,6 +5,7 @@ import { recoverLlamaJsonFromText } from "./llamaJson.js";
 import { recoverPythonicFromText } from "./pythonic.js";
 import { type DialectTool, recoverQwenXmlFromText } from "./qwenXml.js";
 import { coerceString, coerceToSchema } from "./schemaCheck.js";
+import { recoverToolcallJsonFromText } from "./toolcallJson.js";
 
 describe("coerceString", () => {
   it.each([
@@ -132,6 +133,12 @@ const dialects: [string, (timeout: string) => string, (t: string) => any][] = [
     (t) =>
       `<tool_call>run_command<arg_key>command</arg_key><arg_value>10</arg_value><arg_key>timeout</arg_key><arg_value>${t}</arg_value></tool_call>`,
     (t) => recoverGlmXmlFromText(t, tools),
+  ],
+  [
+    "toolcall-json",
+    (t) =>
+      `<TOOLCALL>[{"name": "run_command", "arguments": {"command": "10", "timeout": "${t}"}}]</TOOLCALL>`,
+    (t) => recoverToolcallJsonFromText(t, tools),
   ],
 ];
 

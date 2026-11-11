@@ -9,7 +9,12 @@ import type { ToolPermissions } from "../rules";
 import type { AuditReviewer } from "../audit/record";
 import { ReviewCategory } from "./categories";
 import { ReviewResult } from "./parse";
-import { ReviewEnvironment, ReviewHistory } from "./prompt";
+import { assembleGuidance, guidanceHash, type GuidanceInput } from "./guidance";
+import {
+  ReviewEnvironment,
+  ReviewHistory,
+  reviewerPromptVersion,
+} from "./prompt";
 import {
   DEFAULT_REVIEW_TIMEOUT_MS,
   reviewToolCall,
@@ -67,6 +72,12 @@ export interface AutoReviewDeps {
   /** `modeModels.reviewer.reasoningEffort`, as completion options. */
   reviewerReasoning?: ReviewerReasoning;
   environment: ReviewEnvironment;
+  /**
+   * The person's own `toolPermissions.auto.guidance`, and nothing else. The
+   * reviewer's trusted block is built only from this; `permissions.auto.guidance`
+   * may have come from a repository or an assistant and is never read.
+   */
+  guidance?: GuidanceInput;
   sessions: AutoReviewSessions;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -176,13 +187,34 @@ export async function autoReviewToolCall(
     );
   }
 
+  // Refuse to review with guidance that does not pass: dropping a "never"
+  // entry silently would loosen the reviewer without anyone seeing it.
+  const assembled = assembleGuidance(deps.guidance);
+  if (assembled.errors.length > 0) {
+    return system(
+      unavailable(
+        `Reviewer guidance in config.yaml was refused. ${assembled.errors.join(" ")}`,
+        req.headless,
+      ),
+    );
+  }
+  const guidance = assembled.guidance;
+  const promptVersion = reviewerPromptVersion(guidance);
+
   const state = deps.sessions.get(req.sessionId);
   const limits = deps.permissions?.auto?.limits;
-  const context = reviewContextKey(req.history.userMessages);
+  // A verdict is only reused under the same words and the same guidance
+  const context = `${reviewContextKey(req.history.userMessages)}:${guidanceHash(guidance)}`;
   const cached = state.cached(req.toolName, req.parsedArgs, context);
   // A cached answer is not counted again. The cap is for new refusals.
   if (cached) {
-    return { ...base, ...cached, by: reviewedBy(cached), cached: true };
+    return {
+      ...base,
+      ...cached,
+      by: reviewedBy(cached),
+      cached: true,
+      reviewer: { promptVersion },
+    };
   }
   // The audit wants the model, how long it took and what it used
   let usage: AuditReviewer["usage"];
@@ -202,6 +234,7 @@ export async function autoReviewToolCall(
       history: req.history,
       environment: deps.environment,
       settings: deps.permissions?.auto,
+      guidance,
     },
     {
       timeoutMs: deps.timeoutMs ?? DEFAULT_REVIEW_TIMEOUT_MS,
@@ -219,6 +252,7 @@ export async function autoReviewToolCall(
     by: reviewedBy(result),
     reviewer: {
       model: (deps.reviewer as { model?: string }).model,
+      promptVersion,
       latencyMs: Date.now() - startedAt,
       ...(usage ? { usage } : {}),
     },

@@ -15,6 +15,8 @@ interface CreateStreamCallbacksOptions {
   model?: any;
   /** The TUI's temporary status line */
   onShowStatusMessage?: (message: string) => void;
+  /** The TUI's spinner text while a reply is held for tool call recovery */
+  onRecoveryHold?: (holding: boolean) => void;
 }
 
 /**
@@ -29,10 +31,15 @@ export function createStreamCallbacks(
     llmApi,
     model,
     onShowStatusMessage,
+    onRecoveryHold,
   } = options;
 
   return {
     onContent: (_: string) => {},
+
+    onRecoveryHold: (holding: boolean) => {
+      onRecoveryHold?.(holding);
+    },
 
     // A notice about the request (a reply cut off at the output limit, say)
     onStatusMessage: (message: string) => {

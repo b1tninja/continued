@@ -17,7 +17,7 @@ import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
 import { policyFileHit, POLICY_FILE_REASON } from "./selfProtect";
 import type { ProtectedHit, ProtectedKind } from "./protected";
-import type { ToolPermissions } from "./rules";
+import type { RuleSource, ToolPermissions } from "./rules";
 
 /**
  * Brace expansion, `$IFS`, or a variable where the command name is. The safety
@@ -147,6 +147,12 @@ export interface EvaluateInput {
   parsedArgs: Record<string, unknown>;
   processedArgs?: Record<string, unknown>;
   permissions: ToolPermissions | undefined;
+  /**
+   * The same rules by where each was written. When given, these are the rules
+   * that run (`permissions` still carries the reviewer's settings) and each
+   * reason names the file its rule came from.
+   */
+  permissionSources?: Partial<Record<RuleSource, ToolPermissions>>;
   /** The folder a command runs in; lets git be vouched read-only */
   cwd?: string;
   /** The shell that runs it (resolveShell); without one no command is vouched read-only */
@@ -287,7 +293,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     changedDefinition;
 
   // The floor: deny rules the person wrote to bind even at YOLO
-  const floorRules = parsePermissions({ deny: input.approval?.floor });
+  const floorRules = parsePermissions({ deny: input.approval?.floor }, "floor");
   if (floorRules.length) {
     const isMcpCall =
       !!tool.uri?.startsWith("mcp:") && !!tool.originalFunctionName;
@@ -314,7 +320,11 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     }
   }
 
-  const rules = parsePermissions(input.permissions);
+  const rules = input.permissionSources
+    ? Object.entries(input.permissionSources).flatMap(([origin, perms]) =>
+        parsePermissions(perms, origin as RuleSource),
+      )
+    : parsePermissions(input.permissions);
   const call = { parsedArgs, cwd: input.cwd, shell: input.shell };
   const found = levelOfCall(input.approval, toolName, tool, call);
   // A hidden command is not loosened at any level, YOLO included. Otherwise

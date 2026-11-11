@@ -17,6 +17,13 @@ import { saveToolDialect } from "./config/yaml/saveToolDialect";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { uriToPath } from "./tools/permissions/names";
+import type { PolicyLevels } from "./tools/permissions/policy";
+import {
+  readRuleSources,
+  ruleSourcesOfLoadedConfig,
+} from "./tools/permissions/readRuleSources";
+import { listEffectiveRules } from "./tools/permissions/effectiveRules";
+import { testToolCall } from "./tools/permissions/testToolCall";
 import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
 import { resolveShell } from "./util/shell";
 import {
@@ -24,6 +31,7 @@ import {
   getTerminalEnvironmentStatus,
 } from "./util/terminalEnvironment";
 import { saveUserTerminalSettings } from "./util/userTerminalSettings";
+import { readUserGuidance } from "./util/userGuidance";
 import { addToolRule } from "./tools/permissions/addRule";
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import { getAuditTrail } from "./tools/permissions/audit/global";
@@ -635,6 +643,42 @@ export class Core {
     );
   }
 
+  /**
+   * The settings file shared with the CLI, and the read-only Permissions
+   * page: every rule in effect, and a call tried against them.
+   */
+  private registerPolicyHandlers() {
+    const on = this.messenger.on.bind(this.messenger);
+    on("policy/load", async () => readPolicyFile(policyFilePath()));
+
+    on("policy/save", async ({ data }) => {
+      writePolicyFile(policyFilePath(), data);
+    });
+
+    on("policy/rules", async ({ data }) => {
+      const { config } = await this.configHandler.loadConfig();
+      return listEffectiveRules(
+        readRuleSources({
+          merged: config?.toolPermissions,
+          levels: data?.levels,
+        }),
+      );
+    });
+
+    on("policy/test", async ({ data }) => {
+      const { config } = await this.configHandler.loadConfig();
+      const dirs = await this.ide.getWorkspaceDirs();
+      return testToolCall({
+        ...data,
+        sources: readRuleSources({
+          merged: config?.toolPermissions,
+          levels: data.levels as PolicyLevels | undefined,
+        }),
+        ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
+      });
+    });
+  }
+
   /** Auto approval and the audit answer: the reviewer's decision is written to the audit trail. */
   private registerAutoReviewHandlers() {
     const on = this.messenger.on.bind(this.messenger);
@@ -652,6 +696,7 @@ export class Core {
           permissions: config.toolPermissions,
           enabled: config.experimental?.enableAutoApproval === true,
           reviewer: config.selectedModelByRole.reviewer,
+          guidance: readUserGuidance(),
           shell: resolveShell().kind,
           reviewerReasoning: reasoningOptionsForEffort(
             config.modeModels?.reviewer?.reasoningEffort,
@@ -749,6 +794,7 @@ export class Core {
       ...getTerminalEnvironmentStatus(),
       hostEnvNames: Object.keys(process.env).sort(),
       credentialUrlNames: credentialUrlNames(),
+      platform: process.platform,
     }));
 
     on("config/setTerminalEnvironment", async (msg) => {
@@ -1892,11 +1938,7 @@ export class Core {
       this.handleToolCall(toolCall, workspaceDirs),
     );
 
-    on("policy/load", async () => readPolicyFile(policyFilePath()));
-
-    on("policy/save", async ({ data }) => {
-      writePolicyFile(policyFilePath(), data);
-    });
+    this.registerPolicyHandlers();
 
     on(
       "tools/evaluatePolicy",
@@ -1926,6 +1968,14 @@ export class Core {
           parsedArgs,
           processedArgs,
           permissions: config.toolPermissions,
+          // Each rule named after the file it came from, in the reasons
+          ...(config.toolPermissions
+            ? {
+                permissionSources: ruleSourcesOfLoadedConfig(
+                  config.toolPermissions,
+                ),
+              }
+            : {}),
           approval,
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
           // The shell terminal commands run in

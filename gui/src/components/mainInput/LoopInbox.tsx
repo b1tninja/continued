@@ -68,7 +68,7 @@ export function LoopInbox() {
         className="min-w-0 rounded border border-solid border-border px-2 py-1 text-xs"
       >
         <div className="flex min-w-0 flex-wrap items-center gap-1">
-          <LoopPhaseMark className="h-3.5 w-3.5 shrink-0" label />
+          <LoopPhaseMark className="h-3.5 w-[25px] shrink-0" label />
           <span
             data-testid="loop-status"
             className="min-w-0 flex-1 basis-40 break-words text-description"

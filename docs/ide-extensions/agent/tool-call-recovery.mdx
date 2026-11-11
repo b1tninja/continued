@@ -17,6 +17,7 @@ Set the variable in the environment that starts the editor or the CLI. It takes 
 | `llama-json`         | Llama's JSON call as text: `{"type": "function", "name": "read_file", "parameters": {...}}`, or an array of such objects or of JSON strings of them | `llama` |
 | `hermes-json`        | Hermes-style JSON in tags: `<tool_call>{"name": "...", "arguments": {...}}</tool_call>` | `qwen`, `hermes`            |
 | `glm-xml`            | GLM's tags: `<tool_call>NAME<arg_key>K</arg_key><arg_value>V</arg_value></tool_call>` | `glm`                         |
+| `toolcall-json`      | NVIDIA's JSON array in tags: `<TOOLCALL>[{"name": "...", "arguments": {...}}]</TOOLCALL>` | `nemotron`                  |
 | `qwen-xml,pythonic`  | Both                                                                  | each by its own match         |
 
 The same setting can be given per model as `x_continue_recover_text_tool_calls` in `requestOptions.extraBodyProperties`; it takes the same values. Recovery applies to Amazon Bedrock models only, and a model whose id does not match gets no recovery whatever the setting says.
@@ -47,6 +48,7 @@ models:
 | `llama-json`  | Recover Llama JSON calls for this model, whatever its id is.                            |
 | `hermes-json` | Recover Hermes-style JSON calls for this model, whatever its id is.                     |
 | `glm-xml`     | Recover GLM tag calls for this model, whatever its id is.                               |
+| `toolcall-json` | Recover `<TOOLCALL>` JSON calls (Nemotron-H, Llama-Nemotron) for this model, whatever its id is. |
 
 Any other value is rejected when the config loads. When `CONTINUE_RECOVER_TEXT_TOOL_CALLS` is set, it wins over `toolDialect`. The same switch decides whether Llama 3.x models are offered tools at all (they are off by default, because they write calls as text): setting `llama-json` in either place turns them on. The setting applies to Bedrock models in the IDE and in the CLI (`cn`); the rules below apply unchanged.
 
@@ -70,7 +72,9 @@ Recovery is strict, because text that looks like a call is sometimes an example.
 - For `llama-json`, the reply is nothing but one call object or an array of them, with exactly the keys `name` and `parameters` (and an optional `type` of `function`).
 - For `hermes-json` and `glm-xml`, the reply is nothing but calls (an opening `<think>` block is kept as text), and for `glm-xml` a value is a string unless the schema declares another type, in which case it must be JSON of that type. Both were built from the model chat templates and checked on synthesised fixtures; no live leak of either was captured, so treat them as untested against real replies.
 
-Anything else stays text, exactly as the model wrote it. While a reply streams, text that might be the start of a call is held back until the reply ends, so a recovered call never shows as text first; with recovery on, replies from a matching model can appear later than without it.
+- For `toolcall-json`, the reply is nothing but one or more `<TOOLCALL>` blocks (an opening `<think>` block is kept as text). A block is a non-empty JSON array of objects with exactly the keys `name` and `arguments`; `arguments` is an object, or a string holding one. Several calls in one array, or several blocks, are all recovered. Unlike NVIDIA's own vLLM parser, which keeps only the first block and silently drops a call that has no `arguments`, one bad call (no `arguments`, `parameters` instead, a bare object that is not in an array, an unknown tool, an argument the schema refuses) makes the whole reply stay text, and it is counted as held and released as text in the recovery counts. The form comes from the model's chat template; no live reply was captured, so treat it as untested against real replies.
+
+Anything else stays text, exactly as the model wrote it. While a reply streams, text that might be the start of a call is held back until the reply ends, so a recovered call never shows as text first; with recovery on, replies from a matching model can appear later than without it. While a reply is held, the chat shows "Reading the model's reply" where it would show "Generating", and the CLI spinner says "Reading the model's reply..."; the line goes away as soon as the held text has been shown or turned into a call. Nothing changes when recovery is off.
 
 A recovered call goes through the same tool permissions as any other call.
 
@@ -91,7 +95,8 @@ The preset never turns recovery on. To recover a family's text calls, set `toolD
 | GLM-4.5 to 5                              | `<arg_key>` / `<arg_value>` tags        | `glm-xml`                |
 | Llama 3.1 to 3.3                          | `{"name", "parameters"}` JSON           | `llama-json`             |
 | Llama 4, Nova                             | Python call syntax                      | `pythonic`               |
-| Kimi, MiniMax, DeepSeek, gpt-oss, Gemma 4, Mistral, Llama-Nemotron, Nemotron-H | their own forms | none yet (native only) |
+| Nemotron-H, Llama-Nemotron                | `<TOOLCALL>[{"name", "arguments"}]</TOOLCALL>` | `toolcall-json` |
+| Kimi, MiniMax, DeepSeek, gpt-oss, Gemma 4, Mistral | their own forms | none yet (native only) |
 | Gemma 3                                   | none: it made no tool calls             | none                     |
 
-Nemotron 3 (Super, Nano) writes the same markup as Qwen3-Coder, and NVIDIA's model cards use vLLM's `qwen3_coder` parser for it. Nemotron-H and Llama-Nemotron write `<TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>` instead; no recovery exists for that form yet.
+Nemotron 3 (Super, Nano) writes the same markup as Qwen3-Coder, and NVIDIA's model cards use vLLM's `qwen3_coder` parser for it. Nemotron-H and Llama-Nemotron write `<TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>` instead; set `toolDialect: toolcall-json` to recover it (the preset does not set it for you).

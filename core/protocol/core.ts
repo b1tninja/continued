@@ -238,6 +238,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     TerminalEnvironmentStatus & {
       hostEnvNames: string[];
       credentialUrlNames: string[];
+      /** The host's process.platform; a webview has no `process`. */
+      platform?: NodeJS.Platform;
     },
   ];
   /**
@@ -621,6 +623,22 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "policy/save": [
     import("../tools/permissions/settingsFile").PolicyFileUpdate,
     void,
+  ];
+  /**
+   * Every permission rule in effect with its area, source and state, and the
+   * levels. Read-only. `levels` are the session's, when the caller has them.
+   */
+  "policy/rules": [
+    { levels?: import("../tools/permissions/policy").PolicyLevels } | undefined,
+    import("../tools/permissions/effectiveRules").EffectiveRulesReport,
+  ];
+  /** Run one call through the real evaluator and explain it. Nothing runs. */
+  "policy/test": [
+    Omit<
+      import("../tools/permissions/testToolCall").TestToolCallInput,
+      "sources" | "cwd" | "shell"
+    >,
+    import("../tools/permissions/testToolCall").ToolCallTestResult,
   ];
   "tools/evaluatePolicy": [
     {

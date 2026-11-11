@@ -81,6 +81,44 @@ describe("TUIChat - ActionStatus", () => {
     }
   });
 
+  it("says the reply is being read while it is held for tool call recovery, and only then", () => {
+    const waiting = (isReadingReply: boolean) => ({
+      chatHistory: [],
+      setChatHistory: vi.fn(),
+      isWaitingForResponse: true,
+      isReadingReply,
+      responseStartTime: Date.now(),
+      isCompacting: false,
+      compactionStartTime: null,
+      inputMode: false,
+      attachedFiles: [],
+      activePermissionRequest: null,
+      wasInterrupted: false,
+      handleUserMessage: vi.fn(),
+      handleInterrupt: vi.fn(),
+      handleFileAttached: vi.fn(),
+      resetChatHistory: vi.fn(),
+      handleToolPermissionResponse: vi.fn(),
+    });
+
+    mockUseChat.mockReturnValue(waiting(true));
+    const held = render(React.createElement(AppRoot, {}));
+    try {
+      expect(held.lastFrame()).toContain("Reading the model's reply");
+    } finally {
+      held.unmount();
+    }
+
+    mockUseChat.mockReturnValue(waiting(false));
+    const done = render(React.createElement(AppRoot, {}));
+    try {
+      expect(done.lastFrame()).toContain("esc to interrupt");
+      expect(done.lastFrame()).not.toContain("Reading the model's reply");
+    } finally {
+      done.unmount();
+    }
+  });
+
   it("shows only compaction status when compacting", () => {
     const compactionStartTime = Date.now();
 

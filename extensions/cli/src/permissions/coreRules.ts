@@ -17,6 +17,7 @@ import {
 import { mcpRuleName } from "core/tools/permissions/names.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
 import { resolveShell } from "core/util/shell.js";
+import { readUserGuidance } from "core/util/userGuidance.js";
 
 import { createLlmApi } from "../config.js";
 import { logger } from "../util/logger.js";
@@ -270,6 +271,7 @@ export async function evaluateWithCoreRules(
         enabled: true,
         shell: resolveShell().kind,
         reviewer: input.reviewer ?? null,
+        guidance: readUserGuidance(),
         environment: {
           workspaceDirs: [input.cwd ?? process.cwd()],
           os: process.platform,

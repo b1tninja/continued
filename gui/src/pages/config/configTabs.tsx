@@ -6,6 +6,7 @@ import {
   DocumentIcon,
   PencilIcon,
   QuestionMarkCircleIcon,
+  ShieldCheckIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { ConfigSection } from "./components/ConfigSection";
@@ -13,6 +14,7 @@ import { ConfigsSection } from "./sections/ConfigsSection";
 import { HelpSection } from "./sections/HelpSection";
 import { IndexingSettingsSection } from "./sections/IndexingSettingsSection";
 import { ModelsSection } from "./sections/ModelsSection";
+import { PermissionsSection } from "./sections/permissions/PermissionsSection";
 import { RulesSection } from "./sections/RulesSection";
 import { ToolsSection } from "./sections/ToolsSection";
 import { UserSettingsSection } from "./sections/UserSettingsSection";
@@ -79,6 +81,16 @@ export const topTabSections: TabSection[] = [
         icon: (
           <WrenchScrewdriverIcon className="h-3 w-3 shrink-0 xs:h-4 xs:w-4" />
         ),
+      },
+      {
+        id: "permissions",
+        label: "Permissions",
+        component: (
+          <ConfigSection>
+            <PermissionsSection />
+          </ConfigSection>
+        ),
+        icon: <ShieldCheckIcon className="h-3 w-3 shrink-0 xs:h-4 xs:w-4" />,
       },
     ],
   },
