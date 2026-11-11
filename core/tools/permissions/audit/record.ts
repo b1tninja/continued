@@ -22,7 +22,7 @@ export type AuditBy = "rules" | "reviewer" | "person" | "system";
 
 export interface AuditEnvelope {
   v: typeof AUDIT_VERSION;
-  ev: "decision" | "outcome" | "turn" | "policy";
+  ev: "decision" | "outcome" | "turn" | "policy" | "shadow";
   /** UTC, ISO 8601 */
   ts: string;
   session: string;
@@ -198,8 +198,33 @@ export interface PolicyEvent extends AuditEnvelope {
   maskedKinds?: string[];
 }
 
+/**
+ * What the reviewer WOULD have decided for a call it was not asked about
+ * (shadow mode, ROADMAP B16). It sits beside the real decision, joined by
+ * `callId`, and never changes it. `real` is the decision that stood when the
+ * shadow review was started: the rules' verdict, or the person's answer.
+ */
+export interface ShadowEvent extends AuditEnvelope {
+  ev: "shadow";
+  callId: string;
+  tool: string;
+  real: { policy: AuditPolicy; by: AuditBy };
+  shadow: {
+    policy: AuditPolicy;
+    category?: string;
+    /** The reviewer's sentence, masked and clipped */
+    reason?: string;
+  };
+  /** Model, prompt version, latency and usage of the shadow request */
+  reviewer: AuditReviewer;
+  /** USD of the request, from the shared price table; absent when the model has no price */
+  costUsd?: number;
+  agent?: AuditAgent;
+  maskedKinds?: string[];
+}
+
 export type AuditRecord =
-  DecisionEvent | OutcomeEvent | TurnEvent | PolicyEvent;
+  DecisionEvent | OutcomeEvent | TurnEvent | PolicyEvent | ShadowEvent;
 
 /** A record as the builders produce it: the writer adds `v`, `ts` and `seq`. */
 export type AuditDraft = DistributiveOmit<AuditRecord, "v" | "seq" | "ts"> & {
@@ -350,5 +375,34 @@ export function policyDraft(input: PolicyInput): AuditDraft {
     rule: clipMasked(rule.text, MAX_ARGS_CHARS),
     newRule: newRule ? clipMasked(newRule.text, MAX_ARGS_CHARS) : undefined,
     maskedKinds: kinds.length ? kinds : undefined,
+  }) as AuditDraft;
+}
+
+export interface ShadowInput {
+  session: string;
+  turn?: number;
+  callId: string;
+  tool: string;
+  real: { policy: AuditPolicy; by: AuditBy };
+  shadow: { policy: AuditPolicy; category?: string; reason?: string };
+  reviewer: AuditReviewer;
+  costUsd?: number;
+  agent?: AuditAgent;
+}
+
+export function shadowDraft(input: ShadowInput): AuditDraft {
+  const reason = input.shadow.reason
+    ? maskText(input.shadow.reason)
+    : undefined;
+  return clean({
+    ...input,
+    ev: "shadow" as const,
+    shadow: clean({
+      ...input.shadow,
+      reason: reason ? clipMasked(reason.text, MAX_REASON_CHARS) : undefined,
+    }),
+    reviewer: clean({ ...input.reviewer }),
+    agent: auditAgentOf(input.agent),
+    maskedKinds: reason?.kinds.length ? reason.kinds : undefined,
   }) as AuditDraft;
 }
