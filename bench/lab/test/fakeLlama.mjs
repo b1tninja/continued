@@ -148,6 +148,32 @@ export async function startFakeLlama({
         default_generation_settings: { n_ctx: 16384 },
         ...props,
       });
+    if (req.url === "/slots")
+      return json([
+        {
+          id: 0,
+          id_task: state.hits.length,
+          n_ctx: 16384,
+          speculative: false,
+          is_processing: false,
+          chat_format: "Content-only",
+          params: { temperature: 0, samplers: ["top_k"] },
+          next_token: { has_next_token: false, n_decoded: 7 },
+        },
+      ]);
+    if (req.url === "/metrics")
+      return (
+        res.writeHead(200, { "content-type": "text/plain" }),
+        res.end(
+          [
+            "# HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.",
+            "# TYPE llamacpp:prompt_tokens_total counter",
+            `llamacpp:prompt_tokens_total ${state.requests.length * 10}`,
+            "llamacpp:n_tokens_max 123",
+            "",
+          ].join("\n"),
+        )
+      );
     if (req.url === "/v1/chat/completions") {
       state.requests.push(body);
       const s = await script(body, state);

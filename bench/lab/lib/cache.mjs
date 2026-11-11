@@ -11,6 +11,7 @@ import { toolSet } from "./suites.mjs";
 import { Budget, modelGuard, sleep } from "./guards.mjs";
 import { LabError } from "./ollama.mjs";
 import { appendRecord, resultFile } from "./results.mjs";
+import { probeThink, thinkRefusal } from "./probe.mjs";
 
 const stamp = (n) => `2026-11-10T10:00:${String(n).padStart(2, "0")}Z`;
 
@@ -88,6 +89,7 @@ export const cacheRequestCount = (suite) =>
   expandCache(suite, { nonce: "n" }).reduce((n, s) => n + s.steps.length, 0);
 
 export function cacheRecord({
+  suiteName = "cache",
   model,
   cfg,
   engine,
@@ -102,7 +104,7 @@ export function cacheRecord({
   const u = reply?.usage ?? {};
   return {
     ts: new Date().toISOString(),
-    suite: "cache",
+    suite: suiteName,
     kind: "cache",
     model,
     api: cfg.api,
@@ -115,8 +117,14 @@ export function cacheRecord({
     label: step.label,
     toolCount: step.tools.length,
     toolNames: step.tools.map((t) => t.name).slice(0, 3),
-    promptChars: step.messages.reduce((n, m) => n + m.content.length, 0),
+    promptChars: step.messages.reduce(
+      (n, m) => n + (typeof m.content === "string" ? m.content.length : 0),
+      0,
+    ),
+    firstChangedChars: step.firstChanged,
+    source: step.source,
     usage: u,
+    sidecar: reply?.sidecar,
     ms,
     error: error
       ? { kind: error.kind, message: String(error.message).slice(0, 300) }
@@ -148,8 +156,10 @@ export async function runCache({
   agentTools,
   numCtx,
   cooldownMs = 0,
+  suiteName = "cache",
+  buildSequences,
 }) {
-  const file = resultFile(roots, "cache");
+  const file = resultFile(roots, suiteName);
   const summary = { ran: 0, errors: 0, refused: [], stopped: null, file };
   for (const m of models) {
     if (signal?.aborted) {
@@ -187,9 +197,33 @@ export async function runCache({
       summary.stopped = `cannot reach the engine: ${e.message}`;
       break;
     }
-    const engine = await client.describe?.(m.name).catch(() => undefined);
+    let engine = await client.describe?.(m.name).catch(() => undefined);
+    const probe = await probeThink({
+      client,
+      model: m.name,
+      cfg,
+      budget,
+      signal,
+    }).catch((e) =>
+      e.kind === "aborted" ? { aborted: true } : Promise.reject(e),
+    );
+    if (probe.aborted) {
+      summary.stopped = "interrupted";
+      await client.unload(m.name);
+      break;
+    }
+    if (probe.ok === false) {
+      summary.stopped = thinkRefusal(m.name, probe);
+      summary.thinkRefused = { model: m.name, message: probe.message };
+      log(`REFUSED ${summary.stopped}`);
+      await client.unload(m.name);
+      break;
+    }
+    if (probe.ok) engine = { ...engine, thinkProbe: "accepted" };
     const nonce = Date.now().toString(36);
-    const seqs = expandCache(suite, { nonce, agentTools });
+    const seqs = buildSequences
+      ? buildSequences({ nonce })
+      : expandCache(suite, { nonce, agentTools });
     let consecutive = 0;
     try {
       outer: for (const seq of seqs)
@@ -235,6 +269,7 @@ export async function runCache({
             consecutive++;
           }
           const rec = cacheRecord({
+            suiteName,
             model: m.name,
             cfg,
             engine,
@@ -249,7 +284,7 @@ export async function runCache({
           appendRecord(file, rec, roots);
           error ? summary.errors++ : summary.ran++;
           log(
-            `cache ${seq.id}/${seq.arm} #${i} ${step.label}: ${error ? "error " + error.message : cacheCells(rec).join(" ")}`,
+            `${suiteName} ${seq.id}/${seq.arm} #${i} ${step.label}: ${error ? "error " + error.message : cacheCells(rec).join(" ")}`,
           );
           if (consecutive >= 3) {
             summary.stopped = `3 consecutive errors; last: ${error.message}`;
@@ -265,6 +300,28 @@ export async function runCache({
   return summary;
 }
 
+/** One short cell for the slot and metrics sidecar of a request. */
+export function sidecarCell(sc) {
+  if (!sc) return "-";
+  const bits = [];
+  const s0 = sc.slots?.[0];
+  if (s0)
+    bits.push(
+      "slot0 " +
+        Object.entries(s0)
+          .filter(([k, v]) => k !== "next_token" && k !== "id" && v != null)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(" "),
+    );
+  if (sc.metrics?.prompt_tokens_total != null)
+    bits.push(`prompt_tokens_total=${sc.metrics.prompt_tokens_total}`);
+  if (sc.metrics?.n_tokens_max != null)
+    bits.push(`n_tokens_max=${sc.metrics.n_tokens_max}`);
+  if (sc.slotsError) bits.push(`slots: ${sc.slotsError}`);
+  if (sc.metricsError) bits.push(`metrics: ${sc.metricsError}`);
+  return bits.join("; ") || "-";
+}
+
 const f0 = (x) => (x == null ? "-" : Math.round(x));
 function cacheCells(r) {
   const u = r.usage ?? {};
@@ -273,6 +330,7 @@ function cacheCells(r) {
     `cached=${f0(u.cachedTokens)}`,
     `evaluated=${f0(u.promptEvalTokens ?? u.promptTokens)}`,
     `promptMs=${f0(u.promptEvalMs)}`,
+    ...(r.sidecar ? [sidecarCell(r.sidecar)] : []),
   ];
 }
 
@@ -298,16 +356,24 @@ export function buildCacheReport(records) {
       `## ${r0.seq}${r0.arm !== "default" ? ` (${r0.arm})` : ""}: ${r0.model} via ${r0.api}`,
       "",
     );
+    const hasFc = rs.some((r) => r.firstChangedChars != null);
+    const hasSc = rs.some((r) => r.sidecar);
     L.push(
-      "| # | step | prompt tokens | cached | evaluated | evaluated vs cold | prompt ms | ttft ms | output tokens |",
+      "| # | step | prompt tokens | cached | evaluated | evaluated vs cold | prompt ms | ttft ms | output tokens |" +
+        (hasFc ? " first changed char |" : "") +
+        (hasSc ? " slot / metrics |" : ""),
     );
-    L.push("| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
+    L.push(
+      "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |" +
+        (hasFc ? " ---: |" : "") +
+        (hasSc ? " --- |" : ""),
+    );
     const cold = rs[0].usage?.promptEvalTokens ?? rs[0].usage?.promptTokens;
     for (const r of rs) {
       const u = r.usage ?? {};
       const ev = u.promptEvalTokens ?? u.promptTokens;
       L.push(
-        `| ${r.step} | ${r.label} | ${f0(u.promptTokens)} | ${f0(u.cachedTokens)} | ${f0(ev)} | ${ev != null && cold ? (ev / cold).toFixed(2) : "-"} | ${f0(u.promptEvalMs)} | ${f0(u.ttftMs)} | ${f0(u.outputTokens)} |${r.error ? " error: " + r.error.message : ""}`,
+        `| ${r.step} | ${r.label} | ${f0(u.promptTokens)} | ${f0(u.cachedTokens)} | ${f0(ev)} | ${ev != null && cold ? (ev / cold).toFixed(2) : "-"} | ${f0(u.promptEvalMs)} | ${f0(u.ttftMs)} | ${f0(u.outputTokens)} |${hasFc ? ` ${r.firstChangedChars ?? "-"} |` : ""}${hasSc ? ` ${sidecarCell(r.sidecar)} |` : ""}${r.error ? " error: " + r.error.message : ""}`,
       );
     }
     L.push("");

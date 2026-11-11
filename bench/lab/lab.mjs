@@ -5,10 +5,16 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { loadProduct } from "./adapter.mjs";
+import { compareRuns, CompareError, formatCompare } from "./lib/compare.mjs";
 import { formatDiff } from "./lib/diff.mjs";
 import { writeFixtures } from "./lib/fixtures.mjs";
 import { Budget, machineFacts } from "./lib/guards.mjs";
 import { formatInventory, inventory } from "./lib/inventory.mjs";
+import {
+  loadDumps,
+  replayRequestCount,
+  replaySequences,
+} from "./lib/replay.mjs";
 import { buildCacheReport, cacheRequestCount, runCache } from "./lib/cache.mjs";
 import { APIS, Engine, isLlamaApi, THINK_VALUES } from "./lib/transports.mjs";
 import { DEFAULT_EXE, startServer, stopFromPidFile } from "./lib/server.mjs";
@@ -29,6 +35,8 @@ commands
   run --run                 run for real (without --run it only prints the plan)
   report                    markdown tables with Wilson 95% intervals
   diff <before> <after>     compare two result files
+  compare <A> <B>           pair two result sets by case and pass: rates, McNemar exact, flipped cases
+  replay --dumps PATH       send recorded request dumps through the cache path, report cached/evaluated tokens
   suggest                   write profiles/<model>.json from the results
   fixtures --suite S        write observed corpus fixtures from raw replies
   snapshot-tools            write the real agent tool list (needs the product's install)
@@ -43,6 +51,9 @@ transports (README "Transports")
   --tool-choice auto|required|none|<tool name>   --seed N   --body-extra '{"json":"merged into the body"}'
   --gguf FILE (llama-server apis: size guard; with --serve, the file to start)  --serve (start and stop llama-server for the run)
   --exe FILE  --port N  --ctx N  --ngl N  --parallel N  --alias NAME  --chat-template NAME  --chat-template-file FILE
+  --metrics  --slots (llama-server: start with the endpoint on, and poll /slots and /metrics after each request)
+  --server-log FILE (the log to read the Chat format: line from when the server was not started by --serve)
+  --dumps PATH (replay)  --model-a M  --model-b M (compare, when a side holds several models)
   --cache-reuse N  --reasoning-format F  --server-arg ARG (repeatable)  --no-vram-check  --ready-timeout S
   --out DIR (plan/run/fixtures: results folder; report/diff/snapshot-tools: a file)  --results-dir DIR
   --log-dir DIR  --allow-root DIR (repeatable extra write roots)  --ollama-url URL (the "is anything loaded" check)
@@ -85,6 +96,12 @@ const OPTIONS = {
   "cache-reuse": { type: "string" },
   "reasoning-format": { type: "string" },
   "server-arg": { type: "string", multiple: true },
+  metrics: { type: "boolean" },
+  slots: { type: "boolean" },
+  "server-log": { type: "string" },
+  dumps: { type: "string" },
+  "model-a": { type: "string" },
+  "model-b": { type: "string" },
   "no-vram-check": { type: "boolean" },
   "ready-timeout": { type: "string", default: "300" },
   "log-dir": { type: "string" },
@@ -151,6 +168,10 @@ function suiteOptions(v) {
     ignoreLoaded: v["ignore-loaded"],
   };
 }
+
+/** A result directory, or one file as the single-file list readAll takes. */
+const fileOrDir = (p) =>
+  fs.existsSync(p) && fs.statSync(p).isFile() ? [p] : p;
 
 async function pickModels(spec, inv) {
   if (!spec) die("--models is required (names, smallest-safe or all-safe)");
@@ -261,6 +282,34 @@ export async function main(argv, env = process.env) {
       : process.stdout.write(md);
   }
 
+  if (cmd === "compare") {
+    if (rest.length !== 2)
+      return die(
+        "compare needs two result sets: compare <resultsA> <resultsB>",
+      );
+    let res;
+    try {
+      res = compareRuns(
+        readAll(fileOrDir(rest[0])),
+        readAll(fileOrDir(rest[1])),
+        {
+          modelA: v["model-a"],
+          modelB: v["model-b"],
+        },
+      );
+    } catch (e) {
+      if (e instanceof CompareError) return die(e.message);
+      throw e;
+    }
+    const md = formatCompare(
+      res,
+      rest.map((x) => path.basename(x)),
+    );
+    return v.out
+      ? log("wrote " + writeText(v.out, md, roots))
+      : process.stdout.write(md);
+  }
+
   const serverOpts = () => ({
     exe: v.exe ?? DEFAULT_EXE,
     gguf: v.gguf ?? die("--gguf FILE is required"),
@@ -276,6 +325,8 @@ export async function main(argv, env = process.env) {
         ? num(v["cache-reuse"], "cache-reuse")
         : undefined,
     reasoningFormat: v["reasoning-format"],
+    metrics: v.metrics,
+    slots: v.slots,
     extra: v["server-arg"] ?? [],
     ollamaUrl: v["ollama-url"],
     checkVram: !v["no-vram-check"],
@@ -353,6 +404,8 @@ export async function main(argv, env = process.env) {
     allowRemote: v["allow-remote"],
     requestTimeoutMs: num(v["request-timeout"], "request-timeout") * 1000,
     signal: ctl.signal,
+    sidecar: { slots: v.slots, metrics: v.metrics },
+    serverLog: v["server-log"],
   });
   const facts = machineFacts({ env });
   let server;
@@ -371,6 +424,7 @@ export async function main(argv, env = process.env) {
         `llama-server ready at ${server.baseUrl}; Chat format: ${server.chatFormat() ?? "not in the log"}`,
       );
       client.origin = server.baseUrl;
+      client.serverLog = server.logFile;
     }
     const size = fs.statSync(v.gguf).size;
     const name = v.alias ?? path.basename(v.gguf).replace(/\.gguf$/i, "");
@@ -421,6 +475,55 @@ export async function main(argv, env = process.env) {
       );
     }
 
+    if (cmd === "replay") {
+      const dumpsDir =
+        v.dumps ??
+        [
+          path.join(
+            path.dirname(fileURLToPath(import.meta.url)),
+            "..",
+            "tier0",
+            "fixtures",
+            "dumps",
+          ),
+        ].find((d) => fs.existsSync(d)) ??
+        die("--dumps PATH is required");
+      const sets = loadDumps(dumpsDir);
+      const models = await pickModels(v.models, inv);
+      const n = replayRequestCount(sets);
+      log(
+        `${v.run ? "RUN" : "DRY RUN"}: replay of ${sets.length} set(s), ${n} requests per model via ${cfg.api}${cfgTag(cfg)} from ${dumpsDir}, results ${resultFile(roots, "replay")}`,
+      );
+      if (!v.run)
+        return log("dry: nothing was sent. Add --run to run for real.");
+      const s = await runCache({
+        client,
+        suite: { defaults: { temperature: 0, numPredict: 16 } },
+        suiteName: "replay",
+        buildSequences: ({ nonce }) =>
+          replaySequences(sets, { nonce, api: cfg.api }),
+        models,
+        roots,
+        budget: new Budget({
+          maxRequests: num(v["max-requests"], "max-requests"),
+          maxMs: num(v["max-minutes"], "max-minutes") * 60_000,
+        }),
+        signal: ctl.signal,
+        log,
+        facts: llama ? { ...facts, gpus: undefined } : facts,
+        limits,
+        cfg,
+        numCtx: suiteOptions(v).numCtx,
+        cooldownMs: num(v.cooldown, "cooldown") * 1000,
+      });
+      log(
+        `done: ${s.ran} ran, ${s.errors} errors, ${s.refused.length} model(s) refused${s.stopped ? `; stopped: ${s.stopped}` : ""}`,
+      );
+      if (s.thinkRefused) process.exitCode = 1;
+      if (s.stopped === "interrupted") process.exitCode = 130;
+      return;
+    }
+
     if (cmd !== "plan" && cmd !== "run")
       return die(`unknown command ${cmd}\n\n${HELP}`);
     const suite = loadSuite(v.suite ?? die("--suite is required"));
@@ -456,6 +559,7 @@ export async function main(argv, env = process.env) {
       log(
         `done: ${s.ran} ran, ${s.errors} errors, ${s.refused.length} model(s) refused${s.stopped ? `; stopped: ${s.stopped}` : ""}`,
       );
+      if (s.thinkRefused) process.exitCode = 1;
       if (s.stopped === "interrupted") process.exitCode = 130;
       return;
     }
@@ -531,6 +635,7 @@ export async function main(argv, env = process.env) {
     log(
       `done: ${summary.ran} ran, ${summary.skipped} already done, ${summary.errors} errors, ${summary.refused.length} model(s) refused${summary.stopped ? `; stopped: ${summary.stopped}` : ""}`,
     );
+    if (summary.thinkRefused) process.exitCode = 1;
     if (summary.stopped === "interrupted") process.exitCode = 130;
   }
 }

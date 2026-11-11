@@ -42,6 +42,8 @@ export function buildArgs({
   chatTemplateFile,
   cacheReuse,
   reasoningFormat,
+  metrics,
+  slots,
   extra = [],
 }) {
   if (!gguf) throw new ServerError("a GGUF path is required");
@@ -72,7 +74,20 @@ export function buildArgs({
   if (chatTemplateFile) a.push("--chat-template-file", chatTemplateFile);
   if (cacheReuse != null) a.push("--cache-reuse", String(cacheReuse));
   if (reasoningFormat) a.push("--reasoning-format", reasoningFormat);
+  // b12206 --help: --metrics is off by default, --slots on by default
+  if (metrics) a.push("--metrics");
+  if (slots) a.push("--slots");
   return [...a, ...extra];
+}
+
+/** The last `Chat format:` line in a llama-server log, or undefined. */
+export function readChatFormat(logFile, read = fs.readFileSync) {
+  try {
+    const m = [...read(logFile, "utf8").matchAll(/Chat format:\s*(.+)/g)];
+    return m.length ? m[m.length - 1][1].trim() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Kill a process and its children. Windows: taskkill /T /F; elsewhere SIGKILL. */
@@ -279,14 +294,7 @@ export async function startServer(opts, roots, deps = {}) {
     stop,
     /** The `Chat format:` line llama.cpp prints when it picks a tool-call handler. */
     chatFormat() {
-      try {
-        const m = [
-          ...fs.readFileSync(logFile, "utf8").matchAll(/Chat format:\s*(.+)/g),
-        ];
-        return m.length ? m[m.length - 1][1].trim() : undefined;
-      } catch {
-        return undefined;
-      }
+      return readChatFormat(logFile);
     },
   };
 }
