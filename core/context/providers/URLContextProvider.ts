@@ -42,6 +42,8 @@ export interface UrlFetchOptions {
    * decision (the tool asks for approval first).
    */
   guardRedirects?: boolean;
+  /** With guardRedirects: a redirect to a host this refuses is not followed */
+  allowRedirectHost?: (host: string) => boolean;
 }
 
 export async function getUrlContextItems(
@@ -52,7 +54,7 @@ export async function getUrlContextItems(
   const url = new URL(query);
   const icon = options.guardRedirects ? undefined : await fetchFavicon(url);
   const resp = options.guardRedirects
-    ? await fetchWithGuardedRedirects(url, fetchFn)
+    ? await fetchWithGuardedRedirects(url, fetchFn, options.allowRedirectHost)
     : await fetchFn(url);
 
   // Check if the response is not OK
@@ -92,6 +94,7 @@ export async function getUrlContextItems(
 async function fetchWithGuardedRedirects(
   start: URL,
   fetchFn: FetchFunction,
+  allowHost?: (host: string) => boolean,
 ): Promise<any> {
   // One resolution per hop, then the connection is pinned to those addresses.
   let current = start;
@@ -110,6 +113,11 @@ async function fetchWithGuardedRedirects(
     const next = new URL(location, current);
     if (next.protocol !== "http:" && next.protocol !== "https:") {
       throw new Error(`Refused to follow a redirect to ${next.protocol} URL`);
+    }
+    if (allowHost && !allowHost(next.hostname)) {
+      throw new Error(
+        `Refused to follow a redirect from ${start.host} to ${next.host}, which is not in your trusted domains`,
+      );
     }
     checked = await classifyHost(next.hostname);
     if (!startsNonPublic && checked.nonPublic) {

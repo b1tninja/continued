@@ -82,6 +82,7 @@ export function clampPolicy(
     result.policy === "allowedWithoutPermission" &&
     result.source !== "allow-rule" &&
     result.source !== "permissive" &&
+    result.source !== "trusted-host" &&
     result.source !== "yolo"
   ) {
     return "allowedWithPermission";
@@ -113,6 +114,7 @@ export function recordPolicyDecision(
       by: "rules",
       source: result.source ?? "tool-setting",
       rule: result.rule,
+      ...(result.exempts?.length ? { exempts: result.exempts } : {}),
       reason: result.reason,
     });
     if (policy === "deny") closeRefused(trail, base.callId);

@@ -12,6 +12,8 @@ export function decisionLabel(d: ToolCallDecision): string {
         return "Allowed by Auto";
       case "permissive":
         return "Allowed by Permissive";
+      case "trusted-host":
+        return "Allowed: trusted host";
       case "yolo":
         return "Allowed by YOLO";
       case "once":

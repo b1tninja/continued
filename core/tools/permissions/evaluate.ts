@@ -17,6 +17,12 @@ import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
 import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { askProtectionHit } from "./askProtections";
+import {
+  annotateExemptions,
+  exemptionsFor,
+  trustedFetchAllow,
+} from "./evaluateExtras";
+import type { ExemptableRule } from "./builtinExemptions";
 import { deputyCallHit, type DeputyCallInput } from "./deputyCall";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
@@ -108,6 +114,8 @@ export interface ToolPolicyResult {
   reason?: string;
   /** What kind of protected call asked (source "protected-path") */
   protection?: ProtectedKind;
+  /** Built-in rules the person's own exact Always rule exempted this call from (source "allow-rule") */
+  exempts?: ExemptableRule[];
   /** A command the parser vouched as only reading: why it is Context use */
   readOnly?: string;
   /** The rule that decided, as written in config.yaml. */
@@ -175,7 +183,13 @@ export interface EvaluateInput {
 export function evaluateToolPolicyWithRules(
   input: EvaluateInput,
 ): ToolPolicyResult {
-  return lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input)));
+  return annotateExemptions(
+    input,
+    lockRuntimeWrites(
+      input,
+      lockPolicyFiles(input, trustedFetchAllow(input, evaluateRules(input))),
+    ),
+  );
 }
 
 /**
@@ -305,6 +319,7 @@ function firstProtectedHit(
       trustedDomains: input.trustedDomains,
       largeChangeLines: input.largeChangeLines,
       cwd: input.cwd,
+      exempt: exemptionsFor(input),
     }),
     deputyCallHit({
       toolName,
