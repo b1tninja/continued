@@ -6,10 +6,46 @@ Hooks are commands the CLI runs around tool calls. Hooks in your own settings (`
 
 ## What trust covers
 
-Trust is recorded in `trusted-hooks.json` in the global config folder, with a fingerprint of the project's hook definitions. Any change to a command, matcher, timeout or `onError` asks again.
+Trust is recorded in `trusted-hooks.json` in the global config folder, with a fingerprint of the project's hook definitions. Any change to a command, matcher, timeout, `onError` or `onFailure` asks again.
 
 When a command runs a script inside the workspace, the fingerprint also includes the content of that script, so editing `scripts/pre.sh` after you trusted `./scripts/pre.sh` asks again. The script is looked for in the program and the first few words after it, in each part of a `&&`, `||`, `;` or `|` chain: `./x.sh`, `bash x.sh`, `node x.js`, `python x.py`, `pwsh -File x.ps1`, `npx tsx x.ts`, with `$CLAUDE_PROJECT_DIR` expanded. `continuous hooks` lists the script files it found. This is best effort: files that a script imports or sources, scripts outside the workspace and paths built at run time are not covered.
 
 ## A project hook cannot approve a call
 
 A hook from a project settings file can block a call or ask you to confirm it, but an `allow` answer from it is ignored (a notice is logged). Only hooks in your own settings can turn a call the CLI would ask about into an allowed one. Deny rules, always-on rules and protected paths apply after any hook either way. If you relied on a project hook to skip questions, move that hook to your own settings.
+
+## Only your own hooks
+
+Set `"managedHooksOnly": true` in your own settings (`~/.claude/settings.json` or `~/.continuous/settings.json`) and hooks that come with a repository are not read at all: not offered for trust, not run with `--trust-project-hooks`, and a `disableAllHooks` in a project file cannot switch off yours. Only a value of `true` in one of your own files counts; a project file cannot set it. `continuous hooks` says when this is in force. A path that only an administrator can write is not supported yet.
+
+## When a hook fails
+
+A hook fails when it times out, cannot start, exits with a code other than 0 or 2, or returns an HTTP error. On `PreToolUse`, `PermissionRequest` and `UserPromptSubmit` a failed hook blocks the action: hooks fail closed. Exit code 2 with a message on stderr is a deliberate block and works the same in every tool that reads a Claude Code hooks file.
+
+Two settings let a failed hook through, and they mean the same thing:
+
+| Here | Claude Code | Meaning |
+| --- | --- | --- |
+| `"onError": "block"` | `"onFailure": "block"` | a failure blocks the action |
+| `"onError": "allow"` | `"onFailure": "continue"` | a failure lets the action go ahead |
+
+If a hook sets both, the stricter one applies, and a value that is not understood blocks. **The default differs from Claude Code**: with neither set, a failed hook blocks here, and the Claude Code hooks page (<https://code.claude.com/docs/en/hooks>, read 2026-11-11) says the action goes ahead there unless `onFailure` is `"block"` (Claude Code v2.1.295 or later). A file shared between the two tools therefore fails closed here without changing anything, and a hook you want to fail open must say so in one of these two spellings. On events that cannot stop anything (`Stop`, `SessionStart`, `SessionEnd`, `Notification`, `PreCompact`) a failure is only logged.
+
+## Events
+
+| Event | When it runs | Input fields besides `session_id`, `transcript_path`, `cwd`, `permission_mode` and `hook_event_name` |
+| --- | --- | --- |
+| `SessionStart` | once, after the services are up | `source` (`startup` or `resume`), `model` |
+| `SessionEnd` | when the CLI exits through its normal exit path, once; it waits at most 1.5 seconds | `reason` |
+| `Stop` | when an assistant turn ends in the terminal, headless and `serve` runs; not after a cancelled turn | `stop_hook_active`, `last_assistant_message` (not in the terminal UI) |
+| `Notification` | when an approval is waiting for you | `message`, `title`, `notification_type` (`permission_prompt`) |
+| `PermissionRequest` | before you are asked to approve a call | `tool_name`, `tool_input` |
+| `PreCompact` | before a manual or automatic compaction | `trigger`, `custom_instructions` |
+
+`transcript_path` is empty: there is no transcript file. Some things are logged and not obeyed yet: a `Stop` hook that asks the assistant to continue, a `PreCompact` hook that blocks, and context from `SessionStart` (it is not added to the conversation). A `PermissionRequest` hook can deny a call but its `allow` does not skip the question, because the question may be one a rule insisted on. `SessionEnd` does not run on a signal or a crash.
+
+Not covered yet: the `args` form that runs a command without a shell, an `if` filter, `prompt_id`, `agent_id` and the other optional input fields, and hooks in the IDE extensions. Hooks are a guardrail, not a boundary: the search and glob tools and MCP tools do not call tool hooks.
+
+## What a hook is sent
+
+The input holds conversation content: prompts, tool arguments and tool output. Before it reaches a command from a project, and before any `http` hook sends it off your machine, it goes through the outbound secret masker, which replaces recognised secrets with `[REDACTED:kind:xxxx]`. This is best effort, like every pattern masker. Commands in your own settings get the real values, since they are your own code and a guard that checks a command needs to see it. Text a hook adds back (`additionalContext` or plain output on `SessionStart` and `UserPromptSubmit`) is cut at 10,000 characters per event with a notice.

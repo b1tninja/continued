@@ -123,6 +123,10 @@ export function mergeParentOptions(parentCommand: Command, options: any): any {
     "agent",
     "betaSubagentTool",
     "trustProjectConfig",
+    "maxBudgetUsd",
+    "maxTurns",
+    "maxDuration",
+    "budgetAllowUnpriced",
   ];
 
   for (const optName of inheritableOptions) {

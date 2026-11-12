@@ -4,6 +4,7 @@ import { env } from "../env.js";
 import { formatError } from "../util/formatError.js";
 import { getGitDiffSnapshot } from "../util/git.js";
 import { logger } from "../util/logger.js";
+import { cliFetch } from "../util/networkFetch.js";
 
 import type { StorageSyncServiceState } from "./types.js";
 
@@ -164,7 +165,7 @@ export class StorageSyncService {
     );
 
     try {
-      const response = await fetch(url, {
+      const response = await cliFetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -225,7 +226,7 @@ export class StorageSyncService {
     const url = new URL("agents/storage/presigned-url", env.apiBase);
 
     try {
-      const response = await fetch(url, {
+      const response = await cliFetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -333,7 +334,7 @@ export class StorageSyncService {
       headers["x-amz-server-side-encryption"] = "AES256";
     }
 
-    const response = await fetch(url, {
+    const response = await cliFetch(url, {
       method: "PUT",
       headers,
       body,

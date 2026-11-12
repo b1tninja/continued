@@ -117,6 +117,7 @@ The `models` section defines the language models used in your configuration. Mod
   - `stop`: An array of stop tokens that will terminate the completion.
   - `reasoning`: Boolean to enable thinking/reasoning for Anthropic Claude 3.7+ and some Ollama models.
   - `reasoningBudgetTokens`: Budget tokens for thinking/reasoning in Anthropic Claude 3.7+ models.
+  - `omitSampling`: Advanced. `true` leaves `temperature`, `topP` and `topK` out of the request for this model; `false` sends them even to a Claude model that refuses them. Unset follows the model: Claude 4.7 and later, Fable and Mythos refuse the three, so they are left out whatever the config sets, with one debug-log line per model. Applies to Anthropic, Bedrock and Vertex AI Claude requests.
   - `promptCaching`: Boolean to cache the tool definitions, system prompt and conversation for Claude models on Anthropic, Amazon Bedrock, Vertex AI and OpenRouter, and the system prompt and conversation for Amazon Nova 2 Lite, Pro, Lite and Micro on Bedrock. On Anthropic and Bedrock it is on by default in Agent, Plan and Background modes (and in the CLI) when neither this nor `cacheBehavior` says anything; off in Chat, and off by default on Vertex AI and OpenRouter. `false` turns it off and also overrides `cacheBehavior`. See [Prompt Caching](./customize/deep-dives/prompt-caching.mdx).
   - `keepAlive`: For Ollama, the number of seconds to keep the model loaded after the last request (default: `1800`).
 
@@ -594,7 +595,7 @@ List of documentation sites to index.
 - `name` (**required**): Name of the documentation site, displayed in dropdowns, etc.
 - `startUrl` (**required**): Start page for crawling - usually root or intro page for docs
 - `favicon`: URL for site favicon (default is `/favicon.ico` from `startUrl`).
-- `useLocalCrawling`: Crawl on this machine. This is the default. Set to `false` to send the site URL to the upstream crawl service.
+- `useLocalCrawling`: Ignored. Documentation sites are always crawled on this machine; no crawl service is used. Kept so existing configs still load.
 
 **Example:**
 
@@ -624,6 +625,9 @@ The [Model Context Protocol](https://modelcontextprotocol.io/introduction) is a 
 - `requestOptions`: Optional request options for `sse` and `streamable-http` servers. Same format as [model requestOptions](#models).
 - `oauth`: Optional OAuth settings for `sse` and `streamable-http` servers.
   - `callbackPort`: Port of the local server that receives the browser redirect while signing in (default `3000`).
+  - `clientId`: Client id of an OAuth client you registered with the server's authorization server. When set, dynamic client registration is not used.
+  - `clientSecret`: Secret of that client, if it has one. Write it as `${{ secrets.NAME }}`, never inline.
+  - `redirectHost`: Host name in the redirect URL, `localhost` (default) or `127.0.0.1`. The local server listens on loopback addresses only either way.
 - `connectionTimeout`: Optional timeout for _initial_ connection to MCP server
 
 **Example:**

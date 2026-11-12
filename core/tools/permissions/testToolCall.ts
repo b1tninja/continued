@@ -41,6 +41,8 @@ import {
   type PolicyLevels,
 } from "./policy";
 import type { ProtectedKind } from "./protected";
+import type { Sink } from "./taint/taintSinks";
+import type { TaintFact } from "./taint/taintState";
 import type { RuleDecision, RuleSource, ToolPermissions } from "./rules";
 
 /**
@@ -79,6 +81,8 @@ export interface TestToolCallInput {
   shell?: ShellKind;
   /** Text a tool returned, to see whether the injection notice would be put in front of it */
   outputText?: string;
+  /** The tainted-session fact, to see what the rule would do (taint/taintRule.ts) */
+  taint?: TaintFact;
 }
 
 export type StepOutcome = "passed" | "decided" | "skipped" | "info";
@@ -127,6 +131,8 @@ export interface ToolCallTestResult {
   matchedRules: MatchedRule[];
   /** The call would reach the reviewer model, which this test does not call */
   wouldAskReviewer: boolean;
+  /** Only with `taint` given: the sink class the call is, when it is one */
+  taintSink?: Sink;
   lint: LintFinding[];
   steps: TestStep[];
   notes: string[];
@@ -665,6 +671,7 @@ export function testToolCall(input: TestToolCallInput): ToolCallTestResult {
     largeChangeLines: input.sources.user?.auto?.environment?.largeChangeLines,
     cwd,
     shell,
+    ...(input.taint ? { taint: input.taint } : {}),
   });
 
   const callContext = { parsedArgs, cwd, shell };
@@ -698,6 +705,7 @@ export function testToolCall(input: TestToolCallInput): ToolCallTestResult {
     ...(evaluated.protection ? { protection: evaluated.protection } : {}),
     matchedRules: matches,
     wouldAskReviewer: verdict.wouldAskReviewer,
+    ...(evaluated.taintSink ? { taintSink: evaluated.taintSink } : {}),
     lint,
     steps: [],
     notes,

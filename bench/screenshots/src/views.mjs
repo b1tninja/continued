@@ -101,6 +101,14 @@ export const VIEWS = {
     fixture: "chat-first-run",
     note: "a new chat for a first-time user, with the one-line first-run notice",
   },
+  "audit-list": {
+    fixture: "audit-list",
+    note: "Settings, Permissions, Recent calls: decisions, who decided, agents, filters",
+  },
+  "audit-inbox": {
+    fixture: "audit-inbox",
+    note: "Settings, Permissions, Inbox: open asks oldest first, ages, possibly-ended label, Show older",
+  },
   "settings-tools": {
     fixture: "settings-tools",
     note: "Settings, Tools tab, with Commands and secrets",
@@ -147,8 +155,8 @@ export function parseThemes(value) {
   if (!value || value === "both") return [...DEFAULTS.themes];
   return value.split(",").map((s) => {
     const t = s.trim();
-    if (t !== "dark" && t !== "light") {
-      throw new Error(`Bad theme "${s}": dark or light`);
+    if (t !== "dark" && t !== "light" && t !== "hc") {
+      throw new Error(`Bad theme "${s}": dark, light or hc`);
     }
     return t;
   });

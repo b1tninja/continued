@@ -17,8 +17,11 @@ import {
   type ApprovalTrace,
 } from "../audit/cliAudit.js";
 import { startShadowReview } from "../audit/shadowHook.js";
+import { firePermissionRequest } from "../hooks/fireHook.js";
+import { notifyAttention } from "../hooks/lifecycleHooks.js";
 import { itemBudgetNoteNow } from "../loop/loopBudget.js";
 import { holdLoopCall, loopRepeatGuard } from "../loop/loopHolds.js";
+import { noteCliToolResult } from "../permissions/cliTaint.js";
 import {
   evaluateWithCoreRules,
   keepCoreVerdict,
@@ -50,6 +53,7 @@ import {
   TOOL_ALIASES,
   validateToolCallArgsPresent,
 } from "../tools/index.js";
+import { cliRoleRefusal, cliToolRole } from "../tools/roleGate.js";
 import { PreprocessedToolCall, ToolCall } from "../tools/types.js";
 import { recordCacheTally } from "../util/cacheTally.js";
 import { logger } from "../util/logger.js";
@@ -114,10 +118,33 @@ export function requestUserPermission(
     return Promise.resolve(false);
   }
   const prompt = permissionPrompts.then(() =>
-    promptForPermission(toolCall, callbacks),
+    askWithHooks(toolCall, callbacks),
   );
   permissionPrompts = prompt.catch(() => undefined);
   return prompt;
+}
+
+/**
+ * PermissionRequest hooks run before the person is asked: a hook that denies
+ * answers for them. An `allow` from a hook does not skip the question, because
+ * the question here can be one a rule insisted on; only a deny is honoured.
+ * Notification hooks hear that an approval is waiting.
+ */
+async function askWithHooks(
+  toolCall: PreprocessedToolCall,
+  callbacks: StreamCallbacks,
+): Promise<boolean> {
+  const hooked = await firePermissionRequest(
+    toolCall.name,
+    toolCall.preprocessResult?.args ?? toolCall.arguments,
+  );
+  if (hooked.blocked) return false;
+  notifyAttention(
+    `Approval needed for ${toolCall.name}`,
+    "permission_prompt",
+    "Permission needed",
+  );
+  return promptForPermission(toolCall, callbacks);
 }
 
 async function promptForPermission(
@@ -224,6 +251,10 @@ async function coreRulesVerdict(
       ...(mcpServer
         ? {
             mcp: { serverName: mcpServer, toolName: toolCall.name },
+            mcpSchema: toolCall.tool?.parameters as unknown as Record<
+              string,
+              unknown
+            >,
             mcpDefinitionChange: mcpPinChange(mcpServer, toolCall.name),
           }
         : {}),
@@ -295,6 +326,24 @@ async function decideToolApproval(
   denialMessage?: string;
 }> {
   const { callbacks, isHeadless, hookDecision } = options;
+  // The role table first: a call the mode's role may not make never reaches a
+  // prompt, a rule or the reviewer, so nothing there can loosen it
+  const mode = services.toolPermissions?.getCurrentMode?.();
+  trace.role = cliToolRole(mode);
+  const roleRefusal = cliRoleRefusal(mode, toolCall.tool);
+  if (roleRefusal) {
+    trace.verdict = {
+      decision: "deny",
+      by: "system",
+      source: "role",
+      reason: roleRefusal,
+    };
+    return {
+      approved: false,
+      denialReason: "policy",
+      denialMessage: roleRefusal,
+    };
+  }
   const permissionCheck = withReadOnlyMcp(
     checkToolPermission(toolCall, permissions),
     toolCall.tool,
@@ -976,6 +1025,7 @@ export async function executeStreamedToolCalls(
               approvedCall,
               flagToolResult(rawResult),
             );
+            noteCliToolResult(approvedCall, approvedCall.tool?.mcpServer);
             recordCliOutcome(approvedCall, {
               ran: true,
               durMs: Date.now() - startedAt,

@@ -18,7 +18,9 @@ import { mcpRuleName } from "core/tools/permissions/names.js";
 import { readUserTrustedDomains } from "core/tools/permissions/readRuleSources.js";
 import { processedPathArgs } from "core/tools/permissions/realPath.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
+import { taintInput } from "core/tools/permissions/taint/taintWiring.js";
 import { readUserEnvNames } from "core/tools/permissions/userEnvNames.js";
+import { deputyWorkspace } from "core/tools/permissions/workspaceRoots.js";
 import { resolveShell } from "core/util/shell.js";
 import { readUserGuidance } from "core/util/userGuidance.js";
 
@@ -120,7 +122,9 @@ export function isAutoReviewEnabled(): boolean {
 }
 
 const sessions = new AutoReviewSessions();
-const SESSION_ID = "cli";
+/** One CLI process is one session for the reviewer and the tainted-session rule */
+export const CLI_SESSION_ID = "cli";
+const SESSION_ID = CLI_SESSION_ID;
 
 type ChatLike = NonNullable<AutoReviewDeps["reviewer"]>;
 
@@ -235,6 +239,8 @@ export interface CoreRulesInput {
    * Floor rules use that form either way.
    */
   mcp?: { serverName: string; toolName: string };
+  /** The MCP tool's JSON schema: a string it calls a path is judged as one */
+  mcpSchema?: Record<string, unknown>;
   /** The MCP tool's definition or launch changed since it was approved: it asks again */
   mcpDefinitionChange?: {
     kind: "changed" | "added" | "launch";
@@ -243,6 +249,14 @@ export interface CoreRulesInput {
   isHeadless: boolean;
   history?: ChatHistoryItem[];
   cwd?: string;
+}
+
+/** The MCP tool's declared schema, where the engine reads it (`function.parameters`). */
+function schemaOf(
+  name: string,
+  parameters: Record<string, unknown> | undefined,
+) {
+  return parameters ? { function: { name, parameters } } : {};
 }
 
 function pathArgsFor(
@@ -254,6 +268,17 @@ function pathArgsFor(
   return isMcp
     ? undefined
     : processedPathArgs(toolName, parsedArgs, cwd ?? process.cwd());
+}
+
+/** Whether the engine has anything to say: rules, levels, the reviewer, or a tainted session. */
+function engineApplies(
+  input: CoreRulesInput,
+  useReviewer: boolean,
+  tainted: boolean,
+): boolean {
+  return (
+    !!input.assistantPermissions || useReviewer || !!input.approval || tainted
+  );
 }
 
 /**
@@ -272,7 +297,9 @@ export async function evaluateWithCoreRules(
     isHeadless,
   } = input;
   const useReviewer = !!input.autoReview;
-  if (!permissions && !useReviewer && !input.approval) return undefined;
+  // The tainted-session rule needs the engine even without rules or levels
+  const taint = taintInput(SESSION_ID, undefined);
+  if (!engineApplies(input, useReviewer, !!taint.taint)) return undefined;
   const call = toCoreCall(cliToolName, args);
   const mcp = input.mcp ?? call?.mcp;
   if (!call && !mcp) return undefined;
@@ -282,6 +309,7 @@ export async function evaluateWithCoreRules(
         group: mcp.serverName,
         originalFunctionName: mcp.toolName,
         uri: `mcp:${mcp.serverName}`,
+        ...schemaOf(mcp.toolName, input.mcpSchema),
         evaluateToolCallPolicy: input.evaluateToolCallPolicy as never,
         ...(input.mcpDefinitionChange
           ? { mcpDefinitionChange: input.mcpDefinitionChange }
@@ -363,8 +391,10 @@ export async function evaluateWithCoreRules(
     trustedDomains: readUserTrustedDomains(),
     envNames: readUserEnvNames(),
     cwd: input.cwd ?? process.cwd(),
+    ...deputyWorkspace([input.cwd ?? process.cwd()]),
     // The shell the CLI runs commands in: its login shell, PowerShell on Windows
     shell: resolveShell().kind,
+    ...taint,
   });
   return {
     decision:
@@ -398,7 +428,8 @@ export function keepCoreVerdict(
     verdict.decision === "deny" ||
     verdict.source === "floor" ||
     verdict.source === "protected-path" ||
-    verdict.source === "safety-floor"
+    verdict.source === "safety-floor" ||
+    verdict.source === "tainted-session"
   ) {
     return verdict;
   }

@@ -5,7 +5,7 @@ import type {
   ProviderSetupInfo,
 } from "core/config/providerSetup";
 import { defaultSecretName } from "core/config/providerSecretName";
-import { hasOpenAICompatDefault } from "core/util/openaiCompatTest";
+import { hasConnectionTest } from "core/util/anthropicSurfaceTest";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Input } from "..";
@@ -211,7 +211,7 @@ export function ProviderSetupFlow({
   const isBedrock = isBedrockProvider(provider.provider);
   const isLocal = !!provider.localServer;
   const isOpenAICompat =
-    !isBedrock && (isLocal || hasOpenAICompatDefault(provider.provider));
+    !isBedrock && (isLocal || hasConnectionTest(provider.provider));
   const allFields = provider.collectInputFor ?? [];
   const apiKeyField = allFields.find((f) => f.key === "apiKey");
   // Set when the key is only one of several ways to sign in, as on Bedrock.
@@ -728,6 +728,7 @@ export function ProviderSetupFlow({
               apiBase={isLocal ? connection.apiBase : values.apiBase}
               apiKey={values.apiKey}
               model={provider.packages[0].params.model}
+              modelTitle={provider.packages[0].title}
               canTest={fieldsFilled}
             />
           )}

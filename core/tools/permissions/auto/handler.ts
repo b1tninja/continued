@@ -6,6 +6,7 @@ import type { ShellKind } from "../../../util/shell";
 import { DecisionSource } from "../decide";
 import { uriToPath } from "../names";
 import { EvaluateInput, evaluateToolPolicyWithRules } from "../evaluate";
+import { deputyWorkspace } from "../workspaceRoots";
 import type { ToolPermissions } from "../rules";
 import type { AuditAgent, AuditReviewer } from "../audit/record";
 import { ReviewCategory } from "./categories";
@@ -27,6 +28,8 @@ import {
   unavailable,
 } from "./review";
 import { AutoReviewSessions, reviewContextKey } from "./state";
+import { reasonOf, TAINTED_SESSION_SOURCE } from "../taint/taintRule";
+import { taintInput } from "../taint/taintWiring";
 
 export interface AutoReviewRequest {
   sessionId: string;
@@ -112,6 +115,7 @@ const FINAL_SOURCES: DecisionSource[] = [
   "allow-rule",
   "protected-path",
   "safety-floor",
+  "tainted-session",
 ];
 
 /**
@@ -127,6 +131,7 @@ export async function autoReviewToolCall(
   deps: AutoReviewDeps,
   req: AutoReviewRequest,
 ): Promise<AutoReviewReply> {
+  const tainted = taintInput(req.sessionId, req.callId);
   const evaluated = evaluateToolPolicyWithRules({
     tool: deps.tool,
     toolName: req.toolName,
@@ -136,9 +141,11 @@ export async function autoReviewToolCall(
     permissions: deps.permissions,
     approval: req.approval,
     cwd: folderPath(deps.environment.workspaceDirs?.[0]),
+    ...deputyWorkspace(deps.environment.workspaceDirs ?? []),
     shell: deps.shell,
     trustedDomains: deps.trustedDomains,
     envNames: deps.envNames,
+    ...tainted,
   });
   const base = { displayValue: evaluated.displayValue };
   const settled = (
@@ -181,6 +188,14 @@ export async function autoReviewToolCall(
   }
   if (evaluated.source && FINAL_SOURCES.includes(evaluated.source)) {
     return settled("ask", "Your rules ask before this runs.");
+  }
+  // A sink in a tainted session is the person's to approve, not the reviewer's
+  if (evaluated.taintSink && tainted.taint) {
+    return {
+      ...settled("ask", ""),
+      reason: reasonOf(evaluated.taintSink, tainted.taint),
+      ruleSource: TAINTED_SESSION_SOURCE,
+    };
   }
 
   // Only an area set to Automatic has a reviewer: the others leave an open
@@ -242,7 +257,8 @@ export async function autoReviewToolCall(
   const state = deps.sessions.get(req.sessionId);
   const limits = deps.permissions?.auto?.limits;
   // A verdict is only reused under the same words and the same guidance
-  const context = `${reviewContextKey(req.history.userMessages)}:${guidanceHash(guidance)}`;
+  const taintKey = tainted.taint?.kinds.join("+") ?? "";
+  const context = `${reviewContextKey(req.history.userMessages)}:${guidanceHash(guidance)}:${taintKey}`;
   const cached = state.cached(req.toolName, req.parsedArgs, context);
   // A cached answer is not counted again. The cap is for new refusals.
   if (cached) {
@@ -270,7 +286,7 @@ export async function autoReviewToolCall(
       toolName: req.toolName,
       args: req.parsedArgs,
       history: req.history,
-      environment: deps.environment,
+      environment: { ...deps.environment, ...tainted },
       settings: deps.permissions?.auto,
       guidance,
     },
