@@ -57,6 +57,8 @@ import {
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import { IdeShadow } from "./tools/permissions/auto/shadowIde";
 import { getAuditTrail } from "./tools/permissions/audit/global";
+import { recordAutoAnswer } from "./tools/permissions/audit/autoAnswer";
+import { setQuestionsLevel } from "./context/mcp/mcpElicitation";
 import { registerAuditListHandlers } from "./tools/permissions/audit/listingHandlers";
 import { machineAuditHost } from "./tools/permissions/audit/listingHost";
 import {
@@ -850,6 +852,10 @@ export class Core {
       );
       this.shadowIde.afterAutoReview(data.callId, reply.by);
       return reply;
+    });
+
+    on("audit/autoAnswer", async ({ data }) => {
+      recordAutoAnswer(getAuditTrail(), data);
     });
 
     on("audit/answer", async ({ data }) => {
@@ -2146,6 +2152,9 @@ export class Core {
           // The tainted-session rule's fact; nothing when the rule is off
           ...taintInput(sessionId, callId),
         });
+        // Core keeps the Questions level it was last told, for what is asked
+        // outside a tool call (an MCP server's elicitation)
+        setQuestionsLevel(approval?.levels?.questions);
         recordPolicyDecision(
           getAuditTrail(),
           { session: sessionId, callId, toolName, parsedArgs, approval, agent },

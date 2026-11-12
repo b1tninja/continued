@@ -117,6 +117,26 @@ export const VIEWS = {
     fixture: "audit-inbox",
     note: "Settings, Permissions, Inbox: open asks oldest first, ages, possibly-ended label, Show older",
   },
+  "loop-frame-running": {
+    fixture: "loop-frame-running",
+    note: "the gradient loop frame round a stand-in loop dock, running",
+  },
+  "loop-frame-waiting": {
+    fixture: "loop-frame-waiting",
+    note: "the loop frame, solid amber: waiting on you",
+  },
+  "loop-frame-failed": {
+    fixture: "loop-frame-failed",
+    note: "the loop frame, solid red: an item failed, repairing",
+  },
+  "loop-frame-finished": {
+    fixture: "loop-frame-finished",
+    note: "the loop frame, solid green: finished",
+  },
+  "loop-frame-stopped": {
+    fixture: "loop-frame-stopped",
+    note: "the loop frame, solid grey: stopped",
+  },
   "settings-tools": {
     fixture: "settings-tools",
     note: "Settings, Tools tab, with Commands and secrets",

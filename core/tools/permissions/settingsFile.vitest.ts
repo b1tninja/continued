@@ -56,12 +56,12 @@ mcpServers:
     });
   });
 
-  it("a saved yolo is read as the default, with a notice", () => {
-    const r = parsePolicyFile("levels:\n  tools: yolo\n  questions: yolo\n");
+  it("a saved idgaf is read as the default, with a notice", () => {
+    const r = parsePolicyFile("levels:\n  tools: idgaf\n  questions: idgaf\n");
     expect(r.settings.levels.tools).toBe(DEFAULT_POLICY_LEVELS.tools);
     expect(r.settings.levels.questions).toBe(DEFAULT_POLICY_LEVELS.questions);
     expect(r.notices.join("\n")).toContain(
-      "levels.tools: yolo is for one session",
+      "levels.tools: idgaf is for one session",
     );
   });
 
@@ -102,14 +102,14 @@ describe("applyPolicyUpdate", () => {
     expect(parsePolicyFile(after).settings.levels.tools).toBe("permissive");
   });
 
-  it("never writes YOLO: the area keeps what the file had", () => {
+  it("never writes IDGAF: the area keeps what the file had", () => {
     const first = applyPolicyUpdate(undefined, {
       levels: { ...DEFAULT_POLICY_LEVELS, tools: "permissive" },
     });
     const second = applyPolicyUpdate(first, {
-      levels: { ...DEFAULT_POLICY_LEVELS, tools: "yolo", plan: "yolo" },
+      levels: { ...DEFAULT_POLICY_LEVELS, tools: "idgaf", plan: "idgaf" },
     });
-    expect(second).not.toContain("yolo");
+    expect(second).not.toContain("idgaf");
     expect(parsePolicyFile(second).settings.levels.tools).toBe("permissive");
   });
 
