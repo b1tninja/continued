@@ -268,11 +268,11 @@ describe("the rule", () => {
     expect(decide("git status", "s").decision).toBe("allow");
   });
 
-  it("asks even at YOLO, where everything else runs", () => {
+  it("holds even at IDGAF, where everything else runs: nobody is asked, so it is refused", () => {
     setRule("ask");
     taintRegistry.mark("s", "mcp-result");
-    expect(decide("git push origin main", "s", "yolo").decision).toBe("ask");
-    expect(decide("git push origin main", "clean", "yolo").decision).toBe(
+    expect(decide("git push origin main", "s", "idgaf").decision).toBe("deny");
+    expect(decide("git push origin main", "clean", "idgaf").decision).toBe(
       "allow",
     );
   });

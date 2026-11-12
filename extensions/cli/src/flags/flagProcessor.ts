@@ -88,6 +88,8 @@ export function processCommandFlags(options: {
   if (options.policy !== undefined) {
     const parsed = parsePolicySpec(options.policy);
     if (!parsed.ok) throw new Error(`--policy: ${parsed.error}`);
+    // stderr, so a JSON run's stdout stays what it was
+    if (parsed.deprecated) process.stderr.write(`${parsed.deprecated}\n`);
     setPolicyLevels(parsed.levels);
   }
 

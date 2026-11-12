@@ -123,9 +123,10 @@ function handlePolicy(args: string[]): SlashCommandResult {
       return { exit: false, output: chalk.yellow(parsed.error) };
     }
     setPolicyLevels(parsed.levels);
+    if (parsed.deprecated) process.stderr.write(`${parsed.deprecated}\n`);
     syncRunningLoopPolicy();
     try {
-      // Saved for the next session, and for the IDE; YOLO is never written
+      // Saved for the next session, and for the IDE; IDGAF is never written
       savePolicyFile();
     } catch (e: any) {
       return {

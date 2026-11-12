@@ -125,6 +125,26 @@ export const VIEWS = {
     fixture: "onboarding-local-server",
     note: "The chooser on an OpenAI-compatible server, with More open",
   },
+  "loop-frame-running": {
+    fixture: "loop-frame-running",
+    note: "the gradient loop frame round a stand-in loop dock, running",
+  },
+  "loop-frame-waiting": {
+    fixture: "loop-frame-waiting",
+    note: "the loop frame, solid amber: waiting on you",
+  },
+  "loop-frame-failed": {
+    fixture: "loop-frame-failed",
+    note: "the loop frame, solid red: an item failed, repairing",
+  },
+  "loop-frame-finished": {
+    fixture: "loop-frame-finished",
+    note: "the loop frame, solid green: finished",
+  },
+  "loop-frame-stopped": {
+    fixture: "loop-frame-stopped",
+    note: "the loop frame, solid grey: stopped",
+  },
   "settings-tools": {
     fixture: "settings-tools",
     note: "Settings, Tools tab, with Commands and secrets",
