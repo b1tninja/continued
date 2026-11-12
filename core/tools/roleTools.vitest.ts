@@ -138,17 +138,28 @@ describe("roles", () => {
     expect(offered.has(BuiltInToolNames.RunTerminalCommand)).toBe(false);
   });
 
-  it("the CLI planner also keeps the terminal, which asks; the IDE one does not", () => {
+  it("the planner has no terminal by default, on either surface", () => {
     const bash = { name: "Bash" };
-    expect(isToolAllowedForRole("planner", bash, { surface: "cli" })).toBe(
-      true,
-    );
-    expect(isToolAllowedForRole("planner", bash, { surface: "ide" })).toBe(
+    expect(isToolAllowedForRole("planner", bash)).toBe(false);
+    expect(
+      isToolAllowedForRole("planner", bash, { allowPlanTerminal: false }),
+    ).toBe(false);
+    expect(roleClasses("planner")).not.toContain("terminal");
+  });
+
+  it("plan.allowTerminal restores the terminal for the planner only", () => {
+    const opts = { allowPlanTerminal: true };
+    expect(isToolAllowedForRole("planner", { name: "Bash" }, opts)).toBe(true);
+    expect(
+      isToolAllowedForRole("planner", { name: "RunTerminalCommand" }, opts),
+    ).toBe(false);
+    expect(isToolAllowedForRole("planner", { name: "Write" }, opts)).toBe(
       false,
     );
-    expect(
-      isToolAllowedForRole("planner", { name: "Write" }, { surface: "cli" }),
-    ).toBe(false);
+    expect(isToolAllowedForRole("reviewer", { name: "Bash" }, opts)).toBe(
+      false,
+    );
+    expect(isToolAllowedForRole("chat", { name: "Bash" }, opts)).toBe(false);
   });
 
   it("the orchestrator (proposed) only delegates and keeps the session", () => {

@@ -139,28 +139,27 @@ export const ROLE_CLASSES: Record<ToolRole, readonly ToolClass[]> = {
   orchestrator: ["delegation", "session"],
 };
 
-export type ToolSurface = "ide" | "cli";
-
 /**
- * The one difference between the two Plan modes. The CLI offers Bash in Plan
- * and asks before it runs (PLAN_MODE_POLICIES); the IDE has never offered the
- * terminal in Plan. Kept as data so the difference is visible and tested, not
- * hidden in two selectors. Whether to close it is an owner decision.
+ * Plan mode has no terminal on either surface: the IDE never offered it, the
+ * CLI used to and no longer does. A person who wants it back in the CLI says so
+ * in their own permissions.yaml (`plan.allowTerminal: true`); the call then
+ * still goes through the permission engine, which asks. Claude Code's plan mode
+ * runs shell commands with approval; Gemini CLI's does not. The default here
+ * follows the second.
  */
-export const SURFACE_EXTRA_CLASSES: Partial<
-  Record<ToolSurface, Partial<Record<ToolRole, readonly ToolClass[]>>>
-> = {
-  cli: { planner: ["terminal"] },
-};
+export interface RoleOptions {
+  trust?: PlanMcpTrust;
+  /** The user opted the terminal back into Plan mode (`plan.allowTerminal`) */
+  allowPlanTerminal?: boolean;
+}
 
 export function roleClasses(
   role: ToolRole,
-  surface: ToolSurface = "ide",
+  options: Pick<RoleOptions, "allowPlanTerminal"> = {},
 ): readonly ToolClass[] {
-  return [
-    ...ROLE_CLASSES[role],
-    ...(SURFACE_EXTRA_CLASSES[surface]?.[role] ?? []),
-  ];
+  return role === "planner" && options.allowPlanTerminal
+    ? [...ROLE_CLASSES.planner, "terminal"]
+    : ROLE_CLASSES[role];
 }
 
 /** The role a message mode runs as. A mode this does not know gets the agent's. */
@@ -197,6 +196,7 @@ export function toolRoleOfMode(mode: string | undefined): ToolRole | undefined {
  *     mcpTools:            # or name the tools, whatever the server claims
  *       - search/query
  *       - wiki/*
+ *     allowTerminal: true  # CLI: offer Bash in Plan mode again (it asks)
  *
  * A server's own `readOnlyHint` is a claim, not a fact (the MCP spec treats
  * annotations as untrusted unless the server is trusted), so it opens nothing
@@ -265,11 +265,9 @@ export function classOfTool(
 export function isToolAllowedForRole(
   role: ToolRole,
   tool: RoleToolRef,
-  options: { trust?: PlanMcpTrust; surface?: ToolSurface } = {},
+  options: RoleOptions = {},
 ): boolean {
-  return roleClasses(role, options.surface).includes(
-    classOfTool(tool, options.trust),
-  );
+  return roleClasses(role, options).includes(classOfTool(tool, options.trust));
 }
 
 /** The tools a role may be offered, in their order. */
@@ -277,7 +275,7 @@ export function filterToolsForRole<T>(
   role: ToolRole,
   tools: readonly T[],
   toRef: (tool: T) => RoleToolRef,
-  options: { trust?: PlanMcpTrust; surface?: ToolSurface } = {},
+  options: RoleOptions = {},
 ): T[] {
   return tools.filter((t) => isToolAllowedForRole(role, toRef(t), options));
 }
@@ -298,7 +296,7 @@ const ROLE_LABEL: Record<ToolRole, string> = {
 export function roleRefusal(
   role: ToolRole,
   tool: RoleToolRef,
-  options: { trust?: PlanMcpTrust; surface?: ToolSurface } = {},
+  options: RoleOptions = {},
 ): string | undefined {
   if (isToolAllowedForRole(role, tool, options)) return undefined;
   const where = ROLE_LABEL[role];

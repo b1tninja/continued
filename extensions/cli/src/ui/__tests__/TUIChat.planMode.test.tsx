@@ -35,7 +35,7 @@ const planArgs = {
 
 /**
  * Plan mode through the TUI: PresentPlan saves the plan file and asks Build
- * or Keep planning; Build leaves plan mode. Bash and MCP tools ask first.
+ * or Keep planning; Build leaves plan mode. Bash is not offered unless plan.allowTerminal opts it in, and then it asks first, as MCP tools do.
  */
 describe("TUIChat - plan mode", () => {
   let cwd: string;
@@ -147,7 +147,30 @@ describe("TUIChat - plan mode", () => {
     }
   });
 
-  it("asks before Bash in plan mode", async () => {
+  it("does not offer Bash in plan mode by default", async () => {
+    const llm = new ScriptedLlm([textTurn("just reading")]);
+    await registerFlowServices({ llm, mode: "plan" });
+    const ui = renderFlow();
+    try {
+      await type(ui.stdin, "look around");
+      await type(ui.stdin, ENTER);
+      await waitUntil(
+        () => ui.allOutput().includes("just reading"),
+        "the reply",
+        ui.lastFrame,
+      );
+      const offered = llm.requests[0].tools.map((t) => t.function.name);
+      expect(offered).not.toContain("Bash");
+      expect(offered).toContain("Read");
+    } finally {
+      ui.unmount();
+    }
+  });
+
+  it("asks before Bash in plan mode when plan.allowTerminal opts it in", async () => {
+    const policyFile = path.join(cwd, "permissions.yaml");
+    fs.writeFileSync(policyFile, "plan:\n  allowTerminal: true\n");
+    loadPolicyFile(policyFile);
     const llm = new ScriptedLlm([
       // Not a command that only reads: those run in a plan turn
       toolTurn("Bash", { command: "npm install should-not-run" }),

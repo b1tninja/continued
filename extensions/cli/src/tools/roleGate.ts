@@ -49,8 +49,8 @@ export function cliPlanMcpTrust(): PlanMcpTrust {
 }
 
 const OPTIONS = () => ({
-  surface: "cli" as const,
   trust: cliPlanMcpTrust(),
+  allowPlanTerminal: getPolicyExtras().planAllowTerminal === true,
 });
 
 export function filterCliToolsForRole<T extends Tool>(

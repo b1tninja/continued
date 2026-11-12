@@ -35,12 +35,18 @@ describe("the CLI's role table", () => {
     expect(cliRoleRefusal("plan", mcpTool(true))).toMatch(/read-only claim/);
   });
 
+  it("refuses Bash in Plan mode by default", () => {
+    expect(cliRoleRefusal("plan", { name: "Bash", isBuiltIn: true })).toMatch(
+      /Bash tool is not available in Plan mode/,
+    );
+    expect(
+      cliRoleRefusal("normal", { name: "Bash", isBuiltIn: true }),
+    ).toBeUndefined();
+  });
+
   it("lets Plan mode read, and the agent do anything", () => {
     expect(
       cliRoleRefusal("plan", { name: "Read", isBuiltIn: true }),
-    ).toBeUndefined();
-    expect(
-      cliRoleRefusal("plan", { name: "Bash", isBuiltIn: true }),
     ).toBeUndefined();
     expect(cliRoleRefusal("normal", mcpTool(false))).toBeUndefined();
     expect(cliRoleRefusal("normal", { name: "Write", isBuiltIn: true })).toBe(

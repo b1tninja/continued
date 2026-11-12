@@ -326,6 +326,17 @@ describe("getAllAvailableTools and the task list", () => {
       expect(await planOffered()).toEqual(["mcp__a__search"]);
     });
 
+    it("offers no Bash in Plan mode by default, and Bash again on plan.allowTerminal", async () => {
+      toolState.mode = "plan";
+      expect(await names()).not.toContain("Bash");
+      loadPlanTrust(["plan:", "  allowTerminal: true", ""].join("\n"));
+      expect(await names()).toContain("Bash");
+      expect(await names()).not.toContain("Write");
+      toolState.mode = "normal";
+      resetPolicyLevels();
+      expect(await names()).toContain("Bash");
+    });
+
     it("offers it when the user trusts the server's hints and it claims read-only", async () => {
       loadPlanTrust(["mcpServers:", "  srv: trusted", ""].join("\n"));
       toolState.mode = "plan";

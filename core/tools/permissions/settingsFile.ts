@@ -32,6 +32,8 @@ export interface PolicyFileSettings extends PolicySettings {
    * "server/tool", "server/*" or "server" (plans/research/tr-owner-decisions.md, 1).
    */
   planMcpTools?: string[];
+  /** Offer the terminal in Plan mode (the CLI; it still asks). Default false. */
+  planAllowTerminal?: boolean;
 }
 
 export interface PolicyFileRead {
@@ -130,6 +132,8 @@ export function parsePolicyFile(text: string | undefined): PolicyFileRead {
       (t: unknown): t is string => typeof t === "string" && t.length > 0,
     );
   }
+  const allowTerminal = asBool(raw.plan?.allowTerminal);
+  if (allowTerminal !== undefined) settings.planAllowTerminal = allowTerminal;
   return { settings, notices };
 }
 
