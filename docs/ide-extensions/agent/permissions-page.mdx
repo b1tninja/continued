@@ -30,6 +30,7 @@ A level and a preset are different ideas: "Cautious" is a level, "Careful" is a 
 IDGAF is the top level, and the last preset. It is short for "I don't give a f---", and it means what it says: the agent decides, and nothing asks.
 
 - Nothing asks: every tool call, read and edit runs, and every question is answered by the agent itself.
+- Where a check would ordinarily ask, it refuses instead, with its reason, because nobody is there to answer: a command that hides what it runs, or a push after the session read untrusted content.
 - No rules are consulted: Never rules, Ask rules, protected paths and the built-in rule check are ignored. Only the always-on rules and the locked files still bind, and a tool you switched off stays off.
 - Edits can land anywhere the agent can write, not only in the workspace.
 
@@ -101,6 +102,14 @@ Rules are shown grouped as Never, Ask and Always (the files keep the names `deny
 | Built-in  | a built-in rule that ships with the product, listed per area with its on or off state                                                                                                         |
 
 A rule that is **Ignored** is struck through with the reason: an `allow` rule that came with the workspace is ignored (a repository can add deny and ask rules, not allow rules), allow rules are not consulted while an area is Manual (file edits excepted), and every rule but the always-on rules is ignored while an area is at IDGAF. A rule the page can warn about says so: a pattern after an MCP tool name never matches, and an allow rule written with `host:`, `net:` or `effect:` never allows anything.
+
+## Files outside the workspace
+
+At **File edits = IDGAF** (the top level), the agent can create, edit and write files outside the workspace without asking, in the editor, the terminal UI, headless runs and `serve`. The audit trail lists the call as allowed by the level with the absolute path, and the tool result says `Wrote outside the workspace: <path>`.
+
+Below that level nothing changes: Manual, Cautious and Automatic ask, and Permissive holds it with the outside-paths protection. Only the File edits level counts: Tool use at IDGAF does not free the file tools.
+
+These still hold at IDGAF: the locked policy and configuration files, a tool you switched off, an organisation ceiling, the **Always on** rules you wrote, and Plan mode (including `--readonly`), which holds every write by design.
 
 ## Edit your rules
 

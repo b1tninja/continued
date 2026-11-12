@@ -262,6 +262,14 @@ IDGAF approves everything: no rule, built-in or reviewer is consulted. This is b
 
 The dropdown line says so and counts the deny rules IDGAF will ignore. Optionally, for a user who wants one hard line while keeping IDGAF's meaning everywhere else, the settings file takes a `floor:` list of deny rules that bind at every level including IDGAF. It is empty by default and never written by anything but the person, so IDGAF's default behaviour is exactly "approve everything".
 
+### File edits outside the workspace at the top level
+
+At File edits = IDGAF (`--auto` sets it) an edit, a write or a new file outside the workspace folders is carried out: no prompt and no refusal, in the IDE, the CLI terminal UI, headless `-p` and `serve`, from one question (`editsAllowOutsideWorkspace`, `core/tools/permissions/outsideEdits.ts`). The decision is the evaluator's (source `idgaf`, by rules); its reason names the resolved absolute path, so the audit trail lists it, and the tool result says `Wrote outside the workspace: <path>`.
+
+Where a tool enforced containment itself, it now takes a per-call option the host sets only at that level (`allowOutsideWorkspace` on `tools/call` and `tools/preprocessArgs`; `ResolveOptions.allowOutside` in `core/util/ideUtils.ts`; the CLI reads the effective levels in `workspaceBoundary.ts`). Without it the checks are as before. Only File edits decides: Tool use at the top level does not free a file tool.
+
+Floors that hold at this level: the locked policy and config files, a tool switched off, an organisation ceiling, and the person's own `floor:` rules. Not changed: the tainted-session rule (opt-in, applies at every level as specified in `design/tainted-session.md`), the secret-name check inside the file tools, the webview write guard for plan files, the Plan role (Plan mode and `--readonly` hold writes by design). Manual, Cautious and Automatic ask; Permissive holds it through the outside-paths protection.
+
 ## Settings
 
 One file, read by the IDE and the CLI: `~/.continue/permissions.yaml`. The IDE's saved state mirrors it and writes through it, so the two surfaces never disagree.

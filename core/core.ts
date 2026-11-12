@@ -2042,8 +2042,10 @@ export class Core {
       return { url: "" };
     });
 
-    on("tools/call", async ({ data: { toolCall, workspaceDirs } }) =>
-      this.handleToolCall(toolCall, workspaceDirs),
+    on(
+      "tools/call",
+      async ({ data: { toolCall, workspaceDirs, allowOutsideWorkspace } }) =>
+        this.handleToolCall(toolCall, workspaceDirs, allowOutsideWorkspace),
     );
 
     this.registerPolicyHandlers();
@@ -2127,7 +2129,9 @@ export class Core {
 
     on(
       "tools/preprocessArgs",
-      async ({ data: { toolName, args, workspaceDirs } }) => {
+      async ({
+        data: { toolName, args, workspaceDirs, allowOutsideWorkspace },
+      }) => {
         const { config } = await this.configHandler.loadConfig();
         if (!config) {
           throw new Error("Config not loaded");
@@ -2143,6 +2147,7 @@ export class Core {
             ide: workspaceDirs?.length
               ? ideInWorkspace(this.ide, workspaceDirs)
               : this.ide,
+            ...(allowOutsideWorkspace ? { allowOutsideWorkspace } : {}),
           });
           return {
             preprocessedArgs,
@@ -2192,7 +2197,11 @@ export class Core {
    * worktree): the tool sees those folders as the workspace, and the exact
    * edit tools, otherwise applied through the client's diff review, run here.
    */
-  private async handleToolCall(toolCall: ToolCall, workspaceDirs?: string[]) {
+  private async handleToolCall(
+    toolCall: ToolCall,
+    workspaceDirs?: string[],
+    allowOutsideWorkspace?: boolean,
+  ) {
     const { config } = await this.configHandler.loadConfig();
     if (!config) {
       throw new Error("Config not loaded");
@@ -2230,6 +2239,7 @@ export class Core {
         config,
         ide: inWorkspace ? ideInWorkspace(this.ide, inWorkspace) : this.ide,
         workspaceDirs: inWorkspace,
+        ...(allowOutsideWorkspace ? { allowOutsideWorkspace } : {}),
         llm: config.selectedModelByRole.chat,
         // The model picks the URL of fetch_url_content: the global request
         // headers go only to the configured model endpoints, not to any host
