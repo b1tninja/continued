@@ -17,7 +17,7 @@ buildscript {
     dependencies {
         classpath(platform("com.fasterxml.jackson:jackson-bom:2.21.7"))
         constraints {
-            classpath("org.jsoup:jsoup:1.23.2")
+            classpath("org.jsoup:jsoup:1.24.1")
         }
     }
 }
@@ -95,7 +95,7 @@ dependencies {
         testIntegrationImplementation("com.google.guava:guava:33.7.2-jre")
         testIntegrationImplementation("com.google.protobuf:protobuf-java:3.25.5")
         testIntegrationImplementation("com.thoughtworks.xstream:xstream:1.4.21")
-        testIntegrationImplementation("org.jsoup:jsoup:1.23.2")
+        testIntegrationImplementation("org.jsoup:jsoup:1.24.1")
     }
 }
 
