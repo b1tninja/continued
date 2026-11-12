@@ -284,8 +284,11 @@ describe("Loop mode", () => {
 
     // The model's choices were kept, and they appear in their own panel
     expect(h.loop().questions[0].options).toEqual(["ABNF", "PEG", "Both"]);
-    const panel = document.querySelector("[data-testid=question-panel]")!;
-    expect(panel.textContent).toContain("1 question for you");
+    const panel = document.querySelector("[data-testid=needs-you-tray]")!;
+    expect(panel.textContent).toContain("Needs you");
+    expect(
+      panel.querySelector("[data-testid=needs-you-pager]")!.textContent,
+    ).toBe("1 of 1");
     expect(
       [...panel.querySelectorAll("[data-testid=loop-choice-option]")].map(
         (b) => b.textContent,
@@ -314,7 +317,15 @@ describe("Loop mode", () => {
     );
     await waitFor(() => expect(h.loop().status).toBe("stopped"));
     expect(h.prompt(2)).toContain(": PEG");
-    expect(document.querySelector("[data-testid=question-panel]")).toBeNull();
+    // Nothing waits any more: the tray is one quiet line
+    expect(
+      document.querySelector("[data-testid=needs-you-question]"),
+    ).toBeNull();
+    expect(
+      document
+        .querySelector("[data-testid=needs-you-tray]")!
+        .getAttribute("data-quiet"),
+    ).toBe("true");
   });
 
   test("Other opens a field for an answer of your own", async () => {
@@ -560,7 +571,7 @@ describe("Loop mode", () => {
       document.querySelector("[data-testid=plan-card-diff]")!.textContent,
     ).toContain("Install vitest");
     expect(
-      document.querySelector("[data-testid=plan-card-replan-reason]")!
+      document.querySelector("[data-testid=needs-you-plan-reason]")!
         .textContent,
     ).toContain("Why you are asked");
     const marks = [
@@ -581,7 +592,7 @@ describe("Loop mode", () => {
 
     const cont = await waitFor(() => {
       const el = document.querySelector<HTMLElement>(
-        "[data-testid=plan-card-loop-continue]",
+        "[data-testid=needs-you-accept-plan]",
       );
       expect(el).not.toBeNull();
       return el!;

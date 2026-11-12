@@ -469,6 +469,42 @@ export const FIXTURES: Record<string, Fixture> = {
       true,
     );
   },
+  /** Three questions wait on the person: the tray shows one, with a pager */
+  "loop-questions": ({ store }) => {
+    const question = (id: string, text: string) => ({
+      id,
+      itemId: "2",
+      question: text,
+      kind: "blocking" as const,
+      options: [
+        "Merge it as it is (recommended)",
+        "Leave it open",
+        "Write the record first",
+      ],
+      askedAt: new Date().toISOString(),
+    });
+    loopScene(store, (loop) => ({
+      ...loop,
+      status: "waiting",
+      questions: [
+        question(
+          "q1",
+          "PR #7 is open and green by its own report. Should I merge it as-is, or wait for you?",
+        ),
+        question("q2", "Which branch should the migration land on?"),
+        question("q3", "Do you want the gate record written into the repo?"),
+      ],
+    }));
+  },
+  /** A re-plan waits to be accepted: the tray holds Review diff, Keep planning, Accept plan */
+  "loop-replan": ({ store }) => {
+    loopScene(store, (loop) => ({
+      ...loop,
+      status: "awaiting_plan",
+      replanReason:
+        "Item 2 failed twice: the test runner is not installed, so the plan adds an install step first.",
+    }));
+  },
   /** An item failed and its repair re-plan runs: the red state */
   "loop-failed": ({ store }) => {
     loopScene(

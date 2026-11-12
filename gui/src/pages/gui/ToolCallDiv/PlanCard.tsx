@@ -26,7 +26,7 @@ import { IdeMessengerContext } from "../../../context/IdeMessenger";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
 import { setMode } from "../../../redux/slices/sessionSlice";
 import { buildPlan } from "../../../redux/thunks/buildPlan";
-import { acceptLoopPlan, startLoopFromPlan } from "../../../redux/thunks/loop";
+import { startLoopFromPlan } from "../../../redux/thunks/loop";
 import { selectLoopPolicy } from "../../../redux/selectors/selectAutoApproval";
 import { recordPlanAnswer } from "../../../util/planDecisions";
 import { PlanBudgetStep } from "./PlanBudgetStep";
@@ -168,12 +168,6 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       </div>
       {awaitingLoop && (
         <div data-testid="plan-card-replan" className="mt-1 text-xs">
-          {loop?.replanReason && (
-            <div data-testid="plan-card-replan-reason">
-              <span className="text-description">Why you are asked: </span>
-              {loop.replanReason}
-            </div>
-          )}
           {diff && (
             <div data-testid="plan-card-diff" className="mt-1">
               <div className="text-description">
@@ -349,21 +343,6 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
         >
           The loop is building this plan, one to-do at a time. Questions go to
           its inbox.
-        </div>
-      )}
-      {showActions && awaitingLoop && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Button
-            data-testid="plan-card-loop-continue"
-            title="Accept this plan and start the loop's next round"
-            onClick={() => void dispatch(acceptLoopPlan())}
-          >
-            Continue the loop
-          </Button>
-          <span className="text-2xs text-description-muted">
-            The loop's re-plan. Edit the file first if you like; the loop reads
-            it again.
-          </span>
         </div>
       )}
       {showActions && !awaitingLoop && args.ok && budgetOpen && (

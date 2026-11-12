@@ -80,6 +80,8 @@
     "loop-stopped": {},
     "loop-settings-open": {
       "color-contrast": 1
-    }
+    },
+    "loop-questions": {},
+    "loop-replan": {}
   }
 }

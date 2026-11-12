@@ -26,6 +26,7 @@ import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
 import { ToolDialectNotice } from "../../components/mainInput/ToolDialectNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
 import { AgentsList } from "../../components/BackgroundMode/AgentsList";
+import { NeedsYouTray } from "../../components/loop/NeedsYouTray";
 import { LoopInbox } from "../../components/mainInput/LoopInbox";
 import {
   QuestionPanel,
@@ -572,7 +573,8 @@ export function Chat() {
         {!hasLoop && <TaskListPanel />}
         <LoopInbox />
         <AgentsList />
-        <QuestionPanel />
+        {/* A loop asks through its Needs you tray, which holds the same questions */}
+        {hasLoop ? <NeedsYouTray /> : <QuestionPanel />}
         <QueuedMessages
           onSendNow={sendNowOrSteer}
           onSteerNow={(ids) => void steerNow(ids)}

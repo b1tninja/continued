@@ -51,6 +51,14 @@ export const VIEWS = {
     fixture: "loop-running",
     note: "Loop mode, running item 2: the status line with Now:, progress, round and budget",
   },
+  "loop-questions": {
+    fixture: "loop-questions",
+    note: "Loop mode with three questions waiting: the Needs you tray shows one at a time",
+  },
+  "loop-replan": {
+    fixture: "loop-replan",
+    note: "Loop mode with a re-plan waiting: the Needs you tray holds Review diff, Keep planning and Accept plan",
+  },
   "loop-failed": {
     fixture: "loop-failed",
     note: "Loop mode, a failed item being repaired: the red state",
