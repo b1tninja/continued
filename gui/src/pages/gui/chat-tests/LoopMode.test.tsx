@@ -664,6 +664,12 @@ describe("Loop mode", () => {
     await reading;
 
     // A note for every item, given while item 1 runs
+    // The loop's settings are behind the gear on the status line
+    await act(async () => {
+      fireEvent.click(
+        document.querySelector("[data-testid=loop-settings-toggle]")!,
+      );
+    });
     await act(async () => {
       fireEvent.change(
         document.querySelector("[data-testid=loop-plan-note]")!,
@@ -780,6 +786,12 @@ describe("Loop mode", () => {
       questions: "cautious",
     });
     await waitFor(() => expect(h.loop().status).toBe("waiting"));
+    // The loop's settings are behind the gear on the status line
+    await act(async () => {
+      fireEvent.click(
+        document.querySelector("[data-testid=loop-settings-toggle]")!,
+      );
+    });
     expect(
       document.querySelector("[data-testid=loop-policy]")!.textContent,
     ).toContain("Plan Cautious");
@@ -2107,7 +2119,7 @@ describe("Loop mode's parallel waves", () => {
     await h.start({ parallel: true });
     await waitFor(() => expect(h.requests).toHaveLength(2));
 
-    expect(el("loop-stop")!.textContent).toBe("Stop the wave");
+    expect(el("loop-stop")!.getAttribute("aria-label")).toBe("Stop the wave");
     expect(el("loop-stop-now")).toBeNull();
     await act(async () => {
       fireEvent.click(el("loop-stop")!);

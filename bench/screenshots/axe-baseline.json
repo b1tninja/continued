@@ -69,6 +69,17 @@
     "approval": {
       "color-contrast": 1,
       "scrollable-region-focusable": 1
+    },
+    "loop-running": {
+      "color-contrast": 1
+    },
+    "loop-failed": {
+      "color-contrast": 1
+    },
+    "loop-finished": {},
+    "loop-stopped": {},
+    "loop-settings-open": {
+      "color-contrast": 1
     }
   }
 }

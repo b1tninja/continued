@@ -12,7 +12,7 @@ import type {
 import { listEffectiveRules } from "core/tools/permissions/effectiveRules";
 import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { parsePolicyFile } from "core/tools/permissions/settingsFile";
-import { createLoop, enterWait } from "core/util/loopMode";
+import { createLoop, enterWait, stopLoop } from "core/util/loopMode";
 import { addBlockedCall } from "@gui/redux/slices/blockedCallsSlice";
 import { setPolicyLevel } from "@gui/redux/slices/uiSlice";
 import { POLICY_AREAS } from "core/tools/permissions/policy";
@@ -21,6 +21,7 @@ import {
   newSession,
   setLoop,
   noteToolDialectLeak,
+  setActive,
   setMode,
   setRecoveryHold,
   setTaskPlan,
@@ -176,6 +177,20 @@ const PLAN: TaskPlan = {
   ],
   updatedAt: NOW.toISOString(),
 } as TaskPlan;
+
+function loopScene(
+  store: Store,
+  change: (loop: LoopState) => LoopState,
+  // A running loop takes its next step when nothing streams, which in the
+  // harness ends in an error; a turn in flight keeps the picture still
+  inFlight = false,
+): void {
+  store.dispatch(newSession(session([], "Fix parseConfig")));
+  store.dispatch(setMode("loop" as never));
+  store.dispatch(setTaskPlan(PLAN));
+  store.dispatch(setLoop(change(loopState())));
+  if (inFlight) store.dispatch(setActive());
+}
 
 function loopState(): LoopState {
   // the real clock: a loop whose start is far in the past is stopped by its own time budget
@@ -434,6 +449,83 @@ export const FIXTURES: Record<string, Fixture> = {
     store.dispatch(setMode("loop" as never));
     store.dispatch(setTaskPlan(PLAN));
     store.dispatch(setLoop(loopState()));
+  },
+  /** Loop mode, running item 2: the status line, "Now:" and the progress */
+  "loop-running": ({ store }) => {
+    loopScene(
+      store,
+      (loop) => ({
+        ...loop,
+        title: "Fix parseConfig so defaults merge before the unit converts",
+        status: "running",
+        waitingSince: undefined,
+        current: {
+          kind: "item",
+          itemId: "2",
+          historyIndex: 0,
+          startedAt: new Date().toISOString(),
+        },
+      }),
+      true,
+    );
+  },
+  /** An item failed and its repair re-plan runs: the red state */
+  "loop-failed": ({ store }) => {
+    loopScene(
+      store,
+      (loop) => ({
+        ...loop,
+        status: "replanning",
+        waitingSince: undefined,
+        items: loop.items.map((i) =>
+          i.id === "2" ? { ...i, status: "failed" as const } : i,
+        ),
+        current: {
+          kind: "replan",
+          itemId: "2",
+          historyIndex: 0,
+          startedAt: new Date().toISOString(),
+        },
+      }),
+      true,
+    );
+  },
+  /** Every item done: Close replaces Stop */
+  "loop-finished": ({ store }) => {
+    loopScene(store, (loop) =>
+      stopLoop(
+        {
+          ...loop,
+          items: loop.items.map((i) => ({ ...i, status: "done" as const })),
+        },
+        "done",
+        "Every item is done.",
+      ),
+    );
+  },
+  /** The person stopped the loop: Resume and Close */
+  "loop-stopped": ({ store }) => {
+    loopScene(store, (loop) =>
+      stopLoop(loop, "stopped", "You stopped the loop."),
+    );
+  },
+  /** The gear opened: strategy, Parallel and the note */
+  "loop-settings-open": async ({ store }) => {
+    loopScene(
+      store,
+      (loop) => ({
+        ...loop,
+        status: "running",
+        waitingSince: undefined,
+      }),
+      true,
+    );
+    await new Promise((r) => setTimeout(r, 800));
+    (
+      document.querySelector(
+        "[data-testid=loop-settings-toggle]",
+      ) as HTMLElement
+    )?.click();
   },
   /** Loop mode at YOLO with seven refused calls: the one-line chip and the blocked badge */
   "loop-idgaf": ({ store }) => {
