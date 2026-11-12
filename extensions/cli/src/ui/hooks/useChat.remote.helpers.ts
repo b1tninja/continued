@@ -9,10 +9,7 @@ import { RemoteServerState } from "./useChat.types.js";
  * Request options for `cn serve`. When `CONTINUOUS_SERVE_TOKEN` is set, the
  * remote TUI sends it as a bearer token. With no token, the options are unchanged.
  */
-export function remoteRequestInit(
-  init?: RequestInit,
-  url?: string,
-): RequestInit | undefined {
+export function remoteRequestInit(init?: RequestInit): RequestInit | undefined {
   const token = process.env.CONTINUOUS_SERVE_TOKEN?.trim();
   if (!token) return init;
   return {
@@ -28,7 +25,7 @@ export function remoteFetch(
   url: string,
   init?: RequestInit,
 ): Promise<Response> {
-  const authed = remoteRequestInit(init, url);
+  const authed = remoteRequestInit(init);
   return authed === undefined ? fetch(url) : fetch(url, authed);
 }
 
