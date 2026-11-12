@@ -34,6 +34,7 @@
                   "ide-extensions/agent/how-it-works",
                   "ide-extensions/agent/plan-mode",
                   "ide-extensions/agent/task-list",
+                  "ide-extensions/agent/plan-files",
                   "ide-extensions/agent/loop-budgets",
                   "ide-extensions/agent/leave-and-resume-loop",
                   "ide-extensions/agent/command-checks",
