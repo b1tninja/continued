@@ -36,6 +36,8 @@ import { buildPlan } from "../../../redux/thunks/buildPlan";
 import { acceptLoopPlan, startLoopFromPlan } from "../../../redux/thunks/loop";
 import { selectLoopPolicy } from "../../../redux/selectors/selectAutoApproval";
 import { recordPlanAnswer } from "../../../util/planDecisions";
+import { PlanTree } from "../../../components/loop/PlanTree";
+import { treeSummary } from "../../../components/loop/planTreeModel";
 import { PlanBudgetStep } from "./PlanBudgetStep";
 
 /** The mark of a to-do in a re-plan: what the loop already did with it. */
@@ -110,7 +112,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
 
   if (status === "generating" || status === "generated") {
     return (
-      <div className="px-4 py-1 text-xs text-description">
+      <div className="text-description px-4 py-1 text-xs">
         Writing the plan…
       </div>
     );
@@ -118,7 +120,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
   if (status !== "done" || !fileUri) {
     // Errors and cancels are shown by ToolCallDiv like any other tool call.
     return (
-      <div className="px-4 py-1 text-xs text-description">
+      <div className="text-description px-4 py-1 text-xs">
         The plan was not saved.
       </div>
     );
@@ -128,6 +130,14 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
   const diff =
     awaitingLoop && loop && taskPlan ? replanDiff(loop, taskPlan) : undefined;
   const loopActive = !!loopStatus && loopStatus !== "stopped";
+  // Loop mode: the to-dos are the plan tree, not the plain list. A loop that
+  // has ended keeps its tree while this card is still its plan.
+  const treeMode =
+    !!loop &&
+    !!taskPlan &&
+    isLatestPlanCard &&
+    (loopActive ||
+      loop.items.some((i) => taskPlan.items.some((t) => t.id === i.id)));
 
   const showActions =
     (!answered && !isStreaming && !loopActive) || awaitingLoop;
@@ -157,10 +167,10 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
   return (
     <div
       data-testid="plan-card"
-      className="mx-2 my-1 rounded border border-solid border-border px-3 py-2"
+      className="border-border mx-2 my-1 rounded border border-solid px-3 py-2"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
-        <ClipboardDocumentListIcon className="h-4 w-4 shrink-0 text-description" />
+        <ClipboardDocumentListIcon className="text-description h-4 w-4 shrink-0" />
         <span className="min-w-0 flex-1 basis-32 font-medium break-words">
           {args.ok ? args.title : output?.name}
         </span>
@@ -169,7 +179,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
           data-testid="plan-card-open"
           title="Open the plan file to edit it"
           onClick={() => void ideMessenger.ide.openFile(fileUri)}
-          className="max-w-full min-w-0 cursor-pointer truncate border-none bg-transparent p-0 text-left text-xs text-link hover:underline"
+          className="text-link max-w-full min-w-0 cursor-pointer truncate border-none bg-transparent p-0 text-left text-xs hover:underline"
         >
           {relativePath ?? "Open plan"}
         </button>
@@ -185,7 +195,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
           {loop && (
             <div
               data-testid="plan-card-usage"
-              className="mt-1 text-description"
+              className="text-description mt-1"
               title="What the loop has used, and what is left to divide among the to-dos"
             >
               {(() => {
@@ -199,43 +209,29 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
               })()}
             </div>
           )}
-          {diff && (
-            <div data-testid="plan-card-diff" className="mt-1">
-              <div className="text-description">
-                {diff.kept.length} kept, {diff.added.length} added,{" "}
-                {diff.dropped.length} dropped
-              </div>
-              <ul className="m-0 mt-0.5 list-none p-0">
-                {diff.dropped.map((item, i) => (
-                  <li
-                    key={`d${i}`}
-                    className="py-0.5 break-words text-description-muted line-through"
-                  >
-                    <span className="font-mono">−</span> {item.text}
-                    {item.status && item.status !== "pending" && (
-                      <span> ({item.status})</span>
-                    )}
-                  </li>
-                ))}
-                {diff.added.map((text, i) => (
-                  <li key={`a${i}`} className="py-0.5 break-words">
-                    <span className="font-mono text-description-muted">+</span>{" "}
-                    {text}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+        </div>
+      )}
+      {treeMode && loop && (
+        <div
+          data-testid="plan-card-diff"
+          className="text-description mt-0.5 text-xs"
+        >
+          {treeSummary(loop, diff)}
+        </div>
+      )}
+      {treeMode && loop && taskPlan && (
+        <div className="mt-1">
+          <PlanTree loop={loop} plan={taskPlan} diff={diff} />
         </div>
       )}
       {args.ok && args.body && (
         <details
-          open={!awaitingLoop}
+          open={!awaitingLoop && !treeMode}
           data-testid="plan-card-body"
           className="mt-1 text-sm"
         >
-          {awaitingLoop && (
-            <summary className="cursor-pointer text-xs text-description">
+          {(awaitingLoop || treeMode) && (
+            <summary className="text-description cursor-pointer text-xs">
               Full plan text
             </summary>
           )}
@@ -251,7 +247,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       {args.ok && args.decisions.length > 0 && panelAnswers && (
         <div
           data-testid="plan-card-decisions-pointer"
-          className="mt-1 text-xs text-description"
+          className="text-description mt-1 text-xs"
         >
           {args.decisions.length} decision
           {args.decisions.length === 1 ? "" : "s"} for you: answer
@@ -265,7 +261,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
             Decisions for you (answer here, in the plan file, or in your
             message):
           </div>
-          <ol className="m-0 mt-0.5 pl-4 text-description">
+          <ol className="text-description m-0 mt-0.5 pl-4">
             {args.decisions.map((decision, i) => {
               const answer = answers[decision.question];
               return (
@@ -317,7 +313,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
                         onChange={(e) =>
                           setDrafts({ ...drafts, [i]: e.target.value })
                         }
-                        className="min-w-0 flex-1 basis-40 rounded border border-solid border-border bg-transparent px-1 text-xs text-foreground placeholder:text-description-muted"
+                        className="border-border text-foreground placeholder:text-description-muted min-w-0 flex-1 basis-40 rounded border border-solid bg-transparent px-1 text-xs"
                       />
                       <Button
                         type="submit"
@@ -350,19 +346,19 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
           </ol>
         </div>
       )}
-      {args.ok && (
+      {args.ok && !treeMode && (
         <ul
           data-testid="plan-card-todos"
-          className="m-0 mt-1 list-none p-0 text-xs text-description"
+          className="text-description m-0 mt-1 list-none p-0 text-xs"
         >
           {args.items.map((item, i) => (
             <li key={i} className="py-0.5 break-words">
-              <span className="font-mono text-description-muted">
+              <span className="text-description-muted font-mono">
                 {todoMark(String(item.text), diff?.kept)}
               </span>{" "}
               {String(item.text)}
               {typeof item.check === "string" && item.check.trim() && (
-                <div className="pl-5 font-mono text-description-muted">
+                <div className="text-description-muted pl-5 font-mono">
                   check: {maskCommandForDisplay(item.check.trim())}
                 </div>
               )}
@@ -373,7 +369,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       {args.ok && planCheckSummary(args.items) && (
         <div
           data-testid="plan-card-checks"
-          className="mt-1 text-2xs whitespace-pre-wrap text-description-muted"
+          className="text-2xs text-description-muted mt-1 whitespace-pre-wrap"
         >
           {planCheckSummary(args.items)}
         </div>
@@ -381,7 +377,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       {loopActive && !awaitingLoop && isLatestPlanCard && (
         <div
           data-testid="plan-card-loop-started"
-          className="mt-2 text-2xs text-description-muted"
+          className="text-2xs text-description-muted mt-2"
         >
           The loop is building this plan, one to-do at a time. Questions go to
           its inbox.
@@ -458,7 +454,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
             data-testid="plan-card-budget-toggle"
             aria-expanded={budgetOpen}
             title="Divide the loop's budget among the to-dos before building"
-            className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
+            className="text-link shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs hover:underline"
             onClick={() => setBudgetOpen(!budgetOpen)}
           >
             {budgetOpen ? "Hide the budget" : "Set a budget…"}

@@ -555,19 +555,28 @@ describe("Loop mode", () => {
     expect(
       document.querySelector("[data-testid=plan-card-diff]")!.textContent,
     ).toContain("2 kept, 1 added, 0 dropped");
+    // The to-dos are the plan tree now: it opens by itself while the plan waits
+    const tree = document.querySelector("[data-testid=plan-tree]")!;
     expect(
-      document.querySelector("[data-testid=plan-card-diff]")!.textContent,
-    ).toContain("Install vitest");
+      tree
+        .querySelector("[data-testid=plan-tree-root]")!
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(tree.textContent).toContain("Install vitest");
     expect(
       document.querySelector("[data-testid=plan-card-replan-reason]")!
         .textContent,
     ).toContain("Why you are asked");
-    const marks = [
-      ...document.querySelectorAll("[data-testid=plan-card-todos] li"),
-    ].map((li) => li.textContent);
-    expect(marks[0]).toContain("[x] Write the lexer");
-    expect(marks[1]).toContain("[ ] Install vitest");
-    expect(marks[2]).toContain("[!] Add tests");
+    // State is an icon and a word for a screen reader, not a bracket mark
+    const rows = [...tree.querySelectorAll("[data-testid^=plan-tree-item-]")];
+    const row = (text: string) =>
+      rows.find((r) => r.textContent?.includes(text))?.textContent;
+    expect(
+      tree.querySelector("[data-testid=plan-tree-fold-done]")!.textContent,
+    ).toContain("1 done");
+    expect(row("Install vitest")).toContain("to do");
+    expect(row("Install vitest")).toContain("new");
+    expect(row("Add tests")).toContain("failed");
     expect(h.store.getState().session.mode).toBe("plan");
     expect(h.prompt(2)).toContain("Re-evaluate the plan");
     expect(h.prompt(2)).toContain("(failed: no test runner installed)");

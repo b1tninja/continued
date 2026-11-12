@@ -47,6 +47,26 @@ export const VIEWS = {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",
   },
+  "loop-plan-tile": {
+    fixture: "loop-plan-tile",
+    note: "Loop mode: the plan card as a collapsed tile (title, file link, round line, one root row)",
+  },
+  "loop-plan-running": {
+    fixture: "loop-plan-running",
+    note: "Loop mode: the plan tree open while running: done fold, current item with live lines, upcoming rows, trace and auto-answer",
+  },
+  "loop-plan-waiting": {
+    fixture: "loop-plan-waiting",
+    note: "Loop mode: a re-plan waits to be accepted: dropped struck through, new to-do, kept folded; opens by itself",
+  },
+  "loop-plan-failed": {
+    fixture: "loop-plan-failed",
+    note: "Loop mode: an item failed and a repair runs: check output, fix-forward line; opens by itself",
+  },
+  "loop-plan-finished": {
+    fixture: "loop-plan-finished",
+    note: "Loop mode: finished, every to-do done folded into one row",
+  },
   "settings-models": {
     fixture: "settings-models",
     note: "Settings, Models tab",

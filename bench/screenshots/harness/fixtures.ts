@@ -18,6 +18,7 @@ import {
   newSession,
   setLoop,
   noteToolDialectLeak,
+  setActive,
   setMode,
   setRecoveryHold,
   setTaskPlan,
@@ -264,7 +265,249 @@ const permissionsEditor: Fixture = async ({ messenger, navigate }) => {
     ?.scrollIntoView({ block: "start" });
 };
 
+// ---- Loop mode: the plan tile and its tree ---------------------------------
+
+const TILE_TITLES = [
+  "Port sdk-forge/loop.py pickup to the projecthub CLI",
+  "Move the roadmap sync onto projecthub issues",
+  "Point every project AGENTS.md at the projecthub plan",
+  "Move verify.py's five gates into projecthub",
+  "Retire the sdk-forge githooks path and re-point core.hooksPath",
+  "Write the migration note in PORTFOLIO.md",
+  "Run the whole suite from a clean checkout",
+  "Tag the release",
+];
+
+const PLAN_URI =
+  "file:///c:/work/app/.continuous/plans/finish-the-migration.md";
+
+function planCall(): ToolCallState {
+  return {
+    toolCallId: "plan-1",
+    toolCall: {
+      id: "plan-1",
+      type: "function",
+      function: { name: "present_plan", arguments: "{}" },
+    },
+    parsedArgs: {
+      title: "Finish the sdk-forge to projecthub migration",
+      plan: "Move the planning tools onto projecthub, one project at a time.",
+      todos: TILE_TITLES,
+    },
+    status: "done",
+    output: [
+      {
+        name: "Finish the sdk-forge to projecthub migration",
+        description: ".continuous/plans/finish-the-migration.md",
+        content: "Plan saved",
+        uri: { type: "file", value: PLAN_URI },
+      },
+    ],
+  } as ToolCallState;
+}
+
+function tilePlan(texts = TILE_TITLES): TaskPlan {
+  return {
+    items: texts.map((text, i) => ({
+      id: String(i + 1),
+      text,
+      status: "pending" as const,
+      ...(i === 1 ? { budget: { turns: 12 } } : {}),
+    })),
+    updatedAt: NOW.toISOString(),
+  } as TaskPlan;
+}
+
+function toolTurn(command: string): ChatHistoryItem {
+  return assistant("", [
+    {
+      toolCallId: "t-" + command.length,
+      toolCall: {
+        id: "t-" + command.length,
+        type: "function",
+        function: {
+          name: "run_terminal_command",
+          arguments: JSON.stringify({ command }),
+        },
+      },
+      status: "done",
+      parsedArgs: { command },
+    } as ToolCallState,
+  ]);
+}
+
+type LoopPatch = (loop: LoopState, plan: TaskPlan) => LoopState;
+
+/** The plan card at the head of a Loop session, with the loop in the state `patch` sets */
+function tileFixture(opts: {
+  patch: LoopPatch;
+  plan?: TaskPlan;
+  /** The plan the loop was created from, when it differs (a re-plan waits) */
+  loopPlan?: TaskPlan;
+  history?: ChatHistoryItem[];
+  /** Open the tree with a click, as a person would */
+  open?: boolean;
+}): Fixture {
+  return async ({ store }) => {
+    const plan = opts.plan ?? tilePlan();
+    const base = createLoop(opts.loopPlan ?? plan, {
+      now: new Date(Date.now() - 400_000),
+      sessionTokens: 0,
+      autonomy: "auto",
+      title: "Finish the sdk-forge to projecthub migration",
+    });
+    const patched = opts.patch({ ...base, round: 2 }, plan);
+    store.dispatch(
+      newSession(
+        session(
+          [
+            user("Plan the migration, then build it"),
+            assistant("", [planCall()]),
+            ...(opts.history ?? []),
+          ],
+          "Finish the migration",
+        ),
+      ),
+    );
+    store.dispatch(setMode("loop" as never));
+    store.dispatch(setTaskPlan(plan));
+    store.dispatch(setLoop(patched));
+    // a turn is running: the loop driver leaves a running loop alone
+    if (patched.status === "running") store.dispatch(setActive());
+    if (opts.open) {
+      await new Promise((r) => setTimeout(r, 600));
+      (
+        document.querySelector(
+          "[data-testid=plan-tree-root] > div",
+        ) as HTMLElement | null
+      )?.click();
+    }
+  };
+}
+
+const withItems =
+  (statuses: Record<string, Partial<LoopState["items"][number]>>) =>
+  (loop: LoopState): LoopState => ({
+    ...loop,
+    items: loop.items.map((i) => ({ ...i, ...statuses[i.id] })),
+  });
+
 export const FIXTURES: Record<string, Fixture> = {
+  /** Loop mode, the plan tile: collapsed, one click to audit */
+  "loop-plan-tile": tileFixture({
+    patch: (loop) => ({
+      ...withItems({
+        "1": { status: "done" },
+        "2": { status: "running", attempts: 1 },
+      })(loop),
+      current: {
+        kind: "item",
+        itemId: "2",
+        historyIndex: 2,
+        startedAt: new Date(Date.now() - 130_000).toISOString(),
+      },
+    }),
+  }),
+  /** Loop mode, the plan tree open: done fold, the current item with its live lines, upcoming rows */
+  "loop-plan-running": tileFixture({
+    open: true,
+    history: [
+      toolTurn("pytest -q tests/test_roadmap.py"),
+      toolTurn('pip install -e ".[dev]"'),
+    ],
+    patch: (loop) =>
+      ({
+        ...withItems({
+          "1": { status: "done" },
+          "2": { status: "running", attempts: 1 },
+        })(loop),
+        current: {
+          kind: "item",
+          itemId: "2",
+          historyIndex: 2,
+          startedAt: new Date(Date.now() - 130_000).toISOString(),
+        },
+        autoDecisions: [
+          {
+            kind: "plan",
+            by: "system",
+            source: "Plan edits: Permissive",
+            text: "Plan updated: 7 kept, 1 added, 1 dropped; check of item 1 replaced",
+            at: new Date().toISOString(),
+          },
+          {
+            kind: "question",
+            by: "system",
+            source: "Questions: Permissive",
+            text: "Auto-answered: Merge PR #7 as-is? -> Merge it after writing the gate record",
+            at: new Date().toISOString(),
+          },
+        ],
+      }) as LoopState,
+  }),
+  /** Loop mode, a re-plan waiting to be accepted: dropped struck through, new to-do, kept folded */
+  "loop-plan-waiting": (() => {
+    const previous = TILE_TITLES.slice();
+    const next = tilePlan([
+      TILE_TITLES[0],
+      "Write PR #7's gate record to the log",
+      ...TILE_TITLES.slice(2),
+    ]);
+    // the new to-do has an id the loop does not know
+    next.items[1] = { ...next.items[1], id: "9" };
+    return tileFixture({
+      plan: next,
+      loopPlan: tilePlan(),
+      patch: (loop) => ({
+        ...withItems({ "1": { status: "done" } })(loop),
+        status: "awaiting_plan" as const,
+        replanReason:
+          "It changes or removes the check of item 2, which ended stuck without running it.",
+        replanned: { planTexts: previous },
+      }),
+    });
+  })(),
+  /** Loop mode, an item failed and a repair re-plan runs */
+  "loop-plan-failed": tileFixture({
+    history: [toolTurn("pytest -q")],
+    patch: (loop) => ({
+      ...withItems({
+        "1": { status: "done" },
+        "2": {
+          status: "failed",
+          attempts: 2,
+          check: {
+            status: "failed",
+            command: "pytest -q",
+            exitCode: 1,
+            output: "collected 12 items\n2 failed, 10 passed in 3.4s",
+            at: new Date().toISOString(),
+          },
+        },
+      })(loop),
+      current: {
+        kind: "replan",
+        itemId: "2",
+        itemText: TILE_TITLES[1],
+        historyIndex: 2,
+        startedAt: new Date(Date.now() - 20_000).toISOString(),
+      },
+    }),
+  }),
+  /** Loop mode, finished: one fold, the root says N/N done */
+  "loop-plan-finished": tileFixture({
+    patch: (loop) => ({
+      ...withItems(
+        Object.fromEntries(
+          TILE_TITLES.map((_, i) => [
+            String(i + 1),
+            { status: "done" as const },
+          ]),
+        ),
+      )(loop),
+      status: "stopped" as const,
+    }),
+  }),
   /** A new, empty chat */
   idle: ({ store }) => {
     store.dispatch(newSession());

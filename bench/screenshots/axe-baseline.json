@@ -69,6 +69,22 @@
     "approval": {
       "color-contrast": 1,
       "scrollable-region-focusable": 1
+    },
+    "loop-plan-failed": {
+      "color-contrast": 3,
+      "label-content-name-mismatch": 2
+    },
+    "loop-plan-finished": {},
+    "loop-plan-running": {
+      "color-contrast": 3,
+      "label-content-name-mismatch": 2
+    },
+    "loop-plan-tile": {
+      "color-contrast": 1
+    },
+    "loop-plan-waiting": {
+      "color-contrast": 1,
+      "label-content-name-mismatch": 1
     }
   }
 }
