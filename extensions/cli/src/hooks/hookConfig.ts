@@ -140,6 +140,12 @@ export interface UntrustedProjectHooks {
 export interface LoadedHooksConfig {
   hooks: HooksConfig;
   disabled: boolean;
+  /**
+   * The user's own settings say `managedHooksOnly`: the project's hook files
+   * were not read for this run, trusted or not, and `--trust-project-hooks`
+   * does not change that.
+   */
+  managedOnly?: boolean;
   untrustedProject?: UntrustedProjectHooks;
 }
 
@@ -163,7 +169,9 @@ function markAsProject(hooks: HooksConfig): HooksConfig {
  * The project's files load only if the user trusted this project with these
  * exact hooks, or passed --trust-project-hooks for this run; otherwise they
  * are reported in `untrustedProject` and nothing from them runs, including a
- * `disableAllHooks` that would silence the user's own hooks.
+ * `disableAllHooks` that would silence the user's own hooks. With
+ * `managedHooksOnly` in the user's own settings the project's files are not
+ * looked at at all.
  */
 export function loadHooksConfig(
   cwd: string = process.cwd(),
@@ -171,6 +179,7 @@ export function loadHooksConfig(
 ): LoadedHooksConfig {
   let mergedHooks: HooksConfig = {};
   let disabled = false;
+  let managedOnly = false;
 
   const apply = (settings: {
     hooks?: HooksConfig;
@@ -183,7 +192,16 @@ export function loadHooksConfig(
 
   for (const filePath of getUserSettingsFilePaths(cwd, homeDir)) {
     const settings = loadSettingsFile(filePath);
-    if (settings) apply(settings);
+    if (!settings) continue;
+    apply(settings);
+    // Only the user's own files can switch this on, and only with `true`.
+    if (settings.managedHooksOnly === true) managedOnly = true;
+  }
+
+  if (managedOnly) {
+    // Nothing from the project is read, so not even a `disableAllHooks` in it
+    // can silence the user's hooks, and there is nothing to ask about.
+    return { hooks: mergedHooks, disabled, managedOnly };
   }
 
   const projectFiles = getProjectHookFiles(cwd, homeDir);

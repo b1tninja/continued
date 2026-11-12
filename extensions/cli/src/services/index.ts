@@ -32,6 +32,7 @@ import {
 import {
   AgentFileServiceState,
   ApiClientServiceState,
+  ModelServiceState,
   AuthServiceState,
   ConfigServiceState,
   MCPServiceState,
@@ -57,6 +58,23 @@ const systemMessageService = new SystemMessageService();
 const artifactUploadService = new ArtifactUploadService();
 const gitAiIntegrationService = new GitAiIntegrationService();
 const hookService = new HookService();
+
+/** SessionStart hooks, once the hook service is ready. Never throws. */
+async function fireSessionStartOnce(options: object): Promise<void> {
+  const { resume, fork } = options as { resume?: boolean; fork?: string };
+  try {
+    const { runSessionStartHooks } = await import("../hooks/lifecycleHooks.js");
+    const modelState = serviceContainer.getSync<ModelServiceState>(
+      SERVICE_NAMES.MODEL,
+    )?.value;
+    await runSessionStartHooks(
+      resume || fork ? "resume" : "startup",
+      modelState?.model?.model,
+    );
+  } catch (error) {
+    logger.debug("SessionStart hooks failed (ignored)", error as any);
+  }
+}
 
 /**
  * Initialize all services and register them with the service container
@@ -326,6 +344,7 @@ export async function initializeServices(initOptions: ServiceInitOptions = {}) {
   // Eagerly initialize all services to ensure they're ready when needed
   // This avoids race conditions and "service not ready" errors
   await serviceContainer.initializeAll();
+  await fireSessionStartOnce(commandOptions);
 
   logger.debug("Service registry initialized");
 }

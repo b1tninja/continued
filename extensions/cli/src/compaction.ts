@@ -4,6 +4,7 @@ import type { ChatHistoryItem } from "core/index.js";
 import { encode } from "gpt-tokenizer";
 import { ChatCompletionTool } from "openai/resources.mjs";
 
+import { runPreCompactHooks } from "./hooks/lifecycleHooks.js";
 import { streamChatResponse } from "./stream/streamChatResponse.js";
 import { StreamCallbacks } from "./stream/streamChatResponse.types.js";
 import { logger } from "./util/logger.js";
@@ -35,6 +36,8 @@ export interface CompactionOptions {
   callbacks?: CompactionCallbacks;
   abortController?: AbortController;
   systemMessageTokens?: number;
+  /** What started it, for PreCompact hooks. Defaults to "manual". */
+  trigger?: "manual" | "auto";
 }
 
 const COMPACTION_PROMPT =
@@ -56,7 +59,13 @@ export async function compactChatHistory(
   llmApi: BaseLlmApi,
   options?: CompactionOptions,
 ): Promise<CompactionResult> {
-  const { callbacks, abortController, systemMessageTokens = 0 } = options || {};
+  const {
+    callbacks,
+    abortController,
+    systemMessageTokens = 0,
+    trigger = "manual",
+  } = options || {};
+  await runPreCompactHooks(trigger);
   // Create a prompt to summarize the conversation
   const compactionPrompt: ChatHistoryItem = {
     message: {
