@@ -47,6 +47,14 @@ export const VIEWS = {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",
   },
+  "loop-idgaf": {
+    fixture: "loop-idgaf",
+    note: "Loop mode at IDGAF with seven blocked calls: the one-line IDGAF chip and the blocked badge in the mode bar",
+  },
+  "loop-blocked-open": {
+    fixture: "loop-blocked-open",
+    note: "Loop mode: the Recently blocked list opened from its badge",
+  },
   "settings-models": {
     fixture: "settings-models",
     note: "Settings, Models tab",
