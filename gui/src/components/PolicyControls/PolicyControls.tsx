@@ -24,7 +24,7 @@ import {
   REVIEWABLE_AREAS,
   selectAutoApproval,
   selectEffectiveLevels,
-  selectYoloAreas,
+  selectIdgafAreas,
 } from "../../redux/selectors/selectAutoApproval";
 import {
   applyPolicyPreset,
@@ -229,26 +229,32 @@ export function PolicyControls() {
 }
 
 /**
- * Shown above the input for as long as any area is at YOLO. It has no close
- * button on purpose: the way to remove it is to leave YOLO.
+ * Shown above the input for as long as any area is at IDGAF. It has no close
+ * button on purpose: the way to remove it is to leave IDGAF.
  */
-export function YoloBanner() {
+export function IdgafBanner() {
   const dispatch = useAppDispatch();
-  const areas = useAppSelector(selectYoloAreas);
+  const areas = useAppSelector(selectIdgafAreas);
   if (areas.length === 0) return null;
-  const names = areas
-    .map((a) => `${POLICY_AREA_LABELS[a]} (${policyLevelLabel(a, "yolo")})`)
-    .join(", ");
+  const names = areas.map((a) => POLICY_AREA_LABELS[a]).join(", ");
+  const sentence = `${names}: nothing asks. Never rules, Ask rules, protected paths and the built-in rule check are ignored for these.`;
   return (
     <div
       role="alert"
-      data-testid="yolo-banner"
+      data-testid="idgaf-banner"
+      aria-label={`${policyLevelLabel(areas[0], "idgaf")}: ${sentence}`}
       className="flex items-center gap-2 bg-error/15 px-2 py-0.5 text-2xs text-error"
     >
       <ExclamationTriangleIcon className="h-3 w-3 shrink-0" />
-      <span className="flex-1">
-        {names}: nothing asks. Never rules, Ask rules, protected paths and the
-        built-in rule check are ignored for these.
+      <span
+        data-testid="idgaf-chip"
+        title={sentence}
+        className="shrink-0 rounded bg-error/25 px-1 font-semibold"
+      >
+        {policyLevelLabel(areas[0], "idgaf")}
+      </span>
+      <span className="flex-1" title={sentence}>
+        {names}: nothing asks.
       </span>
       <button
         type="button"

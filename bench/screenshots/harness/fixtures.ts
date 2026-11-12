@@ -559,8 +559,16 @@ function catalogue(): Fixture {
   };
 }
 
+// The loop frame is mounted on its own (see main.tsx, LoopFrameDemo); the state is in the name.
+const noop: Fixture = async () => {};
+
 Object.assign(FIXTURES, {
   catalogue: catalogue(),
+  "loop-frame-running": noop,
+  "loop-frame-waiting": noop,
+  "loop-frame-failed": noop,
+  "loop-frame-finished": noop,
+  "loop-frame-stopped": noop,
   "settings-models": settingsTab("models"),
   "settings-rules": settingsTab("rules"),
   "settings-permissions": async (ctx) => {

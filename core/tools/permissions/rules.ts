@@ -11,7 +11,7 @@ export type RuleDecision = "allow" | "ask" | "deny";
  * Where a rule was written. `user-config` is the person's own config.yaml,
  * `permissions-yaml` the CLI lists and floor in permissions.yaml, `assistant`
  * a hub or assistant configuration, `folder` a file that came with the
- * workspace, `floor` the deny rules in permissions.yaml that bind at YOLO,
+ * workspace, `floor` the deny rules in permissions.yaml that bind at IDGAF,
  * `builtin` the protections shipped with the product.
  */
 export type RuleSource =

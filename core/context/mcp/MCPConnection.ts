@@ -129,7 +129,7 @@ class MCPConnection {
   public tools: MCPTool[] = [];
   /**
    * Tools whose definition changed (or that appeared) since the person
-   * approved this server. They ask again, at every level but YOLO. Empty for a
+   * approved this server. They ask again, at every level but IDGAF. Empty for a
    * server seen for the first time: the normal approval flow handles that.
    */
   public changedTools: Map<
@@ -227,7 +227,7 @@ class MCPConnection {
   }
 
   /**
-   * A call to this tool ran, so it was approved (or the person runs at YOLO).
+   * A call to this tool ran, so it was approved (or the person runs at IDGAF).
    * Pins it: a `new` server is pinned whole, a changed server only has this
    * tool's new definition accepted. Reloads the tool flags if that changed
    * anything.
