@@ -336,6 +336,10 @@ Ids: the ROADMAP on `origin/main` (b928cdfe0) ends the UX track at UX32; this re
 8. **Axe in CI (UX36).** Recommended, pending owner: add as a non-blocking check first; it needs Chromium on the runner, which has a cost (CI cache cost is the subject of PR #650).
 9. **2.16.0 scope.** Recommended, pending owner: the seven items in section 10; drag and drop and Paste as Markdown to 2.17.
 10. **Per-change accept and reject (Claude Code peer).** Recommended, pending owner: not planned in Track UX.
+11. **Release labels.** Recommended, pending owner: read section 10's "2.16.0 candidates" as 2.17.0 candidates now that 2.16.0 is being cut; UX45, UX46, UX47, UX48 and UX50 as 2.18.0 candidates.
+12. **Session approval scope (UX52).** Recommended, pending owner: not before #625 and the Trusted list (B20); a session grant is listed and never written to a file.
+13. **Host notifications (UX51).** Recommended, pending owner: off by default, 30 s threshold, never shows the command.
+14. **JetBrains drops.** Recommended, pending owner: promise nothing until UX54 measures a windowed browser; the browser is always off-screen today.
 
 ## 13. Not verified (first version; section 14 resolves most of it)
 
