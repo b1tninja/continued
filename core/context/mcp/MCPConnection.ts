@@ -560,11 +560,7 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
           // with the shared secret scanner. stdout is the protocol channel
           // and is not captured.
           if (this.options.type === "stdio" && !this.stdioStderr.isEmpty) {
-            errorMessage += `
-
-Process output:
-STDERR:
-${this.stdioStderr.render(this.stdioEnv)}`;
+            errorMessage += `\n\nProcess output:\nSTDERR:\n${this.stdioStderr.render(this.stdioEnv)}`;
           }
 
           this.status = "error";
