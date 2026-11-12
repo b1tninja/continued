@@ -4,6 +4,7 @@
 import "./init.js";
 
 import { Command } from "commander";
+import { dismissCurrentNotice } from "core/util/retirementStartup.js";
 
 import { acp } from "./commands/acp.js";
 import { agentsCommand } from "./commands/agents.js";
@@ -544,9 +545,12 @@ addAuditSuggestOptions(
 program
   .command("test-connection")
   .description(
-    "Check an OpenAI-compatible endpoint: models listed, and with --model how it answers a tool call",
+    "Check an endpoint: models listed, and with --model how it answers a tool call (Anthropic: whether the model is deprecated or retiring)",
   )
-  .option("--provider <name>", "Provider (openai, ollama, llama.cpp, ...)")
+  .option(
+    "--provider <name>",
+    "Provider (openai, anthropic, ollama, llama.cpp, ...)",
+  )
   .option("--api-base <url>", "API base URL (defaults per provider)")
   .option("--api-key-env <name>", "Environment variable holding the API key")
   .option("--model <id>", "Also send one tool-call probe to this model")
@@ -555,6 +559,20 @@ program
   .action(async (options) => {
     const code = await testConnectionCommand(options);
     await gracefulExit(code);
+  });
+
+// Hide the retirement notice for a model (it is shown at start-up once a day)
+program
+  .command("dismiss-notice <model>")
+  .description(
+    "Hide the deprecation or retirement notice shown at start-up for an Anthropic model",
+  )
+  .action(async (model: string) => {
+    const hidden = dismissCurrentNotice({ provider: "anthropic", model });
+    console.log(
+      hidden ? `Notice for ${model} hidden.` : `No notice for ${model}.`,
+    );
+    await gracefulExit(0);
   });
 
 // Handle unknown commands
