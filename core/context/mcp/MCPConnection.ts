@@ -156,7 +156,7 @@ class MCPConnection {
 
     this.client = new Client(
       {
-        name: "continue-client",
+        name: "continuous-client",
         version: "1.0.0",
       },
       {
@@ -789,7 +789,7 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
     }
     const modern = await connectModernIfSupported({
       url: o.url,
-      clientInfo: { name: "continue-client", version: "1.0.0" },
+      clientInfo: { name: "continuous-client", version: "1.0.0" },
       headers: {
         ...o.requestOptions?.headers,
         ...(o.apiKey && { Authorization: `Bearer ${o.apiKey}` }),
