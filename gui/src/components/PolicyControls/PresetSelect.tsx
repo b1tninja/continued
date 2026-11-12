@@ -22,7 +22,7 @@ import {
 } from "core/tools/permissions/policy";
 import { useEffect, useId, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
-import { selectYoloAreas } from "../../redux/selectors/selectAutoApproval";
+import { selectIdgafAreas } from "../../redux/selectors/selectAutoApproval";
 import { applyPolicyPreset } from "../../redux/thunks/policySettings";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
 import { CHIP, LEVEL_TONES, idgafSentence } from "./levelStyle";
@@ -40,7 +40,7 @@ export const PRESET_GLYPHS: Record<PolicyPresetName | "custom", Glyph> = {
   acceptEdits: CheckBadgeIcon,
   handsOff: ForwardIcon,
   reviewer: SparklesIcon,
-  yolo: BoltIcon,
+  idgaf: BoltIcon,
   custom: AdjustmentsHorizontalIcon,
 };
 
@@ -49,7 +49,7 @@ export const PRESET_GLYPHS: Record<PolicyPresetName | "custom", Glyph> = {
  * can change something. Context use is left out: reading is the one area
  * where Permissive is the default, and counting it would paint Careful amber,
  * the same as Hands off. The order is the order of POLICY_LEVELS, manual to
- * yolo, so the tone says how far the trust goes in the loosest place.
+ * idgaf, so the tone says how far the trust goes in the loosest place.
  */
 export function loosestLevel(levels: PolicyLevels): PolicyLevel {
   let top = 0;
@@ -63,14 +63,14 @@ export function loosestLevel(levels: PolicyLevels): PolicyLevel {
 /**
  * The tone of a preset or of a Custom set of levels, taken from the level
  * tones so there is one palette. A Custom set is neutral (it matches no
- * promise) unless an area is at YOLO, which stays red.
+ * promise) unless an area is at IDGAF, which stays red.
  */
 export function presetTone(
   levels: PolicyLevels,
   preset: PolicyPresetName | undefined,
 ): { chip: string; icon: string; level: PolicyLevel | undefined } {
   const loosest = loosestLevel(levels);
-  if (!preset && loosest !== "yolo") {
+  if (!preset && loosest !== "idgaf") {
     return {
       chip: "bg-lightgray/20 text-foreground",
       icon: "",
@@ -116,9 +116,9 @@ export function PresetSelect({
   const summary = summarizeLevels(levels);
   // At the top level the chip is the warning: one line, the sentence on hover and by
   // aria-describedby (there is no separate banner)
-  const idgafAreas = useAppSelector(selectYoloAreas);
+  const idgafAreas = useAppSelector(selectIdgafAreas);
   const idgafDescriptionId = useId();
-  const warn = placement === "toolbar" && preset === "yolo";
+  const warn = placement === "toolbar" && preset === "idgaf";
   const sentence = idgafSentence(idgafAreas);
   // The Listbox button manages its own aria-describedby, so set ours directly
   const button = useRef<HTMLButtonElement>(null);

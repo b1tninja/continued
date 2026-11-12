@@ -129,6 +129,7 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "audit/overview",
     "tools/autoReview",
     "audit/answer",
+    "audit/autoAnswer",
     "audit/status",
     "audit/list",
     "audit/inbox",
