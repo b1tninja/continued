@@ -251,7 +251,7 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   app.post("/permission", async (req: Request, res: Response) => {
     state.lastActivity = Date.now();
 
-    const { requestId, approved } = req.body;
+    const { requestId, approved } = req.body ?? {};
 
     if (!state.pendingPermission) {
       return res.status(400).json({ error: "No pending permission request" });

@@ -47,6 +47,8 @@ These apply before the token is checked, whatever the token setting. A Host that
 
 - The `Host` header must be the address the server is bound to: `127.0.0.1`, `localhost` or `[::1]` on loopback (with this server's port, when the header has one), or the `--host` value elsewhere. Anything else gets `403`. This stops a DNS-rebinding page from reaching the server.
 - A request with an `Origin` header gets `403` unless the origin is listed with `--allow-origin`. Browsers send `Origin`; `curl` and other local clients do not. A listed origin is answered with its own name in `Access-Control-Allow-Origin`, never `*`. The server has no WebSocket route and refuses every upgrade request with `403`.
+- A request with a `Sec-Fetch-Site` header gets `403` unless its value is `none`. Browsers send it, so a request a web page makes (`cross-site`, `same-site`, `same-origin`) is refused. A client that sends no such header, such as `curl`, Node or the remote terminal agent, is not affected.
+- A request that carries a body gets `415` unless its `Content-Type` is `application/json`. This closes the form and `text/plain` posts a page can send without a preflight. A `POST` with no body, such as `/pause` and `/exit`, needs no content type.
 
 ## Limits and masking
 
