@@ -37,12 +37,21 @@ const DECISION_STYLE: Record<RuleDecision, string> = {
   allow: "text-success border-success",
 };
 
+const DECISION_TONE: Record<RuleDecision, string> = {
+  deny: "error",
+  ask: "warning",
+  allow: "ok",
+};
+
 const chip =
-  "inline-block rounded-sm border border-solid px-1 text-2xs leading-4 whitespace-nowrap";
+  "gui-chip inline-block rounded-sm border border-solid px-1 text-2xs leading-4 whitespace-nowrap";
 
 export function DecisionChip({ decision }: { decision: RuleDecision }) {
   return (
-    <span className={cn(chip, DECISION_STYLE[decision])}>
+    <span
+      className={cn(chip, DECISION_STYLE[decision])}
+      data-tone={DECISION_TONE[decision]}
+    >
       {DECISION_LABEL[decision]}
     </span>
   );
@@ -69,7 +78,12 @@ export function StateBadge({
   return (
     <>
       {state === "ignored" && (
-        <span className={cn(chip, "border-warning text-warning")}>Ignored</span>
+        <span
+          className={cn(chip, "border-warning text-warning")}
+          data-tone="warning"
+        >
+          Ignored
+        </span>
       )}
       {locked && (
         <span className={cn(chip, "border-border text-description")}>
