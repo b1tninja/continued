@@ -2,6 +2,7 @@ import { EditOperation } from "../../tools/definitions/multiEdit";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 import { SearchMatchResult, findSearchMatches } from "./findSearchMatch";
 import { recoverMatch } from "./recoverMatch";
+import { strippedFirstLineShift } from "./strippedIndent";
 
 /**
  * Get the leading whitespace of the first non-empty line in a string.
@@ -56,6 +57,18 @@ function adjustReplacementIndentation(
 
   const matchedIndent = getLineIndentAtPosition(fileContent, match.startIndex);
   const oldIndent = getLeadingIndent(oldString);
+
+  // old_string lost the indentation of its first line (vLLM issue 48753): the
+  // later lines move by what the file adds to them, not by the match's indent.
+  const shift = strippedFirstLineShift(fileContent, match, oldString);
+  if (shift !== undefined) {
+    return newString
+      .split("\n")
+      .map((line, index) =>
+        index === 0 || line.trim().length === 0 ? line : shift + line,
+      )
+      .join("\n");
+  }
 
   if (matchedIndent === oldIndent) {
     return newString;

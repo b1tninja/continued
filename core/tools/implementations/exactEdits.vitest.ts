@@ -79,4 +79,45 @@ describe("the exact edit tools in core", () => {
       ),
     ).rejects.toThrow();
   });
+
+  it("both tools reject a whitespace-only old_string and leave the file alone", async () => {
+    const uri = `${WORKTREE}/src/a.ts`;
+    const { ide, files } = fakeIde({ [uri]: "a = 1;\n" });
+    for (const ws of ["   ", "\n", "    "]) {
+      await expect(
+        singleFindAndReplaceImpl(
+          { filepath: "src/a.ts", old_string: ws, new_string: "x" },
+          extrasFor(ide, [WORKTREE]),
+        ),
+      ).rejects.toThrow(/only whitespace/);
+      await expect(
+        multiEditImpl(
+          {
+            filepath: "src/a.ts",
+            edits: [{ old_string: ws, new_string: "x" }],
+          },
+          extrasFor(ide, [WORKTREE]),
+        ),
+      ).rejects.toThrow(/only whitespace/);
+    }
+    expect(files[uri]).toBe("a = 1;\n");
+  });
+
+  it("an empty old_string still inserts at the top through both tools", async () => {
+    const uri = `${WORKTREE}/src/a.ts`;
+    const { ide, files } = fakeIde({ [uri]: "a = 1;\n" });
+    await singleFindAndReplaceImpl(
+      { filepath: "src/a.ts", old_string: "", new_string: "// top\n" },
+      extrasFor(ide, [WORKTREE]),
+    );
+    expect(files[uri]).toBe("// top\na = 1;\n");
+    await multiEditImpl(
+      {
+        filepath: "src/a.ts",
+        edits: [{ old_string: "", new_string: "// first\n" }],
+      },
+      extrasFor(ide, [WORKTREE]),
+    );
+    expect(files[uri]).toBe("// first\n// top\na = 1;\n");
+  });
 });
