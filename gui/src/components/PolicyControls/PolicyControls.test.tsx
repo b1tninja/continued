@@ -7,7 +7,7 @@ import { setupStore } from "../../redux/store";
 import { loadPolicySettings } from "../../redux/thunks/policySettings";
 import { renderWithProviders } from "../../util/test/render";
 import { PolicyCard } from "./PolicyCard";
-import { PolicyControls, YoloChip } from "./PolicyControls";
+import { PolicyControls, IdgafChip } from "./PolicyControls";
 
 async function setup(experimental = false) {
   const ideMessenger = new MockIdeMessenger();
@@ -15,7 +15,7 @@ async function setup(experimental = false) {
   const view = await renderWithProviders(
     <>
       <PolicyControls />
-      <YoloChip />
+      <IdgafChip />
       <PolicyCard />
     </>,
     { store, mockIdeMessenger: ideMessenger },
@@ -50,7 +50,7 @@ describe("PolicyControls", () => {
     expect(screen.getAllByTestId("policy-preset")[0].textContent).toContain(
       "Careful",
     );
-    expect(screen.queryByTestId("yolo-chip")).toBeNull();
+    expect(screen.queryByTestId("idgaf-chip")).toBeNull();
   });
 
   it("the toolbar chip is an icon whose colour and name follow the level", async () => {
@@ -117,25 +117,25 @@ describe("PolicyControls", () => {
     await act(async () => {
       store.dispatch(setPolicyLevel({ area: "questions", level: "yolo" }));
     });
-    const chip = screen.getByTestId("yolo-chip");
+    const chip = screen.getByTestId("idgaf-chip");
     // One line: the word, not the sentence
-    expect(chip.textContent).not.toContain("Never rules");
-    expect(chip.textContent).toContain("YOLO");
+    expect(chip.textContent).not.toContain("Every rule is ignored");
+    expect(chip.textContent).toContain("IDGAF");
     // The sentence is the tooltip and the described-by text
-    expect(chip.getAttribute("title")).toContain("Questions (IDGAF)");
-    expect(chip.getAttribute("title")).toContain("Never rules");
+    expect(chip.getAttribute("title")).toContain("Questions");
+    expect(chip.getAttribute("title")).toContain("Every rule is ignored");
     const description = document.getElementById(
       chip.getAttribute("aria-describedby")!,
     )!;
-    expect(description.textContent).toContain("Questions (IDGAF)");
-    expect(description.textContent).toContain("Never rules");
+    expect(description.textContent).toContain("Questions");
+    expect(description.textContent).toContain("Every rule is ignored");
     // It is not an alert: a standing state is not announced as an interruption
     expect(chip.getAttribute("role")).toBeNull();
     // Unrelated state changes do not remove it.
     await act(async () => {
       store.dispatch(setPolicyLevel({ area: "context", level: "manual" }));
     });
-    expect(screen.getByTestId("yolo-chip")).toBeDefined();
+    expect(screen.getByTestId("idgaf-chip")).toBeDefined();
   });
 
   it("choosing the chip goes back to Careful", async () => {
@@ -143,9 +143,9 @@ describe("PolicyControls", () => {
     await act(async () => {
       store.dispatch(setPolicyLevel({ area: "tools", level: "yolo" }));
     });
-    await user.click(screen.getByTestId("yolo-chip"));
+    await user.click(screen.getByTestId("idgaf-chip"));
     expect(store.getState().ui.policyLevels.tools).toBe("cautious");
-    expect(screen.queryByTestId("yolo-chip")).toBeNull();
+    expect(screen.queryByTestId("idgaf-chip")).toBeNull();
   });
 
   it("a preset sets every area at once", async () => {
@@ -155,15 +155,17 @@ describe("PolicyControls", () => {
     expect(Object.values(store.getState().ui.policyLevels)).toEqual(
       Array(5).fill("yolo"),
     );
-    // At the YOLO preset the preset chip is the warning: one chip, not two
-    expect(screen.queryByTestId("yolo-chip")).toBeNull();
+    // At the top-level preset the preset chip is the warning: one chip, not two
+    expect(screen.queryByTestId("idgaf-chip")).toBeNull();
     const chip = screen.getAllByTestId("policy-preset")[0];
-    expect(chip.textContent).toContain("YOLO");
+    expect(chip.textContent).toContain("nothing asks");
     const description = document.getElementById(
       chip.getAttribute("aria-describedby")!,
     )!;
     expect(description.textContent).toContain("nothing asks");
-    expect(chip.parentElement!.getAttribute("title")).toContain("Never rules");
+    expect(chip.parentElement!.getAttribute("title")).toContain(
+      "Every rule is ignored",
+    );
   });
 
   it("the preset chip has a glyph, a tone from its levels and a name for screen readers", async () => {

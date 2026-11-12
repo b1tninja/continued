@@ -436,7 +436,7 @@ export const FIXTURES: Record<string, Fixture> = {
     store.dispatch(setLoop(loopState()));
   },
   /** Loop mode at YOLO with seven refused calls: the one-line chip and the blocked badge */
-  "loop-yolo": ({ store }) => {
+  "loop-idgaf": ({ store }) => {
     store.dispatch(newSession(session([], "Fix parseConfig")));
     store.dispatch(setMode("loop" as never));
     store.dispatch(setTaskPlan(PLAN));
@@ -460,7 +460,7 @@ export const FIXTURES: Record<string, Fixture> = {
   },
   /** The same, with the blocked list open above the mode bar */
   "loop-blocked-open": async (ctx) => {
-    await (FIXTURES as Record<string, Fixture>)["loop-yolo"](ctx);
+    await (FIXTURES as Record<string, Fixture>)["loop-idgaf"](ctx);
     await new Promise((r) => setTimeout(r, 800));
     (
       document.querySelector(

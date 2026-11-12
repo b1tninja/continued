@@ -25,7 +25,7 @@ import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectYoloAreas } from "../../redux/selectors/selectAutoApproval";
 import { applyPolicyPreset } from "../../redux/thunks/policySettings";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
-import { CHIP, LEVEL_TONES, yoloSentence } from "./levelStyle";
+import { CHIP, LEVEL_TONES, idgafSentence } from "./levelStyle";
 
 type Glyph = typeof BoltIcon;
 
@@ -114,20 +114,20 @@ export function PresetSelect({
   const tone = presetTone(levels, preset);
   const label = preset ? POLICY_PRESETS[preset].label : "Custom";
   const summary = summarizeLevels(levels);
-  // At YOLO the chip is the warning: one line, the sentence on hover and by
+  // At the top level the chip is the warning: one line, the sentence on hover and by
   // aria-describedby (there is no separate banner)
-  const yoloAreas = useAppSelector(selectYoloAreas);
-  const yoloDescriptionId = useId();
+  const idgafAreas = useAppSelector(selectYoloAreas);
+  const idgafDescriptionId = useId();
   const warn = placement === "toolbar" && preset === "yolo";
-  const sentence = yoloSentence(yoloAreas);
+  const sentence = idgafSentence(idgafAreas);
   // The Listbox button manages its own aria-describedby, so set ours directly
   const button = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const el = button.current;
     if (!el) return;
-    if (warn) el.setAttribute("aria-describedby", yoloDescriptionId);
+    if (warn) el.setAttribute("aria-describedby", idgafDescriptionId);
     else el.removeAttribute("aria-describedby");
-  }, [warn, yoloDescriptionId]);
+  }, [warn, idgafDescriptionId]);
 
   return (
     <Listbox
@@ -156,7 +156,7 @@ export function PresetSelect({
               : "policy-preset"
           }
           data-roving={placement === "toolbar" ? "" : undefined}
-          aria-label={`Preset: ${label}. ${summary}`}
+          aria-label={`Preset: ${label}${warn ? ", nothing asks" : ""}. ${summary}`}
           className={`${CHIP} ${tone.chip}`}
         >
           <Glyph
@@ -165,9 +165,7 @@ export function PresetSelect({
           />
           <span>{label}</span>
           {warn && (
-            <span className="hidden min-[481px]:inline" aria-hidden="true">
-              · nothing asks
-            </span>
+            <span className="hidden min-[481px]:inline">· nothing asks</span>
           )}
           <span
             className="sr-only"
@@ -185,8 +183,8 @@ export function PresetSelect({
         </ListboxButton>
         {warn && (
           <span
-            id={yoloDescriptionId}
-            data-testid="yolo-description"
+            id={idgafDescriptionId}
+            data-testid="idgaf-description"
             className="sr-only"
           >
             {sentence}

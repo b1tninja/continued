@@ -47,8 +47,8 @@ export const VIEWS = {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",
   },
-  "loop-yolo": {
-    fixture: "loop-yolo",
+  "loop-idgaf": {
+    fixture: "loop-idgaf",
     note: "Loop mode at YOLO with seven blocked calls: the one-line YOLO chip and the blocked badge in the mode bar",
   },
   "loop-blocked-open": {

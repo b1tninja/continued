@@ -99,7 +99,7 @@ export function RecentlyBlocked() {
                 >
                   {maskCommandForDisplay(item.summary)}
                 </code>
-                <span className="shrink-0 text-error">
+                <span className="shrink-0 font-semibold text-foreground">
                   {decisionLabel({
                     outcome: "blocked",
                     source: item.source,

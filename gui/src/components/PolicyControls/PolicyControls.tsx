@@ -32,7 +32,7 @@ import {
   changePolicyLevel,
 } from "../../redux/thunks/policySettings";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
-import { CHIP, LEVEL_GLYPHS, LEVEL_TONES, yoloSentence } from "./levelStyle";
+import { CHIP, LEVEL_GLYPHS, LEVEL_TONES, idgafSentence } from "./levelStyle";
 import { PresetSelect } from "./PresetSelect";
 
 const AREA_ICONS: Record<PolicyArea, typeof EyeIcon> = {
@@ -230,26 +230,26 @@ export function PolicyControls() {
 }
 
 /**
- * One chip in the mode bar for as long as any area is at YOLO: a bolt, the
+ * One chip in the mode bar for as long as any area is at IDGAF: a bolt, the
  * word and (when there is room) "nothing asks", tinted red. The sentence that
  * used to fill a banner is the tooltip and the accessible description, so it
  * is reachable by keyboard and screen reader, not only by hover. There is no
  * close button on purpose: the chip is the state, and choosing it goes back
  * to Careful, the same as the Careful preset.
  */
-export function YoloChip() {
+export function IdgafChip() {
   const dispatch = useAppDispatch();
   const areas = useAppSelector(selectYoloAreas);
   const descriptionId = useId();
   const preset = presetOf(useAppSelector((s) => s.ui.policyLevels));
-  // At the YOLO preset the preset chip already says so, and carries the sentence
+  // At the IDGAF preset the preset chip already says so, and carries the sentence
   if (areas.length === 0 || preset === "yolo") return null;
-  const sentence = yoloSentence(areas);
+  const sentence = idgafSentence(areas);
   return (
     <>
       <button
         type="button"
-        data-testid="yolo-chip"
+        data-testid="idgaf-chip"
         data-roving=""
         aria-describedby={descriptionId}
         title={`${sentence} Select to go back to Careful.`}
@@ -262,15 +262,13 @@ export function YoloChip() {
           className={`h-3 w-3 shrink-0 ${LEVEL_TONES.yolo.icon}`}
           aria-hidden="true"
         />
-        <span>YOLO</span>
-        <span className="hidden min-[481px]:inline" aria-hidden="true">
-          · nothing asks
-        </span>
+        <span>IDGAF</span>
+        <span className="hidden min-[481px]:inline">· nothing asks</span>
         <span className="sr-only">. Select to go back to Careful.</span>
       </button>
       <span
         id={descriptionId}
-        data-testid="yolo-description"
+        data-testid="idgaf-description"
         className="sr-only"
       >
         {sentence}

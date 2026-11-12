@@ -48,10 +48,8 @@ export const LEVEL_TONES: Record<PolicyLevel, { chip: string; icon: string }> =
 export const CHIP =
   "flex-none min-h-6 gap-1 rounded-full border-none px-2 transition-colors duration-200 hover:brightness-110";
 
-/** The warning for areas at YOLO: what the chip's tooltip and description say. */
-export function yoloSentence(areas: readonly PolicyArea[]): string {
-  const names = areas
-    .map((a) => `${POLICY_AREA_LABELS[a]} (${policyLevelLabel(a, "yolo")})`)
-    .join(", ");
-  return `${names}: nothing asks. Never rules, Ask rules, protected paths and the built-in rule check are ignored for these.`;
+/** The warning for areas at the top level: what the chip's tooltip and description say. */
+export function idgafSentence(areas: readonly PolicyArea[]): string {
+  const names = areas.map((a) => POLICY_AREA_LABELS[a]).join(", ");
+  return `${names}: nothing asks. Every rule is ignored.`;
 }
