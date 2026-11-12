@@ -1,8 +1,10 @@
+import { useRef } from "react";
 import { maskCommandForDisplay } from "core/tools/permissions/displayMask";
 import { useAppDispatch, useAppSelector } from "../../../../redux/hooks";
 import { selectPendingToolCalls } from "../../../../redux/selectors/selectToolCalls";
 import { callToolById } from "../../../../redux/thunks/callToolById";
 import { cancelToolCallThunk } from "../../../../redux/thunks/cancelToolCall";
+import { useApprovalFocus } from "../../../a11y/useApprovalFocus";
 import { getAltKeyLabel, getMetaKeyLabel, isJetBrains } from "../../../../util";
 import { Button } from "../../../ui";
 import { useMainEditor } from "../../TipTapEditor";
@@ -18,8 +20,11 @@ export const generateToolCallButtonTestId = (
 export function PendingToolCallToolbar() {
   const dispatch = useAppDispatch();
   const jetbrains = isJetBrains();
+  const metaKey = getMetaKeyLabel() === "⌘" ? "Meta" : "Control";
   const pendingToolCalls = useAppSelector(selectPendingToolCalls);
   const editor = useMainEditor();
+  const acceptRef = useRef<HTMLButtonElement>(null);
+  useApprovalFocus(pendingToolCalls[0]?.toolCallId, acceptRef);
 
   if (pendingToolCalls.length === 0) {
     return null;
@@ -38,7 +43,16 @@ export function PendingToolCallToolbar() {
   };
 
   return (
-    <div className="flex w-full flex-col pb-0.5">
+    <div
+      className="flex w-full flex-col pb-0.5"
+      role="group"
+      aria-label={
+        pendingToolCalls.length > 1
+          ? `Approval needed for ${pendingToolCalls.length} commands`
+          : "Approval needed"
+      }
+      data-testid="pending-tool-call-toolbar"
+    >
       <div className="flex flex-wrap items-center justify-between gap-x-2 px-1 pb-0.5">
         <span className="min-w-0 basis-full text-2xs text-description xs:basis-auto">
           Sending a new message cancels{" "}
@@ -87,7 +101,8 @@ export function PendingToolCallToolbar() {
             <Button
               variant="ghost"
               size="sm"
-              className="my-0.5 min-h-6 font-medium text-description"
+              className="my-0.5 min-h-6 min-w-6 font-medium text-description"
+              aria-keyshortcuts={`${jetbrains ? "Alt" : metaKey}+Backspace`}
               title="Reject this command"
               onClick={() => handleReject(toolCall.toolCallId)}
               data-testid={generateToolCallButtonTestId(
@@ -105,9 +120,11 @@ export function PendingToolCallToolbar() {
             </Button>
 
             <Button
+              ref={index === 0 ? acceptRef : undefined}
               variant="primary"
               size="sm"
-              className="my-0.5 min-h-6 font-medium"
+              className="my-0.5 min-h-6 min-w-6 font-medium"
+              aria-keyshortcuts={`${metaKey}+Enter`}
               title="Run this command"
               onClick={() => handleAccept(toolCall.toolCallId)}
               data-testid={generateToolCallButtonTestId(

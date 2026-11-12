@@ -27,6 +27,7 @@ import { modelGuard } from "./lib/guards.mjs";
 import fs from "node:fs";
 import { agentTools, loadSuite, SUITE_NAMES } from "./lib/suites.mjs";
 import { writeProfiles } from "./lib/suggest.mjs";
+import { analyze, formatWhitespaceReport } from "./lib/whitespace.mjs";
 
 const HELP = `usage: node bench/lab/lab.mjs <command> [options]
 
@@ -35,6 +36,7 @@ commands
   plan                      dry run: cases x models x passes and estimated time
   run --run                 run for real (without --run it only prints the plan)
   report                    markdown tables with Wilson 95% intervals on the effective n (distinct prompts), raw n beside it
+  whitespace [--file F ...] whitespace fidelity of string arguments from args-whitespace results (offline, no model; vLLM issue 48753)
   diff <before> <after>     compare two result files
   compare <A> <B>           pair two result sets: rates, McNemar exact (per pass and per prompt), flipped cases;
                             --unit prompt|pass|auto (auto: prompt when the passes ran at temperature 0)
@@ -58,6 +60,8 @@ transports (README "Transports")
   --gguf FILE (llama-server apis: size guard; with --serve, the file to start)  --serve (start and stop llama-server for the run)
   --exe FILE  --port N  --ctx N  --ngl N  --parallel N  --alias NAME  --chat-template NAME  --chat-template-file FILE
   --metrics  --slots (llama-server: start with the endpoint on, and poll /slots and /metrics after each request)
+  --size-gb N --alias NAME (instead of --gguf, for a server whose weights are not a local file, such as vLLM: N is the size guard, NAME the served model name)
+  --tool-parser NAME (the tool-call parser the server was started with, for vLLM's --tool-call-parser: it reports none; recorded as engine.parserDeclared)
   --server-log FILE (the log to read the Chat format: line from when the server was not started by --serve)
   --dumps PATH (replay)  --model-a M  --model-b M (compare, when a side holds several models)
   --cache-reuse N  --reasoning-format F  --server-arg ARG (repeatable)  --no-vram-check  --ready-timeout S
@@ -108,6 +112,8 @@ const OPTIONS = {
   metrics: { type: "boolean" },
   slots: { type: "boolean" },
   "server-log": { type: "string" },
+  "tool-parser": { type: "string" },
+  "size-gb": { type: "string" },
   dumps: { type: "string" },
   "model-a": { type: "string" },
   "model-b": { type: "string" },
@@ -217,7 +223,9 @@ export async function main(argv, env = process.env) {
       "the lab runs one request at a time; --concurrency is fixed at 1",
     );
   // --out is a file for report/diff/snapshot-tools and a results folder for the rest
-  const outIsFile = ["report", "diff", "snapshot-tools"].includes(cmd);
+  const outIsFile = ["report", "diff", "snapshot-tools", "whitespace"].includes(
+    cmd,
+  );
   const roots = makeRoots({
     results: v["results-dir"] ?? (outIsFile ? undefined : v.out),
     profiles: v["profiles-dir"],
@@ -281,6 +289,14 @@ export async function main(argv, env = process.env) {
     const md =
       buildReport(labelArms(recs2.filter((r) => r.kind !== "cache"))) +
       buildCacheReport(recs2);
+    return v.out
+      ? log("wrote " + writeText(v.out, md, roots))
+      : process.stdout.write(md);
+  }
+  if (cmd === "whitespace") {
+    const recs = v.file?.length ? readAll(v.file) : readAll(roots.results);
+    const suite = loadSuite(v.suite ?? "args-whitespace");
+    const md = formatWhitespaceReport(analyze(labelArms(recs), suite));
     return v.out
       ? log("wrote " + writeText(v.out, md, roots))
       : process.stdout.write(md);
@@ -427,6 +443,7 @@ export async function main(argv, env = process.env) {
     signal: ctl.signal,
     sidecar: { slots: v.slots, metrics: v.metrics },
     serverLog: v["server-log"],
+    declaredParser: v["tool-parser"],
   });
   const facts = machineFacts({ env });
   let server;
@@ -435,9 +452,9 @@ export async function main(argv, env = process.env) {
     // llama-server lists no sizes: the GGUF file is the size fact. A running
     // server already holds its VRAM, so the free-VRAM check belongs to the
     // server helper (before it starts), not to the model guard.
-    if (!v.gguf)
+    if (!v.gguf && !(v["size-gb"] && v.alias))
       return die(
-        `--api ${v.api} needs --gguf FILE (its size is the guard; --serve starts it)`,
+        `--api ${v.api} needs --gguf FILE (its size is the guard; --serve starts it), or --size-gb N with --alias NAME for a server whose weights are not a local file (vLLM)`,
       );
     if (v.serve && cmd === "run" && v.run) {
       server = await startServer(serverOpts(), roots, { signal: ctl.signal });
@@ -447,7 +464,9 @@ export async function main(argv, env = process.env) {
       client.origin = server.baseUrl;
       client.serverLog = server.logFile;
     }
-    const size = fs.statSync(v.gguf).size;
+    const size = v.gguf
+      ? fs.statSync(v.gguf).size
+      : num(v["size-gb"], "size-gb") * 1e9;
     const name = v.alias ?? path.basename(v.gguf).replace(/\.gguf$/i, "");
     const row = {
       name,

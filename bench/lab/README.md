@@ -191,7 +191,26 @@ Each case is one paired binary outcome (valid call or not), so the test is McNem
 
 ### What an engine record holds (`engine`)
 
-Every record carries an `engine` block read when the model was first used. llama-server: `build` (`/props` `build_info`), `slots` (`total_slots`), `modelPath`, `nCtx`, `chatTemplateSha` (first 16 hex of the SHA-256 of `/props` `chat_template`, so two runs with the same template hash used the same Jinja text) and `chatTemplateChars`, `chatFormat` (`chat_format` from `/props` where the build reports it; failing that the last `Chat format:` line of the server log, from the log the helper writes or from `--server-log FILE` for a server the lab did not start; failing both, `chat_format` from `/slots`), `chatFormatSource` (`props`, `log` or `slots`) and `samplingDefaults` (the server's startup sampling values). Ollama: `version`, `templateSha` (of `/api/show` `template`), `parser`, `renderer`, `quant`, `parameters` (the Modelfile `PARAMETER` lines, see "Sampling"). `thinkProbe: "accepted"` is present when `--think` was probed (below). A field the engine does not report is absent, never guessed.
+Every record carries an `engine` block read when the model was first used. llama-server: `build` (`/props` `build_info`), `slots` (`total_slots`), `modelPath`, `nCtx`, `chatTemplateSha` (first 16 hex of the SHA-256 of `/props` `chat_template`, so two runs with the same template hash used the same Jinja text) and `chatTemplateChars`, `chatFormat` (`chat_format` from `/props` where the build reports it; failing that the last `Chat format:` line of the server log, from the log the helper writes or from `--server-log FILE` for a server the lab did not start; failing both, `chat_format` from `/slots`), `chatFormatSource` (`props`, `log` or `slots`) and `samplingDefaults` (the server's startup sampling values). Ollama: `version`, `templateSha` (of `/api/show` `template`), `parser`, `renderer`, `quant`, `parameters` (the Modelfile `PARAMETER` lines, see "Sampling"). `thinkProbe: "accepted"` is present when `--think` was probed (below). A field the engine does not report is absent, never guessed. vLLM has no `/props`: when it is absent the lab asks `GET /version` and records `engine: "vllm"` with its `version`; vLLM reports no tool parser, so pass `--tool-parser NAME` (the value of the server's `--tool-call-parser`) and the record carries it as `parserDeclared`. The result schema's `arm.server` (contract version 2, `ServerIdentity` in `core/util/labContract.ts`) is the same facts in one shape: `name`, `version`, `parser`, `parserSource` (`reported` for Ollama's `/api/show` parser and llama-server's Chat format, `declared` for `--tool-parser`) and `templateSha`. `lib/serverIdentity.mjs` converts an engine block into it. Nothing is guessed, so a server that reports no version leaves it out.
+
+### The `args-whitespace` suite
+
+String arguments must arrive byte for byte. vLLM's Qwen3 and Qwen3-Coder tool parser strips all leading and trailing whitespace from every string argument in v0.24.0 through v0.25.1 and on `main` ([vllm-project/vllm#48753](https://github.com/vllm-project/vllm/issues/48753), filed 2026-07-15, open when read on 2026-11-11, no upstream fix linked). Per the issue the cause is `_qwen3_arg_converter` in `vllm/parser/qwen3.py` calling `value.strip()`; it affects the `qwen3_coder`, `qwen3_xml` and Seed-OSS parsers, streaming and not, and the legacy `qwen3coder` parser of v0.23 and earlier is not affected. An exact-string edit whose `old_string` has indentation or a trailing newline then no longer matches. The issue names no workaround other than that: the lab does not claim that another parser (hermes, for example) avoids it, so measure it.
+
+The suite has 13 probes, each asking for one `edit_file` call whose `old_string` is an exact string: leading spaces, trailing spaces, a leading and a trailing tab, a trailing newline, a leading newline, CRLF lines, an indentation-only string, a newline-only string, a multi-line indented block, trailing blank lines, whitespace on both sides, and a control with none. Native tools only. The prompt carries the string as a JSON literal so the model does not have to guess the escapes.
+
+```sh
+# online, when you run it: one request per probe against the server you name
+node bench/lab/lab.mjs run --run --suite args-whitespace --api openai-chat --base-url http://127.0.0.1:8000 \
+  --alias Qwen/Qwen3-Coder-30B-A3B-Instruct --size-gb 60 --tool-parser qwen3_coder --max-vram 80 --max-ram 80
+node bench/lab/lab.mjs whitespace            # reads results/*.jsonl, prints the report
+
+# offline, no model and no server: recorded-shape replies
+node bench/lab/lab.mjs whitespace --file bench/lab/fixtures/args-whitespace/stripping-vllm-0.25.1.jsonl \
+  --file bench/lab/fixtures/args-whitespace/faithful-llama-server.jsonl
+```
+
+`whitespace` compares each argument as received with the expected string and prints, per model and server identity, a verdict (`STRIPS WHITESPACE`, `ALTERS ARGUMENTS`, `INCOMPLETE`, `FAITHFUL`), then per case `exact`, the kind of damage (`stripped` means only edge whitespace was lost), the first differing byte (a UTF-8 offset, with the expected and received byte; `end` where one side stops) and both strings with spaces shown as a visible mark. The two files in `fixtures/args-whitespace/` are recorded-shape replies written by hand for a stripping server (labelled vLLM 0.25.1) and a faithful one; they measure nothing about a real server. A vLLM server has no GGUF file: `--size-gb N --alias NAME` replace `--gguf FILE` as the size guard and the served model name (`--allow-remote` if it is not on this machine; the lab never starts or stops a vLLM server).
 
 ### The `--think` probe
 
@@ -347,8 +366,8 @@ Every section degrades to `null` with a line in `product.missing`, so the lab st
 adapter.mjs   the one module that touches the product
 lab.mjs       the CLI
 lib/          ollama client, transports, server helper, cache suite, compare, think probe, replay, guards, suites, classify, run, report, diff, suggest, fixtures, inventory, stats (Wilson, effective n), sampling (inherit, seeds, sampling record), paths, prompts
-suites/       dialect-probe, prompt-variants, reviewer, leaks, cache (data)
-fixtures/     frozen agent tool list
+suites/       dialect-probe, args-whitespace, prompt-variants, reviewer, leaks, cache (data)
+fixtures/     frozen agent tool list, recorded-shape replies for the whitespace report (args-whitespace/)
 samples/      small committed examples (from the fake server)
 test/         offline tests and the fake Ollama
 results/      gitignored: JSONL results and fixtures

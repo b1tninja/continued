@@ -13,6 +13,7 @@ import type {
   HookEventResult,
   NotificationInput,
   PostToolUseFailureInput,
+  PermissionRequestInput,
   PostToolUseInput,
   PreCompactInput,
   PreToolUseInput,
@@ -177,14 +178,35 @@ export async function fireSessionEnd(
 
 export async function fireStop(
   lastAssistantMessage?: string,
+  stopHookActive = false,
 ): Promise<HookEventResult> {
   if (!isHookServiceReady()) return NOOP_RESULT;
 
   const input: StopInput = {
     ...getCommonFields(),
     hook_event_name: "Stop",
-    stop_hook_active: true,
+    stop_hook_active: stopHookActive,
     last_assistant_message: lastAssistantMessage,
+  };
+
+  return services.hooks.fireEvent(input);
+}
+
+// ---------------------------------------------------------------------------
+// Permission request event
+// ---------------------------------------------------------------------------
+
+export async function firePermissionRequest(
+  toolName: string,
+  toolInput: unknown,
+): Promise<HookEventResult> {
+  if (!isHookServiceReady()) return NOOP_RESULT;
+
+  const input: PermissionRequestInput = {
+    ...getCommonFields(),
+    hook_event_name: "PermissionRequest",
+    tool_name: toolName,
+    tool_input: toolInput,
   };
 
   return services.hooks.fireEvent(input);

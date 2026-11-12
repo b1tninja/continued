@@ -4,6 +4,7 @@ import { get, post } from "../util/apiClient.js";
 import { gracefulExit } from "../util/exit.js";
 import { getGitBranch, getGitRemoteUrl } from "../util/git.js";
 import { logger } from "../util/logger.js";
+import { cliFetch } from "../util/networkFetch.js";
 
 interface CheckStatus {
   name: string;
@@ -62,7 +63,7 @@ async function detectPrUrl(): Promise<string | null> {
   }
 
   try {
-    const response = await fetch(
+    const response = await cliFetch(
       `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/pulls?head=${parsed.owner}:${branch}&state=open`,
       {
         headers: {
