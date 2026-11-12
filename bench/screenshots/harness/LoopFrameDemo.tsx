@@ -1,10 +1,7 @@
 // A stand-in for the loop dock, for the picture of the loop frame until the
 // real dock lands: the status strip (icon and word), the Needs-you tray and
 // the input, as one framed object. Only the harness mounts it (see main.tsx).
-import {
-  LoopFrame,
-  type LoopFrameState,
-} from "@gui/components/loop/LoopFrame";
+import { LoopFrame, type LoopFrameState } from "@gui/components/loop/LoopFrame";
 
 const STRIP: Record<LoopFrameState, { icon: string; word: string }> = {
   running: { icon: "●", word: "Running · 6/12 · R3/10" },

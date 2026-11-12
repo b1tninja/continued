@@ -66,7 +66,11 @@ describe("the loop's frame colour map", () => {
   });
 
   it("finished is green, any other stop is gray", () => {
-    const done = { ...running(), status: "stopped" as const, stopReason: "done" as const };
+    const done = {
+      ...running(),
+      status: "stopped" as const,
+      stopReason: "done" as const,
+    };
     expect(loopFrameInfo(done)).toMatchObject({ color: "green", icon: "✓" });
     const stopped = { ...done, stopReason: "stopped" as const };
     expect(loopFrameInfo(stopped)).toMatchObject({ color: "gray", icon: "■" });
@@ -94,7 +98,9 @@ describe("the top border label", () => {
 
   it("reads without colour: icon and word in the line Ink prints", () => {
     const { lastFrame } = render(
-      <LoopFrameTop info={loopFrameInfo({ ...running(), status: "waiting" })} />,
+      <LoopFrameTop
+        info={loopFrameInfo({ ...running(), status: "waiting" })}
+      />,
     );
     expect(lastFrame()).toContain("╭─ ‖ Waiting for you");
   });

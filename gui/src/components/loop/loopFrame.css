@@ -101,7 +101,8 @@
  * declared (angle 0) and the sweep would never move.
  */
 @media (prefers-reduced-motion: no-preference) {
-  body:not(.vscode-reduce-motion) .loop-frame[data-state="running"][data-motion="sweep"] {
+  body:not(.vscode-reduce-motion)
+    .loop-frame[data-state="running"][data-motion="sweep"] {
     background:
       linear-gradient(var(--lf-fill), var(--lf-fill)) padding-box,
       conic-gradient(

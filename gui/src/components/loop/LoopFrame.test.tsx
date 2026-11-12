@@ -67,9 +67,9 @@ describe("LoopFrame", () => {
   it("sweeps only for a running loop that is told to animate", () => {
     for (const state of STATES) {
       const { unmount } = render(<LoopFrame state={state} animate />);
-      expect(
-        screen.getByTestId("loop-frame").getAttribute("data-motion"),
-      ).toBe(state === "running" ? "sweep" : "off");
+      expect(screen.getByTestId("loop-frame").getAttribute("data-motion")).toBe(
+        state === "running" ? "sweep" : "off",
+      );
       unmount();
     }
   });

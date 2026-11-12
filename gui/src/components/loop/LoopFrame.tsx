@@ -3,11 +3,7 @@ import { useReducedMotion } from "../../util/reducedMotion";
 import "./loopFrame.css";
 
 export type LoopFrameState =
-  | "running"
-  | "waiting"
-  | "failed"
-  | "finished"
-  | "stopped";
+  "running" | "waiting" | "failed" | "finished" | "stopped";
 
 export interface LoopFrameProps {
   /** The loop's state: the ring's colour. The icon and word stay beside it. */
