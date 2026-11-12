@@ -6,6 +6,7 @@ import "./init.js";
 import { Command } from "commander";
 import { dismissCurrentNotice } from "core/util/retirementStartup.js";
 
+import { addRunLimitOptions } from "./budget/runLimits.js";
 import { acp } from "./commands/acp.js";
 import { agentsCommand } from "./commands/agents.js";
 import { auditCommand } from "./commands/audit.js";
@@ -191,7 +192,7 @@ program
 
 // Root command - chat functionality (default)
 // Add common options to the root command
-addCommonOptions(program)
+addRunLimitOptions(addCommonOptions(program))
   .argument("[prompt]", "Optional prompt to send to the assistant")
   .option("-p, --print", "Print response and exit (useful for pipes)")
   .option(

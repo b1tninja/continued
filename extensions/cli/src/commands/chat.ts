@@ -4,6 +4,7 @@ import chalk from "chalk";
 import { ChatHistoryItem, Session } from "core";
 import { ChatDescriber } from "core/util/chatDescriber.js";
 
+import * as runLimits from "../budget/runLimits.js";
 import { compactChatHistory, findCompactionIndex } from "../compaction.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
 import { runStopHooks } from "../hooks/lifecycleHooks.js";
@@ -41,48 +42,8 @@ import {
 } from "../util/tokenizer.js";
 
 import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
+import { processJsonOutput, stripThinkTags } from "./chatOutput.js";
 import { printRetirementNotice } from "./retirementNotice.js";
-
-/**
- * Processes and validates JSON output for headless mode
- * @param response - The raw response from the LLM
- * @returns Valid JSON string
- */
-function processJsonOutput(response: string): string {
-  const trimmedResponse = response.trim();
-
-  try {
-    // Try to parse the response as JSON to validate it
-    JSON.parse(trimmedResponse);
-    // If it parses successfully, return as-is
-    return trimmedResponse;
-  } catch {
-    // If it's not valid JSON, wrap it in a JSON object
-    return JSON.stringify({
-      response: trimmedResponse,
-      status: "success",
-      note: "Response was not valid JSON, so it was wrapped in a JSON object",
-    });
-  }
-}
-
-/**
- * Strips <think></think> tags and excess whitespace from response
- * @param response - The raw response from the LLM
- * @returns Cleaned response
- */
-function stripThinkTags(response: string): string {
-  // Remove <think></think> tags and their content
-  let cleaned = response.replace(/<think>[\s\S]*?<\/think>/g, "");
-
-  // Remove excess whitespace: multiple consecutive newlines become single newlines
-  cleaned = cleaned.replace(/\n\s*\n\s*\n/g, "\n\n");
-
-  // Trim leading and trailing whitespace
-  cleaned = cleaned.trim();
-
-  return cleaned;
-}
 
 export interface ChatOptions extends ExtendedCommandOptions {
   headless?: boolean;
@@ -480,6 +441,13 @@ async function runHeadlessMode(
     throw new Error("No LLM API instance found.");
   }
 
+  // Run limits (--max-budget-usd, --max-turns, --max-duration): refuses a
+  // dollar budget on an unpriced model before anything is sent
+  runLimits.startRunLimits(options, {
+    provider: model.provider,
+    model: model.model,
+  });
+
   // Initialize service-driven history (resume if requested)
   const chatHistory = await initializeChatHistory(options);
   let compactionIndex: number | null = null;
@@ -558,8 +526,8 @@ async function runHeadlessMode(
     }
   }
 
-  // exit after headless mode completes
-  await gracefulExit(0);
+  // exit after headless mode completes: a run limit has its own exit code
+  await gracefulExit(runLimits.exitCodeOfRun(options.format));
 }
 
 export async function chat(prompt?: string, options: ChatOptions = {}) {
@@ -583,6 +551,8 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
       await runHeadlessMode(prompt, options);
       return;
     }
+
+    runLimits.assertLimitsEnforceable(options);
 
     // Interactive path - requires TTY for Ink rendering
     // If not in headless mode, use unified initialization with TUI

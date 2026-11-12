@@ -203,6 +203,7 @@
               "guides/plan-mode-guide",
               "guides/ollama-guide",
               "guides/cn-serve",
+              "cli/run-limits",
               "guides/acp",
               "guides/instinct",
               "guides/running-continue-without-internet",
