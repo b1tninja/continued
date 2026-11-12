@@ -563,14 +563,14 @@ export const FIXTURES: Record<string, Fixture> = {
       ) as HTMLElement
     )?.click();
   },
-  /** Loop mode at YOLO with seven refused calls: the one-line chip and the blocked badge */
+  /** Loop mode at IDGAF with seven refused calls: the one-line chip and the blocked badge */
   "loop-idgaf": ({ store }) => {
     store.dispatch(newSession(session([], "Fix parseConfig")));
     store.dispatch(setMode("loop" as never));
     store.dispatch(setTaskPlan(PLAN));
     store.dispatch(setLoop(loopState()));
     for (const area of POLICY_AREAS) {
-      store.dispatch(setPolicyLevel({ area, level: "yolo" }));
+      store.dispatch(setPolicyLevel({ area, level: "idgaf" }));
     }
     for (let i = 0; i < 7; i++) {
       store.dispatch(
@@ -713,7 +713,15 @@ function bedrock(ok: boolean): Fixture {
   };
 }
 
+// The loop frame is mounted on its own (see main.tsx, LoopFrameDemo); the state is in the name.
+const noop: Fixture = async () => {};
+
 Object.assign(FIXTURES, {
+  "loop-frame-running": noop,
+  "loop-frame-waiting": noop,
+  "loop-frame-failed": noop,
+  "loop-frame-finished": noop,
+  "loop-frame-stopped": noop,
   "settings-models": settingsTab("models"),
   "settings-rules": settingsTab("rules"),
   "settings-permissions": async (ctx) => {

@@ -213,6 +213,16 @@ export function LoopInbox() {
           </div>
         )}
         <LoopControls loop={loop} taskPlan={taskPlan} />
+        {(loop.autoDecisions ?? []).slice(-3).map((d, i) => (
+          <div
+            key={`${d.at}-${i}`}
+            data-testid="loop-auto-decision"
+            title={`By the system, under ${d.source}`}
+            className="mt-0.5 truncate text-description"
+          >
+            {d.text}
+          </div>
+        ))}
         {standingNotes.length > 0 && (
           <ul
             data-testid="loop-standing-list"

@@ -30,7 +30,7 @@ describe("Agents window tool policy", () => {
       { command: "git push" },
       {
         approval: {
-          levels: { ...DEFAULT_POLICY_LEVELS, tools: "yolo" },
+          levels: { ...DEFAULT_POLICY_LEVELS, tools: "idgaf" },
           floor: ["runTerminalCommand(git push*)"],
         },
       },

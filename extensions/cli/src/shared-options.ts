@@ -19,7 +19,7 @@ export function addCommonOptions(command: Command): Command {
     )
     .option(
       "--policy <spec>",
-      "Who decides what a rule leaves open, per area (context, tools, edits, plan, questions): a preset (careful, acceptEdits, handsOff, reviewer, yolo) or area=level pairs such as tools=permissive,plan=manual. Levels: manual, cautious, automatic, permissive, yolo (idgaf).",
+      "Who decides what a rule leaves open, per area (context, tools, edits, plan, questions): a preset (careful, acceptEdits, handsOff, reviewer, idgaf) or area=level pairs such as tools=permissive,plan=manual. Levels: manual, cautious, automatic, permissive, idgaf.",
     )
     .option("--verbose", "Enable verbose logging")
     .option("--beta-status-tool", "Enable beta status tool")

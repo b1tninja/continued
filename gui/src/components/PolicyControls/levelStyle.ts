@@ -26,7 +26,7 @@ export const LEVEL_GLYPHS: Record<PolicyLevel, typeof EyeIcon> = {
   cautious: ShieldCheckIcon,
   automatic: SparklesIcon,
   permissive: LockOpenIcon,
-  yolo: BoltIcon,
+  idgaf: BoltIcon,
 };
 
 /**
@@ -41,7 +41,7 @@ export const LEVEL_TONES: Record<PolicyLevel, { chip: string; icon: string }> =
     cautious: { chip: "bg-success/20 text-foreground", icon: "text-success" },
     automatic: { chip: "bg-link/20 text-foreground", icon: "text-link" },
     permissive: { chip: "bg-warning/20 text-foreground", icon: "text-warning" },
-    yolo: { chip: "bg-error/20 text-foreground", icon: "text-error" },
+    idgaf: { chip: "bg-error/20 text-foreground", icon: "text-error" },
   };
 
 /** Every chip and the fold button is a target of at least 24 px (WCAG 2.5.8). */

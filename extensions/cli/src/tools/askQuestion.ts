@@ -1,5 +1,6 @@
 import { services } from "../services/index.js";
 import { quizService } from "../services/QuizService.js";
+import { answerIfIdgaf } from "../util/idgafQuestions.js";
 import {
   heldQuestionResult,
   holdPendingQuestion,
@@ -63,6 +64,12 @@ export const askQuestionTool: Tool = {
     type?: string;
   }): Promise<string> => {
     const { question, options, defaultAnswer } = args;
+
+    // Questions is IDGAF: nobody is asked, in the TUI, headless or serve
+    const auto = answerIfIdgaf({ question, options, pick: defaultAnswer });
+    if (auto) {
+      return `${auto.line} (${auto.source}). Nobody was asked; go on with it and say so in your summary.`;
+    }
 
     // cn serve and headless runs: nobody is at a question box, so the
     // question is held in the inbox (serve /state) and the model goes on with

@@ -71,12 +71,14 @@ const ask = (
   kind: "blocking" | "assumption",
   assumption?: string,
   options?: string[],
+  type?: string,
 ) =>
   calls({
     name: BuiltInToolNames.HoldQuestion,
     args: {
       question,
       kind,
+      ...(type ? { type } : {}),
       ...(assumption ? { assumption } : {}),
       ...(options ? { options } : {}),
     },
@@ -763,6 +765,95 @@ describe("Loop mode", () => {
     expect(h.prompt(3)).toContain("only this item: Install vitest");
   });
 
+  test("with Questions IDGAF an irreversible question is answered by the system and the loop goes on", async () => {
+    const h = await setup(["Drop the old table", "Add tests"]);
+    await act(async () => {
+      h.store.dispatch(setPolicyLevel({ area: "questions", level: "idgaf" }));
+    });
+    h.turns.push(
+      ask(
+        "Drop the old table?",
+        "blocking",
+        undefined,
+        ["Keep it", "Drop it (recommended)"],
+        "irreversible",
+      ),
+      finish("done", "dropped"),
+      finish("done", "tests added"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.loop().stopReason).toBe("done");
+    // Never a panel, never waiting; the record names the system and the setting
+    expect(document.querySelector("[data-testid=question-panel]")).toBeNull();
+    expect(h.loop().questions[0].autoAnswer).toEqual({
+      text: "Drop it",
+      by: "system",
+      source: "Questions: IDGAF",
+    });
+    expect(h.loop().autoDecisions?.[0].text).toBe(
+      "Auto-answered: Drop the old table? -> Drop it",
+    );
+    // The agent was told the answer in the tool result
+    expect(JSON.stringify(h.requests[1].messages)).toContain(
+      "Answered automatically (Questions: IDGAF): Drop it",
+    );
+  });
+
+  test("with Questions Cautious the same irreversible question waits in the panel", async () => {
+    const h = await setup(["Drop the old table"]);
+    h.turns.push(
+      ask(
+        "Drop the old table?",
+        "blocking",
+        undefined,
+        ["Keep it", "Drop it (recommended)"],
+        "irreversible",
+      ),
+      finish("waiting", "needs the decision"),
+    );
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("waiting"));
+    expect(h.loop().questions[0].answerId).toBeUndefined();
+    expect(h.loop().autoDecisions).toBeUndefined();
+    expect(
+      document.querySelector("[data-testid=question-panel]"),
+    ).not.toBeNull();
+  });
+
+  test("with Questions Permissive a plan's open decisions are answered in the plan file by the system", async () => {
+    const h = await setup(["Build the store"]);
+    h.files[PLAN_FILE] = serializePlanFile({
+      title: "Build the parser",
+      body: "Parse the grammar.",
+      items: [{ id: "1", status: "pending" as const, text: "Build the store" }],
+      decisions: [
+        {
+          question: "Which store?",
+          options: ["sqlite", "postgres (recommended)"],
+          pick: "sqlite",
+          todos: [1],
+        },
+      ],
+    });
+    await act(async () => {
+      h.store.dispatch(
+        setPolicyLevel({ area: "questions", level: "permissive" }),
+      );
+    });
+    h.turns.push(finish("done", "built"));
+    await h.start();
+    await waitFor(() => expect(h.loop().status).toBe("stopped"));
+    expect(h.files[PLAN_FILE]).toContain("postgres");
+    expect(h.loop().autoDecisions?.[0]).toMatchObject({
+      kind: "question",
+      by: "system",
+      source: "Questions: Permissive",
+      text: "Auto-answered: Which store? -> postgres",
+    });
+    expect(document.querySelector("[data-testid=question-panel]")).toBeNull();
+  });
+
   test("Permissive on Plan edits does not start a timer: a question waits until you answer", async () => {
     const h = await setup(["Pick the database"]);
     await act(async () => {
@@ -1022,11 +1113,11 @@ describe("Loop mode", () => {
         args: { filepath: `new${n}.ts`, contents: "x" },
       });
     await act(async () => {
-      h.store.dispatch(setPolicyLevel({ area: "tools", level: "yolo" }));
+      h.store.dispatch(setPolicyLevel({ area: "tools", level: "idgaf" }));
     });
     h.ideMessenger.responseHandlers["tools/evaluatePolicy"] = async () => ({
       policy: "allowedWithoutPermission",
-      source: "yolo",
+      source: "idgaf",
     });
     h.turns.push(
       test(),

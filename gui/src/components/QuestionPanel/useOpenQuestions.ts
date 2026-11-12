@@ -1,13 +1,21 @@
 import type { LoopQuestion } from "core";
+import { questionsNeverAsk } from "core/tools/permissions/policy";
 import {
   answeredDecisions,
   parsePlanFile,
   validatePlanArgs,
   type PlanDecision,
 } from "core/util/planFile";
-import { useContext, useEffect, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useAppSelector } from "../../redux/hooks";
+import { selectEffectiveLevels } from "../../redux/selectors/selectAutoApproval";
 import { selectPlanCallToDecide } from "../../redux/selectors/selectPlanDecisions";
 
 export interface OpenQuestions {
@@ -16,8 +24,13 @@ export interface OpenQuestions {
   /** Decisions of the plan on the table that its file does not answer yet */
   decisions: PlanDecision[];
   fileUri?: string;
+  /** The plan file's decisions, once read */
+  fileDecisions?: PlanDecision[];
   /** Keeps the plan file's decisions in step after one is recorded */
-  setFileDecisions: (decisions: PlanDecision[]) => void;
+  setFileDecisions: Dispatch<SetStateAction<PlanDecision[] | undefined>>;
+  /** The Questions level in effect, and whether it is IDGAF: nothing asks */
+  level: ReturnType<typeof selectEffectiveLevels>["questions"];
+  neverAsk: boolean;
   itemText: (id?: string) => string | undefined;
   count: number;
 }
@@ -43,6 +56,8 @@ export function useOpenQuestions(): OpenQuestions {
       ? planCall.output[0].uri.value
       : undefined;
   const callId = planCall?.toolCallId;
+  const level = useAppSelector((s) => selectEffectiveLevels(s).questions);
+  const neverAsk = questionsNeverAsk(level);
 
   useEffect(() => {
     setFileDecisions(undefined);
@@ -63,7 +78,7 @@ export function useOpenQuestions(): OpenQuestions {
     (q) => !q.answerId && !q.decidedAlone,
   );
   const decisions =
-    args?.ok && fileUri
+    args?.ok && fileUri && !neverAsk
       ? answeredDecisions(
           args.decisions,
           (fileDecisions ?? []).flatMap((d) =>
@@ -75,7 +90,10 @@ export function useOpenQuestions(): OpenQuestions {
     open,
     decisions,
     fileUri,
+    fileDecisions,
     setFileDecisions,
+    level,
+    neverAsk,
     itemText: (id) => taskPlan?.items.find((i) => i.id === id)?.text,
     count: open.length + decisions.length,
   };
