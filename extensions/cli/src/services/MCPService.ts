@@ -500,7 +500,7 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
     connection: ServerConnection,
   ): Promise<Client> {
     const client = new Client(
-      { name: "continue-cli-client", version: "1.0.0" },
+      { name: "continuous-cli-client", version: "1.0.0" },
       { capabilities: {} },
     );
 
@@ -514,7 +514,7 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
     ) {
       const modern = await connectModernIfSupported({
         url: serverConfig.url,
-        clientInfo: { name: "continue-cli-client", version: "1.0.0" },
+        clientInfo: { name: "continuous-cli-client", version: "1.0.0" },
         headers: {
           ...serverConfig.requestOptions?.headers,
           ...((serverConfig.apiKey ||

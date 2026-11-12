@@ -69,7 +69,7 @@ export function checkWorkspaceWrite(
   if (note && services.toolPermissions.isHeadless()) {
     throw new ContinueError(
       ContinueErrorReason.FileWriteError,
-      `${toolName} was not run: ${note} A headless run writes only inside the working directory (or under the Continue home folder, ${env.continueHome}). Use a path inside ${process.cwd()}.`,
+      `${toolName} was not run: ${note} A headless run writes only inside the working directory (or under the Continuous home folder, ${env.continueHome}). Use a path inside ${process.cwd()}.`,
     );
   }
   return note;
