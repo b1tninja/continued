@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import type { ChatHistoryItem } from "core/index.js";
+import { maskCommandForDisplay } from "core/tools/permissions/displayMask.js";
 import express, { Request, Response } from "express";
 
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
@@ -35,26 +36,30 @@ import { readStdinSync } from "../util/stdin.js";
 import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
 import { registerAgentsRoute } from "./serve.agents.js";
 import {
-  DEFAULT_SERVE_HOST,
-  installServeGuards,
-  resolveServeToken,
-  serveBindingProblem,
-  type ServerState,
-} from "./serve.helpers.js";
+  jsonErrorHandler,
+  MAX_BODY_BYTES,
+  refuseUpgrades,
+} from "./serve.auth.js";
+import { installServeGuards, type ServerState } from "./serve.helpers.js";
 import {
   getServeStateSnapshot,
   processMessages,
   registerMessageRoutes,
   type ServeMessageContext,
 } from "./serve.messages.js";
+import { prepareServeAccess, printServeBanner } from "./serve.startup.js";
 
 interface ServeOptions extends ExtendedCommandOptions {
   timeout?: string;
   port?: string;
   /** Interface to listen on; loopback unless told otherwise */
   host?: string;
-  /** Bearer token every request must carry. Optional on loopback, required off it. */
+  /** Bearer token every request must carry; one is generated when none is given */
   token?: string;
+  /** Run with no token (loopback only). Commander turns --no-auth into auth: false */
+  auth?: boolean;
+  /** Browser origins that may call the server, exactly */
+  allowOrigin?: string[];
   /** Storage identifier for remote sync */
   id?: string;
 }
@@ -110,17 +115,12 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   const timeoutSeconds = parseInt(options.timeout || "300", 10);
   const timeoutMs = timeoutSeconds * 1000;
   const port = parseInt(options.port || "8000", 10);
-  // Loopback unless told otherwise. A token is optional on loopback; off
-  // loopback one of at least 16 characters is required.
-  const host = options.host ?? DEFAULT_SERVE_HOST;
-  const bindingProblem = serveBindingProblem(
-    host,
-    resolveServeToken(options.token),
+  // Loopback unless told otherwise. A bearer token is always required unless
+  // --no-auth (loopback only); one is generated when none is given.
+  const { host, auth, token, tokenFile, allowedOrigins } = prepareServeAccess(
+    options,
+    port,
   );
-  if (bindingProblem) {
-    throw new Error(bindingProblem);
-  }
-  const token = resolveServeToken(options.token);
 
   // Environment install script will be deferred until after server startup to avoid blocking
 
@@ -232,8 +232,13 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
 
   const app = express();
   // Host and Origin are checked, then the bearer token, before the body is read.
-  installServeGuards(app, { boundHost: host, token });
-  app.use(express.json());
+  installServeGuards(app, {
+    boundHost: host,
+    token,
+    port,
+    allowedOrigins,
+  });
+  app.use(express.json({ limit: MAX_BODY_BYTES }));
 
   const messageCtx: ServeMessageContext = {
     state,
@@ -294,8 +299,9 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
         return;
       }
 
+      // Masked: a diff can hold a key somebody just pasted into a file
       res.json({
-        diff: diffResult.diff,
+        diff: maskCommandForDisplay(diffResult.diff),
       });
     } catch (error) {
       logger.error(`Git diff error: ${formatError(error)}`);
@@ -359,43 +365,14 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   });
 
   const server = app.listen(port, host, async () => {
-    console.log(chalk.green(`Server started on http://${host}:${port}`));
-    console.log(
-      chalk.dim(
-        token
-          ? "  Every request needs: Authorization: Bearer <token>"
-          : "  No access token: only this computer can reach it. Pass --token to require one",
-      ),
-    );
-    console.log(chalk.dim("Endpoints:"));
-    console.log(chalk.dim("  GET  /state      - Get current agent state"));
-    console.log(
-      chalk.dim(
-        "  POST /message    - Send a message (body: { message: string, steer?: boolean })",
-      ),
-    );
-    console.log(
-      chalk.dim(
-        "                     or answer the loop (body: { loopAnswer: { questionId?, itemId?, text, ... } }, loopAction?, loopAutonomy?)",
-      ),
-    );
-    console.log(
-      chalk.dim(
-        "  POST /permission - Approve/reject tool (body: { requestId, approved })",
-      ),
-    );
-    console.log(chalk.dim("  POST /pause      - Pause the current agent run"));
-    console.log(
-      chalk.dim("  GET  /diff       - Get git diff against main branch"),
-    );
-    console.log(
-      chalk.dim("  POST /exit       - Gracefully shut down the server"),
-    );
-    console.log(
-      chalk.dim(
-        `\nServer will shut down after ${timeoutSeconds} seconds of inactivity`,
-      ),
-    );
+    printServeBanner({
+      host,
+      port,
+      auth,
+      tokenFile,
+      allowedOrigins,
+      timeoutSeconds,
+    });
 
     // Run environment install script after server startup
     runEnvironmentInstallSafe();
@@ -429,6 +406,9 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       }
     }
   });
+
+  refuseUpgrades(server);
+  app.use(jsonErrorHandler);
 
   // EADDRINUSE and other bind failures are emitted here, not thrown. Without
   // a listener they become an uncaught exception and the process stays up.

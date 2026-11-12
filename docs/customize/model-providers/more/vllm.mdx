@@ -9,6 +9,10 @@ vLLM is an open-source library for fast LLM inference which typically is used to
 vllm serve meta-llama/Meta-Llama-3.1-8B-Instruct
 ```
 
+<Warning>
+  vLLM v0.24.0 through v0.25.1 and `main` strip leading and trailing whitespace from every string argument in the Qwen3 and Qwen3-Coder tool parser (upstream [issue 48753](https://github.com/vllm-project/vllm/issues/48753)), which breaks exact-string edits. See [Known server bugs](/customize/deep-dives/model-capabilities#known-server-bugs-that-look-like-model-failures).
+</Warning>
+
 ## Chat Model
 
 We recommend configuring **Llama3.1 8B** as your chat model.
