@@ -784,6 +784,11 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
   "tools/autoReview": [AutoReviewRequest, AutoReviewReply];
   /** The person's answer to a call that asked, for the audit trail */
   "audit/answer": [{ callId: string; approved: boolean }, void];
+  /** A question answered for the person, where Questions is IDGAF (core/util/autoAnswer.ts) */
+  "audit/autoAnswer": [
+    { callId: string; question: string; answer: string; source: string },
+    void,
+  ];
   "tools/preprocessArgs": [
     {
       toolName: string;

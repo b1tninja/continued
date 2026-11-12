@@ -181,10 +181,14 @@ describe("Questions: a permissive level answers by itself", () => {
     expect(held.question.answerId).toBeUndefined();
   });
 
-  test("a call the engine held for approval is never answered", () => {
-    const held = ask(running({ questions: "idgaf" }), { kind: "approval" });
+  test("a call the engine held for approval is never answered; at IDGAF nobody is asked, so it is refused", () => {
+    const held = ask(running({ questions: "permissive" }), {
+      kind: "approval",
+    });
     expect(held.question.answerId).toBeUndefined();
     expect(held.question.autoAnswer).toBeUndefined();
+    const refused = ask(running({ questions: "idgaf" }), { kind: "approval" });
+    expect(refused.question.autoAnswer?.text).toMatch(/^Refused/);
   });
 });
 
