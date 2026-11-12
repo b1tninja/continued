@@ -153,3 +153,36 @@ describe("the file on disk", () => {
     expect(readPolicyFile(file).settings.levels.edits).toBe("permissive");
   });
 });
+
+describe("plan.mcpTools", () => {
+  it("reads the tools the person lets Plan mode use, and ignores what is not a name", () => {
+    const text = [
+      "plan:",
+      "  mcpTools:",
+      "    - docs/search",
+      "    - 3",
+      "    - wiki/*",
+      "",
+    ].join(String.fromCharCode(10));
+    expect(parsePolicyFile(text).settings.planMcpTools).toEqual([
+      "docs/search",
+      "wiki/*",
+    ]);
+  });
+
+  it("reads plan.allowTerminal, absent by default", () => {
+    const parse = (v: string) =>
+      parsePolicyFile(`plan:\n  allowTerminal: ${v}\n`).settings
+        .planAllowTerminal;
+    expect(parse("true")).toBe(true);
+    expect(parse("false")).toBe(false);
+    expect(parse("maybe")).toBeUndefined();
+    expect(
+      parsePolicyFile(undefined).settings.planAllowTerminal,
+    ).toBeUndefined();
+  });
+
+  it("is absent when the file does not say", () => {
+    expect(parsePolicyFile(undefined).settings.planMcpTools).toBeUndefined();
+  });
+});

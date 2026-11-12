@@ -2018,6 +2018,8 @@ export interface Tool {
   faviconUrl?: string;
   group: string;
   originalFunctionName?: string;
+  /** An MCP tool from a server the open folder brought, not the person's own config */
+  mcpFromWorkspace?: boolean;
   systemMessageDescription?: {
     prefix: string;
     exampleArgs?: Array<[string, string | number]>;

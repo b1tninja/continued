@@ -52,6 +52,7 @@ import {
   TOOL_ALIASES,
   validateToolCallArgsPresent,
 } from "../tools/index.js";
+import { cliRoleRefusal, cliToolRole } from "../tools/roleGate.js";
 import { PreprocessedToolCall, ToolCall } from "../tools/types.js";
 import { recordCacheTally } from "../util/cacheTally.js";
 import { logger } from "../util/logger.js";
@@ -324,6 +325,24 @@ async function decideToolApproval(
   denialMessage?: string;
 }> {
   const { callbacks, isHeadless, hookDecision } = options;
+  // The role table first: a call the mode's role may not make never reaches a
+  // prompt, a rule or the reviewer, so nothing there can loosen it
+  const mode = services.toolPermissions?.getCurrentMode?.();
+  trace.role = cliToolRole(mode);
+  const roleRefusal = cliRoleRefusal(mode, toolCall.tool);
+  if (roleRefusal) {
+    trace.verdict = {
+      decision: "deny",
+      by: "system",
+      source: "role",
+      reason: roleRefusal,
+    };
+    return {
+      approved: false,
+      denialReason: "policy",
+      denialMessage: roleRefusal,
+    };
+  }
   const permissionCheck = withReadOnlyMcp(
     checkToolPermission(toolCall, permissions),
     toolCall.tool,
