@@ -7,6 +7,7 @@ import { ChatDescriber } from "core/util/chatDescriber.js";
 import * as runLimits from "../budget/runLimits.js";
 import { compactChatHistory, findCompactionIndex } from "../compaction.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
+import { runStopHooks } from "../hooks/lifecycleHooks.js";
 import {
   describePromptBlocked,
   runUserPromptSubmitHooks,
@@ -40,6 +41,7 @@ import {
 } from "../util/tokenizer.js";
 
 import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
+import { printRetirementNotice } from "./retirementNotice.js";
 
 /**
  * Processes and validates JSON output for headless mode
@@ -416,6 +418,8 @@ async function processMessage(
     // Process and output response in headless mode
     processAndOutputResponse(finalResponse, isHeadless, silent, format);
 
+    await runStopHooks(finalResponse);
+
     // Save session after each successful response
     updateSessionHistory(services.chatHistory.getHistory());
   } catch (e: any) {
@@ -600,6 +604,8 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
         headless: false,
         toolPermissionOverrides: permissionOverrides,
       });
+
+      printRetirementNotice();
 
       const agentFileState = await serviceContainer.get<AgentFileServiceState>(
         SERVICE_NAMES.AGENT_FILE,

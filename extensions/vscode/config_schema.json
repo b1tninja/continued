@@ -2793,7 +2793,7 @@
               },
               "useLocalCrawling": {
                 "type": "boolean",
-                "description": "Crawl this documentation site on this machine. This is the default. Set to false to send the site URL to the upstream crawl service."
+                "description": "Ignored. Documentation sites are always crawled on this machine; no crawl service is used. Kept so existing configs still load."
               }
             },
             "required": ["title", "startUrl"]
