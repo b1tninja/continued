@@ -334,6 +334,7 @@ export class Engine extends OllamaClient {
     ollamaUrl = "http://127.0.0.1:11434",
     sidecar = {},
     serverLog,
+    declaredParser,
     ...rest
   } = {}) {
     super(rest);
@@ -342,6 +343,7 @@ export class Engine extends OllamaClient {
     this.api = api;
     this.sidecar = sidecar; // { slots, metrics } booleans: poll after each request
     this.serverLog = serverLog; // llama-server log file, for the Chat format: line
+    this.declaredParser = declaredParser; // what the operator says the tool parser is (--tool-parser); vLLM reports none
     this.ollamaOrigin = assertLoopback(ollamaUrl, rest.allowRemote);
   }
 
@@ -378,6 +380,17 @@ export class Engine extends OllamaClient {
   async describe(model) {
     if (isLlamaApi(this.api)) {
       const props = await this.get("/props");
+      if (!props) {
+        // no llama-server /props: vLLM answers GET /version with {"version": "0.25.1"}
+        const ver = await this.get("/version");
+        if (typeof ver?.version === "string")
+          return {
+            engine: "vllm",
+            api: this.api,
+            version: ver.version,
+            parserDeclared: this.declaredParser,
+          };
+      }
       let chatFormat = readChatFormat(this.serverLog);
       let chatFormatSource = chatFormat ? "log" : undefined;
       if (!chatFormat) {
@@ -400,6 +413,7 @@ export class Engine extends OllamaClient {
         modelPath: props?.model_path,
         nCtx: props?.default_generation_settings?.n_ctx,
         chatTemplateSha: sha(props?.chat_template),
+        parserDeclared: this.declaredParser,
       };
     }
     const version = await this.get("/api/version");
@@ -416,6 +430,7 @@ export class Engine extends OllamaClient {
       parser: show?.parser,
       renderer: show?.renderer,
       quant: show?.details?.quantization_level,
+      parserDeclared: this.declaredParser,
     };
   }
 
