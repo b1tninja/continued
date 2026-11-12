@@ -47,7 +47,7 @@ import {
   registerMessageRoutes,
   type ServeMessageContext,
 } from "./serve.messages.js";
-import { prepareServeAccess, printServeBanner } from "./serve.startup.js";
+import { prepareServeAccessOrExit, printServeBanner } from "./serve.startup.js";
 
 interface ServeOptions extends ExtendedCommandOptions {
   timeout?: string;
@@ -117,10 +117,8 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   const port = parseInt(options.port || "8000", 10);
   // Loopback unless told otherwise. A bearer token is always required unless
   // --no-auth (loopback only); one is generated when none is given.
-  const { host, auth, token, tokenFile, allowedOrigins } = prepareServeAccess(
-    options,
-    port,
-  );
+  const { host, auth, token, tokenFile, allowedOrigins } =
+    prepareServeAccessOrExit(options, port);
 
   // Environment install script will be deferred until after server startup to avoid blocking
 

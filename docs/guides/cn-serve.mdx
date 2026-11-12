@@ -38,6 +38,10 @@ continuous serve
 
 `--no-auth` turns the check off. It is refused with any non-loopback `--host` and together with a token. The server prints a warning, and an approval that arrives over it is recorded in the audit trail as the system's, not as the person's: only an authenticated approval is `by: person`.
 
+### When the server refuses to start
+
+A refused combination does not start the server. `continuous serve` prints one line on stderr saying what was refused and what to change, and exits with status `2` (the usage-error status, as in `continuous secrets scan`). The line never contains a token. The cases are `--no-auth` with a non-loopback `--host` (drop `--no-auth`, or use `--host 127.0.0.1`), `--no-auth` together with `--token` or `CONTINUOUS_SERVE_TOKEN`, and a token shorter than 16 characters (set a longer one, or leave it out to have one generated). Check it in a script with `continuous serve --host 0.0.0.0 --no-auth; echo $?`.
+
 ### Upgrading
 
 Earlier versions let a loopback server run without a token. A script that starts `continuous serve` and then calls `GET /state` or `POST /message` without a token now gets `401`. Either send `Authorization: Bearer <token>` (set `CONTINUOUS_SERVE_TOKEN` before starting, so the script knows it), or start the server with `--no-auth`. A Host that does not match now gets `403`, not `421`.

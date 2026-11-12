@@ -145,3 +145,27 @@ export function printServeBanner(b: ServeBanner): void {
     ),
   );
 }
+
+/** Exit status for a serve option that is not allowed (a usage error, as in `secrets`) */
+export const SERVE_REFUSED_EXIT_CODE = 2;
+
+/**
+ * prepareServeAccess, but a refusal ends the process the way a CLI should:
+ * one line on stderr saying what was refused and how to fix it, exit status 2.
+ * The message never carries a token value.
+ */
+export function prepareServeAccessOrExit(
+  options: Parameters<typeof prepareServeAccess>[0],
+  port: number,
+): ServeAccess {
+  try {
+    return prepareServeAccess(options, port);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `continuous serve: refused to start. ${reason.replace(/\s+/g, " ")}` +
+        "\n",
+    );
+    process.exit(SERVE_REFUSED_EXIT_CODE);
+  }
+}

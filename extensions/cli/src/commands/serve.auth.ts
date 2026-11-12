@@ -92,18 +92,21 @@ export function resolveServeAuth(
   if (input.noAuth) {
     if (!input.loopback(input.host)) {
       return {
-        problem: `--no-auth is only allowed on loopback; --host ${input.host} listens beyond this computer.`,
+        problem: `--no-auth is only allowed on loopback; --host ${input.host} listens beyond this computer. Drop --no-auth (a token is generated, or set --token / CONTINUOUS_SERVE_TOKEN), or use --host 127.0.0.1.`,
       };
     }
     if (explicit) {
-      return { problem: "--no-auth cannot be combined with a token." };
+      return {
+        problem:
+          "--no-auth cannot be combined with a token. Drop --no-auth, or unset --token and CONTINUOUS_SERVE_TOKEN.",
+      };
     }
     return { auth: { mode: "none" } };
   }
   if (explicit) {
     if (explicit.length < MIN_TOKEN_LENGTH) {
       return {
-        problem: `The serve token must be at least ${MIN_TOKEN_LENGTH} characters. Leave it out to have one generated.`,
+        problem: `The serve token (${flag ? "--token" : "CONTINUOUS_SERVE_TOKEN"}) must be at least ${MIN_TOKEN_LENGTH} characters. Set a longer one, or leave it out to have one generated.`,
       };
     }
     return {

@@ -348,3 +348,29 @@ describe("a running guarded server", () => {
     ).toBe(403);
   });
 });
+
+describe("a refused serve start", () => {
+  it("prints one line on stderr and exits with status 2, without the token", async () => {
+    const { prepareServeAccessOrExit, SERVE_REFUSED_EXIT_CODE } =
+      await import("./serve.startup.js");
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit");
+    }) as never);
+    const err = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    try {
+      expect(() =>
+        prepareServeAccessOrExit({ host: "0.0.0.0", token: "short" }, 8000),
+      ).toThrow("exit");
+      expect(exit).toHaveBeenCalledWith(SERVE_REFUSED_EXIT_CODE);
+      expect(SERVE_REFUSED_EXIT_CODE).toBe(2);
+      const text = String(err.mock.calls[0][0]);
+      expect(text).toMatch(/^continuous serve: refused to start\. .*\n$/);
+      expect(text.trim().split("\n")).toHaveLength(1);
+      expect(text).toMatch(/CONTINUOUS_SERVE_TOKEN|--token/);
+      expect(text).not.toContain("short");
+    } finally {
+      exit.mockRestore();
+      err.mockRestore();
+    }
+  });
+});
