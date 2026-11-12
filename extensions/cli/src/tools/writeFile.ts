@@ -46,7 +46,7 @@ export const writeFileTool: Tool = {
       filepath: {
         type: "string",
         description:
-          "The path to the file to write, inside the working directory unless File edits is set to YOLO; a relative path is resolved against it",
+          "The path to the file to write, inside the working directory unless File edits is set to IDGAF; a relative path is resolved against it",
       },
       content: {
         type: "string",

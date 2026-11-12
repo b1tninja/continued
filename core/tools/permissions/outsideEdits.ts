@@ -1,5 +1,6 @@
 import type { ApprovalSettings } from "./approval";
 import { uriToPath } from "./names";
+import { parsePolicyLevel } from "./policy";
 
 /**
  * File edits at IDGAF, the top level, says nothing asks, so an edit, a write or a new file outside the
@@ -13,9 +14,8 @@ import { uriToPath } from "./names";
 export function editsAllowOutsideWorkspace(
   approval: Pick<ApprovalSettings, "levels"> | undefined,
 ): boolean {
-  // `yolo` is the stored name of IDGAF, the top level
-  const level = String(approval?.levels?.edits ?? "").toLowerCase();
-  return level === "idgaf" || level === "yolo";
+  // parsePolicyLevel also reads a level saved under its old name
+  return parsePolicyLevel(approval?.levels?.edits) === "idgaf";
 }
 
 /** The note that goes in the transcript when a write lands outside the workspace. */

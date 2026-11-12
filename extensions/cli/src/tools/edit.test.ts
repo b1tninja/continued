@@ -332,7 +332,7 @@ describe("editTool outside the working directory by File edits level", () => {
   });
 
   it("File edits IDGAF: a headless edit outside is prepared, not refused", async () => {
-    setPolicyLevels({ ...getPolicyLevels(), edits: "yolo" });
+    setPolicyLevels({ ...getPolicyLevels(), edits: "idgaf" });
     markFileAsRead(outsidePath);
     const result = await editTool.preprocess!({
       file_path: outsidePath,
@@ -357,7 +357,7 @@ describe("editTool outside the working directory by File edits level", () => {
   });
 
   it("the run writes the file and says it landed outside", async () => {
-    setPolicyLevels({ ...getPolicyLevels(), edits: "yolo" });
+    setPolicyLevels({ ...getPolicyLevels(), edits: "idgaf" });
     markFileAsRead(outsidePath);
     const prepared = await editTool.preprocess!({
       file_path: outsidePath,

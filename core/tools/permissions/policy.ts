@@ -650,5 +650,5 @@ export function planHandoff(input: PlanHandoffInput): PlanHandoff {
  * agent (see core/util/autoAnswer.ts). The loop's own gates use this one test.
  */
 export function questionsAutoAnswer(level: PolicyLevel): boolean {
-  return level === "automatic" || level === "permissive" || level === "yolo";
+  return level === "automatic" || level === "permissive" || level === "idgaf";
 }

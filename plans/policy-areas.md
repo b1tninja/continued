@@ -264,7 +264,7 @@ The dropdown line says so and counts the deny rules YOLO will ignore. Optionally
 
 ### File edits outside the workspace at the top level
 
-At File edits = IDGAF (stored as `yolo`; `--auto` sets it) an edit, a write or a new file outside the workspace folders is carried out: no prompt and no refusal, in the IDE, the CLI terminal UI, headless `-p` and `serve`, from one question (`editsAllowOutsideWorkspace`, `core/tools/permissions/outsideEdits.ts`). The decision is the evaluator's (source `yolo`, by rules); its reason names the resolved absolute path, so the audit trail lists it, and the tool result says `Wrote outside the workspace: <path>`.
+At File edits = IDGAF (`--auto` sets it) an edit, a write or a new file outside the workspace folders is carried out: no prompt and no refusal, in the IDE, the CLI terminal UI, headless `-p` and `serve`, from one question (`editsAllowOutsideWorkspace`, `core/tools/permissions/outsideEdits.ts`). The decision is the evaluator's (source `idgaf`, by rules); its reason names the resolved absolute path, so the audit trail lists it, and the tool result says `Wrote outside the workspace: <path>`.
 
 Where a tool enforced containment itself, it now takes a per-call option the host sets only at that level (`allowOutsideWorkspace` on `tools/call` and `tools/preprocessArgs`; `ResolveOptions.allowOutside` in `core/util/ideUtils.ts`; the CLI reads the effective levels in `workspaceBoundary.ts`). Without it the checks are as before. Only File edits decides: Tool use at the top level does not free a file tool.
 

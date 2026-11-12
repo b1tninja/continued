@@ -17,10 +17,10 @@ const stateWith = (edits: string, tools = "cautious") =>
   }) as never;
 
 describe("allowOutsideWorkspaceOf", () => {
-  it("is true only when File edits is IDGAF (stored as yolo)", () => {
-    expect(allowOutsideWorkspaceOf(stateWith("yolo"))).toBe(true);
+  it("is true only when File edits is IDGAF", () => {
+    expect(allowOutsideWorkspaceOf(stateWith("idgaf"))).toBe(true);
     for (const level of ["manual", "cautious", "automatic", "permissive"]) {
-      expect(allowOutsideWorkspaceOf(stateWith(level, "yolo")), level).toBe(
+      expect(allowOutsideWorkspaceOf(stateWith(level, "idgaf")), level).toBe(
         false,
       );
     }

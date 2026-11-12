@@ -135,11 +135,11 @@ describe("writeFileTool outside the working directory at each File edits level",
   });
 
   const withEdits = (
-    edits: "manual" | "cautious" | "automatic" | "permissive" | "yolo",
+    edits: "manual" | "cautious" | "automatic" | "permissive" | "idgaf",
   ) => setPolicyLevels({ ...getPolicyLevels(), edits });
 
   it("File edits IDGAF: a headless write outside is prepared, not refused", async () => {
-    withEdits("yolo");
+    withEdits("idgaf");
     const result = await writeFileTool.preprocess!({
       filepath: outsidePath,
       content: "x",
@@ -160,7 +160,7 @@ describe("writeFileTool outside the working directory at each File edits level",
   });
 
   it("the run writes the file and says it landed outside", async () => {
-    withEdits("yolo");
+    withEdits("idgaf");
     const message = await writeFileTool.run({
       filepath: outsidePath,
       content: "x",
@@ -170,7 +170,7 @@ describe("writeFileTool outside the working directory at each File edits level",
   });
 
   it("a write inside the working directory carries no outside note", async () => {
-    withEdits("yolo");
+    withEdits("idgaf");
     const inside = path.join(process.cwd(), "notes", "in.txt");
     const message = await writeFileTool.run({ filepath: inside, content: "x" });
     expect(message).not.toContain("outside the workspace");
@@ -191,7 +191,11 @@ describe("writeFileTool outside the working directory at each File edits level",
   );
 
   it("Tool use at IDGAF alone does not free a file write", async () => {
-    setPolicyLevels({ ...getPolicyLevels(), tools: "yolo", edits: "cautious" });
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      tools: "idgaf",
+      edits: "cautious",
+    });
     const error = await writeFileTool.preprocess!({
       filepath: outsidePath,
       content: "x",

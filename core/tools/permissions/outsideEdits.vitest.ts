@@ -63,10 +63,10 @@ const TOOLS = [createNewFileTool, editFileTool] as const;
 describe("File edits outside the workspace, by level", () => {
   it("IDGAF carries it out, with no prompt, and says where it lands", () => {
     for (const tool of TOOLS) {
-      const r = write(tool, OUTSIDE, { edits: "yolo" });
+      const r = write(tool, OUTSIDE, { edits: "idgaf" });
       expect(r.policy, tool.function.name).toBe(ALLOW);
-      expect(r.source).toBe("yolo");
-      expect(r.reason).toContain("File edits is set to YOLO");
+      expect(r.source).toBe("idgaf");
+      expect(r.reason).toContain("File edits is set to IDGAF");
       expect(r.reason).toContain("The target is outside the workspace: ");
       // a POSIX path on a Windows host gains a drive letter
       expect(r.reason).toContain(OUTSIDE);
@@ -75,7 +75,7 @@ describe("File edits outside the workspace, by level", () => {
 
   it("does not say it for a target inside the workspace", () => {
     const r = write(createNewFileTool, `${CWD}/src/new.ts`, {
-      edits: "yolo",
+      edits: "idgaf",
       within: true,
     });
     expect(r.policy).toBe(ALLOW);
@@ -85,22 +85,22 @@ describe("File edits outside the workspace, by level", () => {
   it("IDGAF ignores Never rules, Ask rules, protected paths and the switch for the check", () => {
     expect(
       write(createNewFileTool, OUTSIDE, {
-        edits: "yolo",
+        edits: "idgaf",
         permissions: { deny: ["writeFile(**)"] },
       }).policy,
     ).toBe(ALLOW);
     expect(
       write(createNewFileTool, OUTSIDE, {
-        edits: "yolo",
+        edits: "idgaf",
         permissions: { ask: ["writeFile(**)"] },
       }).policy,
     ).toBe(ALLOW);
     expect(
-      write(createNewFileTool, "/srv/other/.env", { edits: "yolo" }).policy,
+      write(createNewFileTool, "/srv/other/.env", { edits: "idgaf" }).policy,
     ).toBe(ALLOW);
     expect(
       write(createNewFileTool, OUTSIDE, {
-        edits: "yolo",
+        edits: "idgaf",
         builtin: { "ask-outside-paths": false },
       }).policy,
     ).toBe(ALLOW);
@@ -108,19 +108,19 @@ describe("File edits outside the workspace, by level", () => {
 
   it("the tainted-session rule is off by default, so it does not hold a IDGAF write", () => {
     // No taint fact reaches the evaluator unless the person turned the rule on.
-    expect(write(editFileTool, OUTSIDE, { edits: "yolo" }).policy).toBe(ALLOW);
+    expect(write(editFileTool, OUTSIDE, { edits: "idgaf" }).policy).toBe(ALLOW);
   });
 
   it("what is locked or the person's own floor still holds at IDGAF", () => {
     expect(
       write(createNewFileTool, OUTSIDE, {
-        edits: "yolo",
+        edits: "idgaf",
         floor: ["writeFile(/srv/other/**)"],
       }).policy,
     ).toBe(OFF);
     // the policy files are refused at IDGAF wherever they are
     const own = write(createNewFileTool, "/home/me/.continue/config.yaml", {
-      edits: "yolo",
+      edits: "idgaf",
     });
     expect(own.policy).toBe(OFF);
   });
@@ -144,7 +144,7 @@ describe("File edits outside the workspace, by level", () => {
   it("another area at IDGAF does not free a file edit", () => {
     const r = write(createNewFileTool, OUTSIDE, {
       edits: "cautious",
-      tools: "yolo",
+      tools: "idgaf",
     });
     expect(r.policy).toBe(ASK);
   });
@@ -173,14 +173,14 @@ describe("outsideEdits helpers", () => {
           questions: "cautious",
         },
       }) as never;
-    expect(editsAllowOutsideWorkspace(levels("yolo"))).toBe(true);
+    expect(editsAllowOutsideWorkspace(levels("idgaf"))).toBe(true);
     for (const l of [
       "manual",
       "cautious",
       "automatic",
       "permissive",
     ] as const) {
-      expect(editsAllowOutsideWorkspace(levels(l, "yolo"))).toBe(false);
+      expect(editsAllowOutsideWorkspace(levels(l, "idgaf"))).toBe(false);
     }
     expect(editsAllowOutsideWorkspace(undefined)).toBe(false);
   });

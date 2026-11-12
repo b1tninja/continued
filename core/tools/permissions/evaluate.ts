@@ -356,7 +356,7 @@ function reasonWithOutsideTarget(
   resolvedPath: string | undefined,
 ): string | undefined {
   if (
-    decision.source !== "yolo" ||
+    decision.source !== "idgaf" ||
     decision.policy !== "allowedWithoutPermission" ||
     area !== "edits"
   ) {
