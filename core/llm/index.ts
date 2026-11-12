@@ -45,6 +45,7 @@ import { isLemonadeInstalled } from "../util/lemonadeHelper.js";
 import { Logger } from "../util/Logger.js";
 import mergeJson from "../util/merge.js";
 import { renderChatMessage } from "../util/messageContent.js";
+import { retirementNotice } from "../util/modelRetirement.js";
 import { isOllamaInstalled } from "../util/ollamaHelper.js";
 import { providerRecoversText } from "../util/toolDialectLeak.js";
 import {
@@ -556,8 +557,19 @@ export abstract class BaseLLM implements ILLM {
       }
     }
     return new Error(
-      `HTTP ${resp.status} ${resp.statusText} from ${redactUrl(String(resp.url ?? ""))}\n\n${text}`,
+      `HTTP ${resp.status} ${resp.statusText} from ${redactUrl(String(resp.url ?? ""))}\n\n${text}${this.retiredModelHint(resp.status)}`,
     );
+  }
+
+  /** On a 404 for a model the checked-in table lists as retired, say so and name the replacement. */
+  private retiredModelHint(status: number): string {
+    if (status !== 404) return "";
+    const notice = retirementNotice({
+      provider: this.providerName,
+      model: this.model,
+      now: new Date().toISOString().slice(0, 10),
+    });
+    return notice?.severity === "retired" ? `\n\n${notice.message}` : "";
   }
 
   fetch(url: RequestInfo | URL, init?: RequestInit): Promise<Response> {
