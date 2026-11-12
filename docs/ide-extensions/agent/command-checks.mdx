@@ -168,6 +168,19 @@ Notes on the edges:
 - To change the 300-line limit, set `toolPermissions.auto.environment.largeChangeLines` (a whole number of at least 1) in your own `config.yaml`. A workspace file cannot set it. A file the check cannot read counts as a new file. How many files one turn changes is not counted.
 - `npm install <name>` skips the question only when every name is a bare package name with no version, tag or URL, the nearest `package.json` above the project folder lists it under `dependencies`, `devDependencies` or `optionalDependencies`, and the command has no registry, prefix, workspace or global flag, no `cd` before it and no `npm_config_*` setting. Anything the check cannot read asks as before.
 
+## Reading web pages
+
+`fetch_url_content` and `@url` fetch what a model or a typed address names, so they are limited before the page reaches the model:
+
+- Only `http` and `https` URLs are fetched. `file:`, `data:`, `ftp:`, `javascript:` and the like are refused before any connection, and so is a URL with a user name or password in it.
+- A URL the model wrote is scanned for credentials with the outbound secret rules and for the values of the secrets in your environment. A match is refused and the message names the kind of secret, never the value. A URL with a long encoded value in it asks first, whatever the permission level, because that is the shape of data being sent out through an address. A URL you type for `@url` is not scanned.
+- Reading stops at 2 MiB of decoded text and after 20 seconds in all, and the model is told when a page was cut. To change either, set `toolPermissions.auto.environment.fetchMaxBytes` (at most 64 MiB) or `fetchTimeoutSeconds` (at most 300) in your own `config.yaml`. A workspace file cannot set them.
+- HTML is converted to markdown. Plain text, markdown and XML are returned as text, and JSON is indented. Images, PDF, archives and other binary types are refused with a one-line message.
+- Before the model reads the text, HTML comments, zero-width and direction-control characters and the Unicode tag block are removed, and an image such as `![a](https://example.com/?q=...)` becomes `[image: a]`, so no address is handed to the model for it to repeat.
+- With `experimental.spotlightUntrusted` on, the page's title and URL are inside the untrusted markers with its text.
+- The `requestOptions.headers` of your config, which are meant for your model endpoints, go to the host of a model's `apiBase` only. A host the model names gets the proxy and certificate settings and no extra headers.
+- A host name that resolves to nothing on this machine and does not end in a real top-level domain (`wiki`, `git.corp`) asks, as a private address does: behind an HTTP proxy the proxy resolves names, and the name may be an internal one. A name under a real top-level domain that does not resolve here is left to the connection, because with a proxy that is every public name.
+
 ## File tools that leave the workspace
 
 The file tools read and write with the editor's own authority, so text from a repository, a web page or a tool result can steer them to a file you never meant. A file tool call asks, at every level below YOLO and whatever an allow rule says, when it reaches:

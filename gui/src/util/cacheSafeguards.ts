@@ -1,4 +1,8 @@
-import type { ChatMessage, ModelDescription } from "core";
+import type {
+  ChatMessage,
+  LLMFullCompletionOptions,
+  ModelDescription,
+} from "core";
 import {
   findModelPricing,
   type ModelPricing,
@@ -6,7 +10,6 @@ import {
 import {
   AUTO_ESCALATE_MAX_GAP_MS,
   AUTO_ESCALATE_MIN_GAP_MS,
-  LOCAL_CACHE_WARM_MS,
   modelSupportsOneHourCache,
   modelSupportsPromptCacheControl,
   modelUsesLocalPrefixCache,
@@ -17,6 +20,14 @@ import {
   type PromptCacheSetting,
   type PromptCacheTtl,
 } from "./promptCache";
+import { localCacheWarmMs } from "./localWarmWindow";
+import {
+  hasImages,
+  type KeyTool,
+  requestPartChanges,
+  toolChoiceText,
+  toolsFingerprint,
+} from "./cacheKeyParts";
 
 /**
  * Rules for when the app warns about a cost the user may not expect. Every
@@ -151,7 +162,7 @@ export function warmCacheLoss(
     if (
       !state.lastInputTokens ||
       state.lastRequestAt === undefined ||
-      now - state.lastRequestAt > LOCAL_CACHE_WARM_MS
+      now - state.lastRequestAt > localCacheWarmMs(model)
     ) {
       return undefined;
     }
@@ -277,22 +288,47 @@ export function messageChecksum(message: ChatMessage): string {
  */
 export function promptCacheKey(
   model: ModelDescription,
-  toolNames: string[],
+  /** Tool names, or the tools themselves to also cover descriptions and schemas. */
+  tools: KeyTool[],
   systemMessage: string | undefined,
   /** The messages after the system message, in the order they are sent. */
   messages?: ChatMessage[],
   /**
    * For a model with routes, the account serving the request: each account
-   * has its own cache, so a different route is a different model here.
+   * has its own cache, so a different route is a different model here. An
+   * object also carries the request options that rebuild the cache.
    */
-  route?: string,
+  extras?: string | PromptCacheKeyExtras,
 ): PromptCacheKey {
+  const { route, options } =
+    typeof extras === "string"
+      ? { route: extras, options: undefined }
+      : (extras ?? {});
   return {
     model: `${model.provider}/${model.model}${route ? ` via ${route}` : ""}`,
-    tools: hashString(toolNames.join("\u0000")),
+    tools: hashString(toolsFingerprint(tools)),
     system: hashString(systemMessage ?? ""),
     ...(messages && { messages: messages.map(messageChecksum) }),
+    ...(options && {
+      effort: JSON.stringify([
+        reasoningSettings(model),
+        options.reasoning ?? null,
+        options.reasoningBudgetTokens ?? null,
+      ]),
+      toolChoice: toolChoiceText(options.toolChoice),
+    }),
+    ...(messages && options && { images: hasImages(messages) }),
   };
+}
+
+/** What `promptCacheKey` takes beyond the prompt itself. */
+export interface PromptCacheKeyExtras {
+  route?: string;
+  /** The completion options of the request: reasoning and tool choice. */
+  options?: Pick<
+    LLMFullCompletionOptions,
+    "reasoning" | "reasoningBudgetTokens" | "toolChoice"
+  >;
 }
 
 /**
@@ -351,6 +387,7 @@ export function keyChanges(
       );
     }
   }
+  changes.push(...requestPartChanges(before, after));
   return changes;
 }
 
@@ -394,7 +431,7 @@ export function detectCacheMiss(args: {
   aged?: boolean;
   /**
    * How long the cache is taken to last, when it is not a cache-control
-   * lifetime: a local server's (LOCAL_CACHE_WARM_MS).
+   * lifetime: a local server's (localCacheWarmMs).
    */
   lifetimeMs?: number;
 }): CacheMissReport | undefined {

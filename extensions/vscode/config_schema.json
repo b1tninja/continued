@@ -85,6 +85,11 @@
           "title": "Reasoning Budget Tokens",
           "description": "Set budget tokens for thinking/reasoning in Anthropic Claude 3.7+ models",
           "type": "integer"
+        },
+        "omitSampling": {
+          "title": "Omit Sampling",
+          "description": "Advanced. true leaves temperature, topP and topK out of the request; false sends them even to a Claude model that refuses them (4.7 and later). Unset follows the model.",
+          "type": "boolean"
         }
       }
     },
@@ -2793,7 +2798,7 @@
               },
               "useLocalCrawling": {
                 "type": "boolean",
-                "description": "Crawl this documentation site on this machine. This is the default. Set to false to send the site URL to the upstream crawl service."
+                "description": "Ignored. Documentation sites are always crawled on this machine; no crawl service is used. Kept so existing configs still load."
               }
             },
             "required": ["title", "startUrl"]

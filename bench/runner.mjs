@@ -11,7 +11,7 @@
 // scenarios moved to bench/scenarios/*.json, the model rows to
 // bench/matrix.yaml, the settings to flags.
 import { execFileSync, execSync, spawn, spawnSync } from "child_process";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import fs from "fs";
 import net from "net";
 import os from "os";
@@ -615,8 +615,12 @@ async function runOnce({
     "--verbose",
     ...levels.serve,
   ];
+  // serve needs a bearer token; this run makes its own and sends it on every call
+  const serveToken = randomBytes(24).toString("hex");
+  const authHeaders = { Authorization: `Bearer ${serveToken}` };
   const env = {
     ...process.env,
+    CONTINUOUS_SERVE_TOKEN: serveToken,
     CONTINUE_GLOBAL_DIR: gdir,
     CONTINUE_DUMP_REQUESTS: dumps,
     ...(settings.profile ? { CONTINUE_PROMPT_PROFILE: settings.profile } : {}),
@@ -751,7 +755,7 @@ async function runOnce({
   const post = async (body) => {
     const res = await fetch(`${base}/message`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify(body),
     });
     return { status: res.status, body: await res.json().catch(() => ({})) };
@@ -793,7 +797,7 @@ async function runOnce({
   };
   class BudgetExceeded extends Error {}
   const state = async () => {
-    const s = await (await fetch(`${base}/state`)).json();
+    const s = await (await fetch(`${base}/state`, { headers: authHeaders })).json();
     lastState = s;
     const len = s.session?.history?.length ?? 0;
     if (len !== lastLen) {
@@ -1033,7 +1037,7 @@ async function runOnce({
         at: Math.round((Date.now() - started) / 1000),
       };
       log(`budget: ${error.message}; stopping the serve`);
-      await fetch(`${base}/pause`, { method: "POST" }).catch(() => {});
+      await fetch(`${base}/pause`, { method: "POST", headers: authHeaders }).catch(() => {});
     } else {
       result.error = String(error?.stack ?? error);
       log(`error: ${result.error}`);
@@ -1043,7 +1047,7 @@ async function runOnce({
   // What there is at the end, whatever happened
   let s = lastState;
   try {
-    s = await (await fetch(`${base}/state`)).json();
+    s = await (await fetch(`${base}/state`, { headers: authHeaders })).json();
   } catch {}
   if (s) {
     writeJson(path.join(runDir, "state.json"), s);
@@ -1067,7 +1071,7 @@ async function runOnce({
     });
   } catch {}
 
-  await fetch(`${base}/exit`, { method: "POST" }).catch(() => {});
+  await fetch(`${base}/exit`, { method: "POST", headers: authHeaders }).catch(() => {});
   await sleep(1500);
   killTree(server);
   await sleep(300);

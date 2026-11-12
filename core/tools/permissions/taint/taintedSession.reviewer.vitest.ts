@@ -46,7 +46,11 @@ const approval = {
   levels: { ...DEFAULT_POLICY_LEVELS, tools: "automatic" as const },
 };
 
-function review(command: string, session: string) {
+function review(
+  command: string,
+  session: string,
+  sessions = new AutoReviewSessions(),
+) {
   const llm = stubLlm();
   const deps: AutoReviewDeps = {
     tool: terminalTool,
@@ -54,7 +58,7 @@ function review(command: string, session: string) {
     enabled: true,
     reviewer: llm as never,
     environment: {},
-    sessions: new AutoReviewSessions(),
+    sessions,
   };
   return {
     llm,
@@ -107,6 +111,21 @@ describe("the tainted-session rule and the Auto reviewer", () => {
     expect(user).toContain("Session taint: untrusted content entered");
     expect(user).toContain("mcp-result");
     expect(user).toContain("from turn 3");
+  });
+
+  it("a verdict cached under one taint state is not reused under another", async () => {
+    setRule("ask");
+    const sessions = new AutoReviewSessions();
+    const clean = review("npm test", "s", sessions);
+    await clean.result;
+    expect(clean.llm.chat).toHaveBeenCalledTimes(1);
+    taintRegistry.mark("s", "web-fetch");
+    const tainted = review("npm test", "s", sessions);
+    expect(await tainted.result).toMatchObject({ by: "reviewer" });
+    expect(tainted.llm.chat).toHaveBeenCalledTimes(1);
+    const again = review("npm test", "s", sessions);
+    expect(await again.result).toMatchObject({ cached: true });
+    expect(again.llm.chat).not.toHaveBeenCalled();
   });
 
   it("the prompt has no taint line without the fact", () => {

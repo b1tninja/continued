@@ -13,6 +13,7 @@ import {
 } from "core/util/turnEnd.js";
 import type { ChatCompletionTool } from "openai/resources.mjs";
 
+import { runStoppedAfter, runStoppedBefore } from "../budget/runLimits.js";
 import { pruneLastMessage } from "../compaction.js";
 import {
   endItemRunOverBudget,
@@ -39,7 +40,10 @@ import {
   TRUNCATED_REPLY_MESSAGE,
 } from "../util/replyTally.js";
 import { dumpRequest } from "../util/requestDump.js";
-import { validateContextLength } from "../util/tokenizer.js";
+import {
+  countTotalInputTokens,
+  validateContextLength,
+} from "../util/tokenizer.js";
 
 import { getRequestTools, handleToolCalls } from "./handleToolCalls.js";
 import {
@@ -657,7 +661,7 @@ async function turnTextsForRequest(
 }
 
 // Main function that handles the conversation loop
-// eslint-disable-next-line max-params, max-statements
+// eslint-disable-next-line max-params, max-statements, complexity
 export async function streamChatResponse(
   chatHistory: ChatHistoryItem[],
   model: ModelConfig,
@@ -737,6 +741,15 @@ export async function streamChatResponse(
       toolNames: tools.map((t) => t.function.name),
     });
 
+    // Run limits: do not send a request the budget, turn or time limit forbids
+    if (
+      runStoppedBefore(isCompacting, () =>
+        countTotalInputTokens({ chatHistory, model, systemMessage, tools }),
+      )
+    ) {
+      break;
+    }
+
     // Get response from LLM ("Steer now" interrupts only while it streams;
     // Loop mode sends each run without the turns before it)
     callbacks?.onModelStreaming?.(true);
@@ -778,6 +791,11 @@ export async function streamChatResponse(
 
     // Handle content display
     handleContentDisplay(content, callbacks, isHeadless);
+
+    // Run limits: this reply's real usage is counted; stop before its tools
+    if (runStoppedAfter(isCompacting, usage)) {
+      break;
+    }
 
     // Handle tool calls and check for early return. This updates history via ChatHistoryService.
     const shouldReturn = await handleToolCalls({

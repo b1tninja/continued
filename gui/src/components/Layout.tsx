@@ -1,4 +1,5 @@
 import { OnboardingModes } from "core/protocol/core";
+import { ChatAnnouncer } from "./a11y/ChatAnnouncer";
 import { useContext, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
@@ -206,6 +207,7 @@ const Layout = () => {
       <AuthProvider>
         <LayoutTopDiv>
           <OSRContextMenu />
+          <ChatAnnouncer />
           <div
             style={{
               scrollbarGutter: "stable both-edges",

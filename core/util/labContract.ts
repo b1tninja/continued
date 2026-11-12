@@ -11,7 +11,7 @@
  */
 
 /** Bump when anything exported here changes shape or meaning. */
-export const LAB_CONTRACT_VERSION = 1;
+export const LAB_CONTRACT_VERSION = 2;
 
 /** What one captured reply was, for the rates. Errors stay out of denominators. */
 export const PROBE_OUTCOMES = [
@@ -21,6 +21,28 @@ export const PROBE_OUTCOMES = [
   "error",
 ] as const;
 export type ProbeOutcome = (typeof PROBE_OUTCOMES)[number];
+
+/**
+ * Which server answered and how it parses tool calls, so a result can be tied
+ * to a version (vLLM changed its Qwen3 parser between minor versions and the
+ * new one strips whitespace from string arguments, vLLM issue 48753). Every
+ * field is what the server reported; a field it does not report is absent,
+ * never guessed. `parserSource` says where `parser` came from.
+ */
+export interface ServerIdentity {
+  /** "llama-server", "vllm", "ollama", "bedrock", ... */
+  name: string;
+  /** Release or build: llama.cpp /props build_info, vLLM /version, Ollama /api/version. */
+  version?: string;
+  /** Tool-call parser or handler name. */
+  parser?: string;
+  /** "reported" (Ollama /api/show parser, llama.cpp Chat format) or "declared" (the operator said so). */
+  parserSource?: "reported" | "declared";
+  /** First 16 hex characters of the SHA-256 of the chat template the server uses. */
+  templateSha?: string;
+}
+
+export const SERVER_PARSER_SOURCES = ["reported", "declared"] as const;
 
 /** A tool call as the wire carried it. */
 export interface CaptureToolCall {
@@ -138,4 +160,46 @@ export function validateProbeResult(x: unknown): string[] {
     problems.push("k must not exceed n");
   }
   return problems;
+}
+
+/** Problems with a server identity, or an empty list when it is well formed. */
+export function validateServerIdentity(x: unknown): string[] {
+  if (typeof x !== "object" || x === null || Array.isArray(x)) {
+    return ["not an object"];
+  }
+  const r = x as Record<string, unknown>;
+  const problems: string[] = [];
+  if (typeof r.name !== "string" || r.name === "") {
+    problems.push("name must be a non-empty string");
+  }
+  for (const key of ["version", "parser", "templateSha"]) {
+    if (key in r && (typeof r[key] !== "string" || r[key] === "")) {
+      problems.push(`${key} must be a non-empty string when present`);
+    }
+  }
+  if (
+    "parserSource" in r &&
+    !SERVER_PARSER_SOURCES.includes(r.parserSource as "reported")
+  ) {
+    problems.push(
+      `parserSource must be one of ${SERVER_PARSER_SOURCES.join(", ")}`,
+    );
+  }
+  if ("parserSource" in r && !("parser" in r)) {
+    problems.push("parserSource needs a parser");
+  }
+  return problems;
+}
+
+/** "vllm 0.25.1, parser qwen3_coder (declared)"; the name alone when nothing else is known. */
+export function serverIdentityLabel(id: ServerIdentity): string {
+  const head = id.version ? `${id.name} ${id.version}` : id.name;
+  const parts = [head];
+  if (id.parser) {
+    parts.push(
+      `parser ${id.parser}${id.parserSource ? ` (${id.parserSource})` : ""}`,
+    );
+  }
+  if (id.templateSha) parts.push(`template ${id.templateSha}`);
+  return parts.join(", ");
 }

@@ -51,6 +51,8 @@ export interface AuditAgent {
   role?: string;
   /** The permission mode or loop, as a short word */
   mode?: string;
+  /** The role the tool table applied to its calls (core/tools/roleTools.ts): agent, planner, ... */
+  toolRole?: string;
   /** The spawning agent's id; absent for the main agent */
   parentId?: string;
 }
@@ -69,6 +71,7 @@ export function auditAgentOf(
     kind: AUDIT_AGENT_KINDS.includes(agent.kind) ? agent.kind : "subagent",
     role: line(agent.role),
     mode: line(agent.mode),
+    toolRole: line(agent.toolRole),
     parentId: line(agent.parentId),
   });
 }

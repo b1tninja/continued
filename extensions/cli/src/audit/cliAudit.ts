@@ -56,6 +56,18 @@ export interface ApprovalTrace {
   askedPerson?: boolean;
   /** Loop mode held the call as a question */
   held?: boolean;
+  /** The role the tool table applied (core/tools/roleTools.ts) */
+  role?: string;
+}
+
+let answeredWithoutAuth = false;
+
+/**
+ * cn serve with no token: an approval that came in over an unauthenticated
+ * request is recorded as the system's, never as the person's.
+ */
+export function setApprovalsAnsweredWithoutAuth(value: boolean): void {
+  answeredWithoutAuth = value;
 }
 
 export function recordCliDecision(
@@ -70,7 +82,10 @@ export function recordCliDecision(
     const asked = trace.askedPerson || trace.held;
     const base = {
       session: cliAuditSession(),
-      agent: cliAuditAgent(),
+      agent: {
+        ...cliAuditAgent(),
+        ...(trace.role ? { toolRole: trace.role } : {}),
+      },
       ...taintedField(CLI_SESSION_ID),
       callId: call.id,
       tool: call.name,
@@ -86,7 +101,13 @@ export function recordCliDecision(
         policy: "ask",
         reason: v?.reason ?? "The call needs approval.",
       });
-      if (trace.askedPerson) trail.answer(call.id, result.approved);
+      if (trace.askedPerson) {
+        trail.answer(
+          call.id,
+          result.approved,
+          answeredWithoutAuth ? "system" : "person",
+        );
+      }
       return;
     }
     trail.decision({

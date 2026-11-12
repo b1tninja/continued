@@ -102,7 +102,7 @@ describe("Permissions first-run overview", () => {
       expect(card.textContent).toContain(preset);
     }
     const dismiss = screen.getByRole("button", {
-      name: "Dismiss the permissions overview",
+      name: "Got it, dismiss the permissions overview",
     });
     expect(dismiss.className).toContain("h-6");
     expect(document.querySelectorAll("[id]").length).toBe(

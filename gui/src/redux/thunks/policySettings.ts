@@ -36,6 +36,8 @@ export const loadPolicySettings = createAsyncThunk<void, void, ThunkApiType>(
           },
           builtin: settings.builtin ?? {},
           floor: settings.floor ?? [],
+          planMcpTools: settings.planMcpTools ?? [],
+          trustedMcpServers: Object.keys(settings.mcpServers ?? {}),
         }),
       );
       for (const notice of notices) console.warn(notice);
