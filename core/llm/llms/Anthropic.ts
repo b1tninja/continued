@@ -12,6 +12,10 @@ import {
 } from "@anthropic-ai/sdk/resources/messages.mjs";
 import { streamSse } from "@continuedev/fetch";
 import {
+  claudeRefusesSampling,
+  noteSamplingOmitted,
+} from "../../util/anthropicSamplingGuard.js";
+import {
   getAnthropicErrorMessage,
   getAnthropicHeaders,
   getAnthropicMediaTypeFromDataUrl,
@@ -97,13 +101,17 @@ class Anthropic extends BaseLLM {
   // Public for use within VertexAI
   public convertArgs(options: CompletionOptions): AnthropicRequestParams {
     const thinking = getAnthropicThinkingParams(options);
-    const sampling = anthropicSamplingParams(
-      options.temperature,
-      options.topP,
-      thinking.thinking !== undefined,
-    );
+    const noSampling = claudeRefusesSampling(options.model);
+    if (noSampling) noteSamplingOmitted(options.model);
+    const sampling = noSampling
+      ? {}
+      : anthropicSamplingParams(
+          options.temperature,
+          options.topP,
+          thinking.thinking !== undefined,
+        );
     const finalOptions = {
-      top_k: options.topK,
+      top_k: noSampling ? undefined : options.topK,
       top_p: sampling.top_p,
       temperature: sampling.temperature,
       max_tokens: options.maxTokens ?? 2048,

@@ -17,6 +17,8 @@ import {
   type ApprovalTrace,
 } from "../audit/cliAudit.js";
 import { startShadowReview } from "../audit/shadowHook.js";
+import { firePermissionRequest } from "../hooks/fireHook.js";
+import { notifyAttention } from "../hooks/lifecycleHooks.js";
 import { itemBudgetNoteNow } from "../loop/loopBudget.js";
 import { holdLoopCall, loopRepeatGuard } from "../loop/loopHolds.js";
 import {
@@ -114,10 +116,33 @@ export function requestUserPermission(
     return Promise.resolve(false);
   }
   const prompt = permissionPrompts.then(() =>
-    promptForPermission(toolCall, callbacks),
+    askWithHooks(toolCall, callbacks),
   );
   permissionPrompts = prompt.catch(() => undefined);
   return prompt;
+}
+
+/**
+ * PermissionRequest hooks run before the person is asked: a hook that denies
+ * answers for them. An `allow` from a hook does not skip the question, because
+ * the question here can be one a rule insisted on; only a deny is honoured.
+ * Notification hooks hear that an approval is waiting.
+ */
+async function askWithHooks(
+  toolCall: PreprocessedToolCall,
+  callbacks: StreamCallbacks,
+): Promise<boolean> {
+  const hooked = await firePermissionRequest(
+    toolCall.name,
+    toolCall.preprocessResult?.args ?? toolCall.arguments,
+  );
+  if (hooked.blocked) return false;
+  notifyAttention(
+    `Approval needed for ${toolCall.name}`,
+    "permission_prompt",
+    "Permission needed",
+  );
+  return promptForPermission(toolCall, callbacks);
 }
 
 async function promptForPermission(

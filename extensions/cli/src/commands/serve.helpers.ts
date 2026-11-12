@@ -5,6 +5,7 @@ import type { ChatHistoryItem, Session, ToolStatus } from "core/index.js";
 import { createHistoryItem } from "core/util/messageConversion.js";
 import type { Express, NextFunction, Request, Response } from "express";
 
+import { runStopHooks } from "../hooks/lifecycleHooks.js";
 import {
   describePromptBlocked,
   runUserPromptSubmitHooks,
@@ -415,6 +416,7 @@ export async function streamChatResponseWithInterruption(
       abortController,
       callbacks,
     );
+    await runStopHooks(response || undefined);
     return response || "";
   } finally {
     clearInterval(interruptionChecker);

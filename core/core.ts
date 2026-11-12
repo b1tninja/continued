@@ -20,6 +20,8 @@ import {
   openAICompatBase,
   testOpenAICompatConnection,
 } from "./util/openaiCompatTest";
+import { currentNotice, dismissCurrentNotice } from "./util/retirementStartup";
+import { isDismissed } from "./util/retirementNoticeState";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { deputyWorkspace } from "./tools/permissions/workspaceRoots";
@@ -866,6 +868,15 @@ export class Core {
         new Date().toISOString().slice(0, 10),
       ),
     );
+
+    // Retirement notice for the model chip: offline, dismissible.
+    on("model/retirementNotice", async (msg) => {
+      const notice = currentNotice(msg.data);
+      return notice && !isDismissed(notice.key) ? { notice } : {};
+    });
+    on("model/dismissRetirementNotice", async (msg) => {
+      dismissCurrentNotice(msg.data);
+    });
 
     // Cached per model per process; no hint (an empty object) on any failure.
     on("ollama/showHint", async (msg) => ({
