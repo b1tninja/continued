@@ -381,6 +381,13 @@ function tileFixture(opts: {
           "[data-testid=plan-tree-root] > div",
         ) as HTMLElement | null
       )?.click();
+      // and the fold of the finished items, to show what was replaced
+      await new Promise((r) => setTimeout(r, 100));
+      (
+        document.querySelector(
+          "[data-testid=plan-tree-fold-done] > div",
+        ) as HTMLElement | null
+      )?.click();
     }
   };
 }
@@ -419,7 +426,7 @@ export const FIXTURES: Record<string, Fixture> = {
       ({
         ...withItems({
           "1": { status: "done" },
-          "2": { status: "running", attempts: 1 },
+          "2": { status: "running", attempts: 1, addedInRound: 2 },
         })(loop),
         current: {
           kind: "item",
@@ -427,6 +434,14 @@ export const FIXTURES: Record<string, Fixture> = {
           historyIndex: 2,
           startedAt: new Date(Date.now() - 130_000).toISOString(),
         },
+        replacedItems: [
+          {
+            id: "0",
+            text: "Re-run the gates on the PR head",
+            round: 2,
+            replacedBy: "2",
+          },
+        ],
         autoDecisions: [
           {
             kind: "plan",

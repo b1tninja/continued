@@ -77,7 +77,7 @@
     "loop-plan-finished": {},
     "loop-plan-running": {
       "color-contrast": 3,
-      "label-content-name-mismatch": 2
+      "label-content-name-mismatch": 3
     },
     "loop-plan-tile": {
       "color-contrast": 1
