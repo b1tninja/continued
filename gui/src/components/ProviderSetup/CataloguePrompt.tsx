@@ -17,7 +17,7 @@ export function OpenRouterCataloguePrompt({
     <div
       role="region"
       aria-label="Pull model information"
-      className="border-description-muted flex flex-col gap-2 rounded border border-solid p-2 text-xs"
+      className="flex flex-col gap-2 rounded border border-solid border-description-muted p-2 text-xs"
     >
       <span className="font-medium">
         Pull the latest model information from OpenRouter?

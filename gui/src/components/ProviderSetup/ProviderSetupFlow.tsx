@@ -562,7 +562,7 @@ export function ProviderSetupFlow({
           {...formMethods.register("apiKey")}
         />
         {provider.apiKeyUrl && (
-          <span className="text-description-muted mt-1 block text-xs">
+          <span className="mt-1 block text-xs text-description-muted">
             <a
               className="cursor-pointer text-inherit underline"
               onClick={() => ideMessenger.post("openUrl", provider.apiKeyUrl!)}
@@ -606,20 +606,20 @@ export function ProviderSetupFlow({
               setKeyTouched(true);
             }}
           />
-          <span className="text-description-muted mt-1 block text-xs">
+          <span className="mt-1 block text-xs text-description-muted">
             Every model of this provider refers to it as{" "}
             <code>{`\${{ secrets.${secretName || "NAME"} }}`}</code>
           </span>
         </div>
       )}
       {enterKey && (
-        <span className="text-description-muted text-xs">
+        <span className="text-xs text-description-muted">
           Saved as <code>{enterKey.secretName}</code>. config.yaml already
           refers to it and is not changed.
         </span>
       )}
       {keyIssue && keyChoice.value !== "" && (
-        <span className="text-warning text-xs">{keyIssue}</span>
+        <span className="text-xs text-warning">{keyIssue}</span>
       )}
     </div>
   );
@@ -637,7 +637,7 @@ export function ProviderSetupFlow({
           <code>~/.continuous/.env</code>. Remove that line?
         </p>
         {error && (
-          <div className="text-error text-xs" role="alert">
+          <div className="text-xs text-error" role="alert">
             {error}
           </div>
         )}
@@ -671,7 +671,7 @@ export function ProviderSetupFlow({
       </h2>
 
       {!enterKey && (
-        <div className="text-description-muted text-center text-xs">
+        <div className="text-center text-xs text-description-muted">
           Step {step === "credentials" ? 1 : step === "models" ? 2 : 3} of 3
         </div>
       )}
@@ -699,7 +699,7 @@ export function ProviderSetupFlow({
         <div
           role="region"
           aria-label="Download model list"
-          className="border-description-muted flex flex-col gap-2 rounded border border-solid p-2 text-xs"
+          className="flex flex-col gap-2 rounded border border-solid border-description-muted p-2 text-xs"
         >
           <span>
             Download the latest model list from {catalogueHost}? This contacts
@@ -813,7 +813,7 @@ export function ProviderSetupFlow({
                     />
                   )}
                   {field.description && (
-                    <span className="text-description-muted mt-1 block text-xs">
+                    <span className="mt-1 block text-xs text-description-muted">
                       {field.description}
                     </span>
                   )}
@@ -851,11 +851,11 @@ export function ProviderSetupFlow({
           )}
 
           {error && (
-            <div className="text-error text-xs" role="alert">
+            <div className="text-xs text-error" role="alert">
               {error}
             </div>
           )}
-          {warning && <div className="text-warning text-xs">{warning}</div>}
+          {warning && <div className="text-xs text-warning">{warning}</div>}
 
           <div className="flex gap-2">
             {onCancel && (
@@ -923,18 +923,18 @@ export function ProviderSetupFlow({
             </button>
           </div>
           {refreshError && (
-            <span className="text-warning text-xs whitespace-pre-wrap">
+            <span className="text-xs whitespace-pre-wrap text-warning">
               Couldn't refresh the model list: {refreshError}
             </span>
           )}
           {catalogueHost && noModelsYet && (
-            <span className="text-description-muted text-xs">
+            <span className="text-xs text-description-muted">
               Model list not downloaded. Refresh from {catalogueHost}, or type a
               model id.
             </span>
           )}
           {isOpenRouter && openRouterListFetchedAt() && (
-            <span className="text-description-muted text-xs">
+            <span className="text-xs text-description-muted">
               Model list from {catalogueHost}, downloaded{" "}
               {new Date(openRouterListFetchedAt()!).toLocaleDateString()}.
             </span>
