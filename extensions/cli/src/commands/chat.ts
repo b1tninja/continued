@@ -31,6 +31,7 @@ import { startTUIChat } from "../ui/index.js";
 import { gracefulExit } from "../util/exit.js";
 import { formatAnthropicError, formatError } from "../util/formatError.js";
 import { logger } from "../util/logger.js";
+import { describeNetworkFailure } from "../util/networkError.js";
 import { question } from "../util/prompt.js";
 import { prependPrompt } from "../util/promptProcessor.js";
 import {
@@ -632,12 +633,15 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
   } catch (error: any) {
     const err = error instanceof Error ? error : new Error(String(error));
 
+    const network = describeNetworkFailure(err);
+
     // In headless mode, output error as JSON to stdout
-    if (options.headless) {
-      const errorOutput = {
-        status: "error",
-        message: err.message || String(err),
-      };
+    if (options.headless && network && options.format !== "json") {
+      safeStderr(`Error: ${network.message}\n`);
+    } else if (options.headless) {
+      const errorOutput = network
+        ? { status: "error", ...network }
+        : { status: "error", message: err.message || String(err) };
       safeStderr(JSON.stringify(errorOutput) + "\n");
     } else {
       // Use headless-aware error logging for non-headless mode
