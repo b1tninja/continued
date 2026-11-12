@@ -96,6 +96,77 @@ function adjustReplacementIndentation(
   return adjusted.join("\n");
 }
 
+/** Count CRLF and bare LF line breaks in a string. */
+function countLineEndings(text: string): { crlf: number; lf: number } {
+  const crlf = (text.match(/\r\n/g) ?? []).length;
+  const lf = (text.match(/\n/g) ?? []).length - crlf;
+  return { crlf, lf };
+}
+
+/**
+ * Make newString's line breaks agree with the file region it replaces.
+ * A region that is all CRLF (or all LF) decides. A region with no line break
+ * (a single-line match, or an insertion) defers to the file's majority ending.
+ * A mixed region keeps each of its own endings when newString has the same
+ * number of breaks, and otherwise follows the region's majority.
+ * Only line breaks inside newString change, so whether the file ends with a
+ * newline is never touched.
+ */
+function fitLineEndings(
+  fileContent: string,
+  match: SearchMatchResult,
+  newString: string,
+): string {
+  if (!newString.includes("\n")) {
+    return newString;
+  }
+  const matched = fileContent.slice(match.startIndex, match.endIndex);
+  const region = countLineEndings(matched);
+  const normalised = newString.replace(/\r\n/g, "\n");
+  if (region.crlf > 0 && region.lf > 0) {
+    const regionEndings = matched.match(/\r?\n/g)!;
+    const parts = normalised.split("\n");
+    if (parts.length - 1 === regionEndings.length) {
+      return parts.reduce(
+        (out, part, i) =>
+          out + part + (i < parts.length - 1 ? regionEndings[i] : ""),
+        "",
+      );
+    }
+  }
+  const counts =
+    region.crlf + region.lf > 0 ? region : countLineEndings(fileContent);
+  return counts.crlf > counts.lf
+    ? normalised.replace(/\n/g, "\r\n")
+    : normalised;
+}
+
+/**
+ * The fuzzy strategies end a match at the last non-whitespace character, so an
+ * old_string that ends with a line break matches a region without it, and the
+ * line break new_string ends with then lands after the file's own, doubling it.
+ * Take the file's line break into the match so the two cancel.
+ */
+function includeTrailingLineBreak(
+  fileContent: string,
+  match: SearchMatchResult,
+  oldString: string,
+): SearchMatchResult {
+  if (
+    match.strategyName === "exactMatch" ||
+    match.strategyName === "emptySearch" ||
+    !/\n$/.test(oldString) ||
+    fileContent[match.endIndex - 1] === "\n"
+  ) {
+    return match;
+  }
+  const rest = fileContent.slice(match.endIndex, match.endIndex + 2);
+  const lineBreak = /^\r?\n/.exec(rest);
+  return lineBreak
+    ? { ...match, endIndex: match.endIndex + lineBreak[0].length }
+    : match;
+}
+
 export function executeFindAndReplace(
   fileContent: string,
   oldString: string,
@@ -133,7 +204,7 @@ export function executeFindAndReplace(
     // Apply replacements in reverse order to maintain correct positions
     let result = fileContent;
     for (let i = matches.length - 1; i >= 0; i--) {
-      const match = matches[i];
+      const match = includeTrailingLineBreak(result, matches[i], oldString);
       const adjustedNew = adjustReplacementIndentation(
         result,
         match,
@@ -142,7 +213,7 @@ export function executeFindAndReplace(
       );
       result =
         result.substring(0, match.startIndex) +
-        adjustedNew +
+        fitLineEndings(result, match, adjustedNew) +
         result.substring(match.endIndex);
     }
     return result;
@@ -156,7 +227,7 @@ export function executeFindAndReplace(
     }
 
     // Apply single replacement
-    const match = matches[0];
+    const match = includeTrailingLineBreak(fileContent, matches[0], oldString);
     const adjustedNew = adjustReplacementIndentation(
       fileContent,
       match,
@@ -165,7 +236,7 @@ export function executeFindAndReplace(
     );
     return (
       fileContent.substring(0, match.startIndex) +
-      adjustedNew +
+      fitLineEndings(fileContent, match, adjustedNew) +
       fileContent.substring(match.endIndex)
     );
   }

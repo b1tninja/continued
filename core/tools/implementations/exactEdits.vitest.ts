@@ -121,3 +121,39 @@ describe("the exact edit tools in core", () => {
     expect(files[uri]).toBe("// first\n// top\na = 1;\n");
   });
 });
+
+describe("the exact edit tools keep CRLF files CRLF", () => {
+  const uri = `${WORKTREE}/src/c.txt`;
+
+  it("single_find_and_replace writes CRLF for a multi-line LF edit", async () => {
+    const { ide, files } = fakeIde({
+      [uri]: "alpha\r\nbeta\r\ngamma\r\ndelta",
+    });
+    await singleFindAndReplaceImpl(
+      {
+        filepath: "src/c.txt",
+        old_string: "beta\ngamma",
+        new_string: "BETA\nGAMMA",
+      },
+      extrasFor(ide, [WORKTREE]),
+    );
+    expect(Buffer.from(files[uri]).toString("hex")).toBe(
+      Buffer.from("alpha\r\nBETA\r\nGAMMA\r\ndelta").toString("hex"),
+    );
+  });
+
+  it("multi_edit writes CRLF for every multi-line edit", async () => {
+    const { ide, files } = fakeIde({ [uri]: "a\r\nb\r\nc\r\nd\r\n" });
+    await multiEditImpl(
+      {
+        filepath: "src/c.txt",
+        edits: [
+          { old_string: "a\nb", new_string: "A\nB" },
+          { old_string: "c\nd\n", new_string: "C\nD\nE\n" },
+        ],
+      },
+      extrasFor(ide, [WORKTREE]),
+    );
+    expect(files[uri]).toBe("A\r\nB\r\nC\r\nD\r\nE\r\n");
+  });
+});
