@@ -40,6 +40,7 @@ import {
 } from "../util/tokenizer.js";
 
 import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
+import { printRetirementNotice } from "./retirementNotice.js";
 
 /**
  * Processes and validates JSON output for headless mode
@@ -593,6 +594,8 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
         headless: false,
         toolPermissionOverrides: permissionOverrides,
       });
+
+      printRetirementNotice();
 
       const agentFileState = await serviceContainer.get<AgentFileServiceState>(
         SERVICE_NAMES.AGENT_FILE,
