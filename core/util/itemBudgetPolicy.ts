@@ -5,6 +5,7 @@ import {
   type BudgetKind,
   type ItemBudget,
 } from "./itemBudget";
+import { questionsNeverAsk } from "../tools/permissions/policy";
 import { skipItem } from "./loopMode";
 import type { StuckLevel } from "./stuckSignals";
 
@@ -293,7 +294,15 @@ export function applyLimitPolicy(
   const state = loop.items.find((i) => i.id === item.id);
   const breach = state?.overBudget;
   if (!state || !breach) return undefined;
-  switch (limitPolicyOf(loop)) {
+  // Questions is IDGAF: nobody is asked, so a limit that would ask (Suggest)
+  // is decided by the review rule instead (extend, split or stop)
+  const policy =
+    limitPolicyOf(loop) === "suggest" &&
+    loop.policy &&
+    questionsNeverAsk(loop.policy.questions)
+      ? "review"
+      : limitPolicyOf(loop);
+  switch (policy) {
     case "force":
       return {
         kind: "stop",

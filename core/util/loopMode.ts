@@ -28,6 +28,7 @@ import {
   planHandoff,
   policyLevelLabel,
   questionDecider,
+  questionsNeverAsk,
   type PolicyLevel,
   type PolicySettings,
 } from "../tools/permissions/policy.js";
@@ -359,7 +360,50 @@ export function loopQuestionDecider(
  * are: the levels the person moves are about who decides, not about limits.
  */
 export function setLoopPolicy(loop: LoopState, policy: LoopPolicy): LoopState {
-  return { ...loop, policy, autonomy: autonomyForPolicy(policy) };
+  const next = { ...loop, policy, autonomy: autonomyForPolicy(policy) };
+  // Moved to IDGAF with questions already held: nobody is going to answer them
+  return questionsNeverAsk(policy.questions)
+    ? answerHeldWithoutAsking(next, new Date())
+    : next;
+}
+
+/**
+ * Questions is IDGAF: whatever the inbox holds is answered the way a new
+ * question would be (the labelled option, else the first, else the
+ * best-judgment line; an approval is refused), as the system's, so no item
+ * keeps waiting for a person who said nobody is asked.
+ */
+export function answerHeldWithoutAsking(
+  loop: LoopState,
+  now: Date,
+): LoopState {
+  if (!loop.policy || !questionsNeverAsk(loop.policy.questions)) return loop;
+  const source = `Questions: ${policyLevelLabel("questions", loop.policy.questions)}`;
+  let next = loop;
+  for (const q of loop.questions.filter((x) => !x.answerId)) {
+    const refuse = q.kind === "approval";
+    const text = refuse
+      ? "Not allowed."
+      : q.kind === "assumption" && q.assumption && !q.options?.length
+        ? `Keep the assumption: ${q.assumption}`
+        : autoAnswerFor(q.options).text;
+    const result = answerLoop(
+      next,
+      {
+        questionId: q.id,
+        text,
+        ...(refuse ? { approve: false } : {}),
+      },
+      now,
+    );
+    if (!result.ok) continue;
+    next = addAutoDecision(
+      result.loop,
+      { kind: "question", source, text: autoAnsweredLine(q.question, text) },
+      now,
+    );
+  }
+  return next;
 }
 
 /**
@@ -2471,6 +2515,53 @@ function decideAlone(
 export const LOOP_OPTION_LENGTH = 160;
 
 /**
+ * A call that would ask the person, where Questions is IDGAF: nobody is asked
+ * and nothing waits. What stopped the call (a floor that no level lifts) still
+ * holds, so the call is not run; the loop records that, as the system's.
+ */
+function refuseWithoutAsking(
+  loop: LoopState,
+  input: {
+    itemId?: string;
+    question: string;
+    approval?: LoopQuestion["approval"];
+    now: Date;
+  },
+): HoldResult {
+  const source = `Questions: ${policyLevelLabel("questions", "yolo")}`;
+  const text = "Refused: nobody is asked at this level, so the call did not run";
+  const decided: LoopQuestion = {
+    id: nextId("q", loop.questions),
+    ...(input.itemId ? { itemId: input.itemId } : {}),
+    question: input.question,
+    kind: "approval",
+    askedAt: iso(input.now),
+    decidedAlone: true,
+    answerId: "self",
+    autoAnswer: { text, by: "system", source },
+    ...(input.approval ? { approval: input.approval } : {}),
+  };
+  const kept =
+    loop.questions.length < LOOP_LIMITS.maxQuestions
+      ? { ...loop, questions: [...loop.questions, decided] }
+      : loop;
+  return {
+    ok: true,
+    loop: addAutoDecision(
+      kept,
+      {
+        kind: "question",
+        source,
+        text: autoAnsweredLine(input.question, text),
+      },
+      input.now,
+    ),
+    question: decided,
+    duplicate: false,
+  };
+}
+
+/**
  * The choices a held question offers: two to four distinct, trimmed, non-empty
  * strings. Anything else is dropped, so a model that sends junk still gets
  * its question held, as a free-text one.
@@ -2524,6 +2615,18 @@ export function holdQuestion(
   const kind = input.kind as LoopQuestionKind;
   if (kind !== "blocking" && kind !== "assumption" && kind !== "approval") {
     return { ok: false, error: 'kind must be "blocking" or "assumption"' };
+  }
+  if (
+    kind === "approval" &&
+    loop.policy &&
+    questionsNeverAsk(loop.policy.questions)
+  ) {
+    return refuseWithoutAsking(loop, {
+      itemId: input.itemId,
+      question,
+      approval: input.approval,
+      now,
+    });
   }
   if (kind !== "approval" && loopQuestionDecider(loop, type) === "agent") {
     return decideAlone(
@@ -3747,6 +3850,9 @@ export function approvalHeldResult(
   question: LoopQuestion,
   names: LoopToolNames = LOOP_TOOL_NAMES,
 ): string {
+  if (question.decidedAlone) {
+    return `This call was not run, and nobody was asked: Questions is IDGAF, so a call that would need approval is refused. Do not report "waiting", and do not try to reach the same result another way; do what you can without it and say so in your summary.`;
+  }
   return `This call needs the person's approval, so it was not run. It is held as question ${question.id} in their inbox. Do not try to reach the same result another way. Do what you can without it, then call ${names.finishItem} with outcome "waiting"; the item will run again once they answer.`;
 }
 
