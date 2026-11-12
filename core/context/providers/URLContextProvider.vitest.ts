@@ -108,7 +108,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   setHostResolver(undefined);
-  server.closeAllConnections?.();
+  (server as any).closeAllConnections?.();
   await new Promise((r) => server.close(r));
 });
 
