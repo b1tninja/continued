@@ -34,7 +34,6 @@ export type ConfigSource =
   | { type: "saved-uri"; uri: string }
   | { type: "user-assistant"; slug: string }
   | { type: "local-config-yaml" }
-  | { type: "remote-default-config" }
   | { type: "no-config" };
 
 /**
@@ -97,7 +96,10 @@ function determineConfigSource(
   if (fs.existsSync(defaultConfigPath)) {
     return { type: "local-config-yaml" };
   }
-  return { type: "remote-default-config" };
+
+  // No hosted default config is fetched: a first run with nothing configured
+  // uses an empty local assistant and makes no connection.
+  return { type: "no-config" };
 }
 
 /**
@@ -146,14 +148,6 @@ async function loadFromSource(
           injectBlocks,
         );
 
-      case "remote-default-config":
-        return await loadDefaultConfig(
-          organizationId,
-          apiClient,
-          accessToken,
-          injectBlocks,
-        );
-
       // TODO this is currently skipped because we are forcing default config
       // Because models add on won't work for injected blocks e.g. default model, (only default config)
       case "no-config":
@@ -171,14 +165,14 @@ async function loadFromSource(
     if (source.type === "user-assistant") {
       console.warn(
         chalk.yellow(
-          "Failed to load user assistants, falling back to default agent",
+          "Failed to load user assistants, falling back to an empty local config",
         ),
       );
-      return await loadDefaultConfig(
+      return await unrollPackageIdentifiersAsConfigYaml(
+        injectBlocks,
+        accessToken,
         organizationId,
         apiClient,
-        accessToken,
-        injectBlocks,
       );
     }
     throw error;
@@ -293,12 +287,12 @@ async function loadUserAssistantWithFallback(
     return apiConfig;
   }
 
-  // No user assistants, fall back to default agent
-  return await loadDefaultConfig(
+  // No user assistants, fall back to an empty local config
+  return await unrollPackageIdentifiersAsConfigYaml(
+    injectBlocks,
+    accessToken,
     organizationId,
     apiClient,
-    accessToken,
-    injectBlocks,
   );
 }
 
@@ -319,40 +313,6 @@ async function loadLocalConfigYaml(
     apiClient,
     injectBlocks,
   );
-}
-
-/**
- * Loads the default continuedev/default-config
- */
-async function loadDefaultConfig(
-  organizationId: string | null,
-  apiClient: DefaultApiInterface,
-  accessToken: string | null,
-  injectBlocks: PackageIdentifier[],
-): Promise<AssistantUnrolled> {
-  const resp = await apiClient.getAssistant({
-    ownerSlug: "continuedev",
-    packageSlug: "default-cli-config",
-    organizationId: organizationId ?? undefined,
-  });
-
-  if (!resp.configResult.config) {
-    throw new Error(
-      `Failed to load default agent. Body:\n${JSON.stringify(resp)}`,
-    );
-  }
-  let apiConfig = resp.configResult.config as AssistantUnrolled;
-  if (injectBlocks.length > 0) {
-    const injectedConfig = await unrollPackageIdentifiersAsConfigYaml(
-      injectBlocks,
-      accessToken,
-      organizationId,
-      apiClient,
-    );
-    apiConfig = mergeUnrolledAssistants(apiConfig, injectedConfig);
-  }
-
-  return apiConfig;
 }
 
 export async function unrollPackageIdentifiersAsConfigYaml(
