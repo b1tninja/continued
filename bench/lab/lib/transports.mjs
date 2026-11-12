@@ -22,6 +22,13 @@ import {
 } from "./ollama.mjs";
 import { renderToolsPrompt } from "./prompts.mjs";
 import { readChatFormat } from "./server.mjs";
+import {
+  chatFormatFromProps,
+  llamaSamplingDefaults,
+  mergeBodyExtra,
+  parseModelfileParameters,
+  samplingSent,
+} from "./sampling.mjs";
 
 export const APIS = [
   "ollama-chat",
@@ -189,7 +196,7 @@ export function buildRequest(api, a) {
       notes.push("tool_choice has no meaning on /completion: not sent");
     if (stream) notes.push("llamacpp-raw is not streamed");
   } else throw new LabError("refused", `unknown --api ${api}`);
-  if (bodyExtra) Object.assign(body, bodyExtra);
+  if (bodyExtra) mergeBodyExtra(body, bodyExtra);
   return { path, body, stream: Boolean(body.stream), notes };
 }
 
@@ -391,12 +398,19 @@ export class Engine extends OllamaClient {
             parserDeclared: this.declaredParser,
           };
       }
-      let chatFormat = readChatFormat(this.serverLog);
-      let chatFormatSource = chatFormat ? "log" : undefined;
+      // /props first (b12206 prints no "Chat format:" log line), then the log
+      let chatFormat = chatFormatFromProps(props);
+      let chatFormatSource = chatFormat ? "props" : undefined;
+      if (!chatFormat) {
+        chatFormat = readChatFormat(this.serverLog);
+        if (chatFormat) chatFormatSource = "log";
+      }
       if (!chatFormat) {
         // no log to read (a server the lab did not start): /slots may name it
         const sl = await this.get("/slots");
-        const cf = Array.isArray(sl) ? sl[0]?.chat_format : undefined;
+        const cf = Array.isArray(sl)
+          ? (sl[0]?.chat_format ?? sl[0]?.params?.chat_format)
+          : undefined;
         if (typeof cf === "string") {
           chatFormat = cf;
           chatFormatSource = "slots";
@@ -413,6 +427,8 @@ export class Engine extends OllamaClient {
         modelPath: props?.model_path,
         nCtx: props?.default_generation_settings?.n_ctx,
         chatTemplateSha: sha(props?.chat_template),
+        // what a request that sends no sampling options gets from the server
+        samplingDefaults: llamaSamplingDefaults(props),
         parserDeclared: this.declaredParser,
       };
     }
@@ -430,6 +446,8 @@ export class Engine extends OllamaClient {
       parser: show?.parser,
       renderer: show?.renderer,
       quant: show?.details?.quantization_level,
+      // the Modelfile PARAMETER lines a request inherits (see README)
+      parameters: parseModelfileParameters(show?.parameters),
       parserDeclared: this.declaredParser,
     };
   }
@@ -558,6 +576,7 @@ export class Engine extends OllamaClient {
       path: req.path,
       notes: req.notes,
       toolChoice: a.toolChoice,
+      sampling: samplingSent(api, req.body),
     };
     if (req.stream) out.chunks = [];
     const acc = { list: [], byId: new Map() };

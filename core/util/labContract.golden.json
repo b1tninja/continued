@@ -1,5 +1,5 @@
 {
-  "contractVersion": 2,
+  "contractVersion": 3,
   "wilson": [
     {
       "k": 0,
@@ -115,6 +115,17 @@
         "promptId": "read"
       },
       "output": "live-qwen3-coder-30b-openai-stream-t0-p2-read"
+    },
+    {
+      "input": {
+        "model": "qwen3.6:27b",
+        "transport": "ollama",
+        "streamed": false,
+        "temperature": "inherited",
+        "pass": 1,
+        "promptId": "edit"
+      },
+      "output": "live-qwen3-6-27b-ollama-whole-tinherited-p1-edit"
     },
     {
       "input": {

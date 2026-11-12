@@ -1,11 +1,14 @@
 {
-  "version": 2,
+  "version": 3,
   "surface": {
     "LAB_CONTRACT_VERSION": {
-      "value": 2
+      "value": 3
     },
     "PROBE_OUTCOMES": {
       "value": ["structured", "leak", "refused", "error"]
+    },
+    "TEMPERATURE_INHERITED": {
+      "value": "inherited"
     },
     "SERVER_PARSER_SOURCES": {
       "value": ["reported", "declared"]
