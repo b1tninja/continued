@@ -27,3 +27,7 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 - The generated hub/API SDK client (`packages/continue-sdk`) is deleted, together with the terminal agent's API client service and the `CONTINUE_API_BASE` setting. The code no longer names a Continue-operated host, and `core/egress/egress-allowlist.json` has no entry for one.
 - `--config owner/slug` (a hub assistant) now fails with "hub assistants are not supported; pass a config.yaml path". Pass a path to a `config.yaml`.
+
+## JetBrains: the plugin loads in 2026.2 IDEs
+
+- The JetBrains plugin declares the JCEF plugin dependency (`com.intellij.modules.jcef`) that JetBrains 2026.2 requires. Before, the Continuous tool window failed to load there with `NoClassDefFoundError: com/intellij/ui/jcef/JBCefApp`. Older IDE versions are unaffected: up to 2026.1 the id is an alias of the core platform. Not yet tried in a real 2026.2 IDE.
