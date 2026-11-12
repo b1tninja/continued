@@ -1,4 +1,4 @@
-import type { LoopState } from "core/index.js";
+import type { LoopItemState, LoopState } from "core/index.js";
 import { createLoop, finishItemRun, startItemRun } from "core/util/loopMode.js";
 import { render } from "ink-testing-library";
 import React from "react";
@@ -54,7 +54,7 @@ describe("the loop's frame colour map", () => {
     const failed: LoopState = {
       ...loop,
       status: "replanning",
-      items: loop.items.map((i) =>
+      items: loop.items.map((i: LoopItemState) =>
         i.id === "1" ? { ...i, status: "failed" as const } : i,
       ),
     };
