@@ -70,17 +70,6 @@ import { oauthScopeForMcpServer } from "./workspaceMcpPolicy";
 
 const DEFAULT_MCP_TIMEOUT = 20_000; // 20 seconds
 
-// Commands that are batch scripts on Windows and need cmd.exe to execute
-const WINDOWS_BATCH_COMMANDS = [
-  "npx",
-  "uv",
-  "uvx",
-  "pnpx",
-  "dlx",
-  "nx",
-  "bunx",
-];
-
 const COMMONS_ENV_VARS = ["HOME", "USER", "USERPROFILE", "LOGNAME", "USERNAME"];
 
 /**
@@ -650,40 +639,6 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
   }
 
   /**
-   * Resolves the command and arguments for the current platform
-   * On Windows, batch script commands need to be executed via cmd.exe
-   * UNLESS we're connected to a WSL remote (where Linux commands should run)
-   * @param originalCommand The original command
-   * @param originalArgs The original command arguments
-   * @returns An object with the resolved command and arguments
-   */
-  private async resolveCommandForPlatform(
-    originalCommand: string,
-    originalArgs: string[],
-  ): Promise<{ command: string; args: string[] }> {
-    // Check if we're on Windows host connected to WSL remote
-    const ideInfo = await this.extras?.ide?.getIdeInfo();
-    const isWindowsHostWithWslRemote =
-      process.platform === "win32" && ideInfo?.remoteName === "wsl";
-
-    // If not on Windows, or connected to WSL, or not a batch command, return as-is
-    if (
-      process.platform !== "win32" ||
-      isWindowsHostWithWslRemote ||
-      !WINDOWS_BATCH_COMMANDS.includes(originalCommand)
-    ) {
-      return { command: originalCommand, args: originalArgs };
-    }
-
-    // On Windows (local), we need to execute batch commands via cmd.exe
-    // Format: cmd.exe /c command [args]
-    return {
-      command: "cmd.exe",
-      args: ["/c", originalCommand, ...originalArgs],
-    };
-  }
-
-  /**
    * Resolves the current working directory of the current workspace.
    * @param cwd The cwd parameter provided by user.
    * @returns Current working directory (user-provided cwd or workspace root).
@@ -872,10 +827,14 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
       useSystemCa ? await nodeSupportsSystemCa(env) : false,
     );
 
-    const { command, args } = await this.resolveCommandForPlatform(
-      options.command,
-      options.args || [],
-    );
+    // The command and its arguments go to the transport untouched. On Windows
+    // the transport spawns through cross-spawn, which finds `.cmd` shims
+    // (npx, npm, pnpm, yarn, bunx and the rest) on PATH and escapes each
+    // argument for cmd.exe itself. Wrapping the command as `cmd.exe /c ...`
+    // here made cmd interpret `& | ^ % < >` in arguments, because Node's
+    // argv quoting is not cmd quoting.
+    const command = options.command;
+    const args = options.args || [];
 
     const cwd = await this.resolveCwd(options.cwd);
 
