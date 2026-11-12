@@ -68,15 +68,38 @@ cannot be selected):
 ```sh
 gh api -X PUT repos/b1tninja/continuous/branches/main/protection --input - <<'JSON'
 {
-  "required_status_checks": { "strict": true, "contexts": ["merge-gate"] },
+  "required_status_checks": { "strict": true, "checks": [{ "context": "merge-gate", "app_id": 15368 }] },
   "enforce_admins": false,
-  "required_pull_request_reviews": null,
+  "required_pull_request_reviews": { "required_approving_review_count": 0 },
   "restrictions": null,
   "allow_force_pushes": false,
   "allow_deletions": false
 }
 JSON
 ```
+
+The exact recipe, as settings:
+
+- Require a pull request before merging, with **no required reviews** (approving count 0).
+- Require the status check `merge-gate`, pinned to the GitHub Actions app (`app_id` 15368), so no other
+  app or status can satisfy it by reporting the same name.
+- Require branches to be up to date before merging (`strict: true`).
+- Allow **squash merging only**: in Settings, General, Pull Requests, untick "Allow merge commits" and
+  "Allow rebase merging" (a repository setting, separate from the protection API call above).
+- Leave "Do not allow bypassing the above settings" off (`enforce_admins: false`), so admin bypass stays on.
+- No merge queue (not available on a user-owned repository, see below). No force pushes, no deletions.
+
+Failure modes to know before enabling it:
+
+- A required check whose workflow is skipped by a **path filter** (`paths` or `paths-ignore` on the
+  trigger) never reports, stays Pending and blocks the merge forever. `merge-gate.yml` therefore has no
+  path filter and must not get one.
+- A job skipped by a job-level `if` reports **success** to branch protection, so a gate skipped that way
+  passes silently. `merge-gate` has no job-level `if`; drafts fail inside the job by design.
+- Enabling protection before `merge-gate.yml` is on `main` and has run once blocks every PR, because the
+  check cannot report. Merge the workflow first, confirm it reported on a PR, then enable protection.
+- If Actions is frozen or disabled, `merge-gate` cannot report and every merge is blocked. Admin bypass
+  is the escape hatch ("Merge without waiting for requirements", or push as admin).
 
 Risks: a stuck or never-reporting required check blocks every merge. Because `enforce_admins` is
 false, the owner can still merge through the "Merge without waiting for requirements" option or by
@@ -151,13 +174,34 @@ previous one landed, instead of waiting for "Update branch" and a full gate.
 ### (b) Strict mode, owner action (not applied by the PR)
 
 Run after the commands in section 4 are decided. It replaces only the required status checks of the
-protection that section 4 creates, so apply section 4 first; `strict` is already `true` there. Auto-merge
-needs nothing further: it starts working as soon as a
-required check exists, and with `strict: true` it waits for the branch to be up to date.
+protection that section 4 creates, so apply section 4 first; `strict` is already `true` there.
+
+Recommendation: keep `strict: true`. `main` broke twice from two individually green PRs merging (#573,
+#592), and the post-merge check in (a) only detects that after the fact.
+
+Consequence: merges are serial. Each queued PR whose base has moved needs its branch updated before it
+can merge: `gh pr update-branch <n> --repo b1tninja/continuous` (or a small script or loop over the open
+PRs), then wait for `merge-gate` on the new head. Auto-merge does not do this. GitHub's documentation
+on auto-merge does not say that it updates the branch, so a PR whose base moved stalls until someone or
+something updates it. "Always suggest updating pull request branches" only shows the "Update branch"
+button; it does not update anything automatically.
+
+Alternative: leave `strict` off (`strict=false` in the command below) and rely on the post-merge check
+in (a). Merges then do not need an update step, but a bad combination is found only after it lands.
+
+Merge queue: not recommended until the aggregate test jobs also run on `merge_group`. `merge-gate` passes
+on `merge_group` without testing anything (see section 1), so a queue would add no safety.
+
+Sources: GitHub Docs, "Automatically merging a pull request"
+(https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/automatically-merging-a-pull-request),
+"Managing suggestions to update pull request branches"
+(https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-suggestions-to-update-pull-request-branches),
+"About protected branches"
+(https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 
 ```sh
 gh api -X PATCH repos/b1tninja/continuous/branches/main/protection/required_status_checks \
-  -F strict=true -f 'contexts[]=merge-gate'
+  -F strict=true -f 'checks[][context]=merge-gate' -F 'checks[][app_id]=15368'
 ```
 
 Do not add `post-merge-check` to `contexts`: it only runs on `main`, so a required check by that name
