@@ -21,6 +21,8 @@ One word for each idea, in the page, the toolbar, `/policy` in the terminal agen
 | Always-on rule | A Never rule in `permissions.yaml` that binds at every level, YOLO included. Locked on this page                                                                                             | `floor`                                                |
 | Lock           | Something no rule can change: always-on rules, protected paths, your policy files                                                                                                            |                                                        |
 
+Each level and each preset has a glyph and a tone on the toolbar chips and in the overview card. Levels: Manual a raised hand, Cautious a shield, Automatic sparkles, Permissive an open lock, YOLO a bolt, tinted green, green, blue, amber and red. Presets: Careful a shield, Accept edits a check badge, Hands off a fast-forward, Reviewer sparkles, YOLO a bolt, Custom sliders. A preset takes the tone of its loosest level other than Context use; Custom is neutral unless an area is at YOLO. The glyph and the colour never carry the meaning alone: every chip has its text.
+
 A level and a preset are different ideas: "Cautious" is a level, "Careful" is a preset. The Careful preset is the default set: Permissive for Context use, Manual for File edits and Cautious for the other three.
 
 ## Five areas
@@ -63,13 +65,25 @@ Every change is checked by the same code before anything is written, and the for
 - what a sample call gets now and with the rule (type your own under **Try a call**, or one is made from the pattern)
 - the lines of `config.yaml` that would change
 
-Nothing is written until you press **Save**. If the file cannot be written, or was changed by someone else since the page read it, you are told and nothing changes. After a save, **Undo last change** puts the file back as it was, as long as it is unchanged since; if you edited it in between, it is left alone and you are told.
+Nothing is written until you press **Save**. A change that loosens (a new Always rule, a removed Never or Ask rule, a rule moved to a looser list, an undo that restores less) also waits for your editor's own confirmation dialog, described below. If the file cannot be written, or was changed by someone else since the page read it, you are told and nothing changes. After a save, **Undo last change** puts the file back as it was, as long as it is unchanged since; if you edited it in between, it is left alone and you are told.
 
 If `config.yaml` cannot be read (a syntax error, or `toolPermissions` of the wrong shape) the page shows the reason, says your rules cannot be shown, and turns editing off. It never shows a broken file as "no rules".
 
 ### Friction
 
-An Always rule that matches everything or a broad wildcard needs a typed confirmation: you type `allow everything` before Save turns on, and the form says plainly what the rule would allow. That covers a bare tool name (`runTerminalCommand`), a pattern of only `*`, a command rule whose first word is a wildcard or an interpreter that runs whatever follows (`bash*`, `sudo*`, `python*`), an MCP rule for every server, a fetch rule for every host, and a path rule that covers `/`, your home folder or a credentials folder such as `~/.ssh`. Removing a Never, or moving a rule to a looser list, asks for one confirmation.
+An Always rule that matches everything or a broad wildcard needs a typed confirmation: you type `allow everything` before Save turns on, and the form says plainly what the rule would allow. That covers a bare tool name (`runTerminalCommand`), a pattern of only `*`, a command rule whose first word is a wildcard or an interpreter that runs whatever follows (`bash*`, `sudo*`, `python*`), an MCP rule for every server, a fetch rule for every host, and a path rule that covers `/`, your home folder or a credentials folder such as `~/.ssh`. The typed phrase is checked before the editor's dialog opens.
+
+### Confirmation in your editor
+
+A change that loosens is confirmed in a dialog the editor opens itself (a modal warning in VS Code, a notification with an Allow action in other IDEs), not by a checkbox in the page, because text in the page can be made to send a click. The page says "Your editor will ask you to confirm before it is saved" and then "Waiting for your answer in the window your editor opened". If you decline, close the dialog, it times out, or the host has no dialog, nothing is written. In IntelliJ the notification has no modal form and an unanswered one after 15 seconds counts as no. A change that only tightens, and every preview, never asks. The **Always allow** button on an approval prompt goes through the same path, and the audit record says the change was confirmed natively.
+
+### Refusals
+
+An Always rule is refused, and nothing is written, when an always-on rule or a built-in rule already holds everything it would allow, or when its own sample call would still be held by a protected path, an always-on rule or a built-in rule. The result shows the verdict that held the call.
+
+### The rule as a command
+
+The form shows the rule as `continuous permissions add always '<rule>'` with a **Copy** button. Copy does not run it. Pasting that command, or a `NEVER  rule` line from `continuous audit suggest`, into the Rule field sets the list and the rule, and the change goes through the same preview, confirmation and audit record. Flags in pasted text are refused.
 
 What no rule can change is shown under **Locks**: always-on rules, protected paths (credentials always ask), and your policy files (`config.yaml`, `permissions.yaml` and the files that change what runs later), which the agent cannot write without asking you. The page's write is a message from the page to the app, not a tool, so the model cannot reach it.
 
@@ -96,9 +110,13 @@ The test runs the same check the agent uses. Nothing is run, written or sent, an
 
 The page shows grey placeholders while it reads your rules. If that takes more than eight seconds it says so and offers **Try again**. If the read fails, it says the rules could not be read, names `config.yaml` and `permissions.yaml`, and offers **Retry**; it never shows a failed read as "no rules". An area with no rules says to press **Add a rule**.
 
-## First-run overview
+## First-run notices
 
 The first time you open the page, a short card explains the five areas, the five levels and the presets, using the same glyph and colour as the toolbar chips. Press **Got it** and it does not come back: the choice is saved as `permissionsIntroDismissed` in your own settings.
+
+An empty chat shows the same tip as one dismissible line: "New here? Each area has a level and a preset sets them all; Always on rules apply first. Open Permissions". It shares `permissionsIntroDismissed` with the card, so dismissing either hides both.
+
+The interactive terminal agent shows one line in its header, once per user: "Permissions: Careful preset. Change it with /policy (presets, or area=level). Shown once." It names "a custom mix" when the levels match no preset. It never shows with `-p`, in `serve` or without a terminal, and its flag (`cliFirstRunBannerShown`) lives in the global context file, separate from the editor's.
 
 ## From the terminal agent
 
@@ -112,4 +130,4 @@ continuous permissions adopt '<rule>' --from <file> [--yes-allow-everything] [--
 
 `list` prints the same data as the page. `test` takes a tool (`runTerminalCommand` or `Bash`, `readFile`, `writeFile`, `listDirectory`, `fetchUrl`, `grepSearch`, `searchWeb`, or `mcp__server__tool`) and the call's argument, for example `continuous permissions test Bash git push origin main`. `--level area=level` tries another level for one area and may be repeated. The command reads your `config.yaml` and `permissions.yaml` and does not load an assistant, so rules that come from an assistant are not listed by the terminal command.
 
-`add`, `remove` and `adopt` change your own `config.yaml` with the same checks and friction as the page, and write the same audit record (source `cli`). They exit 0 when the change was made (or previewed with `--dry-run`), 2 when a confirmation is missing and 1 on any refusal: a rule that cannot be read, a file that cannot be read or written, or a rule that is not there. A broad Always rule needs `--yes-allow-everything`; removing a Never needs `--yes`. `adopt` reads the rule from the workspace or assistant file you name with `--from`, shows what it changes, and copies it.
+`add`, `remove` and `adopt` change your own `config.yaml` with the same checks and friction as the page, and write the same audit record (source `cli`). They exit 0 when the change was made (or previewed with `--dry-run`), 2 when a confirmation is missing and 1 on any refusal: a rule that cannot be read, an Always rule that is already held (see Refusals), a file that cannot be read or written, or a rule that is not there. A change that loosens needs `--yes` (removing a Never or Ask rule, or adding an Always rule); a broad Always rule needs `--yes-allow-everything`. There is no editor dialog in the terminal: the flag is the confirmation. `adopt` reads the rule from the workspace or assistant file you name with `--from`, shows what it changes, and copies it.
