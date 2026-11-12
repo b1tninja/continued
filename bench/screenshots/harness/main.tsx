@@ -16,6 +16,7 @@ import ReactDOM from "react-dom/client";
 import { Provider } from "react-redux";
 import { StyleSheetManager } from "styled-components";
 import { FIXTURES, seedMessenger, sendConfig } from "./fixtures";
+import { LoopFrameDemo } from "./LoopFrameDemo";
 import { applyTheme, type ThemeName } from "./themes";
 
 declare global {
@@ -73,6 +74,11 @@ async function main() {
                     onModelsLoaded={() => {}}
                   />
                 </div>
+              ) : fixtureName.startsWith("loop-frame-") ? (
+                <LoopFrameDemo
+                  state={fixtureName.slice("loop-frame-".length) as never}
+                  animate={params.get("animate") === "1"}
+                />
               ) : (
                 <App />
               )}
