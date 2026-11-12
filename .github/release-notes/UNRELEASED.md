@@ -27,3 +27,8 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 - The generated hub/API SDK client (`packages/continue-sdk`) is deleted, together with the terminal agent's API client service and the `CONTINUE_API_BASE` setting. The code no longer names a Continue-operated host, and `core/egress/egress-allowlist.json` has no entry for one.
 - `--config owner/slug` (a hub assistant) now fails with "hub assistants are not supported; pass a config.yaml path". Pass a path to a `config.yaml`.
+
+## Behaviour changes
+
+- **A hook settings file or `permissions.yaml` that is present but broken no longer reads as "no policy".** Before, a hook settings file that did not parse was skipped with a log line (so a guard hook silently did not run), and a `permissions.yaml` that did not parse was treated as absent (so a headless run fell back to defaults that allow `Bash`). Now `cn -p` and `cn serve` refuse to start with exit code 2, naming each file and the line and column of the error (never its contents); `--ignore-broken-config` continues with the file ignored. The interactive agent starts and prints a visible WARNING with the same details. Absent files are still silent. See the Hooks and trust and Permissions pages.
+- **A hook `matcher` that is not a valid regular expression now runs the hook** (fail closed) and warns once per session, instead of silently switching the hook off.

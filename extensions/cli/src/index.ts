@@ -173,6 +173,10 @@ addRunLimitOptions(addCommonOptions(program))
     "Run this project's hooks for this session without asking (see `continuous hooks`)",
   )
   .option(
+    "--ignore-broken-config",
+    "Headless (-p, serve): continue when a hook settings file or permissions.yaml is present but unparseable, with that file ignored. Without it the run exits with code 2",
+  )
+  .option(
     "--trust-project-config",
     "Use this project's Continuous configuration for this session without asking (see `continuous project`)",
   )

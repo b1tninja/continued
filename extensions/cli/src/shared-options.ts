@@ -123,6 +123,7 @@ export function mergeParentOptions(parentCommand: Command, options: any): any {
     "agent",
     "betaSubagentTool",
     "trustProjectConfig",
+    "ignoreBrokenConfig",
     "maxBudgetUsd",
     "maxTurns",
     "maxDuration",

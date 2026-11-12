@@ -31,6 +31,7 @@ import {
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { startTUIChat } from "../ui/index.js";
+import { exitOnBrokenConfig } from "../util/configFileGate.js";
 import { gracefulExit } from "../util/exit.js";
 import { formatAnthropicError, formatError } from "../util/formatError.js";
 import { logger } from "../util/logger.js";
@@ -419,6 +420,9 @@ async function runHeadlessMode(
   prompt: string | undefined,
   options: ChatOptions,
 ): Promise<void> {
+  // A broken hooks or permissions file stops the start (exit code 2)
+  await exitOnBrokenConfig(options);
+
   // Initialize services for headless mode
   const { permissionOverrides } = processCommandFlags(options);
 

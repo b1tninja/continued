@@ -152,6 +152,10 @@ An empty chat shows the same tip as one dismissible line: "New here? Each area h
 
 The interactive terminal agent shows one line in its header, once per user: "Permissions: Careful preset. Change it with /policy (presets, or area=level). Shown once." It names "a custom mix" when the levels match no preset. It never shows with `-p`, in `serve` or without a terminal, and its flag (`cliFirstRunBannerShown`) lives in the global context file, separate from the editor's.
 
+## A permissions.yaml that does not parse
+
+`~/.continuous/permissions.yaml` that exists but is not valid YAML, or has the wrong structure (an unknown top-level key, or `allow`, `ask` or `exclude` that is not a list), is no longer read as "no rules". `cn -p` and `cn serve` refuse to start and exit with code 2, naming the file and the line and column of the error, never its contents. Pass `--ignore-broken-config` to continue with the file ignored; headless runs then use only the defaults, which allow `Bash`. The interactive agent starts and prints a WARNING block. A missing file is fine. `continuous permissions add` will not write over a broken file.
+
 ## From the terminal agent
 
 ```text
