@@ -1,8 +1,8 @@
+import { recordAutoAnswer } from "core/tools/permissions/audit/autoAnswer.js";
 import {
   policyLevelLabel,
   questionsNeverAsk,
 } from "core/tools/permissions/policy.js";
-import { recordAutoAnswer } from "core/tools/permissions/audit/autoAnswer.js";
 import {
   answerWithoutAsking,
   type QuestionAnsweredForYou,

@@ -72,17 +72,17 @@ function LoopQuestionRow({
   return (
     <li
       data-testid={`loop-question-${question.id}`}
-      className="border-border mt-1 rounded border border-solid px-1.5 py-1"
+      className="mt-1 rounded border border-solid border-border px-1.5 py-1"
     >
       <div className="text-2xs text-description-muted">
         {question.id} · {KIND_LABEL[question.kind]}
         {itemText ? ` · ${itemText}` : ""}
       </div>
-      <div className="text-foreground break-words">
+      <div className="break-words text-foreground">
         {maskCommandForDisplay(question.question)}
       </div>
       {question.assumption && (
-        <div className="text-description break-words">
+        <div className="break-words text-description">
           Assumed: {question.assumption}
         </div>
       )}
@@ -137,7 +137,7 @@ function LoopQuestionRow({
                     void answer({ text });
                   }
                 }}
-                className="border-border bg-input text-foreground placeholder:text-description-muted min-w-0 flex-1 basis-32 rounded border border-solid px-1 text-xs"
+                className="min-w-0 flex-1 basis-32 rounded border border-solid border-border bg-input px-1 text-xs text-foreground placeholder:text-description-muted"
               />
               <button
                 type="button"
@@ -165,7 +165,7 @@ function LoopQuestionRow({
         </>
       )}
       {error && (
-        <div role="alert" className="text-error mt-0.5 break-words">
+        <div role="alert" className="mt-0.5 break-words text-error">
           {error}
         </div>
       )}
@@ -206,7 +206,7 @@ function PlanDecisionRow({
   return (
     <li
       data-testid="plan-decision"
-      className="border-border mt-1 rounded border border-solid px-1.5 py-1"
+      className="mt-1 rounded border border-solid border-border px-1.5 py-1"
     >
       <div className="text-2xs text-description-muted">
         Plan decision{decision.type ? ` · ${decision.type}` : ""}
@@ -214,7 +214,7 @@ function PlanDecisionRow({
           ? ` · to-dos ${decision.todos.join(", ")} wait on it`
           : ""}
       </div>
-      <div className="text-foreground break-words">{decision.question}</div>
+      <div className="break-words text-foreground">{decision.question}</div>
       <AnswerChoices
         options={options}
         pick={decision.pick}
@@ -222,7 +222,7 @@ function PlanDecisionRow({
         onChoose={(answer) => choose(answer)}
       />
       {error && (
-        <div role="alert" className="text-error mt-0.5 break-words">
+        <div role="alert" className="mt-0.5 break-words text-error">
           {error}
         </div>
       )}
@@ -321,7 +321,7 @@ export function QuestionPanel() {
   const autoNotice = autoLines.length > 0 && (
     <div
       data-testid="auto-answered"
-      className="text-2xs text-description-muted mx-1 mb-1 px-2"
+      className="mx-1 mb-1 px-2 text-2xs text-description-muted"
     >
       {autoLines.map((line) => (
         <div key={line} className="break-words">
@@ -339,11 +339,11 @@ export function QuestionPanel() {
         data-testid="question-panel"
         role="region"
         aria-label="Questions for you"
-        className="border-link mx-1 mb-1 rounded border border-solid px-2 py-1 text-xs"
+        className="mx-1 mb-1 rounded border border-solid border-link px-2 py-1 text-xs"
       >
-        <div className="text-description flex items-center gap-1">
+        <div className="flex items-center gap-1 text-description">
           <QuestionMarkCircleIcon className="h-3 w-3 shrink-0" />
-          <span className="text-foreground font-medium">
+          <span className="font-medium text-foreground">
             {count} question{count === 1 ? "" : "s"} for you
           </span>
         </div>
