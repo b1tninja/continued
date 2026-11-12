@@ -26,6 +26,8 @@ npm i -g @continuedev/cli
 
 ## Usage
 
+The command is `continuous`, with the short alias `cn`.
+
 ```bash
 cn
 ```
