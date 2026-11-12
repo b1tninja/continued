@@ -5,7 +5,10 @@ import {
   elicitationHandler,
 } from "./mcpElicitation";
 
-const form = (properties: Record<string, unknown>, required: string[] = []) => ({
+const form = (
+  properties: Record<string, unknown>,
+  required: string[] = [],
+) => ({
   mode: "form",
   message: "Which one?",
   requestedSchema: { type: "object", properties, required },
@@ -79,7 +82,10 @@ describe("the handler a modern MCP client uses", () => {
 
   it("at IDGAF answers with the defaults and records it", async () => {
     const notes: string[] = [];
-    const handler = elicitationHandler(() => "yolo", (n) => notes.push(n));
+    const handler = elicitationHandler(
+      () => "yolo",
+      (n) => notes.push(n),
+    );
     expect(await handler("k", request)).toEqual({
       action: "accept",
       content: { region: "eu" },
@@ -87,7 +93,13 @@ describe("the handler a modern MCP client uses", () => {
     expect(notes[0]).toContain("Accepted");
   });
 
-  it.each(["manual", "cautious", "automatic", "permissive", undefined] as const)(
+  it.each([
+    "manual",
+    "cautious",
+    "automatic",
+    "permissive",
+    undefined,
+  ] as const)(
     "at %s the request is declined: no form is ever put to the person",
     async (level) => {
       const handler = elicitationHandler(

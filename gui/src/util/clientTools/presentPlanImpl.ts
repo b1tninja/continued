@@ -94,11 +94,8 @@ export const presentPlanImpl: ClientToolImpl = async (
         description: relativePath,
         content: loopStarted
           ? `Plan saved to ${relativePath}. The loop started building it, one to-do per turn: stop here.`
-          : planProposedResult(
-              relativePath,
-              result.plan,
-              parsed.decisions,
-            ) + (autoLines.length ? `\n\n${autoLines.join("\n")}` : ""),
+          : planProposedResult(relativePath, result.plan, parsed.decisions) +
+            (autoLines.length ? `\n\n${autoLines.join("\n")}` : ""),
         uri: { type: "file", value: fileUri },
         hidden: false,
       },
@@ -120,13 +117,14 @@ export async function autoAnswerOpenDecisions(
   const source = `Questions: ${policyLevelLabel("questions", level)}`;
   try {
     const answers = await autoAnswerPlanFile(extras.ideMessenger.ide, fileUri);
-    answers.forEach((a, i) =>
-      void extras.ideMessenger.request("audit/autoAnswer", {
-        callId: `plan-decision-${Date.now()}-${i}`,
-        question: a.question,
-        answer: a.answer,
-        source,
-      }),
+    answers.forEach(
+      (a, i) =>
+        void extras.ideMessenger.request("audit/autoAnswer", {
+          callId: `plan-decision-${Date.now()}-${i}`,
+          question: a.question,
+          answer: a.answer,
+          source,
+        }),
     );
     return answers.map((a) => autoAnsweredLine(a.question, a.answer));
   } catch (e) {

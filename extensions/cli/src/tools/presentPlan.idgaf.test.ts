@@ -91,7 +91,10 @@ afterEach(() => {
 });
 
 const planFile = () =>
-  fs.readFileSync(path.join(dir, ".continuous", "plans", "add-retry.md"), "utf8");
+  fs.readFileSync(
+    path.join(dir, ".continuous", "plans", "add-retry.md"),
+    "utf8",
+  );
 
 describe.each([
   ["the terminal UI", false],

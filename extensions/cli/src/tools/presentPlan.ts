@@ -39,7 +39,10 @@ import {
   updateSessionPlanFile,
   updateSessionTaskPlan,
 } from "../session.js";
-import { answerIfIdgaf, questionsNeverAskHere } from "../util/idgafQuestions.js";
+import {
+  answerIfIdgaf,
+  questionsNeverAskHere,
+} from "../util/idgafQuestions.js";
 import { reloadPlanFile } from "../util/planFileReload.js";
 
 import type { Tool } from "./types.js";

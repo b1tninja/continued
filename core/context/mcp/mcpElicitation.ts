@@ -91,7 +91,10 @@ export function elicitationHandler(
   record: (note: string) => void = recordElicitation,
 ): InputRequestHandler {
   return async (key, request) => {
-    if (request.method !== "elicitation/create" || !questionsNeverAsk(level())) {
+    if (
+      request.method !== "elicitation/create" ||
+      !questionsNeverAsk(level())
+    ) {
       return declineElicitation(key, request);
     }
     const outcome = answerElicitationWithoutAsking(request.params);

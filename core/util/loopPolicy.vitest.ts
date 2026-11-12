@@ -205,9 +205,7 @@ describe("Questions decides who answers", () => {
     );
     expect(held.ok && held.question.decidedAlone).toBe(true);
     expect(held.ok && held.question.autoAnswer?.text).toMatch(/^Refused/);
-    expect(held.ok && held.loop.questions.some((q) => !q.answerId)).toBe(
-      false,
-    );
+    expect(held.ok && held.loop.questions.some((q) => !q.answerId)).toBe(false);
   });
 });
 

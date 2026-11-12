@@ -373,10 +373,7 @@ export function setLoopPolicy(loop: LoopState, policy: LoopPolicy): LoopState {
  * best-judgment line; an approval is refused), as the system's, so no item
  * keeps waiting for a person who said nobody is asked.
  */
-export function answerHeldWithoutAsking(
-  loop: LoopState,
-  now: Date,
-): LoopState {
+export function answerHeldWithoutAsking(loop: LoopState, now: Date): LoopState {
   if (!loop.policy || !questionsNeverAsk(loop.policy.questions)) return loop;
   const source = `Questions: ${policyLevelLabel("questions", loop.policy.questions)}`;
   let next = loop;
@@ -2529,7 +2526,8 @@ function refuseWithoutAsking(
   },
 ): HoldResult {
   const source = `Questions: ${policyLevelLabel("questions", "yolo")}`;
-  const text = "Refused: nobody is asked at this level, so the call did not run";
+  const text =
+    "Refused: nobody is asked at this level, so the call did not run";
   const decided: LoopQuestion = {
     id: nextId("q", loop.questions),
     ...(input.itemId ? { itemId: input.itemId } : {}),

@@ -101,7 +101,9 @@ describe("plan decisions in the Questions panel", () => {
         expect(screen.getAllByTestId("plan-decision")).toHaveLength(1),
       );
       expect(screen.queryByTestId("auto-answered")).toBeNull();
-      expect(parsePlanFile(files[PLAN_URI]).decisions[0].answer).toBeUndefined();
+      expect(
+        parsePlanFile(files[PLAN_URI]).decisions[0].answer,
+      ).toBeUndefined();
       expect(requests.some(([n]) => n === "audit/autoAnswer")).toBe(false);
     },
   );
