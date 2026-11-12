@@ -1120,9 +1120,12 @@ describe("Loop mode", () => {
     const el = (id: string) =>
       document.querySelector(`[data-testid=${id}]`) as HTMLElement;
 
-    // The limits stay out of sight until asked for, and no usage is shown yet
+    // The limits are in the settings dialog behind the gear, and stay out of
+    // sight there until asked for
+    expect(el("loop-settings")).toBeNull();
+    await act(async () => fireEvent.click(el("loop-settings-toggle")));
+    expect(el("loop-settings")).not.toBeNull();
     expect(el("loop-limit-rounds")).toBeNull();
-    expect(el("loop-usage")).toBeNull();
     await act(async () => fireEvent.click(el("loop-budget-toggle")));
     expect(el("loop-limit-rounds")).not.toBeNull();
 

@@ -59,7 +59,6 @@ async function setup(status: "running" | "waiting" = "running") {
       taskPlan={PLAN}
       settingsOpen={false}
       onToggleSettings={() => toggles.push(true)}
-      settingsId="settings"
     />,
     { store, mockIdeMessenger: ideMessenger },
   );

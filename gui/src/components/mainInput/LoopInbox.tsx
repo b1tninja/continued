@@ -1,56 +1,40 @@
-import type { LoopStrategy } from "core";
-import { policyLevelLabel } from "core/tools/permissions/policy";
 import {
   isLoopPaused,
-  LOOP_LIMITS,
-  LOOP_MAX_PARALLEL,
-  LOOP_STRATEGIES,
-  LOOP_STRATEGY_ORDER,
-  loopStrategy,
   openLoopItems,
   standingInstructions,
 } from "core/util/loopMode";
-import { useId, useState } from "react";
-import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { useState } from "react";
+import { useAppSelector } from "../../redux/hooks";
 import { selectModeEntry } from "../../redux/selectors/selectModeEntry";
 import {
-  answerLoopQuestion,
-  LoopAnswerInput,
-  setLoopParallelThunk,
-  setLoopStrategyThunk,
-} from "../../redux/thunks/loop";
+  LoopSettingsDialog,
+  useLoopNoteDraft,
+} from "../loop/LoopSettingsDialog";
+import { loopShowsUsage } from "../loop/LoopItemList";
 import { LoopStatusLine } from "../loop/LoopStatusLine";
 import { LoopControls } from "./LoopControls";
 
 /**
  * Loop mode's inbox, above the input: one status line, and under the gear the
- * loop's settings (strategy, parallel, a note about the whole plan). Answers
+ * loop's settings dialog (strategy, parallel, limits, a note about the whole plan). Answers
  * can be given at any time; the loop routes each one (core/util/loopMode.ts
  * answerLoop).
  */
 export function LoopInbox() {
-  const dispatch = useAppDispatch();
   const loop = useAppSelector((s) => s.session.loop);
   const taskPlan = useAppSelector((s) => s.session.taskPlan);
   const entry = useAppSelector(selectModeEntry);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsId = useId();
-  const [note, setNote] = useState("");
-  const [replanNow, setReplanNow] = useState(false);
-  const [standing, setStanding] = useState(false);
-  const [noteError, setNoteError] = useState<string>();
+  const noteDraft = useLoopNoteDraft();
+  // Once a budget has been set, or differs from the level's own, show what each run used
+  const [budgetApplied, setBudgetApplied] = useState(false);
   if (!loop) return null;
 
   const standingNotes = standingInstructions(loop);
-  const onAnswer = async (input: LoopAnswerInput) => {
-    const result = await dispatch(answerLoopQuestion(input)).unwrap();
-    return result.ok ? undefined : result.error;
-  };
+  const showUsage = loopShowsUsage(loop, budgetApplied);
   const paused = isLoopPaused(loop);
   const tasksLeft = openLoopItems(loop);
   const modeLabel = entry.charAt(0).toUpperCase() + entry.slice(1);
-  // Parallel waves need a level that does not ask before each edit
-  const supervised = (loop.autonomy ?? "auto") === "supervised";
 
   return (
     <div data-testid="loops-panel" className="mx-1 mb-1 min-w-0">
@@ -63,131 +47,14 @@ export function LoopInbox() {
           taskPlan={taskPlan}
           settingsOpen={settingsOpen}
           onToggleSettings={() => setSettingsOpen(!settingsOpen)}
-          settingsId={settingsId}
         />
-        {settingsOpen && (
-          <div
-            id={settingsId}
-            data-testid="loop-settings"
-            className="mt-1 flex min-w-0 flex-col gap-1 border-0 border-t border-solid border-border pt-1"
-          >
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              <span
-                data-testid="loop-policy"
-                title="Plan edits and Questions: change them in the toolbar or in Settings > Tools"
-                className="shrink-0 text-description"
-              >
-                Plan {policyLevelLabel("plan", loop.policy?.plan ?? "cautious")}{" "}
-                · Questions{" "}
-                {policyLevelLabel(
-                  "questions",
-                  loop.policy?.questions ?? "cautious",
-                )}
-              </span>
-              <select
-                data-testid="loop-strategy"
-                aria-label="Strategy"
-                value={loopStrategy(loop)}
-                title={LOOP_STRATEGIES[loopStrategy(loop)].description}
-                onChange={(e) =>
-                  void dispatch(
-                    setLoopStrategyThunk(e.target.value as LoopStrategy),
-                  )
-                }
-                className="shrink-0 cursor-pointer rounded border border-solid border-border bg-input px-1 py-1 text-xs text-foreground"
-              >
-                {LOOP_STRATEGY_ORDER.map((strategy) => (
-                  <option key={strategy} value={strategy}>
-                    {LOOP_STRATEGIES[strategy].label}
-                  </option>
-                ))}
-              </select>
-              <label
-                className="flex shrink-0 items-center gap-0.5 py-1 text-description"
-                title={
-                  supervised
-                    ? "Parallel waves run only at a level that does not ask before each edit"
-                    : `Run items with disjoint files: lines at the same time, up to ${LOOP_MAX_PARALLEL}, each in its own worktree; the change applies at the next step`
-                }
-              >
-                <input
-                  type="checkbox"
-                  data-testid="loop-parallel"
-                  checked={!!loop.parallelOn}
-                  disabled={supervised}
-                  onChange={(e) =>
-                    void dispatch(setLoopParallelThunk(e.target.checked))
-                  }
-                />
-                Parallel
-              </label>
-            </div>
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              <input
-                data-testid="loop-plan-note"
-                aria-label="A note about the whole plan"
-                value={note}
-                maxLength={LOOP_LIMITS.maxAnswerLength}
-                placeholder="A note about the whole plan (read at the next re-plan, or by every item)"
-                onChange={(e) => setNote(e.target.value)}
-                className="min-w-0 flex-1 basis-40 rounded border border-solid border-border bg-transparent px-1 py-1 text-xs text-foreground placeholder:text-description"
-              />
-              <label className="flex shrink-0 items-center gap-0.5 py-1 text-description">
-                <input
-                  type="checkbox"
-                  data-testid="loop-replan-now"
-                  checked={replanNow}
-                  onChange={(e) => {
-                    setReplanNow(e.target.checked);
-                    if (e.target.checked) setStanding(false);
-                  }}
-                />
-                Re-plan now
-              </label>
-              <label
-                className="flex shrink-0 items-center gap-0.5 py-1 text-description"
-                title="Send this with every item from now on, instead of waiting for the re-plan"
-              >
-                <input
-                  type="checkbox"
-                  data-testid="loop-standing"
-                  checked={standing}
-                  onChange={(e) => {
-                    setStanding(e.target.checked);
-                    if (e.target.checked) setReplanNow(false);
-                  }}
-                />
-                For every item
-              </label>
-              <button
-                type="button"
-                data-testid="loop-plan-note-send"
-                disabled={!note.trim()}
-                className="shrink-0 cursor-pointer rounded border border-solid border-border bg-transparent px-2 py-1 text-xs text-foreground hover:bg-input disabled:cursor-default disabled:opacity-50"
-                onClick={async () => {
-                  const failed = await onAnswer({
-                    text: note,
-                    replanNow,
-                    standing,
-                  });
-                  setNoteError(failed);
-                  if (!failed) {
-                    setNote("");
-                    setReplanNow(false);
-                    setStanding(false);
-                  }
-                }}
-              >
-                Add
-              </button>
-            </div>
-            {noteError && (
-              <div role="alert" className="break-words text-error">
-                {noteError}
-              </div>
-            )}
-          </div>
-        )}
+        <LoopSettingsDialog
+          loop={loop}
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          draft={noteDraft}
+          onBudgetApplied={() => setBudgetApplied(true)}
+        />
         {paused && (
           <div
             data-testid="loop-paused"
@@ -212,7 +79,7 @@ export function LoopInbox() {
             </code>
           </div>
         )}
-        <LoopControls loop={loop} taskPlan={taskPlan} />
+        <LoopControls loop={loop} taskPlan={taskPlan} showUsage={showUsage} />
         {standingNotes.length > 0 && (
           <ul
             data-testid="loop-standing-list"
