@@ -27,3 +27,8 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 - The generated hub/API SDK client (`packages/continue-sdk`) is deleted, together with the terminal agent's API client service and the `CONTINUE_API_BASE` setting. The code no longer names a Continue-operated host, and `core/egress/egress-allowlist.json` has no entry for one.
 - `--config owner/slug` (a hub assistant) now fails with "hub assistants are not supported; pass a config.yaml path". Pass a path to a `config.yaml`.
+
+## Behaviour changes
+
+- **The terminal agent's `Fetch` tool now uses the same hardened fetch as the IDE.** It used to hand Node's global `fetch` to the shared implementation, which ignores the pinned address the safety check resolved (so a name that changed its answer between the check and the connection could reach a private address), your proxy, CA bundle, `verifySsl` and client certificate. It now goes through `@continuedev/fetch` with the pin and your `requestOptions` transport settings. Your `requestOptions.headers` are sent only to your configured models' hosts, never to a URL the model chose. If you relied on `Fetch` working without your proxy or CA settings, it will now use them.
+- **A fetched page is labelled with the URL it was read from, not the one the model asked for.** After a redirect the item's name source, `uri` and the spotlight source name the final URL, so a page that redirected to another host says so. Redirects are still followed one hop at a time and still refused when they lead from a public address to a private one. Not changed: a redirect to a different public host does not ask for approval.
