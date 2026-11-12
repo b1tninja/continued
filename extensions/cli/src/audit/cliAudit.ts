@@ -59,7 +59,7 @@ export interface ApprovalTrace {
 let answeredWithoutAuth = false;
 
 /**
- * cn serve --no-auth: an approval that came in over an unauthenticated
+ * cn serve with no token: an approval that came in over an unauthenticated
  * request is recorded as the system's, never as the person's.
  */
 export function setApprovalsAnsweredWithoutAuth(value: boolean): void {

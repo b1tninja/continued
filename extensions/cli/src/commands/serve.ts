@@ -54,10 +54,8 @@ interface ServeOptions extends ExtendedCommandOptions {
   port?: string;
   /** Interface to listen on; loopback unless told otherwise */
   host?: string;
-  /** Bearer token every request must carry; one is generated when none is given */
+  /** Bearer token every request must carry. Optional on loopback, required off it */
   token?: string;
-  /** Run with no token (loopback only). Commander turns --no-auth into auth: false */
-  auth?: boolean;
   /** Browser origins that may call the server, exactly */
   allowOrigin?: string[];
   /** Storage identifier for remote sync */
@@ -115,10 +113,10 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   const timeoutSeconds = parseInt(options.timeout || "300", 10);
   const timeoutMs = timeoutSeconds * 1000;
   const port = parseInt(options.port || "8000", 10);
-  // Loopback unless told otherwise. A bearer token is always required unless
-  // --no-auth (loopback only); one is generated when none is given.
-  const { host, auth, token, tokenFile, allowedOrigins } =
-    prepareServeAccessOrExit(options, port);
+  // Loopback unless told otherwise. A token is optional on loopback; off
+  // loopback one of at least 16 characters is required.
+  const { host, auth, token, allowedOrigins } =
+    prepareServeAccessOrExit(options);
 
   // Environment install script will be deferred until after server startup to avoid blocking
 
@@ -367,7 +365,6 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       host,
       port,
       auth,
-      tokenFile,
       allowedOrigins,
       timeoutSeconds,
     });

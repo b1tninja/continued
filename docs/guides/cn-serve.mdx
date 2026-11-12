@@ -2,7 +2,7 @@
 title: "cn serve"
 ---
 
-`continuous serve` starts the terminal agent as an HTTP server that takes messages, approvals and loop answers. Anything that can reach the port can act as you, so it listens on loopback by default and checks every request, a token included.
+`continuous serve` starts the terminal agent as an HTTP server that takes messages, approvals and loop answers. Anything that can reach the port can act as you, so it listens on loopback by default, checks the Host and Origin of every request, and requires a token you choose when it listens beyond this computer.
 
 ```bash
 continuous serve --port 8000
@@ -11,44 +11,39 @@ continuous serve --port 8000
 | Option                        | Default       | Meaning                                                                                                  |
 | ----------------------------- | ------------- | -------------------------------------------------------------------------------------------------------- |
 | `--port <port>`               | `8000`        | Port to listen on                                                                                        |
-| `--host <host>`               | `127.0.0.1`   | Interface to listen on. Anything but loopback listens beyond this computer and prints a warning          |
-| `--token <token>`             | generated     | Bearer token every request must carry, at least 16 characters. Also read from `CONTINUOUS_SERVE_TOKEN`  |
-| `--no-auth`                   | off           | Run with no token. Loopback only                                                                         |
+| `--host <host>`               | `127.0.0.1`   | Interface to listen on. Anything but loopback listens beyond this computer, needs `--token`, and prints a warning |
+| `--token <token>`             | none          | Bearer token every request must carry, at least 16 characters. Also read from `CONTINUOUS_SERVE_TOKEN`. Optional on loopback, required elsewhere |
 | `--allow-origin <origin...>`  | none          | A browser origin that may call the server, such as `http://localhost:3000`. Exact match, no wildcard     |
 | `--timeout <seconds>`         | `300`         | Inactivity timeout                                                                                       |
 
 ## Access token
 
-Every request needs a token, on loopback too. Without `--token` or `CONTINUOUS_SERVE_TOKEN` the server makes one when it starts: 256 random bits. It prints the token once on the terminal and saves it, owner-only, in `serve-<port>.token` in the global folder (`~/.continuous`). It is never written to the log or returned by an endpoint.
+A token is your choice. On loopback (the default) the server needs none and does not make one up: a request that passes the Host and Origin checks is answered. Pass `--token` or set `CONTINUOUS_SERVE_TOKEN` to require one; it must be at least 16 characters and is never echoed or written to the log. With `--host` set to anything but loopback the token is required.
 
-Send it in the `Authorization` header:
+| Listening on | No token                                   | Token given                                                  |
+| ------------ | ------------------------------------------ | ------------------------------------------------------------ |
+| Loopback     | Starts. No bearer check                    | Starts. Every request needs the token                        |
+| Elsewhere    | Refused: message on stderr, exit status `2` | Starts with a warning. Every request needs the token        |
 
-```bash
-curl -H "Authorization: Bearer $(cat ~/.continuous/serve-8000.token)" http://127.0.0.1:8000/state
-```
-
-A token in the query string is not read: URLs end up in logs and history, so `?token=...` gets `401`. A request without a valid token gets `401`; an address that fails repeatedly is held off with `429` for a minute. The terminal agent in remote mode and `continuous agents list` send `CONTINUOUS_SERVE_TOKEN` when it is set, or read the token file of a local server.
-
-To choose the token yourself, set it in the environment, which keeps it out of the process list:
+Send the token in the `Authorization` header:
 
 ```bash
 export CONTINUOUS_SERVE_TOKEN="$(openssl rand -hex 24)"
 continuous serve
+curl -H "Authorization: Bearer $CONTINUOUS_SERVE_TOKEN" http://127.0.0.1:8000/state
 ```
 
-`--no-auth` turns the check off. It is refused with any non-loopback `--host` and together with a token. The server prints a warning, and an approval that arrives over it is recorded in the audit trail as the system's, not as the person's: only an authenticated approval is `by: person`.
+Setting it in the environment keeps it out of the process list. A token in the query string is not read: URLs end up in logs and history, so `?token=...` gets `401`. A request without a valid token gets `401`; an address that fails repeatedly is held off with `429` for a minute. The terminal agent in remote mode and `continuous agents list` send `CONTINUOUS_SERVE_TOKEN` when it is set.
+
+An approval that arrives over a server with no token has no authenticated person behind it, so the audit trail records it as the system's (`by: system`). With a token it is recorded as `by: person`, as before.
 
 ### When the server refuses to start
 
-A refused combination does not start the server. `continuous serve` prints one line on stderr saying what was refused and what to change, and exits with status `2` (the usage-error status, as in `continuous secrets scan`). The line never contains a token. The cases are `--no-auth` with a non-loopback `--host` (drop `--no-auth`, or use `--host 127.0.0.1`), `--no-auth` together with `--token` or `CONTINUOUS_SERVE_TOKEN`, and a token shorter than 16 characters (set a longer one, or leave it out to have one generated). Check it in a script with `continuous serve --host 0.0.0.0 --no-auth; echo $?`.
-
-### Upgrading
-
-Earlier versions let a loopback server run without a token. A script that starts `continuous serve` and then calls `GET /state` or `POST /message` without a token now gets `401`. Either send `Authorization: Bearer <token>` (set `CONTINUOUS_SERVE_TOKEN` before starting, so the script knows it), or start the server with `--no-auth`. A Host that does not match now gets `403`, not `421`.
+`continuous serve` does not start with an option it cannot honour. It prints one line on stderr saying what was refused and what to change, and exits with status `2` (the usage-error status, as in `continuous secrets scan`). The line never contains a token. The cases are a non-loopback `--host` with no token (pass `--token` or set `CONTINUOUS_SERVE_TOKEN`, or use `--host 127.0.0.1`) and a token shorter than 16 characters. Check it in a script with `continuous serve --host 0.0.0.0; echo $?`.
 
 ## Host and Origin checks
 
-These apply before the token is checked, whatever the token setting:
+These apply before the token is checked, whatever the token setting. A Host that does not match gets `403`, not `421` as in earlier versions.
 
 - The `Host` header must be the address the server is bound to: `127.0.0.1`, `localhost` or `[::1]` on loopback (with this server's port, when the header has one), or the `--host` value elsewhere. Anything else gets `403`. This stops a DNS-rebinding page from reaching the server.
 - A request with an `Origin` header gets `403` unless the origin is listed with `--allow-origin`. Browsers send `Origin`; `curl` and other local clients do not. A listed origin is answered with its own name in `Access-Control-Allow-Origin`, never `*`. The server has no WebSocket route and refuses every upgrade request with `403`.

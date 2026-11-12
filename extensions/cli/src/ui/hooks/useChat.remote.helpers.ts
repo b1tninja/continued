@@ -1,6 +1,5 @@
 import type { ChatHistoryItem } from "core/index.js";
 
-import { tokenForUrl } from "../../commands/serve.auth.js";
 import { services } from "../../services/index.js";
 import { logger } from "../../util/logger.js";
 
@@ -8,16 +7,13 @@ import { RemoteServerState } from "./useChat.types.js";
 
 /**
  * Request options for `cn serve`. When `CONTINUOUS_SERVE_TOKEN` is set, the
- * remote TUI sends it as a bearer token; failing that it reads the token file a
- * local server wrote. With no token, the options are unchanged.
+ * remote TUI sends it as a bearer token. With no token, the options are unchanged.
  */
 export function remoteRequestInit(
   init?: RequestInit,
   url?: string,
 ): RequestInit | undefined {
-  const token =
-    process.env.CONTINUOUS_SERVE_TOKEN?.trim() ||
-    (url ? tokenForUrl(url) : undefined);
+  const token = process.env.CONTINUOUS_SERVE_TOKEN?.trim();
   if (!token) return init;
   return {
     ...init,

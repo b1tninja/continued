@@ -1,36 +1,24 @@
-import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
-import path from "node:path";
 
 import express from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  generateServeToken,
   jsonErrorHandler,
   MAX_BODY_BYTES,
-  readServeTokenFile,
   refuseUpgrades,
   resolveServeAuth,
   WindowCounter,
-  writeServeTokenFile,
 } from "./serve.auth.js";
 import { installServeGuards, isLoopbackHost } from "./serve.helpers.js";
 import { serveWarnings } from "./serve.startup.js";
 
 const TOKEN = "0123456789abcdef0123";
 
-const globalDir = vi.hoisted(() => ({ path: "" }));
-vi.mock("core/util/paths.js", () => ({
-  getGlobalDirPath: () => globalDir.path,
-}));
-
 function resolve(input: {
   host?: string;
   token?: string;
-  noAuth?: boolean;
   env?: NodeJS.ProcessEnv;
 }) {
   return resolveServeAuth({
@@ -42,16 +30,18 @@ function resolve(input: {
 }
 
 describe("resolveServeAuth", () => {
-  it("generates a token when none is given, even on loopback", () => {
-    const r = resolve({});
-    if (!("auth" in r) || r.auth.mode !== "token") throw new Error("no token");
-    expect(r.auth.source).toBe("generated");
-    // 256 bits, base64url
-    expect(Buffer.from(r.auth.token, "base64url")).toHaveLength(32);
-    expect(generateServeToken()).not.toBe(generateServeToken());
+  it("needs no token on loopback and makes none up", () => {
+    expect(resolve({})).toEqual({ auth: { mode: "none" } });
+    expect(resolve({ host: "::1" })).toEqual({ auth: { mode: "none" } });
   });
 
   it("takes --token before the environment, and requires 16 characters", () => {
+    expect(
+      resolve({
+        token: TOKEN,
+        env: { CONTINUOUS_SERVE_TOKEN: "x".repeat(20) },
+      }),
+    ).toEqual({ auth: { mode: "token", token: TOKEN, source: "flag" } });
     expect(resolve({ token: ` ${TOKEN} ` })).toEqual({
       auth: { mode: "token", token: TOKEN, source: "flag" },
     });
@@ -61,50 +51,26 @@ describe("resolveServeAuth", () => {
     expect(resolve({ token: "short" })).toHaveProperty("problem");
   });
 
-  it("allows --no-auth only on loopback and not beside a token", () => {
-    expect(resolve({ noAuth: true })).toEqual({ auth: { mode: "none" } });
-    expect(resolve({ noAuth: true, host: "0.0.0.0" })).toHaveProperty(
-      "problem",
+  it("refuses a non-loopback host without a token, naming the flag", () => {
+    const r = resolve({ host: "0.0.0.0" });
+    expect(r).toHaveProperty("problem");
+    expect((r as { problem: string }).problem).toMatch(/--token/);
+    expect((r as { problem: string }).problem).toMatch(
+      /CONTINUOUS_SERVE_TOKEN/,
     );
-    expect(resolve({ noAuth: true, token: TOKEN })).toHaveProperty("problem");
+    expect((r as { problem: string }).problem).toMatch(/127\.0\.0\.1/);
   });
 
-  it("generates a token off loopback too, and warns loudly", () => {
-    const r = resolve({ host: "0.0.0.0" });
+  it("accepts a non-loopback host with a token, and warns loudly", () => {
+    const r = resolve({ host: "0.0.0.0", token: TOKEN });
     if (!("auth" in r)) throw new Error("refused");
-    expect(r.auth.mode).toBe("token");
     expect(serveWarnings({ host: "0.0.0.0", auth: r.auth }).join(" ")).toMatch(
       /beyond this computer/,
     );
     expect(serveWarnings({ host: "127.0.0.1", auth: r.auth })).toEqual([]);
     expect(
       serveWarnings({ host: "127.0.0.1", auth: { mode: "none" } })[0],
-    ).toMatch(/--no-auth/);
-  });
-});
-
-describe("the token file", () => {
-  let dir = "";
-  afterEach(() => {
-    if (dir) fs.rmSync(dir, { recursive: true, force: true });
-  });
-
-  it("is written owner-only and read back", () => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "serve-token-"));
-    globalDir.path = path.join(dir, "global");
-    const target = path.join(globalDir.path, "serve-4242.token");
-    // A loose file left by an earlier run must not keep its mode
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, "old", { mode: 0o644 });
-    const file = writeServeTokenFile(4242, TOKEN);
-    expect(file).toBe(target);
-    expect(readServeTokenFile(4242)).toBe(TOKEN);
-    expect(readServeTokenFile(4243)).toBeUndefined();
-    if (process.platform === "win32") {
-      // Windows has no mode bits: the folder's inherited ACL is the protection
-      return;
-    }
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    ).toMatch(/No access token/);
   });
 });
 
@@ -334,7 +300,7 @@ describe("a running guarded server", () => {
     ).toBe(429);
   });
 
-  it("with --no-auth still checks Host and Origin", async () => {
+  it("with no token still checks Host and Origin", async () => {
     const { port } = await start({ token: null });
     expect((await call(port, { host: `127.0.0.1:${port}` })).status).toBe(200);
     expect((await call(port, { host: "evil.example" })).status).toBe(403);
@@ -350,27 +316,51 @@ describe("a running guarded server", () => {
 });
 
 describe("a refused serve start", () => {
-  it("prints one line on stderr and exits with status 2, without the token", async () => {
+  async function refuse(options: { host?: string; token?: string }) {
     const { prepareServeAccessOrExit, SERVE_REFUSED_EXIT_CODE } =
       await import("./serve.startup.js");
     const exit = vi.spyOn(process, "exit").mockImplementation((() => {
       throw new Error("exit");
     }) as never);
     const err = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const env = process.env.CONTINUOUS_SERVE_TOKEN;
+    delete process.env.CONTINUOUS_SERVE_TOKEN;
     try {
-      expect(() =>
-        prepareServeAccessOrExit({ host: "0.0.0.0", token: "short" }, 8000),
-      ).toThrow("exit");
+      expect(() => prepareServeAccessOrExit(options)).toThrow("exit");
       expect(exit).toHaveBeenCalledWith(SERVE_REFUSED_EXIT_CODE);
       expect(SERVE_REFUSED_EXIT_CODE).toBe(2);
-      const text = String(err.mock.calls[0][0]);
-      expect(text).toMatch(/^continuous serve: refused to start\. .*\n$/);
-      expect(text.trim().split("\n")).toHaveLength(1);
-      expect(text).toMatch(/CONTINUOUS_SERVE_TOKEN|--token/);
-      expect(text).not.toContain("short");
+      return String(err.mock.calls[0][0]);
     } finally {
+      if (env !== undefined) process.env.CONTINUOUS_SERVE_TOKEN = env;
       exit.mockRestore();
       err.mockRestore();
+    }
+  }
+
+  it("prints one actionable line on stderr and exits 2 off loopback without a token", async () => {
+    const text = await refuse({ host: "0.0.0.0" });
+    expect(text).toMatch(/^continuous serve: refused to start\. [^\n]*\n$/);
+    expect(text.trim().split(/\n/)).toHaveLength(1);
+    expect(text).toMatch(/--token/);
+    expect(text).toMatch(/CONTINUOUS_SERVE_TOKEN/);
+  });
+
+  it("never echoes a token that is too short", async () => {
+    const text = await refuse({ token: "shortsecret" });
+    expect(text).not.toContain("shortsecret");
+    expect(text).toMatch(/at least 16/);
+  });
+
+  it("starts on loopback with no token", async () => {
+    const { prepareServeAccess } = await import("./serve.startup.js");
+    const prev = process.env.CONTINUOUS_SERVE_TOKEN;
+    delete process.env.CONTINUOUS_SERVE_TOKEN;
+    try {
+      const access = prepareServeAccess({});
+      expect(access.token).toBeUndefined();
+      expect(access.auth.mode).toBe("none");
+    } finally {
+      if (prev !== undefined) process.env.CONTINUOUS_SERVE_TOKEN = prev;
     }
   });
 });

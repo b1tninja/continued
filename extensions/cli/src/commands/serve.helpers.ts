@@ -32,8 +32,8 @@ import {
  * "cn serve"). The server takes messages, approvals and loop answers, and
  * will take the policy levels, so anything that can reach the port can act
  * as the person. It listens on loopback unless `--host` says otherwise.
- * Every request carries a bearer token (serve.auth.ts makes one when none
- * is given), sent in the Authorization header and nowhere else. The Host
+ * A bearer token is optional on loopback and required off it; when one is
+ * given every request carries it, in the Authorization header and nowhere else. The Host
  * header must name the interface the server is bound to, and a request that
  * carries an Origin header is refused unless `--allow-origin` lists it.
  */
@@ -172,7 +172,7 @@ function headerValue(value: string | string[] | undefined): string | undefined {
 
 export interface ServeGuardOptions {
   boundHost: string;
-  /** The bearer token; undefined only with `--no-auth` */
+  /** The bearer token; undefined when none was given (loopback only) */
   token: string | undefined;
   port?: number;
   allowedOrigins?: readonly string[];
