@@ -1,31 +1,31 @@
 {
   "cli-agent": {
-    "tools.builtin@agent": "265b0e18943b",
+    "tools.builtin@agent": "28fb890e2db3",
     "preamble": "86df2e5027c5",
     "turn.act@full": "dc81e6a64288"
   },
   "cli-agent-plain": {
-    "tools.builtin@agent": "6afdc7725842",
+    "tools.builtin@agent": "e28c43712a9a",
     "preamble": "86df2e5027c5",
     "turn.act@full": "dc81e6a64288"
   },
   "cli-plan": {
-    "tools.builtin@plan": "fec5e83dbca0",
+    "tools.builtin@plan": "163c075e9804",
     "preamble": "86df2e5027c5",
     "turn.plan@full": "84edafbe30a5"
   },
   "cli-subagent": {
-    "tools.builtin@agent": "6afdc7725842",
+    "tools.builtin@agent": "e28c43712a9a",
     "preamble": "86df2e5027c5",
     "turn.act@full": "dc81e6a64288"
   },
   "cli-compaction": {
-    "tools.builtin@agent": "6afdc7725842",
+    "tools.builtin@agent": "e28c43712a9a",
     "preamble": "86df2e5027c5",
     "turn.act@full": "dc81e6a64288"
   },
   "cli-resume": {
-    "tools.builtin@agent": "6afdc7725842",
+    "tools.builtin@agent": "e28c43712a9a",
     "preamble": "86df2e5027c5",
     "turn.act@full": "dc81e6a64288"
   }
