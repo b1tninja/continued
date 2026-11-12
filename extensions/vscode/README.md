@@ -14,6 +14,8 @@
 
 > **Unofficial, community-maintained fork.** Continuous is not affiliated with, endorsed by, or supported by Continue Dev, Inc.
 
+**Privacy:** no telemetry, no account, and only the model hosts you configure are contacted. Details: [PRIVACY.md](https://github.com/b1tninja/continuous/blob/main/PRIVACY.md).
+
 ## Features
 
 - **Agent**: hand it a development task; it reads and edits files and runs tools, asking before anything risky.
