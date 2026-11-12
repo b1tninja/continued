@@ -94,6 +94,8 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "ollama/showHint",
     "openaiCompat/testConnection",
     "openaiCompat/probeStatus",
+    "model/retirementNotice",
+    "model/dismissRetirementNotice",
     "config/getTerminalEnvironment",
     "config/setTerminalEnvironment",
     "llm/compileChat",
