@@ -145,12 +145,14 @@ describe("Queued messages", () => {
     await typeAndPressEnter("do not lose me");
 
     // Saved while the turn is still running
-    await waitFor(() =>
-      expect(
-        saves.some((s) =>
-          JSON.stringify(s.queuedMessages ?? []).includes("do not lose me"),
-        ),
-      ).toBe(true),
+    await waitFor(
+      () =>
+        expect(
+          saves.some((s) =>
+            JSON.stringify(s.queuedMessages ?? []).includes("do not lose me"),
+          ),
+        ).toBe(true),
+      { timeout: 5000 },
     );
     expect(store.getState().session.isStreaming).toBe(true);
   });

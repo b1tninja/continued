@@ -8,8 +8,8 @@ import {
 } from "@continuedev/llm-info";
 
 import {
-  claudeRefusesSampling,
   noteSamplingOmitted,
+  omitsSampling,
 } from "./anthropicSamplingGuard.js";
 import type { CacheTtl } from "./cacheTtl.js";
 import {
@@ -617,9 +617,14 @@ export function bedrockSamplingParams(
   temperature: number | undefined,
   topP: number | undefined,
   reasoning: boolean,
+  omitSampling?: boolean,
 ): { temperature?: number; topP?: number } {
+  if (omitSampling === true) {
+    noteSamplingOmitted(modelId, true);
+    return {};
+  }
   if (!/claude/i.test(modelId)) return { temperature, topP };
-  if (claudeRefusesSampling(modelId)) {
+  if (omitsSampling(modelId, omitSampling)) {
     noteSamplingOmitted(modelId);
     return {};
   }

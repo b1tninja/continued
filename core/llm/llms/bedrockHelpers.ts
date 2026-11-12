@@ -5,8 +5,8 @@ import {
 } from "@continuedev/llm-info";
 import { resolveToolDialectPreset } from "../../util/toolDialectPresets.js";
 import {
-  claudeRefusesSampling,
   noteSamplingOmitted,
+  omitsSampling,
 } from "../../util/anthropicSamplingGuard.js";
 import { resolveCacheParts } from "./anthropicCache.js";
 import {
@@ -1116,9 +1116,14 @@ export function bedrockSamplingParams(
   temperature: number | undefined,
   topP: number | undefined,
   reasoning: boolean,
+  omitSampling?: boolean,
 ): { temperature?: number; topP?: number } {
+  if (omitSampling === true) {
+    noteSamplingOmitted(modelId, true);
+    return {};
+  }
   if (!/claude/i.test(modelId)) return { temperature, topP };
-  if (claudeRefusesSampling(modelId)) {
+  if (omitsSampling(modelId, omitSampling)) {
     noteSamplingOmitted(modelId);
     return {};
   }

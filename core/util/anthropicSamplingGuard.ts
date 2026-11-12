@@ -39,12 +39,36 @@ export function claudeRefusesSampling(modelId: string | undefined): boolean {
   return major > 4 || (major === 4 && minor >= 7);
 }
 
+/**
+ * Whether to leave `temperature`, `top_p` and `top_k` out of a request. The
+ * model's `omitSampling` setting wins when it is set: `true` omits them for
+ * any model, `false` sends them even to a model the predicate says refuses
+ * them (a proxy that maps the id, or a model released after this list). Unset
+ * follows the predicate.
+ */
+export function omitsSampling(
+  modelId: string | undefined,
+  override?: boolean | null,
+): boolean {
+  if (override === true || override === false) return override;
+  return claudeRefusesSampling(modelId);
+}
+
 const logged = new Set<string>();
 
 /** Say once per model that the sampling fields were left out. */
-export function noteSamplingOmitted(modelId: string | undefined): void {
+export function noteSamplingOmitted(
+  modelId: string | undefined,
+  forced = false,
+): void {
   if (!modelId || logged.has(modelId)) return;
   logged.add(modelId);
+  if (forced) {
+    console.debug(
+      `Anthropic: omitSampling is set for ${modelId}; omitting temperature, top_p and top_k from the request`,
+    );
+    return;
+  }
   console.debug(
     `Anthropic: ${modelId} refuses temperature, top_p and top_k; omitting them from the request`,
   );

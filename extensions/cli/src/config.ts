@@ -121,6 +121,7 @@ export function createLlmApi(
     apiBase: model.apiBase,
     requestOptions: model.requestOptions,
     env: model.env,
+    omitSampling: model.defaultCompletionOptions?.omitSampling,
     // Prompt caching settings. The Bedrock adapter reads `promptCaching` and
     // `cacheBehavior`; see `bedrockCachingSettings` for what it gets when the
     // model config says nothing. The Anthropic adapter has its own

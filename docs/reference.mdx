@@ -117,6 +117,7 @@ The `models` section defines the language models used in your configuration. Mod
   - `stop`: An array of stop tokens that will terminate the completion.
   - `reasoning`: Boolean to enable thinking/reasoning for Anthropic Claude 3.7+ and some Ollama models.
   - `reasoningBudgetTokens`: Budget tokens for thinking/reasoning in Anthropic Claude 3.7+ models.
+  - `omitSampling`: Advanced. `true` leaves `temperature`, `topP` and `topK` out of the request for this model; `false` sends them even to a Claude model that refuses them. Unset follows the model: Claude 4.7 and later, Fable and Mythos refuse the three, so they are left out whatever the config sets, with one debug-log line per model. Applies to Anthropic, Bedrock and Vertex AI Claude requests.
   - `promptCaching`: Boolean to cache the tool definitions, system prompt and conversation for Claude models on Anthropic, Amazon Bedrock, Vertex AI and OpenRouter, and the system prompt and conversation for Amazon Nova 2 Lite, Pro, Lite and Micro on Bedrock. On Anthropic and Bedrock it is on by default in Agent, Plan and Background modes (and in the CLI) when neither this nor `cacheBehavior` says anything; off in Chat, and off by default on Vertex AI and OpenRouter. `false` turns it off and also overrides `cacheBehavior`. See [Prompt Caching](./customize/deep-dives/prompt-caching.mdx).
   - `keepAlive`: For Ollama, the number of seconds to keep the model loaded after the last request (default: `1800`).
 

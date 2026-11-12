@@ -2100,6 +2100,12 @@ export interface BaseCompletionOptions {
   reasoningBudgetTokens?: number;
   promptCaching?: boolean;
   /**
+   * Advanced. `true` leaves temperature, topP and topK out of the request;
+   * `false` sends them even to a Claude model that refuses them (4.7 and
+   * later); unset follows the model.
+   */
+  omitSampling?: boolean;
+  /**
    * Lifetime of prompt cache entries written by this request. Only honoured by
    * providers that support it (Anthropic and Claude models on Bedrock); omit
    * for the provider's default of 5 minutes.

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { AnthropicApi } from "./Anthropic.js";
-import { claudeRefusesSampling } from "./anthropicSamplingGuard.js";
+import {
+  claudeRefusesSampling,
+  omitsSampling,
+} from "./anthropicSamplingGuard.js";
 import { bedrockSamplingParams } from "./bedrockHelpers.js";
 
 describe("claudeRefusesSampling (adapter copy)", () => {
@@ -10,6 +13,10 @@ describe("claudeRefusesSampling (adapter copy)", () => {
       "claude-sonnet-5-5",
       "claude-mythos-preview",
       "claude-haiku-5-5",
+      "claude-fable-5-2",
+      "anthropic.claude-opus-4-8-v1:0",
+      "us.anthropic.claude-sonnet-5-v1:0",
+      "claude-opus-4-7@20260601",
     ]) {
       expect(claudeRefusesSampling(m), m).toBe(true);
     }
@@ -18,6 +25,8 @@ describe("claudeRefusesSampling (adapter copy)", () => {
       "claude-sonnet-4-5-20250929",
       "claude-sonnet-4-20250514",
       "claude-3-5-sonnet-20241022",
+      "anthropic.claude-opus-4-6-v1:0",
+      "claude-sonnet-4-6@20260301",
       "gpt-5",
     ]) {
       expect(claudeRefusesSampling(m), m).toBe(false);
@@ -65,5 +74,59 @@ describe("claudeRefusesSampling (adapter copy)", () => {
         false,
       ),
     ).toEqual({ temperature: 0.5 });
+  });
+});
+
+describe("omitSampling override (adapter copy)", () => {
+  it("wins over the predicate in both directions", () => {
+    expect(omitsSampling("claude-opus-4-8", false)).toBe(false);
+    expect(omitsSampling("claude-sonnet-4-6", true)).toBe(true);
+    expect(omitsSampling("claude-opus-4-8")).toBe(true);
+  });
+  it("is honoured by the Anthropic body", () => {
+    const messages = [{ role: "user" as const, content: "Hi" }];
+    type S = { temperature?: number; top_p?: number };
+    const send = new AnthropicApi({
+      provider: "anthropic",
+      apiKey: "k",
+      omitSampling: false,
+    });
+    expect(
+      (
+        send._convertToCleanAnthropicBody({
+          model: "claude-opus-4-8",
+          messages,
+          temperature: 0.5,
+        }) as S
+      ).temperature,
+    ).toBe(0.5);
+    const omit = new AnthropicApi({
+      provider: "anthropic",
+      apiKey: "k",
+      omitSampling: true,
+    });
+    expect(
+      (
+        omit._convertToCleanAnthropicBody({
+          model: "claude-sonnet-4-6",
+          messages,
+          temperature: 0.5,
+        }) as S
+      ).temperature,
+    ).toBeUndefined();
+  });
+  it("is honoured by the Bedrock sampling fields", () => {
+    expect(
+      bedrockSamplingParams(
+        "anthropic.claude-opus-4-8-v1:0",
+        0.5,
+        0.9,
+        false,
+        false,
+      ),
+    ).toEqual({ temperature: 0.5 });
+    expect(
+      bedrockSamplingParams("amazon.nova-pro-v1:0", 0.5, 0.9, false, true),
+    ).toEqual({});
   });
 });

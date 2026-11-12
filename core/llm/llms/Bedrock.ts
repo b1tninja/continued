@@ -1396,6 +1396,7 @@ class Bedrock extends BaseLLM {
       options.temperature,
       options.topP,
       !!options.reasoning,
+      options.omitSampling,
     );
 
     return {
