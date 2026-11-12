@@ -30,7 +30,10 @@ import {
 import {
   fetchedToPackages,
   fetchProviderModels,
-  initializeDynamicModels,
+  CATALOGUE_HOSTS,
+  catalogueAnswered,
+  markCatalogueAnswered,
+  refreshProviderCatalogue,
 } from "../../pages/AddNewModel/configs/fetchProviderModels";
 import {
   DisplayInfo,
@@ -158,6 +161,8 @@ export function ProviderSetupFlow({
   const [liveModels, setLiveModels] = useState<ModelPackage[]>([]);
   const [refreshError, setRefreshError] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
+  // Bumped when a fetched catalogue replaces a provider's bundled list.
+  const [, setCatalogueVersion] = useState(0);
   const providerRef = useRef(provider.provider);
   providerRef.current = provider.provider;
 
@@ -173,7 +178,6 @@ export function ProviderSetupFlow({
 
   // What is configured today, and where keys can be kept.
   useEffect(() => {
-    void initializeDynamicModels(ideMessenger);
     let cancelled = false;
     void ideMessenger
       .request("config/getProviderSetup", undefined)
@@ -258,7 +262,18 @@ export function ProviderSetupFlow({
     }
   }, [configured?.key.secretName]);
 
-  const modelLists = computeModelLists(provider, liveModels);
+  const rawLists = computeModelLists(provider, liveModels);
+  const real = (p: ModelPackage) => p.params.model !== "placeholder";
+  const modelLists = {
+    ...rawLists,
+    top: rawLists.top.filter(real),
+    other: rawLists.other?.filter(real),
+  };
+  const noModelsYet = modelLists.top.length === 0 && !modelLists.other?.length;
+  const [, setAnswerTick] = useState(0);
+  const showCataloguePrompt =
+    !!CATALOGUE_HOSTS[provider.provider] &&
+    !catalogueAnswered(provider.provider);
   const groups = useMemo(
     () => buildChecklistRows(modelLists, configuredModels),
     [modelLists.top, modelLists.other, configuredModels],
@@ -317,18 +332,29 @@ export function ProviderSetupFlow({
     diff.add.length > 0 || diff.remove.length > 0 || sendKey || connectionMoved;
   const needsConfirm = diff.remove.length > 0 && !confirmedRemoval;
 
+  const catalogueHost = CATALOGUE_HOSTS[provider.provider];
   const canRefresh =
     isBedrock || isLocal
       ? fieldsFilled
-      : !!keyChoice.value &&
-        provider.provider !== "ollama" &&
-        provider.provider !== "openrouter";
+      : catalogueHost
+        ? true
+        : !!keyChoice.value;
 
   async function refreshModels() {
     const forProvider = provider.provider;
     setRefreshing(true);
     setRefreshError(undefined);
     try {
+      if (CATALOGUE_HOSTS[forProvider]) {
+        // The only request that leaves the machine for these providers.
+        if (!(await refreshProviderCatalogue(ideMessenger, forProvider))) {
+          return setRefreshError(
+            `Could not reach ${CATALOGUE_HOSTS[forProvider]}. Showing the bundled list.`,
+          );
+        }
+        setCatalogueVersion((v) => v + 1);
+        return;
+      }
       if (isBedrockProvider(forProvider)) {
         const result = await listBedrockModelsFor(
           ideMessenger,
@@ -499,7 +525,7 @@ export function ProviderSetupFlow({
           {...formMethods.register("apiKey")}
         />
         {provider.apiKeyUrl && (
-          <span className="mt-1 block text-xs text-description-muted">
+          <span className="text-description-muted mt-1 block text-xs">
             <a
               className="cursor-pointer text-inherit underline"
               onClick={() => ideMessenger.post("openUrl", provider.apiKeyUrl!)}
@@ -543,20 +569,20 @@ export function ProviderSetupFlow({
               setKeyTouched(true);
             }}
           />
-          <span className="mt-1 block text-xs text-description-muted">
+          <span className="text-description-muted mt-1 block text-xs">
             Every model of this provider refers to it as{" "}
             <code>{`\${{ secrets.${secretName || "NAME"} }}`}</code>
           </span>
         </div>
       )}
       {enterKey && (
-        <span className="text-xs text-description-muted">
+        <span className="text-description-muted text-xs">
           Saved as <code>{enterKey.secretName}</code>. config.yaml already
           refers to it and is not changed.
         </span>
       )}
       {keyIssue && keyChoice.value !== "" && (
-        <span className="text-xs text-warning">{keyIssue}</span>
+        <span className="text-warning text-xs">{keyIssue}</span>
       )}
     </div>
   );
@@ -574,7 +600,7 @@ export function ProviderSetupFlow({
           <code>~/.continuous/.env</code>. Remove that line?
         </p>
         {error && (
-          <div className="text-xs text-error" role="alert">
+          <div className="text-error text-xs" role="alert">
             {error}
           </div>
         )}
@@ -608,8 +634,43 @@ export function ProviderSetupFlow({
       </h2>
 
       {!enterKey && (
-        <div className="text-center text-xs text-description-muted">
+        <div className="text-description-muted text-center text-xs">
           Step {step === "credentials" ? 1 : step === "models" ? 2 : 3} of 3
+        </div>
+      )}
+
+      {showCataloguePrompt && !enterKey && (
+        <div
+          role="region"
+          aria-label="Download model list"
+          className="border-description-muted flex flex-col gap-2 rounded border border-solid p-2 text-xs"
+        >
+          <span>
+            Download the latest model list from {catalogueHost}? This contacts
+            that site.
+          </span>
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              onClick={() => {
+                markCatalogueAnswered(provider.provider);
+                setAnswerTick((v) => v + 1);
+                void refreshModels();
+              }}
+            >
+              Download
+            </Button>
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => {
+                markCatalogueAnswered(provider.provider);
+                setAnswerTick((v) => v + 1);
+              }}
+            >
+              Not now
+            </Button>
+          </div>
         </div>
       )}
 
@@ -696,7 +757,7 @@ export function ProviderSetupFlow({
                     />
                   )}
                   {field.description && (
-                    <span className="mt-1 block text-xs text-description-muted">
+                    <span className="text-description-muted mt-1 block text-xs">
                       {field.description}
                     </span>
                   )}
@@ -734,11 +795,11 @@ export function ProviderSetupFlow({
           )}
 
           {error && (
-            <div className="text-xs text-error" role="alert">
+            <div className="text-error text-xs" role="alert">
               {error}
             </div>
           )}
-          {warning && <div className="text-xs text-warning">{warning}</div>}
+          {warning && <div className="text-warning text-xs">{warning}</div>}
 
           <div className="flex gap-2">
             {onCancel && (
@@ -777,8 +838,16 @@ export function ProviderSetupFlow({
             <label className="text-sm font-medium">Models</label>
             <button
               type="button"
-              aria-label="Refresh model list"
-              title="Use the entered credentials to list the models available to you"
+              aria-label={
+                catalogueHost
+                  ? `Refresh from ${catalogueHost}`
+                  : "Refresh model list"
+              }
+              title={
+                catalogueHost
+                  ? `Contacts ${catalogueHost} to fetch the latest model list`
+                  : "Use the entered credentials to list the models available to you"
+              }
               className={`cursor-pointer border-none bg-transparent p-0 ${
                 canRefresh
                   ? "text-description-muted hover:text-foreground"
@@ -787,14 +856,25 @@ export function ProviderSetupFlow({
               onClick={refreshModels}
               disabled={refreshing}
             >
+              {catalogueHost && (
+                <span className="mr-1 text-xs">
+                  Refresh from {catalogueHost}
+                </span>
+              )}
               <ArrowPathIcon
-                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+                className={`inline h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
               />
             </button>
           </div>
           {refreshError && (
-            <span className="text-xs whitespace-pre-wrap text-warning">
+            <span className="text-warning text-xs whitespace-pre-wrap">
               Couldn't refresh the model list: {refreshError}
+            </span>
+          )}
+          {catalogueHost && noModelsYet && (
+            <span className="text-description-muted text-xs">
+              Model list not downloaded. Refresh from {catalogueHost}, or type a
+              model id.
             </span>
           )}
           <ModelChecklist
