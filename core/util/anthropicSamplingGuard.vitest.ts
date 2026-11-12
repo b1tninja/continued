@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import Anthropic from "../llm/llms/Anthropic.js";
 import { bedrockSamplingParams } from "../llm/llms/bedrockHelpers.js";
@@ -206,8 +207,8 @@ describe("noteSamplingOmitted", () => {
 describe("adapter copy", () => {
   // packages/openai-adapters cannot import from core, so the file is copied.
   // Everything after the header comment must stay identical.
-  const body = (path: string) =>
-    readFileSync(new URL(path, import.meta.url), "utf8")
+  const body = (rel: string) =>
+    readFileSync(path.join(__dirname, rel), "utf8")
       .replace(/\r\n/g, "\n")
       .replace(/^\/\*\*[\s\S]*?\*\/\n\n/, "");
   it("is identical to core/util/anthropicSamplingGuard.ts below the header", () => {

@@ -346,9 +346,7 @@ export class AnthropicApi implements BaseLlmApi {
 
   private toolResultContent(
     content:
-      | string
-      | OpenAI.Chat.Completions.ChatCompletionContentPart[]
-      | null,
+      string | OpenAI.Chat.Completions.ChatCompletionContentPart[] | null,
   ): string | Array<TextBlockParam | ImageBlockParam> {
     if (typeof content === "string" || content == null) {
       return content ?? "";

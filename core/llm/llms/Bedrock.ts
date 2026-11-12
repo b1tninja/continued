@@ -316,8 +316,7 @@ function* deltaMessages(
   }
   // A tool-call input fragment; the id and name came with the block start
   const toolUse = delta.toolUse as
-    | (ToolUseBlockDelta & ToolUseBlock)
-    | undefined;
+    (ToolUseBlockDelta & ToolUseBlock) | undefined;
   if (toolUse) {
     yield {
       role: "assistant",

@@ -37,15 +37,7 @@ export const INFERENCE_PROFILE_PREFIXES = [
 ] as const;
 
 export type CrossRegionInference =
-  | "auto"
-  | "us"
-  | "us-gov"
-  | "eu"
-  | "apac"
-  | "jp"
-  | "au"
-  | "ca"
-  | "global";
+  "auto" | "us" | "us-gov" | "eu" | "apac" | "jp" | "au" | "ca" | "global";
 
 /** Map an AWS region (e.g. eu-west-1) to the matching inference profile prefix. */
 export function inferenceProfilePrefixForRegion(
@@ -207,9 +199,7 @@ export interface InferenceProfileSummaryLike {
 }
 
 export type BedrockModelKind =
-  | "on-demand"
-  | "inference-profile"
-  | "application-profile";
+  "on-demand" | "inference-profile" | "application-profile";
 
 export interface BedrockModelOption {
   /** Value to use as the `model` in config. */
@@ -425,8 +415,7 @@ export function bedrockCachePartsForModel(
   modelId: string,
   requested: boolean | undefined,
   behavior:
-    | { cacheSystemMessage?: boolean; cacheConversation?: boolean }
-    | undefined,
+    { cacheSystemMessage?: boolean; cacheConversation?: boolean } | undefined,
   hasSystem: boolean,
 ): BedrockCacheParts {
   const fields = bedrockCachePointFields(modelId);
