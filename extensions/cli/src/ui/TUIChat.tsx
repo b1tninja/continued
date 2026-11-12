@@ -11,7 +11,6 @@ import { ToolPermissionServiceState } from "src/services/ToolPermissionService.j
 
 import { useServices } from "../hooks/useService.js";
 import {
-  ApiClientServiceState,
   AuthServiceState,
   ConfigServiceState,
   MCPServiceState,
@@ -95,7 +94,6 @@ function useTUIChatServices(remoteUrl?: string) {
     config: ConfigServiceState;
     model: ModelServiceState;
     mcp: MCPServiceState;
-    apiClient: ApiClientServiceState;
     update: UpdateServiceState;
     toolPermissions: ToolPermissionServiceState;
   }>([
@@ -103,7 +101,6 @@ function useTUIChatServices(remoteUrl?: string) {
     "config",
     "model",
     "mcp",
-    "apiClient",
     "update",
     "toolPermissions",
   ]);

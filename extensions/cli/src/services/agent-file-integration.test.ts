@@ -165,12 +165,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         "owner/agent",
         authServiceState,
-        apiClientState,
       );
 
       const agentFileState = agentFileService.getState();
@@ -196,12 +193,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         undefined,
         authServiceState,
-        apiClientState,
       );
 
       const agentFileState = agentFileService.getState();
@@ -230,12 +224,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         "owner/agent",
         authServiceState,
-        apiClientState,
       );
 
       // Test that --model flag and agent file model are both processed
@@ -286,12 +277,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         undefined,
         authServiceState,
-        apiClientState,
       );
 
       const baseOptions = {};
@@ -347,12 +335,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         "owner/agent",
         authServiceState,
-        apiClientState,
       );
 
       await modelService.initialize(
@@ -376,12 +361,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         undefined,
         authServiceState,
-        apiClientState,
       );
 
       await modelService.initialize(
@@ -407,14 +389,11 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       // The service should throw the error, not handle it gracefully
       await expect(
         agentFileService.initialize(
           "owner/agent",
           authServiceState,
-          apiClientState,
         ),
       ).rejects.toThrow("Failed to load agent from owner/agent");
 
@@ -471,12 +450,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         "owner/agent",
         authServiceState,
-        apiClientState,
       );
 
       const baseOptions = {};
@@ -506,12 +482,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         "owner/agent",
         authServiceState,
-        apiClientState,
       );
 
       const baseOptions = {};
@@ -580,12 +553,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         "owner/agent",
         authServiceState,
-        apiClientState,
       );
 
       const baseOptions = { prompt: ["user-prompt"] };
@@ -620,12 +590,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         "owner/agent",
         authServiceState,
-        apiClientState,
       );
 
       const agentFileState = agentFileService.getState();
@@ -660,12 +627,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         "owner/agent",
         authServiceState,
-        apiClientState,
       );
 
       const agentFileState = agentFileService.getState();
@@ -693,12 +657,9 @@ describe("Agent file Integration Tests", () => {
         authConfig: mockAuthConfig,
         isAuthenticated: true,
       };
-      const apiClientState = { apiClient: { mock: "apiClient" } };
-
       await agentFileService.initialize(
         "owner/partial",
         authServiceState,
-        apiClientState,
       );
 
       const agentFileState = agentFileService.getState();

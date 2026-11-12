@@ -28,13 +28,7 @@ This is a CLI tool for Continue Dev that provides an interactive AI-assisted dev
    - `ensureAuth.ts`: Handles authentication flow
    - `workos.ts`: WorkOS configuration and token management
 
-3. **Continue SDK Integration** (`src/continueSDK.ts`): Initializes the Continue SDK client with:
-
-   - API key authentication
-   - Assistant configuration (slug-based)
-   - Organization support
-
-4. **Terminal UI** (`src/ui/`): React/Ink-based TUI components
+3. **Terminal UI** (`src/ui/`): React/Ink-based TUI components
 
    - `TUIChat.tsx`: Main chat interface component
    - `UserInput.tsx`: Input handling with multi-line support

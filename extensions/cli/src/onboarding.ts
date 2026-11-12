@@ -5,7 +5,6 @@ import chalk from "chalk";
 import { setConfigFilePermissions } from "core/util/paths.js";
 
 import type { AuthConfig } from "./auth/workos.js";
-import { getApiClient } from "./config.js";
 import { loadConfiguration } from "./configLoader.js";
 import { env } from "./env.js";
 import {
@@ -131,7 +130,6 @@ export async function initializeWithOnboarding(
       await loadConfiguration(
         authConfig,
         configPath,
-        getApiClient(undefined),
         [],
         false,
       );

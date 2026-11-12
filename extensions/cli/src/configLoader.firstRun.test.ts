@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockEnv = vi.hoisted(() => ({
   continueHome: "",
-  apiBase: "https://api.continue.dev/",
 }));
 const auth = vi.hoisted(() => ({ token: null as string | null }));
 
@@ -18,16 +17,6 @@ vi.mock("./auth/workos.js", () => ({
 }));
 
 import { loadConfiguration } from "./configLoader.js";
-
-function makeClient() {
-  return {
-    getAssistant: vi.fn().mockResolvedValue({
-      configResult: { config: { name: "Remote", version: "1", schema: "v1" } },
-    }),
-    syncSecrets: vi.fn().mockResolvedValue([]),
-    configuration: {},
-  };
-}
 
 describe("first run with no config.yaml", () => {
   let home: string;
@@ -42,51 +31,46 @@ describe("first run with no config.yaml", () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  it("makes no API call and uses an empty local assistant", async () => {
-    const client = makeClient();
+  it("uses an empty local assistant", async () => {
     const result = await loadConfiguration(
       {} as any,
       undefined,
-      client as any,
       [],
       true,
     );
     expect(result.source.type).toBe("no-config");
-    expect(client.getAssistant).not.toHaveBeenCalled();
-    expect(client.syncSecrets).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["signed in", () => (auth.token = "token")],
-    ["CONTINUE_API_BASE set", () => (mockEnv.apiBase = "http://localhost:1/")],
-  ])("still makes no default-config call when %s", async (_n, setup) => {
+  it.each([["signed in", () => (auth.token = "token")]])("still uses an empty local assistant when %s", async (_n, setup) => {
     setup();
-    const client = makeClient();
     const result = await loadConfiguration(
       {} as any,
       undefined,
-      client as any,
       [],
       true,
     );
     expect(result.source.type).toBe("no-config");
-    expect(client.getAssistant).not.toHaveBeenCalled();
   });
 
-  it("uses a local config.yaml without any API call", async () => {
+  it("uses a local config.yaml", async () => {
     fs.writeFileSync(
       path.join(home, "config.yaml"),
       "name: Local\nversion: 1.0.0\nschema: v1\n",
     );
-    const client = makeClient();
     const result = await loadConfiguration(
       {} as any,
       undefined,
-      client as any,
       [],
       true,
     );
     expect(result.source.type).toBe("local-config-yaml");
-    expect(client.getAssistant).not.toHaveBeenCalled();
+  });
+
+  it("rejects a hub assistant slug with a clear error", async () => {
+    await expect(
+      loadConfiguration({} as any, "owner/slug", [], true),
+    ).rejects.toThrow(
+      "hub assistants are not supported; pass a config.yaml path",
+    );
   });
 });

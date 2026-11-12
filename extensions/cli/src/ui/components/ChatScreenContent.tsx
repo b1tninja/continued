@@ -1,4 +1,4 @@
-import type { AssistantConfig } from "@continuedev/sdk";
+import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-yaml";
 import { Box } from "ink";
 import React from "react";
 

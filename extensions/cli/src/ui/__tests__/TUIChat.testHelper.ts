@@ -6,7 +6,6 @@ import { TUIChat } from "../TUIChat.js";
 
 import { MockRemoteServer } from "./mockRemoteServer.js";
 import {
-  MockApiClient,
   mockAssistant,
   MockLlmApi,
   MockMCPService,
@@ -127,7 +126,6 @@ export function runTest(
                 model: { provider: "test", name: "test" },
               },
               mcp: { mcpService: new MockMCPService() },
-              apiClient: { apiClient: new MockApiClient() },
             },
             loading: false,
             error: null,
@@ -150,8 +148,6 @@ export function runTest(
                       };
                     case "mcp":
                       return { mcpService: new MockMCPService() };
-                    case "apiClient":
-                      return { apiClient: new MockApiClient() };
                     case "fileIndex":
                       return MOCK_FILE_INDEX;
                     default:
@@ -283,7 +279,6 @@ export function runTestSuite(
                       model: { provider: "test", name: "test" },
                     },
                     mcp: { mcpService: new MockMCPService() },
-                    apiClient: { apiClient: new MockApiClient() },
                   },
                   loading: false,
                   error: null,
@@ -306,8 +301,6 @@ export function runTestSuite(
                             };
                           case "mcp":
                             return { mcpService: new MockMCPService() };
-                          case "apiClient":
-                            return { apiClient: new MockApiClient() };
                           case "fileIndex":
                             return MOCK_FILE_INDEX;
                           default:

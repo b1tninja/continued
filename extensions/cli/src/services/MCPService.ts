@@ -1,5 +1,5 @@
 import { decodeFQSN, getTemplateVariables } from "@continuedev/config-yaml";
-import { type AssistantConfig } from "@continuedev/sdk";
+import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-yaml";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   listPromptsPaged,

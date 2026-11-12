@@ -167,7 +167,6 @@ describe("CONTINUE_USE_BEDROCK environment variable", () => {
     llmApi: {},
     model: { name: "test-model" },
     mcpService: {},
-    apiClient: {},
   });
 
   beforeEach(() => {
