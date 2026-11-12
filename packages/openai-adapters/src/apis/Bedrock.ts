@@ -789,6 +789,7 @@ export class BedrockApi implements BaseLlmApi {
       oaiBody.temperature ?? undefined,
       oaiBody.top_p ?? undefined,
       reasoning === true,
+      this.config.omitSampling,
     );
 
     // Build final request body

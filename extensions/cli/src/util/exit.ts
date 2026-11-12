@@ -221,6 +221,14 @@ export async function gracefulExit(code: number = 0): Promise<void> {
   }
 
   try {
+    // SessionEnd hooks, bounded so a slow hook cannot hold the exit
+    const { runSessionEndHooks } = await import("../hooks/lifecycleHooks.js");
+    await runSessionEndHooks(code === 0 ? "prompt_input_exit" : "other");
+  } catch (err) {
+    logger.debug("SessionEnd hooks error (ignored)", err as any);
+  }
+
+  try {
     // Flush metrics (forceFlush + shutdown inside service)
     await telemetryService.shutdown();
   } catch (err) {

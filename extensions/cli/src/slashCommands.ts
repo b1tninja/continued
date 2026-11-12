@@ -11,6 +11,7 @@ import { getAllSlashCommands } from "./commands/commands.js";
 import { handleInit } from "./commands/init.js";
 import { handleInfoSlashCommand } from "./infoScreen.js";
 import { syncRunningLoopPolicy } from "./loop/loopSession.js";
+import { handleUntaint } from "./permissions/cliTaint.js";
 import {
   describePolicy,
   getPolicyLevels,
@@ -328,6 +329,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   },
   jobs: handleJobs,
   policy: handlePolicy,
+  untaint: handleUntaint,
   // Loop mode's inbox: questions, answers, the level, Stop loop
   loop: () => ({ openLoopInbox: true }),
   skills: () => handleSkills(),

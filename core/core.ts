@@ -20,10 +20,13 @@ import {
   openAICompatBase,
   testOpenAICompatConnection,
 } from "./util/openaiCompatTest";
+import { currentNotice, dismissCurrentNotice } from "./util/retirementStartup";
+import { isDismissed } from "./util/retirementNoticeState";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { deputyWorkspace } from "./tools/permissions/workspaceRoots";
 import { uriToPath } from "./tools/permissions/names";
+import { taintInput } from "./tools/permissions/taint/taintWiring";
 import type { PolicyLevels } from "./tools/permissions/policy";
 import {
   readRuleSources,
@@ -36,6 +39,8 @@ import { testToolCall } from "./tools/permissions/testToolCall";
 import { readUserLargeChangeLines } from "./tools/permissions/userLimits";
 import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
 import { resolveShell } from "./util/shell";
+import { modelToolFetch } from "./util/modelToolFetch";
+import { BuiltInToolNames } from "./tools/builtIn";
 import {
   credentialUrlNames,
   getTerminalEnvironmentStatus,
@@ -127,6 +132,7 @@ import {
   ContextItemId,
   ContextItemWithId,
   IdeSettings,
+  McpOauthSettings,
   ModelDescription,
   Position,
   RangeInFile,
@@ -191,6 +197,7 @@ import {
 } from "./config/workspace/workspaceBlocks";
 import { MCPManagerSingleton } from "./context/mcp/MCPManagerSingleton";
 import { performAuth, removeMCPAuth } from "./context/mcp/MCPOauth";
+import { oauthOptionsFromSettings } from "./context/mcp/mcpOauthSettings";
 import { myersDiff } from "./diff/myers";
 import { ApplyAbortManager } from "./edit/applyAbortManager";
 import { streamDiffLines } from "./edit/streamDiffLines";
@@ -422,6 +429,7 @@ export class Core {
           msg.data.provider,
           msg.data.apiKey,
           msg.data.apiBase,
+          (await this.configHandler.loadConfig()).config?.requestOptions,
         );
       } catch (error: any) {
         void this.ide.showToast("error", error.message);
@@ -866,6 +874,15 @@ export class Core {
         new Date().toISOString().slice(0, 10),
       ),
     );
+
+    // Retirement notice for the model chip: offline, dismissible.
+    on("model/retirementNotice", async (msg) => {
+      const notice = currentNotice(msg.data);
+      return notice && !isDismissed(notice.key) ? { notice } : {};
+    });
+    on("model/dismissRetirementNotice", async (msg) => {
+      dismissCurrentNotice(msg.data);
+    });
 
     // Cached per model per process; no hint (an empty object) on any failure.
     on("ollama/showHint", async (msg) => ({
@@ -1375,9 +1392,9 @@ export class Core {
     on("mcp/startAuthentication", async (msg) => {
       const manager = MCPManagerSingleton.getInstance();
       const connection = manager.getConnection(msg.data.serverId);
-      const callbackPort = (
-        connection?.options as { oauth?: { callbackPort?: number } } | undefined
-      )?.oauth?.callbackPort;
+      const oauthSettings = (
+        connection?.options as { oauth?: McpOauthSettings } | undefined
+      )?.oauth;
       const oauthScope = connection
         ? (
             await import("./context/mcp/workspaceMcpPolicy")
@@ -1394,7 +1411,7 @@ export class Core {
           this.ide,
           // same proxy / CA settings as the connection itself
           {
-            callbackPort,
+            ...oauthOptionsFromSettings(oauthSettings),
             fetchFn: connection?.getFetch() as any,
             oauthScope,
           },
@@ -2069,6 +2086,8 @@ export class Core {
           ...deputyWorkspace(dirs),
           // The shell terminal commands run in
           shell: resolveShell().kind,
+          // The tainted-session rule's fact; nothing when the rule is off
+          ...taintInput(sessionId, callId),
         });
         recordPolicyDecision(
           getAuditTrail(),
@@ -2201,8 +2220,14 @@ export class Core {
         ide: inWorkspace ? ideInWorkspace(this.ide, inWorkspace) : this.ide,
         workspaceDirs: inWorkspace,
         llm: config.selectedModelByRole.chat,
-        fetch: (url, init) =>
-          fetchwithRequestOptions(url, init, config.requestOptions),
+        // The model picks the URL of fetch_url_content: the global request
+        // headers go only to the configured model endpoints, not to any host
+        // it names. Other tools (HTTP tools, search) keep the global options.
+        fetch:
+          tool.function.name === BuiltInToolNames.FetchUrlContent
+            ? modelToolFetch(config)
+            : (url, init) =>
+                fetchwithRequestOptions(url, init, config.requestOptions),
         tool,
         toolCallId: toolCall.id,
         onPartialOutput,

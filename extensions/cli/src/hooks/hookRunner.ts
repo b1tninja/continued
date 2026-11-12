@@ -4,8 +4,15 @@ import type { ChildProcess } from "child_process";
 import { terminalEnvironment } from "core/util/terminalEnvironment.js";
 
 import { logger } from "../util/logger.js";
+import { cliFetch } from "../util/networkFetch.js";
 
 import { getMatchingHookGroups } from "./hookConfig.js";
+import {
+  capAdditionalContext,
+  failureLetsActionThrough,
+  inputIsMasked,
+  maskHookInput,
+} from "./hookInput.js";
 import {
   BLOCKING_EVENTS,
   MATCHER_FIELD_MAP,
@@ -257,7 +264,7 @@ async function executeHttpHook(
       }
     }
 
-    const response = await fetch(handler.url, {
+    const response = await cliFetch(handler.url, {
       method: "POST",
       headers,
       body: JSON.stringify(input),
@@ -400,16 +407,26 @@ export async function runHooks(
     }
   }
 
+  // Masked at most once per event, and only if some handler needs it.
+  let masked: HookInput | undefined;
+  const inputFor = (handler: HookHandler): HookInput => {
+    if (!inputIsMasked(handler)) return input;
+    masked ??= maskHookInput(input);
+    return masked;
+  };
+
   // Fire async hooks (don't await)
   for (const handler of asyncHandlers) {
-    executeHandler(handler, input, cwd).catch((err) => {
+    executeHandler(handler, inputFor(handler), cwd).catch((err) => {
       logger.warn("Async hook failed:", err);
     });
   }
 
   // Execute sync hooks in parallel
   const results = await Promise.all(
-    syncHandlers.map((handler) => executeHandler(handler, input, cwd)),
+    syncHandlers.map((handler) =>
+      executeHandler(handler, inputFor(handler), cwd),
+    ),
   );
   results.forEach((result, i) => {
     if (syncHandlers[i].origin === "project") result.fromProject = true;
@@ -436,7 +453,7 @@ function describeHandler(handler: HookHandler): string {
 
 /**
  * A hook that failed stops the action when the event can stop something,
- * unless the hook says `onError: "allow"`. On other events the action has
+ * unless the hook says `onError: "allow"` or `onFailure: "continue"`. On other events the action has
  * already happened, so the failure is only logged.
  */
 function applyFailurePolicy(
@@ -447,9 +464,9 @@ function applyFailurePolicy(
   if (!result.failed) return;
   const what = `Hook "${describeHandler(handler)}" ${result.failureReason}`;
   const canBlock = BLOCKING_EVENTS.includes(eventName as HookEventName);
-  if (canBlock && handler.onError !== "allow") {
+  if (canBlock && !failureLetsActionThrough(handler)) {
     result.blocked = true;
-    result.blockReason = `${what}. The action was blocked because hooks fail closed; set "onError": "allow" on the hook to let it through.`;
+    result.blockReason = `${what}. The action was blocked because hooks fail closed; set "onError": "allow" (or "onFailure": "continue") on the hook to let it through.`;
     logger.warn(`${what}; blocking ${eventName}`);
   } else {
     logger.warn(`${what}; continuing`);
@@ -584,7 +601,9 @@ function aggregateResults(
   }
 
   if (additionalContextParts.length > 0) {
-    eventResult.additionalContext = additionalContextParts.join("\n");
+    eventResult.additionalContext = capAdditionalContext(
+      additionalContextParts.join("\n"),
+    );
   }
 
   return eventResult;

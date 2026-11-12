@@ -70,7 +70,7 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 - **Tool permissions**: `toolPermissions` rules (allow, ask, deny) with **Always allow**, approval modes, five policy areas with levels, and protected paths that always ask. A floor deny rule you write blocks a command it matches, including when that area is set to YOLO. Rules are checked against several readings of a command (quotes removed, common wrappers skipped). That check stops after 800 readings, so a longer command is not fully covered. The built-in dangerous-command check refuses some commands and asks for others; Hands-off (Permissive) runs a call that would otherwise only ask.
 - **An optional reviewer model** that approves or refuses calls in Auto mode, judging a fenced digest and never the tool output (in the code on `main`; measurement on a real model is still open).
 - **Checkpoints** for agent file edits, with **Restore to here**.
-- **Your config stays yours**: no telemetry (see [PRIVACY.md](PRIVACY.md)), and config files get their own schemas and in-editor problems.
+- **Your config stays yours**: no analytics or usage data (see [PRIVACY.md](PRIVACY.md)), no hosted service of ours that the editor or the terminal agent contacts, and config files get their own schemas and in-editor problems.
 
 **Cost and speed**
 

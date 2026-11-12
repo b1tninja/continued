@@ -66,6 +66,10 @@ export const completionOptionsSchema = z.object({
   reasoning: z.boolean().optional(),
   reasoningBudgetTokens: z.number().optional(),
   promptCaching: z.boolean().optional(),
+  // Advanced. true leaves temperature, topP and topK out of the request,
+  // false sends them even to a Claude model that refuses them; unset follows
+  // the model (Claude 4.7 and later refuse them).
+  omitSampling: z.boolean().optional(),
   stream: z.boolean().optional(),
   keepAlive: z.number().optional(),
 });

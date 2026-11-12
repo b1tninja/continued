@@ -2,7 +2,12 @@
 
 Staging note for the next release. Fold it into that release's `<tag>.md` (the release job reads `.github/release-notes/<tag>.md`) and delete this file.
 
-## Privacy
+## Privacy: Continuous no longer contacts Continue-operated servers
 
-- The 2.12.0 and 2.12.1 builds contained two things that contradicted "collects no telemetry": the `search_web` tool and the docs crawler's `useLocalCrawling: false` path sent queries and URLs, with the extension version, the operating system, a machine id and a key embedded in the code, to a proxy run by the upstream Continue project; and the terminal agent's system prompt told the model to add a `Co-Authored-By: Continue` trailer to commits. The terminal agent's OpenTelemetry metrics also started whenever any `OTEL_*` variable was set. The commit trailer is fixed in [#626](https://github.com/b1tninja/continuous/pull/626) (merged); the proxy calls and the metrics default are changed in [#627](https://github.com/b1tninja/continuous/pull/627) (not yet merged when this was written: keep this sentence only if it is in the release).
+Earlier builds said they collect no telemetry, and the claim was not fully accurate. This change makes it accurate.
+
+- **The built-in web search is gone.** The `search_web` tool and the `@web` context provider used to post the query, with the version, the operating system, a machine id and a key embedded in the code, to a Google Cloud Run proxy run by the upstream Continue project. That proxy is no longer contacted and the key is removed. `search_web` and `@web` now exist only if you set `CONTINUOUS_WEB_SEARCH_URL` to a search endpoint of your own (SearXNG-compatible JSON; optional `CONTINUOUS_WEB_SEARCH_KEY`). See `docs/customize/web-search.mdx`.
+- **The docs crawler no longer has a remote path.** The `useLocalCrawling: false` setting that sent a site URL to the same proxy is ignored; sites are always fetched directly from the host you named.
+- **Terminal agent metrics are opt-in.** They used to start whenever any `OTEL_*` variable was set. They now also need `CONTINUOUS_OTEL=1`, and the service name is `continuous-cli`. The old `CONTINUE_METRICS_ENABLED` and `CONTINUE_CLI_ENABLE_TELEMETRY` switches are no longer read.
+- **A test now guards the claim.** `core/egress/egressAllowlist.vitest.ts` fails when a new hostname appears in source without an entry and a reason in `core/egress/egress-allowlist.json`.
 - What Continuous stores, sends and does not send is now written down in [PRIVACY.md](https://github.com/b1tninja/continuous/blob/main/PRIVACY.md).

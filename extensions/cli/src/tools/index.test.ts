@@ -1,5 +1,15 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+import {
+  loadPolicyFile,
+  resetPolicyLevels,
+} from "../permissions/policyLevels.js";
+
 import {
   extractToolCalls,
+  executeToolCall,
   getAllAvailableTools,
   getToolDisplayName,
 } from "./index.js";
@@ -208,6 +218,9 @@ vi.mock("../services/index.js", () => ({
         : {
             tools: toolState.mcp.map((name) => ({
               name,
+              serverName: "srv",
+              // every server says its tools only read: Plan mode must not believe it
+              annotations: { readOnlyHint: true },
               inputSchema: { type: "object", properties: {} },
             })),
           },
@@ -245,6 +258,14 @@ vi.mock("src/utils/modelCapability.js", () => ({
   isModelCapable: () => true,
 }));
 
+function loadPlanTrust(yaml: string): void {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "role-trust-"));
+  const file = path.join(dir, "permissions.yaml");
+  fs.writeFileSync(file, yaml);
+  loadPolicyFile(file);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 describe("getAllAvailableTools and the task list", () => {
   const names = async () =>
     (await getAllAvailableTools(false)).map((t) => t.name);
@@ -280,6 +301,64 @@ describe("getAllAvailableTools and the task list", () => {
     const offered = await names();
     expect(offered).not.toContain("TaskList");
     expect(offered).toContain("FinishItem");
+  });
+
+  describe("Plan mode and MCP tools (roleTools.ts)", () => {
+    const planOffered = async () =>
+      (await names()).filter((n) => n.startsWith("mcp__"));
+
+    afterEach(() => {
+      resetPolicyLevels();
+    });
+
+    it("hides an MCP tool whose server only claims it is read-only", async () => {
+      toolState.mode = "plan";
+      toolState.mcp = ["mcp__a__search"];
+      expect(await planOffered()).toEqual([]);
+      toolState.mode = "normal";
+      expect(await planOffered()).toEqual(["mcp__a__search"]);
+    });
+
+    it("offers it in Plan mode when the user listed the server", async () => {
+      loadPlanTrust(["plan:", "  mcpTools:", "  - srv/*", ""].join("\n"));
+      toolState.mode = "plan";
+      toolState.mcp = ["mcp__a__search"];
+      expect(await planOffered()).toEqual(["mcp__a__search"]);
+    });
+
+    it("offers no Bash in Plan mode by default, and Bash again on plan.allowTerminal", async () => {
+      toolState.mode = "plan";
+      expect(await names()).not.toContain("Bash");
+      loadPlanTrust(["plan:", "  allowTerminal: true", ""].join("\n"));
+      expect(await names()).toContain("Bash");
+      expect(await names()).not.toContain("Write");
+      toolState.mode = "normal";
+      resetPolicyLevels();
+      expect(await names()).toContain("Bash");
+    });
+
+    it("offers it when the user trusts the server's hints and it claims read-only", async () => {
+      loadPlanTrust(["mcpServers:", "  srv: trusted", ""].join("\n"));
+      toolState.mode = "plan";
+      toolState.mcp = ["mcp__a__search"];
+      expect(await planOffered()).toEqual(["mcp__a__search"]);
+    });
+  });
+
+  it("refuses at execution a call to a tool Plan mode does not offer", async () => {
+    toolState.mode = "plan";
+    const run = vi.fn(async () => "wrote");
+    await expect(
+      executeToolCall({
+        id: "1",
+        name: "Write",
+        arguments: {},
+        argumentsStr: "{}",
+        startNotified: true,
+        tool: { name: "Write", isBuiltIn: true, run } as never,
+      }),
+    ).rejects.toThrow(/Write tool is not available in Plan mode/);
+    expect(run).not.toHaveBeenCalled();
   });
 
   describe("MCP tool order (C64)", () => {

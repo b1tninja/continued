@@ -92,6 +92,16 @@ describe("decisions and outcomes", () => {
     expect(row.policy).toBe("allow");
   });
 
+  it("records an answer over an unauthenticated connection as the system, not the person", () => {
+    const trail = trailAt();
+    recordPolicyDecision(trail, ctx("c1"), "allowedWithPermission", {
+      policy: "allowedWithPermission",
+    });
+    trail.answer("c1", true, "system");
+    const [row] = rows();
+    expect(row.decisions.map((d) => d.by)).toEqual(["rules", "system"]);
+  });
+
   it("records a refusal by the person as a deny and a call that did not run", () => {
     const trail = trailAt();
     recordPolicyDecision(trail, ctx("c1"), "allowedWithPermission", {
