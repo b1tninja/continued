@@ -95,12 +95,12 @@ export function holdInPlanMode(
   // A command the parser vouched as only reading may run in a plan turn:
   // that is how a re-plan looks at `git log` or `ls`
   if (result.readOnly) return result;
-  // An area set to YOLO runs everything, in Plan mode too: that is what the
+  // An area set to IDGAF runs everything, in Plan mode too: that is what the
   // level says. Permissive and below still wait for the person here.
   // The call's arguments matter: a vouched read-only command is Context use.
   if (
     levelOfCall(approval, name, tool, callContextFor(result.toolCallState))
-      ?.level === "yolo"
+      ?.level === "idgaf"
   ) {
     return result;
   }
@@ -138,7 +138,7 @@ export async function evaluateToolPolicy(
     history,
   );
   // Plan mode changes nothing until the plan is accepted, at every level
-  // below YOLO
+  // below IDGAF
   return mode === "plan"
     ? holdInPlanMode(result, activeTools, approval)
     : result;
@@ -243,7 +243,7 @@ async function evaluateBasePolicy(
     // call no rule, protected path or safety check has settled.
     details.source !== "allow-rule" &&
     details.source !== "permissive" &&
-    details.source !== "yolo"
+    details.source !== "idgaf"
   ) {
     return { ...details, policy: "allowedWithPermission", toolCallState }; // Cannot make more lenient
   }
@@ -517,7 +517,7 @@ export async function evaluateToolPolicies(
         source === "auto" ||
         source === "once" ||
         source === "permissive" ||
-        source === "yolo")
+        source === "idgaf")
     ) {
       dispatch(
         setToolCallDecision({

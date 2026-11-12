@@ -288,7 +288,7 @@ const SETTLED_AT: Partial<Record<string, TestStep["id"]>> = {
   "ask-rule": "ask",
   "allow-rule": "allow",
   permissive: "level",
-  yolo: "level",
+  idgaf: "level",
   manual: "level",
   default: "level",
 };
@@ -564,7 +564,7 @@ function verdictOf(
     policy === "allowedWithoutPermission" &&
     !facts.tool?.readonly &&
     !evaluated.readOnly &&
-    facts.level !== "yolo"
+    facts.level !== "idgaf"
   ) {
     policy = "allowedWithPermission";
     source = "plan-mode";

@@ -18,7 +18,7 @@ const terminalTool = {
     evaluateTerminalCommandSecurity(base, args.command as string),
 };
 
-function run(command: string, level?: "yolo") {
+function run(command: string, level?: "idgaf") {
   return evaluateToolPolicyWithRules({
     tool: terminalTool as any,
     toolName: "run_terminal_command",
@@ -81,12 +81,12 @@ describe("braced PowerShell variables", () => {
     ).toBe("sensitive");
   });
 
-  it("a harmless name runs, a policy name asks, at YOLO", () => {
-    expect(run("${env:FOO}='x'; Get-Date", "yolo").policy).toBe(RUN);
-    expect(run("${env:CI}='1'; Get-Date", "yolo").policy).toBe(RUN);
-    expect(run("${env:PATH}='C:/x'; Get-Date", "yolo").policy).toBe(ASK);
+  it("a harmless name runs, a policy name asks, at IDGAF", () => {
+    expect(run("${env:FOO}='x'; Get-Date", "idgaf").policy).toBe(RUN);
+    expect(run("${env:CI}='1'; Get-Date", "idgaf").policy).toBe(RUN);
+    expect(run("${env:PATH}='C:/x'; Get-Date", "idgaf").policy).toBe(ASK);
     expect(
-      run("${env:NODE_OPTIONS}='--require x'; Get-Date", "yolo").policy,
+      run("${env:NODE_OPTIONS}='--require x'; Get-Date", "idgaf").policy,
     ).toBe(ASK);
   });
 
@@ -95,7 +95,7 @@ describe("braced PowerShell variables", () => {
     "& ${env:X}",
     "${env:FOO}='$(calc)'; Get-Date",
     '${env:A}="$(calc)"',
-  ])("%s asks at YOLO", (c) => {
-    expect(run(c, "yolo").policy).toBe(ASK);
+  ])("%s asks at IDGAF", (c) => {
+    expect(run(c, "idgaf").policy).toBe(ASK);
   });
 });

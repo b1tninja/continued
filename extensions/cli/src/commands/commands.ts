@@ -107,7 +107,7 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   {
     name: "policy",
     description:
-      "Show or set who decides per area: /policy, /policy yolo, /policy tools=permissive",
+      "Show or set who decides per area: /policy, /policy idgaf, /policy tools=permissive",
     category: "system",
   },
   {
