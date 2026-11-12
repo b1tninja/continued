@@ -12,7 +12,12 @@ import { buildTaskPlan } from "./taskPlan.js";
  * Decisions already answered are left alone.
  */
 export function autoAnswerDecisions(
-  decisions: readonly { question: string; options?: string[]; pick?: string; answer?: string }[],
+  decisions: readonly {
+    question: string;
+    options?: string[];
+    pick?: string;
+    answer?: string;
+  }[],
 ): { question: string; answer: string }[] {
   return decisions
     .filter((d) => !d.answer?.trim())

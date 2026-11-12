@@ -230,7 +230,11 @@ export const startLoopFromPlan = createAsyncThunk<
       fallbackCheck,
     });
     if (parallel) loop = setLoopParallel(loop, true);
-    loop = await autoAnswerPlanDecisions(loop, planFile, extra.ideMessenger.ide);
+    loop = await autoAnswerPlanDecisions(
+      loop,
+      planFile,
+      extra.ideMessenger.ide,
+    );
     // The plan card's budget step; without it the strategy is None
     loop = applyBudgetStep(dispatch, getState, loop, budget);
     dispatch(setMode("agent"));
@@ -248,7 +252,11 @@ async function autoAnswerPlanDecisions(
   planFile: string | undefined,
   ide: Pick<IDE, "readFile" | "writeFile">,
 ): Promise<LoopState> {
-  if (!planFile || !loop.policy || !questionsAutoAnswer(loop.policy.questions)) {
+  if (
+    !planFile ||
+    !loop.policy ||
+    !questionsAutoAnswer(loop.policy.questions)
+  ) {
     return loop;
   }
   const source = `Questions: ${policyLevelLabel("questions", loop.policy.questions)}`;

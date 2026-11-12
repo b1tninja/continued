@@ -249,7 +249,9 @@ describe("Loop mode's driver in the CLI", () => {
     expect(services.toolPermissions.getCurrentMode()).toBe("normal");
   });
 
-  async function stuckThenCheckReplaced(plan: "yolo" | "permissive" | "cautious") {
+  async function stuckThenCheckReplaced(
+    plan: "yolo" | "permissive" | "cautious",
+  ) {
     await savePlan(
       {
         title: "Work",
