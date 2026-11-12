@@ -8,8 +8,8 @@ import {
 } from "@continuedev/llm-info";
 
 import {
-  claudeRefusesSampling,
   noteSamplingOmitted,
+  omitsSampling,
 } from "./anthropicSamplingGuard.js";
 import type { CacheTtl } from "./cacheTtl.js";
 import {
@@ -46,7 +46,15 @@ export const INFERENCE_PROFILE_PREFIXES = [
 ] as const;
 
 export type CrossRegionInference =
-  "auto" | "us" | "us-gov" | "eu" | "apac" | "jp" | "au" | "ca" | "global";
+  | "auto"
+  | "us"
+  | "us-gov"
+  | "eu"
+  | "apac"
+  | "jp"
+  | "au"
+  | "ca"
+  | "global";
 
 /** Map an AWS region (e.g. eu-west-1) to the matching inference profile prefix. */
 export function inferenceProfilePrefixForRegion(
@@ -238,7 +246,8 @@ export interface BedrockCacheParts {
 export function resolveBedrockCacheParts(
   requested: boolean | undefined,
   behavior:
-    { cacheSystemMessage?: boolean; cacheConversation?: boolean } | undefined,
+    | { cacheSystemMessage?: boolean; cacheConversation?: boolean }
+    | undefined,
   hasSystem: boolean,
 ): BedrockCacheParts {
   if (requested === false) {
@@ -287,7 +296,8 @@ export function bedrockCachePartsForModel(
   modelId: string,
   requested: boolean | undefined,
   behavior:
-    { cacheSystemMessage?: boolean; cacheConversation?: boolean } | undefined,
+    | { cacheSystemMessage?: boolean; cacheConversation?: boolean }
+    | undefined,
   hasSystem: boolean,
 ): BedrockCacheParts {
   const fields = bedrockCachePointFields(modelId);
@@ -617,9 +627,14 @@ export function bedrockSamplingParams(
   temperature: number | undefined,
   topP: number | undefined,
   reasoning: boolean,
+  omitSampling?: boolean,
 ): { temperature?: number; topP?: number } {
+  if (omitSampling === true) {
+    noteSamplingOmitted(modelId, true);
+    return {};
+  }
   if (!/claude/i.test(modelId)) return { temperature, topP };
-  if (claudeRefusesSampling(modelId)) {
+  if (omitsSampling(modelId, omitSampling)) {
     noteSamplingOmitted(modelId);
     return {};
   }

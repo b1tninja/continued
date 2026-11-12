@@ -36,8 +36,8 @@ import {
 } from "../util.js";
 import { EMPTY_CHAT_COMPLETION } from "../util/emptyChatCompletion.js";
 import {
-  claudeRefusesSampling,
   noteSamplingOmitted,
+  omitsSampling,
 } from "./anthropicSamplingGuard.js";
 import { safeParseArgs } from "../util/parseArgs.js";
 import { extractBase64FromDataUrl } from "../util/url.js";
@@ -186,8 +186,10 @@ export class AnthropicApi implements BaseLlmApi {
       }
     }
 
-    const noSampling = claudeRefusesSampling(oaiBody.model);
-    if (noSampling) noteSamplingOmitted(oaiBody.model);
+    const noSampling = omitsSampling(oaiBody.model, this.config.omitSampling);
+    if (noSampling) {
+      noteSamplingOmitted(oaiBody.model, this.config.omitSampling === true);
+    }
     const anthropicBody: MessageCreateParams = {
       messages: this._convertMessages(
         oaiBody.messages.filter(
@@ -344,7 +346,9 @@ export class AnthropicApi implements BaseLlmApi {
 
   private toolResultContent(
     content:
-      string | OpenAI.Chat.Completions.ChatCompletionContentPart[] | null,
+      | string
+      | OpenAI.Chat.Completions.ChatCompletionContentPart[]
+      | null,
   ): string | Array<TextBlockParam | ImageBlockParam> {
     if (typeof content === "string" || content == null) {
       return content ?? "";

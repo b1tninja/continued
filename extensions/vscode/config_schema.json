@@ -85,6 +85,11 @@
           "title": "Reasoning Budget Tokens",
           "description": "Set budget tokens for thinking/reasoning in Anthropic Claude 3.7+ models",
           "type": "integer"
+        },
+        "omitSampling": {
+          "title": "Omit Sampling",
+          "description": "Advanced. true leaves temperature, topP and topK out of the request; false sends them even to a Claude model that refuses them (4.7 and later). Unset follows the model.",
+          "type": "boolean"
         }
       }
     },

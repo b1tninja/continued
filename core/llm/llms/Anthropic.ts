@@ -12,8 +12,8 @@ import {
 } from "@anthropic-ai/sdk/resources/messages.mjs";
 import { streamSse } from "@continuedev/fetch";
 import {
-  claudeRefusesSampling,
   noteSamplingOmitted,
+  omitsSampling,
 } from "../../util/anthropicSamplingGuard.js";
 import {
   getAnthropicErrorMessage,
@@ -101,8 +101,10 @@ class Anthropic extends BaseLLM {
   // Public for use within VertexAI
   public convertArgs(options: CompletionOptions): AnthropicRequestParams {
     const thinking = getAnthropicThinkingParams(options);
-    const noSampling = claudeRefusesSampling(options.model);
-    if (noSampling) noteSamplingOmitted(options.model);
+    const noSampling = omitsSampling(options.model, options.omitSampling);
+    if (noSampling) {
+      noteSamplingOmitted(options.model, options.omitSampling === true);
+    }
     const sampling = noSampling
       ? {}
       : anthropicSamplingParams(
