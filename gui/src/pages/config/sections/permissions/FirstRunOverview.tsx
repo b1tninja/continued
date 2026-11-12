@@ -52,7 +52,7 @@ export function FirstRunOverview({ onDismiss }: { onDismiss: () => void }) {
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Dismiss the permissions overview"
+          aria-label="Got it, dismiss the permissions overview"
           data-testid="permissions-intro-dismiss"
           className="flex h-6 min-w-6 flex-none cursor-pointer items-center justify-center gap-1 rounded-sm border border-solid border-border bg-transparent px-1 text-2xs text-foreground"
         >

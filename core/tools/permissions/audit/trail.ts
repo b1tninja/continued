@@ -132,18 +132,27 @@ export class AuditTrail {
   }
 
   /** The person's answer to an ask. */
-  answer(callId: string, approved: boolean): void {
+  answer(
+    callId: string,
+    approved: boolean,
+    by: "person" | "system" = "person",
+  ): void {
     this.guard(() => {
       const p = this.pending.get(callId);
       if (!p || p.policy !== "ask") return;
       this.decision({
         ...p.input,
         policy: approved ? "allow" : "deny",
-        by: "person",
+        by,
         source: undefined,
         rule: undefined,
         reviewer: undefined,
-        reason: approved ? "The person approved it." : "The person refused it.",
+        reason:
+          by === "system"
+            ? "Answered over a connection with no access token (--no-auth)."
+            : approved
+              ? "The person approved it."
+              : "The person refused it.",
       });
       if (!approved) this.outcome({ callId, ran: false });
     });

@@ -34,6 +34,7 @@ import { multiEditTool } from "./multiEdit.js";
 import { presentPlanTool } from "./presentPlan.js";
 import { readFileTool } from "./readFile.js";
 import { reportFailureTool } from "./reportFailure.js";
+import { cliRoleRefusal, filterCliToolsForRole } from "./roleGate.js";
 import { runTerminalCommandTool } from "./runTerminalCommand.js";
 import { checkIfRipgrepIsInstalled, searchCodeTool } from "./searchCode.js";
 import { applyCliToolSearch } from "./searchTools.js";
@@ -200,7 +201,9 @@ export async function getAllAvailableTools(
 
   // CONTINUE_TOOL_SEARCH=auto: defer MCP tools above a token budget. With it
   // unset this returns `tools` unchanged.
-  return applyCliToolSearch(tools, {
+  // The role table: Plan mode offers only the tools its role may use, and
+  // only the MCP tools the person marked read-only (roleTools.ts)
+  return applyCliToolSearch(filterCliToolsForRole(mode, tools), {
     mode: mode === "plan" ? "plan" : "agent",
     family: name,
   });
@@ -291,6 +294,24 @@ export async function executeToolCall(
   options: Omit<ToolRunContext, "toolCallId"> = { parallelToolCallCount: 1 },
 ): Promise<string> {
   const startTime = Date.now();
+
+  // The role table again, at execution: a call to a tool the mode's role may
+  // not use is refused however it got here
+  const roleRefusal = cliRoleRefusal(
+    services.toolPermissions?.getCurrentMode?.(),
+    toolCall.tool,
+  );
+  if (roleRefusal) {
+    telemetryService.logToolResult({
+      toolName: toolCall.name,
+      success: false,
+      durationMs: 0,
+      error: roleRefusal,
+      errorReason: ContinueErrorReason.Unspecified,
+      toolParameters: JSON.stringify(toolCall.arguments),
+    });
+    throw new Error(roleRefusal);
+  }
 
   try {
     logger.debug("Executing tool", {

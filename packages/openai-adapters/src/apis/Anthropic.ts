@@ -35,6 +35,10 @@ import {
   usageChatChunk,
 } from "../util.js";
 import { EMPTY_CHAT_COMPLETION } from "../util/emptyChatCompletion.js";
+import {
+  noteSamplingOmitted,
+  omitsSampling,
+} from "./anthropicSamplingGuard.js";
 import { safeParseArgs } from "../util/parseArgs.js";
 import { extractBase64FromDataUrl } from "../util/url.js";
 import {
@@ -182,6 +186,10 @@ export class AnthropicApi implements BaseLlmApi {
       }
     }
 
+    const noSampling = omitsSampling(oaiBody.model, this.config.omitSampling);
+    if (noSampling) {
+      noteSamplingOmitted(oaiBody.model, this.config.omitSampling === true);
+    }
     const anthropicBody: MessageCreateParams = {
       messages: this._convertMessages(
         oaiBody.messages.filter(
@@ -190,11 +198,13 @@ export class AnthropicApi implements BaseLlmApi {
       ),
       system: systemMessage,
       // This adapter sends no thinking block, so only the both-set rule applies
-      ...anthropicSamplingParams(
-        oaiBody.temperature ?? undefined,
-        oaiBody.top_p ?? undefined,
-        false,
-      ),
+      ...(noSampling
+        ? {}
+        : anthropicSamplingParams(
+            oaiBody.temperature ?? undefined,
+            oaiBody.top_p ?? undefined,
+            false,
+          )),
       max_tokens: oaiBody.max_tokens ?? this.maxTokensForModel(oaiBody.model), // max_tokens is required
       model: oaiBody.model,
       stop_sequences: stop,
