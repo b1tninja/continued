@@ -97,7 +97,7 @@ Releases from 2.4.3 on also carry the command-line agent, `continuous-cli-<versi
 npm i -g https://github.com/b1tninja/continuous/releases/download/v2.4.4-vscode/continuous-cli-2.4.4.tgz
 ```
 
-The command is `continuous` (upstream's is `cn`, so both can be installed). It uses the same `~/.continuous` folder as the extension, and `continuous --config <path to a .yaml>` runs with one config file. To update, install the next release's `.tgz` the same way; the CLI does not update itself.
+The command is `continuous`, with the short alias `cn` (both run the same program). It uses the same `~/.continuous` folder as the extension, and `continuous --config <path to a .yaml>` runs with one config file. To update, install the next release's `.tgz` the same way; the CLI does not update itself.
 
 ## Updating
 

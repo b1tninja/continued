@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "bin": {
-    "continuous": "dist/cn.js"
+    "continuous": "dist/cn.js",
+    "cn": "dist/cn.js"
   },
   "files": [
     "dist/index.js",

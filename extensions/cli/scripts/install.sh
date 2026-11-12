@@ -6,6 +6,7 @@ set -euo pipefail
 
 REQUIRED_NODE_VERSION="20.20.1"
 PACKAGE_NAME="@continuedev/cli"
+# @continuedev/cli provides `cn`; the Continuous fork tarball provides `continuous` and `cn`
 CLI_COMMAND="cn"
 NETWORK_TIMEOUT=60
 FNM_INSTALL_DIR="$HOME/.local/share/fnm"

@@ -22,6 +22,7 @@ $ProgressPreference = 'SilentlyContinue'  # Faster downloads
 
 $script:RequiredNodeVersion = [version]"20.20.1"
 $script:PackageName = "@continuedev/cli"
+# @continuedev/cli provides `cn`; the Continuous fork tarball provides `continuous` and `cn`
 $script:CliCommand = "cn"
 $script:FnmInstalled = $false
 $script:FnmPath = "$env:LOCALAPPDATA\fnm"
