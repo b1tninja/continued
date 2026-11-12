@@ -549,7 +549,18 @@ function bedrock(ok: boolean): Fixture {
   };
 }
 
+/** OpenRouter provider setup with the one-time "Pull model information" card. */
+function catalogue(): Fixture {
+  return async ({ messenger }) => {
+    const h = messenger.responseHandlers as any;
+    h["modelCatalog/status"] = async () => ({ policy: "ask" });
+    h["modelCatalog/cached"] = async () => null;
+    await sleep(400);
+  };
+}
+
 Object.assign(FIXTURES, {
+  catalogue: catalogue(),
   "settings-models": settingsTab("models"),
   "settings-rules": settingsTab("rules"),
   "settings-permissions": async (ctx) => {

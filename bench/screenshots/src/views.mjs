@@ -77,6 +77,10 @@ export const VIEWS = {
     fixture: "agents-ended",
     note: "the agents tree after every agent ended, one interrupted",
   },
+  catalogue: {
+    fixture: "catalogue",
+    note: "OpenRouter provider setup with the one-time prompt to pull the model list",
+  },
   "bedrock-ok": {
     fixture: "bedrock-ok",
     note: "Bedrock Test connection, success",

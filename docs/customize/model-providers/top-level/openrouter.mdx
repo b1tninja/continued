@@ -142,3 +142,16 @@ If you're experiencing issues with Agent mode or tools not working, you can add 
 <Note>
   Not all models support function calling. Check the [OpenRouter models page](https://openrouter.ai/models) for specific model capabilities.
 </Note>
+
+## Model information and prices
+
+OpenRouter publishes a public list of its models: names, ids, context sizes, whether a model takes tools, and prices per token. Continuous can keep a copy of that list, but it never downloads it on its own.
+
+The first time you choose OpenRouter in provider setup, Continuous asks "Pull the latest model information from OpenRouter?". The request goes to `openrouter.ai/api/v1/models`. It is a plain GET: no account, key or prompt is sent.
+
+- **Pull now** downloads the list once. **Not now** sends nothing, and the question is not asked again in that session. Tick **Don't ask again** to save `modelCatalog: never` in your `config.yaml`; remove that line to be asked again.
+- **Refresh from openrouter.ai** on the model step downloads the list again whenever you want it.
+- The list is stored on this computer in `model-catalog/openrouter.json` in your global folder (`~/.continuous` by default), with the date it was downloaded. Providers other than OpenRouter are not affected. If the file is missing, damaged or from an older format it is ignored.
+- If openrouter.ai cannot be reached, the model step says so and keeps the list you already had.
+
+Prices in the list are estimates and are stored with their date. You can set up OpenRouter without ever pulling the list: type a model id instead.

@@ -47,7 +47,7 @@ Views: `chat` (empty chat with the input and toolbar), `conversation`,
 `settings-tools` (Settings, Tools, scrolled to "Commands and secrets"),
 `permissions-editor` (Settings, Permissions, with the add-rule form open on a
 rule that allows every command: the typed confirmation, diff and verdict). `audit-list` and `audit-inbox` (Settings, Permissions, the Recent calls and Inbox views, with fake audit answers). The
-policy chips are in every chat view, below the input.
+policy chips are in every chat view, below the input. `catalogue` is OpenRouter provider setup with the one-time "Pull the latest model information" card.
 
 ### Accessibility (axe-core)
 

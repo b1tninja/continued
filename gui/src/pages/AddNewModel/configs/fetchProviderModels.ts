@@ -4,6 +4,7 @@ import { isLikelyChatModelId } from "../../../forms/modelListUtils";
 import { ModelPackage } from "./models";
 import { models } from "./models";
 import { ollamaStaticModels, providers } from "./providers";
+import type { CatalogModel } from "core/llm/openRouterCatalog";
 
 interface FetchedModel {
   name: string;
@@ -140,6 +141,9 @@ export const CATALOGUE_HOSTS: Record<string, string> = {
  * Providers whose catalogue prompt was answered (Download or Not now) in this
  * app session. Held in memory only; nothing is persisted.
  */
+/** The date (ISO) of the OpenRouter list in use, when one is. */
+let openRouterListDate: string | undefined;
+export const openRouterListFetchedAt = () => openRouterListDate;
 const answered = new Set<string>();
 export const catalogueAnswered = (id: string) => answered.has(id);
 export const markCatalogueAnswered = (id: string) => void answered.add(id);
@@ -150,6 +154,7 @@ const bundled = {
 /** Forget the answers and the downloaded lists (the bundled lists return). */
 export const resetCatalogueAnswers = () => {
   answered.clear();
+  openRouterListDate = undefined;
   if (providers.ollama && bundled.ollama) {
     providers.ollama.packages = bundled.ollama;
   }
@@ -158,25 +163,98 @@ export const resetCatalogueAnswers = () => {
   }
 };
 
+function catalogToFetched(models: CatalogModel[]): FetchedModel[] {
+  return models.map((m) => ({
+    name: m.name,
+    modelId: m.id,
+    icon: "openrouter.png",
+    contextLength: m.contextLength,
+    maxTokens: m.maxCompletionTokens,
+    supportsTools: m.supportsTools,
+  }));
+}
+
+function applyOpenRouterList(models: CatalogModel[], fetchedAt: string) {
+  if (!providers.openrouter) return;
+  providers.openrouter.packages =
+    catalogToFetched(models).map(toOpenRouterPackage);
+  openRouterListDate = fetchedAt;
+}
+
+/**
+ * Use the dated copy of the OpenRouter list kept on this computer, if there is
+ * one. A local read in core: nothing is requested from the network.
+ */
+export async function loadCachedOpenRouterList(
+  ideMessenger: IIdeMessenger,
+): Promise<string | undefined> {
+  try {
+    const res = await ideMessenger.request("modelCatalog/cached", undefined);
+    if (res.status !== "success" || !res.content) return undefined;
+    applyOpenRouterList(res.content.models, res.content.fetchedAt);
+    return res.content.fetchedAt;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The saved answer to "ask again?", from the user's settings. */
+export async function loadCatalogPolicy(
+  ideMessenger: IIdeMessenger,
+): Promise<"ask" | "never"> {
+  try {
+    const res = await ideMessenger.request("modelCatalog/status", undefined);
+    return res.status === "success" && res.content.policy === "never"
+      ? "never"
+      : "ask";
+  } catch {
+    return "ask";
+  }
+}
+
+export async function saveCatalogPolicy(
+  ideMessenger: IIdeMessenger,
+  policy: "ask" | "never",
+): Promise<void> {
+  try {
+    await ideMessenger.request("modelCatalog/setPolicy", { policy });
+  } catch {
+    // The choice then lasts for this session only.
+  }
+}
+
 /**
  * Fetch one provider's catalogue (Ollama or OpenRouter) and fold it into the
  * provider's list. This contacts a third-party host, so it runs only when the
- * user presses Refresh, never when the setup screen opens. Until then the
- * bundled list stays. Returns false (and changes nothing) when nothing came
- * back, e.g. offline.
+ * user presses Pull now / Download / Refresh, never when the setup screen
+ * opens. Until then the bundled (or last downloaded) list stays. Returns
+ * undefined on success, else a short reason (and changes nothing), e.g. when
+ * offline.
  */
 export async function refreshProviderCatalogue(
   ideMessenger: IIdeMessenger,
   providerId: string,
-): Promise<boolean> {
-  if (!CATALOGUE_HOSTS[providerId]) return false;
+): Promise<{ ok: true } | { ok: false; error?: string }> {
+  if (!CATALOGUE_HOSTS[providerId]) return { ok: false };
+  if (providerId === "openrouter") {
+    // Core keeps the dated copy (names, sizes, prices) as it downloads
+    try {
+      const res = await ideMessenger.request("modelCatalog/pull", undefined);
+      if (res.status !== "success") return { ok: false };
+      if (!res.content.ok) return { ok: false, error: res.content.error };
+      applyOpenRouterList(res.content.models, res.content.fetchedAt);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : undefined };
+    }
+  }
   let fetched: FetchedModel[];
   try {
     fetched = await fetchModels(ideMessenger, providerId);
   } catch {
-    return false;
+    return { ok: false };
   }
-  if (fetched.length === 0) return false;
+  if (fetched.length === 0) return { ok: false };
   if (providerId === "ollama" && providers.ollama) {
     const popular = [
       {
@@ -190,8 +268,6 @@ export async function refreshProviderCatalogue(
       .map(toOllamaPackage)
       .filter((p) => !popularTitles.has(p.title));
     providers.ollama.packages = [...popular, ...additional];
-  } else if (providerId === "openrouter" && providers.openrouter) {
-    providers.openrouter.packages = fetched.map(toOpenRouterPackage);
   }
-  return true;
+  return { ok: true };
 }

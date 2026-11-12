@@ -64,4 +64,10 @@ describe("egress allowlist", () => {
       ).toEqual([]);
     }
   });
+
+  it("covers the model catalogue hosts as opt-in contacts", () => {
+    for (const host of ["openrouter.ai", "ollama.com"]) {
+      expect(allowed.get(host)?.class, host).toBe("O");
+    }
+  });
 });

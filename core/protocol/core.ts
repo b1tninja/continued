@@ -15,6 +15,7 @@ import type {
   TerminalEnvironmentMode,
   TerminalEnvironmentStatus,
 } from "../util/terminalEnvironment";
+import type { CatalogModel } from "../llm/openRouterCatalog";
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type {
@@ -797,6 +798,30 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
   "process/isBackgrounded": [{ toolCallId: string }, boolean];
   "process/killTerminalProcess": [{ toolCallId: string }, void];
   "mdm/setLicenseKey": [{ licenseKey: string }, boolean];
+  /**
+   * The dated local copy of OpenRouter's public model list. `status` and
+   * `cached` read the file only; `pull` is the one request to openrouter.ai
+   * and runs only when the person asks.
+   */
+  "modelCatalog/status": [
+    undefined,
+    {
+      policy: "ask" | "never";
+      openrouter?: { fetchedAt: string; count: number };
+    },
+  ];
+  "modelCatalog/cached": [
+    undefined,
+    { fetchedAt: string; models: CatalogModel[] } | null,
+  ];
+  "modelCatalog/pull": [
+    undefined,
+    (
+      | { ok: true; fetchedAt: string; models: CatalogModel[] }
+      | { ok: false; error: string }
+    ),
+  ];
+  "modelCatalog/setPolicy": [{ policy: "ask" | "never" }, { saved: boolean }];
   "models/fetch": [
     { provider: string; apiKey?: string; apiBase?: string },
     {

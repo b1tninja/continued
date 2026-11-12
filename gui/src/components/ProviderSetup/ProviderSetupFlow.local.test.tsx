@@ -228,11 +228,27 @@ describe("ProviderSetupFlow: local server", () => {
 describe("ProviderSetupFlow: catalogue fetch only on request", () => {
   beforeEach(() => resetCatalogueAnswers());
 
-  function setup(fail = false) {
+  const NEW_MODEL = {
+    id: "zz-test/new-model",
+    name: "ZZ Test: New Model",
+    contextLength: 8192,
+    supportsTools: true,
+    pricing: { prompt: 0.000001, completion: 0.000002 },
+  };
+
+  function setup(
+    opts: {
+      fail?: boolean;
+      policy?: "ask" | "never";
+      cached?: boolean;
+    } = {},
+  ) {
     const { messenger, fetches } = messengerWith();
+    const pulls: unknown[] = [];
+    const policies: unknown[] = [];
     messenger.responseHandlers["models/fetch"] = async (req) => {
       fetches.push(req);
-      if (fail) throw new Error("offline");
+      if (opts.fail) throw new Error("offline");
       return [
         {
           name: "zz-test/new-model",
@@ -241,79 +257,182 @@ describe("ProviderSetupFlow: catalogue fetch only on request", () => {
         },
       ];
     };
-    return { messenger, fetches };
+    messenger.responseHandlers["modelCatalog/status"] = async () => ({
+      policy: opts.policy ?? "ask",
+    });
+    messenger.responseHandlers["modelCatalog/cached"] = async () =>
+      opts.cached
+        ? { fetchedAt: "2026-11-01T00:00:00.000Z", models: [NEW_MODEL] }
+        : null;
+    messenger.responseHandlers["modelCatalog/pull"] = async () => {
+      pulls.push(1);
+      if (opts.fail) return { ok: false, error: "offline" };
+      return {
+        ok: true,
+        fetchedAt: "2026-11-12T00:00:00.000Z",
+        models: [NEW_MODEL],
+      };
+    };
+    messenger.responseHandlers["modelCatalog/setPolicy"] = async (req) => {
+      policies.push(req.policy);
+      return { saved: true };
+    };
+    return { messenger, fetches, pulls, policies };
   }
 
   const idle = () => new Promise((r) => setTimeout(r, 50));
+  const promptRegion = () =>
+    screen.queryByRole("region", { name: "Pull model information" });
 
-  it("sends no models/fetch on mount", async () => {
-    const { messenger, fetches } = setup();
-    await renderWithProviders(<ProviderSetupFlow onDone={vi.fn()} />, {
-      mockIdeMessenger: messenger,
-    });
-    await idle();
-    expect(fetches).toHaveLength(0);
-  });
-
-  for (const [id, host] of [
-    ["ollama", "ollama.com"],
-    ["openrouter", "openrouter.ai"],
-  ] as const) {
-    it(`${id}: prompt sends nothing; Download one request; Refresh one per click`, async () => {
-      const { messenger, fetches } = setup();
-      const { user } = await renderWithProviders(
-        <ProviderSetupFlow initialProvider={id} onDone={vi.fn()} />,
+  it("sends no catalogue request on mount, for any provider", async () => {
+    for (const initialProvider of [undefined, "openrouter", "ollama"]) {
+      resetCatalogueAnswers();
+      const { messenger, fetches, pulls } = setup();
+      const { unmount } = await renderWithProviders(
+        <ProviderSetupFlow
+          initialProvider={initialProvider}
+          onDone={vi.fn()}
+        />,
         { mockIdeMessenger: messenger },
       );
       await idle();
-      expect(screen.getByText(new RegExp(`latest model list from ${host}`)));
       expect(fetches).toHaveLength(0);
-      await user.click(screen.getByRole("button", { name: "Download" }));
-      await waitFor(() => expect(fetches).toHaveLength(1));
-      expect(fetches[0].provider).toBe(id);
-      expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
-      if (id === "openrouter") {
-        await user.type(screen.getByLabelText(/API key/i), "test-key");
-      }
-      await user.click(screen.getByRole("button", { name: "Next" }));
-      const btn = await screen.findByRole("button", {
-        name: `Refresh from ${host}`,
-      });
-      await user.click(btn);
-      await waitFor(() => expect(fetches).toHaveLength(2));
-      await user.click(btn);
-      await waitFor(() => expect(fetches).toHaveLength(3));
-    });
-  }
+      expect(pulls).toHaveLength(0);
+      unmount();
+    }
+  });
 
-  it("Not now sends nothing and keeps the bundled list", async () => {
+  it("ollama: prompt sends nothing; Download one request; Refresh one per click", async () => {
     const { messenger, fetches } = setup();
     const { user } = await renderWithProviders(
       <ProviderSetupFlow initialProvider="ollama" onDone={vi.fn()} />,
       { mockIdeMessenger: messenger },
     );
-    await user.click(screen.getByRole("button", { name: "Not now" }));
+    await idle();
+    expect(screen.getByText(/latest model list from ollama.com/)).toBeTruthy();
+    expect(fetches).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Download" }));
+    await waitFor(() => expect(fetches).toHaveLength(1));
+    expect(fetches[0].provider).toBe("ollama");
     expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Next" }));
-    expect(await screen.findByTestId("model-checklist")).toBeTruthy();
-    await idle();
-    expect(fetches).toHaveLength(0);
+    const btn = await screen.findByRole("button", {
+      name: "Refresh from ollama.com",
+    });
+    await user.click(btn);
+    await waitFor(() => expect(fetches).toHaveLength(2));
+    await user.click(btn);
+    await waitFor(() => expect(fetches).toHaveLength(3));
   });
 
-  it("OpenRouter without a download says the list is not downloaded", async () => {
-    const { messenger } = setup();
+  it("openrouter: the dialog asks once; Pull now sends exactly one request", async () => {
+    const { messenger, fetches, pulls, policies } = setup();
     const { user } = await renderWithProviders(
       <ProviderSetupFlow initialProvider="openrouter" onDone={vi.fn()} />,
       { mockIdeMessenger: messenger },
     );
-    await user.click(screen.getByRole("button", { name: "Not now" }));
+    const region = await screen.findByRole("region", {
+      name: "Pull model information",
+    });
+    expect(region.textContent).toContain(
+      "Pull the latest model information from OpenRouter?",
+    );
+    expect(region.textContent).toContain(
+      "This contacts openrouter.ai once to get the public model list: names, context sizes and prices. No account, key or prompt is sent. Prices are estimates and are stored on this computer with the date.",
+    );
+    await idle();
+    expect(pulls).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Pull now" }));
+    await waitFor(() => expect(pulls).toHaveLength(1));
+    await idle();
+    expect(pulls).toHaveLength(1);
+    expect(fetches).toHaveLength(0);
+    expect(policies).toHaveLength(0);
+    expect(promptRegion()).toBeNull();
+
+    await user.type(screen.getByLabelText(/API key/i), "test-key");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByLabelText(NEW_MODEL.name)).toBeTruthy();
+    expect(screen.getByText(/downloaded/)).toBeTruthy();
+    // The Refresh button stays for later: one request per click
+    await user.click(
+      screen.getByRole("button", { name: "Refresh from openrouter.ai" }),
+    );
+    await waitFor(() => expect(pulls).toHaveLength(2));
+  });
+
+  it("openrouter: Not now sends nothing, persists nothing, and does not ask again this session", async () => {
+    const { messenger, fetches, pulls, policies } = setup();
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="openrouter" onDone={vi.fn()} />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.click(await screen.findByRole("button", { name: "Not now" }));
+    expect(promptRegion()).toBeNull();
     await user.type(screen.getByLabelText(/API key/i), "test-key");
     await user.click(screen.getByRole("button", { name: "Next" }));
     expect(await screen.findByText(/Model list not downloaded/)).toBeTruthy();
+    await idle();
+    expect(pulls).toHaveLength(0);
+    expect(fetches).toHaveLength(0);
+    expect(policies).toHaveLength(0);
   });
 
-  it("keeps the bundled list and says so when offline", async () => {
-    const { messenger, fetches } = setup(true);
+  it("openrouter: Don't ask again persists the choice, and a saved 'never' suppresses the dialog", async () => {
+    const first = setup();
+    const { user, unmount } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="openrouter" onDone={vi.fn()} />,
+      { mockIdeMessenger: first.messenger },
+    );
+    await user.click(await screen.findByLabelText("Don't ask again"));
+    await user.click(screen.getByRole("button", { name: "Not now" }));
+    await waitFor(() => expect(first.policies).toEqual(["never"]));
+    expect(first.pulls).toHaveLength(0);
+    unmount();
+
+    resetCatalogueAnswers(); // a new app session
+    const second = setup({ policy: "never" });
+    await renderWithProviders(
+      <ProviderSetupFlow initialProvider="openrouter" onDone={vi.fn()} />,
+      { mockIdeMessenger: second.messenger },
+    );
+    await idle();
+    expect(promptRegion()).toBeNull();
+    expect(second.pulls).toHaveLength(0);
+  });
+
+  it("openrouter: a downloaded copy on this computer is used and nothing is asked", async () => {
+    const { messenger, pulls } = setup({ cached: true });
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="openrouter" onDone={vi.fn()} />,
+      { mockIdeMessenger: messenger },
+    );
+    await idle();
+    expect(promptRegion()).toBeNull();
+    await user.type(screen.getByLabelText(/API key/i), "test-key");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByLabelText(NEW_MODEL.name)).toBeTruthy();
+    expect(pulls).toHaveLength(0);
+  });
+
+  it("openrouter: a failed pull keeps the list and says so inline", async () => {
+    const { messenger, pulls } = setup({ fail: true });
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="openrouter" onDone={vi.fn()} />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.click(await screen.findByRole("button", { name: "Pull now" }));
+    await user.type(screen.getByLabelText(/API key/i), "test-key");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(
+      await screen.findByText(/Could not reach openrouter.ai \(offline\)/),
+    ).toBeTruthy();
+    expect(pulls).toHaveLength(1);
+    expect(screen.getByText(/Model list not downloaded/)).toBeTruthy();
+  });
+
+  it("keeps the bundled list and says so when Ollama is offline", async () => {
+    const { messenger, fetches } = setup({ fail: true });
     const { user } = await renderWithProviders(
       <ProviderSetupFlow initialProvider="ollama" onDone={vi.fn()} />,
       { mockIdeMessenger: messenger },
@@ -323,5 +442,18 @@ describe("ProviderSetupFlow: catalogue fetch only on request", () => {
     expect(await screen.findByText(/Could not reach ollama.com/)).toBeTruthy();
     expect(fetches).toHaveLength(1);
     expect(screen.getByTestId("model-checklist")).toBeTruthy();
+  });
+
+  it("Not now on Ollama sends nothing and keeps the bundled list", async () => {
+    const { messenger, fetches } = setup();
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="ollama" onDone={vi.fn()} />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.click(screen.getByRole("button", { name: "Not now" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByTestId("model-checklist")).toBeTruthy();
+    await idle();
+    expect(fetches).toHaveLength(0);
   });
 });

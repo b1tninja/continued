@@ -297,6 +297,11 @@ export const baseConfigYamlSchema = z.object({
   rulesByMode: rulesByModeSchema.optional(),
   toolPermissions: toolPermissionsSchema.optional(),
   terminal: terminalSchema.optional(),
+  /**
+   * Whether to offer the one-time download of OpenRouter's public model list
+   * (names, sizes, prices). `ask` (default) shows the dialog, `never` does not.
+   */
+  modelCatalog: z.enum(["ask", "never"]).optional(),
   env: envRecord.optional(),
   requestOptions: requestOptionsSchema.optional(),
 });

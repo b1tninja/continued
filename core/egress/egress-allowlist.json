@@ -124,12 +124,15 @@
         "integrate.api.nvidia.com",
         "llm.kindo.ai",
         "oai.endpoints.kepler.ai.cloud.ovh.net",
-        "ollama.com",
-        "openrouter.ai",
         "registry.ollama.ai",
         "us-south.ml.cloud.ibm.com",
         "www.googleapis.com"
       ]
+    },
+    {
+      "class": "O",
+      "reason": "Public model catalogues (ollama.com/library, openrouter.ai/api/v1/models): a plain GET with no key, contacted only after the person chooses Download, Pull now or Refresh, or runs `continuous models refresh`.",
+      "hosts": ["ollama.com", "openrouter.ai"]
     },
     {
       "class": "S",

@@ -84,6 +84,12 @@ import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
 import {
+  pullOpenRouterCatalog,
+  readModelCatalogPolicy,
+  readOpenRouterCatalog,
+  saveModelCatalogPolicy,
+} from "./llm/modelCatalogStore";
+import {
   convertConnectionToAccount,
   saveProviderModelsToAccount,
 } from "./config/providers/accountSetup";
@@ -437,6 +443,51 @@ export class Core {
         return [];
       }
     });
+
+    on("modelCatalog/status", async () => {
+      const cached = readOpenRouterCatalog();
+      return {
+        policy: readModelCatalogPolicy(),
+        ...(cached
+          ? {
+              openrouter: {
+                fetchedAt: cached.fetchedAt,
+                count: cached.models.length,
+              },
+            }
+          : {}),
+      };
+    });
+
+    on("modelCatalog/cached", async () => {
+      const cached = readOpenRouterCatalog();
+      return cached
+        ? { fetchedAt: cached.fetchedAt, models: cached.models }
+        : null;
+    });
+
+    // The one request to openrouter.ai: runs only on the person's say-so.
+    on("modelCatalog/pull", async () => {
+      try {
+        const catalog = await pullOpenRouterCatalog(
+          (await this.configHandler.loadConfig()).config?.requestOptions,
+        );
+        return {
+          ok: true as const,
+          fetchedAt: catalog.fetchedAt,
+          models: catalog.models,
+        };
+      } catch (e: any) {
+        return {
+          ok: false as const,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    });
+
+    on("modelCatalog/setPolicy", async (msg) => ({
+      saved: saveModelCatalogPolicy(msg.data.policy),
+    }));
 
     on("models/detectLocal", async () => detectLocalServers());
 

@@ -32,8 +32,12 @@ import {
   fetchProviderModels,
   CATALOGUE_HOSTS,
   catalogueAnswered,
+  loadCachedOpenRouterList,
+  loadCatalogPolicy,
   markCatalogueAnswered,
+  openRouterListFetchedAt,
   refreshProviderCatalogue,
+  saveCatalogPolicy,
 } from "../../pages/AddNewModel/configs/fetchProviderModels";
 import {
   DisplayInfo,
@@ -44,6 +48,7 @@ import {
   providers,
 } from "../../pages/AddNewModel/configs/providers";
 import ModelSelectionListbox from "../modelSelection/ModelSelectionListbox";
+import { OpenRouterCataloguePrompt } from "./CataloguePrompt";
 import { LocalServerPicker } from "./LocalServerPicker";
 import { ModelChecklist } from "./ModelChecklist";
 import {
@@ -271,9 +276,35 @@ export function ProviderSetupFlow({
   };
   const noModelsYet = modelLists.top.length === 0 && !modelLists.other?.length;
   const [, setAnswerTick] = useState(0);
+  // OpenRouter: what the user's settings say about asking, and whether a dated
+  // copy of its list is already on this computer. Both are local reads; until
+  // they arrive the prompt is not shown.
+  const [orState, setOrState] = useState<{
+    policy: "ask" | "never";
+    haveCopy: boolean;
+  }>();
+  const isOpenRouter = provider.provider === "openrouter";
+  useEffect(() => {
+    if (!isOpenRouter) return;
+    let cancelled = false;
+    void (async () => {
+      const [policy, date] = await Promise.all([
+        loadCatalogPolicy(ideMessenger),
+        loadCachedOpenRouterList(ideMessenger),
+      ]);
+      if (cancelled) return;
+      setOrState({ policy, haveCopy: !!date });
+      if (date) setCatalogueVersion((v) => v + 1);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpenRouter, ideMessenger]);
   const showCataloguePrompt =
     !!CATALOGUE_HOSTS[provider.provider] &&
-    !catalogueAnswered(provider.provider);
+    !catalogueAnswered(provider.provider) &&
+    (!isOpenRouter ||
+      (orState !== undefined && orState.policy === "ask" && !orState.haveCopy));
   const groups = useMemo(
     () => buildChecklistRows(modelLists, configuredModels),
     [modelLists.top, modelLists.other, configuredModels],
@@ -347,9 +378,15 @@ export function ProviderSetupFlow({
     try {
       if (CATALOGUE_HOSTS[forProvider]) {
         // The only request that leaves the machine for these providers.
-        if (!(await refreshProviderCatalogue(ideMessenger, forProvider))) {
+        const result = await refreshProviderCatalogue(
+          ideMessenger,
+          forProvider,
+        );
+        if (!result.ok) {
           return setRefreshError(
-            `Could not reach ${CATALOGUE_HOSTS[forProvider]}. Showing the bundled list.`,
+            `Could not reach ${CATALOGUE_HOSTS[forProvider]}${
+              result.error ? ` (${result.error})` : ""
+            }. Showing the ${openRouterListFetchedAt() && forProvider === "openrouter" ? "last downloaded" : "bundled"} list.`,
           );
         }
         setCatalogueVersion((v) => v + 1);
@@ -639,7 +676,26 @@ export function ProviderSetupFlow({
         </div>
       )}
 
-      {showCataloguePrompt && !enterKey && (
+      {showCataloguePrompt && !enterKey && isOpenRouter && (
+        <OpenRouterCataloguePrompt
+          onPull={(dontAskAgain) => {
+            if (dontAskAgain) void saveCatalogPolicy(ideMessenger, "never");
+            markCatalogueAnswered(provider.provider);
+            setAnswerTick((v) => v + 1);
+            void refreshModels();
+          }}
+          onNotNow={(dontAskAgain) => {
+            if (dontAskAgain) {
+              void saveCatalogPolicy(ideMessenger, "never");
+              setOrState((s) => ({ haveCopy: false, ...s, policy: "never" }));
+            }
+            markCatalogueAnswered(provider.provider);
+            setAnswerTick((v) => v + 1);
+          }}
+        />
+      )}
+
+      {showCataloguePrompt && !enterKey && !isOpenRouter && (
         <div
           role="region"
           aria-label="Download model list"
@@ -875,6 +931,12 @@ export function ProviderSetupFlow({
             <span className="text-description-muted text-xs">
               Model list not downloaded. Refresh from {catalogueHost}, or type a
               model id.
+            </span>
+          )}
+          {isOpenRouter && openRouterListFetchedAt() && (
+            <span className="text-description-muted text-xs">
+              Model list from {catalogueHost}, downloaded{" "}
+              {new Date(openRouterListFetchedAt()!).toLocaleDateString()}.
             </span>
           )}
           <ModelChecklist
