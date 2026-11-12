@@ -10,6 +10,7 @@ import type {
   LoopItemState,
   LoopItemStatus,
   LoopPolicy,
+  LoopReplacedItem,
   LoopParallelRun,
   LoopQuestion,
   LoopQuestionKind,
@@ -2880,6 +2881,46 @@ function sameTexts(previous: string[], plan: TaskPlan): boolean {
  *   alone; only the repaired item runs again (other failed items stay
  *   failed), and the to-dos it was split into inherit its repairs.
  */
+/**
+ * The to-dos an accepted re-plan took out of the plan, for the plan tree
+ * (LoopState.replacedItems). Their text comes from the plan the loop was
+ * running, when its to-dos still line up with the loop's items. A link to the
+ * to-do that took the place is kept only for a repair that replaced the failed
+ * item with exactly one new to-do: any other re-plan does not say which new
+ * to-do answers which old one, so those show as dropped. Undefined when
+ * nothing was taken out.
+ */
+function recordReplaced(
+  loop: LoopState,
+  plan: TaskPlan,
+  items: LoopItemState[],
+  round: number,
+  repairOf: LoopItemState | undefined,
+): LoopReplacedItem[] | undefined {
+  const kept = new Set(plan.items.map((t) => t.id));
+  const previous = loop.replanned?.planTexts ?? loop.current?.planTexts;
+  const aligned = !!previous && previous.length === loop.items.length;
+  const added = items.filter((i) => i.addedInRound === round);
+  const taken: LoopReplacedItem[] = [];
+  loop.items.forEach((item, i) => {
+    if (kept.has(item.id)) return;
+    const text = aligned ? previous[i] : undefined;
+    taken.push({
+      id: item.id,
+      ...(text ? { text } : {}),
+      round,
+      ...(repairOf?.id === item.id && added.length === 1
+        ? { replacedBy: added[0].id }
+        : {}),
+    });
+  });
+  if (taken.length === 0) return undefined;
+  return [...(loop.replacedItems ?? []), ...taken].slice(-MAX_REPLACED_ITEMS);
+}
+
+/** How many taken-out to-dos the loop remembers */
+const MAX_REPLACED_ITEMS = 20;
+
 export function acceptReplan(
   loop: LoopState,
   plan: TaskPlan,
@@ -2889,10 +2930,15 @@ export function acceptReplan(
   const scope = loop.replanned;
   const unchangedCheckIn = !!scope?.checkIn && sameTexts(scope.planTexts, plan);
   const repairOf = scope?.itemId ? itemState(loop, scope.itemId) : undefined;
+  // The round the plan's new to-dos come in with (LoopItemState.addedInRound)
+  const roundAfter = loop.round + (unchangedCheckIn ? 0 : 1);
   const items = plan.items.map((task) => {
     const known = itemState(loop, task.id);
     if (!known) {
-      const fresh = fromTask(task);
+      const fresh = {
+        ...fromTask(task),
+        ...(roundAfter > 1 ? { addedInRound: roundAfter } : {}),
+      };
       return repairOf?.repairs
         ? { ...fresh, repairs: repairOf.repairs }
         : fresh;
@@ -2908,8 +2954,10 @@ export function acceptReplan(
     }
     return state;
   });
+  const replacedItems = recordReplaced(loop, plan, items, roundAfter, repairOf);
   const strategyState: Partial<LoopState> = {
     replanned: undefined,
+    ...(replacedItems ? { replacedItems } : {}),
     ...(loopStrategy(loop) === "check-in"
       ? { doneSinceReplan: 0, checkInDue: undefined }
       : {}),
