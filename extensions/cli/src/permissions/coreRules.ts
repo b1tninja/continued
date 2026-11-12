@@ -20,6 +20,7 @@ import { processedPathArgs } from "core/tools/permissions/realPath.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
 import { taintInput } from "core/tools/permissions/taint/taintWiring.js";
 import { readUserEnvNames } from "core/tools/permissions/userEnvNames.js";
+import { readUserReviewerPrompt } from "core/tools/permissions/userReviewerPrompt.js";
 import { deputyWorkspace } from "core/tools/permissions/workspaceRoots.js";
 import { resolveShell } from "core/util/shell.js";
 import { readUserGuidance } from "core/util/userGuidance.js";
@@ -336,6 +337,7 @@ export async function evaluateWithCoreRules(
         shell: resolveShell().kind,
         reviewer: input.reviewer ?? null,
         guidance: readUserGuidance(),
+        reviewerPrompt: readUserReviewerPrompt(),
         trustedDomains: readUserTrustedDomains(),
         envNames: readUserEnvNames(),
         environment: {

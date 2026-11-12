@@ -46,7 +46,7 @@ The embeddings model is bundled; nothing is downloaded from Hugging Face at run 
 - `continuous doctor network`, if present in your build, reports the outbound paths. It depends on [#638](https://github.com/b1tninja/continuous/pull/638).
 - The code is open. A firewall or proxy log is the final word.
 
-Two Continue-operated hostnames remain as text or as an unused default (`api.continue.dev`, `continue.dev` links in CLI messages). Nothing in the default local path fetches them; removing them is tracked in the roadmap.
+Two Continue-operated hostnames remain as text or as an unused default (`api.continue.dev`, `continue.dev` links in CLI messages). Nothing in the default local path fetches them, including a first run with no `config.yaml`: the hosted default config that upstream fetched for unconfigured users was removed, so that run makes no connection. Removing the remaining text is tracked in the roadmap.
 
 ## Where secrets are kept
 
