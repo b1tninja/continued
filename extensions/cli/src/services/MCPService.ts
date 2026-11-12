@@ -1,6 +1,11 @@
 import { decodeFQSN, getTemplateVariables } from "@continuedev/config-yaml";
 import { type AssistantConfig } from "@continuedev/sdk";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import {
+  listPromptsPaged,
+  listToolsPaged,
+} from "core/context/mcp/mcpClientLists.js";
+import { connectModernIfSupported } from "core/context/mcp/mcpModernConnect.js";
 import { announcePins } from "core/context/mcp/mcpPinNotices.js";
 import {
   adoptLegacyPin,
@@ -371,7 +376,9 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
               if (!conn?.client) {
                 throw new Error(`Client for ${serverName} not available`);
               }
-              return (await conn.client.listPrompts()).prompts;
+              const { items, warning } = await listPromptsPaged(conn.client);
+              if (warning) connection.warnings.push(warning);
+              return items;
             },
           );
         } catch (error) {
@@ -393,7 +400,9 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
               if (!conn?.client) {
                 throw new Error(`Client for ${serverName} not available`);
               }
-              return (await conn.client.listTools()).tools;
+              const { items, warning } = await listToolsPaged(conn.client);
+              if (warning) connection.warnings.push(warning);
+              return items;
             },
           );
         } catch (error) {
@@ -494,6 +503,28 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
       { name: "continue-cli-client", version: "1.0.0" },
       { capabilities: {} },
     );
+
+    // Revision 2026-07-28 servers answer `server/discover` and need no handshake;
+    // everything else (and any failure of the probe) takes the classic path.
+    if (
+      !("command" in serverConfig) &&
+      (serverConfig.type === undefined ||
+        serverConfig.type === "streamable-http") &&
+      serverConfig.requestOptions?.verifySsl !== false
+    ) {
+      const modern = await connectModernIfSupported({
+        url: serverConfig.url,
+        clientInfo: { name: "continue-cli-client", version: "1.0.0" },
+        headers: {
+          ...serverConfig.requestOptions?.headers,
+          ...((serverConfig.apiKey ||
+            this.apiKeyCache.get(serverConfig.name)) && {
+            Authorization: `Bearer ${serverConfig.apiKey ?? this.apiKeyCache.get(serverConfig.name)}`,
+          }),
+        },
+      });
+      if (modern) return modern as unknown as Client;
+    }
 
     if ("command" in serverConfig) {
       // STDIO: no need to check type, just if command is present

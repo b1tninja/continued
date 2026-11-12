@@ -13,6 +13,13 @@ import {
   SSEClientTransport,
   SseError,
 } from "@modelcontextprotocol/sdk/client/sse.js";
+import {
+  listPromptsPaged,
+  listResourceTemplatesPaged,
+  listResourcesPaged,
+  listToolsPaged,
+} from "./mcpClientLists";
+import { connectModernIfSupported } from "./mcpModernConnect";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import {
   StreamableHTTPClientTransport,
@@ -109,6 +116,8 @@ export type MCPExtras = {
 
 class MCPConnection {
   public client: Client;
+  /** The SDK client; `client` points at it except while a stateless server is connected. */
+  private legacyClient: Client;
   public abortController: AbortController;
   public status: MCPConnectionStatus = "not-connected";
   public isProtectedResource = false;
@@ -154,6 +163,7 @@ class MCPConnection {
         capabilities: {},
       },
     );
+    this.legacyClient = this.client;
 
     this.abortController = new AbortController();
 
@@ -165,11 +175,11 @@ class MCPConnection {
       async () => {
         if (this.status !== "connected") return;
         try {
-          const { tools } = await this.client.listTools(
-            {},
-            { signal: this.abortController.signal },
-          );
-          this.tools = tools;
+          const { items, warning } = await listToolsPaged(this.client, {
+            signal: this.abortController.signal,
+          });
+          this.tools = items;
+          if (warning) this.infos.push(warning);
           await this.refreshPins();
           this.onToolsChanged?.();
         } catch (e) {
@@ -300,6 +310,9 @@ class MCPConnection {
     } catch {
       // nothing to close, or it was already closed
     }
+    // A previous stateless connection is replaced by the SDK client; the
+    // negotiation below decides again.
+    this.client = this.legacyClient;
 
     this.sawUnauthorized = false;
     // OAuth for SSE and streamable-http: if the user has signed in, hand the
@@ -373,6 +386,8 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
                     throw error;
                   }
                 }
+              } else if (await this.connectStateless(authProvider)) {
+                // Revision 2026-07-28: no handshake and no transport to open.
               } else {
                 // SSE/HTTP: if type isn't explicit: try http and fall back to sse
                 if (this.options.type === "sse") {
@@ -448,11 +463,12 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
               // Resources <—> Context Provider
               if (capabilities?.resources) {
                 try {
-                  const { resources } = await this.client.listResources(
-                    {},
+                  const { items, warning } = await listResourcesPaged(
+                    this.client,
                     { signal: timeoutController.signal },
                   );
-                  this.resources = resources;
+                  this.resources = items;
+                  if (warning) this.infos.push(warning);
                 } catch (e) {
                   let errorMessage = `Error loading resources for MCP Server ${this.options.name}`;
                   if (e instanceof Error) {
@@ -463,13 +479,12 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
 
                 // Resource templates
                 try {
-                  const { resourceTemplates } =
-                    await this.client.listResourceTemplates(
-                      {},
-                      { signal: timeoutController.signal },
-                    );
-
-                  this.resourceTemplates = resourceTemplates;
+                  const { items, warning } = await listResourceTemplatesPaged(
+                    this.client,
+                    { signal: timeoutController.signal },
+                  );
+                  this.resourceTemplates = items;
+                  if (warning) this.infos.push(warning);
                 } catch (e) {
                   let errorMessage = `Error loading resource templates for MCP Server ${this.options.name}`;
                   if (e instanceof Error) {
@@ -482,11 +497,11 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
               // Tools <—> Tools
               if (capabilities?.tools) {
                 try {
-                  const { tools } = await this.client.listTools(
-                    {},
-                    { signal: timeoutController.signal },
-                  );
-                  this.tools = tools;
+                  const { items, warning } = await listToolsPaged(this.client, {
+                    signal: timeoutController.signal,
+                  });
+                  this.tools = items;
+                  if (warning) this.infos.push(warning);
                   await this.refreshPins();
                 } catch (e) {
                   let errorMessage = `Error loading tools for MCP Server ${this.options.name}`;
@@ -500,11 +515,14 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
               // Prompts <—> Slash commands
               if (capabilities?.prompts) {
                 try {
-                  const { prompts } = await this.client.listPrompts(
-                    {},
-                    { signal: timeoutController.signal },
+                  const { items, warning } = await listPromptsPaged(
+                    this.client,
+                    {
+                      signal: timeoutController.signal,
+                    },
                   );
-                  this.prompts = prompts;
+                  this.prompts = items;
+                  if (warning) this.infos.push(warning);
                 } catch (e) {
                   let errorMessage = `Error loading prompts for MCP Server ${this.options.name}`;
                   if (e instanceof Error) {
@@ -752,6 +770,37 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
         headers,
       },
     });
+  }
+
+  /**
+   * Ask an HTTP server for `server/discover`. True when it speaks revision
+   * 2026-07-28 and `client` now is the stateless client; false leaves
+   * everything to the classic handshake.
+   */
+  private async connectStateless(
+    authProvider?: MCPConnectionOauthProvider,
+  ): Promise<boolean> {
+    const o = this.options;
+    if (
+      !("url" in o) ||
+      !(o.type === undefined || o.type === "streamable-http")
+    ) {
+      return false;
+    }
+    const modern = await connectModernIfSupported({
+      url: o.url,
+      clientInfo: { name: "continue-client", version: "1.0.0" },
+      headers: {
+        ...o.requestOptions?.headers,
+        ...(o.apiKey && { Authorization: `Bearer ${o.apiKey}` }),
+      },
+      accessToken: async () => (await authProvider?.tokens())?.access_token,
+      fetch: this.getFetch(),
+    });
+    if (!modern) return false;
+    this.client = modern as unknown as Client;
+    this.transport = { close: async () => {} } as Transport;
+    return true;
   }
 
   private constructHttpTransport(
