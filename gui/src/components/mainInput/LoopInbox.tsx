@@ -226,6 +226,16 @@ export function LoopInbox() {
             New plan waiting on its card: {loop.replanReason}
           </div>
         )}
+        {(loop.autoDecisions ?? []).slice(-3).map((d, i) => (
+          <div
+            key={`${d.at}-${i}`}
+            data-testid="loop-auto-decision"
+            title={`By the system, under ${d.source}`}
+            className="mt-0.5 truncate text-description"
+          >
+            {d.text}
+          </div>
+        ))}
         {open.length > 0 && (
           <div
             data-testid="loop-questions-pointer"
