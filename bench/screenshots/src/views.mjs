@@ -155,8 +155,8 @@ export function parseThemes(value) {
   if (!value || value === "both") return [...DEFAULTS.themes];
   return value.split(",").map((s) => {
     const t = s.trim();
-    if (t !== "dark" && t !== "light") {
-      throw new Error(`Bad theme "${s}": dark or light`);
+    if (t !== "dark" && t !== "light" && t !== "hc") {
+      throw new Error(`Bad theme "${s}": dark, light or hc`);
     }
     return t;
   });

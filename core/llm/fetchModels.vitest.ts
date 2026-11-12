@@ -2,6 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fetchModels, windowFromInputAndOutput } from "./fetchModels";
 
+// Provider list requests go through the shared fetch; stand in for it with the
+// global stub these tests already use.
+vi.mock("@continuedev/fetch", () => ({
+  fetchwithRequestOptions: (...args: unknown[]) =>
+    (globalThis as any).fetch(...args),
+}));
+
 describe("windowFromInputAndOutput", () => {
   it("adds the output limit to the input limit", () => {
     expect(windowFromInputAndOutput(100_000, 128_000)).toBe(228_000);

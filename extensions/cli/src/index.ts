@@ -4,6 +4,7 @@
 import "./init.js";
 
 import { Command } from "commander";
+import { dismissCurrentNotice } from "core/util/retirementStartup.js";
 
 import { acp } from "./commands/acp.js";
 import { agentsCommand } from "./commands/agents.js";
@@ -12,6 +13,7 @@ import { addAuditSuggestOptions } from "./commands/auditSuggest.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { registerCleanCommand } from "./commands/clean.js";
+import { doctorCommand } from "./commands/doctor.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
@@ -337,12 +339,17 @@ program
   .option("--port <port>", "Port to run the server on (default: 8000)", "8000")
   .option(
     "--host <host>",
-    "Interface to listen on (default: 127.0.0.1). Off loopback, --token is required and must be at least 16 characters",
+    "Interface to listen on (default: 127.0.0.1). Anything else listens beyond this computer",
     "127.0.0.1",
   )
   .option(
     "--token <token>",
-    "Require this bearer token on every request (also read from CONTINUOUS_SERVE_TOKEN). Optional on loopback",
+    "Bearer token every request must carry, at least 16 characters (also read from CONTINUOUS_SERVE_TOKEN). Generated and printed once when omitted",
+  )
+  .option("--no-auth", "Run with no access token. Only allowed on loopback")
+  .option(
+    "--allow-origin <origin...>",
+    "A browser origin that may call the server, exactly (http://localhost:3000). Default: none",
   )
   .option(
     "--id <storageId>",
@@ -420,6 +427,16 @@ program
   .action(async (action: string | undefined, options) => {
     const code = await hooksCommand(action, { yes: options.yes });
     await gracefulExit(code);
+  });
+
+// Connection diagnostics
+program
+  .command("doctor [topic] [urls...]")
+  .description(
+    "Diagnose proxy and certificate problems (doctor network [url...])",
+  )
+  .action(async (topic: string | undefined, urls: string[]) => {
+    await gracefulExit(await doctorCommand(topic, urls));
   });
 
 // Reviewer evaluation: dry by default, --run sends the requests
@@ -544,9 +561,12 @@ addAuditSuggestOptions(
 program
   .command("test-connection")
   .description(
-    "Check an OpenAI-compatible endpoint: models listed, and with --model how it answers a tool call",
+    "Check an endpoint: models listed, and with --model how it answers a tool call (Anthropic: whether the model is deprecated or retiring)",
   )
-  .option("--provider <name>", "Provider (openai, ollama, llama.cpp, ...)")
+  .option(
+    "--provider <name>",
+    "Provider (openai, anthropic, ollama, llama.cpp, ...)",
+  )
   .option("--api-base <url>", "API base URL (defaults per provider)")
   .option("--api-key-env <name>", "Environment variable holding the API key")
   .option("--model <id>", "Also send one tool-call probe to this model")
@@ -555,6 +575,20 @@ program
   .action(async (options) => {
     const code = await testConnectionCommand(options);
     await gracefulExit(code);
+  });
+
+// Hide the retirement notice for a model (it is shown at start-up once a day)
+program
+  .command("dismiss-notice <model>")
+  .description(
+    "Hide the deprecation or retirement notice shown at start-up for an Anthropic model",
+  )
+  .action(async (model: string) => {
+    const hidden = dismissCurrentNotice({ provider: "anthropic", model });
+    console.log(
+      hidden ? `Notice for ${model} hidden.` : `No notice for ${model}.`,
+    );
+    await gracefulExit(0);
   });
 
 // Handle unknown commands
