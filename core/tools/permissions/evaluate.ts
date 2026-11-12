@@ -18,7 +18,7 @@ import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { askProtectionHit } from "./askProtections";
 import { deputyCallHit, type DeputyCallInput } from "./deputyCall";
-import { builtinRuleOn } from "./policy";
+import { builtinRuleOn, questionsNeverAsk } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
 import type { Sink } from "./taint/taintSinks";
@@ -182,10 +182,49 @@ export interface EvaluateInput extends TaintedSessionInput {
 export function evaluateToolPolicyWithRules(
   input: EvaluateInput,
 ): ToolPolicyResult {
-  return applyTaintedSessionRule(
+  return noAskAtIdgaf(
     input,
-    lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input))),
+    applyTaintedSessionRule(
+      input,
+      lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input))),
+    ),
   );
+}
+
+export const IDGAF_NO_ASK_REASON =
+  "Not run: this would ask, and Questions is IDGAF, so nobody is asked. What stopped it is a floor that no level lifts.";
+
+/**
+ * Questions is IDGAF: nothing asks. A call whose own area is at the top level is allowed
+ * outright, so what is left asking there is a floor that no level lifts (a
+ * command that hides what it runs, a write to a path built at run time, a
+ * tainted session). Such a call is refused instead of held for the person,
+ * who has said they will not be asked. An area below the top level keeps its own
+ * asking: that is the Tool use, File edits or Context use setting, not a
+ * question.
+ */
+function noAskAtIdgaf(
+  input: EvaluateInput,
+  result: ToolPolicyResult,
+): ToolPolicyResult {
+  if (
+    result.policy !== "allowedWithPermission" ||
+    !questionsNeverAsk(input.approval?.levels.questions)
+  ) {
+    return result;
+  }
+  const level = levelOfCall(input.approval, input.toolName, input.tool, {
+    parsedArgs: input.parsedArgs,
+    cwd: input.cwd,
+    shell: input.shell,
+  })?.level;
+  if (level !== "idgaf") return result;
+  return {
+    ...result,
+    policy: "disabled",
+    source: result.source ?? "floor",
+    reason: `${IDGAF_NO_ASK_REASON}${result.reason ? ` (${result.reason})` : ""}`,
+  };
 }
 
 /**
