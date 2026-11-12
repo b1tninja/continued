@@ -1,6 +1,11 @@
 import type { Command } from "commander";
 
-import { configureConsoleForHeadless } from "../init.js";
+import { addRunLimitOptions } from "../budget/runLimits.js";
+import {
+  configureConsoleForHeadless,
+  safeStderr,
+  safeStdout,
+} from "../init.js";
 import {
   activatePlanBuild,
   deactivatePlanBuild,
@@ -28,9 +33,12 @@ export interface PlanIo {
   err: (line: string) => void;
 }
 
+// With -p in argv init.ts replaces process.stdout/stderr.write with no-ops so
+// that dependencies stay quiet; the command's own output has to go through
+// the saved originals or a refusal under -p prints nothing.
 const stdio: PlanIo = {
-  out: (l) => process.stdout.write(`${l}\n`),
-  err: (l) => process.stderr.write(`${l}\n`),
+  out: (l) => safeStdout(`${l}\n`),
+  err: (l) => safeStderr(`${l}\n`),
 };
 
 function formatTime(ms: number): string {
@@ -129,6 +137,29 @@ export async function planBuildCommand(
   return 0;
 }
 
+/**
+ * Commander hands a flag to the first command on the line that declares it,
+ * and the root `continuous` declares every flag `plan build` does, so
+ * `continuous plan build a -p --config x` leaves the values on the root and
+ * the subcommand sees none of them. Fills what the subcommand lacks from the
+ * root (the same inheritance `serve` and `acp` use).
+ */
+export function inheritRootOptions<T extends Record<string, unknown>>(
+  options: T,
+  root: Command | null | undefined,
+): T {
+  const merged: Record<string, unknown> = { ...options };
+  if (!root) return merged as T;
+  for (const [key, value] of Object.entries(root.opts())) {
+    const own = merged[key];
+    const ownUnset = own === undefined || (Array.isArray(own) && !own.length);
+    const rootSet =
+      value !== undefined && !(Array.isArray(value) && !value.length);
+    if (ownUnset && rootSet) merged[key] = value;
+  }
+  return merged as T;
+}
+
 /** Adds `continuous plan` with `list` and `build` to the program. */
 export function registerPlanCommand(program: Command): void {
   const plan = program
@@ -145,16 +176,19 @@ export function registerPlanCommand(program: Command): void {
     .action(async (options) => {
       await gracefulExit(planListCommand(options));
     });
-  addCommonOptions(
-    plan
-      .command("build <name>")
-      .description(
-        "Run the agent on a plan (a name or a path inside .continuous/plans), from its first unchecked to-do; a to-do's check: is run by the harness",
-      )
-      .option("-p, --print", "Headless: run to the end without a TUI")
-      .option("--force", "Build a draft plan with open decisions"),
-  ).action(async (name: string, options) => {
-    const code = await planBuildCommand(name, options);
+  addRunLimitOptions(
+    addCommonOptions(
+      plan
+        .command("build <name>")
+        .description(
+          "Run the agent on a plan (a name or a path inside .continuous/plans), from its first unchecked to-do; a to-do's check: is run by the harness",
+        )
+        .option("-p, --print", "Headless: run to the end without a TUI")
+        .option("--force", "Build a draft plan with open decisions"),
+    ),
+  ).action(async (name: string, options, command: Command) => {
+    const merged = inheritRootOptions(options, command.parent?.parent);
+    const code = await planBuildCommand(name, merged);
     await gracefulExit(code);
   });
 }

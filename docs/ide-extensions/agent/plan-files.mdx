@@ -27,8 +27,8 @@ continuous plan build add-retry
 
 - The plan's to-dos become the task list. Completed ones stay completed, so a plan resumes at its first unchecked to-do.
 - Each status the agent reports is written back to the checkboxes in the plan file. Only the checkbox character changes; the rest of the file is left as it was.
-- A draft plan is refused unless you pass `--force`. A done plan is refused.
-- With a terminal it opens the chat; with `-p`, or without a terminal, it runs to the end and prints the answer. The usual flags (`--auto`, `--allow`, `--config` and so on) apply, and the permission rules are the ones you already have.
+- A draft plan is refused unless you pass `--force`. A done plan is refused. A refusal prints the reason on stderr and exits with code 2.
+- With a terminal it opens the chat; with `-p`, or without a terminal, it runs to the end and prints the answer. The usual flags (`--auto`, `--allow`, `--config` and so on) apply wherever they stand on the line, and the permission rules are the ones you already have.
 
 ### Checks
 
