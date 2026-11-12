@@ -1,5 +1,6 @@
 import type {
   LoopAnswer,
+  LoopAutoDecision,
   LoopAnswerRoute,
   LoopAutonomy,
   LoopBlocker,
@@ -43,6 +44,11 @@ import { TASK_LIST_BLOCK_CLOSE, TASK_LIST_BLOCK_OPEN } from "./taskPlan.js";
 import { describeBreach } from "./itemBudget";
 import { addCost } from "./costOf";
 import { costSince } from "./loopCost";
+import {
+  autoAnswerFor,
+  autoAnsweredLine,
+  NO_ONE_AVAILABLE,
+} from "./autoAnswer";
 
 /**
  * Loop mode: build a plan item by item without the person driving each step.
@@ -1351,6 +1357,24 @@ function todos(n: number): string {
   return `${n} to-do${n === 1 ? "" : "s"}`;
 }
 
+/** Items whose failed or never-run check the plan changed or removed. */
+function changedChecks(loop: LoopState, plan: TaskPlan) {
+  const task = (id: string) => plan.items.find((t) => t.id === id);
+  const checkOf = (id: string) => {
+    const t = task(id);
+    return t ? itemCheck(loop, t) : undefined;
+  };
+  const failedCheck = loop.items.filter(
+    (i) => i.check?.status === "failed" && checkOf(i.id) !== i.check.command,
+  );
+  const stuckCheck = loop.items.filter((i) => {
+    if (i.status !== "failed" || i.check?.status === "failed") return false;
+    const previous = loop.current?.planChecks?.[i.id];
+    return previous !== undefined && checkOf(i.id) !== previous;
+  });
+  return { failedCheck, stuckCheck };
+}
+
 /**
  * What a re-plan did that nobody should find out about only afterwards: it
  * changed or removed a check that had failed, which is an easy way to make an
@@ -1367,19 +1391,8 @@ export function replanConcern(
   loop: LoopState,
   plan: TaskPlan,
 ): string | undefined {
+  const { failedCheck, stuckCheck } = changedChecks(loop, plan);
   const task = (id: string) => plan.items.find((t) => t.id === id);
-  const checkOf = (id: string) => {
-    const t = task(id);
-    return t ? itemCheck(loop, t) : undefined;
-  };
-  const failedCheck = loop.items.filter(
-    (i) => i.check?.status === "failed" && checkOf(i.id) !== i.check.command,
-  );
-  const stuckCheck = loop.items.filter((i) => {
-    if (i.status !== "failed" || i.check?.status === "failed") return false;
-    const previous = loop.current?.planChecks?.[i.id];
-    return previous !== undefined && checkOf(i.id) !== previous;
-  });
   const droppedDone = loop.items.filter(
     (i) => i.status === "done" && !i.skipped && !task(i.id),
   );
@@ -1467,20 +1480,83 @@ export function endReplan(
       : replanDecision(loop, planTexts, plan);
   const concern = plan ? replanConcern(loop, plan) : undefined;
   const reason = concern ? `${concern} ${decision.reason}` : decision.reason;
-  return {
-    loop: {
-      ...loop,
-      current: undefined,
-      status: "awaiting_plan",
-      replanReason: reason,
-      replanned: {
-        planTexts,
-        ...(current?.checkIn ? { checkIn: current.checkIn } : {}),
-        ...repairOf,
-      },
+  // A concern holds the re-plan only where the person has not opted out of
+  // plan cards (planHandoff: Manual and Cautious, with the rule on)
+  const concernHolds =
+    !!concern &&
+    (!loop.policy ||
+      planHandoff({
+        policy: policySettings(loop.policy),
+        first: false,
+        added: 0,
+        concern,
+      }).decision !== "go");
+  const accept = decision.accept && !concernHolds;
+  const waiting: LoopState = {
+    ...loop,
+    current: undefined,
+    status: "awaiting_plan",
+    replanReason: reason,
+    replanned: {
+      planTexts,
+      ...(current?.checkIn ? { checkIn: current.checkIn } : {}),
+      ...repairOf,
     },
-    accept: decision.accept && !concern,
   };
+  // Accepted without a card: say what changed, where nobody has to look
+  const noted =
+    accept && plan && loop.policy
+      ? addAutoDecision(waiting, {
+          kind: "plan",
+          source: `Plan edits: ${policyLevelLabel("plan", loop.policy.plan)}`,
+          text: replanNotice(loop, plan, planTexts),
+        })
+      : waiting;
+  return { loop: noted, accept };
+}
+
+/** The most auto decisions a loop keeps. */
+const MAX_AUTO_DECISIONS = 50;
+
+/**
+ * Records something the loop decided for the person, by the policy they set:
+ * who decided (always `system`), under which setting, and what. Shown as one
+ * line in the inbox; it never blocks.
+ */
+export function addAutoDecision(
+  loop: LoopState,
+  decision: Pick<LoopAutoDecision, "kind" | "source" | "text">,
+  now: Date = new Date(),
+): LoopState {
+  const next: LoopAutoDecision = { ...decision, by: "system", at: iso(now) };
+  return {
+    ...loop,
+    autoDecisions: [...(loop.autoDecisions ?? []), next].slice(
+      -MAX_AUTO_DECISIONS,
+    ),
+  };
+}
+
+/**
+ * One line for a re-plan that went on by itself: "Plan updated: 11 kept, 1
+ * added, 1 dropped; check of item 1 replaced". `loop` is the loop as the
+ * re-plan began (its current run still set); `planTexts` the plan it ran.
+ */
+export function replanNotice(
+  loop: LoopState,
+  plan: TaskPlan,
+  planTexts: string[],
+): string {
+  const diff = replanDiff({ ...loop, replanned: { planTexts } }, plan);
+  const counts = diff
+    ? `${diff.kept.length} kept, ${diff.added.length} added, ${diff.dropped.length} dropped`
+    : `${plan.items.length} to-dos`;
+  const { failedCheck, stuckCheck } = changedChecks(loop, plan);
+  const ids = [...new Set([...failedCheck, ...stuckCheck].map((i) => i.id))];
+  const checks = ids.length
+    ? `; check of ${ids.length === 1 ? "item" : "items"} ${ids.join(", ")} replaced`
+    : "";
+  return `Plan updated: ${counts}${checks}`;
 }
 
 export function startItemRun(
@@ -2342,29 +2418,50 @@ export type HoldResult =
  */
 function decideAlone(
   loop: LoopState,
-  itemId: string | undefined,
-  question: string,
-  assumption: unknown,
+  input: {
+    itemId?: string;
+    question: string;
+    assumption: unknown;
+    type?: QuestionType;
+    options?: string[];
+  },
   now: Date,
 ): HoldResult {
+  const { itemId, question, assumption, type, options } = input;
+  const answer = autoAnswerFor(options);
+  const source = loop.policy
+    ? `Questions: ${policyLevelLabel("questions", loop.policy.questions)}`
+    : "Autonomy: IDGAF";
   const decided: LoopQuestion = {
     id: nextId("q", loop.questions),
     ...(itemId ? { itemId } : {}),
     question,
     kind: "assumption",
+    ...(type ? { type } : {}),
+    ...(options ? { options } : {}),
     askedAt: iso(now),
     decidedAlone: true,
     answerId: "self",
+    autoAnswer: { text: answer.text, by: "system", source },
     ...(typeof assumption === "string" && assumption.trim()
       ? { assumption: assumption.trim() }
       : {}),
   };
+  const kept =
+    loop.questions.length < LOOP_LIMITS.maxQuestions
+      ? { ...loop, questions: [...loop.questions, decided] }
+      : loop;
   return {
     ok: true,
-    loop:
-      loop.questions.length < LOOP_LIMITS.maxQuestions
-        ? { ...loop, questions: [...loop.questions, decided] }
-        : loop,
+    loop: addAutoDecision(
+      kept,
+      {
+        kind: "question",
+        source,
+        text: autoAnsweredLine(question, answer.text),
+      },
+      now,
+    ),
     question: decided,
     duplicate: false,
   };
@@ -2429,7 +2526,17 @@ export function holdQuestion(
     return { ok: false, error: 'kind must be "blocking" or "assumption"' };
   }
   if (kind !== "approval" && loopQuestionDecider(loop, type) === "agent") {
-    return decideAlone(loop, input.itemId, question, input.assumption, now);
+    return decideAlone(
+      loop,
+      {
+        itemId: input.itemId,
+        question,
+        assumption: input.assumption,
+        type,
+        options: questionOptions(input.options),
+      },
+      now,
+    );
   }
   const assumption =
     typeof input.assumption === "string" ? input.assumption.trim() : "";
@@ -3621,7 +3728,11 @@ export function holdQuestionResult(
   names: LoopToolNames = LOOP_TOOL_NAMES,
 ): string {
   if (question.decidedAlone) {
-    return `Nobody will answer this: this loop decides for itself. Go on with your best judgment, even if the decision is important, and say what you chose in your summary. Do not report "waiting".`;
+    const auto = question.autoAnswer;
+    if (auto && auto.text !== NO_ONE_AVAILABLE) {
+      return `Answered automatically (${auto.source}): ${auto.text}. Go on with it, even if the decision is important, and say so in your summary. Do not report "waiting".`;
+    }
+    return `${NO_ONE_AVAILABLE}. This loop never waits for the person, even on an important decision. Do not report "waiting".`;
   }
   const prefix = duplicate
     ? `You already asked this (${question.id}).`
