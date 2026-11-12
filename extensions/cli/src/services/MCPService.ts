@@ -350,8 +350,7 @@ export class MCPService
     try {
       if (unrendered.length > 0) {
         const message = `${serverConfig.name} MCP Server has unresolved secrets: ${unrendered.join(", ")}
-For personal use you can set the secret in the hub at https://continue.dev/settings/secrets or pass it to the CLI environment.
-Org-level secrets can only be used for MCP by Background Agents (https://docs.continue.dev/hub/agents/overview) when \"Include in Env\" is enabled for the secret.`;
+Set each secret as an environment variable or in a .env file (~/.continuous/.env, .continuous/.env, .continue/.env or .env in the project). Secrets are never fetched from a server.`;
         if (this.isHeadless) {
           throw new Error(message);
         } else {

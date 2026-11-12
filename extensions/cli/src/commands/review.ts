@@ -305,8 +305,7 @@ export async function review(options: ReviewOptions = {}): Promise<void> {
         ) +
         chalk.dim(
           "  2. Or specify an agent: cn review --review-agents org/agent-name\n",
-        ) +
-        chalk.dim("  3. Or configure reviews on https://continue.dev\n"),
+        ),
     );
     process.exit(0);
   }

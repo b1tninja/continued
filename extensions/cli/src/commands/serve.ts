@@ -9,7 +9,6 @@ import { prependPrompt } from "src/util/promptProcessor.js";
 import { startRunLimits } from "../budget/runLimits.js";
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
-import { setAgentId } from "../index.js";
 import { loopWaveRunning } from "../loop/loopSession.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import {
@@ -23,11 +22,11 @@ import {
   ConfigServiceState,
   ModelServiceState,
 } from "../services/types.js";
-import { createSession, loadOrCreateSessionById } from "../session.js";
+import { createSession } from "../session.js";
 import { messageQueue } from "../stream/messageQueue.js";
 import { constructSystemMessage } from "../systemMessage.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
-import { gracefulExit, updateAgentMetadata } from "../util/exit.js";
+import { gracefulExit } from "../util/exit.js";
 import { formatError } from "../util/formatError.js";
 import { getGitDiffSnapshot } from "../util/git.js";
 import { logger } from "../util/logger.js";
@@ -43,7 +42,6 @@ import {
 } from "./serve.auth.js";
 import { installServeGuards, type ServerState } from "./serve.helpers.js";
 import {
-  getServeStateSnapshot,
   processMessages,
   registerMessageRoutes,
   type ServeMessageContext,
@@ -59,8 +57,6 @@ interface ServeOptions extends ExtendedCommandOptions {
   token?: string;
   /** Browser origins that may call the server, exactly */
   allowOrigin?: string[];
-  /** Storage identifier for remote sync */
-  id?: string;
 }
 
 /**
@@ -98,9 +94,6 @@ function logServeConfiguration(
 }
 
 export async function serve(prompt?: string, options: ServeOptions = {}) {
-  // Set agent ID for error reporting if provided
-  setAgentId(options.id);
-
   // Check if prompt should come from stdin instead of parameter
   let actualPrompt = prompt;
   if (!prompt) {
@@ -171,11 +164,7 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     });
   }
 
-  const trimmedId = options.id?.trim();
-  const session =
-    trimmedId && trimmedId.length > 0
-      ? loadOrCreateSessionById(trimmedId, initialHistory)
-      : createSession(initialHistory);
+  const session = createSession(initialHistory);
 
   // Align ChatHistoryService with server session and enable remote mode
   try {
@@ -210,22 +199,6 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     }
   };
 
-  const storageSyncService = services.storageSync;
-  let storageSyncActive = await storageSyncService.startFromOptions({
-    storageOption: options.id,
-    accessToken: null,
-    syncSessionHistory,
-    getCompleteStateSnapshot: () => getServeStateSnapshot(state),
-    isActive: () => state.serverRunning,
-  });
-
-  const stopStorageSync = () => {
-    if (storageSyncActive) {
-      storageSyncService.stop();
-      storageSyncActive = false;
-    }
-  };
-
   // Record session start
   telemetryService.recordSessionStart();
   telemetryService.startActiveTime();
@@ -246,7 +219,6 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       return services.model.getState().llmApi ?? llmApi;
     },
     syncSessionHistory,
-    onIdle: () => storageSyncService.markAgentStatusUnread(),
   };
   registerMessageRoutes(app, messageCtx);
   registerAgentsRoute(app, state);
@@ -329,7 +301,6 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
 
     // Set server running flag to false to stop processing
     state.serverRunning = false;
-    stopStorageSync();
 
     // Abort any current processing
     if (state.currentAbortController) {
@@ -346,14 +317,6 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     const handleExitResponse = async () => {
       server.close(async () => {
         telemetryService.stopActiveTime();
-
-        // Update metadata one final time before exiting (with completion flag)
-        try {
-          const history = services.chatHistory?.getHistory();
-          await updateAgentMetadata({ history, isComplete: true });
-        } catch (err) {
-          logger.debug("Failed to update metadata (non-critical)", err as any);
-        }
 
         gracefulExit(0).catch((err) => {
           logger.error(`Graceful exit failed: ${formatError(err)}`);
@@ -429,17 +392,8 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
         ),
       );
       state.serverRunning = false;
-      stopStorageSync();
       server.close(async () => {
         telemetryService.stopActiveTime();
-
-        // Update metadata one final time before exiting (with completion flag)
-        try {
-          const history = services.chatHistory?.getHistory();
-          await updateAgentMetadata({ history, isComplete: true });
-        } catch (err) {
-          logger.debug("Failed to update metadata (non-critical)", err as any);
-        }
 
         gracefulExit(0).catch((err) => {
           logger.error(`Graceful exit failed: ${formatError(err)}`);
@@ -457,21 +411,12 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   process.on("SIGINT", () => {
     console.log(chalk.yellow("\nShutting down server..."));
     state.serverRunning = false;
-    stopStorageSync();
     if (inactivityChecker) {
       clearInterval(inactivityChecker);
       inactivityChecker = null;
     }
     server.close(async () => {
       telemetryService.stopActiveTime();
-
-      // Update metadata one final time before exiting (with completion flag)
-      try {
-        const history = services.chatHistory?.getHistory();
-        await updateAgentMetadata({ history, isComplete: true });
-      } catch (err) {
-        logger.debug("Failed to update metadata (non-critical)", err as any);
-      }
 
       gracefulExit(0).catch((err) => {
         logger.error(`Graceful exit failed: ${formatError(err)}`);

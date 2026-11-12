@@ -12,13 +12,6 @@ export const services = {
     shouldAsk: vi.fn(() => Promise.resolve(false)),
     handleToolCall: vi.fn(() => Promise.resolve({ allowed: true })),
   },
-  artifactUpload: {
-    uploadArtifact: vi.fn(() =>
-      Promise.resolve({ success: true, filename: "test.png" }),
-    ),
-    uploadArtifacts: vi.fn(() => Promise.resolve([])),
-    getState: vi.fn(() => ({ uploadsInProgress: 0, lastError: null })),
-  },
 };
 
 export const reloadService = vi.fn(() => Promise.resolve(undefined));
@@ -35,7 +28,5 @@ export const SERVICE_NAMES = {
   SYSTEM_MESSAGE: "systemMessage",
   CHAT_HISTORY: "chatHistory",
   UPDATE: "update",
-  STORAGE_SYNC: "storageSync",
   AGENT_FILE: "agentFile",
-  ARTIFACT_UPLOAD: "artifactUpload",
 } as const;

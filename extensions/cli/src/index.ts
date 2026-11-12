@@ -12,7 +12,6 @@ import { agentsCommand } from "./commands/agents.js";
 import { auditCommand } from "./commands/audit.js";
 import { addAuditSuggestOptions } from "./commands/auditSuggest.js";
 import { chat } from "./commands/chat.js";
-import { checks } from "./commands/checks.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
@@ -31,7 +30,6 @@ import {
 } from "./flags/flagValidator.js";
 import { configureConsoleForHeadless, safeStderr } from "./init.js";
 import { addCommonOptions, mergeParentOptions } from "./shared-options.js";
-import { post } from "./util/apiClient.js";
 import { markUnhandledError } from "./util/errorState.js";
 import { gracefulExit } from "./util/exit.js";
 import { logger } from "./util/logger.js";
@@ -45,9 +43,6 @@ let showExitMessage: boolean;
 let exitMessageCallback: (() => void) | null;
 let lastCtrlCTime: number;
 
-// Agent ID for serve mode - set when serve command is invoked with --id
-let agentId: string | undefined;
-
 // Initialize state immediately to avoid temporal dead zone issues with exported functions
 (function initializeTUIState() {
   tuiUnmount = null;
@@ -55,11 +50,6 @@ let agentId: string | undefined;
   exitMessageCallback = null;
   lastCtrlCTime = 0;
 })();
-
-// Set the agent ID for error reporting (called by serve command)
-export function setAgentId(id: string | undefined) {
-  agentId = id;
-}
 
 // Register TUI cleanup function for graceful shutdown
 export function setTUIUnmount(unmount: () => void) {
@@ -111,27 +101,6 @@ export function shouldShowExitMessage(): boolean {
   return showExitMessage;
 }
 
-// Helper to report unhandled errors to the API when running in serve mode
-async function reportUnhandledErrorToApi(error: Error): Promise<void> {
-  if (!agentId) {
-    // Not running in serve mode with an agent ID, skip API reporting
-    return;
-  }
-
-  try {
-    await post(`agents/${agentId}/status`, {
-      status: "FAILED",
-      errorMessage: `Unhandled error: ${error.message}`,
-    });
-    logger.debug(`Reported unhandled error to API for agent ${agentId}`);
-  } catch (apiError) {
-    // If API reporting fails, just log it - don't crash
-    logger.debug(
-      `Failed to report error to API: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
-    );
-  }
-}
-
 // Add global error handlers to prevent uncaught errors from crashing the process
 process.on("unhandledRejection", (reason, promise) => {
   // Mark that an unhandled error occurred - this will cause non-zero exit
@@ -147,20 +116,12 @@ process.on("unhandledRejection", (reason, promise) => {
   // If reason is an Error, use it directly for better stack traces
   if (reason instanceof Error) {
     logger.error("Unhandled Promise Rejection", reason, errorDetails);
-    // Report to API if running in serve mode
-    reportUnhandledErrorToApi(reason).catch(() => {
-      // Silently fail if API reporting errors - already logged in helper
-    });
   } else {
     // Convert non-Error reasons to Error for consistent handling
     const error = new Error(`Unhandled rejection: ${String(reason)}`);
     logger.error("Unhandled Promise Rejection", error, {
       ...errorDetails,
       originalReason: String(reason),
-    });
-    // Report to API if running in serve mode
-    reportUnhandledErrorToApi(error).catch(() => {
-      // Silently fail if API reporting errors - already logged in helper
     });
   }
 
@@ -169,9 +130,8 @@ process.on("unhandledRejection", (reason, promise) => {
 
 process.on("uncaughtException", (error) => {
   const asError = error instanceof Error ? error : new Error(String(error));
-  // Report to API if running in serve mode, then leave. Staying up after an
-  // uncaught exception leaves serve idle with no listener.
-  void reportUnhandledErrorToApi(asError);
+  // Leave: staying up after an uncaught exception leaves serve idle with no
+  // listener.
   exitBecause(asError, "Uncaught Exception:");
 });
 
@@ -350,14 +310,6 @@ program
     "--allow-origin <origin...>",
     "A browser origin that may call the server, exactly (http://localhost:3000). Default: none",
   )
-  .option(
-    "--id <storageId>",
-    "Upload session snapshots to Continue-managed storage using the provided identifier",
-  )
-  .option(
-    "--beta-upload-artifact-tool",
-    "Enable beta UploadArtifact tool for uploading screenshots, videos, and logs",
-  )
   .action(async (prompt, options) => {
     // Merge parent options with subcommand options
     const mergedOptions = mergeParentOptions(program, options);
@@ -379,14 +331,6 @@ program
   .action(async (options) => {
     const mergedOptions = mergeParentOptions(program, options);
     await acp(mergedOptions);
-  });
-
-// Checks subcommand
-program
-  .command("checks [action] [pr-url]")
-  .description("Show CI check statuses for a PR")
-  .action(async (action: string | undefined, prUrl: string | undefined) => {
-    await checks(action, prUrl);
   });
 
 // Review subcommand

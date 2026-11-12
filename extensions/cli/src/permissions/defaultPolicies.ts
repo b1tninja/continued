@@ -28,9 +28,6 @@ export function getDefaultToolPolicies(
     { tool: "List", permission: "allow" },
     { tool: "Read", permission: "allow" },
     { tool: "Search", permission: "allow" },
-    { tool: "Status", permission: "allow" },
-    { tool: "ReportFailure", permission: "allow" },
-    { tool: "UploadArtifact", permission: "allow" },
   ];
 
   // MCP and Bash are ask in TUI mode, auto in headless
@@ -66,12 +63,9 @@ export const PLAN_MODE_POLICIES: ToolPermissionPolicy[] = [
   { tool: "Fetch", permission: "allow" },
   { tool: "List", permission: "allow" },
   { tool: "Read", permission: "allow" },
-  { tool: "ReportFailure", permission: "allow" },
   { tool: "Search", permission: "allow" },
   { tool: "Skills", permission: "allow" },
   { tool: "SearchTools", permission: "allow" },
-  { tool: "Status", permission: "allow" },
-  { tool: "UploadArtifact", permission: "allow" },
 
   // MCP tools and anything else not listed
   { tool: "*", permission: "ask" },

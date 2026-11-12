@@ -317,9 +317,9 @@ async function loadLocalConfigYaml(
 
 export async function unrollPackageIdentifiersAsConfigYaml(
   packageIdentifiers: PackageIdentifier[],
-  accessToken: string | null,
-  organizationId: string | null,
-  apiClient: DefaultApiInterface,
+  _accessToken: string | null,
+  _organizationId: string | null,
+  _apiClient: DefaultApiInterface,
 ): Promise<AssistantUnrolled> {
   const unrollResult = await unrollAssistantFromContent(
     {
@@ -332,7 +332,7 @@ export async function unrollPackageIdentifiersAsConfigYaml(
     }),
     {
       currentUserSlug: "",
-      platformClient: new CLIPlatformClient(organizationId, apiClient),
+      platformClient: new CLIPlatformClient(),
       renderSecrets: true,
       injectBlocks: packageIdentifiers,
       ...loadLocalModelFiles(),
@@ -370,7 +370,7 @@ async function unrollAssistantWithConfig(
       currentUserSlug: "",
       alwaysUseProxy: false,
       renderSecrets: true,
-      platformClient: new CLIPlatformClient(organizationId, apiClient),
+      platformClient: new CLIPlatformClient(),
       injectBlocks,
       // Accounts (providers.yaml) and the model catalog (models.yaml)
       ...loadLocalModelFiles(),

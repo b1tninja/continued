@@ -252,7 +252,6 @@ vi.mock("./skills.js", async (importOriginal) => ({
 }));
 vi.mock("./toolsConfig.js", () => ({
   isBetaSubagentToolEnabled: () => false,
-  isBetaUploadArtifactToolEnabled: () => false,
 }));
 vi.mock("src/utils/modelCapability.js", () => ({
   isModelCapable: () => true,

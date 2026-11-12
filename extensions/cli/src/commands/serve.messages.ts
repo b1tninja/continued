@@ -26,13 +26,12 @@ import {
   MessageQueue,
   messageQueue,
 } from "../stream/messageQueue.js";
-import { reportFailureTool } from "../tools/reportFailure.js";
 import {
   cacheTallySnapshot,
   type CacheTallySnapshot,
   describeCacheTally,
 } from "../util/cacheTally.js";
-import { gracefulExit, updateAgentMetadata } from "../util/exit.js";
+import { gracefulExit } from "../util/exit.js";
 import { formatError } from "../util/formatError.js";
 import { logger } from "../util/logger.js";
 import {
@@ -46,7 +45,6 @@ import {
 import { formatReplyTally, getTruncatedReplies } from "../util/replyTally.js";
 
 import {
-  checkAgentComplete,
   removePartialAssistantMessage,
   streamChatResponseWithInterruption,
   type ServerState,
@@ -97,7 +95,7 @@ export interface ServeMessageContext {
   llmApi: any;
   syncSessionHistory: () => void;
   /** Called when a run of turns has ended with nothing left in the queue. */
-  onIdle: () => Promise<void>;
+  onIdle?: () => Promise<void>;
   /** processMessages is sending turns; another call only asks it to look again */
   draining?: boolean;
   lookAgain?: boolean;
@@ -323,16 +321,6 @@ async function reportTurnError(state: ServerState, e: unknown) {
       contextItems: [],
     });
   }
-
-  // Report failure to control plane (retries exhausted or non-retryable error)
-  try {
-    await reportFailureTool.run({
-      errorMessage: formatError(e),
-    });
-  } catch (reportError) {
-    logger.error(`Failed to report agent failure: ${formatError(reportError)}`);
-    // Don't block on reporting failure
-  }
 }
 
 async function runTurn(ctx: ServeMessageContext, prompt: string) {
@@ -365,20 +353,6 @@ async function runTurn(ctx: ServeMessageContext, prompt: string) {
 
     state.lastActivity = Date.now();
     logTurnTally();
-
-    // Update metadata after successful agent turn
-    try {
-      const history = services.chatHistory?.getHistory();
-      await updateAgentMetadata({
-        history,
-        isComplete: checkAgentComplete(history),
-      });
-    } catch (metadataErr) {
-      logger.debug(
-        "Failed to update metadata after turn (non-critical)",
-        metadataErr as any,
-      );
-    }
   } catch (e: any) {
     if (e.name === "AbortError") {
       logger.debug("Response interrupted");
@@ -513,6 +487,6 @@ async function drainMessages(ctx: ServeMessageContext) {
     state.serverRunning &&
     messageQueue.getQueueLength() === 0
   ) {
-    await ctx.onIdle();
+    await ctx.onIdle?.();
   }
 }

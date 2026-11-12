@@ -115,24 +115,12 @@ export interface ApiClientServiceState {
   apiClient: DefaultApiInterface | null;
 }
 
-export interface StorageSyncServiceState {
-  isEnabled: boolean;
-  storageId?: string;
-  lastUploadAt?: number;
-  lastError?: string | null;
-}
-
 export interface AgentFileServiceState {
   agentFile: AgentFile | null;
   slug: string | null;
   agentFileModel: ModelConfig | null;
   parsedTools: ReturnType<typeof parseAgentFileTools> | null;
   parsedRules: ReturnType<typeof parseAgentFileRules> | null;
-}
-
-export interface ArtifactUploadServiceState {
-  uploadsInProgress: number;
-  lastError: string | null;
 }
 
 export type {
@@ -158,9 +146,7 @@ export const SERVICE_NAMES = {
   SYSTEM_MESSAGE: "systemMessage",
   CHAT_HISTORY: "chatHistory",
   UPDATE: "update",
-  STORAGE_SYNC: "storageSync",
   AGENT_FILE: "agentFile",
-  ARTIFACT_UPLOAD: "artifactUpload",
   GIT_AI_INTEGRATION: "gitAiIntegration",
   BACKGROUND_JOBS: "backgroundJobs",
   QUIZ: "quiz",

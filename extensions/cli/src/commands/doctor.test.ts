@@ -97,4 +97,15 @@ describe.skipIf(!hasOpenssl())("doctor network", () => {
     ).toBe(1);
     expect(lines[0]).toContain("Usage");
   });
+
+  it("checks no host by default and prints usage", async () => {
+    const lines: string[] = [];
+    expect(
+      await doctorCommand("network", [], { write: (l) => lines.push(l) }),
+    ).toBe(0);
+    const out = lines.join(" | ");
+    expect(out).toContain("Usage: continuous doctor network <url...>");
+    expect(out).not.toContain("continue.dev");
+    expect(out).not.toContain("route:");
+  });
 });
