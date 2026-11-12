@@ -174,9 +174,30 @@ previous one landed, instead of waiting for "Update branch" and a full gate.
 ### (b) Strict mode, owner action (not applied by the PR)
 
 Run after the commands in section 4 are decided. It replaces only the required status checks of the
-protection that section 4 creates, so apply section 4 first; `strict` is already `true` there. Auto-merge
-needs nothing further: it starts working as soon as a
-required check exists, and with `strict: true` it waits for the branch to be up to date.
+protection that section 4 creates, so apply section 4 first; `strict` is already `true` there.
+
+Recommendation: keep `strict: true`. `main` broke twice from two individually green PRs merging (#573,
+#592), and the post-merge check in (a) only detects that after the fact.
+
+Consequence: merges are serial. Each queued PR whose base has moved needs its branch updated before it
+can merge: `gh pr update-branch <n> --repo b1tninja/continuous` (or a small script or loop over the open
+PRs), then wait for `merge-gate` on the new head. Auto-merge does not do this. GitHub's documentation
+on auto-merge does not say that it updates the branch, so a PR whose base moved stalls until someone or
+something updates it. "Always suggest updating pull request branches" only shows the "Update branch"
+button; it does not update anything automatically.
+
+Alternative: leave `strict` off (`strict=false` in the command below) and rely on the post-merge check
+in (a). Merges then do not need an update step, but a bad combination is found only after it lands.
+
+Merge queue: not recommended until the aggregate test jobs also run on `merge_group`. `merge-gate` passes
+on `merge_group` without testing anything (see section 1), so a queue would add no safety.
+
+Sources: GitHub Docs, "Automatically merging a pull request"
+(https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/automatically-merging-a-pull-request),
+"Managing suggestions to update pull request branches"
+(https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-suggestions-to-update-pull-request-branches),
+"About protected branches"
+(https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 
 ```sh
 gh api -X PATCH repos/b1tninja/continuous/branches/main/protection/required_status_checks \
