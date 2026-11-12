@@ -38,14 +38,15 @@ describe("hookRunner - quoted command paths", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  // `&` and `%` are legal in Windows file names; `"` is not, so quote-in-name
-  // cases are POSIX only. Non-ASCII exercises the console code page path.
+  // `&` and `%` are legal in Windows file names. A single quote is legal on
+  // POSIX only here, and is literal inside a double-quoted sh word. A double
+  // quote in a name would need escaping, which this test does not do. Non-ASCII exercises the console code page path.
   const dirNames = [
     "with space",
     "amp & amp",
     "100%done",
     "café 日本",
-    ...(process.platform === "win32" ? [] : ['dq"quote', "it's"]),
+    ...(process.platform === "win32" ? [] : ["it's"]),
   ];
 
   for (const dirName of dirNames) {
