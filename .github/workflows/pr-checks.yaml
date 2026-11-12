@@ -45,10 +45,24 @@ jobs:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
+      # Two commits deep: the merge commit and its first parent (the base), so the step below can
+      # tell whether this PR touches the extension version.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"
+
+      # main.yaml refuses to publish an odd minor version, which is found only at release time.
+      # Run the same script at review time when a PR changes the extension's package.json.
+      - name: Check the VS Code extension version has an even minor
+        if: github.event_name == 'pull_request'
+        run: |
+          if git diff --name-only HEAD^1 HEAD | grep -qx 'extensions/vscode/package.json'; then
+            cd extensions/vscode
+            node scripts/versionCheck.js
+          fi
 
       - uses: actions/cache@v6
         id: root-cache
