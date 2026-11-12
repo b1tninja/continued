@@ -29,7 +29,7 @@ Two settings let a failed hook through, and they mean the same thing:
 | `"onError": "block"` | `"onFailure": "block"` | a failure blocks the action |
 | `"onError": "allow"` | `"onFailure": "continue"` | a failure lets the action go ahead |
 
-If a hook sets both, the stricter one applies, and a value that is not understood blocks. **The default differs from Claude Code**: with neither set, a failed hook blocks here, and the Claude Code hooks page (<https://code.claude.com/docs/en/hooks>, read 2026-11-11) says the action goes ahead there unless `onFailure` is `"block"` (Claude Code v2.1.295 or later). A file shared between the two tools therefore fails closed here without changing anything, and a hook you want to fail open must say so in one of these two spellings. On events that cannot stop anything (`Stop`, `SessionStart`, `SessionEnd`, `Notification`, `PreCompact`) a failure is only logged.
+If a hook sets both, the stricter one applies, and a value that is not understood blocks. **The default differs from Claude Code**: with neither set, a failed hook blocks here, and the Claude Code hooks page ([code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks), read 2026-11-11) says the action goes ahead there unless `onFailure` is `"block"` (Claude Code v2.1.295 or later). A file shared between the two tools therefore fails closed here without changing anything, and a hook you want to fail open must say so in one of these two spellings. On events that cannot stop anything (`Stop`, `SessionStart`, `SessionEnd`, `Notification`, `PreCompact`) a failure is only logged.
 
 ## Events
 
