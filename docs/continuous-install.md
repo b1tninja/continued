@@ -91,13 +91,52 @@ Replace `win32-x64-vsix` with `darwin-arm64-vsix` on a Mac and use `bash`/`zsh` 
 
 ## The terminal CLI
 
-Releases from 2.4.3 on also carry the command-line agent, `continuous-cli-<version>.tgz`. It needs Node.js 22 or newer and installs with npm straight from the release, with nothing else to download:
+Releases from 2.4.3 on also carry the command-line agent, `continuous-cli-<version>.tgz`. It needs Node.js 22 or newer. The command is `continuous`, with the short alias `cn` (both run the same program). It uses the same `~/.continuous` folder as the extension, and `continuous --config <path to a .yaml>` runs with one config file.
+
+### Install script
+
+The scripts find the latest release, download its `continuous-cli-*.tgz`, check it against the release's `SHA256SUMS.txt`, install it with `npm install -g`, and print `continuous --version` and `cn --version`. If Node.js 22 is missing they install it with fnm. They send no telemetry and contact only `api.github.com`, `github.com` and the npm registry. Running one again upgrades in place.
+
+Read a script before you run it. macOS, Linux, WSL and Git Bash:
 
 ```bash
-npm i -g https://github.com/b1tninja/continuous/releases/download/v2.4.4-vscode/continuous-cli-2.4.4.tgz
+curl -fsSL https://raw.githubusercontent.com/b1tninja/continuous/main/extensions/cli/scripts/install.sh -o install.sh
+less install.sh
+bash install.sh
 ```
 
-The command is `continuous`, with the short alias `cn` (both run the same program). It uses the same `~/.continuous` folder as the extension, and `continuous --config <path to a .yaml>` runs with one config file. To update, install the next release's `.tgz` the same way; the CLI does not update itself.
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/b1tninja/continuous/main/extensions/cli/scripts/install.ps1 -OutFile install.ps1
+notepad install.ps1
+.\install.ps1
+```
+
+Once you have inspected them, the one-liners are `curl -fsSL <raw url above>/install.sh | bash` and `irm <raw url above>/install.ps1 | iex`.
+
+To pin a version, or to skip the release lookup, set an environment variable:
+
+```bash
+CONTINUOUS_CLI_VERSION=2.14.0 bash install.sh
+CONTINUOUS_CLI_URL=https://github.com/b1tninja/continuous/releases/download/v2.14.0-vscode/continuous-cli-2.14.0.tgz bash install.sh
+```
+
+```powershell
+$env:CONTINUOUS_CLI_VERSION = "2.14.0"; .\install.ps1
+```
+
+`SHA256SUMS.txt` is published beside the tarball, so it catches a corrupt download but is not a signature. With `CONTINUOUS_CLI_URL`, the script looks for `SHA256SUMS.txt` in the same folder and, if it has no entry, prints the tarball's SHA-256 for you to compare.
+
+### Install with npm, update and uninstall
+
+Without the script, install straight from the release:
+
+```bash
+npm i -g https://github.com/b1tninja/continuous/releases/download/v2.14.0-vscode/continuous-cli-2.14.0.tgz
+```
+
+To update, run the install script again or install the next release's `.tgz` the same way; the CLI does not update itself. To uninstall, run `npm uninstall -g @b1tninja/continuous-cli`. That removes both commands and leaves `~/.continuous` alone.
 
 ## Updating
 

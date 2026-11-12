@@ -6,22 +6,26 @@ The Continue CLI (`cn`) is a customizable command line coding agent.
 
 ## Installation
 
-**macOS / Linux:**
+Read a script before you run it, then run it. **macOS / Linux:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/continuedev/continue/main/extensions/cli/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/b1tninja/continuous/main/extensions/cli/scripts/install.sh -o install.sh
+less install.sh
+bash install.sh
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-irm https://raw.githubusercontent.com/continuedev/continue/main/extensions/cli/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/b1tninja/continuous/main/extensions/cli/scripts/install.ps1 -OutFile install.ps1
+notepad install.ps1
+.\install.ps1
 ```
 
-Or install with npm if you have Node.js 20+:
+Or install a release tarball with npm if you have Node.js 22+ (see [Installing Continuous](../../docs/continuous-install.md) for pinning a version):
 
 ```bash
-npm i -g @continuedev/cli
+npm i -g https://github.com/b1tninja/continuous/releases/download/v2.14.0-vscode/continuous-cli-2.14.0.tgz
 ```
 
 ## Usage
