@@ -1,3 +1,3 @@
-export { AreaLevelSelect, PolicyControls, YoloBanner } from "./PolicyControls";
+export { AreaLevelSelect, PolicyControls, YoloChip } from "./PolicyControls";
 export { PresetSelect } from "./PresetSelect";
 export { PolicyCard } from "./PolicyCard";

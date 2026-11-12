@@ -20,10 +20,12 @@ import {
   type PolicyLevels,
   type PolicyPresetName,
 } from "core/tools/permissions/policy";
+import { useEffect, useId, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { selectYoloAreas } from "../../redux/selectors/selectAutoApproval";
 import { applyPolicyPreset } from "../../redux/thunks/policySettings";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
-import { CHIP, LEVEL_TONES } from "./levelStyle";
+import { CHIP, LEVEL_TONES, yoloSentence } from "./levelStyle";
 
 type Glyph = typeof BoltIcon;
 
@@ -112,6 +114,20 @@ export function PresetSelect({
   const tone = presetTone(levels, preset);
   const label = preset ? POLICY_PRESETS[preset].label : "Custom";
   const summary = summarizeLevels(levels);
+  // At YOLO the chip is the warning: one line, the sentence on hover and by
+  // aria-describedby (there is no separate banner)
+  const yoloAreas = useAppSelector(selectYoloAreas);
+  const yoloDescriptionId = useId();
+  const warn = placement === "toolbar" && preset === "yolo";
+  const sentence = yoloSentence(yoloAreas);
+  // The Listbox button manages its own aria-describedby, so set ours directly
+  const button = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const el = button.current;
+    if (!el) return;
+    if (warn) el.setAttribute("aria-describedby", yoloDescriptionId);
+    else el.removeAttribute("aria-describedby");
+  }, [warn, yoloDescriptionId]);
 
   return (
     <Listbox
@@ -126,9 +142,14 @@ export function PresetSelect({
     >
       <div
         className="relative"
-        title={`${label}. ${summary} Presets set all five areas at once.`}
+        title={
+          warn
+            ? `${sentence} Choose Careful to go back.`
+            : `${label}. ${summary} Presets set all five areas at once.`
+        }
       >
         <ListboxButton
+          ref={button}
           data-testid={
             placement === "settings"
               ? "policy-preset-settings"
@@ -143,6 +164,11 @@ export function PresetSelect({
             aria-hidden="true"
           />
           <span>{label}</span>
+          {warn && (
+            <span className="hidden min-[481px]:inline" aria-hidden="true">
+              · nothing asks
+            </span>
+          )}
           <span
             className="sr-only"
             data-testid={
@@ -157,6 +183,15 @@ export function PresetSelect({
           </span>
           <ChevronDownIcon className="h-2 w-2 shrink-0" aria-hidden="true" />
         </ListboxButton>
+        {warn && (
+          <span
+            id={yoloDescriptionId}
+            data-testid="yolo-description"
+            className="sr-only"
+          >
+            {sentence}
+          </span>
+        )}
         <ListboxOptions className="max-w-72 min-w-48">
           {POLICY_PRESET_ORDER.map((name) => {
             const OptionGlyph = PRESET_GLYPHS[name];

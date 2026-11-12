@@ -6,7 +6,12 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
-import type { PolicyLevel } from "core/tools/permissions/policy";
+import {
+  POLICY_AREA_LABELS,
+  policyLevelLabel,
+  type PolicyArea,
+  type PolicyLevel,
+} from "core/tools/permissions/policy";
 
 /**
  * A glyph and a colour for each level, so a chip reads without its text: the
@@ -42,3 +47,11 @@ export const LEVEL_TONES: Record<PolicyLevel, { chip: string; icon: string }> =
 /** Every chip and the fold button is a target of at least 24 px (WCAG 2.5.8). */
 export const CHIP =
   "flex-none min-h-6 gap-1 rounded-full border-none px-2 transition-colors duration-200 hover:brightness-110";
+
+/** The warning for areas at YOLO: what the chip's tooltip and description say. */
+export function yoloSentence(areas: readonly PolicyArea[]): string {
+  const names = areas
+    .map((a) => `${POLICY_AREA_LABELS[a]} (${policyLevelLabel(a, "yolo")})`)
+    .join(", ");
+  return `${names}: nothing asks. Never rules, Ask rules, protected paths and the built-in rule check are ignored for these.`;
+}

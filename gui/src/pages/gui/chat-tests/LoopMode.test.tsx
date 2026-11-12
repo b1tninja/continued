@@ -241,7 +241,7 @@ beforeEach(() => {
 });
 
 describe("Loop mode", () => {
-  test("a loop is one card in the Loops panel, named by its plan, with the plan inside it", async () => {
+  test("a loop is one card above the input, named by its plan, with the plan inside it", async () => {
     const h = await setup(["Pick the grammar", "Write the lexer"]);
     h.turns.push(
       ask("Item 'Pick the grammar': ABNF or PEG?", "blocking"),
@@ -252,7 +252,8 @@ describe("Loop mode", () => {
     await waitFor(() => expect(h.loop().status).toBe("waiting"));
 
     const panel = document.querySelector("[data-testid=loops-panel]")!;
-    expect(panel.textContent).toContain("Loops");
+    // No separate "Loops" heading: the card is the loop
+    expect(panel.textContent).not.toContain("Loops");
     // Named by its plan, not just "Loop"
     expect(
       panel.querySelector("[data-testid=loop-status]")!.textContent,
@@ -290,10 +291,10 @@ describe("Loop mode", () => {
         (b) => b.textContent,
       ),
     ).toEqual(["ABNF", "PEG", "Both"]);
-    // The inbox points at the panel instead of listing the question again
+    // The inbox does not point at the panel: the panel is on screen
     expect(
       document.querySelector("[data-testid=loop-questions-pointer]"),
-    ).not.toBeNull();
+    ).toBeNull();
 
     // Selecting a choice only marks it: nothing is sent until Answer
     await act(async () =>
@@ -387,10 +388,10 @@ describe("Loop mode", () => {
     expect(panel.textContent).toContain("1 question for you");
     expect(panel.textContent).toContain("Where does the fix land?");
     expect(panel.textContent).toContain("Workspace copy (recommended)");
-    // The card points at the panel instead of repeating the question
+    // The card neither points at the panel nor repeats the question
     expect(
       document.querySelector("[data-testid=plan-card-decisions-pointer]"),
-    ).not.toBeNull();
+    ).toBeNull();
     expect(
       document.querySelector("[data-testid=plan-card-decisions]"),
     ).toBeNull();

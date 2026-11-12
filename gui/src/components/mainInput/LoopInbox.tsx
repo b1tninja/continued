@@ -44,7 +44,6 @@ export function LoopInbox() {
   const [noteError, setNoteError] = useState<string>();
   if (!loop) return null;
 
-  const open = loop.questions.filter((q) => !q.answerId);
   const standingNotes = standingInstructions(loop);
   const onAnswer = async (input: LoopAnswerInput) => {
     const result = await dispatch(answerLoopQuestion(input)).unwrap();
@@ -60,9 +59,6 @@ export function LoopInbox() {
 
   return (
     <div data-testid="loops-panel" className="mx-1 mb-1 min-w-0">
-      <div className="px-0.5 text-2xs tracking-wide text-description uppercase">
-        Loops
-      </div>
       <div
         data-testid="loop-inbox"
         className="min-w-0 rounded border border-solid border-border px-2 py-1 text-xs"
@@ -218,23 +214,6 @@ export function LoopInbox() {
           </div>
         )}
         <LoopControls loop={loop} taskPlan={taskPlan} />
-        {loop.status === "awaiting_plan" && loop.replanReason && (
-          <div
-            data-testid="loop-replan-reason"
-            className="mt-0.5 text-description"
-          >
-            New plan waiting on its card: {loop.replanReason}
-          </div>
-        )}
-        {open.length > 0 && (
-          <div
-            data-testid="loop-questions-pointer"
-            className="mt-0.5 text-description"
-          >
-            {open.length} open question{open.length === 1 ? "" : "s"}: answer
-            them in the Questions panel above the input.
-          </div>
-        )}
         {standingNotes.length > 0 && (
           <ul
             data-testid="loop-standing-list"
