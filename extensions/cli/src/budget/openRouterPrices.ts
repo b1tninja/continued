@@ -1,11 +1,11 @@
+import { loadOpenRouterPrices } from "core/llm/modelCatalogStore.js";
+import { catalogAgeDays } from "core/llm/openRouterCatalog.js";
 import {
   BUDGET_CATALOG_MAX_AGE_DAYS,
   STALE_CATALOG_WARN_DAYS,
   catalogDate,
   catalogModelWithPrice,
 } from "core/llm/utils/catalogPricing.js";
-import { loadOpenRouterPrices } from "core/llm/modelCatalogStore.js";
-import { catalogAgeDays } from "core/llm/openRouterCatalog.js";
 
 /**
  * The OpenRouter price list on this computer, as a run sees it. Loading it is

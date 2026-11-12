@@ -15,11 +15,11 @@ import {
 import { getContinueGlobalPath } from "core/util/paths.js";
 import * as YAML from "yaml";
 
-import { safeStderr, safeStdout } from "../init.js";
 import {
   priceListStatus,
   stalePriceWarning,
 } from "../budget/openRouterPrices.js";
+import { safeStderr, safeStdout } from "../init.js";
 import { gracefulExit } from "../util/exit.js";
 
 /**
