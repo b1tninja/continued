@@ -43,7 +43,7 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
-  // The shared settings file replaces what the webview remembered (YOLO is
+  // The shared settings file replaces what the webview remembered (IDGAF is
   // for one session only)
   useEffect(() => {
     void dispatch(loadPolicySettings());

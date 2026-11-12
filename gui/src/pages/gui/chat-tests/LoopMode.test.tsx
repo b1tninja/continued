@@ -1089,11 +1089,11 @@ describe("Loop mode", () => {
         args: { filepath: `new${n}.ts`, contents: "x" },
       });
     await act(async () => {
-      h.store.dispatch(setPolicyLevel({ area: "tools", level: "yolo" }));
+      h.store.dispatch(setPolicyLevel({ area: "tools", level: "idgaf" }));
     });
     h.ideMessenger.responseHandlers["tools/evaluatePolicy"] = async () => ({
       policy: "allowedWithoutPermission",
-      source: "yolo",
+      source: "idgaf",
     });
     h.turns.push(
       test(),

@@ -5,6 +5,7 @@ import {
   BUILTIN_RULES,
   DEFAULT_POLICY_LEVELS,
   normalizePolicy,
+  parsePolicyLevel,
   POLICY_AREAS,
   type BuiltinRuleId,
   type PolicyArea,
@@ -19,11 +20,11 @@ import {
  * with the CLI's own `allow`, `ask` and `exclude` lists, which this module
  * never touches.
  *
- * YOLO and IDGAF are session-only: a saved `yolo` is read as that area's
- * default with a notice, and is never written.
+ * IDGAF is session-only: a saved `idgaf` (or `yolo`, which 2.14.x wrote for
+ * it) is read as that area's default with a notice, and is never written.
  */
 export interface PolicyFileSettings extends PolicySettings {
-  /** Deny rules that bind at every level, YOLO included. */
+  /** Deny rules that bind at every level, IDGAF included. */
   floor?: string[];
   /** MCP servers whose read-only hints the person trusts, by display name. */
   mcpServers?: Record<string, "trusted">;
@@ -80,13 +81,13 @@ export function parsePolicyFile(text: string | undefined): PolicyFileRead {
     }
   }
 
-  // YOLO is never read from disk
+  // IDGAF is never read from disk; `yolo` is its old spelling
   const levelsIn: Record<string, unknown> = { ...(raw.levels ?? {}) };
   for (const area of POLICY_AREAS) {
-    if (levelsIn[area] === "yolo") {
+    if (parsePolicyLevel(levelsIn[area]) === "idgaf") {
       delete levelsIn[area];
       notices.push(
-        `levels.${area}: yolo is for one session only, so ${DEFAULT_POLICY_LEVELS[area]} applies.`,
+        `levels.${area}: idgaf is for one session only, so ${DEFAULT_POLICY_LEVELS[area]} applies.`,
       );
     }
   }
@@ -151,7 +152,7 @@ export interface PolicyFileUpdate {
 
 /**
  * The file's text with the update applied, keeping every other key and
- * comment. Levels at YOLO are not written: the area keeps what the file had.
+ * comment. Levels at IDGAF are not written: the area keeps what the file had.
  */
 export function applyPolicyUpdate(
   text: string | undefined,
@@ -163,7 +164,7 @@ export function applyPolicyUpdate(
   if (update.levels) {
     for (const area of POLICY_AREAS as readonly PolicyArea[]) {
       const level = update.levels[area];
-      if (level === "yolo") continue;
+      if (parsePolicyLevel(level) === "idgaf") continue;
       doc.setIn(["levels", area], level);
     }
   }

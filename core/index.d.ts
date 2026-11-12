@@ -656,7 +656,7 @@ export interface LoopBudget {
 /**
  * How much the loop does without the person. It follows the approval mode
  * the person picked when the loop starts (Manual: supervised; Auto-approve
- * and Auto: auto; YOLO: unattended) and can be changed while it runs. See
+ * and Auto: auto; IDGAF: unattended) and can be changed while it runs. See
  * LOOP_AUTONOMY in core/util/loopMode.ts.
  */
 export type LoopAutonomy = "supervised" | "auto" | "unattended" | "idgaf";
@@ -1292,7 +1292,7 @@ interface McpUiState {
 
 interface ToolCallDecision {
   outcome: "allowed" | "blocked";
-  /** A rule, the safety check, a switch, YOLO, the Auto reviewer, or the user ("once"). */
+  /** A rule, the safety check, a switch, IDGAF, the Auto reviewer, or the user ("once"). */
   source: string;
   /** One line saying why. */
   reason?: string;
@@ -2060,7 +2060,7 @@ export interface Tool {
   mcpMeta?: McpToolMeta;
   /**
    * An MCP tool whose definition changed, or that appeared, after the person
-   * approved its server. It asks again at every level but YOLO until a call to
+   * approved its server. It asks again at every level but IDGAF until a call to
    * it is approved. `summary` says what changed.
    */
   mcpDefinitionChange?: {

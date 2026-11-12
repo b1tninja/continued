@@ -18,19 +18,53 @@ export const POLICY_AREAS: readonly PolicyArea[] = [
   "questions",
 ];
 
-/** "yolo" reads as IDGAF on Plan edits and Questions. */
+/** The top level, IDGAF, is the same on every area. */
 export type PolicyLevel =
-  "manual" | "cautious" | "automatic" | "permissive" | "yolo";
+  "manual" | "cautious" | "automatic" | "permissive" | "idgaf";
 
 export const POLICY_LEVELS: readonly PolicyLevel[] = [
   "manual",
   "cautious",
   "automatic",
   "permissive",
-  "yolo",
+  "idgaf",
 ];
 
 export type PolicyLevels = Record<PolicyArea, PolicyLevel>;
+
+/**
+ * Spellings that are read as a level and never written. 2.14.x called the top
+ * level `yolo` (and `IDGAF` on Plan edits and Questions only).
+ */
+export const DEPRECATED_LEVEL_ALIASES: Readonly<Record<string, PolicyLevel>> = {
+  yolo: "idgaf",
+};
+
+/** A level from stored or typed text: any case, `yolo` read as `idgaf`. */
+export function parsePolicyLevel(value: unknown): PolicyLevel | undefined {
+  if (typeof value !== "string") return undefined;
+  const word = value.trim().toLowerCase();
+  const level = DEPRECATED_LEVEL_ALIASES[word] ?? word;
+  return POLICY_LEVELS.includes(level as PolicyLevel)
+    ? (level as PolicyLevel)
+    : undefined;
+}
+
+/** True when the text spells a level the way 2.14.x did (`yolo`, any case). */
+export function isDeprecatedLevelSpelling(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    Object.hasOwn(DEPRECATED_LEVEL_ALIASES, value.trim().toLowerCase())
+  );
+}
+
+/**
+ * Text written by 2.14.x (an audit reason, a saved notice) with the old name
+ * of the top level replaced, for display. The stored text is not changed.
+ */
+export function modernizeLevelText(text: string): string {
+  return text.replace(/\bYOLO\b/g, "IDGAF").replace(/\byolo\b/g, "idgaf");
+}
 
 /** What a question is about. The agent names it when it asks. */
 export type QuestionType =
@@ -140,7 +174,7 @@ export const BUILTIN_RULES: readonly {
 ];
 
 /**
- * Rules that cannot be switched off, by config, by a level or by YOLO. They
+ * Rules that cannot be switched off, by config, by a level or by IDGAF. They
  * are listed beside the built-in rules, without a switch.
  */
 export const LOCKED_FLOOR_RULES: readonly {
@@ -152,7 +186,7 @@ export const LOCKED_FLOOR_RULES: readonly {
     id: "protect-policy-files",
     label: "Never change the permission files",
     description:
-      "Every file the product loads as config, code, rules or hooks: the global folder, a project's .continue and .continuous folders, .claude settings, agents and skills, and .continuerc. A write or delete that names the path asks, and is refused at Automatic and YOLO. A terminal command is read as it is written: a path built when it runs (a variable, a wildcard, a backtick, a cd into your home folder) cannot be seen, so at YOLO such a command asks. A sandbox that denies writes to these folders is what holds for certain.",
+      "Every file the product loads as config, code, rules or hooks: the global folder, a project's .continue and .continuous folders, .claude settings, agents and skills, and .continuerc. A write or delete that names the path asks, and is refused at Automatic and IDGAF. A terminal command is read as it is written: a path built when it runs (a variable, a wildcard, a backtick, a cd into your home folder) cannot be seen, so at IDGAF such a command asks. A sandbox that denies writes to these folders is what holds for certain.",
   },
 ];
 
@@ -189,7 +223,7 @@ export const DEFAULT_POLICY_LEVELS: PolicyLevels = {
 };
 
 export type PolicyPresetName =
-  "careful" | "acceptEdits" | "handsOff" | "reviewer" | "yolo";
+  "careful" | "acceptEdits" | "handsOff" | "reviewer" | "idgaf";
 
 export const POLICY_PRESETS: Record<
   PolicyPresetName,
@@ -228,15 +262,15 @@ export const POLICY_PRESETS: Record<
       questions: "automatic",
     },
   },
-  yolo: {
-    label: "YOLO",
+  idgaf: {
+    label: "IDGAF",
     description: "Everything runs and nothing asks. Every rule is ignored.",
     levels: {
-      context: "yolo",
-      tools: "yolo",
-      edits: "yolo",
-      plan: "yolo",
-      questions: "yolo",
+      context: "idgaf",
+      tools: "idgaf",
+      edits: "idgaf",
+      plan: "idgaf",
+      questions: "idgaf",
     },
   },
 };
@@ -260,9 +294,7 @@ export const POLICY_AREA_LABELS: Record<PolicyArea, string> = {
 };
 
 export function policyLevelLabel(area: PolicyArea, level: PolicyLevel): string {
-  if (level === "yolo") {
-    return area === "plan" || area === "questions" ? "IDGAF" : "YOLO";
-  }
+  if (level === "idgaf") return "IDGAF";
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
@@ -277,7 +309,7 @@ export const POLICY_LEVEL_DESCRIPTIONS: Record<
       "Reads what your Always rules and tool settings cover, asks otherwise.",
     automatic: "As Cautious, and a reviewer model decides what is left.",
     permissive: "Reads anything no rule stops.",
-    yolo: "Reads anything. Every rule is ignored.",
+    idgaf: "Reads anything. Every rule is ignored.",
   },
   tools: {
     manual: "Asks before each command and tool.",
@@ -285,14 +317,14 @@ export const POLICY_LEVEL_DESCRIPTIONS: Record<
       "Runs what your Always rules and tool settings cover, asks otherwise.",
     automatic: "As Cautious, and a reviewer model decides what is left.",
     permissive: "Runs anything no rule stops.",
-    yolo: "Runs anything. Every rule is ignored.",
+    idgaf: "Runs anything. Every rule is ignored.",
   },
   edits: {
     manual: "You review each diff.",
     cautious: "Accepts what your Always rules cover, you review the rest.",
     automatic: "A reviewer model accepts, refuses or sends it to you.",
     permissive: "Accepts anything no rule stops.",
-    yolo: "Accepts everything. Every rule is ignored.",
+    idgaf: "Accepts everything. Every rule is ignored.",
   },
   plan: {
     manual: "In Loop, every plan and re-plan waits for you.",
@@ -300,20 +332,16 @@ export const POLICY_LEVEL_DESCRIPTIONS: Record<
     automatic:
       "In Loop, a reviewer model judges each plan and waits if unsure.",
     permissive: "In Loop, plans go on. A re-plan may add a few to-dos.",
-    yolo: "In Loop, every plan goes on. Nothing is checked.",
+    idgaf: "In Loop, every plan goes on. Nothing is checked.",
   },
   questions: {
     manual: "You decide every question.",
     cautious: "You decide, except types a rule gives the agent.",
     automatic: "A second model decides, or sends it to you if unsure.",
     permissive: "The agent decides, except types a rule gives you.",
-    yolo: "The agent decides everything and never asks.",
+    idgaf: "The agent decides everything and never asks.",
   },
 };
-
-function isLevel(value: unknown): value is PolicyLevel {
-  return POLICY_LEVELS.includes(value as PolicyLevel);
-}
 
 function questionTypes(value: unknown): QuestionType[] | undefined {
   if (!Array.isArray(value)) return undefined;
@@ -340,7 +368,8 @@ export function normalizePolicy(raw: unknown): NormalizedPolicy {
   for (const area of POLICY_AREAS) {
     const value = given[area];
     if (value === undefined) continue;
-    if (isLevel(value)) levels[area] = value;
+    const level = parsePolicyLevel(value);
+    if (level) levels[area] = level;
     else problems.push(`${area}: "${String(value)}" is not a level`);
   }
   const delivery = input.questions?.delivery;
@@ -410,7 +439,7 @@ export function migrateApproval(old: LegacyApproval): PolicyLevels {
       levels.context = "automatic";
       break;
     // A saved "yolo" is from 2.4.4, where it still honoured deny rules and
-    // protected paths: carrying it over as today's YOLO would loosen it
+    // protected paths: carrying it over as today's IDGAF would loosen it
     case "review":
     case "yolo":
       levels.tools = "permissive";
@@ -516,7 +545,7 @@ export function questionDecider(
   type: unknown,
 ): QuestionDecider {
   const level = policy.levels.questions;
-  if (level === "yolo") return "agent";
+  if (level === "idgaf") return "agent";
   if (level === "manual") return "person";
   const known = QUESTION_TYPES.includes(type as QuestionType)
     ? (type as QuestionType)
@@ -571,7 +600,7 @@ const count = (n: number) => `${n} new to-do${n === 1 ? "" : "s"}`;
 export function planHandoff(input: PlanHandoffInput): PlanHandoff {
   const { policy, first, added, concern } = input;
   const level = policy.levels.plan;
-  if (level === "yolo") {
+  if (level === "idgaf") {
     return { decision: "go", reason: "Plan edits is set to IDGAF." };
   }
   switch (level) {
