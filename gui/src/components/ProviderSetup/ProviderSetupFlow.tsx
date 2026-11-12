@@ -5,7 +5,7 @@ import type {
   ProviderSetupInfo,
 } from "core/config/providerSetup";
 import { defaultSecretName } from "core/config/providerSecretName";
-import { hasOpenAICompatDefault } from "core/util/openaiCompatTest";
+import { hasOpenAICompatDefault } from "core/util/openaiCompatBases";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Input } from "..";
