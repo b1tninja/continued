@@ -9,6 +9,15 @@ import {
   put,
 } from "./apiClient.js";
 
+// The CLI's own requests go through the shared fetch; stand in for it with the
+// global mock this file already installs.
+vi.mock("@continuedev/fetch", () => ({
+  createWebFetch:
+    () =>
+    (...args: unknown[]) =>
+      (globalThis.fetch as any)(...args),
+}));
+
 vi.mock("../env.js", () => ({
   env: {
     apiBase: "https://api.continue.dev",

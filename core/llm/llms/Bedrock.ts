@@ -1733,7 +1733,26 @@ class Bedrock extends BaseLLM {
 
   /** Seam over the AWS SDK credential chain (overridden in tests). */
   protected async _credentialChain(profile: string | undefined) {
-    return fromNodeProviderChain({ profile, ignoreCache: true })();
+    return fromNodeProviderChain(await this._credentialChainInit(profile))();
+  }
+
+  protected async _credentialChainInit(profile: string | undefined) {
+    // The SSO, SSO-OIDC, STS AssumeRole and web-identity providers build their
+    // own clients with the SDK's default HTTP handler, which ignores the proxy
+    // and CA settings. `clientConfig` is passed to those clients
+    // (FromIniInit/FromSSOInit/FromTokenFileInit in @aws-sdk/credential-provider-*),
+    // so the same handler as the runtime client applies. Undefined (SDK default)
+    // unless a proxy, CA, the OS store or verifySsl:false is in play. One handler
+    // for the regional STS endpoint serves all of them, so a NO_PROXY entry for
+    // one AWS host applies to all.
+    const requestHandler = await this._requestHandlerFor(
+      `https://sts.${this.region ?? "us-east-1"}.amazonaws.com`,
+    );
+    return {
+      profile,
+      ignoreCache: true,
+      ...(requestHandler ? { clientConfig: { requestHandler } } : {}),
+    };
   }
 
   private async _getCredentials() {

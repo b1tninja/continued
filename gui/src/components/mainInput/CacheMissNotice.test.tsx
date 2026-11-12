@@ -51,6 +51,31 @@ describe("CacheMissNotice", () => {
     expect(text).not.toContain("Nothing the app controls changed");
   });
 
+  it("names request settings instead of blaming the provider", async () => {
+    const { store } = await setup();
+    await act(async () => {
+      store.dispatch(
+        setPromptCacheState({
+          escalated: false,
+          misses: 3,
+          lastMiss: {
+            ...miss,
+            causes: [
+              "the reasoning effort or thinking settings changed",
+              "the tool choice changed",
+              "an image was added",
+            ],
+          },
+        }),
+      );
+    });
+    const text = screen.getByTestId("cache-miss-notice").textContent!;
+    expect(text).toContain(
+      "Likely cause: the reasoning effort or thinking settings changed; the tool choice changed; an image was added.",
+    );
+    expect(text).not.toContain("may not be caching");
+  });
+
   it("lists several causes", async () => {
     const { store } = await setup();
     await act(async () => {

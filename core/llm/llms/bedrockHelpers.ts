@@ -4,6 +4,10 @@ import {
   promptCacheSupportsLifetime,
 } from "@continuedev/llm-info";
 import { resolveToolDialectPreset } from "../../util/toolDialectPresets.js";
+import {
+  claudeRefusesSampling,
+  noteSamplingOmitted,
+} from "../../util/anthropicSamplingGuard.js";
 import { resolveCacheParts } from "./anthropicCache.js";
 import {
   familyRuleFor,
@@ -1114,6 +1118,10 @@ export function bedrockSamplingParams(
   reasoning: boolean,
 ): { temperature?: number; topP?: number } {
   if (!/claude/i.test(modelId)) return { temperature, topP };
+  if (claudeRefusesSampling(modelId)) {
+    noteSamplingOmitted(modelId);
+    return {};
+  }
   if (reasoning) return {};
   if (temperature !== undefined && topP !== undefined) return { temperature };
   return { temperature, topP };
