@@ -119,9 +119,9 @@ describe("testToolCall", () => {
     expect(assistant.reason).not.toContain("your config.yaml");
   });
 
-  it("applies the floor, even at YOLO", () => {
+  it("applies the floor, even at IDGAF", () => {
     const r = run("terraform destroy -auto-approve", {
-      levels: { tools: "yolo" },
+      levels: { tools: "idgaf" },
     });
     expect(r).toMatchObject({ decision: "deny", source: "floor" });
     expect(r.matchedRules[0]).toMatchObject({ source: "floor", locked: true });
@@ -256,7 +256,7 @@ describe("testToolCall", () => {
 
 describe("env-name lists and the secrets a result may show", () => {
   const FAKE = "fake-token-value-for-tests";
-  const levels = { context: "yolo", tools: "yolo", edits: "yolo" } as any;
+  const levels = { context: "idgaf", tools: "idgaf", edits: "idgaf" } as any;
 
   it("only the person's own lists count: a list that came with the sources is ignored", () => {
     const planted = {

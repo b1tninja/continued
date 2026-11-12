@@ -55,7 +55,7 @@ export type DecisionSource =
   | "safety-floor"
   | "tainted-session"
   | "permissive"
-  | "yolo"
+  | "idgaf"
   | "manual"
   | "tool-setting"
   | "default";

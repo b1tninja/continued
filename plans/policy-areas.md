@@ -108,8 +108,8 @@ For a question:
 2. IDGAF: the agent decides.
 3. Manual: you decide.
 4. Cautious: the type is on "agent decides": the agent decides. Otherwise you decide.
-5. Permissive: the type is on "you decide": you decide. Otherwise the agent decides.
-6. Automatic: "you decide" and `scope` send it to you, "agent decides" to the agent, and the reviewer answers `design` and `detail`; unsure or any failure sends it to you. The reviewer has no more information about your intent than the agent, so it is not asked about scope.
+5. Permissive: the type is on your own "you decide" list (not the default list): you decide. Otherwise the agent decides, and in a loop the system answers it (the `(recommended)` option, else the first, else "No one is available to answer; use your best judgment and state the assumption"), recorded as `system`.
+6. Automatic (the reviewer is not built, so as Permissive): your own "you decide" list sends it to you, otherwise the system answers it. The reviewer design below is the plan: "you decide" and `scope` send it to you, "agent decides" to the agent, and the reviewer answers `design` and `detail`; unsure or any failure sends it to you. The reviewer has no more information about your intent than the agent, so it is not asked about scope.
 
 A missing or unknown type counts as "you decide" at every level but IDGAF.
 

@@ -37,6 +37,21 @@ The page has one tab for each policy area. Each tab shows the area's level (chan
 | Plan edits  | none: a level, the number of new to-dos a re-plan may add, and the check-keeping switch                                |
 | Questions   | none: a level and the two lists of question types you or the agent decide                                              |
 
+## What Plan edits and Questions do for a loop
+
+A loop exists to go on without you, so these two areas decide whether it ever stops to ask. They bind the loop's own gates only: a call that a Never rule, a protected path or a built-in protection refuses is still refused at every level, and a call that would ask is still held as an approval question.
+
+| Level                   | A re-plan (a repair, changed checks, added or dropped to-dos)                                                                                                | A question the agent asks, or a decision in a plan                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Manual                  | Waits on its card.                                                                                                                                           | Waits in the Questions panel.                                                                                         |
+| Cautious                | Goes on if it adds no new to-dos and weakens no check; otherwise waits on its card.                                                                          | Waits, except the types the agent may decide (details by default).                                                    |
+| Automatic and Permissive | Goes on by itself, even when it replaces a check. At Permissive a re-plan that adds more new to-dos than the limit on the Plan edits tab still waits.        | Answered by the system. A type on your own "you decide" list still waits.                                             |
+| YOLO (IDGAF)            | Goes on by itself, with no limit.                                                                                                                            | Answered by the system, whatever its type. The `irreversible` label does not change that.                             |
+
+When the loop goes on by itself it leaves a one-line notice in the loop panel, for example `Plan updated: 11 kept, 1 added, 1 dropped; check of item 1 replaced`. It never blocks.
+
+An answered question is chosen in this order: the option labelled `(recommended)`, then the plan decision's own pick, then the first option. A question with no options gets `No one is available to answer; use your best judgment and state the assumption`. The answer is recorded on the loop as given by `system` (never `person`), with the setting that allowed it, such as `Questions: IDGAF`, and the panel shows `Auto-answered: <question> -> <answer>`. A late answer from you still overrules it. The same rules apply in the extension, in `cn` and under `cn serve`.
+
 The tool name in a rule decides the tab. A terminal command rule is listed under Tool use, but a command the parser can show only reads is Context use for that one call, so the page says the area is decided per command. Rules for tools that only touch the session (the task list, Loop's tools) and rules that cannot be read are listed at the bottom under "Rules with no area".
 
 Rules are shown grouped as Never, Ask and Always (the files keep the names `deny`, `ask` and `allow`). The order does not matter, and there is no way to reorder them: a call is weighed by decision (always-on rules, then Never rules, then protected paths, then Ask rules, then Always rules, then the level), never by where a rule sits in a list.

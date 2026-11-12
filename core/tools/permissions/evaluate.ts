@@ -193,13 +193,13 @@ export function evaluateToolPolicyWithRules(
  * ROADMAP B31. The path guards read a path as it is written, so a terminal
  * command whose write target is built when it runs (`$d`, a wildcard, a
  * backtick, a bare name after a `cd` into the home folder) is not covered by
- * them. At YOLO, which would otherwise run it, it asks. It only tightens: a
+ * them. At IDGAF, which would otherwise run it, it asks. It only tightens: a
  * call already refused or already asked is left as it is, and no rule or
  * setting loosens it. The sandbox that denies writes to the policy folders (W8)
  * is what holds for certain.
  */
 export const RUNTIME_WRITE_REASON =
-  "This command writes to a path built when it runs, which the path guards cannot read, so at YOLO it asks.";
+  "This command writes to a path built when it runs, which the path guards cannot read, so at IDGAF it asks.";
 
 function lockRuntimeWrites(
   input: EvaluateInput,
@@ -219,7 +219,7 @@ function lockRuntimeWrites(
     cwd: input.cwd,
     shell: input.shell,
   })?.level;
-  if (level !== "yolo") return result;
+  if (level !== "idgaf") return result;
   const why = runtimeWriteTarget(command, input.shell, input.cwd);
   if (!why) return result;
   return {
@@ -232,10 +232,10 @@ function lockRuntimeWrites(
 
 /**
  * The locked floor (selfProtect.ts): a call that would write or delete a
- * permission or policy file asks, and is refused at Automatic and YOLO, where
+ * permission or policy file asks, and is refused at Automatic and IDGAF, where
  * nobody is there to say yes to a change that undoes the other protections.
  * That holds for a path the call names. A terminal command is read as it is
- * written, so a path built when it runs is not seen here; at YOLO such a
+ * written, so a path built when it runs is not seen here; at IDGAF such a
  * command asks instead (lockRuntimeWrites).
  * It runs after everything else and only tightens, so no rule, level or
  * built-in switch can loosen it.
@@ -264,7 +264,7 @@ function lockPolicyFiles(
     shell: input.shell,
   })?.level;
   // A scan that gave up cannot say the call is a write: it asks, never refuses.
-  const refuse = (level === "automatic" || level === "yolo") && !hit.capped;
+  const refuse = (level === "automatic" || level === "idgaf") && !hit.capped;
   if (!refuse && result.policy === "allowedWithPermission") return result;
   return {
     ...result,
@@ -439,7 +439,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   // It only ever tightens: a call that is already refused stays refused.
   // A private or local URL always asks. Permissive (Hands-off) and an allow
   // rule can loosen the tool's own "ask", so this is a protection, like a
-  // protected path. YOLO still reaches past it.
+  // protected path. IDGAF still reaches past it.
   const privateUrl =
     toolName === "fetch_url_content" &&
     isPrivateFetchTarget(parsedArgs.url, processedArgs)
@@ -449,7 +449,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
         } satisfies ProtectedHit)
       : undefined;
   // A tool whose MCP definition changed since approval asks again. Never in
-  // the skip list: no setting turns it off, and YOLO alone reaches past it.
+  // the skip list: no setting turns it off, and IDGAF alone reaches past it.
   const changedDefinition = changedDefinitionHit(
     tool.mcpDefinitionChange,
     basePolicy,
@@ -469,7 +469,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     envHit,
   });
 
-  // The floor: deny rules the person wrote to bind even at YOLO
+  // The floor: deny rules the person wrote to bind even at IDGAF
   const floorRules = parsePermissions({ deny: input.approval?.floor }, "floor");
   if (floorRules.length) {
     const isMcpCall =
@@ -504,14 +504,14 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     : parsePermissions(input.permissions);
   const call = { parsedArgs, cwd: input.cwd, shell: input.shell };
   const found = levelOfCall(input.approval, toolName, tool, call);
-  // A hidden command is not loosened at any level, YOLO included. Otherwise
-  // YOLO reaches past a refusal, a rule and a protected path, and Permissive
+  // A hidden command is not loosened at any level, IDGAF included. Otherwise
+  // IDGAF reaches past a refusal, a rule and a protected path, and Permissive
   // acts only on a call that would otherwise ask.
   const hidden =
     floorOn && hidesTheCommand(commandText, input.shell, input.envNames);
   const loosening = hidden
     ? undefined
-    : found?.level === "yolo" || evaluated === "allowedWithPermission"
+    : found?.level === "idgaf" || evaluated === "allowedWithPermission"
       ? approvalLoosening({
           approval: input.approval,
           tool,

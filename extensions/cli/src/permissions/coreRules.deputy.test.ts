@@ -140,14 +140,14 @@ describe("the confused-deputy rule through the CLI", () => {
     );
   });
 
-  it("asks below YOLO and not at YOLO", async () => {
+  it("asks below IDGAF and not at IDGAF", async () => {
     const args = { filepath: path.join(outside, "new.txt") };
     for (const level of ["cautious", "permissive", "automatic"] as const) {
       expect((await decide("Write", args, { level }))?.decision, level).toBe(
         "ask",
       );
     }
-    expect((await decide("Write", args, { level: "yolo" }))?.decision).toBe(
+    expect((await decide("Write", args, { level: "idgaf" }))?.decision).toBe(
       "allow",
     );
   });
@@ -194,7 +194,7 @@ describe("MCP file tools through the CLI", () => {
   it("follows the same switch and level", async () => {
     const args = { path: path.join(outside, "x.txt") };
     expect(
-      (await decide("mcp__files__write_file", args, { mcp, level: "yolo" }))
+      (await decide("mcp__files__write_file", args, { mcp, level: "idgaf" }))
         ?.decision,
     ).toBe("allow");
     expect(

@@ -538,9 +538,24 @@ export type QuestionType =
   | "design"
   | "detail";
 
+/**
+ * Something the loop decided for the person under the policy they set (a
+ * re-plan it accepted, a question it answered). Always by `system`; `source`
+ * names the setting ("Plan edits: IDGAF", "Questions: Permissive").
+ */
+export interface LoopAutoDecision {
+  kind: "plan" | "question";
+  by: "system";
+  source: string;
+  text: string;
+  at: string;
+}
+
 export interface LoopQuestion {
   /** IDGAF: the agent decided this itself; it never reached the inbox */
   decidedAlone?: boolean;
+  /** Questions is permissive: the answer the system chose, and under which setting */
+  autoAnswer?: { text: string; by: "system"; source: string };
   id: string;
   /** The item it is about; none for a question about the whole plan */
   itemId?: string;
@@ -641,7 +656,7 @@ export interface LoopBudget {
 /**
  * How much the loop does without the person. It follows the approval mode
  * the person picked when the loop starts (Manual: supervised; Auto-approve
- * and Auto: auto; YOLO: unattended) and can be changed while it runs. See
+ * and Auto: auto; IDGAF: unattended) and can be changed while it runs. See
  * LOOP_AUTONOMY in core/util/loopMode.ts.
  */
 export type LoopAutonomy = "supervised" | "auto" | "unattended" | "idgaf";
@@ -873,6 +888,8 @@ export interface LoopState {
   waitingSince?: string;
   /** Why the last re-plan did or did not start the next round by itself */
   replanReason?: string;
+  /** What the loop decided for the person by their policy, oldest first (capped) */
+  autoDecisions?: LoopAutoDecision[];
   /** Tool calls the person allowed from an approval question (grantKey) */
   grants: string[];
   /** A plan-wide answer asked to re-plan now */
@@ -1275,7 +1292,7 @@ interface McpUiState {
 
 interface ToolCallDecision {
   outcome: "allowed" | "blocked";
-  /** A rule, the safety check, a switch, YOLO, the Auto reviewer, or the user ("once"). */
+  /** A rule, the safety check, a switch, IDGAF, the Auto reviewer, or the user ("once"). */
   source: string;
   /** One line saying why. */
   reason?: string;
@@ -2052,7 +2069,7 @@ export interface Tool {
   mcpMeta?: McpToolMeta;
   /**
    * An MCP tool whose definition changed, or that appeared, after the person
-   * approved its server. It asks again at every level but YOLO until a call to
+   * approved its server. It asks again at every level but IDGAF until a call to
    * it is approved. `summary` says what changed.
    */
   mcpDefinitionChange?: {

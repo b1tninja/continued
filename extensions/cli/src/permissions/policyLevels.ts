@@ -2,6 +2,8 @@ import type { LoopAutonomy } from "core/index.js";
 import type { ApprovalSettings } from "core/tools/permissions/approval.js";
 import {
   DEFAULT_POLICY_LEVELS,
+  isDeprecatedLevelSpelling,
+  parsePolicyLevel,
   POLICY_AREA_LABELS,
   POLICY_AREAS,
   POLICY_LEVEL_DESCRIPTIONS,
@@ -79,7 +81,7 @@ export function loadPolicyFile(file: string = PERMISSIONS_YAML_PATH): string[] {
   return notices;
 }
 
-/** Writes the levels (never YOLO) and the other settings back to the file. */
+/** Writes the levels (never IDGAF) and the other settings back to the file. */
 export function savePolicyFile(
   file: string = PERMISSIONS_YAML_PATH,
   update: PolicyFileUpdate = { levels },
@@ -126,7 +128,7 @@ const TOOL_AREAS: readonly PolicyArea[] = ["context", "tools", "edits"];
 
 /**
  * The levels in force. The CLI's `auto` mode (`--auto`) allowed everything,
- * which is YOLO on the three tool areas and a plan that goes on; and
+ * which is IDGAF on the three tool areas and a plan that goes on; and
  * `--auto-review` hands what a rule leaves open to the reviewer, which is
  * Automatic wherever the level is Cautious. A level the person set higher
  * than that is kept.
@@ -134,7 +136,7 @@ const TOOL_AREAS: readonly PolicyArea[] = ["context", "tools", "edits"];
 export function effectiveLevels(mode: PermissionMode): PolicyLevels {
   const result = { ...levels };
   if (mode === "auto") {
-    for (const area of TOOL_AREAS) result[area] = "yolo";
+    for (const area of TOOL_AREAS) result[area] = "idgaf";
     if (result.plan === "manual" || result.plan === "cautious") {
       result.plan = "permissive";
     }
@@ -167,21 +169,28 @@ const AREA_KEYS: Record<string, PolicyArea> = {
   question: "questions",
 };
 
-const LEVEL_ALIASES: Record<string, PolicyLevel> = { idgaf: "yolo" };
+/** `yolo` is the old spelling of the top level and of the preset: still read. */
+const DEPRECATED_PRESET = "yolo";
 
 function toLevel(word: string): PolicyLevel | undefined {
-  const w = word.trim().toLowerCase();
-  const aliased = LEVEL_ALIASES[w] ?? w;
-  return POLICY_LEVELS.includes(aliased as PolicyLevel)
-    ? (aliased as PolicyLevel)
-    : undefined;
+  return parsePolicyLevel(word);
 }
 
 export type PolicySpecResult =
-  { ok: true; levels: PolicyLevels } | { ok: false; error: string };
+  | {
+      ok: true;
+      levels: PolicyLevels;
+      /** The old spelling was used (`yolo`): the caller says so on stderr */
+      deprecated?: string;
+    }
+  | { ok: false; error: string };
+
+/** The one line printed (on stderr) when a spec used the old name. */
+export const YOLO_DEPRECATION_NOTE =
+  '"yolo" is now called "idgaf"; the old name still works for now.';
 
 /**
- * A preset name (`careful`, `acceptEdits`, `handsOff`, `reviewer`, `yolo`),
+ * A preset name (`careful`, `acceptEdits`, `handsOff`, `reviewer`, `idgaf`),
  * or area=level pairs separated by commas or spaces, applied on top of
  * `from`: `tools=permissive,plan=manual`. A bare level sets every area.
  */
@@ -191,16 +200,28 @@ export function parsePolicySpec(
 ): PolicySpecResult {
   const text = spec.trim();
   if (!text) return { ok: false, error: "Nothing to set." };
+  const lowered = text.toLowerCase();
   const preset = POLICY_PRESET_ORDER.find(
-    (p) => p.toLowerCase() === text.toLowerCase(),
+    (p) =>
+      p.toLowerCase() === (lowered === DEPRECATED_PRESET ? "idgaf" : lowered),
   );
-  if (preset) return { ok: true, levels: { ...POLICY_PRESETS[preset].levels } };
+  if (preset) {
+    return {
+      ok: true,
+      levels: { ...POLICY_PRESETS[preset].levels },
+      ...(lowered === DEPRECATED_PRESET
+        ? { deprecated: YOLO_DEPRECATION_NOTE }
+        : {}),
+    };
+  }
 
   const next = { ...from };
+  let deprecated: string | undefined;
   for (const part of text.split(/[\s,]+/).filter(Boolean)) {
     const [key, value, ...rest] = part.split("=");
     if (value === undefined) {
       const level = toLevel(key);
+      if (isDeprecatedLevelSpelling(key)) deprecated = YOLO_DEPRECATION_NOTE;
       if (!level) {
         return {
           ok: false,
@@ -212,6 +233,7 @@ export function parsePolicySpec(
     }
     const area = AREA_KEYS[key.trim().toLowerCase()];
     const level = toLevel(value);
+    if (isDeprecatedLevelSpelling(value)) deprecated = YOLO_DEPRECATION_NOTE;
     if (rest.length || !area) {
       return {
         ok: false,
@@ -221,12 +243,12 @@ export function parsePolicySpec(
     if (!level) {
       return {
         ok: false,
-        error: `"${value}" is not a level. Levels: ${POLICY_LEVELS.join(", ")} (idgaf is yolo).`,
+        error: `"${value}" is not a level. Levels: ${POLICY_LEVELS.join(", ")} (yolo is the old name of idgaf).`,
       };
     }
     next[area] = level;
   }
-  return { ok: true, levels: next };
+  return { ok: true, levels: next, ...(deprecated ? { deprecated } : {}) };
 }
 
 /** The five levels and what each means, for `/policy`. */
@@ -265,6 +287,6 @@ export function levelsForAutonomy(
     case "unattended":
       return { plan: "permissive", questions: "cautious" };
     case "idgaf":
-      return { plan: "permissive", questions: "yolo" };
+      return { plan: "permissive", questions: "idgaf" };
   }
 }
