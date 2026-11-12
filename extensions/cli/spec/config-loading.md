@@ -25,17 +25,16 @@ This document specifies the behavior of the CLI's configuration loading system, 
 1. **CLI `--config` Flag** (highest priority)
 
    - File path (starts with `.`, `/`, `~`): Loads local YAML file
-   - Assistant slug (`owner/package`): Fetches from Continue platform
+   - Assistant slug (`owner/package`): rejected with "hub assistants are not supported; pass a config.yaml path"
    - Overrides any saved preferences
 
 2. **Saved Config URI** (if no `--config` flag)
 
    - Retrieved from authentication config
    - Converts `file://` URIs back to file paths
-   - Converts `slug://` URIs back to assistant slugs
+   - A `slug://` URI is rejected with the same hub-assistants error
 
 3. **Default Resolution** (if no flag and no saved URI)
-   - **Authenticated**: First user assistant from `listAssistants()`
    - **config.yaml**: The saved config file at `~/.continue/config.yaml`
    - **Nothing configured**: an empty local assistant; no hosted default config is fetched, and a model comes from `~/.continuous/config.yaml` or `--config <file>`
 
@@ -45,14 +44,10 @@ This document specifies the behavior of the CLI's configuration loading system, 
 
 **Available Options:**
 
-- Personal assistants
-- Organization assistants (if organization selected)
 - Local YAML files
-- Public assistants
 
 **Behavior:**
 
-- `listAssistants()` returns personalized results
 - Config selections are saved as URIs in auth config
 - Organization context affects available assistants
 
@@ -88,7 +83,6 @@ This document specifies the behavior of the CLI's configuration loading system, 
 **Effects on Config Loading:**
 
 - Organization ID passed to all API calls
-- Affects which assistants appear in `listAssistants()`
 - Organization changes trigger complete config reload
 
 ## Error Handling Behavior

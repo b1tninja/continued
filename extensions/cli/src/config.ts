@@ -7,13 +7,8 @@ import {
   LLMConfig,
   onFieldFallback,
 } from "@continuedev/openai-adapters";
-import {
-  Configuration,
-  DefaultApi,
-} from "@continuedev/sdk/dist/api/dist/index.js";
 
 import { AuthConfig } from "./auth/workos.js";
-import { env } from "./env.js";
 import { logger } from "./util/logger.js";
 import { getUniqueId } from "./util/uniqueId.js";
 import { getVersion } from "./version.js";
@@ -165,15 +160,4 @@ export function getLlmApi(
   }
 
   return [llmApi, model];
-}
-
-export function getApiClient(
-  accessToken: string | undefined | null,
-): DefaultApi {
-  return new DefaultApi(
-    new Configuration({
-      basePath: env.apiBase.replace(/\/$/, ""),
-      accessToken: accessToken ?? undefined,
-    }),
-  );
 }

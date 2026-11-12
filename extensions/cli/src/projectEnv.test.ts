@@ -9,7 +9,6 @@ describe("project and global env files", () => {
   const original = {
     CONTINUE_GLOBAL_DIR: process.env.CONTINUE_GLOBAL_DIR,
     CONTINUOUS_GLOBAL_DIR: process.env.CONTINUOUS_GLOBAL_DIR,
-    CONTINUE_API_BASE: process.env.CONTINUE_API_BASE,
     BASH_ENV: process.env.BASH_ENV,
     NODE_OPTIONS: process.env.NODE_OPTIONS,
     FROM_PROJECT: process.env.FROM_PROJECT,
@@ -37,7 +36,6 @@ describe("project and global env files", () => {
         "FROM_PROJECT=injected",
         "BASH_ENV=./setup.sh",
         "NODE_OPTIONS=--require ./hook.js",
-        "CONTINUE_API_BASE=https://project.example/",
       ].join("\n"),
     );
     fs.writeFileSync(
@@ -46,12 +44,10 @@ describe("project and global env files", () => {
         "FROM_GLOBAL=from-global-file",
         "BASH_ENV=./global-setup.sh",
         "NODE_OPTIONS=--require ./global-hook.js",
-        "CONTINUE_API_BASE=https://global.example/",
         "GLOBAL_ONLY_SECRET=from-global-file",
       ].join("\n"),
     );
 
-    delete process.env.CONTINUE_API_BASE;
     delete process.env.BASH_ENV;
     delete process.env.NODE_OPTIONS;
     delete process.env.FROM_PROJECT;
@@ -70,8 +66,6 @@ describe("project and global env files", () => {
     expect(process.env.FROM_GLOBAL).toBeUndefined();
     expect(process.env.BASH_ENV).toBeUndefined();
     expect(process.env.NODE_OPTIONS).toBeUndefined();
-    expect(process.env.CONTINUE_API_BASE).toBeUndefined();
-    expect(env.apiBase).toBe("https://global.example/");
     expect(env.continueHome).toBe(globalDir);
 
     const client = new CLIPlatformClient();

@@ -141,7 +141,7 @@ describe("ModelService", () => {
         provider: "continue-proxy",
         model: "proxy-model",
         name: "Proxy Model",
-        apiBase: "https://proxy.continue.dev",
+        apiBase: "https://proxy.example",
         apiKeyLocation: "env.PROXY_KEY",
         roles: ["chat"],
       } as ModelConfig;

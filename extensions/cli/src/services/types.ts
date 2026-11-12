@@ -5,9 +5,8 @@ import {
   parseAgentFileRules,
   parseAgentFileTools,
 } from "@continuedev/config-yaml";
+import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
-import { AssistantConfig } from "@continuedev/sdk";
-import { DefaultApiInterface } from "@continuedev/sdk/dist/api/dist/index.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 import type { AuthConfig } from "../auth/workos.js";
@@ -111,10 +110,6 @@ export interface UpdateServiceState {
   currentVersion: string;
 }
 
-export interface ApiClientServiceState {
-  apiClient: DefaultApiInterface | null;
-}
-
 export interface AgentFileServiceState {
   agentFile: AgentFile | null;
   slug: string | null;
@@ -139,7 +134,6 @@ export const SERVICE_NAMES = {
   CONFIG: "config",
   MODEL: "model",
   MCP: "mcp",
-  API_CLIENT: "apiClient",
   TOOL_PERMISSIONS: "toolPermissions",
   FILE_INDEX: "fileIndex",
   RESOURCE_MONITORING: "resourceMonitoring",

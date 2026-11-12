@@ -1,6 +1,6 @@
 import fs from "fs";
 
-import { type AssistantConfig } from "@continuedev/sdk";
+import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-yaml";
 import chalk from "chalk";
 import type { Session } from "core/index.js";
 import { POLICY_PRESET_ORDER } from "core/tools/permissions/policy.js";

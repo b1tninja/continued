@@ -1,4 +1,4 @@
-import { type AssistantConfig } from "@continuedev/sdk";
+import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-yaml";
 import { createRelativeRuleFilePath } from "core/config/markdown/utils.js";
 
 import { SlashCommandResult } from "../ui/hooks/useChat.types.js";
