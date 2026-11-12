@@ -3,15 +3,11 @@ import { setProjectConfigTrustedForRun } from "core/config/projectTrust.js";
 import { HookService } from "../hooks/HookService.js";
 import { setTrustProjectHooksForRun } from "../hooks/hookTrust.js";
 import { initializeWithOnboarding } from "../onboarding.js";
-import {
-  setBetaSubagentToolEnabled,
-  setBetaUploadArtifactToolEnabled,
-} from "../tools/toolsConfig.js";
+import { setBetaSubagentToolEnabled } from "../tools/toolsConfig.js";
 import { logger } from "../util/logger.js";
 
 import { AgentFileService } from "./AgentFileService.js";
 import { ApiClientService } from "./ApiClientService.js";
-import { ArtifactUploadService } from "./ArtifactUploadService.js";
 import { AuthService } from "./AuthService.js";
 import { backgroundJobService } from "./BackgroundJobService.js";
 import { ChatHistoryService } from "./ChatHistoryService.js";
@@ -23,7 +19,6 @@ import { ModelService } from "./ModelService.js";
 import { quizService } from "./QuizService.js";
 import { ResourceMonitoringService } from "./ResourceMonitoringService.js";
 import { serviceContainer } from "./ServiceContainer.js";
-import { StorageSyncService } from "./StorageSyncService.js";
 import { SystemMessageService } from "./SystemMessageService.js";
 import {
   InitializeToolServiceOverrides,
@@ -51,11 +46,9 @@ const fileIndexService = new FileIndexService();
 const resourceMonitoringService = new ResourceMonitoringService();
 const chatHistoryService = new ChatHistoryService();
 const updateService = new UpdateService();
-const storageSyncService = new StorageSyncService();
 const agentFileService = new AgentFileService();
 const toolPermissionService = new ToolPermissionService();
 const systemMessageService = new SystemMessageService();
-const artifactUploadService = new ArtifactUploadService();
 const gitAiIntegrationService = new GitAiIntegrationService();
 const hookService = new HookService();
 
@@ -86,9 +79,6 @@ export async function initializeServices(initOptions: ServiceInitOptions = {}) {
   const commandOptions = initOptions.options || {};
 
   // Configure beta tools based on command options
-  if (commandOptions.betaUploadArtifactTool) {
-    setBetaUploadArtifactToolEnabled(true);
-  }
   if (commandOptions.betaSubagentTool) {
     setBetaSubagentToolEnabled(true);
   }
@@ -306,18 +296,6 @@ export async function initializeServices(initOptions: ServiceInitOptions = {}) {
   );
 
   serviceContainer.register(
-    SERVICE_NAMES.STORAGE_SYNC,
-    () => storageSyncService.initialize(),
-    [],
-  );
-
-  serviceContainer.register(
-    SERVICE_NAMES.ARTIFACT_UPLOAD,
-    () => artifactUploadService.initialize(),
-    [],
-  );
-
-  serviceContainer.register(
     SERVICE_NAMES.CHAT_HISTORY,
     () => chatHistoryService.initialize(undefined, initOptions.headless),
     [], // No dependencies for now, but could depend on SESSION in future
@@ -400,10 +378,8 @@ export const services = {
   systemMessage: systemMessageService,
   chatHistory: chatHistoryService,
   updateService: updateService,
-  storageSync: storageSyncService,
   agentFile: agentFileService,
   toolPermissions: toolPermissionService,
-  artifactUpload: artifactUploadService,
   gitAiIntegration: gitAiIntegrationService,
   backgroundJobs: backgroundJobService,
   quiz: quizService,

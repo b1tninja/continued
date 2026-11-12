@@ -126,14 +126,6 @@ function renderTextReport(
         ? chalk.dim("These reviews also run on your PRs via Continue CI.")
         : "These reviews also run on your PRs via Continue CI.",
     );
-  } else {
-    lines.push(
-      isTTY
-        ? chalk.dim(
-            "Tip: Run these automatically on every PR → https://continue.dev",
-          )
-        : "Tip: Run these automatically on every PR → https://continue.dev",
-    );
   }
 
   return lines.join("\n");

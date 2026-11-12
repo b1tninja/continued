@@ -489,21 +489,3 @@ export interface ServerState {
   pendingPermission: PendingPermission | null;
   systemMessage?: string;
 }
-
-/**
- * Check if the agent should be marked as complete based on conversation history.
- * The agent is complete if the last message is from the assistant and has no tool calls.
- */
-export function checkAgentComplete(
-  history: { message: { role: string; tool_calls?: any[] } }[] | undefined,
-): boolean {
-  if (!history || history.length === 0) {
-    return false;
-  }
-  const lastItem = history[history.length - 1];
-  if (lastItem?.message?.role !== "assistant") {
-    return false;
-  }
-  const toolCalls = (lastItem.message as any).tool_calls;
-  return !toolCalls || toolCalls.length === 0;
-}

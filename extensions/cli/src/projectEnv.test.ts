@@ -74,11 +74,7 @@ describe("project and global env files", () => {
     expect(env.apiBase).toBe("https://global.example/");
     expect(env.continueHome).toBe(globalDir);
 
-    const client = new CLIPlatformClient(null, {
-      syncSecrets: async () => {
-        throw new Error("global file should have supplied the secret");
-      },
-    } as never);
+    const client = new CLIPlatformClient();
     const [secret] = await client.resolveFQSNs([
       { packageSlugs: [], secretName: "GLOBAL_ONLY_SECRET" },
     ]);

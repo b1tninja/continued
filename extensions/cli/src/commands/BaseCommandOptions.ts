@@ -28,8 +28,6 @@ export interface BaseCommandOptions {
   budgetAllowUnpriced?: boolean;
   /** Agent file slug from the hub (--agent) */
   agent?: string;
-  /** Enable beta UploadArtifact tool */
-  betaUploadArtifactTool?: boolean;
   /** Enable beta Subagent tool */
   betaSubagentTool?: boolean;
   /** Run this project's hooks for this session without asking (--trust-project-hooks) */

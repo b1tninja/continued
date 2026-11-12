@@ -22,7 +22,6 @@ import {
   shouldBypassProxy,
 } from "@continuedev/fetch";
 
-import { env } from "../env.js";
 import type { NetworkRequestOptions } from "../util/networkFetch.js";
 
 const PROXY_VARS = [
@@ -192,7 +191,13 @@ export async function doctorCommand(
     write(`  ${line}`);
   }
 
-  const targets = urls.length ? urls : [env.apiBase];
+  if (urls.length === 0) {
+    write("");
+    write("Usage: continuous doctor network <url...>");
+    write("Pass the address you want to reach, such as your model endpoint.");
+    return 0;
+  }
+  const targets = urls;
   let failed = 0;
   for (const target of targets) {
     write("");

@@ -46,7 +46,7 @@ The embeddings model is bundled; nothing is downloaded from Hugging Face at run 
 - `continuous doctor network`, if present in your build, reports the outbound paths. It depends on [#638](https://github.com/b1tninja/continuous/pull/638).
 - The code is open. A firewall or proxy log is the final word.
 
-Two Continue-operated hostnames remain as text or as an unused default (`api.continue.dev`, `continue.dev` links in CLI messages). Nothing in the default local path fetches them, including a first run with no `config.yaml`: the hosted default config that upstream fetched for unconfigured users was removed, so that run makes no connection. Removing the remaining text is tracked in the roadmap.
+One Continue-operated hostname remains in the source: `api.continue.dev`. It is the default value of the API base setting (`CONTINUE_API_BASE`) in the terminal agent, the default of the generated SDK client in `packages/continue-sdk`, and a literal in tests and one comment. The terminal agent no longer calls it for remote agent ids, storage sync, agent status or metadata, artifact upload, PR checks or secret sync: that code was removed. No `continue.dev` or `docs.continue.dev` link is left in the terminal agent's messages. This is a reading of the source, not a capture of traffic. The hub config-loading code that still takes an API client (`configLoader`, `ApiClientService`) was not traced to the end here, and removing it together with the SDK client is the next step. Nothing in the default local path fetches the host, including a first run with no `config.yaml`: the hosted default config that upstream fetched for unconfigured users was removed, so that run makes no connection.
 
 ## Where secrets are kept
 
