@@ -32,6 +32,7 @@ env:
 jobs:
   track-rerun:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: (github.run_attempt > 1) && github.event.pull_request.draft != true
     steps:
       - uses: actions/checkout@v7
@@ -41,6 +42,7 @@ jobs:
   lint:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -83,6 +85,7 @@ jobs:
         node-version: ${{ fromJSON(github.event_name == 'pull_request' && '[22]' || '[22,24]') }}
       fail-fast: false
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -145,6 +148,7 @@ jobs:
     # Only runs when secrets are available (not on fork PRs)
     if: (github.event.pull_request.head.repo.full_name == github.repository) && github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -193,6 +197,7 @@ jobs:
   require-all-checks-to-pass-cli:
     if: (always()) && github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs:
       - lint
       - test

@@ -35,6 +35,7 @@ env:
 jobs:
   track-rerun:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: (github.run_attempt > 1) && github.event.pull_request.draft != true
     steps:
       - uses: actions/checkout@v7
@@ -44,6 +45,7 @@ jobs:
   prettier-check:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       # Two commits deep: the merge commit and its first parent (the base), so the step below can
       # tell whether this PR touches the extension version.
@@ -93,6 +95,7 @@ jobs:
   core-checks:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
         with:
@@ -142,6 +145,7 @@ jobs:
   gui-checks:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - name: Setup packages
@@ -173,6 +177,7 @@ jobs:
   binary-checks:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Setup packages
@@ -196,6 +201,7 @@ jobs:
   vscode-checks:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Setup packages
@@ -236,6 +242,7 @@ jobs:
   get-packages-matrix:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       packages: ${{ steps.get-packages.outputs.packages }}
     steps:
@@ -251,6 +258,7 @@ jobs:
     if: github.event.pull_request.draft != true
     needs: get-packages-matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         package: ${{ fromJson(needs.get-packages-matrix.outputs.packages) }}
@@ -290,6 +298,7 @@ jobs:
   vscode-get-test-file-matrix:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       test_file_matrix: ${{ steps.vscode-get-test-file-matrix.outputs.test_file_matrix }}
     steps:
@@ -430,6 +439,7 @@ jobs:
   require-all-checks-to-pass:
     if: (always()) && github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs:
       - prettier-check
       - core-checks
