@@ -237,7 +237,8 @@ export class ConfigService
       } catch (e) {
         if (isHeadless) {
           throw new Error(
-            "No model specified in headless mode (and failed to load default model)",
+            "No model specified in headless mode (and failed to load default model). " +
+              "No config.yaml was found or it has no model: put one at ~/.continuous/config.yaml or pass --config <file>.",
           );
         } else {
           logger.error(
