@@ -1,5 +1,4 @@
 import { vscForeground } from "..";
-import { LOOP_GRADIENT_STOPS } from "./loopGradient";
 import { LOOP_PATH } from "./LoopIcon";
 
 interface ContinuedLogoProps {
@@ -9,7 +8,7 @@ interface ContinuedLogoProps {
 
 /**
  * The Continuous mark (brand-src/mark.svg: an endless loop in the brand
- * gradient on a badge with a thin glowing border; the dot is only in the
+ * gradient on a dark navy badge with a thin glowing gradient frame; the dot is only in the
  * running LoopIcon) with the "Continuous" wordmark in the editor's foreground colour.
  */
 export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
@@ -24,8 +23,8 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
     >
       <defs>
         <linearGradient id="continuous-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#312E81" />
-          <stop offset="1" stopColor="#1E1B4B" />
+          <stop offset="0" stopColor="#1B2455" />
+          <stop offset="1" stopColor="#150F3D" />
         </linearGradient>
         <linearGradient
           id="continuous-loop"
@@ -35,13 +34,9 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
           x2="412"
           y2="0"
         >
-          {LOOP_GRADIENT_STOPS.map((stop, i) => (
-            <stop
-              key={stop}
-              offset={i / (LOOP_GRADIENT_STOPS.length - 1)}
-              stopColor={stop}
-            />
-          ))}
+          <stop offset="0" stopColor="#3B82F6" />
+          <stop offset="0.5" stopColor="#818CF8" />
+          <stop offset="1" stopColor="#A78BFA" />
         </linearGradient>
         <linearGradient
           id="continuous-edge"
@@ -51,9 +46,9 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
           x2="512"
           y2="512"
         >
-          <stop offset="0" stopColor={LOOP_GRADIENT_STOPS[0]} />
-          <stop offset="0.5" stopColor={LOOP_GRADIENT_STOPS[2]} />
-          <stop offset="1" stopColor={LOOP_GRADIENT_STOPS[1]} />
+          <stop offset="0" stopColor="#4C8DFF" />
+          <stop offset="0.55" stopColor="#8B7CF6" />
+          <stop offset="1" stopColor="#A78BFA" />
         </linearGradient>
         <filter
           id="continuous-glow"
@@ -62,26 +57,38 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
           width="120%"
           height="120%"
         >
-          <feGaussianBlur stdDeviation="7" />
+          <feGaussianBlur stdDeviation="6" />
         </filter>
       </defs>
       <rect
-        x="24"
-        y="24"
-        width="464"
-        height="464"
-        rx="108"
-        stroke="url(#continuous-edge)"
-        strokeWidth="12"
-        filter="url(#continuous-glow)"
+        x="16"
+        y="16"
+        width="480"
+        height="480"
+        rx="112"
+        fill="url(#continuous-bg)"
       />
       <rect
-        x="24"
-        y="24"
-        width="464"
-        height="464"
-        rx="108"
-        fill="url(#continuous-bg)"
+        x="28"
+        y="28"
+        width="456"
+        height="456"
+        rx="96"
+        fill="none"
+        stroke="url(#continuous-edge)"
+        strokeWidth="10"
+        filter="url(#continuous-glow)"
+        opacity="0.7"
+      />
+      <rect
+        x="28"
+        y="28"
+        width="456"
+        height="456"
+        rx="96"
+        fill="none"
+        stroke="url(#continuous-edge)"
+        strokeWidth="5"
       />
       <path
         d={LOOP_PATH}
@@ -90,15 +97,6 @@ export default function ContinuedLogo({ height = 75 }: ContinuedLogoProps) {
         strokeWidth="44"
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-      <rect
-        x="27"
-        y="27"
-        width="458"
-        height="458"
-        rx="105"
-        stroke="url(#continuous-edge)"
-        strokeWidth="6"
       />
       <text
         x="560"
