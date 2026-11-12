@@ -52,7 +52,7 @@ policy chips are in every chat view, below the input.
 ### Accessibility (axe-core)
 
 ```sh
-cd bench/screenshots && npm run axe -- --browser edge      # every view, 300 and 800, dark and light
+cd bench/screenshots && npm run axe -- --browser edge      # every view, 300 and 800, dark and light; --theme hc adds a high-contrast look (for --report; the baseline is dark and light)
 npm run axe -- --view settings-permissions --report         # one view, every violation with a target
 npm run axe -- --update                                     # rewrite axe-baseline.json from this run
 ```

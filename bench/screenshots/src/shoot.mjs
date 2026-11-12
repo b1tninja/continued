@@ -61,7 +61,7 @@ export async function shoot(o) {
       const t1 = Date.now();
       const context = await browser.newContext({
         viewport: { width: job.width, height: job.height },
-        colorScheme: job.theme,
+        colorScheme: job.theme === "light" ? "light" : "dark",
         deviceScaleFactor: 1,
         reducedMotion: "reduce",
       });

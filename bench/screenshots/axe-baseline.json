@@ -4,57 +4,42 @@
   "note": "Known violations per view: rule -> most nodes seen at any width or theme. Fix and tighten with --update; never add by hand.",
   "views": {
     "agents-ended": {
-      "color-contrast": 26
+      "color-contrast": 7
     },
     "agents-running": {
-      "color-contrast": 26
+      "color-contrast": 7
     },
     "attach-open": {},
     "audit-inbox": {
-      "color-contrast": 9
+      "color-contrast": 3
     },
     "audit-list": {
-      "color-contrast": 13
+      "color-contrast": 5
     },
     "bedrock-fail": {},
     "bedrock-ok": {
       "color-contrast": 1
     },
-    "chat": {
-      "color-contrast": 2
-    },
-    "chat-first-run": {
-      "color-contrast": 2
-    },
+    "chat": {},
+    "chat-first-run": {},
     "conversation": {
-      "color-contrast": 14,
+      "color-contrast": 13,
       "scrollable-region-focusable": 1
     },
-    "dialect": {
-      "color-contrast": 2
-    },
+    "dialect": {},
     "held": {
-      "color-contrast": 2
+      "color-contrast": 1
     },
-    "loop": {
-      "color-contrast": 2
-    },
+    "loop": {},
     "overflow-open": {
-      "aria-hidden-focus": 3,
-      "color-contrast": 2
+      "aria-hidden-focus": 3
     },
     "permissions-editor": {
-      "color-contrast": 16
+      "color-contrast": 5
     },
-    "permissions-error": {
-      "color-contrast": 3
-    },
-    "permissions-intro": {
-      "color-contrast": 6
-    },
-    "permissions-loading": {
-      "color-contrast": 3
-    },
+    "permissions-error": {},
+    "permissions-intro": {},
+    "permissions-loading": {},
     "preset-open": {},
     "settings-configs": {},
     "settings-general": {
@@ -65,23 +50,21 @@
     },
     "settings-indexing": {},
     "settings-models": {
-      "color-contrast": 4
+      "color-contrast": 1
     },
-    "settings-permissions": {
-      "color-contrast": 6
-    },
+    "settings-permissions": {},
     "settings-rules": {
       "color-contrast": 2
     },
     "settings-tools": {},
     "streaming": {
-      "color-contrast": 2
+      "color-contrast": 1
     },
     "tool-call": {
-      "color-contrast": 2
+      "color-contrast": 1
     },
     "tool-call-done": {
-      "color-contrast": 2
+      "color-contrast": 1
     }
   }
 }
