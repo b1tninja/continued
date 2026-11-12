@@ -2,6 +2,7 @@
 import { env } from "../env.js";
 
 import { logger } from "./logger.js";
+import { cliFetch } from "./networkFetch.js";
 
 export interface ApiRequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
@@ -80,7 +81,7 @@ export async function makeAuthenticatedRequest<T = any>(
     const url = new URL(endpoint, env.apiBase);
     logger.debug(`Making ${method} request to: ${url.toString()}`);
 
-    const response = await fetch(url, requestOptions);
+    const response = await cliFetch(url, requestOptions);
 
     if (!response.ok) {
       const errorText = await response.text();

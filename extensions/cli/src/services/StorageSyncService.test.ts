@@ -22,6 +22,15 @@ vi.mock("../util/git.js", () => ({
   getGitDiffSnapshot: vi.fn(),
 }));
 
+// The CLI's own requests go through the shared fetch; stand in for it with the
+// global mock this file already installs.
+vi.mock("@continuedev/fetch", () => ({
+  createWebFetch:
+    () =>
+    (...args: unknown[]) =>
+      (globalThis.fetch as any)(...args),
+}));
+
 describe("StorageSyncService", () => {
   const fetchMock = vi.fn();
   const gitDiffMock = vi.mocked(getGitDiffSnapshot);

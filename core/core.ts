@@ -426,6 +426,7 @@ export class Core {
           msg.data.provider,
           msg.data.apiKey,
           msg.data.apiBase,
+          (await this.configHandler.loadConfig()).config?.requestOptions,
         );
       } catch (error: any) {
         void this.ide.showToast("error", error.message);
