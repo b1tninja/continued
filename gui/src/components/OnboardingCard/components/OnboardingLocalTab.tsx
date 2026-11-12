@@ -199,10 +199,10 @@ export function OnboardingLocalTab({
         <div className="mt-3 flex flex-col gap-1 px-2">
           {choice && (
             <div data-testid="local-choice-summary" className="flex flex-col">
-              <p className="text-foreground mb-1 text-sm leading-tight font-semibold">
+              <p className="mb-1 text-sm leading-tight font-semibold text-foreground">
                 Your model
               </p>
-              <p className="text-foreground m-0 text-sm break-all">
+              <p className="m-0 text-sm break-all text-foreground">
                 <span className="font-mono">{choice.chatModel}</span>
                 <span className="text-description-muted">
                   {" "}
@@ -219,7 +219,7 @@ export function OnboardingLocalTab({
           {isOllamaChoice && (
             <>
               <div className="flex flex-col">
-                <p className="text-foreground mb-1 text-sm leading-tight font-semibold">
+                <p className="mb-1 text-sm leading-tight font-semibold text-foreground">
                   Install Ollama
                 </p>
                 <OllamaStatus isOllamaConnected={isOllamaConnected} />
@@ -266,7 +266,7 @@ export function OnboardingLocalTab({
             </div>
             <div className="w-full text-center">
               <span
-                className="text-description-muted cursor-pointer underline"
+                className="cursor-pointer text-description-muted underline"
                 onClick={onClickSkip}
               >
                 Skip and configure manually

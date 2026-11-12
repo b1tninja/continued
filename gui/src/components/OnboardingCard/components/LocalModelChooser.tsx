@@ -201,7 +201,7 @@ export function LocalModelChooser({
       {hint && (
         <span
           id={`${uid}-${key}-hint`}
-          className="text-description-muted block text-xs"
+          className="block text-xs text-description-muted"
         >
           {hint}
         </span>
@@ -209,7 +209,7 @@ export function LocalModelChooser({
       {errors[key] && (
         <span
           id={`${uid}-${key}-error`}
-          className="text-error block text-xs"
+          className="block text-xs text-error"
           data-testid={`local-chooser-${key}-error`}
         >
           {errors[key]}
@@ -305,14 +305,14 @@ export function LocalModelChooser({
 
       {needsPull && (
         <div data-testid="local-chooser-pull">
-          <p className="text-description-muted m-0 mb-1 text-xs">
+          <p className="m-0 mb-1 text-xs text-description-muted">
             Not installed yet. Run this in a terminal:
           </p>
           <button
             type="button"
             onClick={copyPull}
             aria-label={`Copy ${pullCommand}`}
-            className="rounded-default border-description bg-input text-foreground flex w-full cursor-pointer items-center justify-between gap-2 border border-solid px-2 py-1 text-left hover:brightness-125"
+            className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-default border border-solid border-description bg-input px-2 py-1 text-left text-foreground hover:brightness-125"
           >
             <span className="font-mono text-xs break-all">{pullCommand}</span>
             <ClipboardDocumentIcon
@@ -331,7 +331,7 @@ export function LocalModelChooser({
           aria-expanded={showMore}
           aria-controls={`${uid}-more`}
           onClick={() => setShowMore(!showMore)}
-          className="text-foreground cursor-pointer border-none bg-transparent p-0 text-sm underline"
+          className="cursor-pointer border-none bg-transparent p-0 text-sm text-foreground underline"
         >
           More
         </button>
@@ -378,7 +378,7 @@ export function LocalModelChooser({
       <button
         type="button"
         onClick={onChooseOtherProvider}
-        className="text-description-muted cursor-pointer border-none bg-transparent p-0 text-center text-sm underline"
+        className="cursor-pointer border-none bg-transparent p-0 text-center text-sm text-description-muted underline"
       >
         {OTHER_PROVIDER_LINK}
       </button>
