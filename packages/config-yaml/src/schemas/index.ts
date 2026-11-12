@@ -242,6 +242,10 @@ export const toolPermissionsSchema = z.object({
             .optional(),
           /** Changed lines above which the built-in large-change check asks (default 300). Read from the personal config only. */
           largeChangeLines: z.number().int().min(1).optional(),
+          /** Largest web page, in bytes, the fetch tool and @url read (default 2 MiB). Read from the personal config only. */
+          fetchMaxBytes: z.number().int().min(1).optional(),
+          /** Seconds a web fetch may take in all, including the body (default 20). Read from the personal config only. */
+          fetchTimeoutSeconds: z.number().int().min(1).optional(),
         })
         .optional(),
       /** Plain-language guidance added to the reviewer's prompt. */

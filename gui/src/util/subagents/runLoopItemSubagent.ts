@@ -135,6 +135,8 @@ export function loopWorkerTools(
     state.ui.toolGroupSettings,
     true,
     false,
+    state.ui.policyExtras.planMcpTools,
+    state.ui.policyExtras.trustedMcpServers,
   );
   if (model.toolOverrides?.length) {
     parentTools = applyToolOverrides(parentTools, model.toolOverrides).tools;

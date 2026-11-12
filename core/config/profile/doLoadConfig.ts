@@ -245,6 +245,9 @@ export default async function doLoadConfig(options: {
         group: server.name,
         originalFunctionName: tool.name,
         mcpMeta: tool._meta,
+        ...(workspaceDirs.some((dir) => server.sourceFile?.startsWith(dir)) && {
+          mcpFromWorkspace: true,
+        }),
         ...(connection?.changedTools.get(tool.name) && {
           mcpDefinitionChange: connection.changedTools.get(tool.name),
         }),
