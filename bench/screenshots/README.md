@@ -43,7 +43,7 @@ repository.
 
 Views: `chat` (empty chat with the input and toolbar), `conversation`,
 `streaming`, `tool-call` (a terminal command waiting for approval),
-`tool-call-done`, `loop` (plan card, per-item budgets, loop controls),
+`approval` (three calls waiting: a long command, a path outside the workspace, an MCP tool), `tool-call-done`, `loop` (plan card, per-item budgets, loop controls),
 `settings-tools` (Settings, Tools, scrolled to "Commands and secrets"),
 `permissions-editor` (Settings, Permissions, with the add-rule form open on a
 rule that allows every command: the typed confirmation, diff and verdict). `audit-list` and `audit-inbox` (Settings, Permissions, the Recent calls and Inbox views, with fake audit answers). The

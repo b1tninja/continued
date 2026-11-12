@@ -1305,7 +1305,12 @@ export const sessionSlice = createSlice({
     },
     setToolCallPolicyNote: (
       state,
-      action: PayloadAction<{ toolCallId: string; note: string }>,
+      action: PayloadAction<{
+        toolCallId: string;
+        note: string;
+        rule?: string;
+        source?: string;
+      }>,
     ) => {
       const toolCallState = findToolCallById(
         state.history,
@@ -1313,6 +1318,10 @@ export const sessionSlice = createSlice({
       );
       if (toolCallState) {
         toolCallState.policyNote = action.payload.note;
+        if (action.payload.rule) toolCallState.policyRule = action.payload.rule;
+        if (action.payload.source) {
+          toolCallState.policySource = action.payload.source;
+        }
       }
     },
     setToolCallDecision: (

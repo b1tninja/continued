@@ -6,6 +6,7 @@ import {
   canAllowOnce,
   clearBlockedCalls,
 } from "../../redux/slices/blockedCallsSlice";
+import { PendingActionSummary } from "../mainInput/Lump/LumpToolbar/PendingActionSummary";
 import { decisionLabel } from "../../pages/gui/ToolCallDiv/DecisionChip";
 
 /**
@@ -69,6 +70,12 @@ export function RecentlyBlocked() {
                     </button>
                   ))}
               </div>
+              <PendingActionSummary
+                id={"blocked-action-" + item.id}
+                testId={item.id}
+                toolName={item.toolName}
+                args={item.parsedArgs}
+              />
               {item.reason && (
                 <div className="whitespace-normal text-description-muted">
                   {maskCommandForDisplay(item.reason)}

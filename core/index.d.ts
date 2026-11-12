@@ -1299,6 +1299,9 @@ interface ToolCallState {
   processedArgs?: Record<string, any>; // Added in preprocesing step
   /** Why this call is waiting for approval, when a rule or protected path says so. */
   policyNote?: string;
+  /** The rule (as written in config.yaml) and the kind of check that made the call wait. */
+  policyRule?: string;
+  policySource?: string;
   /** Why the call ran or was refused, for the decision chip. Set by the policy check. */
   decision?: ToolCallDecision;
   output?: ContextItem[];

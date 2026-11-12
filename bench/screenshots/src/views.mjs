@@ -15,6 +15,10 @@ export const VIEWS = {
     fixture: "tool-call",
     note: "a terminal command card waiting for approval",
   },
+  approval: {
+    fixture: "approval",
+    note: "three calls waiting for approval: a long command, a path outside the workspace, an MCP tool",
+  },
   "tool-call-done": {
     fixture: "tool-call-done",
     note: "the same command after it ran",
