@@ -25,7 +25,7 @@ import {
   REVIEWABLE_AREAS,
   selectAutoApproval,
   selectEffectiveLevels,
-  selectYoloAreas,
+  selectIdgafAreas,
 } from "../../redux/selectors/selectAutoApproval";
 import {
   applyPolicyPreset,
@@ -239,11 +239,11 @@ export function PolicyControls() {
  */
 export function IdgafChip() {
   const dispatch = useAppDispatch();
-  const areas = useAppSelector(selectYoloAreas);
+  const areas = useAppSelector(selectIdgafAreas);
   const descriptionId = useId();
   const preset = presetOf(useAppSelector((s) => s.ui.policyLevels));
   // At the IDGAF preset the preset chip already says so, and carries the sentence
-  if (areas.length === 0 || preset === "yolo") return null;
+  if (areas.length === 0 || preset === "idgaf") return null;
   const sentence = idgafSentence(areas);
   return (
     <>
@@ -256,10 +256,10 @@ export function IdgafChip() {
         onClick={() =>
           void dispatch(applyPolicyPreset(POLICY_PRESETS.careful.levels))
         }
-        className={`${CHIP} ${LEVEL_TONES.yolo.chip} cursor-pointer`}
+        className={`${CHIP} ${LEVEL_TONES.idgaf.chip} cursor-pointer`}
       >
         <BoltIcon
-          className={`h-3 w-3 shrink-0 ${LEVEL_TONES.yolo.icon}`}
+          className={`h-3 w-3 shrink-0 ${LEVEL_TONES.idgaf.icon}`}
           aria-hidden="true"
         />
         <span>IDGAF</span>

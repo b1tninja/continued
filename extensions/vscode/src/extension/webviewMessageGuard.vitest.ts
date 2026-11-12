@@ -21,9 +21,9 @@ describe("raisedPolicyAreas", () => {
     ).toEqual(["tools"]);
   });
 
-  it("treats yolo as higher than permissive", () => {
+  it("treats idgaf as higher than permissive", () => {
     expect(
-      raisedPolicyAreas({ tools: "permissive" }, { tools: "yolo" }),
+      raisedPolicyAreas({ tools: "permissive" }, { tools: "idgaf" }),
     ).toEqual(["tools"]);
   });
 });

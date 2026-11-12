@@ -435,14 +435,14 @@ export const FIXTURES: Record<string, Fixture> = {
     store.dispatch(setTaskPlan(PLAN));
     store.dispatch(setLoop(loopState()));
   },
-  /** Loop mode at YOLO with seven refused calls: the one-line chip and the blocked badge */
+  /** Loop mode at IDGAF with seven refused calls: the one-line chip and the blocked badge */
   "loop-idgaf": ({ store }) => {
     store.dispatch(newSession(session([], "Fix parseConfig")));
     store.dispatch(setMode("loop" as never));
     store.dispatch(setTaskPlan(PLAN));
     store.dispatch(setLoop(loopState()));
     for (const area of POLICY_AREAS) {
-      store.dispatch(setPolicyLevel({ area, level: "yolo" }));
+      store.dispatch(setPolicyLevel({ area, level: "idgaf" }));
     }
     for (let i = 0; i < 7; i++) {
       store.dispatch(

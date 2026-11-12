@@ -8,7 +8,7 @@ import { DEFAULT_POLICY_LEVELS } from "./policy";
 const denyRm = parsePermissions({ deny: ["runTerminalCommand(rm *)"] });
 const askGit = parsePermissions({ ask: ["runTerminalCommand(git *)"] });
 
-function looseningFor(level: "yolo" | "permissive") {
+function looseningFor(level: "idgaf" | "permissive") {
   return approvalLoosening({
     approval: { levels: { ...DEFAULT_POLICY_LEVELS, tools: level } },
     toolName: "run_terminal_command",
@@ -33,12 +33,12 @@ describe.each([
   ["the safety floor", { evaluated: "disabled" as const }],
   ["a protected path", { protectedHit }],
 ])("with %s", (_name, over) => {
-  test("YOLO allows the call", () => {
+  test("IDGAF allows the call", () => {
     expect(
-      decideToolCall(call({ ...over, loosening: looseningFor("yolo") })),
+      decideToolCall(call({ ...over, loosening: looseningFor("idgaf") })),
     ).toMatchObject({
       policy: "allowedWithoutPermission",
-      source: "yolo",
+      source: "idgaf",
     });
   });
 
@@ -60,13 +60,13 @@ test("Permissive allows a call nothing has settled", () => {
   });
 });
 
-test("a tool switched off stays off, even in YOLO", () => {
+test("a tool switched off stays off, even in IDGAF", () => {
   expect(
     decideToolCall(
       call({
         base: "disabled",
         evaluated: "disabled",
-        loosening: looseningFor("yolo"),
+        loosening: looseningFor("idgaf"),
       }),
     ).policy,
   ).toBe("disabled");

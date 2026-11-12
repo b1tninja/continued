@@ -49,7 +49,7 @@ export const VIEWS = {
   },
   "loop-idgaf": {
     fixture: "loop-idgaf",
-    note: "Loop mode at YOLO with seven blocked calls: the one-line YOLO chip and the blocked badge in the mode bar",
+    note: "Loop mode at IDGAF with seven blocked calls: the one-line IDGAF chip and the blocked badge in the mode bar",
   },
   "loop-blocked-open": {
     fixture: "loop-blocked-open",
