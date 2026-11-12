@@ -13,17 +13,15 @@ import { auditCommand } from "./commands/audit.js";
 import { addAuditSuggestOptions } from "./commands/auditSuggest.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
-import { registerCleanCommand } from "./commands/clean.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
-import { registerPlanCommand } from "./commands/plan.js";
 import { projectCommand } from "./commands/project.js";
+import { registerLocalCommands } from "./commands/registerLocalCommands.js";
 import { review } from "./commands/review.js";
 import { registerReviewerCommand } from "./commands/reviewEval.js";
 import { sandboxCommand } from "./commands/sandbox.js";
-import { registerSecretsCommand } from "./commands/secrets.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
 import { testConnectionCommand } from "./commands/testConnection.js";
@@ -488,14 +486,8 @@ program
     },
   );
 
-// Secrets subcommand: scan files for secrets (exit 3 on a finding)
-registerSecretsCommand(program);
-
-// Clean: retention for the product's own persisted files (dry run unless --yes)
-registerCleanCommand(program);
-
-// Plan files: continuous plan list / build
-registerPlanCommand(program);
+// Local-file subcommands: secrets, clean, plan
+registerLocalCommands(program);
 
 // Sandbox status subcommand
 program

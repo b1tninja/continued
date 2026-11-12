@@ -8,11 +8,6 @@ import {
   taskPlanToMarkdown,
 } from "core/util/taskPlan.js";
 
-import {
-  activePlanBuild,
-  gateCompletions,
-  syncActivePlan,
-} from "../plans/planBuild.js";
 import { services } from "../services/index.js";
 import {
   getSessionLoop,
@@ -128,6 +123,12 @@ export const taskListTool: Tool = {
   },
   run: async (args: { items?: unknown; reset?: unknown }) => {
     const next = planFromToolArgs(args);
+    // Imported here, not at the top: planBuild reaches tools/index through
+    // the stream helpers, and a static import made tools/index evaluate its
+    // built-in tool list before taskListTool existed.
+    const { activePlanBuild, gateCompletions, syncActivePlan } = await import(
+      "../plans/planBuild.js"
+    );
     // `continuous plan build`: the harness runs a to-do's check:, and the
     // file's checkboxes follow the list. A Loop does its own checks.
     if (!activePlanBuild() || getSessionLoop()) {
