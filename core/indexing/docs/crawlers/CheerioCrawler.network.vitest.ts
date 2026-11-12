@@ -40,7 +40,7 @@ describe("CheerioCrawler network behaviour", () => {
   });
 
   afterAll(async () => {
-    proxy.closeAllConnections?.();
+    (proxy as any).closeAllConnections?.();
     await new Promise((r) => proxy.close(r));
   });
 
