@@ -24,6 +24,7 @@ import type {
 import { stableStringify } from "../tools/permissions/auto/state.js";
 import {
   DEFAULT_POLICY_LEVELS,
+  parsePolicyLevel,
   planHandoff,
   policyLevelLabel,
   questionDecider,
@@ -220,7 +221,7 @@ export const LOOP_AUTONOMY: Record<LoopAutonomy, LoopAutonomyPreset> = {
       "The agent answers every question itself, even important decisions, and never waits for you. Re-plans that add up to 5 to-dos go on by themselves.",
     replan: "bounded",
     maxNewItemsPerReplan: 5,
-    // Approvals are the approval mode's business (YOLO runs them all). One
+    // Approvals are the approval mode's business (IDGAF runs them all). One
     // that is held anyway must not stop the loop.
     waitTimeoutMs: 1000,
     budget: {
@@ -245,6 +246,7 @@ export function loopAutonomyFor(
     "manual" | "autoApprove" | "auto" | "review" | "yolo" | undefined,
 ): LoopAutonomy {
   switch (approvalMode) {
+    // "yolo" is a saved approval mode from before policy areas
     case "review":
     case "yolo":
       return "unattended";
@@ -291,7 +293,7 @@ export function loopPolicyOf(settings: PolicySettings): LoopPolicy {
   };
 }
 
-const EXPANSIVE: readonly PolicyLevel[] = ["permissive", "yolo"];
+const EXPANSIVE: readonly PolicyLevel[] = ["permissive", "idgaf"];
 
 /**
  * The preset that supplies a policy loop's budgets and default strategy. The
@@ -299,7 +301,7 @@ const EXPANSIVE: readonly PolicyLevel[] = ["permissive", "yolo"];
  * policy.
  */
 export function autonomyForPolicy(policy: LoopPolicy): LoopAutonomy {
-  if (policy.questions === "yolo") return "idgaf";
+  if (policy.questions === "idgaf") return "idgaf";
   if (EXPANSIVE.includes(policy.plan)) return "unattended";
   return policy.plan === "manual" ? "supervised" : "auto";
 }
@@ -319,7 +321,7 @@ export function loopAutonomy(loop: LoopState): LoopAutonomyPreset {
   return {
     ...preset,
     replan: "policy",
-    waitTimeoutMs: policy.questions === "yolo" ? 1000 : 0,
+    waitTimeoutMs: policy.questions === "idgaf" ? 1000 : 0,
   };
 }
 
@@ -329,7 +331,7 @@ export function loopAutonomy(loop: LoopState): LoopAutonomyPreset {
  */
 export function loopDecidesAlone(loop: LoopState): boolean {
   return loop.policy
-    ? loop.policy.questions === "yolo"
+    ? loop.policy.questions === "idgaf"
     : loop.autonomy === "idgaf";
 }
 
@@ -3558,13 +3560,27 @@ export function isLoopState(value: unknown): value is LoopState {
 }
 
 /**
+ * A loop saved by 2.14.x can name its top level `yolo`: it is IDGAF now.
+ * Nothing is written back in the old spelling.
+ */
+function withCurrentLevelNames(loop: LoopState): LoopState {
+  const policy = loop.policy;
+  if (!policy) return loop;
+  const plan = parsePolicyLevel(policy.plan) ?? policy.plan;
+  const questions = parsePolicyLevel(policy.questions) ?? policy.questions;
+  if (plan === policy.plan && questions === policy.questions) return loop;
+  return { ...loop, policy: { ...policy, plan, questions } };
+}
+
+/**
  * A loop restored from a saved session. A run that was going when the window
  * closed did not finish: its item goes back to pending (its next run checks
  * what is already done) and the loop is stopped, so a reload never starts
  * work by itself.
  */
-export function restoreLoop(value: unknown): LoopState | undefined {
-  if (!isLoopState(value)) return undefined;
+export function restoreLoop(raw: unknown): LoopState | undefined {
+  if (!isLoopState(raw)) return undefined;
+  const value = withCurrentLevelNames(raw);
   if (
     !value.current &&
     !value.parallel?.length &&
