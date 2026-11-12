@@ -22,3 +22,9 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 - Provider setup no longer contacts `ollama.com` or `openrouter.ai` when it opens. Ollama asks "Download the latest model list from ollama.com?"; OpenRouter asks "Pull the latest model information from OpenRouter?" with **Pull now**, **Not now** and **Don't ask again** (saved as `modelCatalog: never` in `config.yaml`). **Refresh** stays on the model step.
 - The OpenRouter list (names, context sizes, per-token prices) is kept on this computer, dated, in `model-catalog/openrouter.json` in the global folder, and read from there afterwards. If the site cannot be reached, the list you already had stays.
 - The details are in [PRIVACY.md](https://github.com/b1tninja/continuous/blob/main/PRIVACY.md) and the OpenRouter provider page.
+
+## OpenRouter prices in cost figures and budgets
+
+- Once you have pulled OpenRouter's model list, the cost shown for OpenRouter models uses its per-token prices (cache reads and writes, long-prompt tiers, reasoning tokens), labelled as an estimate with the download date. Provider setup shows the price and date next to each model.
+- `continuous models refresh` (also `cn models refresh`) downloads the list explicitly and says which host it contacts and what it stores; `continuous models list [--json]` shows it. Neither contacts anything unless you run `refresh`.
+- `--max-budget-usd` now works on OpenRouter models that are in the list, without `--budget-allow-unpriced`. A list older than 30 days gives a warning; one older than 90 days is not used for a budget.

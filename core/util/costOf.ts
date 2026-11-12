@@ -46,6 +46,8 @@ export interface CostResult {
   breakdown: string[];
   /** What the figure takes for granted (tier, region, aggregation) */
   assumptions: string[];
+  /** Set when the prices came from a downloaded list: its source and date */
+  estimate?: { source: string; fetchedAt: string };
 }
 
 const PER_M = 1_000_000;
@@ -142,7 +144,9 @@ export function costOf(
   }
   const lines = priced.breakdown.split("\n");
   const assumptions = [
-    "List price, standard tier (batch, flex and fast tiers are not detected)",
+    priced.estimate
+      ? "Estimate from the per-token prices OpenRouter published in the downloaded list (standard tier; web search requests are not counted)"
+      : "List price, standard tier (batch, flex and fast tiers are not detected)",
     ...lines.filter((l) => l.startsWith("Prices:")),
   ];
   if (requests > 1) {
@@ -160,6 +164,7 @@ export function costOf(
   );
   return {
     amount: priced.cost * requests,
+    ...(priced.estimate ? { estimate: priced.estimate } : {}),
     breakdown:
       requests > 1 ? [`Per average request (x${requests}):`, ...body] : body,
     assumptions,

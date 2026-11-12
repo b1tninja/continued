@@ -13,6 +13,15 @@ export function modelUsageKey(provider: string, model: string): string {
   return `${provider}/${model}`;
 }
 
+function olderEstimate(
+  a: ModelUsage["priceEstimate"],
+  b: ModelUsage["priceEstimate"],
+): NonNullable<ModelUsage["priceEstimate"]> {
+  if (!a) return b!;
+  if (!b) return a;
+  return Date.parse(a.fetchedAt) <= Date.parse(b.fetchedAt) ? a : b;
+}
+
 /**
  * Add one request's usage to a session's totals. Returns a new object.
  *
@@ -54,6 +63,11 @@ export function addRequestUsage(
     cacheWriteTokens: prev.cacheWriteTokens + cacheWrite,
     cost: prev.cost + (priced?.cost ?? 0),
     pricedRequests: prev.pricedRequests + (priced ? 1 : 0),
+    ...(priced?.estimate || prev.priceEstimate
+      ? {
+          priceEstimate: olderEstimate(prev.priceEstimate, priced?.estimate),
+        }
+      : {}),
   };
 
   const prevDetails = base.promptTokensDetails ?? {};
@@ -86,6 +100,8 @@ export interface SessionUsageSummary {
   cost: number | undefined;
   /** True when some requests were priced and some were not, so `cost` undercounts. */
   costIsPartial: boolean;
+  /** Set when part of `cost` is an estimate from a downloaded price list: its date (ISO). */
+  priceListDate?: string;
 }
 
 /** Totals across every model of a session. */
@@ -111,8 +127,14 @@ export function summarizeSessionUsage(
     sum.cacheWriteTokens += m.cacheWriteTokens;
     sum.cost += m.cost;
   }
+  let oldest: string | undefined;
+  for (const m of models) {
+    const at = m.priceEstimate?.fetchedAt;
+    if (at && (!oldest || Date.parse(at) < Date.parse(oldest))) oldest = at;
+  }
   return {
     ...sum,
+    ...(oldest ? { priceListDate: oldest } : {}),
     requests,
     cost: priced > 0 ? sum.cost : undefined,
     costIsPartial: priced > 0 && priced < requests,

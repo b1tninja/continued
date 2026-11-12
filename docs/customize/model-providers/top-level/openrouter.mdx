@@ -155,3 +155,10 @@ The first time you choose OpenRouter in provider setup, Continuous asks "Pull th
 - If openrouter.ai cannot be reached, the model step says so and keeps the list you already had.
 
 Prices in the list are estimates and are stored with their date. You can set up OpenRouter without ever pulling the list: type a model id instead.
+
+Once the list is downloaded:
+
+- The model step shows each model's price per million tokens with the date ("prices as of 2026-11-12").
+- The cost shown for OpenRouter requests (the usage tooltip and the console's Total Usage) is computed from these prices, including cache read and write rates, tiered prices for long prompts and reasoning tokens when the response reports them, and is labelled as an estimate with the date. Models the list does not hold keep the previous behaviour.
+- In the terminal, `continuous models refresh` is the same download as **Pull now**, and `continuous models list` shows what was kept. `--max-budget-usd` works on priced models; see [run limits](/cli/run-limits).
+

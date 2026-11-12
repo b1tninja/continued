@@ -32,6 +32,15 @@ These are this project's own definitions. `--max-turns` and `--max-budget-usd` a
 
 A dollar cap cannot be held on a model the cost table has no price for: its spend would read as unknown. `--max-budget-usd` on such a model is refused at startup with an error naming the model, unless `--budget-allow-unpriced` is given. The same rule applies to the shadow reviewer.
 
+### OpenRouter models
+
+OpenRouter publishes per-token prices for its models. After you download them once with `continuous models refresh` (it contacts openrouter.ai, a plain GET with no key, and keeps a dated copy in `model-catalog/openrouter.json` in your global folder), `--max-budget-usd` is held on those models without `--budget-allow-unpriced`. The prices are estimates from that copy, and the run says so at the end ("prices from openrouter.ai as of 2026-11-12").
+
+- A copy older than 30 days still works, with the warning "prices may be out of date: run `continuous models refresh`".
+- A copy older than 90 days is never used for a dollar cap: the model counts as unpriced and the error says how old the copy is.
+- With no copy, the error says to run `continuous models refresh`.
+- `continuous models list [--json]` shows the downloaded models with their prices and never touches the network.
+
 ## Exit codes and the final message
 
 | Code | Reason                           |

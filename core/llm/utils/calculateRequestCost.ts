@@ -3,6 +3,7 @@ import {
   normalizeClaudeModelId,
   normalizeNovaModelId,
 } from "@continuedev/llm-info";
+import { priceFromCatalog } from "./catalogPricing";
 import {
   openAIWriteCost,
   openAIWriteRates,
@@ -12,6 +13,12 @@ import {
 export interface CostBreakdown {
   cost: number;
   breakdown: string;
+  /**
+   * Set when the price came from a downloaded list rather than a table in the
+   * code: where it came from and when it was downloaded. Show such a figure
+   * as an estimate with that date.
+   */
+  estimate?: { source: string; fetchedAt: string };
 }
 
 /**
@@ -707,13 +714,18 @@ export function calculateRequestCost(
     // estimate. Regional pricing, data residency and reseller margins can differ.
     case "vertexai":
       return calculateCachedModelCost(model, usage);
-    case "openrouter":
+    case "openrouter": {
+      // The downloaded OpenRouter prices come first when the list holds this
+      // id; otherwise the Claude-style ids keep the table price below.
+      const fromList = priceFromCatalog(model, usage);
+      if (fromList) return fromList;
       return calculateCachedModelCost(
         model,
         usageWithCacheTakenOut(usage),
         // prompt_tokens is already the whole prompt, cache included.
         usage.promptTokens,
       );
+    }
     case "openai":
       return calculateOpenAICost(model, usage);
     default:

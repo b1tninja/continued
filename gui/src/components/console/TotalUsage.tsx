@@ -301,6 +301,15 @@ const TotalUsage: React.FC<TotalUsageProps> = ({ llmLog }) => {
               <div className="text-xs text-[color:var(--vscode-descriptionForeground)]">
                 {totalUsage.costBreakdowns.length} cost calculations
               </div>
+              {totalUsage.priceListDate && (
+                <div
+                  className="text-xs text-[color:var(--vscode-descriptionForeground)]"
+                  data-testid="total-usage-price-date"
+                >
+                  Estimate: OpenRouter prices from the list downloaded{" "}
+                  {totalUsage.priceListDate.slice(0, 10)}
+                </div>
+              )}
             </div>
           </div>
         </>

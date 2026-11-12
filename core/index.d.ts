@@ -303,6 +303,11 @@ export interface ModelUsage {
   cost: number;
   /** How many of `requests` could be priced. Fewer than `requests` means `cost` is partial. */
   pricedRequests: number;
+  /**
+   * Set when some of `cost` came from a downloaded price list: where it came
+   * from and the date of the oldest list used. The figure is an estimate.
+   */
+  priceEstimate?: { source: string; fetchedAt: string };
 }
 
 export interface SessionUsage extends Usage {

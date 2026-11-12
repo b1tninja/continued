@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { IdeMessengerContext } from "../context/IdeMessenger";
+import { useOpenRouterPrices } from "./useOpenRouterPrices";
 
 import { FromCoreProtocol } from "core/protocol";
 import { useAppDispatch, useAppSelector } from "../redux/hooks";
@@ -44,6 +45,7 @@ const QUEUE_SAVE_DELAY_MS = 250;
 function ParallelListeners() {
   const dispatch = useAppDispatch();
   const ideMessenger = useContext(IdeMessengerContext);
+  useOpenRouterPrices();
   const history = useAppSelector((store) => store.session.history);
   const isInEdit = useAppSelector((store) => store.session.isInEdit);
   const selectedProfileId = useAppSelector(

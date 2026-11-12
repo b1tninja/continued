@@ -84,6 +84,7 @@ import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
 import {
+  loadOpenRouterPrices,
   pullOpenRouterCatalog,
   readModelCatalogPolicy,
   readOpenRouterCatalog,
@@ -443,6 +444,9 @@ export class Core {
         return [];
       }
     });
+
+    // Cost figures use the downloaded prices, if there are any (a file read)
+    loadOpenRouterPrices();
 
     on("modelCatalog/status", async () => {
       const cached = readOpenRouterCatalog();
