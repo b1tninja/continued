@@ -1,4 +1,4 @@
-import { AssistantConfig } from "@continuedev/sdk";
+import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-yaml";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MCPService } from "./MCPService.js";

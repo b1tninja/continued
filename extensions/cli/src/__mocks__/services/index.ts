@@ -21,7 +21,6 @@ export const SERVICE_NAMES = {
   CONFIG: "config",
   MODEL: "model",
   MCP: "mcp",
-  API_CLIENT: "apiClient",
   TOOL_PERMISSIONS: "toolPermissions",
   FILE_INDEX: "fileIndex",
   RESOURCE_MONITORING: "resourceMonitoring",

@@ -132,11 +132,6 @@
       ]
     },
     {
-      "class": "D",
-      "reason": "REMAINING Continue-operated host. api.continue.dev is the default value of the API base setting (CONTINUE_API_BASE) in the terminal agent and the default of the generated SDK client, and a string in tests. The terminal agent no longer calls it for remote agent ids, storage sync, agent status or metadata, artifact upload, checks or secret sync (all removed). The hub config-loading code that still holds an API client (configLoader, ApiClientService) has no reachable login to give it a token and is slated for removal with the SDK client.",
-      "hosts": ["api.continue.dev"]
-    },
-    {
       "class": "S",
       "reason": "Documentation, console, help and model-card links shown to the user in the settings UI, error messages and model metadata; opened only when the user clicks, never fetched by code.",
       "hosts": [

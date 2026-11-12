@@ -5,7 +5,6 @@ import chalk from "chalk";
 import { setConfigFilePermissions } from "core/util/paths.js";
 
 import type { AuthConfig } from "./auth/workos.js";
-import { getApiClient } from "./config.js";
 import { loadConfiguration } from "./configLoader.js";
 import { env } from "./env.js";
 import {
@@ -128,13 +127,7 @@ export async function initializeWithOnboarding(
   if (configPath !== undefined) {
     // throw an early error is configPath is invalid or has errors
     try {
-      await loadConfiguration(
-        authConfig,
-        configPath,
-        getApiClient(undefined),
-        [],
-        false,
-      );
+      await loadConfiguration(authConfig, configPath, [], false);
     } catch (errorMessage) {
       throw new Error(
         `Failed to load config from "${configPath}": ${errorMessage}`,

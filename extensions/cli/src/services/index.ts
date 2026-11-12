@@ -7,7 +7,6 @@ import { setBetaSubagentToolEnabled } from "../tools/toolsConfig.js";
 import { logger } from "../util/logger.js";
 
 import { AgentFileService } from "./AgentFileService.js";
-import { ApiClientService } from "./ApiClientService.js";
 import { AuthService } from "./AuthService.js";
 import { backgroundJobService } from "./BackgroundJobService.js";
 import { ChatHistoryService } from "./ChatHistoryService.js";
@@ -26,7 +25,6 @@ import {
 } from "./ToolPermissionService.js";
 import {
   AgentFileServiceState,
-  ApiClientServiceState,
   ModelServiceState,
   AuthServiceState,
   ConfigServiceState,
@@ -40,7 +38,6 @@ import { UpdateService } from "./UpdateService.js";
 const authService = new AuthService();
 const configService = new ConfigService();
 const modelService = new ModelService();
-const apiClientService = new ApiClientService();
 const mcpService = new MCPService();
 const fileIndexService = new FileIndexService();
 const resourceMonitoringService = new ResourceMonitoringService();
@@ -119,31 +116,15 @@ export async function initializeServices(initOptions: ServiceInitOptions = {}) {
   );
 
   serviceContainer.register(
-    SERVICE_NAMES.API_CLIENT,
+    SERVICE_NAMES.AGENT_FILE,
     async () => {
       const authState = await serviceContainer.get<AuthServiceState>(
         SERVICE_NAMES.AUTH,
       );
-      return apiClientService.initialize(authState.authConfig);
-    },
-    [SERVICE_NAMES.AUTH], // Depends on auth
-  );
 
-  serviceContainer.register(
-    SERVICE_NAMES.AGENT_FILE,
-    async () => {
-      const [authState, apiClientState] = await Promise.all([
-        serviceContainer.get<AuthServiceState>(SERVICE_NAMES.AUTH),
-        serviceContainer.get<ApiClientServiceState>(SERVICE_NAMES.API_CLIENT),
-      ]);
-
-      return await agentFileService.initialize(
-        commandOptions.agent,
-        authState,
-        apiClientState,
-      );
+      return await agentFileService.initialize(commandOptions.agent, authState);
     },
-    [SERVICE_NAMES.AUTH, SERVICE_NAMES.API_CLIENT],
+    [SERVICE_NAMES.AUTH],
   );
 
   serviceContainer.register(
@@ -210,15 +191,10 @@ export async function initializeServices(initOptions: ServiceInitOptions = {}) {
   serviceContainer.register(
     SERVICE_NAMES.CONFIG,
     async () => {
-      const [authState, apiClientState, agentFileState] = await Promise.all([
+      const [authState, agentFileState] = await Promise.all([
         serviceContainer.get<AuthServiceState>(SERVICE_NAMES.AUTH),
-        serviceContainer.get<ApiClientServiceState>(SERVICE_NAMES.API_CLIENT),
         serviceContainer.get<AgentFileServiceState>(SERVICE_NAMES.AGENT_FILE),
       ]);
-
-      if (!apiClientState.apiClient) {
-        throw new Error("API client not available");
-      }
 
       // Use current config path from ConfigService state if available (for reloads),
       // otherwise use initial options.config (for first initialization)
@@ -233,13 +209,12 @@ export async function initializeServices(initOptions: ServiceInitOptions = {}) {
       return await configService.initialize({
         authConfig: authState.authConfig,
         configPath,
-        apiClient: apiClientState.apiClient,
         agentFileState,
         injectedConfigOptions: commandOptions,
         isHeadless: initOptions.headless,
       });
     },
-    [SERVICE_NAMES.AUTH, SERVICE_NAMES.API_CLIENT, SERVICE_NAMES.AGENT_FILE], // Dependencies
+    [SERVICE_NAMES.AUTH, SERVICE_NAMES.AGENT_FILE], // Dependencies
   );
 
   serviceContainer.register(
@@ -371,7 +346,6 @@ export const services = {
   auth: authService,
   config: configService,
   model: modelService,
-  apiClient: apiClientService,
   mcp: mcpService,
   fileIndex: fileIndexService,
   resourceMonitoring: resourceMonitoringService,
