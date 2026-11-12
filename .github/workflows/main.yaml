@@ -172,6 +172,8 @@ jobs:
           npm run build
           version=$(node -p "require('../vscode/package.json').version")
           node scripts/pack-release.mjs "$version" "$GITHUB_WORKSPACE/cli-artifact"
+          # LICENSE, NOTICE and the generated third-party notices must be in the tarball
+          node ../../scripts/ci/check-artefact-licences.mjs --tgz "$GITHUB_WORKSPACE/cli-artifact/continuous-cli-$version.tgz"
 
       # A clean install from the tarball, outside the repository, must run.
       - name: Install the tarball and run it

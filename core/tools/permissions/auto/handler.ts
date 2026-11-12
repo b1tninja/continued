@@ -6,6 +6,7 @@ import type { ShellKind } from "../../../util/shell";
 import { DecisionSource } from "../decide";
 import { uriToPath } from "../names";
 import { EvaluateInput, evaluateToolPolicyWithRules } from "../evaluate";
+import { deputyWorkspace } from "../workspaceRoots";
 import type { ToolPermissions } from "../rules";
 import type { AuditAgent, AuditReviewer } from "../audit/record";
 import { ReviewCategory } from "./categories";
@@ -136,6 +137,7 @@ export async function autoReviewToolCall(
     permissions: deps.permissions,
     approval: req.approval,
     cwd: folderPath(deps.environment.workspaceDirs?.[0]),
+    ...deputyWorkspace(deps.environment.workspaceDirs ?? []),
     shell: deps.shell,
     trustedDomains: deps.trustedDomains,
     envNames: deps.envNames,

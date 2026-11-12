@@ -22,6 +22,7 @@ import {
 } from "./util/openaiCompatTest";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
+import { deputyWorkspace } from "./tools/permissions/workspaceRoots";
 import { uriToPath } from "./tools/permissions/names";
 import type { PolicyLevels } from "./tools/permissions/policy";
 import {
@@ -2065,6 +2066,7 @@ export class Core {
           envNames: readUserEnvNames(),
           largeChangeLines: readUserLargeChangeLines(),
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
+          ...deputyWorkspace(dirs),
           // The shell terminal commands run in
           shell: resolveShell().kind,
         });

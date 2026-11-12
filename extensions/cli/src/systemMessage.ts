@@ -10,6 +10,10 @@ import {
   type PromptChoice,
 } from "core/llm/prompts/usePrompts.js";
 
+import {
+  attributionInstructions,
+  loadAttributionSettings,
+} from "./attribution.js";
 import { processRule } from "./hubLoader.js";
 import { AGENT_FILES, rulesDirs } from "./instructionFiles.js";
 import { PermissionMode } from "./permissions/types.js";
@@ -214,13 +218,11 @@ export async function constructSystemMessage(
     systemMessage += `${SYSTEM_MARKERS.plan}${planTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
   } else {
     systemMessage += `${SYSTEM_MARKERS.agent}${actTurnTextFor(model, promptChoice, CLI_TURN_TOOL_NAMES)}\n</context>\n`;
-    // Check if commit signature is disabled via environment variable
-    if (!process.env.CONTINUE_CLI_DISABLE_COMMIT_SIGNATURE) {
-      systemMessage += `${SYSTEM_MARKERS.commit}When creating commits using any CLI or tool, include the following in the commit message:
-Generated with [Continue](https://continue.dev)
-
-Co-Authored-By: Continue <noreply@continue.dev>
-</context>\n`;
+    // Attribution is opt-in: nothing is added unless the user's own settings ask.
+    const attribution = attributionInstructions(loadAttributionSettings());
+    if (attribution) {
+      systemMessage += `${SYSTEM_MARKERS.commit}${attribution}</context>
+`;
     }
   }
 

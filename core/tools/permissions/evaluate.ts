@@ -17,7 +17,7 @@ import { DecisionSource, decideToolCall, findRuleMatch } from "./decide";
 import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { askProtectionHit } from "./askProtections";
-import { deputyCallHit } from "./deputyCall";
+import { deputyCallHit, type DeputyCallInput } from "./deputyCall";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
@@ -116,7 +116,7 @@ export interface ToolPolicyResult {
 
 export interface EvaluateInput {
   tool:
-    | Pick<
+    | (Pick<
         Tool,
         | "group"
         | "originalFunctionName"
@@ -124,7 +124,7 @@ export interface EvaluateInput {
         | "evaluateToolCallPolicy"
         | "readonly"
         | "mcpDefinitionChange"
-      >
+      > & { function?: Pick<Tool["function"], "parameters"> })
     | undefined;
   toolName: string;
   basePolicy: ToolPolicy;
@@ -139,6 +139,10 @@ export interface EvaluateInput {
   permissionSources?: Partial<Record<RuleSource, ToolPermissions>>;
   /** The folder a command runs in; lets git be vouched read-only */
   cwd?: string;
+  /** Every workspace folder as a path (the first is `cwd`); a path in any is inside */
+  workspaceDirs?: readonly string[];
+  /** Follows links for an MCP path argument; set only for a local workspace (realPath.ts) */
+  resolvePath?: DeputyCallInput["resolvePath"];
   /** The shell that runs it (resolveShell); without one no command is vouched read-only */
   shell?: ShellKind;
   /** The level chosen for each area; absent means Cautious everywhere. */
@@ -312,6 +316,9 @@ function firstProtectedHit(
           }
         : undefined,
       cwd: input.cwd,
+      workspaceDirs: input.workspaceDirs,
+      resolvePath: input.resolvePath,
+      schema: tool?.function?.parameters,
       approval: input.approval,
       flavor: input.platform,
       home: input.home,

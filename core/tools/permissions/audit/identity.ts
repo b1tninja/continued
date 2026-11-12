@@ -1,4 +1,8 @@
-import { mainAgentId } from "../../../agents/fromRuns";
+import {
+  LOOP_WORKER_MODE,
+  loopWorkerAgentId,
+  mainAgentId,
+} from "../../../agents/fromRuns";
 import type { AuditAgent } from "./record";
 
 /**
@@ -7,7 +11,7 @@ import type { AuditAgent } from "./record";
  * in step.
  */
 export const subagentAgentId = (toolCallId: string) => `sub-${toolCallId}`;
-export const loopWorkerAgentId = (itemId: string) => `worker-${itemId}`;
+export { LOOP_WORKER_MODE, loopWorkerAgentId };
 export const backgroundAgentId = (taskId: string) => `bg-${taskId}`;
 
 export function mainAuditAgent(sessionId: string, mode?: string): AuditAgent {
@@ -33,13 +37,6 @@ export function subagentAuditAgent(
     parentId: mainAgentId(sessionId),
   };
 }
-
-/**
- * The mode a Loop worker runs in: Agent mode's tools with the loop's three
- * (`loopWorkerTools`). Loop is not a mode, so a worker's mode is this, or the
- * mode its caller says; "loop" marks the kind, which is `loop-worker`.
- */
-export const LOOP_WORKER_MODE = "agent" as const;
 
 export function loopWorkerAuditAgent(
   sessionId: string,

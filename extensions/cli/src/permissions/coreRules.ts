@@ -19,6 +19,7 @@ import { readUserTrustedDomains } from "core/tools/permissions/readRuleSources.j
 import { processedPathArgs } from "core/tools/permissions/realPath.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
 import { readUserEnvNames } from "core/tools/permissions/userEnvNames.js";
+import { deputyWorkspace } from "core/tools/permissions/workspaceRoots.js";
 import { resolveShell } from "core/util/shell.js";
 import { readUserGuidance } from "core/util/userGuidance.js";
 
@@ -235,6 +236,8 @@ export interface CoreRulesInput {
    * Floor rules use that form either way.
    */
   mcp?: { serverName: string; toolName: string };
+  /** The MCP tool's JSON schema: a string it calls a path is judged as one */
+  mcpSchema?: Record<string, unknown>;
   /** The MCP tool's definition or launch changed since it was approved: it asks again */
   mcpDefinitionChange?: {
     kind: "changed" | "added" | "launch";
@@ -243,6 +246,14 @@ export interface CoreRulesInput {
   isHeadless: boolean;
   history?: ChatHistoryItem[];
   cwd?: string;
+}
+
+/** The MCP tool's declared schema, where the engine reads it (`function.parameters`). */
+function schemaOf(
+  name: string,
+  parameters: Record<string, unknown> | undefined,
+) {
+  return parameters ? { function: { name, parameters } } : {};
 }
 
 function pathArgsFor(
@@ -282,6 +293,7 @@ export async function evaluateWithCoreRules(
         group: mcp.serverName,
         originalFunctionName: mcp.toolName,
         uri: `mcp:${mcp.serverName}`,
+        ...schemaOf(mcp.toolName, input.mcpSchema),
         evaluateToolCallPolicy: input.evaluateToolCallPolicy as never,
         ...(input.mcpDefinitionChange
           ? { mcpDefinitionChange: input.mcpDefinitionChange }
@@ -363,6 +375,7 @@ export async function evaluateWithCoreRules(
     trustedDomains: readUserTrustedDomains(),
     envNames: readUserEnvNames(),
     cwd: input.cwd ?? process.cwd(),
+    ...deputyWorkspace([input.cwd ?? process.cwd()]),
     // The shell the CLI runs commands in: its login shell, PowerShell on Windows
     shell: resolveShell().kind,
   });

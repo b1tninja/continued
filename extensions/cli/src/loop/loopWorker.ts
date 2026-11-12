@@ -1,7 +1,9 @@
 import type { LoopReminder, LoopState, TaskPlan, Usage } from "core/index.js";
+import type { AuditAgent } from "core/tools/permissions/audit/record.js";
 import type { PolicyLevels } from "core/tools/permissions/policy.js";
 import type { ParallelRunResult } from "core/util/loopMode.js";
 
+import { setCliAuditAgent } from "../audit/cliAudit.js";
 import { captureWorktreeDiff } from "../commands/review/worktree.js";
 import {
   loadPolicyFile,
@@ -108,6 +110,11 @@ export interface LoopWorkerInput {
    * session begins there, so the budget includes tokens already spent.
    */
   baselineUsage?: Usage;
+  /**
+   * Who the worker is in the agent map and the audit record: the parent
+   * names it, so both use one id and one mode (workerIdentity.ts).
+   */
+  agent?: AuditAgent;
 }
 
 export interface LoopWorkerOutput {
@@ -153,6 +160,7 @@ export async function runLoopItemHere(
     throw new Error("The worker's loop does not name the item to run.");
   }
   process.chdir(input.worktree);
+  setCliAuditAgent(input.agent);
   applyLoopWorkerPolicy(input.options.policy);
   await initializeServices({
     options: {

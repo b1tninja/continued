@@ -8,6 +8,7 @@ import type { ShellKind } from "../../util/shell";
 import { evaluateToolPolicyWithRules } from "./evaluate";
 import { DEFAULT_POLICY_LEVELS } from "./policy";
 import { runtimeWriteTarget } from "./runtimeWriteTarget";
+import { tryLink } from "./testLinks";
 
 const ASK = "allowedWithPermission" as const;
 const RUN = "allowedWithoutPermission" as const;
@@ -429,12 +430,9 @@ describe("the user's own temp folder is a safe root, when it is certain", () => 
     ).toBeDefined();
   });
 
-  it("asks for a link or junction inside the temp folder that points elsewhere", () => {
-    try {
-      fs.symlinkSync(`${base}/Other`, `${temp}/lnk`, "junction");
-    } catch {
-      return; // links cannot be made here
-    }
+  it("asks for a link or junction inside the temp folder that points elsewhere", (ctx) => {
+    const made = tryLink(`${base}/Other`, `${temp}/lnk`);
+    if (!made.ok) return ctx.skip(made.reason);
     expect(run("Set-Content $env:TEMP/lnk/x y")).toBeDefined();
     expect(run("Set-Content $env:TEMP/lnk y")).toBeDefined();
     expect(run("Set-Content $env:TEMP/plain/x y")).toBeUndefined();
