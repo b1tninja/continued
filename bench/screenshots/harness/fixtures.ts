@@ -22,6 +22,7 @@ import {
   setRecoveryHold,
   setTaskPlan,
 } from "@gui/redux/slices/sessionSlice";
+import { setOnboardingCard } from "@gui/redux/slices/uiSlice";
 import type { setupStore } from "@gui/redux/store";
 import { AUDIT_FIXTURES } from "./auditFixtures";
 
@@ -629,6 +630,56 @@ Object.assign(FIXTURES, {
   "chat-first-run": ({ store }: FixtureContext) => {
     store.dispatch(newSession());
   },
+});
+
+/** The onboarding card on its Local tab, with Ollama running and one model installed. */
+function onboardingLocal(
+  steps: (ctx: FixtureContext) => Promise<void> | void = () => {},
+): Fixture {
+  return async (ctx) => {
+    ctx.messenger.responseHandlers["llm/listModels"] = (async () => [
+      "llama3.1:8b",
+      "qwen3:8b",
+    ]) as never;
+    ctx.store.dispatch(
+      setOnboardingCard({ show: true, activeTab: "Local" as never }),
+    );
+    await sleep(700);
+    await steps(ctx);
+  };
+}
+
+const clickButton = (name: string) => {
+  [...document.querySelectorAll("button")]
+    .find((b) => b.textContent?.trim() === name)
+    ?.click();
+};
+
+Object.assign(FIXTURES, {
+  /** Onboarding, Local tab: the suggested model and the two buttons */
+  "onboarding-local": onboardingLocal(),
+  /** The Configure model chooser, open on Ollama with an installed model picked */
+  "onboarding-local-chooser": onboardingLocal(async () => {
+    clickButton("Configure model");
+    await sleep(400);
+  }),
+  /** The chooser on an OpenAI-compatible server, with More open */
+  "onboarding-local-server": onboardingLocal(async () => {
+    clickButton("Configure model");
+    await sleep(300);
+    const select = document.querySelector<HTMLSelectElement>(
+      '[data-testid="local-model-chooser"] select',
+    )!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )!.set!;
+    setter.call(select, "openai");
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await sleep(300);
+    clickButton("More");
+    await sleep(300);
+  }),
 });
 
 Object.assign(FIXTURES, AUDIT_FIXTURES);
