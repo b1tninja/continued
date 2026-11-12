@@ -486,7 +486,7 @@ export async function evaluateToolPolicies(
 
   // Say why a call is waiting, when a rule or protected path made it wait, so
   // the prompt is not a mystery for a tool the user set to run on its own.
-  for (const { policy, source, reason, toolCallState } of policyResults) {
+  for (const { policy, source, reason, rule, toolCallState } of policyResults) {
     if (
       policy === "allowedWithPermission" &&
       reason &&
@@ -501,6 +501,8 @@ export async function evaluateToolPolicies(
         setToolCallPolicyNote({
           toolCallId: toolCallState.toolCallId,
           note: reason,
+          ...(rule ? { rule } : {}),
+          ...(source ? { source } : {}),
         }),
       );
     }

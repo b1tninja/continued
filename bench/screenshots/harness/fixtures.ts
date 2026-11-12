@@ -305,6 +305,69 @@ export const FIXTURES: Record<string, Fixture> = {
       ),
     );
   },
+  /** Three calls waiting: a long command, a directory outside the workspace, an MCP tool */
+  approval: ({ store }) => {
+    const call = (
+      id: string,
+      name: string,
+      args: Record<string, unknown>,
+      extra: Partial<ToolCallState> = {},
+    ): ToolCallState => ({
+      toolCallId: id,
+      toolCall: {
+        id,
+        type: "function",
+        function: { name, arguments: JSON.stringify(args) },
+      },
+      status: "generated",
+      parsedArgs: args,
+      ...extra,
+    });
+    store.dispatch(
+      newSession(
+        session([
+          user("Clean up and look around"),
+          assistant("I need to run a few things.", [
+            call("call-1", "run_terminal_command", {
+              command:
+                "cd packages/app && API_TOKEN=sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789 npm run build \\\n  && rsync -av --delete dist/ deploy@staging.example.com:/var/www/app/ \\\n  && ssh deploy@staging.example.com 'sudo systemctl restart app && sudo journalctl -u app -n 50'\n# afterwards\necho done",
+              cwd: "D:/code/app",
+            }),
+            call(
+              "call-2",
+              "ls",
+              { dirPath: "D:/" },
+              {
+                policyNote:
+                  "This reaches D:/, outside the workspace, a place the agent has not been given. Approve only if you meant it.",
+                policyRule: "ls(D:/**)",
+                policySource: "ask-rule",
+              },
+            ),
+            call(
+              "call-3",
+              "github_create_issue",
+              {
+                repo: "b1tninja/continuous",
+                title: "Approval row",
+                labels: ["ux"],
+              },
+              {
+                tool: {
+                  type: "function",
+                  function: { name: "github_create_issue" },
+                  displayTitle: "create_issue",
+                  group: "github",
+                  originalFunctionName: "create_issue",
+                  readonly: false,
+                } as ToolCallState["tool"],
+              },
+            ),
+          ]),
+        ]),
+      ),
+    );
+  },
   "tool-call-done": ({ store }) => {
     store.dispatch(
       newSession(

@@ -9,6 +9,8 @@ type Props = {
   toolCallId: string;
   toolName: string;
   parsedArgs: Record<string, unknown>;
+  /** The id of the element that says what the call does, for aria-describedby. */
+  describedBy?: string;
 };
 
 type State =
@@ -31,7 +33,12 @@ const COULD_NOT_SAVE = "Could not save the rule.";
  * install, a network fetch, a script), the rule would switch that check off
  * for it. Then the exact rule is shown first and a second click saves it.
  */
-export function AlwaysAllowButton({ toolCallId, toolName, parsedArgs }: Props) {
+export function AlwaysAllowButton({
+  toolCallId,
+  toolName,
+  parsedArgs,
+  describedBy,
+}: Props) {
   const ideMessenger = useContext(IdeMessengerContext);
   const dispatch = useAppDispatch();
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -109,6 +116,7 @@ export function AlwaysAllowButton({ toolCallId, toolName, parsedArgs }: Props) {
         size="sm"
         className="my-0.5 min-h-6 font-medium text-description"
         disabled={state.kind === "working"}
+        aria-describedby={describedBy}
         onClick={onClick}
         title={
           state.kind === "confirm"
