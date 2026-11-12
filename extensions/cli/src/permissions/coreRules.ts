@@ -18,6 +18,7 @@ import { mcpRuleName } from "core/tools/permissions/names.js";
 import { readUserTrustedDomains } from "core/tools/permissions/readRuleSources.js";
 import { processedPathArgs } from "core/tools/permissions/realPath.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
+import { taintInput } from "core/tools/permissions/taint/taintWiring.js";
 import { readUserEnvNames } from "core/tools/permissions/userEnvNames.js";
 import { deputyWorkspace } from "core/tools/permissions/workspaceRoots.js";
 import { resolveShell } from "core/util/shell.js";
@@ -121,7 +122,9 @@ export function isAutoReviewEnabled(): boolean {
 }
 
 const sessions = new AutoReviewSessions();
-const SESSION_ID = "cli";
+/** One CLI process is one session for the reviewer and the tainted-session rule */
+export const CLI_SESSION_ID = "cli";
+const SESSION_ID = CLI_SESSION_ID;
 
 type ChatLike = NonNullable<AutoReviewDeps["reviewer"]>;
 
@@ -267,6 +270,17 @@ function pathArgsFor(
     : processedPathArgs(toolName, parsedArgs, cwd ?? process.cwd());
 }
 
+/** Whether the engine has anything to say: rules, levels, the reviewer, or a tainted session. */
+function engineApplies(
+  input: CoreRulesInput,
+  useReviewer: boolean,
+  tainted: boolean,
+): boolean {
+  return (
+    !!input.assistantPermissions || useReviewer || !!input.approval || tainted
+  );
+}
+
 /**
  * Run the core engine for one CLI call. Returns undefined when the layer does
  * not apply (no rules and no reviewer, or a tool core has no name for), so the
@@ -283,7 +297,9 @@ export async function evaluateWithCoreRules(
     isHeadless,
   } = input;
   const useReviewer = !!input.autoReview;
-  if (!permissions && !useReviewer && !input.approval) return undefined;
+  // The tainted-session rule needs the engine even without rules or levels
+  const taint = taintInput(SESSION_ID, undefined);
+  if (!engineApplies(input, useReviewer, !!taint.taint)) return undefined;
   const call = toCoreCall(cliToolName, args);
   const mcp = input.mcp ?? call?.mcp;
   if (!call && !mcp) return undefined;
@@ -378,6 +394,7 @@ export async function evaluateWithCoreRules(
     ...deputyWorkspace([input.cwd ?? process.cwd()]),
     // The shell the CLI runs commands in: its login shell, PowerShell on Windows
     shell: resolveShell().kind,
+    ...taint,
   });
   return {
     decision:
@@ -411,7 +428,8 @@ export function keepCoreVerdict(
     verdict.decision === "deny" ||
     verdict.source === "floor" ||
     verdict.source === "protected-path" ||
-    verdict.source === "safety-floor"
+    verdict.source === "safety-floor" ||
+    verdict.source === "tainted-session"
   ) {
     return verdict;
   }

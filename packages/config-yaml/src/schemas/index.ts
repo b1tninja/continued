@@ -246,6 +246,8 @@ export const toolPermissionsSchema = z.object({
           fetchMaxBytes: z.number().int().min(1).optional(),
           /** Seconds a web fetch may take in all, including the body (default 20). Read from the personal config only. */
           fetchTimeoutSeconds: z.number().int().min(1).optional(),
+          /** `ask`: after untrusted content enters a session, calls that send data out or change state outside the workspace ask (default `off`). Read from the personal config only. */
+          taintedSessionRule: z.enum(["off", "ask"]).optional(),
         })
         .optional(),
       /** Plain-language guidance added to the reviewer's prompt. */

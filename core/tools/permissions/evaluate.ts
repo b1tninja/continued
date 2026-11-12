@@ -21,6 +21,11 @@ import { deputyCallHit, type DeputyCallInput } from "./deputyCall";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
+import type { Sink } from "./taint/taintSinks";
+import {
+  applyTaintedSessionRule,
+  type TaintedSessionInput,
+} from "./taint/taintRule";
 import { runtimeWriteTarget } from "./runtimeWriteTarget";
 import { policyFileHit, POLICY_FILE_REASON } from "./selfProtect";
 import type { ProtectedHit, ProtectedKind } from "./protected";
@@ -112,9 +117,11 @@ export interface ToolPolicyResult {
   readOnly?: string;
   /** The rule that decided, as written in config.yaml. */
   rule?: string;
+  /** Set only in a tainted session: the sink class the call is (taint/taintSinks.ts) */
+  taintSink?: Sink;
 }
 
-export interface EvaluateInput {
+export interface EvaluateInput extends TaintedSessionInput {
   tool:
     | (Pick<
         Tool,
@@ -175,7 +182,10 @@ export interface EvaluateInput {
 export function evaluateToolPolicyWithRules(
   input: EvaluateInput,
 ): ToolPolicyResult {
-  return lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input)));
+  return applyTaintedSessionRule(
+    input,
+    lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input))),
+  );
 }
 
 /**

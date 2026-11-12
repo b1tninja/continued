@@ -99,6 +99,12 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
     category: "system",
   },
   {
+    name: "untaint",
+    description:
+      "Acknowledge the untrusted content in this session (taintedSessionRule)",
+    category: "system",
+  },
+  {
     name: "policy",
     description:
       "Show or set who decides per area: /policy, /policy yolo, /policy tools=permissive",

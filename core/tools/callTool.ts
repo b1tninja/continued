@@ -31,6 +31,7 @@ import { viewDiffImpl } from "./implementations/viewDiff";
 import { viewRepoMapImpl } from "./implementations/viewRepoMap";
 import { viewSubdirectoryImpl } from "./implementations/viewSubdirectory";
 import { coerceArgsToSchema, safeParseToolCallArgs } from "./parseArgs";
+import { noteCoreToolResult } from "./taintResult";
 
 async function callHttpTool(
   url: string,
@@ -271,6 +272,7 @@ export async function callTool(
       : {
           contextItems: await callBuiltInTool(tool.function.name, args, extras),
         };
+    await noteCoreToolResult(tool, toolCall.id, args, extras);
     if (tool.faviconUrl) {
       contextItems.forEach((item) => {
         item.icon = tool.faviconUrl;
