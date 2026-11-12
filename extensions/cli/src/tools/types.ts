@@ -72,6 +72,8 @@ export interface Tool {
   isBuiltIn: boolean;
   /** MCP server this tool belongs to, so floor rules on `mcp__server__*` apply. */
   mcpServer?: string;
+  /** The tool's own name on that server, which the model-facing `name` may qualify */
+  mcpToolName?: string;
   evaluateToolCallPolicy?: (
     basePolicy: ToolPolicy,
     parsedArgs: Record<string, unknown>,
