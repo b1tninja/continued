@@ -15,6 +15,7 @@ import {
   findReviewerAddressedText,
 } from "./reviewerAddressed";
 import { ReviewResult } from "./parse";
+import { promptText, type ReviewerPromptVariant } from "./promptV3";
 import { assembleGuidance, guidanceHash, type GuidanceInput } from "./guidance";
 import {
   ReviewEnvironment,
@@ -97,6 +98,12 @@ export interface AutoReviewDeps {
   trustedDomains?: readonly string[];
   /** The person's own `toolPermissions.auto.environment.envNames`, and nothing else. */
   envNames?: EnvNameOptions;
+  /**
+   * `toolPermissions.auto.reviewerPrompt` from the person's own config.yaml
+   * and nothing else (userReviewerPrompt.ts). `v3` is the tightened prompt;
+   * absent is the shipped one.
+   */
+  reviewerPrompt?: ReviewerPromptVariant;
   sessions: AutoReviewSessions;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -252,13 +259,18 @@ export async function autoReviewToolCall(
     );
   }
   const guidance = assembled.guidance;
-  const promptVersion = reviewerPromptVersion(guidance);
+  const variant = deps.reviewerPrompt === "v3" ? "v3" : "default";
+  const promptVersion = reviewerPromptVersion(
+    guidance,
+    undefined,
+    promptText(variant),
+  );
 
   const state = deps.sessions.get(req.sessionId);
   const limits = deps.permissions?.auto?.limits;
   // A verdict is only reused under the same words and the same guidance
   const taintKey = tainted.taint?.kinds.join("+") ?? "";
-  const context = `${reviewContextKey(req.history.userMessages)}:${guidanceHash(guidance)}:${taintKey}`;
+  const context = `${reviewContextKey(req.history.userMessages)}:${guidanceHash(guidance)}:${variant}:${taintKey}`;
   const cached = state.cached(req.toolName, req.parsedArgs, context);
   // A cached answer is not counted again. The cap is for new refusals.
   if (cached) {
@@ -295,6 +307,7 @@ export async function autoReviewToolCall(
       signal: deps.signal,
       headless: req.headless,
       reasoning: deps.reviewerReasoning,
+      promptVariant: variant,
     },
   );
   state.remember(req.toolName, req.parsedArgs, raw, context);
