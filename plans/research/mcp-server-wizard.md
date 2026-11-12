@@ -1,0 +1,518 @@
+# An easier way to add MCP servers: a wizard proposal (2026-11-12)
+
+Status: DRAFT, research and design only. Planned for a future release, **not in 2.15.0**; the rows are MCPW1 to MCPW18 in `plans/ROADMAP.md`, Track MCPW. Nothing here is built, no model was called and no product code was changed. Code read at `origin/main` 028a74050. Web pages were fetched on 2026-11-12 and are cited with that date; anything I could not confirm from the vendor's own page is marked **unverified**.
+
+Owner's request: "lets work on a wizard or ui dialog for configuring and adding new MCP servers, research what features might make this easier for users."
+
+## 1. Summary
+
+1. **Adding a server today means writing YAML by hand.** Settings > Tools > MCP Servers has a `+` button that creates an empty file in `.continuous/mcpServers/` (`config/addLocalWorkspaceBlock`) and opens it. There is no form, no paste import, no connection test before saving, no place to enter a secret, no template and no registry. The one assisted path is the Cline and Roo importer, which only appears when it finds those tools' files.
+2. **The pieces a wizard needs mostly exist.** Secret storage (`config/getProviderSetup`, `${{ secrets.NAME }}`), the import preview and secret rules (`importClineMcp.ts`), OAuth sign-in, tool pinning, launch pins, workspace trust, ENOENT hints in `MCPConnection`, the injection detector, the announcer and the provider-setup dialog pattern. The wizard is mostly composition plus three new cores: a paste parser, a launch-safety analysis and a non-invasive probe ("Test connection").
+3. **Every comparable client has converged on the same four ideas**: a guided add flow with a package or URL as the starting point (VS Code, Zed, Goose), a one-click install link or marketplace (VS Code, Cursor, Goose, Cline, Claude Desktop bundles), secret inputs kept out of the file (VS Code inputs with `password`, MCPB `sensitive`, Goose secret keys, Claude Code masked `--client-secret`), and a status list with logs (Claude Code `claude mcp list`, VS Code List Servers, Cursor MCP Logs, Zed's status dot).
+4. **The safety problem is the design problem.** A stdio server is a command that runs as the user; a remote server is a prompt-injection surface. A wizard that makes adding easy makes the dangerous step easy. So the wizard shows the exact command or URL, never starts anything on paste, asks for one explicit trust decision before the first connection (the probe is a connection), and treats tool descriptions from the new server as untrusted text.
+5. **Privacy fits an existing pattern.** The official MCP Registry is a third-party host. Contact it only after a one-time ask, keep a dated local copy, search that copy, add one egress-allowlist entry of class O, and send no telemetry. A bundled offline template list needs no request at all and is the MVP.
+6. **Recommended MVP (MCPW1 to MCPW6):** paste-to-form parser, launch-safety checks, a probe that lists tools and shows stderr with fix hints, a dialog (paste, review, trust, test, save) that writes the user's own `config.yaml`, secrets stored as secrets, and eight bundled templates. No registry, no deeplink, no import adapters in the MVP.
+
+## 2. Current state (read at `origin/main` 028a74050)
+
+### 2.1 Configuration schema
+
+`packages/config-yaml/src/schemas/mcp/index.ts` defines two shapes, validated by zod:
+
+| Shape           | Fields                                                                                                                                                               |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Common          | `name`, `serverName?`, `faviconUrl?`, `connectionTimeout?` (ms)                                                                                                      |
+| stdio           | `command`, `type?: "stdio"`, `args?`, `env?` (string map), `cwd?`                                                                                                    |
+| `sse` or `http` | `url`, `type?: "sse" or "streamable-http"`, `apiKey?`, `requestOptions?` (headers, proxy, CA), `oauth?` (`callbackPort`, `clientId`, `clientSecret`, `redirectHost`) |
+
+Secrets are written `${{ secrets.NAME }}`. `docs/customize/deep-dives/mcp.mdx` documents the YAML. JSON files in `.continuous/mcpServers/` (Claude Desktop, Cursor, Cline layout) are loaded by `core/context/mcp/json/loadJsonMcpConfigs.ts` and converted by `packages/config-yaml/src/schemas/mcp/convertJson.ts`. There is no `enabled` field in the schema; the GUI's enable switch goes through `mcp/setServerEnabled` (where that state is kept was not checked).
+
+### 2.2 Connection code
+
+| Area           | File                                                                                                                | What it does                                                                                                                                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connection     | `core/context/mcp/MCPConnection.ts`                                                                                 | stdio, SSE and streamable HTTP clients; 20 s default timeout; `spawn ... ENOENT` becomes "command not found, install the X CLI" with an install link for `uv`/`uvx` and `node`/`npx`; `status`, `infos` (shown in the UI) and `errors`                    |
+| Windows        | same file, `WINDOWS_BATCH_COMMANDS` and `resolveCommandForPlatform`                                                 | `npx`, `uv`, `uvx`, `pnpx`, `dlx`, `nx`, `bunx` are wrapped as `cmd.exe /c`. Row W17 (open) says this has the backslash-escaped-quote hazard fixed for hooks in #658                                                                                      |
+| Manager        | `core/context/mcp/MCPManagerSingleton.ts`                                                                           | connection lifecycle, reload, enable                                                                                                                                                                                                                      |
+| OAuth          | `MCPOauth.ts`, `mcpOauth*.ts`, `mcpAuthProbe.ts`                                                                    | sign-in for `sse` and `streamable-http`, tokens in the IDE's secret storage; the shipped table lists it as built                                                                                                                                          |
+| Trust and pins | `workspaceMcpPolicy.ts`, `mcpToolPins.ts`, `toolPinning.ts`, `mcpPinNotices.ts`                                     | a folder's servers stay off, with secrets redacted, until the folder is trusted (`projectTrust: "required"`); tools are pinned by hash at the first approved call; a changed launch definition (command, arguments, URL, variable names) asks again (X1b) |
+| System CA      | `stdioSystemCa.ts`                                                                                                  | `NODE_OPTIONS=--use-system-ca` for Node servers, on by default on Windows and macOS                                                                                                                                                                       |
+| VS Code bridge | `extensions/vscode/src/ai/mcpServerDefinitionProvider.ts`                                                           | offers the selected config's servers to VS Code's own chat, credentials added late in `resolveMcpServerDefinition`                                                                                                                                        |
+| Import         | `core/config/importClineMcp.ts`, `core/protocol/core.ts` (`config/previewMcpImport`, `config/importMcpServers`)     | Cline and Roo only; secret detection by key name and token prefix; values stored through the secret writer; `sourcePath` must be a detected file                                                                                                          |
+| CLI            | `extensions/cli/src/services/MCPService.ts`, `mcpTransports.ts`, `ui/MCPSelector.tsx`, `extensions/cli/spec/mcp.md` | `/mcp` menu: restart all, stop all, view servers with a coloured status, per-server restart and stop. There is **no `continuous mcp` subcommand**: `mcp` appears in `commands.ts` only as a slash command. `PL17` plans `cn mcp login`                    |
+
+### 2.3 GUI
+
+- `gui/src/pages/config/sections/ToolsSection.tsx`, "MCP Servers": a header with an add button (tooltip "Add MCP server"), the `ImportClineMcpButton`, and one `MCPServerPreview` per server with a status colour and tooltip, enable switch, reload, sign in or out, and a per-tool policy list. When MCP is disabled by organization policy it shows "MCP servers are disabled in your organization". In Chat mode an alert says all MCPs are off.
+- The add button creates a blank workspace block (`config/addLocalWorkspaceBlock`, `blockType: "mcpServers"`). A file under the workspace is subject to folder trust; a server in the user's own `config.yaml` is not.
+- `ImportClineMcp.tsx` is the only dialog for MCP: source picker, per-server checkboxes, a "store secrets" option, a result view.
+- The setup patterns to copy: `gui/src/components/ProviderSetup/ProviderSetupFlow.tsx` (866 lines, steps, `ReviewStep`, `useProviderSetupDialog` opens it in the app dialog from every entry point), `OnboardingCard`, and the Test connection of the add-model form (`openaiCompat/testConnection`, result lines, host name only recorded, never a key). `LocalModelChooser` was not found on main.
+- The announcer is `gui/src/components/a11y/announcer.ts`: `announce(text, "polite" | "assertive")`, text must already be safe to read aloud.
+
+### 2.4 Permissions, injection and egress
+
+- Policy areas (`plans/policy-areas.md`): five areas, five levels (Manual, Cautious, Automatic, Permissive, YOLO). Read-only MCP calls fall under Context use; every other MCP call under Tool use. MCP tool names are `mcp__<server>__<tool>` (`core/tools/mcpToolName.ts`) and a rule can name them. Rows B2, B74 and TR3 are about per-server and per-tool controls; TR3 (`mcpServers.<name>.tools.{allow,deny}`) is not built.
+- Pins: first approval pins all of a server's tools (`pinNotices`), which means today a user approves the first call before they have seen the tool list as a set. TR4 (hide new and changed tools until approved) is not built. TR14 (description caps and normalisation) is not built.
+- Injection: `core/tools/permissions/injection.ts` (`detectInstructionLikeText`), `suspiciousToolDefinitions` in `toolPinning.ts` (a hint, not a gate), and the tainted-session work in `permissions/taint/`. TR15 (wrap MCP results in a data tag) is not built.
+- Command checks that a wizard can reuse: `fetchAndRunHit` in `core/tools/permissions/fetchAndRun.ts` (the `curl | sh` shape), `commandLint.ts`, `missingBinary.ts`, and the secret heuristics in `core/util/secretScan/`. I did not read their signatures; MCPW2 starts by checking they can run on a command string that is not about to be executed.
+- Egress: `core/egress/egress-allowlist.json` classes are R, O, D, X and S, `denied` is `.run.app` and `.continuedev.com`, and `egressAllowlist.vitest.ts` fails when source names a host not listed with a reason. `PRIVACY.md` says the code names no Continue-operated host and lists "MCP servers you add, and their sign-in pages" under "Contacts a third party only if you set it up". The provider setup contacts `openrouter.ai` and `ollama.com` when it opens; the ask-once fix is PL27 (draft PR #661). The ask-once, dated-local-copy pattern is therefore a row and a draft, not a shipped feature; this note proposes reusing it, not copying code from it.
+
+### 2.5 ROADMAP rows that touch MCP
+
+| Row                    | Subject                                                                                                            | State at 2026-11-12                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| shipped line           | OAuth sign-in for `streamable-http` and `sse`; system CA for MCP                                                   | built                                                                                          |
+| X1, X1b                | tool pins; launch-definition pins                                                                                  | built (X1b #541)                                                                               |
+| X19, PL14 to PL18      | OAuth acceptance suite; client id and scopes in config; callback hardening; `cn mcp login`; step-up and revocation | PL14 and PL15 partly built, PL17 and PL18 not started (check the table before relying on this) |
+| O23                    | client for the 2026-07-28 stateless revision (`server/discover`, Client ID Metadata Documents)                     | not started                                                                                    |
+| TR2 to TR4, TR14, TR15 | Plan-mode filter, per-tool toggles, hide-until-approved, description caps, result wrapping                         | not started                                                                                    |
+| B20                    | one read-only view of every content-hash grant, with revoke                                                        | not started                                                                                    |
+| G0 to G5               | importers for Claude Code, Cursor, OpenCode, Codex                                                                 | not started; **the wizard should be the front end of these**                                   |
+| W17                    | `cmd.exe /c` quoting in `MCPConnection`                                                                            | open, verify and fix                                                                           |
+| E4                     | Windows `npx` for MCP servers                                                                                      | open                                                                                           |
+| PL27                   | ask-once catalogue fetch                                                                                           | draft PR #661                                                                                  |
+| UX30                   | MCP resources and prompts as `@` items                                                                             | not started                                                                                    |
+
+### 2.6 Where the friction is
+
+| Friction                                                       | Evidence                                                                                                                                                                  |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hand-written YAML into an empty file                           | `handleAddMcpServer` only creates a blank block                                                                                                                           |
+| The README snippet is JSON or a shell line, the config is YAML | no paste parser; JSON works only when saved as a file in `.continuous/mcpServers/`                                                                                        |
+| No test before saving; errors appear later as a red dot        | the only feedback is the status tooltip and `infos`                                                                                                                       |
+| Secrets                                                        | the user must know `${{ secrets.NAME }}` and where to put the value; plain keys in `env` are the easy mistake (a `PlaintextKeysNotice` exists for providers, not for MCP) |
+| Missing runtime                                                | ENOENT text exists but only after a failed connect, one link each for node and uv; none for docker                                                                        |
+| Windows                                                        | `npx` goes through `cmd.exe /c`, quoting unverified (W17)                                                                                                                 |
+| Discoverability                                                | no list of popular servers, no registry, the docs page has examples only                                                                                                  |
+| Trust                                                          | a user-config server runs with no review step at all; a workspace server asks once per folder                                                                             |
+| Edit, duplicate, remove                                        | only by editing the file; duplicate names are detected only by the importer                                                                                               |
+| CLI                                                            | no `continuous mcp add`; `/mcp` can restart but not add                                                                                                                   |
+| Logs                                                           | no server output viewer in the GUI (stderr handling was not traced to its sink)                                                                                           |
+
+## 3. What other clients do (fetched 2026-11-12)
+
+| Client                          | Entry points and notable features                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Source                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| VS Code                         | **MCP: Add Server** offers "Add from another application", NPM Package, Pip Package, Docker Image; for a package the model generates the config and the page tells the user to review the command, publisher and credential needs; **Browse MCP Servers**; Agent Customizations editor with enable toggle and a `...` menu; `mcp.json` with `inputs` of type `promptString` (`password: true` hides the value), `${input:id}` stored securely and asked on first start; `sandboxEnabled` for stdio on macOS and Linux only; `dev` watch and debug; `code --add-mcp '{json}'`; **MCP: List Servers** (start, stop, restart, show output, authenticate, enable, uninstall); **MCP: Reset Trust**; workspace files inherit Workspace Trust, other sources use a separate trust decision that may prompt on first start or after a configuration change. A `vscode:mcp/install` link exists in third-party generators (a URL-encoded JSON with `name`, `command`, `args` or `type`, `url`); the vendor pages I could fetch did not document it: **unverified** | <https://code.visualstudio.com/docs/copilot/customization/mcp-servers>, <https://code.visualstudio.com/docs/agents/reference/mcp-configuration>, <https://code.visualstudio.com/docs/agents/run/manage-mcp-servers>, for the link only <https://dev.to/danywalls/how-to-create-one-click-mcp-installation-deep-links-for-cursor-and-vs-code-5g5k> (all 2026-11-12) |
+| Claude Code                     | `claude mcp add --transport http\|sse\|stdio`, `--scope local\|project\|user`, `--env`, `--header`, `--client-id`, `--client-secret` (masked prompt), `--callback-port`; `add-json`; `.mcp.json` with `${VAR}` and `${VAR:-default}` expansion; project servers prompt for approval in an interactive session and approvals committed to the repo are ignored in an untrusted folder; `claude mcp list`, `get`, `remove`, `login`, `logout`; status markers (Connected, Needs authentication, Failed, Pending approval, Disabled); the page notes `add` does not validate credentials, so a placeholder token fails later. `add-from-claude-desktop` was not in the part of the page I could read: **unverified**                                                                                                                                                                                                                                                                                                                                          | <https://code.claude.com/docs/en/mcp> (2026-11-12; the last 57k characters were not read)                                                                                                                                                                                                                                                                          |
+| Claude Desktop and MCPB         | `.mcpb` bundles (formerly `.dxt`): a zip with `manifest.json`; `user_config` keys typed `string`, `number`, `boolean`, `directory`, `file` with `required`, `default` and `sensitive` (masked and stored securely); `${user_config.KEY}` substitution; per-platform overrides; `compatibility` (platforms, runtimes); `privacy_policies` required when the server uses external services; opening a bundle shows an install dialog (its contents not described on the page read); signing not covered by the pages read: **unverified**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | <https://github.com/modelcontextprotocol/mcpb>, <https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/MANIFEST.md> (2026-11-12)                                                                                                                                                                                                                        |
+| Cursor                          | Marketplace "Add to Cursor" with OAuth; `.cursor/mcp.json` and `~/.cursor/mcp.json`; `${env:NAME}`, `${userHome}`, `${workspaceFolder}`; `envFile` for stdio; static OAuth `auth` object (`CLIENT_ID`, `CLIENT_SECRET`, `scopes`); per-server toggle; per-tool approval with arguments viewable; **MCP Logs** in the Output panel. The `cursor://` install deeplink is not on the page read: **unverified**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | <https://cursor.com/docs/context/mcp> (2026-11-12)                                                                                                                                                                                                                                                                                                                 |
+| Zed                             | Settings > AI > MCP Servers > Add Server: Install from Extensions (a setup modal lists what the server needs, for example a token), Add Local Server, Add Remote Server; `context_servers` in `settings.json`; a status dot per server; per-tool rules `mcp:<server>:<tool>`; OAuth prompt when a remote server has no Authorization header                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | <https://zed.dev/docs/ai/mcp> (2026-11-12)                                                                                                                                                                                                                                                                                                                         |
+| Cline                           | `cline_mcp_settings.json`, `disabled` flag, `autoApprove` list, restart and timeout in the settings page; a marketplace with one-click install where Cline reads the server's README or an `llms-install.md` to set it up, submitted by GitHub issue (review described by the repo; one third-party blog claims installs skip vetting, **unverified**); the vendor docs page I fetched did not mention the marketplace                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | <https://docs.cline.bot/mcp/mcp-marketplace> (2026-11-12); search summary only for the submission process                                                                                                                                                                                                                                                          |
+| Windsurf (docs now under Devin) | MCP list with Available servers from "your MCP registries" (the official registry schema) and an Install button; `mcp_config.json` at project, local-override and user scope; "Needs authentication" and an Authenticate button; the agent asks before any MCP tool call by default; admin allowlist                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <https://docs.devin.ai/desktop/cascade/mcp> (2026-11-12)                                                                                                                                                                                                                                                                                                           |
+| Goose                           | Deeplink `goose://extension?...` with `cmd` limited to `jbang`, `npx`, `uvx`, `goosed`, `docker`, repeated `arg`, `timeout`, `url` and `type=streamable_http`; Add custom extension dialog (type, ID, name, description, command, env, timeout); `goose configure`; an extension directory; an automatic known-malware check before activating an external extension; `client_secret_key` names a secret instead of holding it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | <https://goose-docs.ai/docs/getting-started/using-extensions> (2026-11-12)                                                                                                                                                                                                                                                                                         |
+| Gemini CLI                      | `gemini mcp add\|list\|remove`, scope project or user, `--trust` skips confirmations, `includeTools` and `excludeTools`, `$VAR` expansion, OAuth discovery after a 401 with `/mcp auth <server>`, `/mcp` shows status and discovery state with a config summary that omits sensitive data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | <https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html> (2026-11-12)                                                                                                                                                                                                                                                                               |
+
+### 3.1 The official MCP Registry
+
+Source: <https://raw.githubusercontent.com/modelcontextprotocol/registry/main/docs/reference/api/official-registry-api.md>, `.../server-json/generic-server-json.md` and `.../modelcontextprotocol-io/authentication.mdx` (all 2026-11-12).
+
+| Topic                  | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Host and API           | `registry.modelcontextprotocol.io`; `GET /v0.1/servers` (search, version, `updated_since`, cursor paging), `GET /v0.1/servers/{name}/versions/{version}` where version may be `latest`, `POST /v0.1/validate`. No freeze or stability promise on the page; the version marker is the `v0.1` path prefix                                                                                                                                              |
+| Listing quirks         | one record per version, sorted by name then version as text (so `1.10.0` sorts before `1.2.0`); `search` is a substring match on name, three characters minimum, else HTTP 422; a deprecated version can still be `isLatest`, so a client must check `status == "active"`                                                                                                                                                                            |
+| Incremental sync       | `updated_since` with deleted entries included automatically; the page tells richer search to use a subregistry                                                                                                                                                                                                                                                                                                                                       |
+| `server.json`          | `name` (`io.github.<owner>/<server>` or `com.example/<server>`), `packages[]` (`registryType` npm, pypi, oci, nuget, mcpb; `identifier`, `version`, `runtimeHint` npx, uvx, dnx; `environmentVariables[]` with `isRequired`, `isSecret`, `default`, `choices`; `packageArguments[]`, `runtimeArguments[]`; `fileSha256` for mcpb), `remotes[]` (`streamable-http` or `sse`, templated `url`, `headers[]` with `isSecret`, `variables`), `repository` |
+| Namespace verification | GitHub login grants `io.github.<user>/*`; DNS and HTTP proofs grant a domain namespace. This proves who may publish a name. The pages do not say it proves anything about the code, and they do not define "verified". Package ownership checks (`mcpName`) were not on the pages read: **unverified**                                                                                                                                               |
+| Consequence            | `isSecret`, `isRequired`, `choices` and `variables` map directly onto wizard fields; `runtimeHint` maps onto runtime detection. A "verified namespace" badge must say "publisher proved they own this name", never "safe"                                                                                                                                                                                                                            |
+
+### 3.2 The protocol side
+
+Spec pages read on 2026-11-12: <https://modelcontextprotocol.io/specification/latest/basic/authorization> and `.../basic/transports` (the latest revision is 2026-07-28).
+
+- **Transports:** stdio and Streamable HTTP are the two standard bindings. The 2026-07-28 page describes no HTTP+SSE binding; it only says clients and servers that talk to earlier revisions detect the counterpart's era and fall back. Our `sse` type is therefore a compatibility setting, and the wizard should detect it rather than ask for it. How to detect (try Streamable HTTP, fall back on a 4xx to the old SSE handshake) is described in earlier revisions; I did not re-read them for this note.
+- **Authorization:** optional; for HTTP transports clients SHOULD follow the spec, stdio SHOULD NOT and takes credentials from the environment. Servers MUST implement Protected Resource Metadata and clients MUST use it to find the authorization server; the 401 carries `WWW-Authenticate` with `resource_metadata` and optionally `scope`. Client registration is by Client ID Metadata Documents, pre-registration, or Dynamic Client Registration, which that revision deprecates. PKCE, the `resource` parameter and the RFC 9207 `iss` check apply.
+- **RFCs cited by that page, status checked in `rfclib` on 2026-11-12:** RFC 9728 OAuth 2.0 Protected Resource Metadata (proposed standard, current, 2025-04), RFC 8414 Authorization Server Metadata (current, 2018-06), RFC 7591 Dynamic Client Registration (current, 2015-07), RFC 9207 Issuer Identification (current, 2022-03), RFC 6749 (current, updated by RFC 8252 and RFC 9700), RFC 8252 OAuth for Native Apps (BCP 212, current). I did not quote any of their text.
+- **What a wizard can use:** a pasted `https://` URL can be probed without credentials: an unauthenticated request that returns 401 with `resource_metadata` means "this server wants a sign-in", and the wizard can show the **Sign in** step instead of asking for a key. `mcpAuthProbe.ts` already exists for this; MCPW3 checks whether it can be called without connecting.
+
+## 4. UX features extracted, and what to do with each
+
+| Feature                                                                                                                                   | Seen in                                                          | Verdict                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Paste a snippet (JSON `mcpServers` block, one server object, `npx -y pkg`, `uvx pkg`, `docker run ...`, `claude mcp add ...`, a bare URL) | VS Code add-from-package, Claude Code `add-json`, Goose          | **MVP.** Pure parser with a golden corpus                          |
+| Template gallery of popular servers                                                                                                       | Zed, Cline, Goose                                                | **MVP**, eight bundled entries, no network                         |
+| Test connection that lists tools, resources and prompts                                                                                   | Claude Code `get`, Gemini `/mcp`, VS Code                        | **MVP**, the centrepiece                                           |
+| stderr and a fix hint on failure                                                                                                          | none do this well; ours has ENOENT hints already                 | **MVP**, extend the hint table                                     |
+| Secrets as references, masked entry                                                                                                       | VS Code `password`, MCPB `sensitive`, Goose                      | **MVP**, existing secret writer                                    |
+| Duplicate-name detection, rename suggestion                                                                                               | importer only                                                    | **MVP**                                                            |
+| Edit, enable, remove, duplicate in the list                                                                                               | VS Code, Cursor, Zed                                             | Slice 2                                                            |
+| Logs viewer                                                                                                                               | Cursor, VS Code                                                  | Slice 2 (needs a stderr ring buffer)                               |
+| Runtime detection (node, npx, uv, uvx, docker) with install help                                                                          | VS Code (review runtime), MCPB compatibility                     | Slice 2; detection first, help text second, never auto-install     |
+| Transport auto-detect from a URL                                                                                                          | Windsurf lists three, Claude Code asks `--transport`             | **MVP**, from the probe                                            |
+| OAuth sign-in button inside the flow                                                                                                      | Zed, Windsurf, Cursor, Claude Code                               | Slice 2 (the button exists in the list; the wizard step wires it)  |
+| Scope choice (user or workspace)                                                                                                          | Claude Code, Gemini, Windsurf                                    | **MVP**, default user; workspace only as "share with this project" |
+| Import from other tools                                                                                                                   | VS Code "from another application", Claude Code (**unverified**) | Slice 3, as the Track G adapters behind the wizard                 |
+| Registry browse and search                                                                                                                | VS Code, Windsurf                                                | Slice 3, ask-once                                                  |
+| Deeplink install                                                                                                                          | VS Code (**unverified**), Cursor (**unverified**), Goose         | Slice 3, review screen only, never auto                            |
+| Export and share an entry                                                                                                                 | Claude Code `.mcp.json`, MCPB                                    | Slice 3 ("Copy as JSON" with secrets as references)                |
+| Per-tool allow or ask preselection                                                                                                        | Cursor, Zed, Gemini `includeTools`                               | Slice 2, needs TR3                                                 |
+| Health badge, "last connected", idle warning                                                                                              | Claude Code list, J2 idle server                                 | Slice 2                                                            |
+| Sandboxing of stdio servers                                                                                                               | VS Code (macOS and Linux only)                                   | Out of scope here; Track W is the place                            |
+| Malware or provenance check                                                                                                               | Goose, registry namespace                                        | Slice 3; local checks only in the MVP                              |
+
+## 5. Safety and trust design
+
+### 5.1 Principles
+
+1. **Paste never runs anything.** The parser is pure. It does not resolve, fetch, install or spawn. The first process start is a button the user presses after the trust step.
+2. **The user sees what will run, exactly.** The review screen shows the command and arguments as one string through the existing display mask (`maskCommandForDisplay`, `displayMask.ts`), the working directory, the names (not values) of environment variables, and the URL for a remote server.
+3. **One explicit trust decision, before the probe.** The probe is a connection, and a connection runs the command. The decision is the primary button's label: "Run this command and test" (stdio) or "Connect to this server and test" (remote). Not a checkbox, not pre-focused on "Trust always".
+4. **Warnings are specific and local** (no network):
+
+| Check                                                                                                      | Wording                                                                                                                                                                                                                                             | Level                                                           |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `fetchAndRunHit(command)` or a pipe into `sh`, `bash`, `iex`                                               | "This command downloads a script and runs it. Continuous cannot tell what the script will do."                                                                                                                                                      | blocks Save until "I understand" is ticked; Test stays disabled |
+| `npx` or `uvx` or `pnpx` or `bunx` with no pinned version                                                  | "This package is not pinned to a version. A later release could change what runs on your machine. Pin it, for example `name@1.2.3`." with a one-click "Pin to latest known" only when the version is known locally (otherwise no button, no lookup) | amber, Save allowed                                             |
+| `-y` or `--yes`                                                                                            | "`-y` installs without asking."                                                                                                                                                                                                                     | information                                                     |
+| A shell wrapper (`sh -c`, `cmd /c`, `powershell -Command`)                                                 | "This runs through a shell. Prefer the program itself."                                                                                                                                                                                             | amber                                                           |
+| `docker run` with `--privileged`, a `-v` of `/`, the home folder or the docker socket, or `--network host` | "This container can reach your files or network beyond what a tool needs."                                                                                                                                                                          | amber                                                           |
+| A secret-looking value in `args` or in the URL                                                             | "This looks like a key. It will be stored as a secret and replaced by a reference."                                                                                                                                                                 | automatic fix offered                                           |
+| A path outside the workspace in `args`                                                                     | name the path                                                                                                                                                                                                                                       | information                                                     |
+| Remote URL is `http://` and not loopback                                                                   | "This connection is not encrypted."                                                                                                                                                                                                                 | blocks Save                                                     |
+| Remote URL host is a literal private address                                                               | "This address is on your local network."                                                                                                                                                                                                            | information                                                     |
+| Command not found                                                                                          | the hint table in 5.4                                                                                                                                                                                                                               | error                                                           |
+
+5. **Secrets.** Values entered in the form go straight to the secret writer in core (`storeSecret`, the same one the importer uses: IDE secure storage, else `~/.continuous/.env`); the webview keeps the typed value only in component state and clears it after Save. The YAML gets `${{ secrets.<SERVER>_<KEY> }}`. The review screen shows the reference name and "stored in the system keychain" or "stored in ~/.continuous/.env", never the value. Pasted secrets are detected by the importer's rule (key name or token prefix) and by `core/util/secretScan/` and moved the same way. The probe's stderr and any error text go through the existing secret mask before reaching the webview, the audit trail or the announcer. Nothing about the form's values is logged.
+6. **Provenance on the review screen.** "Pasted by you", "From the Continuous template list (version 2026-11-12)" or "From the MCP Registry: `io.github.owner/name` 1.2.3, namespace proven through GitHub login, status active, published <date>". The registry line is information, not approval. A deprecated entry shows its `statusMessage`.
+7. **Tool descriptions from a new server are untrusted text.** The probe result lists names with a one-line description rendered as plain text (no markdown, no links, no HTML), truncated at the cap TR14 proposes (1,024 characters for a description) with a notice, after NFC normalisation and removal of control, bidi and zero-width characters (a copy of the TR14 function is not needed: the row is a dependency; until it lands, the wizard applies a local equivalent and MCPW3 swaps it for the TR14 function when that lands). `detectInstructionLikeText` and `suspiciousToolDefinitions` run over every description; a hit shows "This tool description contains text that reads like instructions to the model" beside the tool and, on Save, the default for that tool is Ask. The hint is not a gate: an honest server can trip it and a hostile one can avoid it. The review screen says so in one line.
+8. **Pin at Add, not at first call.** Today the first approved call pins every tool of the server (`pinNotices`) so the user approves a pin for a list they have not seen. After the probe the user has seen the list, so Save can record the pin and the launch pin (X1b) for exactly that definition; a later change then asks. This needs the pin store's write path to accept a pin from the wizard, and TR4 for "hide new tools until approved". Until TR4 exists, Save pins what the probe saw and later additions follow today's behaviour.
+9. **The probe never calls a tool.** It performs the handshake, lists tools, resources and prompts (using the existing pagination helper) and disconnects. Resources are listed by name only, not read. Prompts are listed, not fetched. A hard 20 s timeout (the existing default) and a 1 MiB cap on stderr.
+10. **The probe runs with the same environment as a real run**, not a richer one. `MCPConnection` passes a small set of common variables (`HOME`, `USER`, ...) plus the configured `env`; confirming that nothing else leaks into the child belongs to MCPW3's first test.
+11. **No auto-enable for workspace entries.** "Share with this project" writes a file under `.continuous/mcpServers/`; that file follows the existing folder-trust path and the dialog says "Other people who open this folder will be asked to trust it before it starts."
+12. **Remote servers.** Show the host, whether it is HTTPS, and whether the probe saw a 401 with metadata. After sign-in show the authorization server's host. Tokens are never shown and live where they live today. Text returned by remote tools is untrusted by the existing taint logic; the wizard adds nothing but says on the success screen: "Results from this server are treated as untrusted text."
+
+### 5.2 What is built on existing trust UI and what is new
+
+| Piece                                             | Built on                                    | New                                                                                                  |
+| ------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Folder trust for workspace entries                | `workspaceMcpPolicy`, `projectTrust`        | nothing                                                                                              |
+| Launch pin                                        | X1b `mcpToolPins`                           | write at Save                                                                                        |
+| Tool pins                                         | X1 `toolPinning`                            | write at Save                                                                                        |
+| Secret handling                                   | `storeSecret`, `secretScan`, importer rules | wizard form                                                                                          |
+| Display mask                                      | `displayMask.ts`                            | reused                                                                                               |
+| Fetch-and-run detection                           | `fetchAndRun.ts`                            | called on a string                                                                                   |
+| Instruction-like text                             | `injection.ts`, `suspiciousToolDefinitions` | reused on probe output                                                                               |
+| Trusted list with revoke                          | B20 (not built)                             | the wizard can only link to it when B20 lands                                                        |
+| Paste parser, launch-safety analysis, probe       | none                                        | **new** (MCPW1 to MCPW3)                                                                             |
+| First-start trust prompt for a user-config server | none today                                  | **new**: the trust step is a decision recorded at Save so a hand-edited line is still the user's own |
+
+### 5.3 Privacy: the registry and any catalogue
+
+A registry request tells a third party that the user is looking for MCP servers and, with a server-side search, what they typed. The rule in `PRIVACY.md` is that the code names no host the user did not choose and that Continue-operated hosts are denied. Proposal, following the OpenRouter catalogue approach (row PL27 and the 2.14.0 note; the code for it is a draft, so this is a pattern to follow, not a module to import):
+
+1. **Offline first.** The bundled template list needs no request. The MVP has no registry.
+2. **Ask once.** The first time the user presses "Browse the MCP Registry", a dialog: "Download the list of MCP servers from registry.modelcontextprotocol.io? Continuous will send a request for the list and nothing else: no search words, no identity, no telemetry. The list is saved on this computer with today's date and used until you press Refresh." Buttons "Download list" (default) and "Not now". The answer is stored in the user's own settings; "Not now" is remembered until the user presses Browse again.
+3. **Dated local copy.** Pages of `GET /v0.1/servers?version=latest` are written to `~/.continuous/` as one file with the fetch date, owner-only, capped (size per page and total are **not measured**; MCPW14 measures the live registry first). Search runs on the local copy, so the search words never leave the machine. The registry's own `search` parameter is never used.
+4. **Refresh** is a button, never a timer. Incremental refresh uses `updated_since`.
+5. **Allowlist:** one new group in `egress-allowlist.json`, class O, host `registry.modelcontextprotocol.io`, reason "opt-in MCP Registry list, after a one-time ask". `PRIVACY.md` gains one line under "Contacts a third party only if you set it up".
+6. **No package lookups.** Whether an npm or PyPI version exists, or who owns it, would be a second third party. The MVP's unpinned-package check is local. A later, separately asked "Check this package on npmjs.com" can be proposed on its own row.
+7. **Headers and body:** a fixed User-Agent naming the product and version, no cookies, no API key, no user or workspace data.
+8. **Deeplinks never fetch.** A link carries the server definition; nothing is looked up.
+
+### 5.4 Fix hints for the probe
+
+| Signal                                              | Hint shown                                                                                                                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `spawn <cmd> ENOENT`, command `npx` or `node`       | "`npx` was not found. Install Node.js (it includes npx), then restart your editor so the PATH is refreshed." with the Node download page link (a link only, nothing is fetched) |
+| ... `uvx` or `uv`                                   | the existing uv guide link                                                                                                                                                      |
+| ... `docker`                                        | "Docker was not found, or the Docker app is not running."                                                                                                                       |
+| ... any other                                       | "`<cmd>` was not found on the PATH your editor uses. Give the full path, or start the editor from a terminal where `<cmd>` works."                                              |
+| Windows, `npx` fails with a syntax or quoting error | "On Windows this server is started through cmd.exe. If your arguments contain quotes or spaces, try the JSON form or report it." The hint is a stopgap; W17 is the fix          |
+| Timeout at 20 s with no output                      | "The server did not answer within 20 seconds. The first run of `npx` can take longer while it downloads the package. Try again, or raise Timeout." with a Timeout field         |
+| Exit before the handshake, stderr present           | show the last 20 lines of stderr, masked, in a scrollable block                                                                                                                 |
+| HTTP 401 with `resource_metadata`                   | "This server needs you to sign in." with the Sign in button                                                                                                                     |
+| HTTP 401 without metadata                           | "This server needs a key. Add a header such as Authorization." with the header field                                                                                            |
+| HTTP 404 on Streamable HTTP, SSE works              | "This server uses the older SSE connection. Saved as `sse`."                                                                                                                    |
+| TLS error                                           | the existing system-CA text pointing at `useSystemCa` and `caBundlePath`                                                                                                        |
+| Handshake succeeded, zero tools                     | "Connected, but the server offers no tools. It may offer resources or prompts only."                                                                                            |
+
+## 6. The design
+
+### 6.1 Entry points
+
+| Entry                                                                                         | Behaviour                                                                                                                                                                                                                                                               |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Settings > Tools > MCP Servers `+`                                                            | opens the wizard (today it creates a blank file); "Edit as YAML" remains one click away                                                                                                                                                                                 |
+| Empty state of the MCP list                                                                   | "Add your first MCP server" opens the wizard at the template step                                                                                                                                                                                                       |
+| `/mcp add` in the chat input (GUI) and in the CLI's `/mcp` menu                               | the CLI menu gains "Add server" that runs the same core steps in the terminal                                                                                                                                                                                           |
+| `continuous mcp add <name> [--transport] [--scope user\|project] [--env KEY] -- <command...>` | non-interactive parity with `claude mcp add` (parity of names only; wording is ours); also `mcp add-json`, `mcp list`, `mcp test <name>`, `mcp remove`, `mcp login` (PL17)                                                                                              |
+| Clipboard hint                                                                                | when the wizard opens and the clipboard holds something the parser recognises, the paste field shows "Paste what's on your clipboard?" with a button. Never read the clipboard silently; a click is the permission (webview clipboard-read needs a user gesture anyway) |
+| Deeplink (slice 3)                                                                            | opens the wizard at the review step with the fields filled and nothing started, and a banner "This link came from outside Continuous."                                                                                                                                  |
+| Import (slice 3)                                                                              | the "Import from..." button in step 1 opens the Track G adapter list                                                                                                                                                                                                    |
+
+JetBrains shares the webview; the entry points inside the GUI work as they are. The deeplink and the clipboard need an IDE-side handler per host (VS Code URI handler, JetBrains protocol handler), which is why they are slice 3.
+
+### 6.2 Steps
+
+```
+ 1 Start         paste, template, registry (slice 3), import (slice 3), or "write YAML"
+ 2 Review        name, transport, command or URL, env and headers, scope; safety lines
+ 3 Trust+Test    one decision; probe runs; tools, resources, prompts listed; errors with hints
+ 4 Tools         per-tool Allow / Ask preselection (slice 2); description warnings
+ 5 Done          saved where, secrets stored where, next actions
+```
+
+Steps 1 to 3 and Save are the MVP; step 4 is a read-only list in the MVP (names and warnings; the choice appears when TR3 lands).
+
+A **Simple / Advanced** switch sits at the top of step 2. Simple is the form. Advanced shows the YAML for this one server (read from the same model), editable, validated live against the zod schema, with the error under the field. Switching Simple to Advanced and back keeps unknown keys. A user who edits YAML and returns to Simple sees a notice "Some settings are only in the YAML view" if a key has no field.
+
+### 6.3 Wireframes (300 px sidebar first)
+
+Width is about 36 characters. The dialog is a full-width sheet inside the sidebar.
+
+Step 1, Start:
+
+```
++------------------------------------+
+| Add MCP server                  [x]|
+| Step 1 of 3: Start                 |
+|------------------------------------|
+| Paste a config, a command or a URL |
+| +--------------------------------+ |
+| |                                | |
+| |                                | |
+| +--------------------------------+ |
+| [Paste from clipboard]             |
+|                                    |
+| Or start from                      |
+|  > Filesystem   files you choose   |
+|  > Git          local repositories |
+|  > Fetch        web pages as text  |
+|  > GitHub       issues, PRs, code  |
+|  > More templates (8)              |
+|                                    |
+| Nothing runs until you say so.     |
+|                                    |
+| [Write YAML instead]    [Continue] |
++------------------------------------+
+```
+
+Step 2, Review (stdio, simple):
+
+```
++------------------------------------+
+| Add MCP server                  [x]|
+| Step 2 of 3: Review                |
+| [Simple] [Advanced YAML]           |
+|------------------------------------|
+| Name                               |
+| [ github                         ] |
+| Transport  (o) Command  ( ) URL    |
+| Command                            |
+| [ npx                            ] |
+| Arguments (one per line)           |
+| [ -y                             ] |
+| [ @modelcontextprotocol/server-g.. |
+| Environment                        |
+|  GITHUB_TOKEN  [ ************* ]   |
+|  Saved as a secret, not in the file|
+| Save for  (o) Me   ( ) This project|
+|                                    |
+| ! This package is not pinned to a  |
+|   version. A later release could   |
+|   change what runs on your machine.|
+|   [Pin to 2025.4.8]                |
+|                                    |
+| [Back]                   [Continue]|
++------------------------------------+
+```
+
+Step 3, Trust and test (before the decision):
+
+```
++------------------------------------+
+| Step 3 of 3: Test                  |
+|------------------------------------|
+| This will run on your computer:    |
+| +--------------------------------+ |
+| | npx -y @modelcontextprotocol/  | |
+| | server-github@2025.4.8         | |
+| +--------------------------------+ |
+| as you, in C:\Users\you\project    |
+| with GITHUB_TOKEN (a secret).      |
+|                                    |
+| A command runs with your           |
+| permissions. Only continue if you  |
+| trust where it came from:          |
+| pasted by you.                     |
+|                                    |
+| [Back]   [Run this command + test] |
++------------------------------------+
+```
+
+Step 3, success:
+
+```
++------------------------------------+
+| Step 3 of 3: Test                  |
+|------------------------------------|
+| Connected in 3.1 s.                |
+| Found 26 tools, 0 resources,       |
+| 0 prompts.                         |
+|                                    |
+| Tools                  Search [   ]|
+|  create_issue    asks              |
+|  search_code     asks              |
+|  ! get_file      reads like        |
+|    instructions to the model       |
+|  ...                               |
+| Results from this server are       |
+| treated as untrusted text.         |
+|                                    |
+| [Back]                     [Save]  |
++------------------------------------+
+```
+
+Step 3, failure:
+
+```
++------------------------------------+
+| Could not connect                  |
+|------------------------------------|
+| `npx` was not found. Install       |
+| Node.js (it includes npx), then    |
+| restart your editor.               |
+| [Open Node.js download page]       |
+|                                    |
+| Last output                        |
+| +--------------------------------+ |
+| | spawn npx ENOENT               | |
+| +--------------------------------+ |
+|                                    |
+| [Back]  [Edit]        [Try again]  |
+| [Save without testing]             |
++------------------------------------+
+```
+
+"Save without testing" saves and shows "Saved. This server has not been tested." on the done screen; it exists because a server that needs a VPN or a not-yet-installed runtime is a real case. It is a link-style button, not the default.
+
+Done:
+
+```
++------------------------------------+
+| Added github                       |
+|------------------------------------|
+| Saved to your settings.            |
+| GITHUB_TOKEN is in the system      |
+| keychain.                          |
+| It is on in Agent and Plan mode.   |
+| Tool calls ask you first.          |
+|                                    |
+| [Add another]    [Back to Tools]   |
++------------------------------------+
+```
+
+Wide layout: the same steps with the form on the left and the tool list or YAML on the right; no new content.
+
+### 6.4 Keyboard, focus, motion, contrast
+
+- Every step is a form in DOM order; Tab walks fields, Enter in a single-line field does not submit, Enter on the primary button does. Escape closes the dialog only from a step with no unsaved input; otherwise it asks "Discard this server?" with Cancel focused.
+- Focus: on open, the paste field; on a step change, the step heading (tabindex -1); after an error, the error summary; after Save, the "Back to Tools" button. On close focus returns to the `+` button that opened it.
+- The paste area is a labelled textarea, not a contenteditable. The tool list is a list of rows with a visible text label for each state (the colour is never the only signal); "asks" and "reads" are words.
+- One announcer: steps and results call `announce()` with polite text ("Step 2 of 3, Review", "Connected. 26 tools found.") and assertive for failures. No new `aria-live` regions. Announcer text is built from names and counts only, never from a command, URL or tool description (`announce` needs safe text; use `maskCommandForDisplay` for anything command-shaped).
+- Reduced motion: the probe progress is a text line "Connecting..." with elapsed seconds, no spinner animation under `prefers-reduced-motion`. High contrast: warnings carry the word "Warning:" and an icon, borders not colour alone. Targets at least 24 px.
+- Secrets fields are `type="password"` with a Show toggle that is off by default and announces nothing of the value.
+
+### 6.5 Exact wording for states
+
+| State                              | Text                                                                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Empty list                         | "No MCP servers yet. MCP servers give the agent tools such as reading a database or opening issues. [Add a server]"                         |
+| Paste not understood               | "I could not find a server in that text. Paste a JSON config, a command such as `npx -y some-package`, or a URL that starts with https://." |
+| Paste contains several servers     | "Found 3 servers. Pick the ones to add." with checkboxes, none ticked by default                                                            |
+| Name exists                        | "A server called github already exists. [Use github-2] [Replace it] [Cancel]" ("Replace" shows a diff of the two definitions)               |
+| Probe running                      | "Connecting... 4 s. This can take a while the first time."                                                                                  |
+| Success                            | "Connected in 3.1 s. Found 26 tools, 0 resources, 0 prompts."                                                                               |
+| Save without test                  | "Saved. This server has not been tested."                                                                                                   |
+| Registry offline                   | "Could not reach the MCP Registry. You can still add a server from a template or by pasting. [Try again]"                                   |
+| Disabled by organization           | the existing "MCP servers are disabled in your organization"                                                                                |
+| Folder not trusted (project scope) | "This folder is not trusted, so a project server would not start. Save it for you, or trust the folder first."                              |
+
+### 6.6 Data model
+
+MVP changes to `config.yaml`: **none.** The wizard writes the existing `mcpServers` shape and `${{ secrets.NAME }}` references. Writing preserves comments and key order in the user's file (use the YAML document API, as the importer does; to be confirmed in MCPW5).
+
+Proposed, later, all optional and all neutral in the B21 sense unless stated:
+
+| Key                                                                      | Purpose                                                                  | Class                                                      |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `description`                                                            | one line shown in the list                                               | neutral                                                    |
+| `origin` (`pasted`, `template:<id>@<date>`, `registry:<name>@<version>`) | provenance on the review and in the list; never trusted for any decision | neutral                                                    |
+| `enabled`                                                                | persist the switch in the file                                           | tightening when false, loosening when true: B21 classes it |
+| `tools.allow`, `tools.deny` (TR3)                                        | the preselection of step 4                                               | loosening for allow                                        |
+
+`origin` is informational: an attacker-edited file can claim any origin, so no code path may read it to relax a check.
+
+### 6.7 CLI parity
+
+The core steps (parse, analyse, probe, write) live in core and are called by both surfaces; the terminal gets the same review text and the same single trust question ("Run `npx -y ...` as you? [y/N]", default No, and a non-interactive `--yes-run` that is refused unless `--yes-run` is spelled in full and the command is pinned). `continuous mcp test <name>` prints the same result and exits non-zero on failure (like `continuous test-connection`). `mcp login` is PL17. The `/mcp` menu keeps its restart and stop items and gains Add.
+
+### 6.8 JetBrains parity
+
+The GUI is the same webview, so the dialog and the paste flow work. Differences to check: clipboard-read permission in the JCEF webview, a protocol handler for deeplinks, secure storage (`secureStorageAvailable` is false in hosts without it and the writer falls back to `~/.continuous/.env`, which the done screen must say), and the Windows `cmd.exe` path. No JetBrains-specific UI is proposed.
+
+## 7. Test plan
+
+| Layer                  | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Parser unit tests      | golden corpus in `core/config/fixtures/mcpPaste/`: real README snippets for filesystem, git, fetch, github, postgres, sqlite, playwright, memory, sequential-thinking (copied with attribution and the source URL and date in a header comment, no network at test time), Claude Desktop and Cursor and VS Code `mcp.json` forms, Claude Code `claude mcp add` lines, `docker run -i --rm -e X image`, `uvx`, `pipx run`, `bunx`, Windows paths with spaces and backslashes, PowerShell and cmd quoting, multi-line YAML, a bare URL, an SSE URL |
+| Parser false positives | things that look like servers and are not: a README sentence containing `npx`, a `package.json` script, a `docker run` of a web app with `-p`, an `http://` URL of a docs page, a JSON file with no `mcpServers`, a `curl ... \| sh` install line; each must yield "not understood" or a warning, never a server                                                                                                                                                                                                                                 |
+| Safety analysis        | table-driven: every row of 5.1 item 4 has a positive and a negative case; `npx pkg@1.2.3` pinned; scoped packages; `@latest` counts as unpinned                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Secret handling        | a pasted token in env, in args and in a URL query is replaced by a reference; the value appears nowhere in the preview object, the YAML, the audit line, the announcer text or the logs (a canary test like `core/util/secretScan/canary.ts`)                                                                                                                                                                                                                                                                                                    |
+| Probe                  | against `mockMcpRevisionServer.ts` and `mockOAuthMcpServer.ts` (both exist): handshake, tools, pagination, zero tools, a server that exits, a server that writes secrets to stderr, a timeout, a missing command, an SSE-only server, a 401 with and without metadata; asserts that no `tools/call` is ever sent                                                                                                                                                                                                                                 |
+| Writer                 | comments and order preserved in a fixture `config.yaml`; duplicate names; Windows line endings; a file that does not parse is refused with the line number, not overwritten                                                                                                                                                                                                                                                                                                                                                                      |
+| GUI                    | Vitest and Testing Library on the dialog with the repository's `MockIdeMessenger`, modelled on `ProviderSetupFlow.test.tsx` and `entryPoints.test.tsx`: each step, back and forward keep state, Escape asks, focus lands where 6.4 says, announcer messages                                                                                                                                                                                                                                                                                      |
+| Screenshots            | new views in `bench/screenshots/src/views.mjs` for each wireframe in light and dark, 300 px and wide, plus the failure and the empty states; the harness uses `MockIdeMessenger`, no network                                                                                                                                                                                                                                                                                                                                                     |
+| Accessibility          | `bench/screenshots/src/axe.mjs` over each view; any new violation fails; the baseline file `axe-baseline.json` must not grow                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Egress                 | `egressAllowlist.vitest.ts` passes with the new class O group; a test that the registry module is not imported unless the ask was answered yes                                                                                                                                                                                                                                                                                                                                                                                                   |
+| CLI                    | the `mcp add`, `test`, `remove` commands against a temp `config.yaml`; exit codes; no secret in output                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+## 8. Recommended slices
+
+| Slice | Rows             | Contents                                                                                                                       | Order and dependency                                                                                    |
+| ----- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| MVP   | MCPW1 to MCPW6   | parser, safety analysis, probe, writer, dialog (paste, review, trust and test, save), templates                                | MCPW1, MCPW2, MCPW3 in parallel; MCPW4 needs MCPW1 and MCPW3; MCPW5 needs the dialog design; MCPW6 last |
+| 2     | MCPW7 to MCPW12  | CLI parity, edit and remove and enable from the list, logs, runtime detection, OAuth step, per-tool preselection               | W17 should land first or alongside; TR3 for preselection                                                |
+| 3     | MCPW13 to MCPW18 | import adapters behind the wizard, registry browse, deeplink, export, pin at add, screenshots and accessibility gates extended | G0 and G1; PL27 pattern; O23 for new-revision servers                                                   |
+
+Why this order: the parser and the safety analysis are pure and testable without UI; the probe is the highest-value feature and the riskiest, so it ships with the trust step or not at all; templates give the first-run user something to click without any parsing; the registry is last because it is the only feature that adds a third-party request, and because its schema has no stability promise.
+
+## 9. Not verified, not measured
+
+- The `vscode:mcp/install` and `cursor://` link formats from the vendors' own pages; the VS Code format above is from third-party generators.
+- Claude Code `add-from-claude-desktop` and Claude Desktop's own bundle review dialog; MCPB signing.
+- Registry package-ownership checks (`mcpName`); registry size and page count (needed for the local-copy cap).
+- Where the enable switch is persisted, and where `MCPConnection` sends stderr.
+- Whether `fetchAndRunHit`, `commandLint` and the secret heuristics accept a string that is not about to run.
+- How the old HTTP+SSE fallback is detected in the earlier spec revisions (not re-read).
+- No user research was done: the friction list in 2.6 is from reading code and the owner's request, not from observing users.
+
+## 10. Open questions for the owner
+
+1. **Where should the wizard save by default?** Recommended, pending owner: the user's own `config.yaml` (no folder trust needed, and the wizard's trust step is the user's decision), with "This project" as an explicit choice that writes `.continuous/mcpServers/<name>.yaml`.
+2. **Should a user-config stdio server need the wizard's trust step on hand-edited entries too?** Recommended, pending owner: no change to hand edits; the launch pin (X1b) already asks when a definition changes, and the wizard records its pin at Save.
+3. **Should the probe be allowed to run before Save at all?** Recommended, pending owner: yes, behind the explicit "Run this command and test" button; Save without test is allowed but labelled.
+4. **Block or warn on `curl | sh` style commands?** Recommended, pending owner: block Test and Save until an explicit acknowledgement, and never allow it from a deeplink or the registry.
+5. **Which eight templates?** Recommended, pending owner: filesystem, git, fetch, memory, sequential-thinking, GitHub (remote, OAuth), Playwright, SQLite; every command pinned to a version we looked at, dated in the file, refreshed by a maintainer with a test that the pins parse. Postgres is left out of the first eight because its connection string is a credential and the reference server's status was not checked.
+6. **Registry in slice 3 or earlier?** Recommended, pending owner: slice 3, after PL27's ask-once pattern lands, so the dialog and the allowlist wording are shared.
+7. **Deeplinks at all?** Recommended, pending owner: yes in slice 3, review screen only, with the banner, because a web page that can add a command to a developer's editor is the main abuse path; if the owner prefers not to ship that surface, drop MCPW15 and keep paste.
+8. **Pin at Add (item 8 of 5.1)?** Recommended, pending owner: yes, because it closes the "approve a pin for a list you never saw" gap, but only after TR4 so a later tool is hidden rather than only flagged.
+9. **A per-server `enabled` key in the schema?** Recommended, pending owner: yes in slice 2, classed by B21, so enable state lives in the file and the CLI sees it.
+10. **Malware or reputation checks (Goose does a known-malware check)?** Recommended, pending owner: not in this track; it needs a third-party feed, which is a PV decision.
+11. **User research.** Recommended, pending owner: show the MVP wireframes to five people who have never added an MCP server before building MCPW4; I can write the script (`design:user-research`).
+
+## Sources (all fetched 2026-11-12)
+
+- VS Code: <https://code.visualstudio.com/docs/copilot/customization/mcp-servers>, <https://code.visualstudio.com/docs/agents/reference/mcp-configuration>, <https://code.visualstudio.com/docs/agents/run/manage-mcp-servers>
+- Claude Code: <https://code.claude.com/docs/en/mcp>
+- MCPB: <https://github.com/modelcontextprotocol/mcpb>, <https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/MANIFEST.md>
+- Cursor: <https://cursor.com/docs/context/mcp>
+- Zed: <https://zed.dev/docs/ai/mcp>
+- Cline: <https://docs.cline.bot/mcp/mcp-marketplace>
+- Windsurf (now under Devin): <https://docs.devin.ai/desktop/cascade/mcp>
+- Goose: <https://goose-docs.ai/docs/getting-started/using-extensions>
+- Gemini CLI: <https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html>
+- MCP Registry: <https://raw.githubusercontent.com/modelcontextprotocol/registry/main/docs/reference/api/official-registry-api.md>, <https://raw.githubusercontent.com/modelcontextprotocol/registry/main/docs/reference/server-json/generic-server-json.md>, <https://raw.githubusercontent.com/modelcontextprotocol/registry/main/docs/modelcontextprotocol-io/authentication.mdx>
+- MCP specification 2026-07-28: <https://modelcontextprotocol.io/specification/latest/basic/authorization>, <https://modelcontextprotocol.io/specification/latest/basic/transports>
+- RFC status through `rfclib` (RFC 9728, 8414, 7591, 9207, 6749, 8252), 2026-11-12
+- Third-party, unverified: <https://dev.to/danywalls/how-to-create-one-click-mcp-installation-deep-links-for-cursor-and-vs-code-5g5k>
