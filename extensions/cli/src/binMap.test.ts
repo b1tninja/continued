@@ -1,4 +1,5 @@
 import { readFileSync } from "fs";
+
 import { describe, expect, it } from "vitest";
 
 describe("package.json bin map", () => {
