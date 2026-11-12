@@ -129,6 +129,7 @@ import {
   ContextItemId,
   ContextItemWithId,
   IdeSettings,
+  McpOauthSettings,
   ModelDescription,
   Position,
   RangeInFile,
@@ -193,6 +194,7 @@ import {
 } from "./config/workspace/workspaceBlocks";
 import { MCPManagerSingleton } from "./context/mcp/MCPManagerSingleton";
 import { performAuth, removeMCPAuth } from "./context/mcp/MCPOauth";
+import { oauthOptionsFromSettings } from "./context/mcp/mcpOauthSettings";
 import { myersDiff } from "./diff/myers";
 import { ApplyAbortManager } from "./edit/applyAbortManager";
 import { streamDiffLines } from "./edit/streamDiffLines";
@@ -1386,9 +1388,9 @@ export class Core {
     on("mcp/startAuthentication", async (msg) => {
       const manager = MCPManagerSingleton.getInstance();
       const connection = manager.getConnection(msg.data.serverId);
-      const callbackPort = (
-        connection?.options as { oauth?: { callbackPort?: number } } | undefined
-      )?.oauth?.callbackPort;
+      const oauthSettings = (
+        connection?.options as { oauth?: McpOauthSettings } | undefined
+      )?.oauth;
       const oauthScope = connection
         ? (
             await import("./context/mcp/workspaceMcpPolicy")
@@ -1405,7 +1407,7 @@ export class Core {
           this.ide,
           // same proxy / CA settings as the connection itself
           {
-            callbackPort,
+            ...oauthOptionsFromSettings(oauthSettings),
             fetchFn: connection?.getFetch() as any,
             oauthScope,
           },
