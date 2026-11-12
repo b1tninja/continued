@@ -20,6 +20,7 @@ import {
   listToolsPaged,
 } from "./mcpClientLists";
 import { connectModernIfSupported } from "./mcpModernConnect";
+import { StdioOutputBuffer } from "./stdioOutput";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import {
   StreamableHTTPClientTransport,
@@ -131,10 +132,8 @@ class MCPConnection {
   public resourceTemplates: MCPResourceTemplate[] = [];
   private transport: Transport;
   private connectionPromise: Promise<unknown> | null = null;
-  private stdioOutput: { stdout: string; stderr: string } = {
-    stdout: "",
-    stderr: "",
-  };
+  private stdioStderr = new StdioOutputBuffer();
+  private stdioEnv: Record<string, string> = {};
 
   constructor(
     public options: InternalMcpOptions,
@@ -287,7 +286,7 @@ class MCPConnection {
     this.resourceTemplates = [];
     this.errors = [];
     this.infos = [];
-    this.stdioOutput = { stdout: "", stderr: "" };
+    this.stdioStderr = new StdioOutputBuffer();
 
     this.abortController.abort();
     this.abortController = new AbortController();
@@ -557,18 +556,15 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
             this.infos.push(this.signInGuidance(!!authProvider));
           }
 
-          // Include stdio output if available for stdio transport
-          if (
-            this.options.type === "stdio" &&
-            (this.stdioOutput.stdout || this.stdioOutput.stderr)
-          ) {
-            errorMessage += "\n\nProcess output:";
-            if (this.stdioOutput.stdout) {
-              errorMessage += `\nSTDOUT:\n${this.stdioOutput.stdout}`;
-            }
-            if (this.stdioOutput.stderr) {
-              errorMessage += `\nSTDERR:\n${this.stdioOutput.stderr}`;
-            }
+          // Include stderr if the stdio server wrote any. Capped, and masked
+          // with the shared secret scanner. stdout is the protocol channel
+          // and is not captured.
+          if (this.options.type === "stdio" && !this.stdioStderr.isEmpty) {
+            errorMessage += `
+
+Process output:
+STDERR:
+${this.stdioStderr.render(this.stdioEnv)}`;
           }
 
           this.status = "error";
@@ -847,8 +843,9 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
     });
 
     // Capture stdio output for better error reporting
+    this.stdioEnv = env;
     transport.stderr?.on("data", (data: Buffer) => {
-      this.stdioOutput.stderr += data.toString();
+      this.stdioStderr.append(data.toString());
     });
 
     return transport;

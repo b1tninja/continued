@@ -365,6 +365,38 @@ describe("MCPConnection", () => {
       // Starts a real node process, which can take longer than the 5 s default
       // on a loaded runner.
     }, 30_000);
+
+    it("masks secrets and caps the stderr shown in the connect-failure message", async () => {
+      vi.restoreAllMocks();
+      // Assembled at run time so the file holds no literal that looks like a key.
+      const canary = ["AKIA", "QXZN2M4K", "KPQR5TWV"].join("");
+      const envSecret = "plain-looking-secret-value-77";
+      const conn = new MCPConnection({
+        name: "noisy-mcp",
+        id: "noisy-id",
+        type: "stdio",
+        command: "node",
+        args: [
+          "-e",
+          `console.error("key " + process.env.NOISY_API_KEY + " and ${canary}");` +
+            `console.error("x".repeat(200000));` +
+            `console.error("final words"); process.exit(1);`,
+        ],
+        env: { NOISY_API_KEY: envSecret },
+        timeout: 5000,
+      });
+
+      await conn.connectClient(false, new AbortController().signal);
+
+      expect(conn.status).toBe("error");
+      const message = conn.errors[0];
+      expect(message).toContain("STDERR:");
+      expect(message).toContain("final words");
+      expect(message).not.toContain(canary);
+      expect(message).not.toContain(envSecret);
+      expect(message).toContain("characters omitted");
+      expect(message.length).toBeLessThan(10_000);
+    }, 30_000);
   });
 
   // Needs the real filesystem MCP server from npm and times out in CI.
