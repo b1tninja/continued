@@ -18,6 +18,7 @@ import {
   LoopQuestionRow,
   PlanDecisionRow,
 } from "../QuestionPanel/QuestionPanel";
+import { announce } from "../a11y/announcer";
 import { useOpenQuestions } from "../QuestionPanel/useOpenQuestions";
 import { useMainEditor } from "../mainInput/TipTapEditor";
 import { jumpToPlan } from "./LoopStatusLine";
@@ -80,6 +81,11 @@ export function NeedsYouTray() {
     useOpenQuestions();
   const [index, setIndex] = useState(0);
   const [bulkError, setBulkError] = useState<string>();
+  // The error is shown in the tray; the existing announcer says it, so the tray
+  // adds no live region of its own
+  useEffect(() => {
+    if (bulkError) announce(maskCommandForDisplay(bulkError), "assertive");
+  }, [bulkError]);
   const [bulkBusy, setBulkBusy] = useState(false);
 
   useLoopAnnouncements(loop, count);
@@ -288,7 +294,10 @@ export function NeedsYouTray() {
             </div>
           )}
           {bulkError && (
-            <div role="alert" className="mt-0.5 break-words text-error">
+            <div
+              data-testid="needs-you-bulk-error"
+              className="mt-0.5 break-words text-error"
+            >
               {maskCommandForDisplay(bulkError)}
             </div>
           )}

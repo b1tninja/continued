@@ -800,7 +800,7 @@ describe("Loop mode", () => {
     );
   });
 
-  test("with Questions Cautious the same irreversible question waits in the panel", async () => {
+  test("with Questions Cautious the same irreversible question waits in the tray", async () => {
     const h = await setup(["Drop the old table"]);
     h.turns.push(
       ask(
@@ -816,8 +816,9 @@ describe("Loop mode", () => {
     await waitFor(() => expect(h.loop().status).toBe("waiting"));
     expect(h.loop().questions[0].answerId).toBeUndefined();
     expect(h.loop().autoDecisions).toBeUndefined();
+    // In a loop the question is in the Needs you tray, not the panel
     expect(
-      document.querySelector("[data-testid=question-panel]"),
+      document.querySelector("[data-testid=needs-you-question]"),
     ).not.toBeNull();
   });
 
