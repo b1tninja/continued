@@ -181,29 +181,43 @@ function withTrailingSlash(url: string): string {
   return url.endsWith("/") ? url : `${url}/`;
 }
 
+/** Pages of 100 models read at most: a bound on a misbehaving gateway. */
+const ANTHROPIC_MAX_PAGES = 10;
+
 async function fetchAnthropicModels(
   apiKey?: string,
   apiBase?: string,
   requestOptions?: RequestOptions,
 ): Promise<FetchedModel[]> {
   const root = withTrailingSlash(apiBase || "https://api.anthropic.com/v1/");
-  const url = new URL("models", root);
-  url.searchParams.set("limit", "100");
-  const response = await networkFetch(
-    url,
-    {
-      headers: {
-        "x-api-key": apiKey ?? "",
-        "anthropic-version": "2023-06-01",
+  const rows: any[] = [];
+  let afterId: string | undefined;
+  for (let page = 0; page < ANTHROPIC_MAX_PAGES; page++) {
+    const url = new URL("models", root);
+    url.searchParams.set("limit", "100");
+    if (afterId) url.searchParams.set("after_id", afterId);
+    const response = await networkFetch(
+      url,
+      {
+        headers: {
+          "x-api-key": apiKey ?? "",
+          "anthropic-version": "2023-06-01",
+        },
       },
-    },
-    requestOptions,
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to fetch Anthropic models: ${response.status}`);
+      requestOptions,
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Anthropic models: ${response.status}`);
+    }
+    const data = await response.json();
+    rows.push(...(data.data ?? []));
+    // `has_more` and `last_id` are the documented cursor: `last_id` is the
+    // `after_id` of the next page.
+    const next: unknown = data.last_id;
+    if (!data.has_more || typeof next !== "string" || next === afterId) break;
+    afterId = next;
   }
-  const data = await response.json();
-  return (data.data ?? []).map((m: any) => ({
+  return rows.map((m: any) => ({
     name: m.display_name ?? m.id,
     modelId: m.id,
     icon: "anthropic.png",
