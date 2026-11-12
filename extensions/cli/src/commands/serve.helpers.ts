@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import type { IncomingHttpHeaders } from "node:http";
 
 import chalk from "chalk";
 import type { ChatHistoryItem, Session, ToolStatus } from "core/index.js";
@@ -32,8 +33,8 @@ import {
  * "cn serve"). The server takes messages, approvals and loop answers, and
  * will take the policy levels, so anything that can reach the port can act
  * as the person. It listens on loopback unless `--host` says otherwise.
- * Every request carries a bearer token (serve.auth.ts makes one when none
- * is given), sent in the Authorization header and nowhere else. The Host
+ * A bearer token is optional on loopback and required off it; when one is
+ * given every request carries it, in the Authorization header and nowhere else. The Host
  * header must name the interface the server is bound to, and a request that
  * carries an Origin header is refused unless `--allow-origin` lists it.
  */
@@ -143,7 +144,7 @@ export interface ServeRequestProblem {
  * when the Host and Origin headers are acceptable.
  */
 export function serveRequestProblem(
-  headers: { host?: string; origin?: string },
+  headers: { host?: string; origin?: string; secFetchSite?: string },
   boundHost: string,
   options: { port?: number; allowedOrigins?: readonly string[] } = {},
 ): ServeRequestProblem | undefined {
@@ -162,7 +163,44 @@ export function serveRequestProblem(
         "Requests that carry an Origin header are refused unless the origin is allowed with --allow-origin.",
     };
   }
+  // A browser says how the request relates to the page that made it. "none"
+  // is the person typing the address; anything else is a page, so refuse. No
+  // header at all is a client that is not a browser (curl, Node, the TUI).
+  const site = headers.secFetchSite?.trim();
+  if (site !== undefined && site.toLowerCase() !== "none") {
+    return {
+      status: 403,
+      error: "Requests made by a web page (Sec-Fetch-Site) are refused.",
+    };
+  }
   return undefined;
+}
+
+/** Methods that carry no body the server reads */
+const BODYLESS_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * 415 when a request that carries a body is not JSON. A cross-site form or a
+ * text/plain fetch is a "simple" request a page can send without a preflight;
+ * refusing every non-JSON body closes that. A POST with no body (/pause,
+ * /exit) needs no content type.
+ */
+export function bodyContentTypeProblem(req: {
+  method: string;
+  headers: IncomingHttpHeaders;
+}): { status: 415; error: string } | undefined {
+  if (BODYLESS_METHODS.has(req.method.toUpperCase())) return undefined;
+  const length = Number(req.headers["content-length"] ?? 0);
+  const chunked = req.headers["transfer-encoding"] !== undefined;
+  if (!(length > 0) && !chunked) return undefined;
+  const type = (headerValue(req.headers["content-type"]) ?? "")
+    .trim()
+    .toLowerCase();
+  if (type.startsWith("application/json")) return undefined;
+  return {
+    status: 415,
+    error: "A request body must be sent as application/json.",
+  };
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {
@@ -172,7 +210,7 @@ function headerValue(value: string | string[] | undefined): string | undefined {
 
 export interface ServeGuardOptions {
   boundHost: string;
-  /** The bearer token; undefined only with `--no-auth` */
+  /** The bearer token; undefined when none was given (loopback only) */
   token: string | undefined;
   port?: number;
   allowedOrigins?: readonly string[];
@@ -191,12 +229,21 @@ export function installServeGuards(
   app.use((req: Request, res: Response, next: NextFunction) => {
     const origin = headerValue(req.headers.origin);
     const problem = serveRequestProblem(
-      { host: headerValue(req.headers.host), origin },
+      {
+        host: headerValue(req.headers.host),
+        origin,
+        secFetchSite: headerValue(req.headers["sec-fetch-site"]),
+      },
       boundHost,
       { port, allowedOrigins },
     );
     if (problem) {
       res.status(problem.status).json({ error: problem.error });
+      return;
+    }
+    const bodyProblem = bodyContentTypeProblem(req);
+    if (bodyProblem) {
+      res.status(bodyProblem.status).json({ error: bodyProblem.error });
       return;
     }
     // An allowed origin gets its own name back, never a wildcard. The

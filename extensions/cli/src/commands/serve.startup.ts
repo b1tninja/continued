@@ -2,11 +2,7 @@ import chalk from "chalk";
 
 import { setApprovalsAnsweredWithoutAuth } from "../audit/cliAudit.js";
 
-import {
-  resolveServeAuth,
-  type ServeAuth,
-  writeServeTokenFile,
-} from "./serve.auth.js";
+import { resolveServeAuth, type ServeAuth } from "./serve.auth.js";
 import {
   DEFAULT_SERVE_HOST,
   isLoopbackHost,
@@ -16,32 +12,24 @@ import {
 export interface ServeAccess {
   host: string;
   auth: ServeAuth;
-  /** The bearer token, absent only with --no-auth */
+  /** The bearer token, absent when no token was given (loopback only) */
   token: string | undefined;
-  /** Where a generated token was written */
-  tokenFile: string | undefined;
   allowedOrigins: string[];
 }
 
 /**
- * Work out who may reach the server from the options, write a generated
- * token to its owner-only file, and tell the audit whether approvals arrive
+ * Work out who may reach the server from the options and tell the audit whether approvals arrive
  * authenticated. Throws a message when the options are not allowed.
  */
-export function prepareServeAccess(
-  options: {
-    host?: string;
-    token?: string;
-    auth?: boolean;
-    allowOrigin?: string[];
-  },
-  port: number,
-): ServeAccess {
+export function prepareServeAccess(options: {
+  host?: string;
+  token?: string;
+  allowOrigin?: string[];
+}): ServeAccess {
   const host = options.host ?? DEFAULT_SERVE_HOST;
   const resolved = resolveServeAuth({
     host,
     token: options.token,
-    noAuth: options.auth === false,
     loopback: isLoopbackHost,
   });
   if ("problem" in resolved) throw new Error(resolved.problem);
@@ -53,16 +41,11 @@ export function prepareServeAccess(
       `--allow-origin takes an exact http(s) origin such as http://localhost:3000, not "${badOrigin}".`,
     );
   }
-  const tokenFile =
-    auth.mode === "token" && auth.source === "generated"
-      ? writeServeTokenFile(port, auth.token)
-      : undefined;
   setApprovalsAnsweredWithoutAuth(auth.mode === "none");
   return {
     host,
     auth,
     token: auth.mode === "token" ? auth.token : undefined,
-    tokenFile,
     allowedOrigins,
   };
 }
@@ -71,8 +54,6 @@ export interface ServeBanner {
   host: string;
   port: number;
   auth: ServeAuth;
-  /** Where the generated token was written */
-  tokenFile?: string;
   allowedOrigins: readonly string[];
   timeoutSeconds: number;
 }
@@ -87,16 +68,15 @@ export function serveWarnings(b: Pick<ServeBanner, "host" | "auth">): string[] {
   }
   if (b.auth.mode === "none") {
     out.push(
-      "WARNING: --no-auth: no access token. Any local process, and any program running as any user on this computer, can act as you through this server.",
+      "No access token: any program running as any user on this computer can reach this server. Pass --token to require one. Approvals that arrive over it are recorded as the system's, not the person's.",
     );
   }
   return out;
 }
 
 /**
- * The start-up text. A generated token is printed here and nowhere else: not
- * in the log, not in /state. A token given with --token or the environment is
- * never echoed.
+ * The start-up text. A token given with --token or the environment is never
+ * echoed.
  */
 export function printServeBanner(b: ServeBanner): void {
   console.log(chalk.green(`Server started on http://${b.host}:${b.port}`));
@@ -105,12 +85,12 @@ export function printServeBanner(b: ServeBanner): void {
     console.log(
       chalk.dim("  Every request needs: Authorization: Bearer <token>"),
     );
-    if (b.auth.source === "generated") {
-      console.log(`  Access token (shown once): ${chalk.bold(b.auth.token)}`);
-      if (b.tokenFile) {
-        console.log(chalk.dim(`  Also saved, owner-only, in ${b.tokenFile}`));
-      }
-    }
+  } else {
+    console.log(
+      chalk.dim(
+        "  No access token: only this computer can reach it. Pass --token to require one",
+      ),
+    );
   }
   if (b.allowedOrigins.length) {
     console.log(chalk.dim(`  Allowed origins: ${b.allowedOrigins.join(", ")}`));
@@ -144,4 +124,27 @@ export function printServeBanner(b: ServeBanner): void {
       `\nServer will shut down after ${b.timeoutSeconds} seconds of inactivity`,
     ),
   );
+}
+
+/** Exit status for a serve option that is not allowed (a usage error, as in `secrets`) */
+export const SERVE_REFUSED_EXIT_CODE = 2;
+
+/**
+ * prepareServeAccess, but a refusal ends the process the way a CLI should:
+ * one line on stderr saying what was refused and how to fix it, exit status 2.
+ * The message never carries a token value.
+ */
+export function prepareServeAccessOrExit(
+  options: Parameters<typeof prepareServeAccess>[0],
+): ServeAccess {
+  try {
+    return prepareServeAccess(options);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `continuous serve: refused to start. ${reason.replace(/\s+/g, " ")}` +
+        "\n",
+    );
+    process.exit(SERVE_REFUSED_EXIT_CODE);
+  }
 }

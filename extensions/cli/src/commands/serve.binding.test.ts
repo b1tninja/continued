@@ -125,6 +125,7 @@ describe("serve request guards", () => {
     port: number,
     headers: http.OutgoingHttpHeaders,
     method = "POST",
+    body?: string,
   ): Promise<{ status: number; body: string }> {
     return new Promise((resolve, reject) => {
       const req = http.request(
@@ -141,7 +142,7 @@ describe("serve request guards", () => {
         },
       );
       req.on("error", reject);
-      req.end();
+      req.end(body);
     });
   }
 
@@ -199,5 +200,54 @@ describe("serve request guards", () => {
       authorization: `Bearer ${TOKEN}`,
     });
     expect(res.status).toBe(200);
+  });
+
+  it("refuses a request a web page made (Sec-Fetch-Site), allows none and absent", async () => {
+    const port = await start("127.0.0.1", null);
+    const host = `127.0.0.1:${port}`;
+    for (const site of ["cross-site", "same-site", "same-origin"]) {
+      const res = await request(port, { host, "sec-fetch-site": site });
+      expect(res.status).toBe(403);
+      expect(res.body).toContain("Sec-Fetch-Site");
+    }
+    expect(
+      (await request(port, { host, "sec-fetch-site": "none" })).status,
+    ).toBe(200);
+    expect((await request(port, { host })).status).toBe(200);
+  });
+
+  it("answers 415 to a body that is not JSON, and still takes JSON and bodiless posts", async () => {
+    const port = await start("127.0.0.1", null);
+    const host = `127.0.0.1:${port}`;
+    const text = "hello";
+    const length = String(Buffer.byteLength(text));
+    const plain = await request(
+      port,
+      { host, "content-type": "text/plain", "content-length": length },
+      "POST",
+      text,
+    );
+    expect(plain.status).toBe(415);
+    const none = await request(
+      port,
+      { host, "content-length": length },
+      "POST",
+      text,
+    );
+    expect(none.status).toBe(415);
+    const json = await request(
+      port,
+      {
+        host,
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "2",
+      },
+      "POST",
+      "{}",
+    );
+    expect(json.status).toBe(200);
+    // /pause and /exit post nothing: no content type is needed
+    expect((await request(port, { host })).status).toBe(200);
+    expect((await request(port, { host }, "GET")).status).toBe(404);
   });
 });
