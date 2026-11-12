@@ -1,5 +1,5 @@
 // Screenshot harness entry. URL query:
-//   ?fixture=<name>&theme=dark|light&font=<px>
+//   ?fixture=<name>&theme=dark|light|hc&font=<px>
 // Renders the real <App/> against the real redux store with MockIdeMessenger,
 // then sets `window.__shotReady = true` once the fixture is applied and the
 // page has settled, so the driver knows when to take the picture.
@@ -27,7 +27,9 @@ declare global {
 }
 
 const params = new URLSearchParams(window.location.search);
-const theme: ThemeName = params.get("theme") === "light" ? "light" : "dark";
+const themeParam = params.get("theme");
+const theme: ThemeName =
+  themeParam === "light" || themeParam === "hc" ? themeParam : "dark";
 const fixtureName = params.get("fixture") ?? "idle";
 
 // A webview has no `process`. core/util/scrubEnvironment.ts reads

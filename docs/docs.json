@@ -101,6 +101,7 @@
               "customize/workspace-trust",
               "customize/vscode-chat-and-agents",
               "customize/mcp-tools",
+              "customize/web-search",
               "customize/rules",
               "customize/prompts",
               {
@@ -203,6 +204,7 @@
               "guides/plan-mode-guide",
               "guides/ollama-guide",
               "guides/cn-serve",
+              "cli/run-limits",
               "guides/acp",
               "guides/instinct",
               "guides/running-continue-without-internet",

@@ -27,6 +27,13 @@ export interface PolicyFileSettings extends PolicySettings {
   floor?: string[];
   /** MCP servers whose read-only hints the person trusts, by display name. */
   mcpServers?: Record<string, "trusted">;
+  /**
+   * MCP tools the person lets Plan mode use, whatever the server claims:
+   * "server/tool", "server/*" or "server" (plans/research/tr-owner-decisions.md, 1).
+   */
+  planMcpTools?: string[];
+  /** Offer the terminal in Plan mode (the CLI; it still asks). Default false. */
+  planAllowTerminal?: boolean;
 }
 
 export interface PolicyFileRead {
@@ -120,6 +127,13 @@ export function parsePolicyFile(text: string | undefined): PolicyFileRead {
     }
     settings.mcpServers = servers;
   }
+  if (Array.isArray(raw.plan?.mcpTools)) {
+    settings.planMcpTools = raw.plan.mcpTools.filter(
+      (t: unknown): t is string => typeof t === "string" && t.length > 0,
+    );
+  }
+  const allowTerminal = asBool(raw.plan?.allowTerminal);
+  if (allowTerminal !== undefined) settings.planAllowTerminal = allowTerminal;
   return { settings, notices };
 }
 

@@ -32,6 +32,11 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: vi.fn(),
 }));
 
+const { createWebFetchMock } = vi.hoisted(() => ({
+  createWebFetchMock: vi.fn(() => vi.fn()),
+}));
+vi.mock("@continuedev/fetch", () => ({ createWebFetch: createWebFetchMock }));
+
 vi.mock("https", () => ({
   Agent: vi.fn().mockImplementation(function () {
     return { rejectUnauthorized: false };
@@ -221,10 +226,9 @@ describe("MCPService", () => {
       ).resolves.not.toThrow();
     });
 
-    it("should create HttpsAgent when verifySsl is false for SSE transport", async () => {
+    it("should pass verifySsl: false to the shared fetch for SSE transport", async () => {
       const { SSEClientTransport } =
         await import("@modelcontextprotocol/sdk/client/sse.js");
-      const { Agent: HttpsAgent } = await import("https");
 
       const sseAssistant: AssistantConfig = {
         name: "sse-assistant",
@@ -246,17 +250,13 @@ describe("MCPService", () => {
       expect(SSEClientTransport).toHaveBeenCalledWith(
         expect.any(URL),
         expect.objectContaining({
+          fetch: expect.any(Function),
           eventSourceInit: expect.objectContaining({
             fetch: expect.any(Function),
           }),
-          requestInit: expect.objectContaining({
-            agent: expect.any(Object),
-          }),
         }),
       );
-      expect(HttpsAgent).toHaveBeenCalledWith({
-        rejectUnauthorized: false,
-      });
+      expect(createWebFetchMock).toHaveBeenCalledWith({ verifySsl: false });
     });
 
     it("should not create HttpsAgent when verifySsl is true for SSE transport", async () => {
@@ -303,10 +303,9 @@ describe("MCPService", () => {
       expect(HttpsAgent).not.toHaveBeenCalled();
     });
 
-    it("should create HttpsAgent when verifySsl is false for streamable-http transport", async () => {
+    it("should pass verifySsl: false to the shared fetch for streamable-http transport", async () => {
       const { StreamableHTTPClientTransport } =
         await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
-      const { Agent: HttpsAgent } = await import("https");
 
       const httpAssistant: AssistantConfig = {
         name: "http-assistant",
@@ -327,15 +326,9 @@ describe("MCPService", () => {
 
       expect(StreamableHTTPClientTransport).toHaveBeenCalledWith(
         expect.any(URL),
-        expect.objectContaining({
-          requestInit: expect.objectContaining({
-            agent: expect.any(Object),
-          }),
-        }),
+        expect.objectContaining({ fetch: expect.any(Function) }),
       );
-      expect(HttpsAgent).toHaveBeenCalledWith({
-        rejectUnauthorized: false,
-      });
+      expect(createWebFetchMock).toHaveBeenCalledWith({ verifySsl: false });
     });
 
     it("should not create HttpsAgent when verifySsl is true for streamable-http transport", async () => {

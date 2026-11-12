@@ -2018,6 +2018,8 @@ export interface Tool {
   faviconUrl?: string;
   group: string;
   originalFunctionName?: string;
+  /** An MCP tool from a server the open folder brought, not the person's own config */
+  mcpFromWorkspace?: boolean;
   systemMessageDescription?: {
     prefix: string;
     exampleArgs?: Array<[string, string | number]>;
@@ -2097,6 +2099,12 @@ export interface BaseCompletionOptions {
   reasoning?: boolean;
   reasoningBudgetTokens?: number;
   promptCaching?: boolean;
+  /**
+   * Advanced. `true` leaves temperature, topP and topK out of the request;
+   * `false` sends them even to a Claude model that refuses them (4.7 and
+   * later); unset follows the model.
+   */
+  omitSampling?: boolean;
   /**
    * Lifetime of prompt cache entries written by this request. Only honoured by
    * providers that support it (Anthropic and Claude models on Bedrock); omit
@@ -2331,6 +2339,12 @@ export type InternalSseMcpOptions = BaseInternalMCPOptions & {
 export interface McpOauthSettings {
   /** Port of the local redirect server used while signing in (default 3000). */
   callbackPort?: number;
+  /** Pre-registered OAuth client id; skips dynamic client registration. */
+  clientId?: string;
+  /** Secret of the pre-registered client (use a secrets reference). */
+  clientSecret?: string;
+  /** Host in the redirect URI: "localhost" (default) or "127.0.0.1". */
+  redirectHost?: "localhost" | "127.0.0.1";
 }
 
 export type InternalWebsocketMcpOptions = BaseInternalMCPOptions & {

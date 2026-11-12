@@ -4,8 +4,10 @@ import chalk from "chalk";
 import { ChatHistoryItem, Session } from "core";
 import { ChatDescriber } from "core/util/chatDescriber.js";
 
+import * as runLimits from "../budget/runLimits.js";
 import { compactChatHistory, findCompactionIndex } from "../compaction.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
+import { runStopHooks } from "../hooks/lifecycleHooks.js";
 import {
   describePromptBlocked,
   runUserPromptSubmitHooks,
@@ -32,6 +34,7 @@ import { startTUIChat } from "../ui/index.js";
 import { gracefulExit } from "../util/exit.js";
 import { formatAnthropicError, formatError } from "../util/formatError.js";
 import { logger } from "../util/logger.js";
+import { describeNetworkFailure } from "../util/networkError.js";
 import { question } from "../util/prompt.js";
 import { prependPrompt } from "../util/promptProcessor.js";
 import {
@@ -40,47 +43,8 @@ import {
 } from "../util/tokenizer.js";
 
 import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
-
-/**
- * Processes and validates JSON output for headless mode
- * @param response - The raw response from the LLM
- * @returns Valid JSON string
- */
-function processJsonOutput(response: string): string {
-  const trimmedResponse = response.trim();
-
-  try {
-    // Try to parse the response as JSON to validate it
-    JSON.parse(trimmedResponse);
-    // If it parses successfully, return as-is
-    return trimmedResponse;
-  } catch {
-    // If it's not valid JSON, wrap it in a JSON object
-    return JSON.stringify({
-      response: trimmedResponse,
-      status: "success",
-      note: "Response was not valid JSON, so it was wrapped in a JSON object",
-    });
-  }
-}
-
-/**
- * Strips <think></think> tags and excess whitespace from response
- * @param response - The raw response from the LLM
- * @returns Cleaned response
- */
-function stripThinkTags(response: string): string {
-  // Remove <think></think> tags and their content
-  let cleaned = response.replace(/<think>[\s\S]*?<\/think>/g, "");
-
-  // Remove excess whitespace: multiple consecutive newlines become single newlines
-  cleaned = cleaned.replace(/\n\s*\n\s*\n/g, "\n\n");
-
-  // Trim leading and trailing whitespace
-  cleaned = cleaned.trim();
-
-  return cleaned;
-}
+import { processJsonOutput, stripThinkTags } from "./chatOutput.js";
+import { printRetirementNotice } from "./retirementNotice.js";
 
 export interface ChatOptions extends ExtendedCommandOptions {
   headless?: boolean;
@@ -416,6 +380,8 @@ async function processMessage(
     // Process and output response in headless mode
     processAndOutputResponse(finalResponse, isHeadless, silent, format);
 
+    await runStopHooks(finalResponse);
+
     // Save session after each successful response
     updateSessionHistory(services.chatHistory.getHistory());
   } catch (e: any) {
@@ -477,6 +443,13 @@ async function runHeadlessMode(
   if (!llmApi) {
     throw new Error("No LLM API instance found.");
   }
+
+  // Run limits (--max-budget-usd, --max-turns, --max-duration): refuses a
+  // dollar budget on an unpriced model before anything is sent
+  runLimits.startRunLimits(options, {
+    provider: model.provider,
+    model: model.model,
+  });
 
   // Initialize service-driven history (resume if requested)
   const chatHistory = await initializeChatHistory(options);
@@ -556,8 +529,8 @@ async function runHeadlessMode(
     }
   }
 
-  // exit after headless mode completes
-  await gracefulExit(0);
+  // exit after headless mode completes: a run limit has its own exit code
+  await gracefulExit(runLimits.exitCodeOfRun(options.format));
 }
 
 export async function chat(prompt?: string, options: ChatOptions = {}) {
@@ -582,6 +555,8 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
       return;
     }
 
+    runLimits.assertLimitsEnforceable(options);
+
     // Interactive path - requires TTY for Ink rendering
     // If not in headless mode, use unified initialization with TUI
     if (!options.headless) {
@@ -594,6 +569,7 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
         toolPermissionOverrides: permissionOverrides,
       });
 
+      printRetirementNotice();
       seedPlanBuild();
 
       const agentFileState = await serviceContainer.get<AgentFileServiceState>(
@@ -637,12 +613,15 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
   } catch (error: any) {
     const err = error instanceof Error ? error : new Error(String(error));
 
+    const network = describeNetworkFailure(err);
+
     // In headless mode, output error as JSON to stdout
-    if (options.headless) {
-      const errorOutput = {
-        status: "error",
-        message: err.message || String(err),
-      };
+    if (options.headless && network && options.format !== "json") {
+      safeStderr(`Error: ${network.message}\n`);
+    } else if (options.headless) {
+      const errorOutput = network
+        ? { status: "error", ...network }
+        : { status: "error", message: err.message || String(err) };
       safeStderr(JSON.stringify(errorOutput) + "\n");
     } else {
       // Use headless-aware error logging for non-headless mode

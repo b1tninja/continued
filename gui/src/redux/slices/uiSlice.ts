@@ -65,6 +65,10 @@ export interface PolicyExtras {
   builtin?: Partial<Record<BuiltinRuleId, boolean>>;
   /** Deny rules that bind at every level; read from the file, never written here */
   floor?: string[];
+  /** MCP tools Plan mode may use ("server/tool", "server/*"); read from the file, never written here */
+  planMcpTools?: string[];
+  /** MCP servers whose read-only hints the person trusts; read from the file, never written here */
+  trustedMcpServers?: string[];
 }
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";
