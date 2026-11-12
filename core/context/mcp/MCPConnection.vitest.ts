@@ -358,7 +358,9 @@ describe("MCPConnection", () => {
       expect(conn.errors[0]).toContain("Process output:");
       expect(conn.errors[0]).toContain("STDERR:");
       expect(conn.errors[0]).toContain("Custom error message from stderr");
-    });
+      // Starts a real node process, which can take longer than the 5 s default
+      // on a loaded runner.
+    }, 30_000);
   });
 
   // Needs the real filesystem MCP server from npm and times out in CI.

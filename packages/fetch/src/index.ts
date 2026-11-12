@@ -12,6 +12,7 @@ import { CertsCache, defaultUseSystemCa } from "./certs.js";
 import { fetchwithRequestOptions } from "./fetch.js";
 import { getTlsErrorHint } from "./tlsErrors.js";
 import { redactBody, redactHeaderValue, redactUrl } from "./redact.js";
+import { getProxy, shouldBypassProxy } from "./util.js";
 import { createWebFetch } from "./webFetch.js";
 
 export {
@@ -20,12 +21,14 @@ export {
   createWebFetch,
   defaultUseSystemCa,
   fetchwithRequestOptions,
+  getProxy,
   getTlsErrorHint,
   needsCustomAgent,
   patchedFetch,
   redactBody,
   redactHeaderValue,
   redactUrl,
+  shouldBypassProxy,
   streamJSON,
   streamResponse,
   streamSse,
