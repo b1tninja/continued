@@ -109,11 +109,18 @@ function executeCommandHook(
     };
 
     // Use shell to execute the command (matches Claude Code behavior)
-    const shell = process.platform === "win32" ? "cmd.exe" : "/bin/sh";
-    const shellArgs =
-      process.platform === "win32"
-        ? ["/c", handler.command]
-        : ["-c", handler.command];
+    //
+    // On Windows the command line must reach cmd.exe verbatim. With an argv
+    // array Node escapes every inner double quote as \", so a quoted script
+    // path arrives mangled and the hook never runs. This is the same
+    // construction `shell: true` uses: `cmd.exe /d /s /c "<command>"`, where
+    // /s strips exactly the outer pair of quotes and keeps the rest as typed,
+    // and /d skips AutoRun commands.
+    const isWindows = process.platform === "win32";
+    const shell = isWindows ? (process.env.ComSpec ?? "cmd.exe") : "/bin/sh";
+    const shellArgs = isWindows
+      ? ["/d", "/s", "/c", `"${handler.command}"`]
+      : ["-c", handler.command];
 
     let settled = false;
     const finish = (result: HookExecutionResult) => {
@@ -130,6 +137,7 @@ function executeCommandHook(
       // started. On Windows taskkill /T walks the tree instead.
       detached: process.platform !== "win32",
       windowsHide: true,
+      windowsVerbatimArguments: isWindows,
     });
 
     const timer = setTimeout(() => {
