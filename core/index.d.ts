@@ -538,9 +538,24 @@ export type QuestionType =
   | "design"
   | "detail";
 
+/**
+ * Something the loop decided for the person under the policy they set (a
+ * re-plan it accepted, a question it answered). Always by `system`; `source`
+ * names the setting ("Plan edits: IDGAF", "Questions: Permissive").
+ */
+export interface LoopAutoDecision {
+  kind: "plan" | "question";
+  by: "system";
+  source: string;
+  text: string;
+  at: string;
+}
+
 export interface LoopQuestion {
   /** IDGAF: the agent decided this itself; it never reached the inbox */
   decidedAlone?: boolean;
+  /** Questions is permissive: the answer the system chose, and under which setting */
+  autoAnswer?: { text: string; by: "system"; source: string };
   id: string;
   /** The item it is about; none for a question about the whole plan */
   itemId?: string;
@@ -873,6 +888,8 @@ export interface LoopState {
   waitingSince?: string;
   /** Why the last re-plan did or did not start the next round by itself */
   replanReason?: string;
+  /** What the loop decided for the person by their policy, oldest first (capped) */
+  autoDecisions?: LoopAutoDecision[];
   /** Tool calls the person allowed from an approval question (grantKey) */
   grants: string[];
   /** A plan-wide answer asked to re-plan now */

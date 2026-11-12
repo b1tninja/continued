@@ -121,11 +121,14 @@ describe("Plan edits decides a re-plan", () => {
     ).toBe(true);
   });
 
-  test("Automatic waits: no reviewer for plans exists yet", () => {
+  test("Automatic goes on without a cap: no reviewer for plans exists yet", () => {
     expect(
-      replanDecision(loopWith({ plan: "automatic" }), before, plan("A", "B"))
-        .accept,
-    ).toBe(false);
+      replanDecision(
+        loopWith({ plan: "automatic" }),
+        before,
+        plan("A", "B", "1", "2", "3", "4", "5", "6"),
+      ).accept,
+    ).toBe(true);
   });
 
   test("a repair of just the failed item goes on at every level but Manual", () => {
@@ -177,7 +180,9 @@ describe("Questions decides who answers", () => {
   test("Permissive: the agent decides, except types you keep", () => {
     const loop = loopWith({ questions: "permissive" });
     expect(loopQuestionDecider(loop, "design")).toBe("agent");
-    expect(loopQuestionDecider(loop, "security")).toBe("person");
+    // the default list no longer holds a question back: only your own does
+    expect(loopQuestionDecider(loop, "security")).toBe("agent");
+    expect(loopQuestionDecider(loop, undefined)).toBe("agent");
     expect(
       loopQuestionDecider(
         loopWith({ questions: "permissive", youDecide: ["design"] }),
@@ -192,13 +197,15 @@ describe("Questions decides who answers", () => {
     ).toBe("person");
   });
 
-  test("an approval is never decided by the agent", () => {
+  test("an approval is never decided by the agent: at IDGAF it is refused, not held", () => {
     const held = holdQuestion(
       loopWith({ questions: "idgaf" }),
       { itemId: "1", question: "Run it?", kind: "approval" },
       T0,
     );
-    expect(held.ok && held.question.decidedAlone).toBeUndefined();
+    expect(held.ok && held.question.decidedAlone).toBe(true);
+    expect(held.ok && held.question.autoAnswer?.text).toMatch(/^Refused/);
+    expect(held.ok && held.loop.questions.some((q) => !q.answerId)).toBe(false);
   });
 });
 

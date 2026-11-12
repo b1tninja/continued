@@ -105,11 +105,11 @@ Two lists, and each level consults the lists the way the tool levels consult rul
 For a question:
 
 1. `access`: you, at every level.
-2. IDGAF: the agent decides.
+2. IDGAF: the agent decides, and nothing asks anywhere. Your own "you decide" list does not apply. Every surface (the extension's Questions panel, `cn`'s AskQuestion in the terminal UI, `-p` and `serve`, a loop's HoldQuestion, a plan's decisions made outside a loop, a held question left over from before the level changed, an item over its limit under Suggest, an MCP server's elicitation) answers by one rule: the `(recommended)` option, else the plan decision's pick, else the first option, else "No one is available to answer; use your best judgment and state the assumption". The record is `by: system`, source `Questions: IDGAF`, and the person sees one non-blocking line, `Auto-answered: <question> -> <answer>`. MCP elicitation takes the server's own defaults, or is declined with a note when a field has none, asks for a secret, or the form is a url (never an invented value). An approval that a loop would hold is refused instead, and a call at an IDGAF-level area that still asks (the floors no level lifts) is refused with its reason. An approval outside a loop stays with the Tool use, File edits and Context use levels, and Plan mode's own Build question is not a question the agent asks.
 3. Manual: you decide.
 4. Cautious: the type is on "agent decides": the agent decides. Otherwise you decide.
-5. Permissive: the type is on "you decide": you decide. Otherwise the agent decides.
-6. Automatic: "you decide" and `scope` send it to you, "agent decides" to the agent, and the reviewer answers `design` and `detail`; unsure or any failure sends it to you. The reviewer has no more information about your intent than the agent, so it is not asked about scope.
+5. Permissive: the type is on your own "you decide" list (not the default list): you decide. Otherwise the agent decides, and in a loop the system answers it (the `(recommended)` option, else the first, else "No one is available to answer; use your best judgment and state the assumption"), recorded as `system`.
+6. Automatic (the reviewer is not built, so as Permissive): your own "you decide" list sends it to you, otherwise the system answers it. The reviewer design below is the plan: "you decide" and `scope` send it to you, "agent decides" to the agent, and the reviewer answers `design` and `detail`; unsure or any failure sends it to you. The reviewer has no more information about your intent than the agent, so it is not asked about scope.
 
 A missing or unknown type counts as "you decide" at every level but IDGAF.
 

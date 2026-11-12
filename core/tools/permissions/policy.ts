@@ -547,24 +547,26 @@ export function questionDecider(
   const level = policy.levels.questions;
   if (level === "idgaf") return "agent";
   if (level === "manual") return "person";
-  if (!QUESTION_TYPES.includes(type as QuestionType)) return "person";
-  const known = type as QuestionType;
+  const known = QUESTION_TYPES.includes(type as QuestionType)
+    ? (type as QuestionType)
+    : undefined;
+  if (level === "automatic" || level === "permissive") {
+    // The person opted out of being asked: the agent's choice stands, whatever
+    // the question's type. Only a type the person put on their own "you
+    // decide" list (not the default list) still reaches them.
+    return known && policy.questions?.youDecide?.includes(known)
+      ? "person"
+      : "agent";
+  }
+  if (!known) return "person";
   if ((policy.questions?.youDecide ?? DEFAULT_YOU_DECIDE).includes(known)) {
     return "person";
   }
-  if (
-    (policy.questions?.agentDecides ?? DEFAULT_AGENT_DECIDES).includes(known)
-  ) {
-    return "agent";
-  }
-  switch (level) {
-    case "automatic":
-      return "reviewer";
-    case "permissive":
-      return "agent";
-    default:
-      return "person";
-  }
+  return (policy.questions?.agentDecides ?? DEFAULT_AGENT_DECIDES).includes(
+    known,
+  )
+    ? "agent"
+    : "person";
 }
 
 export function questionDelivery(
@@ -601,18 +603,15 @@ export function planHandoff(input: PlanHandoffInput): PlanHandoff {
   if (level === "idgaf") {
     return { decision: "go", reason: "Plan edits is set to IDGAF." };
   }
-  if (concern && builtinRuleOn(policy, "plan-keeps-checks")) {
-    return { decision: "wait", reason: concern };
-  }
   switch (level) {
     case "manual":
-      return { decision: "wait", reason: "Every plan waits for you." };
-    case "automatic":
-      return {
-        decision: "review",
-        reason: "A reviewer model judges this plan.",
-      };
+      return concern && builtinRuleOn(policy, "plan-keeps-checks")
+        ? { decision: "wait", reason: concern }
+        : { decision: "wait", reason: "Every plan waits for you." };
     case "cautious":
+      if (concern && builtinRuleOn(policy, "plan-keeps-checks")) {
+        return { decision: "wait", reason: concern };
+      }
       return added === 0 && !first
         ? { decision: "go", reason: "The re-plan adds no new to-dos." }
         : {
@@ -621,18 +620,44 @@ export function planHandoff(input: PlanHandoffInput): PlanHandoff {
               ? "The first plan waits for you."
               : `The re-plan adds ${count(added)}.`,
           };
+    case "automatic":
     case "permissive": {
-      if (first) return { decision: "go", reason: "Plan edits is Permissive." };
-      const max = policy.maxNewPlanItems ?? DEFAULT_MAX_NEW_PLAN_ITEMS;
-      return added <= max
+      // The person opted out of plan cards: a re-plan goes on, even one that
+      // changed a check (the loop's notice says so). A reviewer model for
+      // plans is not built, so Automatic goes on without a cap. At Permissive
+      // only the cap on new to-dos (the Plan edits setting) holds one back.
+      const name = policyLevelLabel("plan", level);
+      if (first) return { decision: "go", reason: `Plan edits is ${name}.` };
+      const max =
+        level === "permissive"
+          ? (policy.maxNewPlanItems ?? DEFAULT_MAX_NEW_PLAN_ITEMS)
+          : undefined;
+      return max !== undefined && added > max
         ? {
-            decision: "go",
-            reason: `The re-plan adds ${count(added)}, within ${max}.`,
-          }
-        : {
             decision: "wait",
             reason: `The re-plan adds ${count(added)}, more than ${max}.`,
+          }
+        : {
+            decision: "go",
+            reason: `Plan edits is ${name}: the re-plan goes on.`,
           };
     }
   }
+}
+
+/**
+ * The Questions levels at which nobody is asked: an answer is chosen for the
+ * agent (see core/util/autoAnswer.ts). The loop's own gates use this one test.
+ */
+export function questionsAutoAnswer(level: PolicyLevel): boolean {
+  return level === "automatic" || level === "permissive" || level === "idgaf";
+}
+
+/**
+ * Questions is IDGAF (a saved `yolo`, its old name, reads as IDGAF): nothing asks, in a loop or outside one, on any
+ * surface. The person's own "you decide" list does not apply, and a question
+ * is answered for the agent (core/util/autoAnswer.ts) rather than shown.
+ */
+export function questionsNeverAsk(level: PolicyLevel | undefined): boolean {
+  return typeof level === "string" && parsePolicyLevel(level) === "idgaf";
 }
