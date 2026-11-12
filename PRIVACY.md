@@ -33,6 +33,7 @@ Your messages, the files and tool output the agent reads, and the conversation s
 ## Contacts a third party only if you set it up
 
 - **Web search**: the `search_web` tool and `@web` exist only if you set `CONTINUOUS_WEB_SEARCH_URL` to a search endpoint you run or choose (optional `CONTINUOUS_WEB_SEARCH_KEY`, sent to that endpoint only). See [web search](docs/customize/web-search.mdx).
+- **Model catalogues**: provider setup contacts `ollama.com` or `openrouter.ai` (a plain GET, no key) only after you choose Download or Refresh for that provider.
 - **MCP servers** you add, and their sign-in pages.
 - **Pages you name**: `@url`, the `fetch_url` tool and docs indexing fetch the sites you point them at, directly from your machine.
 - **Docs on GitHub**: a docs entry on github.com uses the GitHub API.

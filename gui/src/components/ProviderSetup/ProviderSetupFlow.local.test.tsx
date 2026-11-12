@@ -1,6 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import type { ProviderSetupInfo } from "core/config/providerSetup";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetCatalogueAnswers } from "../../pages/AddNewModel/configs/fetchProviderModels";
 import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import { renderWithProviders } from "../../util/test/render";
 import { ProviderSetupFlow } from "./ProviderSetupFlow";
@@ -221,5 +222,106 @@ describe("ProviderSetupFlow: local server", () => {
       }),
     ).toBeTruthy();
     expect(screen.getByTestId("local-server-picker")).toBeTruthy();
+  });
+});
+
+describe("ProviderSetupFlow: catalogue fetch only on request", () => {
+  beforeEach(() => resetCatalogueAnswers());
+
+  function setup(fail = false) {
+    const { messenger, fetches } = messengerWith();
+    messenger.responseHandlers["models/fetch"] = async (req) => {
+      fetches.push(req);
+      if (fail) throw new Error("offline");
+      return [
+        {
+          name: "zz-test/new-model",
+          modelId: "zz-test/new-model",
+          contextLength: 8192,
+        },
+      ];
+    };
+    return { messenger, fetches };
+  }
+
+  const idle = () => new Promise((r) => setTimeout(r, 50));
+
+  it("sends no models/fetch on mount", async () => {
+    const { messenger, fetches } = setup();
+    await renderWithProviders(<ProviderSetupFlow onDone={vi.fn()} />, {
+      mockIdeMessenger: messenger,
+    });
+    await idle();
+    expect(fetches).toHaveLength(0);
+  });
+
+  for (const [id, host] of [
+    ["ollama", "ollama.com"],
+    ["openrouter", "openrouter.ai"],
+  ] as const) {
+    it(`${id}: prompt sends nothing; Download one request; Refresh one per click`, async () => {
+      const { messenger, fetches } = setup();
+      const { user } = await renderWithProviders(
+        <ProviderSetupFlow initialProvider={id} onDone={vi.fn()} />,
+        { mockIdeMessenger: messenger },
+      );
+      await idle();
+      expect(screen.getByText(new RegExp(`latest model list from ${host}`)));
+      expect(fetches).toHaveLength(0);
+      await user.click(screen.getByRole("button", { name: "Download" }));
+      await waitFor(() => expect(fetches).toHaveLength(1));
+      expect(fetches[0].provider).toBe(id);
+      expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
+      if (id === "openrouter") {
+        await user.type(screen.getByLabelText(/API key/i), "test-key");
+      }
+      await user.click(screen.getByRole("button", { name: "Next" }));
+      const btn = await screen.findByRole("button", {
+        name: `Refresh from ${host}`,
+      });
+      await user.click(btn);
+      await waitFor(() => expect(fetches).toHaveLength(2));
+      await user.click(btn);
+      await waitFor(() => expect(fetches).toHaveLength(3));
+    });
+  }
+
+  it("Not now sends nothing and keeps the bundled list", async () => {
+    const { messenger, fetches } = setup();
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="ollama" onDone={vi.fn()} />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.click(screen.getByRole("button", { name: "Not now" }));
+    expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByTestId("model-checklist")).toBeTruthy();
+    await idle();
+    expect(fetches).toHaveLength(0);
+  });
+
+  it("OpenRouter without a download says the list is not downloaded", async () => {
+    const { messenger } = setup();
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="openrouter" onDone={vi.fn()} />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.click(screen.getByRole("button", { name: "Not now" }));
+    await user.type(screen.getByLabelText(/API key/i), "test-key");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText(/Model list not downloaded/)).toBeTruthy();
+  });
+
+  it("keeps the bundled list and says so when offline", async () => {
+    const { messenger, fetches } = setup(true);
+    const { user } = await renderWithProviders(
+      <ProviderSetupFlow initialProvider="ollama" onDone={vi.fn()} />,
+      { mockIdeMessenger: messenger },
+    );
+    await user.click(screen.getByRole("button", { name: "Download" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText(/Could not reach ollama.com/)).toBeTruthy();
+    expect(fetches).toHaveLength(1);
+    expect(screen.getByTestId("model-checklist")).toBeTruthy();
   });
 });

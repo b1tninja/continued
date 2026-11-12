@@ -130,42 +130,68 @@ export async function fetchProviderModels(
   return fetchedToPackages(models, provider);
 }
 
-export async function initializeDynamicModels(ideMessenger: IIdeMessenger) {
-  const ollamaAutodetect = {
-    ...models.AUTODETECT,
-    params: { ...models.AUTODETECT.params, title: "Ollama" },
-  };
+/** Providers whose model catalogue is a public page on a third-party host. */
+export const CATALOGUE_HOSTS: Record<string, string> = {
+  ollama: "ollama.com",
+  openrouter: "openrouter.ai",
+};
 
-  if (providers.ollama) {
-    providers.ollama.popularPackages = [
-      ollamaAutodetect,
+/**
+ * Providers whose catalogue prompt was answered (Download or Not now) in this
+ * app session. Held in memory only; nothing is persisted.
+ */
+const answered = new Set<string>();
+export const catalogueAnswered = (id: string) => answered.has(id);
+export const markCatalogueAnswered = (id: string) => void answered.add(id);
+const bundled = {
+  ollama: providers.ollama?.packages,
+  openrouter: providers.openrouter?.packages,
+};
+/** Forget the answers and the downloaded lists (the bundled lists return). */
+export const resetCatalogueAnswers = () => {
+  answered.clear();
+  if (providers.ollama && bundled.ollama) {
+    providers.ollama.packages = bundled.ollama;
+  }
+  if (providers.openrouter && bundled.openrouter) {
+    providers.openrouter.packages = bundled.openrouter;
+  }
+};
+
+/**
+ * Fetch one provider's catalogue (Ollama or OpenRouter) and fold it into the
+ * provider's list. This contacts a third-party host, so it runs only when the
+ * user presses Refresh, never when the setup screen opens. Until then the
+ * bundled list stays. Returns false (and changes nothing) when nothing came
+ * back, e.g. offline.
+ */
+export async function refreshProviderCatalogue(
+  ideMessenger: IIdeMessenger,
+  providerId: string,
+): Promise<boolean> {
+  if (!CATALOGUE_HOSTS[providerId]) return false;
+  let fetched: FetchedModel[];
+  try {
+    fetched = await fetchModels(ideMessenger, providerId);
+  } catch {
+    return false;
+  }
+  if (fetched.length === 0) return false;
+  if (providerId === "ollama" && providers.ollama) {
+    const popular = [
+      {
+        ...models.AUTODETECT,
+        params: { ...models.AUTODETECT.params, title: "Ollama" },
+      },
       ...ollamaStaticModels,
     ];
-
-    try {
-      const fetched = await fetchModels(ideMessenger, "ollama");
-      const fetchedPkgs = fetched.map(toOllamaPackage);
-      const popularTitles = new Set(
-        providers.ollama.popularPackages.map((p) => p.title),
-      );
-      const additional = fetchedPkgs.filter((p) => !popularTitles.has(p.title));
-      providers.ollama.packages = [
-        ...providers.ollama.popularPackages,
-        ...additional,
-      ];
-    } catch (error) {
-      console.error("Failed to initialize Ollama models:", error);
-      providers.ollama.packages = [...providers.ollama.popularPackages];
-    }
+    const popularTitles = new Set(popular.map((p) => p.title));
+    const additional = fetched
+      .map(toOllamaPackage)
+      .filter((p) => !popularTitles.has(p.title));
+    providers.ollama.packages = [...popular, ...additional];
+  } else if (providerId === "openrouter" && providers.openrouter) {
+    providers.openrouter.packages = fetched.map(toOpenRouterPackage);
   }
-
-  try {
-    const fetched = await fetchModels(ideMessenger, "openrouter");
-    const packages = fetched.map(toOpenRouterPackage);
-    if (packages.length > 0 && providers.openrouter) {
-      providers.openrouter.packages = packages;
-    }
-  } catch (error) {
-    console.error("Failed to initialize OpenRouter models:", error);
-  }
+  return true;
 }
