@@ -72,8 +72,8 @@ describe("Queued messages", () => {
 
     // When the turn ends, both go as one message
     release();
-    await waitFor(
-      () => expect(userMessages(store)).toEqual(["first", "second\nthird"]),
+    await waitFor(() =>
+      expect(userMessages(store)).toEqual(["first", "second\nthird"]),
     );
     expect(store.getState().session.queuedMessages).toHaveLength(0);
   });
@@ -150,13 +150,12 @@ describe("Queued messages", () => {
     await typeAndPressEnter("do not lose me");
 
     // Saved while the turn is still running
-    await waitFor(
-      () =>
-        expect(
-          saves.some((s) =>
-            JSON.stringify(s.queuedMessages ?? []).includes("do not lose me"),
-          ),
-        ).toBe(true),
+    await waitFor(() =>
+      expect(
+        saves.some((s) =>
+          JSON.stringify(s.queuedMessages ?? []).includes("do not lose me"),
+        ),
+      ).toBe(true),
     );
     expect(store.getState().session.isStreaming).toBe(true);
   });
@@ -319,9 +318,8 @@ describe("Queued messages", () => {
 
     // Sent merged, in the new order
     release();
-    await waitFor(
-      () =>
-        expect(userMessages(store)).toEqual(["first", "beta\ngamma\nalpha"]),
+    await waitFor(() =>
+      expect(userMessages(store)).toEqual(["first", "beta\ngamma\nalpha"]),
     );
   });
 
