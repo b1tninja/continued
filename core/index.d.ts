@@ -2331,6 +2331,12 @@ export type InternalSseMcpOptions = BaseInternalMCPOptions & {
 export interface McpOauthSettings {
   /** Port of the local redirect server used while signing in (default 3000). */
   callbackPort?: number;
+  /** Pre-registered OAuth client id; skips dynamic client registration. */
+  clientId?: string;
+  /** Secret of the pre-registered client (use a secrets reference). */
+  clientSecret?: string;
+  /** Host in the redirect URI: "localhost" (default) or "127.0.0.1". */
+  redirectHost?: "localhost" | "127.0.0.1";
 }
 
 export type InternalWebsocketMcpOptions = BaseInternalMCPOptions & {

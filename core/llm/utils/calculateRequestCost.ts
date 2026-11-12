@@ -3,6 +3,11 @@ import {
   normalizeClaudeModelId,
   normalizeNovaModelId,
 } from "@continuedev/llm-info";
+import {
+  openAIWriteCost,
+  openAIWriteRates,
+  type OpenAIWriteRates,
+} from "./openaiCacheWrite";
 
 export interface CostBreakdown {
   cost: number;
@@ -495,6 +500,8 @@ interface OpenAIPrice {
   /** Price of cached input; absent where the model has no cached rate. */
   cachedInput?: number;
   output: number;
+  /** Cache write rates (GPT-5.6 and later only; see openaiCacheWrite.ts). */
+  writes?: OpenAIWriteRates;
   /**
    * The listed prices are for prompts up to this many tokens; longer prompts
    * are billed at long-context rates the table does not carry, so no price
@@ -509,14 +516,54 @@ interface OpenAIPrice {
  * no longer on that page keep their previous prices.
  */
 const OPENAI_PRICES: Record<string, OpenAIPrice> = {
-  "gpt-6-astra": { input: 10, cachedInput: 1, output: 50 },
-  "gpt-6.1-sol": { input: 2, cachedInput: 0.1, output: 10 },
-  "gpt-6.1-terra": { input: 1, cachedInput: 0.05, output: 5 },
-  "gpt-6-luna": { input: 0.1, cachedInput: 0.01, output: 0.5 },
-  "gpt-6-sol": { input: 2, cachedInput: 0.2, output: 10 },
-  "gpt-5.6-sol": { input: 4, cachedInput: 0.4, output: 20 },
-  "gpt-5.6-terra": { input: 2, cachedInput: 0.2, output: 12 },
-  "gpt-5.6-luna": { input: 0.2, cachedInput: 0.02, output: 1.2 },
+  "gpt-6-astra": {
+    input: 10,
+    cachedInput: 1,
+    output: 50,
+    writes: openAIWriteRates(10),
+  },
+  "gpt-6.1-sol": {
+    input: 2,
+    cachedInput: 0.1,
+    output: 10,
+    writes: openAIWriteRates(2),
+  },
+  "gpt-6.1-terra": {
+    input: 1,
+    cachedInput: 0.05,
+    output: 5,
+    writes: openAIWriteRates(1),
+  },
+  "gpt-6-luna": {
+    input: 0.1,
+    cachedInput: 0.01,
+    output: 0.5,
+    writes: openAIWriteRates(0.1),
+  },
+  "gpt-6-sol": {
+    input: 2,
+    cachedInput: 0.2,
+    output: 10,
+    writes: openAIWriteRates(2),
+  },
+  "gpt-5.6-sol": {
+    input: 4,
+    cachedInput: 0.4,
+    output: 20,
+    writes: openAIWriteRates(4),
+  },
+  "gpt-5.6-terra": {
+    input: 2,
+    cachedInput: 0.2,
+    output: 12,
+    writes: openAIWriteRates(2),
+  },
+  "gpt-5.6-luna": {
+    input: 0.2,
+    cachedInput: 0.02,
+    output: 1.2,
+    writes: openAIWriteRates(0.2),
+  },
   "gpt-5.5": {
     input: 5,
     cachedInput: 0.5,
@@ -584,7 +631,18 @@ function calculateOpenAICost(
     usage.promptTokensDetails?.cachedTokens ?? 0,
     usage.promptTokens,
   );
-  const uncached = usage.promptTokens - cached;
+  // Writes are part of the uncached input and billed at their own rate
+  const write = price.writes
+    ? openAIWriteCost(
+        price.writes,
+        Math.min(
+          usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+          usage.promptTokens - cached,
+        ),
+        usage.promptTokensDetails?.cacheWriteTokens1h ?? 0,
+      )
+    : undefined;
+  const uncached = usage.promptTokens - cached - (write?.tokens ?? 0);
   const cachedRate = price.cachedInput ?? price.input;
 
   const inputCost = (uncached / 1_000_000) * price.input;
@@ -608,7 +666,8 @@ function calculateOpenAICost(
     );
   }
 
-  const totalCost = inputCost + cachedCost + outputCost;
+  if (write?.lines.length) breakdownParts.push(...write.lines);
+  const totalCost = inputCost + cachedCost + outputCost + (write?.cost ?? 0);
   let breakdown = `Model: ${model}\n`;
   breakdown += breakdownParts.join("\n");
   if (breakdownParts.length > 1) {

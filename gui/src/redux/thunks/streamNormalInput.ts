@@ -36,7 +36,6 @@ import {
   modelSupportsOneHourCache,
   modelSupportsPromptCacheControl,
   modelUsesLocalPrefixCache,
-  LOCAL_CACHE_WARM_MS,
   promptCacheStatus,
 } from "../../util/promptCache";
 import { buildLedgerEntry } from "../../util/cacheLedger";
@@ -47,6 +46,7 @@ import {
   expectedRoute,
   promptCacheKey,
 } from "../../util/cacheSafeguards";
+import { localCacheWarmMs } from "../../util/localWarmWindow";
 import { totalInputTokens } from "core/llm/utils/cacheStats";
 import { ThunkApiType } from "../store";
 import { buildChatRequest } from "../util/buildChatRequest";
@@ -153,12 +153,12 @@ export const streamNormalInput = createAsyncThunk<
     const cacheKeyFor = (route: string | undefined) =>
       promptCacheKey(
         selectedChatModel,
-        activeTools.map((t) => t.function.name),
+        activeTools,
         finalSystem ? renderChatMessage(finalSystem) : undefined,
         // Each message after the system one, so an edit or removal of an earlier
         // message is told apart from a conversation that only grew.
         messages.filter((m) => m.role !== "system"),
-        route,
+        { route, options: completionOptions },
       );
     const routeExpected = expectedRoute(
       selectedChatModel,
@@ -303,7 +303,9 @@ export const streamNormalInput = createAsyncThunk<
                   requestAt: localCache
                     ? start
                     : (cacheResolution.nextState.lastRequestAt ?? start),
-                  ...(localCache && { lifetimeMs: LOCAL_CACHE_WARM_MS }),
+                  ...(localCache && {
+                    lifetimeMs: localCacheWarmMs(selectedChatModel),
+                  }),
                   readTokens:
                     message.usage.promptTokensDetails?.cachedTokens ?? 0,
                   totalInputTokens: total,

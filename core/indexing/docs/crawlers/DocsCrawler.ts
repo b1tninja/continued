@@ -4,7 +4,6 @@ import { ContinueConfig, IDE } from "../../..";
 
 import CheerioCrawler from "./CheerioCrawler";
 import { ChromiumCrawler, ChromiumInstaller } from "./ChromiumCrawler";
-import { DefaultCrawler } from "./DefaultCrawler";
 import GitHubCrawler from "./GitHubCrawler";
 
 export type PageData = {
@@ -13,7 +12,7 @@ export type PageData = {
   content: string;
 };
 
-export type DocsCrawlerType = "default" | "cheerio" | "chromium" | "github";
+export type DocsCrawlerType = "cheerio" | "chromium" | "github";
 
 class DocsCrawler {
   private readonly GITHUB_HOST = "github.com";
@@ -24,7 +23,6 @@ class DocsCrawler {
     private readonly config: ContinueConfig,
     private readonly maxDepth: number = 4,
     private readonly maxRequestsPerCrawl: number = 1000,
-    private readonly useLocalCrawling: boolean = true,
     private readonly githubToken: string | undefined = undefined,
   ) {
     this.chromiumInstaller = new ChromiumInstaller(this.ide, this.config);
@@ -50,25 +48,6 @@ class DocsCrawler {
         this.config.requestOptions,
       ).crawl();
       return "github";
-    }
-
-    // The upstream crawl service receives the page URL. It runs only when a
-    // site explicitly sets useLocalCrawling: false.
-    if (!this.useLocalCrawling) {
-      try {
-        const pageData = await new DefaultCrawler(
-          startUrl,
-          this.maxRequestsPerCrawl,
-          this.maxDepth,
-          this.config.requestOptions,
-        ).crawl();
-        if (pageData.length > 0) {
-          yield* pageData;
-          return "default";
-        }
-      } catch (e) {
-        console.error("Default crawler failed, trying backup: ", e);
-      }
     }
 
     if (this.shouldUseChromium()) {

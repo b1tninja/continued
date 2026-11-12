@@ -16,32 +16,18 @@ vi.mock("../../../util/networkAddress", async (importOriginal) => ({
 const ide = { showToast: async () => undefined } as unknown as IDE;
 const config = { experimental: {} } as ContinueConfig;
 
-async function crawl(useLocalCrawling?: boolean) {
+async function crawl() {
   const calls: string[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
     calls.push(url);
-    if (url.includes("proxy-server-blue-l6vsfbzhba-uw.a.run.app")) {
-      return new Response(
-        JSON.stringify([
-          { url: "https://example.com/docs", path: "/docs", content: "remote" },
-        ]),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
-    }
     return new Response("<html><body><p>local</p></body></html>", {
       status: 200,
     });
   }) as typeof fetch;
   try {
-    const crawler = new DocsCrawler(
-      ide,
-      config,
-      0,
-      1,
-      useLocalCrawling !== false,
-    );
+    const crawler = new DocsCrawler(ide, config, 0, 1);
     const pages = [];
     const generator = crawler.crawl(new URL("https://example.com/docs"));
     let kind = "";
@@ -64,13 +50,12 @@ describe("docs crawl reporting", () => {
     vi.restoreAllMocks();
   });
 
-  it("crawls on this machine unless the upstream service is opted into", async () => {
-    const local = await crawl(undefined);
-    expect(local.calls.some((url) => url.includes("a.run.app"))).toBe(false);
-
-    const remote = await crawl(false);
-    expect(remote.calls.some((url) => url.includes("/crawl"))).toBe(true);
-    expect(remote.kind).toBe("default");
-    expect(remote.pages[0]?.content).toBe("remote");
+  it("fetches only from the site the user named, never a crawl service", async () => {
+    const result = await crawl();
+    expect(result.kind).toBe("cheerio");
+    expect(result.calls.length).toBeGreaterThan(0);
+    for (const url of result.calls) {
+      expect(new URL(url).host).toBe("example.com");
+    }
   });
 });

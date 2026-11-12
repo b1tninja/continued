@@ -20,6 +20,8 @@ import {
   openAICompatBase,
   testOpenAICompatConnection,
 } from "./util/openaiCompatTest";
+import { currentNotice, dismissCurrentNotice } from "./util/retirementStartup";
+import { isDismissed } from "./util/retirementNoticeState";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { deputyWorkspace } from "./tools/permissions/workspaceRoots";
@@ -127,6 +129,7 @@ import {
   ContextItemId,
   ContextItemWithId,
   IdeSettings,
+  McpOauthSettings,
   ModelDescription,
   Position,
   RangeInFile,
@@ -191,6 +194,7 @@ import {
 } from "./config/workspace/workspaceBlocks";
 import { MCPManagerSingleton } from "./context/mcp/MCPManagerSingleton";
 import { performAuth, removeMCPAuth } from "./context/mcp/MCPOauth";
+import { oauthOptionsFromSettings } from "./context/mcp/mcpOauthSettings";
 import { myersDiff } from "./diff/myers";
 import { ApplyAbortManager } from "./edit/applyAbortManager";
 import { streamDiffLines } from "./edit/streamDiffLines";
@@ -868,6 +872,15 @@ export class Core {
       ),
     );
 
+    // Retirement notice for the model chip: offline, dismissible.
+    on("model/retirementNotice", async (msg) => {
+      const notice = currentNotice(msg.data);
+      return notice && !isDismissed(notice.key) ? { notice } : {};
+    });
+    on("model/dismissRetirementNotice", async (msg) => {
+      dismissCurrentNotice(msg.data);
+    });
+
     // Cached per model per process; no hint (an empty object) on any failure.
     on("ollama/showHint", async (msg) => ({
       ...(await getOllamaShowHint(msg.data)),
@@ -1376,9 +1389,9 @@ export class Core {
     on("mcp/startAuthentication", async (msg) => {
       const manager = MCPManagerSingleton.getInstance();
       const connection = manager.getConnection(msg.data.serverId);
-      const callbackPort = (
-        connection?.options as { oauth?: { callbackPort?: number } } | undefined
-      )?.oauth?.callbackPort;
+      const oauthSettings = (
+        connection?.options as { oauth?: McpOauthSettings } | undefined
+      )?.oauth;
       const oauthScope = connection
         ? (
             await import("./context/mcp/workspaceMcpPolicy")
@@ -1395,7 +1408,7 @@ export class Core {
           this.ide,
           // same proxy / CA settings as the connection itself
           {
-            callbackPort,
+            ...oauthOptionsFromSettings(oauthSettings),
             fetchFn: connection?.getFetch() as any,
             oauthScope,
           },
