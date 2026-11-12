@@ -1994,6 +1994,13 @@ export interface ToolExtras {
    * folders; the exact edit tools run only with this set.
    */
   workspaceDirs?: string[];
+  /**
+   * Set when File edits is IDGAF, which says nothing asks: the file
+   * tools may then name a path outside the workspace folders. The permission
+   * layer has already decided the call; this only lets the tool resolve the
+   * path instead of treating it as not a target.
+   */
+  allowOutsideWorkspace?: boolean;
 }
 
 export interface McpToolMeta {
@@ -2033,6 +2040,8 @@ export interface Tool {
     args: Record<string, unknown>,
     extras: {
       ide: IDE;
+      /** As for ToolExtras: File edits is IDGAF */
+      allowOutsideWorkspace?: boolean;
     },
   ) => Promise<Record<string, unknown>>;
   evaluateToolCallPolicy?: (

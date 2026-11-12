@@ -5,6 +5,11 @@ import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  getPolicyLevels,
+  resetPolicyLevels,
+  setPolicyLevels,
+} from "../permissions/policyLevels.js";
+import {
   calculateLinesOfCodeDiff,
   getLanguageFromFilePath,
 } from "../telemetry/utils.js";
@@ -15,8 +20,14 @@ import { generateDiff } from "./writeFile.js";
 
 // Mock the dependencies
 const headless = vi.hoisted(() => ({ value: false }));
+const mode = vi.hoisted(() => ({ value: "normal" }));
 vi.mock("../services/index.js", () => ({
-  services: { toolPermissions: { isHeadless: () => headless.value } },
+  services: {
+    toolPermissions: {
+      isHeadless: () => headless.value,
+      getCurrentMode: () => mode.value,
+    },
+  },
 }));
 vi.mock("../telemetry/telemetryService.js");
 vi.mock("../telemetry/utils.js");
@@ -253,6 +264,8 @@ describe("editTool and the working directory", () => {
   afterEach(() => {
     readFilesSet.clear();
     headless.value = false;
+    mode.value = "normal";
+    resetPolicyLevels();
   });
 
   it("says in the preview when the file is outside the working directory", async () => {
@@ -297,4 +310,77 @@ describe("editTool and the working directory", () => {
       content: "Will make the following changes:",
     });
   });
+});
+
+describe("editTool outside the working directory by File edits level", () => {
+  const outsidePath = path.resolve(process.cwd(), "..", "elsewhere", "c.txt");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    headless.value = true;
+    mode.value = "normal";
+    resetPolicyLevels();
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue("Hello world");
+    vi.mocked(fs.realpathSync).mockImplementation((p) => p.toString());
+  });
+
+  afterEach(() => {
+    headless.value = false;
+    mode.value = "normal";
+    resetPolicyLevels();
+  });
+
+  it("File edits IDGAF: a headless edit outside is prepared, not refused", async () => {
+    setPolicyLevels({ ...getPolicyLevels(), edits: "yolo" });
+    markFileAsRead(outsidePath);
+    const result = await editTool.preprocess!({
+      file_path: outsidePath,
+      old_string: "Hello",
+      new_string: "Hi",
+    });
+    expect(result.preview?.[0].content).toContain(
+      "Outside the working directory",
+    );
+  });
+
+  it("--auto is IDGAF on File edits", async () => {
+    mode.value = "auto";
+    markFileAsRead(outsidePath);
+    await expect(
+      editTool.preprocess!({
+        file_path: outsidePath,
+        old_string: "Hello",
+        new_string: "Hi",
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("the run writes the file and says it landed outside", async () => {
+    setPolicyLevels({ ...getPolicyLevels(), edits: "yolo" });
+    markFileAsRead(outsidePath);
+    const prepared = await editTool.preprocess!({
+      file_path: outsidePath,
+      old_string: "Hello",
+      new_string: "Hi",
+    });
+    const message = await editTool.run(prepared.args);
+    expect(fs.writeFileSync).toHaveBeenCalled();
+    expect(message).toContain(`Wrote outside the workspace: ${outsidePath}`);
+  });
+
+  it.each(["manual", "cautious", "automatic", "permissive"] as const)(
+    "File edits %s: a headless edit outside is still refused",
+    async (level) => {
+      setPolicyLevels({ ...getPolicyLevels(), edits: level });
+      markFileAsRead(outsidePath);
+      const error = await editTool.preprocess!({
+        file_path: outsidePath,
+        old_string: "Hello",
+        new_string: "Hi",
+      }).catch((e) => e);
+      expect(error).toBeInstanceOf(ContinueError);
+      expect(error.message).toContain("Edit was not run");
+    },
+  );
 });

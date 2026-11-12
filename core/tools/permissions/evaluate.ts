@@ -18,6 +18,7 @@ import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { askProtectionHit } from "./askProtections";
 import { deputyCallHit, type DeputyCallInput } from "./deputyCall";
+import { outsideTargetReason } from "./outsideEdits";
 import { builtinRuleOn } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
@@ -316,25 +317,73 @@ function firstProtectedHit(
       largeChangeLines: input.largeChangeLines,
       cwd: input.cwd,
     }),
-    deputyCallHit({
-      toolName,
-      parsedArgs,
-      resolved: resolved
-        ? {
-            path: resolvedPath,
-            withinWorkspace: resolved.isWithinWorkspace,
-          }
-        : undefined,
-      cwd: input.cwd,
-      workspaceDirs: input.workspaceDirs,
-      resolvePath: input.resolvePath,
-      schema: tool?.function?.parameters,
-      approval: input.approval,
-      flavor: input.platform,
-      home: input.home,
-      mcp: !!tool?.uri?.startsWith("mcp:") && !!tool?.originalFunctionName,
-    }),
+    deputyCallHit(deputyInputOf(input, resolved, resolvedPath)),
   ].find((hit) => hit !== undefined);
+}
+
+function deputyInputOf(
+  input: EvaluateInput,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): DeputyCallInput {
+  const { tool, toolName, parsedArgs } = input;
+  return {
+    toolName,
+    parsedArgs,
+    resolved: resolved
+      ? {
+          path: resolvedPath,
+          withinWorkspace: resolved.isWithinWorkspace,
+        }
+      : undefined,
+    cwd: input.cwd,
+    workspaceDirs: input.workspaceDirs,
+    resolvePath: input.resolvePath,
+    schema: tool?.function?.parameters,
+    approval: input.approval,
+    flavor: input.platform,
+    home: input.home,
+    mcp: !!tool?.uri?.startsWith("mcp:") && !!tool?.originalFunctionName,
+  };
+}
+
+/** The decision's reason; at IDGAF on File edits it also names a target outside the workspace. */
+function reasonWithOutsideTarget(
+  input: EvaluateInput,
+  decision: { source?: DecisionSource; policy: ToolPolicy; reason?: string },
+  area: string | undefined,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): string | undefined {
+  if (
+    decision.source !== "yolo" ||
+    decision.policy !== "allowedWithoutPermission" ||
+    area !== "edits"
+  ) {
+    return decision.reason;
+  }
+  const note = outsideTargetNote(input, resolved, resolvedPath);
+  return note ? `${decision.reason ?? ""} ${note}`.trim() : decision.reason;
+}
+
+/**
+ * The absolute path a File edits call reaches outside the workspace, when
+ * IDGAF lets it through: said in the decision, so the audit trail and the
+ * transcript name the place. The built-in rule is not consulted for the
+ * judgement (it may be switched off, and the fact stays true).
+ */
+function outsideTargetNote(
+  input: EvaluateInput,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): string | undefined {
+  const hit = deputyCallHit({
+    ...deputyInputOf(input, resolved, resolvedPath),
+    approval: undefined,
+  });
+  const suffix = ", outside the workspace";
+  if (!hit?.path.endsWith(suffix)) return undefined;
+  return outsideTargetReason(hit.path.slice(0, -suffix.length));
 }
 
 function evaluateRules(input: EvaluateInput): ToolPolicyResult {
@@ -503,11 +552,19 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     shell: input.shell,
   });
 
+  const reason = reasonWithOutsideTarget(
+    input,
+    decision,
+    found?.area,
+    resolved,
+    resolvedPath,
+  );
+
   return {
     policy: decision.policy,
     displayValue,
     source: decision.source,
-    ...(decision.reason ? { reason: decision.reason } : {}),
+    ...(reason ? { reason } : {}),
     ...(decision.protection ? { protection: decision.protection } : {}),
     ...(decision.rule ? { rule: decision.rule } : {}),
     ...(found?.readOnly ? { readOnly: found.readOnly } : {}),
