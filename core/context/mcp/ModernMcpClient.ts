@@ -1,9 +1,6 @@
 import { FetchLike, RpcError, postRpc } from "./mcpHttpRpc";
-import {
-  InputRequestHandler,
-  declineElicitation,
-  resolveInputRequired,
-} from "./mcpMrtr";
+import { currentQuestionsLevel, elicitationHandler } from "./mcpElicitation";
+import { InputRequestHandler, resolveInputRequired } from "./mcpMrtr";
 import {
   ClientIdentity,
   DiscoverResult,
@@ -113,7 +110,7 @@ export class ModernMcpClient {
     return resolveInputRequired(
       (p) => this.send(method, p, o),
       params,
-      this.opts.onInputRequest ?? declineElicitation,
+      this.opts.onInputRequest ?? elicitationHandler(currentQuestionsLevel),
     );
   }
 

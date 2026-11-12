@@ -39,18 +39,37 @@ The page has one tab for each policy area. Each tab shows the area's level (chan
 
 ## What Plan edits and Questions do for a loop
 
-A loop exists to go on without you, so these two areas decide whether it ever stops to ask. They bind the loop's own gates only: a call that a Never rule, a protected path or a built-in protection refuses is still refused at every level, and a call that would ask is still held as an approval question.
+A loop exists to go on without you, so these two areas decide whether it ever stops to ask. They bind the loop's own gates only: a call that a Never rule, a protected path or a built-in protection refuses is still refused at every level, and a call that would ask is still held as an approval question, except at Questions IDGAF, where nothing is held (see below).
 
 | Level                   | A re-plan (a repair, changed checks, added or dropped to-dos)                                                                                                | A question the agent asks, or a decision in a plan                                                                    |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | Manual                  | Waits on its card.                                                                                                                                           | Waits in the Questions panel.                                                                                         |
 | Cautious                | Goes on if it adds no new to-dos and weakens no check; otherwise waits on its card.                                                                          | Waits, except the types the agent may decide (details by default).                                                    |
 | Automatic and Permissive | Goes on by itself, even when it replaces a check. At Permissive a re-plan that adds more new to-dos than the limit on the Plan edits tab still waits.        | Answered by the system. A type on your own "you decide" list still waits.                                             |
-| YOLO (IDGAF)            | Goes on by itself, with no limit.                                                                                                                            | Answered by the system, whatever its type. The `irreversible` label does not change that.                             |
+| IDGAF                   | Goes on by itself, with no limit.                                                                                                                            | Answered by the system, whatever its type, and your "you decide" list does not apply. The `irreversible` label does not change that. |
 
 When the loop goes on by itself it leaves a one-line notice in the loop panel, for example `Plan updated: 11 kept, 1 added, 1 dropped; check of item 1 replaced`. It never blocks.
 
 An answered question is chosen in this order: the option labelled `(recommended)`, then the plan decision's own pick, then the first option. A question with no options gets `No one is available to answer; use your best judgment and state the assumption`. The answer is recorded on the loop as given by `system` (never `person`), with the setting that allowed it, such as `Questions: IDGAF`, and the panel shows `Auto-answered: <question> -> <answer>`. A late answer from you still overrules it. The same rules apply in the extension, in `cn` and under `cn serve`.
+
+## Questions at IDGAF: nothing asks
+
+At Questions IDGAF no question waits for you, in a loop or outside one, in the extension, in the `cn` terminal, in `cn -p` and under `cn serve`. Never rules, Ask rules, protected paths and the built-in rule check are ignored for these, and so is your own "you decide" list. Every place a question could appear is answered the same way, by the rule above (`(recommended)`, then the plan's pick, then the first option, then `No one is available to answer; use your best judgment and state the assumption`), recorded as `by: system` in the audit trail with the source `Questions: IDGAF`, and shown as one line, `Auto-answered: <question> -> <answer>`, that never blocks.
+
+| Where a question could appear | At Questions IDGAF |
+| ----------------------------- | ------------------------- |
+| The agent's question in `cn` (`AskQuestion`), in the terminal UI | Answered; the question box does not open. |
+| `AskQuestion` in `cn -p` and `cn serve` | Answered; nothing is added to the pending questions that serve shows. |
+| `HoldQuestion` in a loop | Answered, and the item goes on. |
+| A plan's decisions (the `Plan decision` rows), made in or outside a loop | Answered from the plan's options and written into the plan file before the plan card or the Questions panel shows them. A plan opened later is answered when it is on the table. |
+| Questions already held when you move a loop to IDGAF | Answered at once (an approval is refused). |
+| An item over its own limit with the limit policy Suggest | Decided by the review rule (extend, split or stop) instead of asking. |
+| A call that would ask for approval in a loop | Not held. It is refused and the agent is told nobody was asked. |
+| A call at an IDGAF-level area that still asks (a command that hides what it runs, a write to a path built when it runs) | Refused, with the reason, instead of asking. |
+| An MCP server's `elicitation/create` request | Answered with the server's own default for every field when it gives one. Declined, and noted in the audit trail, when a field has no default, asks for a secret, or when the form sends you to a page (url mode). A value is never invented. |
+| The Recently blocked list | Lists refusals only. Nothing in it waits for you. |
+
+Two things are not questions and stay as they are. An approval for a tool call is decided by the Tool use, File edits and Context use levels, not by Questions: a call at a level below the top one asks as that level says, outside a loop. The plan question of Plan mode (Build, Build in a loop, Keep planning) is how you leave Plan mode, not a question the agent asks. At every level below IDGAF the Questions behaviour is unchanged.
 
 The tool name in a rule decides the tab. A terminal command rule is listed under Tool use, but a command the parser can show only reads is Context use for that one call, so the page says the area is decided per command. Rules for tools that only touch the session (the task list, Loop's tools) and rules that cannot be read are listed at the bottom under "Rules with no area".
 
