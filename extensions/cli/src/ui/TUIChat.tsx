@@ -96,14 +96,7 @@ function useTUIChatServices(remoteUrl?: string) {
     mcp: MCPServiceState;
     update: UpdateServiceState;
     toolPermissions: ToolPermissionServiceState;
-  }>([
-    "auth",
-    "config",
-    "model",
-    "mcp",
-    "update",
-    "toolPermissions",
-  ]);
+  }>(["auth", "config", "model", "mcp", "update", "toolPermissions"]);
 
   return { services, allServicesReady, isRemoteMode };
 }

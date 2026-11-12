@@ -36,9 +36,9 @@ The jobs run only in `b1tninja/continuous`, so a fork does not try to publish.
 
 ## CLI
 
-| Variable            | Purpose                                                                 | Referenced In                                                                                      |
-| ------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `CONTINUE_API_KEY`  | API key for Continue authentication                                     | `extensions/cli/.env.example`, multiple workflows |
+| Variable           | Purpose                             | Referenced In                                     |
+| ------------------ | ----------------------------------- | ------------------------------------------------- |
+| `CONTINUE_API_KEY` | API key for Continue authentication | `extensions/cli/.env.example`, multiple workflows |
 
 ---
 

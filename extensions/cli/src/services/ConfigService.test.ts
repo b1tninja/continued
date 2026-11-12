@@ -486,10 +486,7 @@ describe("ConfigService", () => {
         models: [defaultModel],
       });
 
-      const result = await service.addDefaultChatModelIfNone(
-        config,
-        null,
-      );
+      const result = await service.addDefaultChatModelIfNone(config, null);
 
       expect(
         vi.mocked(configLoader.unrollPackageIdentifiersAsConfigYaml),
@@ -525,10 +522,7 @@ describe("ConfigService", () => {
         ],
       } as any;
 
-      const result = await service.addDefaultChatModelIfNone(
-        config,
-        null,
-      );
+      const result = await service.addDefaultChatModelIfNone(config, null);
 
       // Should not call the unroll function since chat model exists
       expect(
@@ -550,10 +544,7 @@ describe("ConfigService", () => {
         ],
       } as any;
 
-      const result = await service.addDefaultChatModelIfNone(
-        config,
-        null,
-      );
+      const result = await service.addDefaultChatModelIfNone(config, null);
 
       expect(
         vi.mocked(configLoader.unrollPackageIdentifiersAsConfigYaml),
@@ -576,10 +567,7 @@ describe("ConfigService", () => {
         models: [defaultModel],
       });
 
-      const result = await service.addDefaultChatModelIfNone(
-        config,
-        null,
-      );
+      const result = await service.addDefaultChatModelIfNone(config, null);
 
       expect(result.models).toHaveLength(1);
       expect(result.models![0]).toEqual(defaultModel);
@@ -600,10 +588,7 @@ describe("ConfigService", () => {
         models: [defaultModel],
       });
 
-      const result = await service.addDefaultChatModelIfNone(
-        config,
-        null,
-      );
+      const result = await service.addDefaultChatModelIfNone(config, null);
 
       expect(result.models).toHaveLength(1);
       expect(result.models![0]).toEqual(defaultModel);
@@ -622,11 +607,7 @@ describe("ConfigService", () => {
       ).mockRejectedValue(error);
 
       await expect(
-        service.addDefaultChatModelIfNone(
-          config,
-          null,
-          true,
-        ),
+        service.addDefaultChatModelIfNone(config, null, true),
       ).rejects.toThrow(
         "No model specified in headless mode (and failed to load default model)",
       );
@@ -649,11 +630,7 @@ describe("ConfigService", () => {
       });
 
       await expect(
-        service.addDefaultChatModelIfNone(
-          config,
-          null,
-          true,
-        ),
+        service.addDefaultChatModelIfNone(config, null, true),
       ).rejects.toThrow(
         "No model specified in headless mode (and failed to load default model)",
       );

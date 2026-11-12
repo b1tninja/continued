@@ -34,7 +34,7 @@ This is a CLI tool for Continue Dev that provides an interactive AI-assisted dev
    - `UserInput.tsx`: Input handling with multi-line support
    - `TextBuffer.ts`: Text display utilities
 
-5. **Tools System** (`src/tools/`): Built-in development tools including:
+4. **Tools System** (`src/tools/`): Built-in development tools including:
 
    - File operations (read, write, list)
    - Code search functionality
@@ -42,9 +42,9 @@ This is a CLI tool for Continue Dev that provides an interactive AI-assisted dev
    - Diff viewing
    - Exit tool (headless mode only)
 
-6. **MCP Integration** (`src/mcp.ts`): Model Context Protocol service for extended tool capabilities
+5. **MCP Integration** (`src/mcp.ts`): Model Context Protocol service for extended tool capabilities
 
-7. **Hooks System** (`src/hooks/`): Event interception system for extending CLI behavior
+6. **Hooks System** (`src/hooks/`): Event interception system for extending CLI behavior
    - `HookService.ts`: Service container integration, loads config and fires events
    - `hookConfig.ts`: Loads hooks from settings files, merges configs from multiple sources
    - `hookRunner.ts`: Executes hook handlers (command, HTTP) with exit code semantics

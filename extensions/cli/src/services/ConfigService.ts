@@ -61,10 +61,7 @@ export class ConfigService
    * Declare dependencies on other services
    */
   getDependencies(): string[] {
-    return [
-      SERVICE_NAMES.AUTH,
-      SERVICE_NAMES.AGENT_FILE,
-    ];
+    return [SERVICE_NAMES.AUTH, SERVICE_NAMES.AGENT_FILE];
   }
 
   getAdditionalBlocksFromOptions(
@@ -248,12 +245,8 @@ export class ConfigService
   private async loadConfig(
     init: ConfigServiceInit,
   ): Promise<ConfigServiceState> {
-    const {
-      authConfig,
-      configPath,
-      injectedConfigOptions,
-      agentFileState,
-    } = init;
+    const { authConfig, configPath, injectedConfigOptions, agentFileState } =
+      init;
     const { injected, additional } = this.getAdditionalBlocksFromOptions(
       injectedConfigOptions,
       agentFileState,

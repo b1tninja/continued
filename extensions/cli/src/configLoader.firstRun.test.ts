@@ -32,37 +32,25 @@ describe("first run with no config.yaml", () => {
   });
 
   it("uses an empty local assistant", async () => {
-    const result = await loadConfiguration(
-      {} as any,
-      undefined,
-      [],
-      true,
-    );
+    const result = await loadConfiguration({} as any, undefined, [], true);
     expect(result.source.type).toBe("no-config");
   });
 
-  it.each([["signed in", () => (auth.token = "token")]])("still uses an empty local assistant when %s", async (_n, setup) => {
-    setup();
-    const result = await loadConfiguration(
-      {} as any,
-      undefined,
-      [],
-      true,
-    );
-    expect(result.source.type).toBe("no-config");
-  });
+  it.each([["signed in", () => (auth.token = "token")]])(
+    "still uses an empty local assistant when %s",
+    async (_n, setup) => {
+      setup();
+      const result = await loadConfiguration({} as any, undefined, [], true);
+      expect(result.source.type).toBe("no-config");
+    },
+  );
 
   it("uses a local config.yaml", async () => {
     fs.writeFileSync(
       path.join(home, "config.yaml"),
       "name: Local\nversion: 1.0.0\nschema: v1\n",
     );
-    const result = await loadConfiguration(
-      {} as any,
-      undefined,
-      [],
-      true,
-    );
+    const result = await loadConfiguration({} as any, undefined, [], true);
     expect(result.source.type).toBe("local-config-yaml");
   });
 

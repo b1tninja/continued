@@ -5,11 +5,7 @@ import { vi } from "vitest";
 import { TUIChat } from "../TUIChat.js";
 
 import { MockRemoteServer } from "./mockRemoteServer.js";
-import {
-  mockAssistant,
-  MockLlmApi,
-  MockMCPService,
-} from "./TUIChat.setup.js";
+import { mockAssistant, MockLlmApi, MockMCPService } from "./TUIChat.setup.js";
 
 // Shared mock FileIndex to avoid duplication
 const MOCK_FILE_INDEX = {

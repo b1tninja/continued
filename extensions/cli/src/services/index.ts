@@ -122,10 +122,7 @@ export async function initializeServices(initOptions: ServiceInitOptions = {}) {
         SERVICE_NAMES.AUTH,
       );
 
-      return await agentFileService.initialize(
-        commandOptions.agent,
-        authState,
-      );
+      return await agentFileService.initialize(commandOptions.agent, authState);
     },
     [SERVICE_NAMES.AUTH],
   );

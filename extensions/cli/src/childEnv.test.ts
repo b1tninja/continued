@@ -121,13 +121,8 @@ describe("global env file helpers", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cn-dotenv-"));
     try {
       const file = path.join(dir, ".env");
-      fs.writeFileSync(
-        file,
-        'export SOME_SETTING="https://files.example/"\n',
-      );
-      expect(readDotEnvFile(file).SOME_SETTING).toBe(
-        "https://files.example/",
-      );
+      fs.writeFileSync(file, 'export SOME_SETTING="https://files.example/"\n');
+      expect(readDotEnvFile(file).SOME_SETTING).toBe("https://files.example/");
       expect(readDotEnvFile(path.join(dir, "missing.env"))).toEqual({});
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });

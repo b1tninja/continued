@@ -127,12 +127,7 @@ export async function initializeWithOnboarding(
   if (configPath !== undefined) {
     // throw an early error is configPath is invalid or has errors
     try {
-      await loadConfiguration(
-        authConfig,
-        configPath,
-        [],
-        false,
-      );
+      await loadConfiguration(authConfig, configPath, [], false);
     } catch (errorMessage) {
       throw new Error(
         `Failed to load config from "${configPath}": ${errorMessage}`,
