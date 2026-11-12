@@ -36,6 +36,7 @@ Your messages, the files and tool output the agent reads, and the conversation s
 - **MCP servers** you add, and their sign-in pages.
 - **Pages you name**: `@url`, the `fetch_url` tool and docs indexing fetch the sites you point them at, directly from your machine.
 - **Docs on GitHub**: a docs entry on github.com uses the GitHub API.
+- **Model lists in provider setup**: when the provider setup screen opens, it looks up model lists with public GET requests to `openrouter.ai` and `ollama.com`. This is tracked for a later release.
 - **Chromium**: one download, only if you accept the install prompt.
 
 The embeddings model is bundled; nothing is downloaded from Hugging Face at run time.
