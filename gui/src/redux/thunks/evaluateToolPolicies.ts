@@ -313,6 +313,8 @@ async function reviewOpenCalls(
         !isEditTool(toolName) &&
         r.source !== "ask-rule" &&
         r.source !== "protected-path" &&
+        // The tainted-session rule's ask is the person's, not the reviewer's
+        r.source !== "tainted-session" &&
         // Plan mode's hold is for the user, not the reviewer
         r.source !== "plan-mode" &&
         // Manual asks every time; only an area set to Automatic has a reviewer
@@ -489,6 +491,7 @@ export async function evaluateToolPolicies(
       policy === "allowedWithPermission" &&
       reason &&
       (source === "protected-path" ||
+        source === "tainted-session" ||
         source === "ask-rule" ||
         source === "manual" ||
         source === "auto" ||
