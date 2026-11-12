@@ -751,7 +751,7 @@ describe("Loop mode", () => {
   test("with Questions IDGAF an irreversible question is answered by the system and the loop goes on", async () => {
     const h = await setup(["Drop the old table", "Add tests"]);
     await act(async () => {
-      h.store.dispatch(setPolicyLevel({ area: "questions", level: "yolo" }));
+      h.store.dispatch(setPolicyLevel({ area: "questions", level: "idgaf" }));
     });
     h.turns.push(
       ask(
