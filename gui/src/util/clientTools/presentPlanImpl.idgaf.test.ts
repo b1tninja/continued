@@ -50,7 +50,7 @@ const args = {
 
 describe("present_plan decisions outside a loop", () => {
   it("at Questions IDGAF are answered in the file, audited and reported", async () => {
-    const x = setup("yolo");
+    const x = setup("idgaf");
     const out = await presentPlanImpl(args, "call-1", x.extras);
 
     expect(

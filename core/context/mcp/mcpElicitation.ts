@@ -113,7 +113,7 @@ function recordElicitation(note: string): void {
       args: "{}",
       policy: note.startsWith("Accepted") ? "allow" : "deny",
       by: "system",
-      source: `Questions: ${policyLevelLabel("questions", "yolo")}`,
+      source: `Questions: ${policyLevelLabel("questions", "idgaf")}`,
       reason: note,
     });
   } catch {

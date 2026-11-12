@@ -56,7 +56,7 @@ describe("Questions IDGAF: a question is answered, never held", () => {
   test.each(["blocking", "assumption"] as const)(
     "%s: the labelled option wins, label stripped, by the system",
     (kind) => {
-      const result = ask(loopAt({ questions: "yolo" }), {
+      const result = ask(loopAt({ questions: "idgaf" }), {
         kind,
         assumption: "sqlite",
         options: ["sqlite", "Postgres (recommended)", "mysql"],
@@ -83,11 +83,11 @@ describe("Questions IDGAF: a question is answered, never held", () => {
   );
 
   test("else the first option, else the best-judgment line", () => {
-    const first = ask(loopAt({ questions: "yolo" }), {
+    const first = ask(loopAt({ questions: "idgaf" }), {
       options: ["alpha", "beta"],
     });
     expect(first.ok && first.question.autoAnswer?.text).toBe("alpha");
-    const none = ask(loopAt({ questions: "yolo" }), {});
+    const none = ask(loopAt({ questions: "idgaf" }), {});
     expect(none.ok && none.question.autoAnswer?.text).toBe(NO_ONE_AVAILABLE);
   });
 
@@ -116,11 +116,11 @@ describe("Questions IDGAF: a question is answered, never held", () => {
   });
 
   test("the person's own you-decide list does not apply at IDGAF", () => {
-    const loop = loopAt({ questions: "yolo" });
+    const loop = loopAt({ questions: "idgaf" });
     const result = ask(
       {
         ...loop,
-        policy: { ...loop.policy!, questions: "yolo" },
+        policy: { ...loop.policy!, questions: "idgaf" },
       } as LoopState,
       { type: "irreversible" },
     );
@@ -145,7 +145,7 @@ describe("Questions IDGAF: an approval is not held", () => {
   };
 
   test("refused by the system, nothing left open, the model is told", () => {
-    const r = ask(loopAt({ questions: "yolo" }), {
+    const r = ask(loopAt({ questions: "idgaf" }), {
       kind: "approval",
       question: "Allow this call? rm -rf build",
       approval,
@@ -196,7 +196,7 @@ describe("Questions IDGAF: what was already held is answered", () => {
 
     const moved = setLoopPolicy(q2.loop, {
       plan: "cautious",
-      questions: "yolo",
+      questions: "idgaf",
     });
     expect(open(moved)).toHaveLength(0);
     const lines = (moved.autoDecisions ?? []).map((d) => d.text);
@@ -248,9 +248,13 @@ describe("Questions IDGAF: an item over its limit is not asked about", () => {
   });
 
   test("Suggest is decided by the review rule at IDGAF", () => {
-    const decision = applyLimitPolicy(overBudget({ questions: "yolo" }), item, {
-      now: T0,
-    });
+    const decision = applyLimitPolicy(
+      overBudget({ questions: "idgaf" }),
+      item,
+      {
+        now: T0,
+      },
+    );
     expect(decision?.kind).not.toBe("ask");
     expect(open(decision!.loop)).toHaveLength(0);
   });

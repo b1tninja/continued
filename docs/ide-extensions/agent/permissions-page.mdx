@@ -69,7 +69,7 @@ At Questions IDGAF no question waits for you, in a loop or outside one, in the e
 | An MCP server's `elicitation/create` request | Answered with the server's own default for every field when it gives one. Declined, and noted in the audit trail, when a field has no default, asks for a secret, or when the form sends you to a page (url mode). A value is never invented. |
 | The Recently blocked list | Lists refusals only. Nothing in it waits for you. |
 
-Two things are not questions and stay as they are. An approval for a tool call is decided by the Tool use, File edits and Context use levels, not by Questions: a call at a level below the top one asks as that level says, outside a loop. The plan question of Plan mode (Build, Build in a loop, Keep planning) is how you leave Plan mode, not a question the agent asks. At every level below YOLO the Questions behaviour is unchanged.
+Two things are not questions and stay as they are. An approval for a tool call is decided by the Tool use, File edits and Context use levels, not by Questions: a call at a level below the top one asks as that level says, outside a loop. The plan question of Plan mode (Build, Build in a loop, Keep planning) is how you leave Plan mode, not a question the agent asks. At every level below IDGAF the Questions behaviour is unchanged.
 
 The tool name in a rule decides the tab. A terminal command rule is listed under Tool use, but a command the parser can show only reads is Context use for that one call, so the page says the area is decided per command. Rules for tools that only touch the session (the task list, Loop's tools) and rules that cannot be read are listed at the bottom under "Rules with no area".
 

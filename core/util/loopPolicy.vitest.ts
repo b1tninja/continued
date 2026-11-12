@@ -56,7 +56,7 @@ describe("a loop that follows policy levels", () => {
     expect(
       autonomyForPolicy({ plan: "permissive", questions: "cautious" }),
     ).toBe("unattended");
-    expect(autonomyForPolicy({ plan: "manual", questions: "yolo" })).toBe(
+    expect(autonomyForPolicy({ plan: "manual", questions: "idgaf" })).toBe(
       "idgaf",
     );
     expect(loopWith({ plan: "permissive" }).autonomy).toBe("unattended");
@@ -66,7 +66,7 @@ describe("a loop that follows policy levels", () => {
     expect(loopAutonomy(loopWith({ plan: "permissive" })).waitTimeoutMs).toBe(
       0,
     );
-    expect(loopAutonomy(loopWith({ questions: "yolo" })).waitTimeoutMs).toBe(
+    expect(loopAutonomy(loopWith({ questions: "idgaf" })).waitTimeoutMs).toBe(
       1000,
     );
   });
@@ -114,7 +114,7 @@ describe("Plan edits decides a re-plan", () => {
   });
 
   test("IDGAF: every re-plan goes on", () => {
-    const loop = loopWith({ plan: "yolo" });
+    const loop = loopWith({ plan: "idgaf" });
     expect(
       replanDecision(loop, before, plan("A", "B", "1", "2", "3", "4", "5", "6"))
         .accept,
@@ -133,7 +133,7 @@ describe("Plan edits decides a re-plan", () => {
 
   test("a repair of just the failed item goes on at every level but Manual", () => {
     const repaired = plan("A", "B, first half", "B, second half");
-    for (const level of ["cautious", "permissive", "yolo"] as const) {
+    for (const level of ["cautious", "permissive", "idgaf"] as const) {
       expect(
         repairDecision(loopWith({ plan: level }), before, "B", repaired).accept,
       ).toBe(true);
@@ -160,7 +160,7 @@ describe("Questions decides who answers", () => {
     );
 
   test("IDGAF: the agent decides every question, whatever its type", () => {
-    const loop = loopWith({ questions: "yolo" });
+    const loop = loopWith({ questions: "idgaf" });
     expect(loopDecidesAlone(loop)).toBe(true);
     const held = hold(loop, "security");
     expect(held.ok && held.question.decidedAlone).toBe(true);
@@ -199,7 +199,7 @@ describe("Questions decides who answers", () => {
 
   test("an approval is never decided by the agent: at IDGAF it is refused, not held", () => {
     const held = holdQuestion(
-      loopWith({ questions: "yolo" }),
+      loopWith({ questions: "idgaf" }),
       { itemId: "1", question: "Run it?", kind: "approval" },
       T0,
     );

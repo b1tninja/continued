@@ -84,7 +84,7 @@ export function clampPolicy(
     result.policy === "allowedWithoutPermission" &&
     result.source !== "allow-rule" &&
     result.source !== "permissive" &&
-    result.source !== "yolo"
+    result.source !== "idgaf"
   ) {
     return "allowedWithPermission";
   }

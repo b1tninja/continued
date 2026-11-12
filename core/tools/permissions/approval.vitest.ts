@@ -95,8 +95,8 @@ describe("each area has its own level", () => {
     expect(cmd("git push", a).policy).toBe(ALLOW);
     expect(read("src/a.ts", a, { basePolicy: ALLOW }).policy).toBe(ASK);
   });
-  it("Context use YOLO does not loosen commands", () => {
-    const a = levels({ context: "yolo", tools: "manual" });
+  it("Context use IDGAF does not loosen commands", () => {
+    const a = levels({ context: "idgaf", tools: "manual" });
     expect(read("/outside/x", a).policy).toBe(ALLOW);
     expect(cmd("npm test", a, { basePolicy: ALLOW }).policy).toBe(ASK);
   });
@@ -207,49 +207,49 @@ describe("obfuscated commands the safety floor cannot see", () => {
     plan: "permissive",
     questions: "permissive",
   });
-  const yolo = levels({
-    tools: "yolo",
-    context: "yolo",
-    edits: "yolo",
-    plan: "yolo",
-    questions: "yolo",
+  const idgaf = levels({
+    tools: "idgaf",
+    context: "idgaf",
+    edits: "idgaf",
+    plan: "idgaf",
+    questions: "idgaf",
   });
 
   it.each(["{rm,-rf,~}", "rm${IFS}-rf${IFS}~", "G=rm; $G -rf ~"])(
-    "does not run %s under Hands-off or YOLO",
+    "does not run %s under Hands-off or IDGAF",
     (command) => {
       expect(cmd(command, handsOff).policy).toBe(OFF);
-      expect(cmd(command, yolo).policy).toBe(OFF);
+      expect(cmd(command, idgaf).policy).toBe(OFF);
     },
   );
 
-  it("still runs an ordinary command under Hands-off and a clear refusal under YOLO", () => {
+  it("still runs an ordinary command under Hands-off and a clear refusal under IDGAF", () => {
     expect(cmd("git push origin main", handsOff).policy).toBe(ALLOW);
     expect(cmd("echo $HOME", handsOff).policy).toBe(ALLOW);
-    expect(cmd("rm -rf /", yolo).policy).toBe(ALLOW);
+    expect(cmd("rm -rf /", idgaf).policy).toBe(ALLOW);
   });
 
   it("does not run a substitution the floor only asks about; at IDGAF nobody is asked, so it is refused", () => {
     expect(cmd("echo $(date)", handsOff).policy).toBe(ASK);
-    expect(cmd("echo $(date)", yolo).policy).toBe(OFF);
+    expect(cmd("echo $(date)", idgaf).policy).toBe(OFF);
   });
 });
 
-describe("YOLO", () => {
-  const yolo = levels({ tools: "yolo", context: "yolo", edits: "yolo" });
+describe("IDGAF", () => {
+  const idgaf = levels({ tools: "idgaf", context: "idgaf", edits: "idgaf" });
 
   it("allows everything and ignores every rule", () => {
-    expect(cmd("git push", yolo).source).toBe("yolo");
+    expect(cmd("git push", idgaf).source).toBe("idgaf");
     const deny = {
       permissions: { deny: ["runTerminalCommand(terraform apply*)"] },
     };
-    expect(cmd("terraform apply", yolo, deny).policy).toBe(ALLOW);
-    expect(cmd("cat .env", yolo).policy).toBe(ALLOW);
-    expect(cmd("rm -rf /", yolo).policy).toBe(ALLOW);
-    expect(read("/outside/x", yolo).policy).toBe(ALLOW);
+    expect(cmd("terraform apply", idgaf, deny).policy).toBe(ALLOW);
+    expect(cmd("cat .env", idgaf).policy).toBe(ALLOW);
+    expect(cmd("rm -rf /", idgaf).policy).toBe(ALLOW);
+    expect(read("/outside/x", idgaf).policy).toBe(ALLOW);
   });
   it("does not turn on a tool the user switched off", () => {
-    expect(cmd("npm test", yolo, { basePolicy: OFF }).policy).toBe(OFF);
+    expect(cmd("npm test", idgaf, { basePolicy: OFF }).policy).toBe(OFF);
   });
 });
 
@@ -304,15 +304,15 @@ describe("the floor", () => {
     floor: ["runTerminalCommand(terraform destroy*)"],
   });
 
-  it("binds at YOLO, where every other rule is ignored", () => {
-    const r = cmd("terraform destroy -auto-approve", floor({ tools: "yolo" }));
+  it("binds at IDGAF, where every other rule is ignored", () => {
+    const r = cmd("terraform destroy -auto-approve", floor({ tools: "idgaf" }));
     expect(r.policy).toBe(OFF);
     expect(r.source).toBe("floor");
     expect(r.rule).toContain("terraform destroy");
   });
 
   it("leaves other commands to the level", () => {
-    expect(cmd("terraform plan", floor({ tools: "yolo" })).policy).toBe(ALLOW);
+    expect(cmd("terraform plan", floor({ tools: "idgaf" })).policy).toBe(ALLOW);
   });
 
   it("binds at every other level too", () => {
@@ -344,9 +344,9 @@ describe("a command that only reads is Context use", () => {
     expect(cmd("ls", manualContext).policy).toBe(ASK);
     expect(cmd("ls", manualContext).source).toBe("manual");
     expect(cmd("npm test", manualContext).policy).toBe(ALLOW);
-    expect(cmd("ls", levels({ context: "yolo", tools: "manual" })).policy).toBe(
-      ALLOW,
-    );
+    expect(
+      cmd("ls", levels({ context: "idgaf", tools: "manual" })).policy,
+    ).toBe(ALLOW);
   });
 
   it("a redirect or substitution makes it Tool use again", () => {

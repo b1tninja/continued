@@ -22,7 +22,7 @@ const settings = (
 
 describe("Questions: who decides", () => {
   it("only IDGAF never asks", () => {
-    expect(questionsNeverAsk("yolo")).toBe(true);
+    expect(questionsNeverAsk("idgaf")).toBe(true);
     for (const level of [
       "manual",
       "cautious",
@@ -32,11 +32,11 @@ describe("Questions: who decides", () => {
       expect(questionsNeverAsk(level)).toBe(false);
     }
     expect(questionsNeverAsk(undefined)).toBe(false);
-    expect(questionsAutoAnswer("yolo")).toBe(true);
+    expect(questionsAutoAnswer("idgaf")).toBe(true);
   });
 
   it("IDGAF: the agent decides every type, your own list does not apply", () => {
-    const own = settings("yolo", [...QUESTION_TYPES]);
+    const own = settings("idgaf", [...QUESTION_TYPES]);
     for (const type of [...QUESTION_TYPES, undefined, "made up"]) {
       expect(questionDecider(own, type), String(type)).toBe("agent");
     }
@@ -79,19 +79,19 @@ describe("a call that still asks at a IDGAF area is refused when Questions is ID
     });
 
   it("IDGAF tools with Questions below IDGAF still asks (the floor)", () => {
-    expect(run("yolo", "cautious").policy).toBe(ASK);
+    expect(run("idgaf", "cautious").policy).toBe(ASK);
   });
 
-  it.each(["yolo"] as const)(
+  it.each(["idgaf"] as const)(
     "IDGAF tools with Questions %s is refused with the reason, never asked",
     (questions) => {
-      const r = run("yolo", questions);
+      const r = run("idgaf", questions);
       expect(r.policy).toBe(OFF);
       expect(r.reason).toContain(IDGAF_NO_ASK_REASON);
     },
   );
 
   it("a tool area below IDGAF keeps its own asking: that is not a question", () => {
-    expect(run("cautious", "yolo").policy).toBe(ASK);
+    expect(run("cautious", "idgaf").policy).toBe(ASK);
   });
 });

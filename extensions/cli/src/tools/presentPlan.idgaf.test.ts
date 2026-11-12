@@ -102,7 +102,7 @@ describe.each([
 ])("PresentPlan decisions at Questions IDGAF in %s", (_name, headless) => {
   beforeEach(() => {
     store.headless = headless;
-    setPolicyLevels({ ...DEFAULT_POLICY_LEVELS, questions: "yolo" });
+    setPolicyLevels({ ...DEFAULT_POLICY_LEVELS, questions: "idgaf" });
   });
 
   it("answers the decisions in the file and does not ask about them", async () => {

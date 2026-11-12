@@ -38,7 +38,7 @@ export const PRESET_GLYPHS: Record<PolicyPresetName | "custom", Glyph> = {
   acceptEdits: CheckBadgeIcon,
   handsOff: ForwardIcon,
   reviewer: SparklesIcon,
-  yolo: BoltIcon,
+  idgaf: BoltIcon,
   custom: AdjustmentsHorizontalIcon,
 };
 
@@ -47,7 +47,7 @@ export const PRESET_GLYPHS: Record<PolicyPresetName | "custom", Glyph> = {
  * can change something. Context use is left out: reading is the one area
  * where Permissive is the default, and counting it would paint Careful amber,
  * the same as Hands off. The order is the order of POLICY_LEVELS, manual to
- * yolo, so the tone says how far the trust goes in the loosest place.
+ * idgaf, so the tone says how far the trust goes in the loosest place.
  */
 export function loosestLevel(levels: PolicyLevels): PolicyLevel {
   let top = 0;
@@ -61,14 +61,14 @@ export function loosestLevel(levels: PolicyLevels): PolicyLevel {
 /**
  * The tone of a preset or of a Custom set of levels, taken from the level
  * tones so there is one palette. A Custom set is neutral (it matches no
- * promise) unless an area is at YOLO, which stays red.
+ * promise) unless an area is at IDGAF, which stays red.
  */
 export function presetTone(
   levels: PolicyLevels,
   preset: PolicyPresetName | undefined,
 ): { chip: string; icon: string; level: PolicyLevel | undefined } {
   const loosest = loosestLevel(levels);
-  if (!preset && loosest !== "yolo") {
+  if (!preset && loosest !== "idgaf") {
     return {
       chip: "bg-lightgray/20 text-foreground",
       icon: "",

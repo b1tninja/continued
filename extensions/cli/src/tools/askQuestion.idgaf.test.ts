@@ -47,7 +47,7 @@ describe.each([
     store.decisions = [];
     resetPendingQuestions();
     vi.mocked(quizService.askQuestion).mockClear();
-    setPolicyLevels({ ...DEFAULT_POLICY_LEVELS, questions: "yolo" });
+    setPolicyLevels({ ...DEFAULT_POLICY_LEVELS, questions: "idgaf" });
   });
   afterEach(() => resetPolicyLevels());
 

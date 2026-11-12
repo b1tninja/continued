@@ -83,7 +83,7 @@ describe("the handler a modern MCP client uses", () => {
   it("at IDGAF answers with the defaults and records it", async () => {
     const notes: string[] = [];
     const handler = elicitationHandler(
-      () => "yolo",
+      () => "idgaf",
       (n) => notes.push(n),
     );
     expect(await handler("k", request)).toEqual({
@@ -113,7 +113,7 @@ describe("the handler a modern MCP client uses", () => {
   );
 
   it("any other server request is an error", async () => {
-    const handler = elicitationHandler(() => "yolo");
+    const handler = elicitationHandler(() => "idgaf");
     await expect(handler("k", { method: "sampling/create" })).rejects.toThrow(
       /Unsupported/,
     );

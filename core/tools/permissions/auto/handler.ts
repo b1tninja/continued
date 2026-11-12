@@ -68,7 +68,7 @@ export interface AutoReviewReply {
   /** The reviewer's reply could not be read, so the call was left for the user. */
   unusable?: boolean;
   /**
-   * YOLO only: the call carries text addressed to the reviewer. YOLO runs it
+   * IDGAF only: the call carries text addressed to the reviewer. IDGAF runs it
    * anyway; the notice is for the person to see.
    */
   notice?: string;
@@ -171,7 +171,7 @@ export async function autoReviewToolCall(
   }
   if (evaluated.policy === "allowedWithoutPermission") {
     const allowed = settled("allow", "Allowed without review.");
-    if (evaluated.source === "yolo") {
+    if (evaluated.source === "idgaf") {
       const hits = findReviewerAddressedText(req.parsedArgs);
       if (hits.length > 0) {
         return { ...allowed, notice: addressedReason(hits) };
