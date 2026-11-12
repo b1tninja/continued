@@ -257,6 +257,8 @@ export const toolPermissionsSchema = z.object({
           allow: z.array(z.string()).optional(),
         })
         .optional(),
+      /** Which reviewer prompt Auto uses: `v3` is the tightened prompt (category check first, stricter authorisation); default is the shipped one. Read from the personal config only. */
+      reviewerPrompt: z.enum(["default", "v3"]).optional(),
       /** Stop the agent and ask after this many refusals in a row, or in total. */
       limits: z
         .object({
