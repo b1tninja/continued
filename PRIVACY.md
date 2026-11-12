@@ -58,6 +58,6 @@ Builds 2.12.0 and 2.12.1 sent web search queries and, for sites with `useLocalCr
 
 ## Reporting a privacy or security problem
 
-This fork's GitHub Issues are turned off and private vulnerability reporting is not enabled. Until that changes, use: **[CONTACT METHOD: the owner must fill this in before release]**. Please do not post vulnerability details or secrets in a public pull request.
+This fork's GitHub Issues are turned off. Report security-sensitive problems privately through GitHub private vulnerability reporting: <https://github.com/b1tninja/continuous/security/advisories/new>. General privacy questions use the same channel until a project mailbox exists. Please do not post vulnerability details or secrets in a public pull request.
 
 Changes to this page are made by pull request; the history is in git.
