@@ -112,7 +112,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
 
   if (status === "generating" || status === "generated") {
     return (
-      <div className="text-description px-4 py-1 text-xs">
+      <div className="px-4 py-1 text-xs text-description">
         Writing the plan…
       </div>
     );
@@ -120,7 +120,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
   if (status !== "done" || !fileUri) {
     // Errors and cancels are shown by ToolCallDiv like any other tool call.
     return (
-      <div className="text-description px-4 py-1 text-xs">
+      <div className="px-4 py-1 text-xs text-description">
         The plan was not saved.
       </div>
     );
@@ -167,10 +167,10 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
   return (
     <div
       data-testid="plan-card"
-      className="border-border mx-2 my-1 rounded border border-solid px-3 py-2"
+      className="mx-2 my-1 rounded border border-solid border-border px-3 py-2"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
-        <ClipboardDocumentListIcon className="text-description h-4 w-4 shrink-0" />
+        <ClipboardDocumentListIcon className="h-4 w-4 shrink-0 text-description" />
         <span className="min-w-0 flex-1 basis-32 font-medium break-words">
           {args.ok ? args.title : output?.name}
         </span>
@@ -179,7 +179,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
           data-testid="plan-card-open"
           title="Open the plan file to edit it"
           onClick={() => void ideMessenger.ide.openFile(fileUri)}
-          className="text-link max-w-full min-w-0 cursor-pointer truncate border-none bg-transparent p-0 text-left text-xs hover:underline"
+          className="max-w-full min-w-0 cursor-pointer truncate border-none bg-transparent p-0 text-left text-xs text-link hover:underline"
         >
           {relativePath ?? "Open plan"}
         </button>
@@ -195,7 +195,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
           {loop && (
             <div
               data-testid="plan-card-usage"
-              className="text-description mt-1"
+              className="mt-1 text-description"
               title="What the loop has used, and what is left to divide among the to-dos"
             >
               {(() => {
@@ -214,7 +214,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       {treeMode && loop && (
         <div
           data-testid="plan-card-diff"
-          className="text-description mt-0.5 text-xs"
+          className="mt-0.5 text-xs text-description"
         >
           {treeSummary(loop, diff)}
         </div>
@@ -231,7 +231,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
           className="mt-1 text-sm"
         >
           {(awaitingLoop || treeMode) && (
-            <summary className="text-description cursor-pointer text-xs">
+            <summary className="cursor-pointer text-xs text-description">
               Full plan text
             </summary>
           )}
@@ -247,7 +247,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       {args.ok && args.decisions.length > 0 && panelAnswers && (
         <div
           data-testid="plan-card-decisions-pointer"
-          className="text-description mt-1 text-xs"
+          className="mt-1 text-xs text-description"
         >
           {args.decisions.length} decision
           {args.decisions.length === 1 ? "" : "s"} for you: answer
@@ -261,7 +261,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
             Decisions for you (answer here, in the plan file, or in your
             message):
           </div>
-          <ol className="text-description m-0 mt-0.5 pl-4">
+          <ol className="m-0 mt-0.5 pl-4 text-description">
             {args.decisions.map((decision, i) => {
               const answer = answers[decision.question];
               return (
@@ -313,7 +313,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
                         onChange={(e) =>
                           setDrafts({ ...drafts, [i]: e.target.value })
                         }
-                        className="border-border text-foreground placeholder:text-description-muted min-w-0 flex-1 basis-40 rounded border border-solid bg-transparent px-1 text-xs"
+                        className="min-w-0 flex-1 basis-40 rounded border border-solid border-border bg-transparent px-1 text-xs text-foreground placeholder:text-description-muted"
                       />
                       <Button
                         type="submit"
@@ -349,16 +349,16 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       {args.ok && !treeMode && (
         <ul
           data-testid="plan-card-todos"
-          className="text-description m-0 mt-1 list-none p-0 text-xs"
+          className="m-0 mt-1 list-none p-0 text-xs text-description"
         >
           {args.items.map((item, i) => (
             <li key={i} className="py-0.5 break-words">
-              <span className="text-description-muted font-mono">
+              <span className="font-mono text-description-muted">
                 {todoMark(String(item.text), diff?.kept)}
               </span>{" "}
               {String(item.text)}
               {typeof item.check === "string" && item.check.trim() && (
-                <div className="text-description-muted pl-5 font-mono">
+                <div className="pl-5 font-mono text-description-muted">
                   check: {maskCommandForDisplay(item.check.trim())}
                 </div>
               )}
@@ -369,7 +369,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       {args.ok && planCheckSummary(args.items) && (
         <div
           data-testid="plan-card-checks"
-          className="text-2xs text-description-muted mt-1 whitespace-pre-wrap"
+          className="mt-1 text-2xs whitespace-pre-wrap text-description-muted"
         >
           {planCheckSummary(args.items)}
         </div>
@@ -377,7 +377,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
       {loopActive && !awaitingLoop && isLatestPlanCard && (
         <div
           data-testid="plan-card-loop-started"
-          className="text-2xs text-description-muted mt-2"
+          className="mt-2 text-2xs text-description-muted"
         >
           The loop is building this plan, one to-do at a time. Questions go to
           its inbox.
@@ -454,7 +454,7 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
             data-testid="plan-card-budget-toggle"
             aria-expanded={budgetOpen}
             title="Divide the loop's budget among the to-dos before building"
-            className="text-link shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs hover:underline"
+            className="shrink-0 cursor-pointer border-none bg-transparent p-0 text-xs text-link hover:underline"
             onClick={() => setBudgetOpen(!budgetOpen)}
           >
             {budgetOpen ? "Hide the budget" : "Set a budget…"}

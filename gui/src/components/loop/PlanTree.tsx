@@ -50,7 +50,7 @@ function StatusIcon({ status }: { status: TreeStatus | "idle" }) {
           aria-hidden
           className={`${ICON} flex items-center justify-center`}
         >
-          <span className="plan-tree-dot bg-link h-2 w-2 rounded-full" />
+          <span className="plan-tree-dot h-2 w-2 rounded-full bg-link" />
         </span>
       );
     case "replaced":
@@ -66,7 +66,7 @@ function StatusIcon({ status }: { status: TreeStatus | "idle" }) {
           aria-hidden
           className={`${ICON} flex items-center justify-center`}
         >
-          <span className="border-description h-2 w-2 rounded-full border border-solid" />
+          <span className="h-2 w-2 rounded-full border border-solid border-description" />
         </span>
       );
   }
@@ -115,7 +115,7 @@ function Row(p: RowProps) {
         onClick={() => p.onToggle?.(p.nodeId)}
         className={`flex min-h-6 min-w-0 items-center gap-1.5 rounded px-1 py-px ${
           p.expandable || p.followTo ? "cursor-pointer" : ""
-        } ${p.highlight ? "bg-input outline-link outline outline-1" : ""}`}
+        } ${p.highlight ? "bg-input outline outline-1 outline-link" : ""}`}
       >
         {p.children}
       </div>
@@ -128,7 +128,7 @@ function Group({ children }: { children: ReactNode }) {
   return (
     <ul
       role="group"
-      className="border-border m-0 mt-px ml-2 list-none border-0 border-l border-solid p-0 pl-2.5"
+      className="m-0 mt-px ml-2 list-none border-0 border-l border-solid border-border p-0 pl-2.5"
     >
       {children}
     </ul>
@@ -144,8 +144,8 @@ function Chip({
 }) {
   return (
     <span
-      className={`text-2xs shrink-0 rounded border border-solid px-1 leading-4 ${
-        tone === "new" ? "text-success border-success" : "text-link border-link"
+      className={`shrink-0 rounded border border-solid px-1 text-2xs leading-4 ${
+        tone === "new" ? "border-success text-success" : "border-link text-link"
       }`}
     >
       {children}
@@ -333,7 +333,7 @@ export function PlanTree({ loop, plan, diff, extras }: PlanTreeProps) {
       testId={`plan-tree-line-${line.tone}`}
     >
       <span aria-hidden className={`${ICON} text-description`} />
-      <span className="text-description min-w-0 text-xs break-words">
+      <span className="min-w-0 text-xs break-words text-description">
         {line.label && <span className={LINE_LABEL_CLASS}>{line.label}: </span>}
         {line.text}
       </span>
@@ -380,12 +380,12 @@ export function PlanTree({ loop, plan, diff, extras }: PlanTreeProps) {
           {item.text}
         </span>
         {item.status === "dropped" && (
-          <span className="text-2xs text-description shrink-0">dropped</span>
+          <span className="shrink-0 text-2xs text-description">dropped</span>
         )}
         {item.isNew && <Chip tone="new">new</Chip>}
         {item.round && <Chip tone="round">R{item.round}</Chip>}
         {item.replacedByNumber !== undefined && (
-          <span className="text-2xs text-description shrink-0">
+          <span className="shrink-0 text-2xs text-description">
             replaced by {item.replacedByNumber}
           </span>
         )}
@@ -420,7 +420,7 @@ export function PlanTree({ loop, plan, diff, extras }: PlanTreeProps) {
           />
         )}
         <StatusIcon status={fold.status === "done" ? "done" : "pending"} />
-        <span className="text-description text-xs">
+        <span className="text-xs text-description">
           <span className="sr-only">{TREE_STATUS_WORD[fold.status]}: </span>
           {fold.label}
         </span>
@@ -467,7 +467,7 @@ export function PlanTree({ loop, plan, diff, extras }: PlanTreeProps) {
                       aria-hidden
                       className={`${ICON} text-description`}
                     />
-                    <span className="text-2xs text-description min-w-0 break-words">
+                    <span className="min-w-0 text-2xs break-words text-description">
                       {node.text}
                     </span>
                   </Row>
