@@ -11,9 +11,7 @@ import {
  * Get the preferred shell for the current platform
  * @returns The preferred shell command or path
  */
-function getPreferredShell(): string {
-  const platform = os.platform();
-
+function getPreferredShell(platform: NodeJS.Platform = os.platform()): string {
   if (platform === "win32") {
     return "powershell.exe";
   } else if (platform === "darwin") {
@@ -24,7 +22,24 @@ function getPreferredShell(): string {
   }
 }
 
-const PLATFORM_INFO = `Choose terminal commands and scripts optimized for ${os.platform()} and ${os.arch()} and shell ${getPreferredShell()}.`;
+/**
+ * The sentence naming the shell. On Windows the editor starts Windows
+ * PowerShell 5.1 (resolveShell), which rejects `&&` and `||` as syntax errors;
+ * the CLI's terminal tool says so for the same reason (its describeShell).
+ * Other platforms are unchanged.
+ */
+export function platformInfo(
+  platform: NodeJS.Platform = os.platform(),
+  arch: string = os.arch(),
+): string {
+  const shell = getPreferredShell(platform);
+  if (platform === "win32") {
+    return `Runs in Windows PowerShell 5.1 (${shell}, ${arch}): chain commands with ; or a newline, not && or ||, and use PowerShell cmdlets and syntax.`;
+  }
+  return `Choose terminal commands and scripts optimized for ${platform} and ${arch} and shell ${shell}.`;
+}
+
+const PLATFORM_INFO = platformInfo();
 
 const RUN_COMMAND_NOTES = `The shell is not stateful and will not remember any previous commands.\
       When a command is run in the background ALWAYS suggest using shell commands to stop it; NEVER suggest using Ctrl+C.\
