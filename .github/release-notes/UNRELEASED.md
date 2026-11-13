@@ -30,5 +30,15 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 ## Behaviour changes
 
+- The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
 - **An MCP server's `readOnlyHint` is believed only for a server you trust.** Before, any server not defined inside the open folder could mark a tool read-only, which let the tool run without asking and kept it from counting as a send in the tainted-session rule. Now the hint counts only for a server you named `trusted` under `mcpServers` in your own `permissions.yaml`, a server written inline in your own `config.yaml` (the CLI: when it runs on `~/.continue/config.yaml`), or a server defined by a file in your global folder. A hint from a server that came with the open folder, an agent file, a `--mcp` flag or any other source is ignored: the tool asks like any other tool, and counts as a send. If a third-party server's read-only tools stopped running silently after you upgraded, add the server under `mcpServers:` as `trusted`.
 - **Two MCP tools never share a name.** In the CLI, a tool keeps its bare name unless another connected server offers the same name or a built-in tool has it; those are offered as `<server>_<tool>`. A call runs on the server its tool was listed under. Before, it ran on whichever connected server had that name first, so the card you approved and the server that ran could differ. A call by a bare name that two servers offer is refused. In the extension and the CLI, tools whose composed names collide (server `a` with tool `b_c` and server `a_b` with tool `c` both gave `a_b_c`) are all renamed with a short stable suffix. Names that do not collide are unchanged, so existing rules keep matching. A saved rule written with a bare name for a tool that is now qualified no longer matches it and the tool asks.
+
+## File edits at IDGAF now reach outside the workspace
+
+At File edits = IDGAF (the top level, also reached by `--auto`), the agent can create, edit and write files outside the workspace folder, in the editor, the terminal UI, headless `-p` and `serve`, with no prompt and no refusal. Before, a headless run refused such a write whatever the level, and the editor's exact edit tools treated an absolute path elsewhere as a file that does not exist.
+
+- Each such write is listed in the audit trail as allowed by the level, with the resolved absolute path, and the tool result says `Wrote outside the workspace: <path>`.
+- Lower levels are unchanged: Manual, Cautious and Automatic ask, Permissive holds it by the outside-paths protection.
+- Still binding at IDGAF: the locked policy files, a tool switched off, an organisation ceiling and the `floor:` rules you wrote. Secret-file name checks inside the file tools, and the webview's own write guard (used for plan files), are not changed.
+- Separate fix: an absolute path inside the workspace given to the new-file tool is now written where it says, not under a folder named after the drive.
