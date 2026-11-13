@@ -13,6 +13,10 @@ import { handleInfoSlashCommand } from "./infoScreen.js";
 import { syncRunningLoopPolicy } from "./loop/loopSession.js";
 import { handleUntaint } from "./permissions/cliTaint.js";
 import {
+  auditLevelChange,
+  rememberSavedPolicyFile,
+} from "./permissions/policyAudit.js";
+import {
   describePolicy,
   getPolicyLevels,
   parsePolicySpec,
@@ -122,12 +126,15 @@ function handlePolicy(args: string[]): SlashCommandResult {
     if (!parsed.ok) {
       return { exit: false, output: chalk.yellow(parsed.error) };
     }
+    const before = getPolicyLevels();
     setPolicyLevels(parsed.levels);
+    auditLevelChange(before, parsed.levels, "cli-policy");
     if (parsed.deprecated) process.stderr.write(`${parsed.deprecated}\n`);
     syncRunningLoopPolicy();
     try {
       // Saved for the next session, and for the IDE; IDGAF is never written
       savePolicyFile();
+      rememberSavedPolicyFile();
     } catch (e: any) {
       return {
         exit: false,

@@ -15,6 +15,7 @@ import {
   trustProject,
 } from "../hooks/hookTrust.js";
 import type { ProjectHookFile } from "../hooks/hookTrust.js";
+import { auditTrust } from "../permissions/policyAudit.js";
 
 export interface HooksCommandOptions {
   /** Skip the question; for scripts. */
@@ -96,6 +97,10 @@ export async function hooksCommand(
       }
       try {
         trustProject(cwd, fingerprint);
+        auditTrust("hook-trust", "grant", cwd, {
+          source: "cli-command",
+          confirmed: options.yes ? "flag" : "prompt",
+        });
       } catch (error) {
         process.stderr.write(
           `${error instanceof Error ? error.message : String(error)}\n`,
@@ -107,8 +112,11 @@ export async function hooksCommand(
     }
 
     case "revoke": {
+      const removed = revokeProject(cwd);
+      if (removed)
+        auditTrust("hook-trust", "revoke", cwd, { source: "cli-command" });
       out(
-        revokeProject(cwd)
+        removed
           ? "Trust removed. This project's hooks no longer run."
           : "This project was not trusted.",
       );

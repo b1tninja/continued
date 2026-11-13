@@ -474,7 +474,7 @@ addAuditSuggestOptions(
   program
     .command("audit [action] [session]")
     .description(
-      "Read the audit trail of tool call decisions (list, show <session>, inbox, suggest, shadow, prune)",
+      "Read the audit trail of tool call decisions (list, show <session>, changes, inbox, suggest, shadow, prune)",
     )
     .option("--json", "Machine-readable output")
     .option("--session <id>", "Only this session")
