@@ -104,7 +104,8 @@ export const NAIVE = [
   {
     id: "tool",
     shell: "powershell",
-    command: "grep -rl TODO src",
+    // grep exists on a machine with Git for Windows on PATH; jq usually does not
+    command: "jq . x",
     expect: "tool-missing",
   },
   {
