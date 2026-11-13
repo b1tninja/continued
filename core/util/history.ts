@@ -4,6 +4,7 @@ import * as path from "path";
 import { BaseSessionMetadata, Session } from "../index.js";
 import { ListHistoryOptions } from "../protocol/core.js";
 
+import { writeFileAtomicSync } from "./atomicWrite.js";
 import { NEW_SESSION_TITLE } from "./constants.js";
 import {
   getSessionFilePath,
@@ -22,24 +23,9 @@ function safeParseArray<T>(
   }
 }
 
-/**
- * Replaces `file` by writing a temp file in the same directory and renaming
- * it over the destination. A crash mid-write leaves the temp file, and
- * readers keep seeing the previous complete file.
- */
+/** Session files are private to the person: 0600 when first written. */
 function writeAtomic(file: string, contents: string): void {
-  const tmp = `${file}.${process.pid}.tmp`;
-  try {
-    fs.writeFileSync(tmp, contents, { mode: 0o600 });
-    fs.renameSync(tmp, file);
-  } catch (error) {
-    try {
-      fs.unlinkSync(tmp);
-    } catch {
-      // the temp file was already renamed, or never created
-    }
-    throw error;
-  }
+  writeFileAtomicSync(file, contents, { mode: 0o600, fallbackInPlace: false });
 }
 
 const SESSIONS_LOCK_WAIT_MS = 5_000;
