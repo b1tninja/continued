@@ -62,14 +62,25 @@ export function shellKindOf(executable: string | undefined): ShellKind {
  * is not reported, and `$?` decides success so `node -e "process.exit(3)";
  * echo hi` is still 0, as it is without the tail. A failing cmdlet leaves
  * `$LASTEXITCODE` null and exits 1. Other shells report the real code
- * already and get `command` back unchanged. Opt-in: ordinary Bash tool calls
- * do not use it.
+ * already and get `command` back unchanged.
+ *
+ * `resetFirst: false` leaves out the line that clears `$LASTEXITCODE`, so the
+ * command stays on line 1 and PowerShell's own error text ("At line:1
+ * char:5") is what it would be without the tail: the terminal tools use it,
+ * because the model reads that text. The price is small: when the last
+ * statement is a failing cmdlet, no native program ran in the command, and
+ * the person's profile left a non-zero `$LASTEXITCODE`, that stale number is
+ * reported in place of 1 (a failure either way).
  */
-export function withRealExitCode(command: string, kind: ShellKind): string {
+export function withRealExitCode(
+  command: string,
+  kind: ShellKind,
+  opts: { resetFirst?: boolean } = {},
+): string {
   if (kind !== "powershell") return command;
   // Newlines, not `;`: a trailing `# comment` must not swallow the tail
   return [
-    "$global:LASTEXITCODE = $null",
+    ...(opts.resetFirst === false ? [] : ["$global:LASTEXITCODE = $null"]),
     command,
     "$__ok = $?",
     "if ($__ok) { exit 0 }",

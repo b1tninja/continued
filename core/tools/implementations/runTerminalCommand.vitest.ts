@@ -167,6 +167,24 @@ describe("runTerminalCommandImpl", () => {
     }
   });
 
+  // Windows PowerShell used to report 1 for any failing native program
+  it("reports the exit code the program chose", async () => {
+    const command = `node -e "console.log('before exit'); process.exit(3)"`;
+    const streamed = await runTerminalCommandImpl(
+      { command, waitForCompletion: true },
+      createMockExtras({ onPartialOutput: vi.fn() }),
+    );
+    expect(streamed[0].status).toBe("Command failed with exit code 3");
+    expect(streamed[0].content.trim()).toBe("before exit");
+    const plain = await runTerminalCommandImpl(
+      { command, waitForCompletion: true },
+      createMockExtras(),
+    );
+    expect(plain[0].status).toBe(
+      "Command failed with: Command failed with exit code 3",
+    );
+  }, 60_000);
+
   // Before, a command that asks a question waited for the two-minute timeout
   it("a command that prompts fails or reads nothing, and does not wait", async () => {
     const windows = process.platform === "win32";

@@ -74,6 +74,17 @@ describe("runTerminalCommandTool", () => {
     );
   });
 
+  describe("exit codes", () => {
+    // Windows PowerShell used to report 1 for any failing native program
+    it("names the code the program chose", async () => {
+      await expect(
+        runTerminalCommandTool.run({
+          command: `node -e "console.error('failed'); process.exit(3)"`,
+        }),
+      ).rejects.toMatch(/^Error \(exit code 3\): failed/);
+    }, 30_000);
+  });
+
   describe("commands that ask a question", () => {
     // Standard input used to stay open, so these waited for the timeout
     it.runIf(process.platform === "win32")(

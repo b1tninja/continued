@@ -8,7 +8,7 @@ import {
 import { commandLintGate } from "core/tools/permissions/commandLint.js";
 import { missingBinaryGate } from "core/tools/permissions/missingBinaryGate.js";
 import { getCommandExecutor } from "core/util/commandExecutor.js";
-import { COMMAND_STDIO } from "core/util/commandSpawn.js";
+import { COMMAND_STDIO, realExitInvocation } from "core/util/commandSpawn.js";
 import { getTerminalShellPreference } from "core/util/shell.js";
 import {
   TERMINAL_ENV_NOTICE,
@@ -114,9 +114,10 @@ function commandBlocked(command: string): string | undefined {
   );
 }
 
-// Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL
+// Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL;
+// PowerShell is asked for the exit code the command's own program chose
 function getShellCommand(command: string): { shell: string; args: string[] } {
-  return getCommandExecutor().invocation(command);
+  return realExitInvocation(getCommandExecutor(), command);
 }
 
 export function runCommandInBackground(command: string): {

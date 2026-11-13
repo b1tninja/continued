@@ -1,3 +1,6 @@
+import type { CommandExecutor } from "./commandExecutor";
+import { withRealExitCode } from "./shell";
+
 /**
  * How a command the agent starts is given its standard streams, in one place
  * for every terminal tool (the editor's, the CLI's, background jobs and loop
@@ -18,3 +21,22 @@ export const COMMAND_STDIO: ["ignore", "pipe", "pipe"] = [
   "pipe",
   "pipe",
 ];
+
+/**
+ * The program and arguments a terminal tool starts for `command`, with the
+ * exit code the command's own program chose. Windows PowerShell's `-Command`
+ * reports 1 for any failing native program (`node -e "process.exit(3)"` came
+ * back as 1), so the result the model and the person read named a code no
+ * program returned. Other shells already report the real code and get the
+ * command unchanged. What is shown, approved, linted and audited is still
+ * `command` itself: only the text handed to the shell carries the tail, and
+ * the tail prints nothing.
+ */
+export function realExitInvocation(
+  executor: Pick<CommandExecutor, "invocation" | "shell">,
+  command: string,
+): { shell: string; args: string[] } {
+  return executor.invocation(
+    withRealExitCode(command, executor.shell.kind, { resetFirst: false }),
+  );
+}

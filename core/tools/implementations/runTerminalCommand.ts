@@ -1,7 +1,7 @@
 import iconv from "iconv-lite";
 import childProcess from "node:child_process";
 import os from "node:os";
-import { COMMAND_STDIO } from "../../util/commandSpawn";
+import { COMMAND_STDIO, realExitInvocation } from "../../util/commandSpawn";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 
 // Default timeout for terminal commands (2 minutes)
@@ -65,8 +65,9 @@ function getDecodedOutput(data: Buffer): string {
   }
 } // Simple helper function to use login shell on Unix/macOS and PowerShell on Windows
 function getShellCommand(command: string): { shell: string; args: string[] } {
-  // Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL
-  return getCommandExecutor().invocation(command);
+  // Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL;
+  // PowerShell is asked for the exit code the command's own program chose
+  return realExitInvocation(getCommandExecutor(), command);
 }
 
 import { fileURLToPath } from "node:url";
