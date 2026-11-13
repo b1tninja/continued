@@ -61,6 +61,7 @@ import {
 } from "../util/editLoggingUtils";
 import type { VsCodeWebviewProtocol } from "../webviewProtocol";
 import { registerVsCodeAi } from "../ai/registerVsCodeAi";
+import { registerEnvironmentDetailSetting } from "../environmentDetailSetting";
 import { registerTerminalShellSetting } from "../terminalShellSetting";
 import { registerConfigLanguageSupport } from "../lang-server/configLanguageSupport";
 import { promptForWorkspaceConfigTrust } from "../util/workspaceConfigTrust";
@@ -294,6 +295,7 @@ export class VsCodeExtension {
 
     // Where terminal commands run (the host shell or WSL)
     registerTerminalShellSetting(context);
+    registerEnvironmentDetailSetting(context);
 
     this.verticalDiffManager = new VerticalDiffManager(
       this.sidebar.webviewProtocol,

@@ -39,6 +39,8 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
   "history/list": [],
   "docs/getIndexedPages": [],
   "history/save": undefined,
+  // No environment by default, so a test's request carries no machine facts
+  "environment/session": undefined as never,
   "policy/save": undefined,
   "providers/list": {
     instances: [],

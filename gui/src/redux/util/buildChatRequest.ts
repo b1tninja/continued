@@ -11,6 +11,12 @@ import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { SystemMessageToolCodeblocksFramework } from "core/tools/systemMessageTools/toolCodeblocks";
 import { BuiltInToolNames } from "core/tools/builtIn";
+import { withTerminalToolSentence } from "core/tools/definitions/terminalToolText";
+import {
+  placeEnvironment,
+  withLeadingText,
+  withTrailingText,
+} from "core/util/environmentMessages";
 import { loopRunPlanBlock, withLoopPlanBlock } from "core/util/loopMode";
 import { taskPlanTailMessage } from "core/util/taskPlan";
 import {
@@ -24,6 +30,8 @@ import { selectSelectedChatModel } from "../slices/configSlice";
 import type { RootState } from "../store";
 import { constructMessages } from "./constructMessages";
 import { getBaseSystemMessage } from "./getBaseSystemMessage";
+
+const NOTICE_SEPARATOR = "\n\n";
 
 /** The plan block of the running item's run, kept between its requests. */
 const runPlanMemo: { key?: string; block?: string } = {};
@@ -78,6 +86,8 @@ export interface ChatRequest {
   appliedRuleIndex: number;
   /** Set when the model takes tools as text in the system message. */
   systemToolsFramework: SystemMessageToolCodeblocksFramework | undefined;
+  /** How many user messages the request's history has (for the date notice). */
+  userTurns: number;
 }
 
 /**
@@ -103,8 +113,19 @@ export function buildChatRequest(
     throw new Error("No chat model selected");
   }
 
-  // Get tools and apply model-level overrides (disabled, description, etc.)
+  // The session's environment texts, rendered once by core and frozen with
+  // the session (core/util/environmentSession.ts); absent until core answers.
+  const environment = state.session.environment?.strings;
+
+  // Get tools and apply model-level overrides (disabled, description, etc.).
+  // The terminal tool names the shell the session's executor runs.
   let activeTools = selectActiveTools(state);
+  if (environment?.toolSentence) {
+    activeTools = withTerminalToolSentence(
+      activeTools,
+      environment.toolSentence,
+    );
+  }
   if (model.toolOverrides?.length) {
     const { tools: overriddenTools, errors } = applyToolOverrides(
       activeTools,
@@ -164,12 +185,17 @@ export function buildChatRequest(
   // Construct messages (excluding system message). The use's prompt choice
   // (`modeModels.<use>.prompt`) picks the turn text: a Loop item may run on
   // the short text while Agent mode keeps the full one.
-  const baseSystemMessage = getBaseSystemMessage(
+  // The system line (the platform and where the session facts are) goes
+  // last, the same bytes in chat, agent and plan, and in every folder.
+  const modeSystemMessage = getBaseSystemMessage(
     state.session.mode,
     model,
     activeTools,
     use ? promptChoiceFor(state.config.config.modeModels, use) : undefined,
   );
+  const baseSystemMessage = environment?.systemLine
+    ? `${modeSystemMessage}\n\n${environment.systemLine}`
+    : modeSystemMessage;
 
   const systemMessage = systemToolsFramework
     ? addSystemMessageToolsToSystemMessage(
@@ -229,13 +255,41 @@ export function buildChatRequest(
   const tail = use
     ? tailFor(state.config.config.modeModels, use, model.model)
     : undefined;
+  // The first-message block goes before the first user message's text, the
+  // frozen bytes of the session's start, so every request extends the last.
+  // A date notice (ENV32) rides at the end of the user message it was first
+  // added to, so it never moves and earlier bytes never change.
+  const notices = state.session.environment?.notices ?? [];
+  const withEnvironment =
+    environment?.firstMessageBlock || notices.length
+      ? placeEnvironment(
+          withoutMessageIds,
+          (item) => item.message.role === "user",
+          (item, add) => ({
+            ...item,
+            message: {
+              ...item.message,
+              content: withTrailingText(
+                withLeadingText(item.message.content, add.first ?? ""),
+                add.notices.join(NOTICE_SEPARATOR),
+              ),
+            } as typeof item.message,
+          }),
+          environment?.firstMessageBlock,
+          notices,
+        )
+      : withoutMessageIds;
+  const userTurns = withoutMessageIds.filter(
+    (item) => item.message.role === "user",
+  ).length;
+
   const withTail = tail
-    ? withoutMessageIds.map((item) =>
+    ? withEnvironment.map((item) =>
         item.message.role === "user"
           ? { ...item, message: withTurnTail([item.message], tail)[0] }
           : item,
       )
-    : withoutMessageIds;
+    : withEnvironment;
 
   const {
     messages,
@@ -272,5 +326,6 @@ export function buildChatRequest(
     appliedRules,
     appliedRuleIndex,
     systemToolsFramework,
+    userTurns,
   };
 }

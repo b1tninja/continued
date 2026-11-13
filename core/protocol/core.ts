@@ -72,6 +72,7 @@ import {
   RangeInFileWithNextEditInfo,
   SerializedContinueConfig,
   Session,
+  SessionEnvironment,
   SiteIndexingConfig,
   SlashCommandDescWithSource,
   StreamDiffLinesPayload,
@@ -177,6 +178,12 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
   "history/delete": [{ id: string }, void];
   "history/load": [{ id: string }, Session];
   "history/save": [Session, void];
+  /**
+   * The session's environment (the snapshot and its three texts), gathered
+   * once for a new session; a saved one is sent back to freeze the terminal
+   * executor at its shell again (core/util/environmentSession.ts).
+   */
+  "environment/session": [{ saved?: SessionEnvironment }, SessionEnvironment];
   "history/share": [{ id: string; outputDir?: string }, void];
   "history/clear": [undefined, void];
   "devdata/log": [DevDataLogEvent, void];

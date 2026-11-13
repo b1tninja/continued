@@ -1,4 +1,3 @@
-import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -14,6 +13,10 @@ import {
   attributionInstructions,
   loadAttributionSettings,
 } from "./attribution.js";
+import {
+  ensureSessionEnvironment,
+  environmentDisclosure,
+} from "./environmentContext.js";
 import { processRule } from "./hubLoader.js";
 import { AGENT_FILES, rulesDirs } from "./instructionFiles.js";
 import { PermissionMode } from "./permissions/types.js";
@@ -21,35 +24,20 @@ import { serviceContainer } from "./services/ServiceContainer.js";
 import { ConfigServiceState, SERVICE_NAMES } from "./services/types.js";
 import { SYSTEM_MARKERS } from "./systemMessageMarkers.js";
 
-/**
- * Check if current directory is a git repository
- */
-function isGitRepo(): boolean {
-  try {
-    execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // The CLI's preamble. The turn's own instructions (act or plan) are shared
 // with the IDE and appended by constructSystemMessage; see
 // core/llm/prompts/turns.ts and plans/policy-areas.md.
 //
-// Only facts that are the same for every run in this folder go here, so the
-// cached prefix matches across sessions. The date and the git status change
-// between runs and travel in the first user message of each request instead
-// (src/environmentContext.ts).
-const baseSystemMessage = `You are an agent in the Continuous CLI. Your replies are shown in a terminal: be concise and direct, and show file names and code only where they help.
+// Only facts that are the same for every run in every folder go here, so the
+// cached prefix matches across folders and sessions: the renderer's system
+// line (the platform and where the session facts are). The working folder,
+// the date and the git state travel in the first user message of each
+// request instead (src/environmentContext.ts).
+function baseSystemMessage(): string {
+  return `You are an agent in the Continuous CLI. Your replies are shown in a terminal: be concise and direct, and show file names and code only where they help.
 Here is useful information about the environment you are running in:
-<env>
-Working directory: ${process.cwd()}
-Is directory a git repo: ${isGitRepo()}
-Platform: ${process.platform}
-</env>
-
-Today's date and the git status of the working tree are in a <context name="environment"> block in the first user message.`;
+${environmentDisclosure().systemLine}`;
+}
 
 async function getConfigYamlRules(): Promise<string[]> {
   const configState = await serviceContainer.get<ConfigServiceState>(
@@ -208,7 +196,8 @@ export async function constructSystemMessage(
   }
 
   // Construct the comprehensive system message
-  let systemMessage = baseSystemMessage;
+  await ensureSessionEnvironment();
+  let systemMessage = baseSystemMessage();
 
   // The turn's instructions: a plan turn in plan mode, an act turn otherwise.
   // The same texts serve the IDE, so the two surfaces cannot drift apart; the

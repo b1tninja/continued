@@ -31,6 +31,16 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 ## Behaviour changes
 
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
+- Prompt cache, once: the first request after upgrading writes the prompt cache once because the prompt prefix changed. The changes are all in text sent to the model: the `multi_edit` / `MultiEdit` tool description is shorter (the same rules in about a quarter of the words), the terminal agent's git status in the environment block is capped at 40 files and 4,000 characters (the rest is counted in a "... and N more changed files" line, files listed by status and then path), and, with tool search on, the `search_tools` description now lists every deferrable tool and no longer changes after a search. Tool search is still off by default. In the terminal agent the tools a search activated are now read from the conversation, so a resumed session keeps the tools its history already called and a new session in the same process starts with none.
+
+## What the agent is told about your machine (2.18.0 train)
+
+- One renderer now writes what both the editor and the terminal agent tell the model about the machine and folder, from one snapshot read when a session starts and saved with it, so a resumed session sends the same bytes. The system message carries only the platform (no folder, no git answer); the terminal tool names the shell that really runs the command (and no folder); the folder, today's date (your local day, not UTC) and the git facts go in a fenced block in the first message, with your home folder shown as `~`. Your account name, the host name, your git identity and network addresses are never sent.
+- The editor's terminal tool no longer says "optimized for win32 and x64 and shell powershell.exe": it carries the same shell sentence as the terminal agent, and the shell is fixed for the session, so a change to `continuous.terminal.shell` takes effect in the next session. A remote window says the shell is not known there.
+- A session that runs past midnight, or is resumed on a later day, gets one "Today's date is now ..." notice on the newest message.
+- `environment.detail` (`minimal`, `standard`, `full`) in your config.yaml, `continuous.environment.detail` in VS Code and `--env-detail` in the terminal agent choose how much is sent; an assistant's config may only lower it.
+- `continuous doctor env` prints what is sent and why (`--json`, `--surface`, `--detail`), with no network call.
+- Prompt cache, once more: these change the tools and system text, so the first request after upgrading writes the cache once.
 
 ## File edits at IDGAF now reach outside the workspace
 

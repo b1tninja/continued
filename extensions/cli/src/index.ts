@@ -4,6 +4,7 @@
 import "./init.js";
 
 import { Command } from "commander";
+import { parseEnvDetail } from "core/util/environmentSnapshot.js";
 import { dismissCurrentNotice } from "core/util/retirementStartup.js";
 
 import { addRunLimitOptions } from "./budget/runLimits.js";
@@ -24,6 +25,7 @@ import { sandboxCommand } from "./commands/sandbox.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
 import { testConnectionCommand } from "./commands/testConnection.js";
+import { setEnvironmentDetail } from "./environmentContext.js";
 import {
   handleValidationErrors,
   validateFlags,
@@ -240,6 +242,18 @@ addRunLimitOptions(addCommonOptions(program))
       logger.debug("Verbose logging enabled");
     }
 
+    // --env-detail: how much the model is told about the machine (ENV18)
+    if (options.envDetail !== undefined) {
+      const detail = parseEnvDetail(options.envDetail);
+      if (!detail) {
+        safeStderr(
+          `--env-detail must be minimal, standard or full (got "${options.envDetail}")\n`,
+        );
+        process.exit(1);
+      }
+      setEnvironmentDetail(detail);
+    }
+
     // Handle piped input for headless mode (only if we haven't already read it)
     if (options.print && !stdinInput) {
       const headlessStdinInput = readStdinSync();
@@ -376,11 +390,30 @@ program
 program
   .command("doctor [topic] [urls...]")
   .description(
-    "Diagnose proxy and certificate problems (doctor network [url...])",
+    "Diagnose proxy and certificate problems (doctor network [url...]), or show what the agent is told about this machine (doctor env)",
   )
-  .action(async (topic: string | undefined, urls: string[]) => {
-    await gracefulExit(await doctorCommand(topic, urls));
-  });
+  .option("--json", "doctor env: print the renderer's object as JSON")
+  .option(
+    "--surface <surface>",
+    "doctor env: preview another surface (cli, ide-agent, subagent, ...)",
+  )
+  .option(
+    "--detail <level>",
+    "doctor env: preview another detail level (minimal, standard, full)",
+  )
+  .action(
+    async (
+      topic: string | undefined,
+      urls: string[],
+      opts: { json?: boolean; surface?: string; detail?: string },
+    ) => {
+      await gracefulExit(
+        await doctorCommand(topic, urls, {
+          env: { json: opts.json, surface: opts.surface, detail: opts.detail },
+        }),
+      );
+    },
+  );
 
 // Reviewer evaluation: dry by default, --run sends the requests
 registerReviewerCommand(program, gracefulExit);

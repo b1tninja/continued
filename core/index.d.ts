@@ -12,6 +12,8 @@ import { TextResourceContents } from "@modelcontextprotocol/sdk/types.js";
 import Parser from "web-tree-sitter";
 import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
 import { LLMConfigurationStatuses } from "./llm/constants";
+import type { EnvironmentNotice } from "./util/environmentMessages";
+import type { EnvironmentSnapshot } from "./util/environmentPrompt";
 import type {
   SubagentRunStatus,
   SubagentToolCallSummary,
@@ -390,6 +392,29 @@ export interface Session {
    * stay Plan and Agent; a plan presented while it is set starts the loop.
    */
   loopRequested?: boolean;
+  /**
+   * Optional: what the model was told about this machine and workspace, read
+   * once when the session started (core/util/environmentSnapshot.ts). Reused
+   * on resume so the prompt keeps the bytes it started with.
+   */
+  environment?: SessionEnvironment;
+}
+
+/** The session's frozen environment and the detail level it was rendered at. */
+export interface SessionEnvironment {
+  snapshot: EnvironmentSnapshot;
+  detail: "minimal" | "standard" | "full";
+  /**
+   * The three texts as first sent (the editor keeps them, so a later
+   * renderer cannot change a saved session's bytes).
+   */
+  strings?: {
+    systemLine: string;
+    toolSentence: string;
+    firstMessageBlock: string;
+  };
+  /** Date notices already sent, each on the user message it was added to. */
+  notices?: EnvironmentNotice[];
 }
 
 /** Where one plan item is in Loop mode. The task list shows it too. */
