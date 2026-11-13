@@ -352,3 +352,56 @@ Not done here (each needs a measurement or a scratch run first):
 - A timeout on every job (CI37) is left to pull request #734, which edits the same two workflow files.
   This change adds `timeout-minutes` only to its own new jobs (`changes` and `merge-gate`, 5 minutes each)
   and does not touch the lines #734 adds; see the pull request body for the overlap.
+
+## 8. Measured job costs (2026-11-13)
+
+Source: the last 100 completed `pull_request` runs of PR Checks and of CLI PR Checks, and 60 of Supply Chain,
+from the REST API (`actions/workflows/<file>/runs`, then `runs/<id>/jobs?filter=latest`), all from before the
+non-polling gate. Only jobs that concluded `success` or `failure` are counted (cancelled runs are most of the
+100: a newer push supersedes them). The 100 PR Checks runs span 2026-11-13 02:07 to 14:50 UTC; 47 of them
+reached the test jobs. Duration is `completed_at - started_at`; queue is `started_at - created_at`. The split
+uses the step timings of each job: fixed (set up job, checkout, setup-node, cache restore and save, post
+steps), install/build (`Setup packages`, `Setup <component>`, installs, `Build core`, building the extension),
+tests (type check, lint, test steps). "Mixed" is a composite action whose steps the jobs API does not split;
+for those a job log was read (one successful run of each).
+
+| workflow  | job                            | n   | median min | p90 min | queue median min | queue p90 min | fixed % | install/build % |        tests % (mixed) |
+| --------- | ------------------------------ | --- | ---------: | ------: | ---------------: | ------------: | ------: | --------------: | ---------------------: |
+| PR Checks | vscode e2e (10 legs, per leg)  | 440 |        2.0 |     2.9 |             41.9 |         192.6 |       5 |    about 38 (a) |           about 57 (a) |
+| PR Checks | jetbrains-tests                | 47  |        8.3 |     9.4 |             31.2 |         158.8 |      25 |    about 36 (b) |           about 47 (b) |
+| PR Checks | core-checks                    | 47  |        6.8 |     8.2 |             33.7 |         127.7 |       5 |              11 |                     83 |
+| CLI       | test (ubuntu, Node 22)         | 55  |        5.2 |     6.1 |             13.4 |         125.0 |       4 |              25 |                     70 |
+| PR Checks | gui-checks                     | 47  |        5.5 |     6.0 |             32.3 |         140.5 |       2 |              18 |                     79 |
+| PR Checks | packages-checks (6 legs, each) | 267 |        0.9 |     1.3 |             35.2 |         170.4 |      39 |              48 | 8 (c), mostly `npm ci` |
+| PR Checks | vscode-package-extension-linux | 46  |        3.5 |     4.0 |             24.2 |         155.4 |      24 |              75 |                      0 |
+| CLI       | lint                           | 54  |        1.9 |     2.2 |             12.6 |         121.7 |      10 |              67 |                     21 |
+| CLI       | smoke-api                      | 54  |        1.6 |     1.8 |             11.5 |         127.9 |      11 |              85 |                      1 |
+| PR Checks | vscode-checks                  | 49  |        1.7 |     2.0 |             25.4 |         130.0 |       9 |              49 |                     38 |
+| PR Checks | binary-checks                  | 49  |        1.2 |     1.4 |             19.9 |         122.1 |      10 |              72 |                     14 |
+| PR Checks | vscode-get-test-file-matrix    | 48  |        1.1 |     1.2 |             30.0 |         137.1 |      40 |              56 |                      0 |
+| PR Checks | prettier-check                 | 46  |        1.0 |     1.2 |             32.0 |         129.9 |      20 |               1 |                     75 |
+| Supply    | pins-and-notice                | 36  |        0.2 |     0.3 |             17.2 |         114.1 |      58 |               0 |                     18 |
+| Supply    | dependency-review              | 36  |        0.1 |     0.2 |             16.3 |          93.5 |      60 |               0 |                     10 |
+| PR Checks | get-packages-matrix            | 46  |        0.1 |     0.2 |             25.5 |         145.1 |      63 |               0 |                      0 |
+
+(a) One leg's log: about 57 s of setup (four cache restores 23 s, `build-packages.js` 18 s, compile and
+extension install 4 s) and 94 s of test. (b) One log: `Free disk space` 86 s (median 104 s), then 3.3 min building packages, gui, the
+extension prepackage and binary before Gradle, and Gradle 4.3 min. (c) `Test and check <package>` is `npm ci` plus the tests; the
+tests themselves take 2 to 17 s.
+
+A full PR Checks run costs a median of 55 runner-minutes (p90 58), a CLI PR Checks run 8.4.
+
+The five largest time sinks:
+
+1. Queue delay, not run time. Every job waited a median of 12 to 42 minutes for a runner (p90 two to
+   three hours) against run times of 0.1 to 8 minutes. In this window the pool (20 concurrent jobs) was
+   mostly held by the polling gate, which section 7 removes; what is left is driven by the number of jobs
+   per push, so removing jobs matters more than shortening them.
+2. The e2e legs: 10 per push, 2 minutes each, about 40 % of it setup that every leg repeats.
+3. `core-checks`: `npm run vitest` alone takes about 5.3 minutes (469 files) and jest 43 s; the type check
+   and lint 48 s.
+4. `jetbrains-tests`: 8.3 minutes, of which about 1.5 is freeing disk and 3.3 rebuilding packages,
+   gui, the extension and binary before Gradle starts.
+5. Repeated setup: `build-packages.js` (installs and builds all six packages) runs in about 25 jobs per
+   push at 18 to 29 s each (about 10 runner-minutes); the six package legs spend 87 % of their time on it
+   to run 2 to 17 s of tests each; the CLI builds core three times (20 s each).
