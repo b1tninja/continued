@@ -36,7 +36,7 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
     "file:///Users/user/workspace1",
     "file:///Users/user/workspace2",
   ],
-  "modelCatalog/status": { policy: "ask" },
+  "modelCatalog/status": { policy: "ask", refreshHours: 24 },
   "modelCatalog/cached": null,
   "history/list": [],
   "docs/getIndexedPages": [],

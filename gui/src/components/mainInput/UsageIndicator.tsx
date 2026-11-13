@@ -7,6 +7,7 @@ import {
 import { useMemo } from "react";
 import { useAppSelector } from "../../redux/hooks";
 import { ToolTip } from "../gui/Tooltip";
+import { formatUpdatedAt } from "../ModelInfoFreshness";
 
 /**
  * Small usage readout in the input toolbar: context used against the model's
@@ -90,8 +91,9 @@ export function UsageIndicator() {
       </span>
       {summary.cost !== undefined && summary.priceListDate && (
         <span className="text-description-muted" data-testid="usage-price-date">
-          Estimate: OpenRouter prices from the list downloaded{" "}
-          {summary.priceListDate.slice(0, 10)}
+          Estimate: OpenRouter prices, last updated{" "}
+          {formatUpdatedAt(summary.priceListDate)}. Refresh now from the Models
+          settings.
         </span>
       )}
       {models.length > 1 &&

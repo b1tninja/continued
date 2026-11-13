@@ -1,6 +1,7 @@
 import { calculateRequestCost } from "core/llm/utils/calculateRequestCost";
 import React, { useMemo, useState } from "react";
 import { LLMLog } from "../../hooks/useLLMLog";
+import { ModelInfoFreshness } from "../ModelInfoFreshness";
 import useTotalUsage from "../../hooks/useTotalUsage";
 
 interface TotalUsageProps {
@@ -310,6 +311,7 @@ const TotalUsage: React.FC<TotalUsageProps> = ({ llmLog }) => {
                   {totalUsage.priceListDate.slice(0, 10)}
                 </div>
               )}
+              <ModelInfoFreshness className="mt-1 items-center" />
             </div>
           </div>
         </>

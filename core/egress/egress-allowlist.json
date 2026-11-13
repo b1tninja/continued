@@ -131,8 +131,13 @@
     },
     {
       "class": "O",
-      "reason": "Public model catalogues (ollama.com/library, openrouter.ai/api/v1/models): a plain GET with no key, contacted only after the person chooses Download, Pull now or Refresh, or runs `continuous models refresh`.",
-      "hosts": ["ollama.com", "openrouter.ai"]
+      "reason": "Ollama's public model library (ollama.com/library), a plain GET with no key: only after the person chooses Download or Refresh in Ollama's setup; never at start-up or on a timer.",
+      "hosts": ["ollama.com"]
+    },
+    {
+      "class": "D",
+      "reason": "OpenRouter's public model list (openrouter.ai/api/v1/models), a plain GET with no key and a fixed user-agent: refreshed in the background when the local copy is older than modelCatalogRefreshHours (model information updates `automatic`, the default), and on Pull now, Refresh now or `continuous models refresh`. `modelCatalog: manual` stops the background refresh; `off` stops every request.",
+      "hosts": ["openrouter.ai"]
     },
     {
       "class": "S",
