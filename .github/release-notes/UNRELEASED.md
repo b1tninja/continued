@@ -30,7 +30,12 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 ## Behaviour changes
 
+- A root `--policy` or `--trust-project-hooks` now reaches `continuous serve` and `continuous acp` when it is written before the subcommand. Before, `continuous --policy careful serve` dropped the policy without a word and ran with the default one.
+- The git-ai integration is now off by default. The terminal agent used to run `git-ai` (found through PATH, with the workspace as its working directory) around every file edit whenever it was installed. It now runs only if your own `settings.json` in your Continuous folder says `"gitAiIntegration": true`, and then only the `git-ai` found in an absolute PATH entry outside the workspace, by its full path. A project cannot switch it on.
+- `continuous serve` no longer runs the `install` command from `.continuous/environment.json` or `.continue/environment.json` unless the folder is trusted. Run `continuous project trust` (or pass `--trust-project-config`) to keep the old behaviour; `serve` prints one line on stderr when it skips the file. Set `"environmentInstall": false` in your own `settings.json` to turn it off even for a trusted folder. See the workspace trust page.
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
+- **The terminal agent's `Fetch` tool now uses the same hardened fetch as the IDE.** It used to hand Node's global `fetch` to the shared implementation, which ignores the pinned address the safety check resolved (so a name that changed its answer between the check and the connection could reach a private address), your proxy, CA bundle, `verifySsl` and client certificate. It now goes through `@continuedev/fetch` with the pin and your `requestOptions` transport settings. Your `requestOptions.headers` are sent only to your configured models' hosts, never to a URL the model chose. If you relied on `Fetch` working without your proxy or CA settings, it will now use them.
+- **A fetched page is labelled with the URL it was read from, not the one the model asked for.** After a redirect the item's name source, `uri` and the spotlight source name the final URL, so a page that redirected to another host says so. Redirects are still followed one hop at a time and still refused when they lead from a public address to a private one. Not changed: a redirect to a different public host does not ask for approval.
 
 ## File edits at IDGAF now reach outside the workspace
 
@@ -44,3 +49,8 @@ At File edits = IDGAF (the top level, also reached by `--auto`), the agent can c
 ## JetBrains: the plugin loads in 2026.2 IDEs
 
 - The JetBrains plugin declares the JCEF plugin dependency (`com.intellij.modules.jcef`) that JetBrains 2026.2 requires. Before, the Continuous tool window failed to load there with `NoClassDefFoundError: com/intellij/ui/jcef/JBCefApp`. Older IDE versions are unaffected: up to 2026.1 the id is an alias of the core platform. Not yet tried in a real 2026.2 IDE.
+## Model lists are downloaded when you ask, not when a screen opens
+
+- Provider setup no longer contacts `ollama.com` or `openrouter.ai` when it opens. Ollama asks "Download the latest model list from ollama.com?"; OpenRouter asks "Pull the latest model information from OpenRouter?" with **Pull now**, **Not now** and **Don't ask again** (saved as `modelCatalog: never` in `config.yaml`). **Refresh** stays on the model step.
+- The OpenRouter list (names, context sizes, per-token prices) is kept on this computer, dated, in `model-catalog/openrouter.json` in the global folder, and read from there afterwards. If the site cannot be reached, the list you already had stays.
+- The details are in [PRIVACY.md](https://github.com/b1tninja/continuous/blob/main/PRIVACY.md) and the OpenRouter provider page.
