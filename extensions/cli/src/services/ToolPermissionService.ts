@@ -44,6 +44,16 @@ export class ToolPermissionService
   extends BaseService<ToolPermissionServiceState>
   implements ServiceWithDependencies
 {
+  /**
+   * The --allow, --ask and --exclude flags this session was started with.
+   * They outrank permissions.yaml, so every later reload has to apply them
+   * again.
+   */
+  private sessionFlags?: Pick<
+    InitializeToolServiceOverrides,
+    "allow" | "ask" | "exclude"
+  >;
+
   constructor() {
     super("ToolPermissionService", {
       permissions: { policies: [] },
@@ -192,6 +202,14 @@ export class ToolPermissionService
     mcpServiceState?: MCPServiceState,
   ): ToolPermissionServiceState {
     logger.debug("Synchronously initializing ToolPermissionService");
+
+    if (runtimeOverrides) {
+      this.sessionFlags = {
+        allow: runtimeOverrides.allow,
+        ask: runtimeOverrides.ask,
+        exclude: runtimeOverrides.exclude,
+      };
+    }
 
     // Set mode from overrides or default
     if (runtimeOverrides?.mode) {
@@ -397,10 +415,14 @@ export class ToolPermissionService
 
     logger.debug("Reloading permissions from configuration files");
 
-    // Reload permissions from files
+    // Reload permissions from files. The session's command line flags and
+    // its headless state are not in any file: without them an "always allow"
+    // would quietly bring back a tool that --exclude took away.
     const freshPolicies = resolvePermissionPrecedence({
+      commandLineFlags: this.sessionFlags,
       personalSettings: true, // Enable loading from ~/.continue/permissions.yaml
       useDefaults: true,
+      isHeadless: this.currentState.isHeadless,
     });
 
     // Combine mode policies with freshly loaded user policies
