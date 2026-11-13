@@ -167,6 +167,31 @@ describe("runTerminalCommandImpl", () => {
     }
   });
 
+  it("gives a command a pager that prints and ends, unless passEnv names it", async () => {
+    vi.stubEnv("PAGER", "less");
+    vi.stubEnv("GIT_PAGER", "less");
+    const command = `node -e "console.log('P=' + process.env.PAGER + ' G=' + process.env.GIT_PAGER + ' M=' + process.env.MANPAGER)"`;
+    try {
+      for (const onPartialOutput of [undefined, vi.fn()]) {
+        setTerminalEnvironmentSettings(undefined);
+        const result = await runTerminalCommandImpl(
+          { command, waitForCompletion: true },
+          createMockExtras({ onPartialOutput }),
+        );
+        expect(result[0].content).toContain("P=cat G=cat M=cat");
+        setTerminalEnvironmentSettings({ passEnv: ["GIT_PAGER"] });
+        const passed = await runTerminalCommandImpl(
+          { command, waitForCompletion: true },
+          createMockExtras({ onPartialOutput }),
+        );
+        expect(passed[0].content).toContain("P=cat G=less M=cat");
+      }
+    } finally {
+      setTerminalEnvironmentSettings(undefined);
+      vi.unstubAllEnvs();
+    }
+  }, 60_000);
+
   // Windows PowerShell used to report 1 for any failing native program
   it("reports the exit code the program chose", async () => {
     const command = `node -e "console.log('before exit'); process.exit(3)"`;

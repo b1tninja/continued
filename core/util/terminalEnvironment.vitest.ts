@@ -4,6 +4,7 @@ import {
   setTerminalEnvironmentSettings,
   TERMINAL_ENV_NOTICE,
   terminalEnvironment,
+  withPagerDefaults,
 } from "./terminalEnvironment";
 
 const posix = {
@@ -104,5 +105,81 @@ describe("terminalEnvironment", () => {
 
   it("the tool notice is one static sentence naming passEnv", () => {
     expect(TERMINAL_ENV_NOTICE).toContain("terminal.passEnv");
+  });
+});
+
+describe("withPagerDefaults", () => {
+  const pagers = (env: Record<string, string>) => ({
+    PAGER: env.PAGER,
+    GIT_PAGER: env.GIT_PAGER,
+    MANPAGER: env.MANPAGER,
+    LESS: env.LESS,
+  });
+
+  it("gives a command pagers that print and end", () => {
+    const env = withPagerDefaults({ PATH: "/usr/bin" }, { platform: "linux" });
+    expect(env).toEqual({
+      PATH: "/usr/bin",
+      PAGER: "cat",
+      GIT_PAGER: "cat",
+      MANPAGER: "cat",
+      LESS: "FRX",
+    });
+  });
+
+  it("replaces the host's pager, which has no terminal to page in, but keeps its LESS flags", () => {
+    const env = withPagerDefaults(
+      { PAGER: "less", GIT_PAGER: "delta", MANPAGER: "most", LESS: "-R" },
+      { platform: "linux" },
+    );
+    expect(pagers(env)).toEqual({
+      PAGER: "cat",
+      GIT_PAGER: "cat",
+      MANPAGER: "cat",
+      LESS: "-R",
+    });
+  });
+
+  it("never touches a name the person put in terminal.passEnv, set or not", () => {
+    setTerminalEnvironmentSettings({ passEnv: ["GIT_PAGER", "MANPAGER"] });
+    const env = withPagerDefaults(
+      { PAGER: "less", GIT_PAGER: "delta" },
+      { platform: "linux" },
+    );
+    expect(pagers(env)).toEqual({
+      PAGER: "cat",
+      GIT_PAGER: "delta",
+      MANPAGER: undefined,
+      LESS: "FRX",
+    });
+  });
+
+  it("inherit keeps what the host sets and fills in the rest", () => {
+    setTerminalEnvironmentSettings({ environment: "inherit" });
+    const env = withPagerDefaults({ PAGER: "less" }, { platform: "linux" });
+    expect(pagers(env)).toEqual({
+      PAGER: "less",
+      GIT_PAGER: "cat",
+      MANPAGER: "cat",
+      LESS: "FRX",
+    });
+  });
+
+  it("compares names without case on Windows and leaves one spelling", () => {
+    setTerminalEnvironmentSettings({ passEnv: ["git_pager"] });
+    const env = withPagerDefaults(
+      { Pager: "more", Git_Pager: "delta" },
+      { platform: "win32" },
+    );
+    expect(env.Pager).toBeUndefined();
+    expect(env.PAGER).toBe("cat");
+    expect(env.Git_Pager).toBe("delta");
+    expect(env.GIT_PAGER).toBeUndefined();
+  });
+
+  it("does not change its input", () => {
+    const input = { PAGER: "less" };
+    withPagerDefaults(input, { platform: "linux" });
+    expect(input).toEqual({ PAGER: "less" });
   });
 });

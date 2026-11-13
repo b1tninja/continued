@@ -74,6 +74,15 @@ describe("runTerminalCommandTool", () => {
     );
   });
 
+  describe("pagers", () => {
+    it("gives a command a pager that prints and ends", async () => {
+      const result = await runTerminalCommandTool.run({
+        command: `node -e "console.log('P=' + process.env.PAGER + ' G=' + process.env.GIT_PAGER)"`,
+      });
+      expect(result).toContain("P=cat G=cat");
+    }, 30_000);
+  });
+
   describe("exit codes", () => {
     // Windows PowerShell used to report 1 for any failing native program
     it("names the code the program chose", async () => {

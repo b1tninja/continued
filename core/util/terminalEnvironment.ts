@@ -172,6 +172,51 @@ export function terminalEnvironment(
     .env;
 }
 
+/**
+ * What a command is given so that a pager cannot hold it: the command has no
+ * terminal, nobody can press `q`, and `git log` or `man` waiting in `less`
+ * would wait until the tool's timeout. `cat` prints and ends. `LESS` is the
+ * value git itself uses when the variable is not set (quit when the text fits
+ * one screen, keep colours, do not clear the screen).
+ */
+export const PAGER_DEFAULTS: Readonly<Record<string, string>> = {
+  PAGER: "cat",
+  GIT_PAGER: "cat",
+  MANPAGER: "cat",
+  LESS: "FRX",
+};
+
+/**
+ * `env` (already scrubbed) with the pager defaults. The person's own choices
+ * stand: a name in `terminal.passEnv` is never touched, whether the host sets
+ * it or not, and with `terminal.environment: inherit` a value the host sets is
+ * kept. `LESS` holds flags rather than a program, so it is only filled in when
+ * it is not set. Names compare without case on Windows, as its environment
+ * does.
+ */
+export function withPagerDefaults(
+  env: Readonly<Record<string, string>>,
+  opts: { platform?: NodeJS.Platform } = {},
+): Record<string, string> {
+  const platform = opts.platform ?? process.platform;
+  const fold = (name: string) =>
+    platform === "win32" ? name.toUpperCase() : name;
+  const passed = new Set((configured?.passEnv ?? []).map(fold));
+  const present = new Map(Object.keys(env).map((key) => [fold(key), key]));
+  const inherit = getTerminalEnvironmentMode() === "inherit";
+  const out: Record<string, string> = { ...env };
+  for (const [name, value] of Object.entries(PAGER_DEFAULTS)) {
+    if (passed.has(fold(name))) continue;
+    const existing = present.get(fold(name));
+    if (existing !== undefined) {
+      if (inherit || name === "LESS") continue;
+      delete out[existing];
+    }
+    out[name] = value;
+  }
+  return out;
+}
+
 function scrubPolicyFor(
   mode: TerminalEnvironmentMode,
   settings: TerminalEnvironmentSettings | undefined,

@@ -39,6 +39,17 @@ describe("command executor environment", () => {
     expect(spawn.mock.calls[0][2].env).toEqual({ CANARY_TOKEN: "c" });
   });
 
+  it("gives a command pagers that print and end, unless passEnv names one", () => {
+    vi.stubEnv("PAGER", "less");
+    vi.stubEnv("GIT_PAGER", "delta");
+    setTerminalEnvironmentSettings({ passEnv: ["GIT_PAGER"] });
+    getCommandExecutor({ platform: "linux", env: {} }).spawn("git log");
+    const env = spawn.mock.calls[0][2].env;
+    expect(env.PAGER).toBe("cat");
+    expect(env.MANPAGER).toBe("cat");
+    expect(env.GIT_PAGER).toBe("delta");
+  });
+
   it("leaves no standard input open unless the caller sets stdio", () => {
     const local = getCommandExecutor({ platform: "linux", env: {} });
     local.spawn("ls");

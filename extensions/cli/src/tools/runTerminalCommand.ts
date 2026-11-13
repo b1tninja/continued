@@ -8,7 +8,11 @@ import {
 import { commandLintGate } from "core/tools/permissions/commandLint.js";
 import { missingBinaryGate } from "core/tools/permissions/missingBinaryGate.js";
 import { getCommandExecutor } from "core/util/commandExecutor.js";
-import { COMMAND_STDIO, realExitInvocation } from "core/util/commandSpawn.js";
+import {
+  COMMAND_STDIO,
+  commandEnvironment,
+  realExitInvocation,
+} from "core/util/commandSpawn.js";
 import { getTerminalShellPreference } from "core/util/shell.js";
 import {
   TERMINAL_ENV_NOTICE,
@@ -231,7 +235,7 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
       // Use same shell logic as core implementation
       const { shell, args } = getShellCommand(command);
       const child = spawn(shell, args, {
-        env: terminalEnvironment(shellChildEnv()),
+        env: commandEnvironment(terminalEnvironment(shellChildEnv())),
         // No open standard input: a prompt must fail, not wait for the timeout
         stdio: COMMAND_STDIO,
       });

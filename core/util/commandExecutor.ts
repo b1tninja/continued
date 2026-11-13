@@ -1,6 +1,6 @@
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { spawn } from "node:child_process";
-import { COMMAND_STDIO } from "./commandSpawn";
+import { COMMAND_STDIO, commandEnvironment } from "./commandSpawn";
 import { containerArgs } from "./containerArgs";
 import {
   containerUnavailableMessage,
@@ -93,7 +93,7 @@ export function getCommandExecutor(
       spawn(shell.executable, shell.args(command), {
         ...options,
         stdio: options?.stdio ?? COMMAND_STDIO,
-        env: options?.env ?? terminalEnvironment(),
+        env: options?.env ?? commandEnvironment(terminalEnvironment()),
       }),
     describe: () =>
       wsl

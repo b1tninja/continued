@@ -1,5 +1,6 @@
 import type { CommandExecutor } from "./commandExecutor";
 import { withRealExitCode } from "./shell";
+import { withPagerDefaults } from "./terminalEnvironment";
 
 /**
  * How a command the agent starts is given its standard streams, in one place
@@ -39,4 +40,18 @@ export function realExitInvocation(
   return executor.invocation(
     withRealExitCode(command, executor.shell.kind, { resetFirst: false }),
   );
+}
+
+/**
+ * The last step for the environment of a command a terminal tool starts.
+ * `env` is the host's environment after the scrub (`terminalEnvironment`);
+ * this adds what a command with no terminal needs: pagers that print and end
+ * (`withPagerDefaults`, which leaves the person's `terminal.passEnv` names
+ * alone).
+ */
+export function commandEnvironment(
+  env: Readonly<Record<string, string>>,
+  opts: { platform?: NodeJS.Platform } = {},
+): Record<string, string> {
+  return withPagerDefaults(env, opts);
 }

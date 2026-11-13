@@ -1,7 +1,11 @@
 import iconv from "iconv-lite";
 import childProcess from "node:child_process";
 import os from "node:os";
-import { COMMAND_STDIO, realExitInvocation } from "../../util/commandSpawn";
+import {
+  COMMAND_STDIO,
+  commandEnvironment,
+  realExitInvocation,
+} from "../../util/commandSpawn";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 
 // Default timeout for terminal commands (2 minutes)
@@ -127,7 +131,8 @@ function resolveWorkingDirectory(workspaceDirs: string[]): string {
 
 // Add color-supporting environment variables
 const getColorEnv = () => ({
-  ...terminalEnvironment(),
+  // Pagers that print and end: a command has no terminal to page in
+  ...commandEnvironment(terminalEnvironment()),
   FORCE_COLOR: "1",
   COLORTERM: "truecolor",
   TERM: "xterm-256color",
