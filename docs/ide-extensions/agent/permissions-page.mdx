@@ -175,6 +175,10 @@ An empty chat shows the same tip as one dismissible line: "New here? Each area h
 
 The interactive terminal agent shows one line in its header, once per user: "Permissions: Careful preset. Change it with /policy (presets, or area=level). Shown once." It names "a custom mix" when the levels match no preset. It never shows with `-p`, in `serve` or without a terminal, and its flag (`cliFirstRunBannerShown`) lives in the global context file, separate from the editor's.
 
+## Raising a level in the terminal agent
+
+`/policy` asks once before it moves an area up to Automatic, Permissive or IDGAF from a lower level. The first run changes nothing and prints one line naming each area and both levels, such as `Permission levels: tools cautious to permissive. Fewer calls will ask first. Nothing was changed. Run "/policy tools=permissive --yes" to apply it.` Run it again with `--yes` to apply it. Lowering a level, or moving from Manual to Cautious, never asks. `--policy` on the command line is already explicit, so it does not ask. Every change, asked or not, is written to the [audit trail](/ide-extensions/agent/audit-trail#setting-changes) with where it came from.
+
 ## From the terminal agent
 
 ```text

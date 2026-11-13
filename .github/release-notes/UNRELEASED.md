@@ -31,6 +31,9 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 ## Behaviour changes
 
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
+- `/policy` in the terminal agent now asks before it raises an area to Automatic, Permissive or IDGAF from a lower level. The first run changes nothing and prints one line naming each area and both levels; run it again with `--yes` to apply it, for example `/policy tools=permissive --yes`. Lowering a level never asks, and command-line flags (`--policy`, `--auto`) are already explicit, so they do not ask. Scripts that drove `/policy` in a terminal session without `--yes` for a raise now need it.
+- The audit trail now records permission setting changes: levels and the preset they add up to, floor rules, built-in rules switched off, trusted MCP servers, and project and hook trust, each with the old and new value and where it came from (`/policy`, a flag, the settings page, an edit of `permissions.yaml` seen at the next start, or `continuous project trust` and `continuous hooks trust`). List them with `continuous audit changes`. New `setting` lines are skipped by older readers, and older files read as before. File contents and secrets are not recorded.
+- A decision the host sent with no call id is now written to the audit trail under a made-up id (`nocall-<hash>-<n>`) marked `synthetic`. Before, it was left out.
 
 ## File edits at IDGAF now reach outside the workspace
 
