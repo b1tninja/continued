@@ -3,10 +3,7 @@ import { Command } from "commander";
 // Function to add common options to any command
 export function addCommonOptions(command: Command): Command {
   return command
-    .option(
-      "--config <path>",
-      "Configuration file for the assistant (can be a file path or hub slug)",
-    )
+    .option("--config <path>", "Path to the config.yaml file to use")
     .option(
       "--org <slug>",
       "Organization slug to use for this session (supported only in headless mode)",
@@ -25,7 +22,7 @@ export function addCommonOptions(command: Command): Command {
     .option("--beta-status-tool", "Enable beta status tool")
     .option(
       "--rule <rule>",
-      "Add a rule (can be a file path, hub slug, or string content). Can be specified multiple times.",
+      "Add a rule: the rule text, or a path to a rule file (starting with ./, / or ~). Can be specified multiple times.",
       (value: string, previous: string[] | undefined) => {
         const array = Array.isArray(previous) ? previous : [];
         array.push(value);
@@ -34,8 +31,8 @@ export function addCommonOptions(command: Command): Command {
       [] as string[],
     )
     .option(
-      "--mcp <slug>",
-      "Add an MCP server from the hub (slug in format 'owner/package'). Can be specified multiple times.",
+      "--mcp <url-or-path>",
+      "Add an MCP server: an http(s) URL, or a path to a YAML file that defines one (starting with ./, / or ~). Can be specified multiple times.",
       (value: string, previous: string[] | undefined) => {
         const array = Array.isArray(previous) ? previous : [];
         array.push(value);
@@ -44,8 +41,8 @@ export function addCommonOptions(command: Command): Command {
       [] as string[],
     )
     .option(
-      "--model <slug>",
-      "Add a model from the hub (slug in format 'owner/package'). Can be specified multiple times.",
+      "--model <path>",
+      "Add a model from a YAML file that defines one (path starting with ./, / or ~). Can be specified multiple times.",
       (value: string, previous: string[] | undefined) => {
         const array = Array.isArray(previous) ? previous : [];
         array.push(value);
@@ -55,7 +52,7 @@ export function addCommonOptions(command: Command): Command {
     )
     .option(
       "--prompt <prompt>",
-      "Add to the initial user message (can be a file path, hub slug, or string content). Can be specified multiple times.",
+      "Add to the initial user message: the text, or a path to a file that holds it (starting with ./ or /). Can be specified multiple times.",
       (value: string, previous: string[] | undefined) => {
         const array = Array.isArray(previous) ? previous : [];
         array.push(value);
@@ -93,10 +90,7 @@ export function addCommonOptions(command: Command): Command {
       },
       [] as string[],
     )
-    .option(
-      "--agent <slug>",
-      "Load agent file from the hub (slug in format 'owner/package')",
-    );
+    .option("--agent <path>", "Load an agent file (path to a .md file)");
 }
 
 // Function to merge parent options into subcommand options
