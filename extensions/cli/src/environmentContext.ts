@@ -1,6 +1,6 @@
 import { execSync } from "child_process";
 
-import { sanitiseEnvValue } from "core/util/envDisclosure.js";
+import { sanitizeEnvValue } from "core/util/envDisclosure.js";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
 
 /**
@@ -35,8 +35,11 @@ function isGitRepo(): boolean {
  * character caps are C65 (#750).
  */
 export function gitStatusForPrompt(status: string): string {
-  const { text, removed } = sanitiseEnvValue(status.trim(), {
+  // keepQuotes: these are git's own porcelain lines, which quote a name with
+  // a space in it, so the bytes of an ordinary tree stay as they were
+  const { text, removed } = sanitizeEnvValue(status.trim(), {
     maxChars: Number.POSITIVE_INFINITY,
+    keepQuotes: true,
   });
   if (removed === 0) return text;
   const what = removed === 1 ? "character was" : "characters were";
