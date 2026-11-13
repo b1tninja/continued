@@ -126,6 +126,11 @@ export function ignoreBrokenConfigForRun(): boolean {
   return ignoreBroken;
 }
 
+/** Reads after a file name: "is not valid YAML", "could not be read", "has the wrong structure". */
+export function asPredicate(reason: string): string {
+  return /^(has|could) /.test(reason) ? reason : `is ${reason}`;
+}
+
 const noticed = new Set<string>();
 
 /**
@@ -142,7 +147,7 @@ export function noticeBrokenConfig(
   noticed.add(key);
   logger.warn(`Policy file ${file.path} is broken: ${file.error}`);
   safeStderr(
-    `\nWARNING: ${file.path} is ${file.error}.\n` +
+    `\nWARNING: ${file.path} ${asPredicate(file.error)}.\n` +
       `It is being ignored${ignored ? " (--ignore-broken-config)" : ""}, so the hooks or permission rules in it do NOT apply. Fix the file.\n\n`,
   );
 }

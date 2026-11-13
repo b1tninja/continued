@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  asPredicate,
   formatBrokenConfigRefusal,
   noticeBrokenConfig,
   readPolicyFile,
@@ -122,5 +123,19 @@ describe("readPolicyFile", () => {
     warnOnce("k", "careful");
     warnOnce("k", "careful");
     expect(write).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("asPredicate", () => {
+  it("reads after a file name for every kind of reason", () => {
+    expect(asPredicate("not valid YAML (BAD_INDENT)")).toBe(
+      "is not valid YAML (BAD_INDENT)",
+    );
+    expect(asPredicate("could not be read (EACCES)")).toBe(
+      "could not be read (EACCES)",
+    );
+    expect(
+      asPredicate('has the wrong structure ("allow" must be a list)'),
+    ).toBe('has the wrong structure ("allow" must be a list)');
   });
 });

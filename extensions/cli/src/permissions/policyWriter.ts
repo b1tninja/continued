@@ -3,6 +3,7 @@ import fs from "fs";
 import YAML from "yaml";
 
 import { logger } from "../util/logger.js";
+import { asPredicate } from "../util/readPolicyFile.js";
 
 import {
   PERMISSIONS_YAML_PATH,
@@ -40,7 +41,7 @@ export async function addPolicyToYaml(policyRule: string): Promise<void> {
     const existing = readPermissionsYaml();
     if (existing.status === "broken") {
       throw new Error(
-        `${existing.path} is ${existing.error}; fix it before adding rules`,
+        `${existing.path} ${asPredicate(existing.error)}; fix it before adding rules`,
       );
     }
     const config: PermissionsYamlConfig =
