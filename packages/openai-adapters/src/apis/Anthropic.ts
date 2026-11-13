@@ -85,6 +85,27 @@ export function anthropicSamplingParams(
   return { temperature, top_p: topP };
 }
 
+/**
+ * Anthropic's `stop_reason` as OpenAI's `finish_reason`, so a client can tell a
+ * reply cut off at the output limit (max_tokens) from a finished one.
+ */
+export function anthropicFinishReason(
+  stopReason: string | null | undefined,
+): "stop" | "length" | "tool_calls" | "content_filter" {
+  switch (stopReason) {
+    case "max_tokens":
+    case "model_context_window_exceeded":
+      return "length";
+    case "tool_use":
+      return "tool_calls";
+    case "refusal":
+      return "content_filter";
+    default:
+      // end_turn, stop_sequence, pause_turn and anything newer
+      return "stop";
+  }
+}
+
 export class AnthropicApi implements BaseLlmApi {
   apiBase: string = "https://api.anthropic.com/v1/";
 
@@ -467,6 +488,8 @@ export class AnthropicApi implements BaseLlmApi {
     const completion = await response.json();
 
     const usage: Record<string, number> | undefined = completion.usage;
+    const finishReason = anthropicFinishReason(completion.stop_reason);
+    const text: string = completion.content?.[0]?.text ?? "";
     return {
       id: completion.id,
       object: "chat.completion",
@@ -485,11 +508,13 @@ export class AnthropicApi implements BaseLlmApi {
       choices: [
         {
           logprobs: null,
-          finish_reason: "stop",
+          finish_reason: finishReason,
           message: {
             role: "assistant",
-            content: completion.content[0].text,
-            refusal: null,
+            content: text,
+            // A refusal keeps its text in `content` too, which is what callers
+            // of this adapter read today.
+            refusal: finishReason === "content_filter" ? text || null : null,
           },
           index: 0,
         },
@@ -508,6 +533,7 @@ export class AnthropicApi implements BaseLlmApi {
     // Set while a content block has started (or streamed) and not stopped.
     let blockOpen = false;
     let sawStop = false;
+    let stopReason: string | undefined;
 
     const usage: CompletionUsage = {
       completion_tokens: 0,
@@ -540,7 +566,10 @@ export class AnthropicApi implements BaseLlmApi {
           break;
         case "message_delta":
           const deltaEvent = rawEvent as RawMessageDeltaEvent;
-          if (deltaEvent.delta?.stop_reason) sawStop = true;
+          if (deltaEvent.delta?.stop_reason) {
+            sawStop = true;
+            stopReason = deltaEvent.delta.stop_reason;
+          }
           usage.completion_tokens = deltaEvent.usage?.output_tokens ?? 0;
           break;
         case "content_block_delta":
@@ -599,6 +628,15 @@ export class AnthropicApi implements BaseLlmApi {
       throw new Error(
         "The Anthropic stream ended before the response was complete (no message_stop).",
       );
+    }
+
+    // Why the reply ended, on a chunk with an empty delta (as Bedrock does).
+    if (stopReason) {
+      yield chatChunkFromDelta({
+        model,
+        delta: {},
+        finish_reason: anthropicFinishReason(stopReason),
+      });
     }
 
     yield usageChatChunk({
