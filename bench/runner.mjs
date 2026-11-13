@@ -61,7 +61,7 @@ Settings
                            for none, or a text of your own; default: the CLI's own (on for Loop items
                            and the short and tailored profiles, off elsewhere)
   --level <area=level,..>  policy levels, recorded on every record; applied where the CLI has the
-                           knob today (tool-use=yolo adds --auto, tool-use=manual removes it;
+                           knob today (tool-use=idgaf adds --auto, tool-use=manual removes it;
                            plan-edits and questions pick the loop autonomy); the rest is recorded only
   --effort <x>             reasoning effort as the family spells it (see matrix.yaml efforts)
   --max-tokens <n>         defaultCompletionOptions.maxTokens (default: the provider's)
@@ -180,12 +180,14 @@ const AREAS = [
   "plan-edits",
   "questions",
 ];
-const LEVELS = ["manual", "cautious", "automatic", "permissive", "yolo"];
+const LEVELS = ["manual", "cautious", "automatic", "permissive", "idgaf"];
 
 function parseLevels(text) {
   const levels = {};
   for (const part of text.split(",")) {
-    const [area, level] = part.split("=").map((s) => s?.trim().toLowerCase());
+    const [area, rawLevel] = part.split("=").map((s) => s?.trim().toLowerCase());
+    // "yolo" is the old name of idgaf
+    const level = rawLevel === "yolo" ? "idgaf" : rawLevel;
     if (!AREAS.includes(area))
       throw new Error(`--level: unknown area ${area} (${AREAS.join(", ")})`);
     if (!LEVELS.includes(level))
@@ -314,7 +316,7 @@ function applyLevels(levels, scenario) {
   const applied = {};
   const toolUse = levels["tool-use"];
   if (
-    toolUse === "yolo" &&
+    toolUse === "idgaf" &&
     scenario.kind === "agent" &&
     !serve.includes("--auto")
   ) {
@@ -332,7 +334,7 @@ function applyLevels(levels, scenario) {
       cautious: "supervised",
       automatic: "auto",
       permissive: "auto",
-      yolo: "unattended",
+      idgaf: "unattended",
     }[loopLevel];
     applied[levels["plan-edits"] ? "plan-edits" : "questions"] =
       `loopAutonomy ${loop.autonomy}`;

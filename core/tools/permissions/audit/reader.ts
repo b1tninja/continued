@@ -7,6 +7,7 @@ import {
   type DecisionEvent,
   type OutcomeEvent,
 } from "./record";
+import { modernizeLevelText } from "../policy";
 import { readAuditFile } from "./writer";
 
 /**
@@ -101,6 +102,18 @@ export interface AuditCallRow {
   outcome?: OutcomeEvent;
 }
 
+/**
+ * Entries written by 2.14.x say `yolo` and "set to YOLO". The file keeps what
+ * was written; readers show the current name.
+ */
+function displaySource(source: string | undefined): string | undefined {
+  return source === "yolo" ? "idgaf" : source;
+}
+
+function displayReason(reason: string | undefined): string | undefined {
+  return reason === undefined ? undefined : modernizeLevelText(reason);
+}
+
 /** One row per call, from a session's records. An outcome with no decision is skipped. */
 export function callRows(records: readonly AuditRecord[]): AuditCallRow[] {
   const byCall = new Map<string, AuditCallRow>();
@@ -117,9 +130,9 @@ export function callRows(records: readonly AuditRecord[]): AuditCallRow[] {
           policy: r.policy,
           by: r.by,
           asked: r.policy === "ask",
-          source: r.source,
+          source: displaySource(r.source),
           rule: r.rule,
-          reason: r.reason,
+          reason: displayReason(r.reason),
           reviewerModel: r.reviewer?.model,
           argsMasked: r.argsMasked,
           ...(r.agent ? { agent: r.agent } : {}),
@@ -129,9 +142,9 @@ export function callRows(records: readonly AuditRecord[]): AuditCallRow[] {
         row.asked ||= row.policy === "ask";
         row.policy = r.policy;
         row.by = r.by;
-        row.source = r.source ?? row.source;
+        row.source = displaySource(r.source) ?? row.source;
         row.rule = r.rule ?? row.rule;
-        row.reason = r.reason ?? row.reason;
+        row.reason = displayReason(r.reason) ?? row.reason;
         row.reviewerModel = r.reviewer?.model ?? row.reviewerModel;
         row.decisions.push(r);
       }

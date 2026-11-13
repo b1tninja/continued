@@ -187,6 +187,41 @@ export class MockIdeMessenger implements IIdeMessenger {
   };
   chatResponse: ChatMessage[] = DEFAULT_CHAT_RESPONSE;
   chatStreamDelay: number = 0;
+  private streamGate: Promise<void> | null = null;
+
+  /**
+   * Hold every chat stream open after the chunk it just yielded until the
+   * returned function is called (or the stream is cancelled). Unlike
+   * `chatStreamDelay` this does not depend on wall-clock time, so a test that
+   * needs "the turn is still running" does not race a slow machine. Once
+   * released, later streams are not held.
+   */
+  holdStream(): () => void {
+    let release!: () => void;
+    this.streamGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return release;
+  }
+
+  private async waitForStreamGate(cancelToken: AbortSignal): Promise<void> {
+    if (!this.streamGate) {
+      return;
+    }
+    await Promise.race([
+      this.streamGate,
+      new Promise<void>((resolve) => {
+        if (cancelToken.aborted) {
+          resolve();
+        } else {
+          cancelToken.addEventListener("abort", () => resolve(), {
+            once: true,
+          });
+        }
+      }),
+    ]);
+  }
+
   setChatResponseText(text: string): void {
     this.chatResponse = [
       {
@@ -210,6 +245,7 @@ export class MockIdeMessenger implements IIdeMessenger {
         JSON.stringify(response, null, 2),
       );
       yield [response];
+      await this.waitForStreamGate(cancelToken);
       if (this.chatStreamDelay > 0) {
         await new Promise((resolve) =>
           setTimeout(resolve, this.chatStreamDelay),
@@ -275,5 +311,6 @@ export class MockIdeMessenger implements IIdeMessenger {
     this.responseHandlers = { ...DEFAULT_MOCK_CORE_RESPONSE_HANDLERS };
     this.chatResponse = DEFAULT_CHAT_RESPONSE;
     this.chatStreamDelay = 0;
+    this.streamGate = null;
   }
 }

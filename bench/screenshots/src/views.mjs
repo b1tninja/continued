@@ -67,6 +67,14 @@ export const VIEWS = {
     fixture: "loop-plan-finished",
     note: "Loop mode: finished, every to-do done folded into one row",
   },
+  "loop-idgaf": {
+    fixture: "loop-idgaf",
+    note: "Loop mode at IDGAF with seven blocked calls: the one-line IDGAF chip and the blocked badge in the mode bar",
+  },
+  "loop-blocked-open": {
+    fixture: "loop-blocked-open",
+    note: "Loop mode: the Recently blocked list opened from its badge",
+  },
   "settings-models": {
     fixture: "settings-models",
     note: "Settings, Models tab",
@@ -132,6 +140,26 @@ export const VIEWS = {
   "audit-inbox": {
     fixture: "audit-inbox",
     note: "Settings, Permissions, Inbox: open asks oldest first, ages, possibly-ended label, Show older",
+  },
+  "loop-frame-running": {
+    fixture: "loop-frame-running",
+    note: "the gradient loop frame round a stand-in loop dock, running",
+  },
+  "loop-frame-waiting": {
+    fixture: "loop-frame-waiting",
+    note: "the loop frame, solid amber: waiting on you",
+  },
+  "loop-frame-failed": {
+    fixture: "loop-frame-failed",
+    note: "the loop frame, solid red: an item failed, repairing",
+  },
+  "loop-frame-finished": {
+    fixture: "loop-frame-finished",
+    note: "the loop frame, solid green: finished",
+  },
+  "loop-frame-stopped": {
+    fixture: "loop-frame-stopped",
+    note: "the loop frame, solid grey: stopped",
   },
   "settings-tools": {
     fixture: "settings-tools",
