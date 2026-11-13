@@ -1,0 +1,94 @@
+---
+title: "Where things are stored"
+---
+
+The VS Code extension and the terminal agent keep everything on your machine: one global folder shared by both, a few folders in each project, and some state inside VS Code. This page lists what is where, how to reset each part, and where to look when something goes wrong.
+
+## The global folder
+
+`~/.continuous`, or the folder `CONTINUOUS_GLOBAL_DIR` names (`CONTINUE_GLOBAL_DIR` is the older name). On first start, if only the older `~/.continue` exists, it is copied once to `~/.continuous`; after that the two drift apart and `~/.continue` is never read or changed again.
+
+### What you edit
+
+| Name                       | What it holds                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| `config.yaml`              | Models, MCP servers, rules, `toolPermissions`. Created with `models: []` if missing  |
+| `permissions.yaml`         | Levels, built-in rule switches, always-on rules. See [`permissions.yaml`](/reference/permissions-yaml) |
+| `settings.json`            | Run limits, attribution, hooks. See [`settings.json`](/reference/settings-json)      |
+| `providers.yaml`, `models.yaml` | Provider accounts and the model catalog                                         |
+| `.env`                     | Keys and API bases, when you chose to keep them in a file                            |
+| `rules/`, `prompts/`, `agents/`, `skills/` | Your rule files, prompts, agent definitions and subagents, skills    |
+| `.continuousignore`        | Ignore patterns                                                                      |
+| `config.json`, `config.ts` | Older config formats, still read                                                     |
+
+### What the product writes for itself
+
+| Name                       | What it holds                                                               | Reset                                                       |
+| -------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `sessions/`                | Chat sessions of both products, and the loops saved with them               | `continuous clean` (older than 30 days by default), or delete |
+| `logs/`                    | `cn.log` (terminal agent), `core.log`, `prompt.log`                         | `continuous clean` (14 days), or delete                     |
+| `dev_data/`                | Local development data                                                      | `continuous clean` (90 days), or delete                     |
+| `audit/`                   | The audit trail of tool decisions                                           | `continuous audit prune`; kept 30 days by default           |
+| `index/`                   | The codebase and docs indexes, and `globalContext.json` (selected config and other choices) | Delete; it is rebuilt                       |
+| `trusted-project.json`     | Projects whose own configuration you trusted                                | `continuous project revoke` in that project, or delete      |
+| `trusted-hooks.json`       | Projects whose hooks you trusted                                            | `continuous hooks revoke` in that project, or delete        |
+| `mcp-tool-pins.json`       | The MCP tool definitions you approved                                       | Delete; each tool asks again                                |
+| `measured-facts.json`      | What `test-connection` saw on your endpoints                                | Delete                                                      |
+| `retirement-notices.json`  | Which model retirement notices were shown or dismissed                      | Delete                                                      |
+| `input_history.json`       | The terminal agent's input history                                          | Delete. `continuous clean` does not touch it                |
+| `.onboarding_complete`     | The terminal agent's first-start question was answered                      | Delete to be asked again                                    |
+| `worktrees/`               | Git worktrees of parallel loop workers                                      | See below                                                   |
+| `bedrock-catalog`, `.utils`, `.diffs`, `.migrations`, `.configs` | Caches, downloaded tools, pending diffs, migration markers | Delete                              |
+
+`continuous clean` is a dry run unless you add `--yes`, and it touches only `sessions`, `logs` and `dev_data`. Deleting a file is not secure erasure: an SSD, a backup or a snapshot can keep the bytes, so rotate any key that was in a file you removed.
+
+## In each project
+
+| Name                                         | What it holds                                                          |
+| -------------------------------------------- | ---------------------------------------------------------------------- |
+| `.continuous/plans/`                         | Plan files written by Plan and Loop mode                               |
+| `.continuous/` (also the older `.continue/`) | The project's own rules, settings, MCP servers and other config, used only once you trust it |
+| `.continue/worktrees.json`                   | Setup commands for loop worktrees                                      |
+| Git branches `continued/loop-*`              | Branches of parallel loop workers                                      |
+
+To remove leftover loop worktrees, list them with `git worktree list`, remove each with `git worktree remove <path>`, and delete the branches with `git branch -D`.
+
+## Inside VS Code
+
+| What                                       | Where                                                          | Reset                                                                     |
+| ------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Keys you saved in secure storage           | VS Code's secret storage for the extension                     | Not in `~/.continuous`, so deleting that folder leaves them. **Owner TODO:** no documented way to clear them all |
+| `continuous.*` settings                    | VS Code's `settings.json`                                      | **Preferences: Open User Settings (JSON)** and delete the lines           |
+| Remembered levels, tool and rule switches, open tabs | The extension's webview storage                       | Not removed by deleting `~/.continuous`                                    |
+
+Uninstalling the extension (`code --uninstall-extension b1tninja.continuous`) or the terminal agent (`npm uninstall -g @b1tninja/continuous-cli`) leaves `~/.continuous` in place.
+
+## Reset
+
+There is no single reset command. Pick what you need:
+
+- **Start over, keep your models**: delete `sessions/`, `index/` and the `trusted-*.json` and `mcp-tool-pins.json` files, and keep `config.yaml`, `providers.yaml`, `models.yaml` and `.env`.
+- **Forget every trust grant**: delete `trusted-project.json`, `trusted-hooks.json` and `mcp-tool-pins.json`.
+- **Default permissions**: delete `permissions.yaml`. Your own `toolPermissions` rules in `config.yaml` stay.
+- **As if never installed**: uninstall both, then delete `~/.continuous`, the projects' `.continuous/` folders, and the keys in VS Code's secret storage. `~/.continue` belongs to the upstream product and is not this product's to delete. If you added hooks for this product to `~/.claude/settings.json`, remove them there.
+
+## Getting help
+
+There is no issue tracker: issues are switched off on the repository. Start here instead:
+
+1. **The logs.** Terminal agent: `~/.continuous/logs/cn.log`; `continuous --verbose` prints the log's path and a line that filters it to this run. Extension: **Developer: Toggle Developer Tools**, then the Console tab, as [Troubleshooting](/troubleshooting#check-the-logs) describes. Several notices, such as an unreadable `permissions.yaml` or a `settings.json` that did not parse, go only to the log.
+2. **`continuous doctor network <url>`** for proxy and certificate problems. It shows the proxy and CA settings in force and the certificate chain each address returns.
+3. **`continuous test-connection --provider <name>`** to check a model endpoint and a key outside a session.
+4. **"Why was this asked or refused?"** `continuous permissions test <tool> <arg>` shows how a call is decided and why; `continuous audit show <session>` shows the decisions that were made. The [Permissions page](/ide-extensions/agent/permissions-page) does the same in the extension.
+5. **`/info`** in the terminal agent names the config file and model in use.
+6. [Troubleshooting](/troubleshooting) and the [FAQ](/faqs).
+
+**Owner TODO: name the place to report a bug or ask a question.** No channel is decided yet. Until it is, this section deliberately names none.
+
+**Owner TODO: name the place to report a security problem.** `SECURITY.md` links the repository's private vulnerability reporting form, which is switched off.
+
+## Related
+
+- [`permissions.yaml`](/reference/permissions-yaml)
+- [Environment variables](/reference/environment-variables)
+- [Install the terminal agent](/cli/install)
