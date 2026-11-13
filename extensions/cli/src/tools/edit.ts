@@ -18,6 +18,7 @@ import {
   checkWorkspaceWrite,
   outsideWorkspacePreview,
   resolveWorkspacePath,
+  wroteOutsideResult,
 } from "./workspaceBoundary.js";
 import { generateDiff } from "./writeFile.js";
 
@@ -195,7 +196,7 @@ WARNINGS:
         args.resolvedPath,
       );
 
-      return `Successfully edited ${args.resolvedPath}\nDiff:\n${diff}`;
+      return `Successfully edited ${args.resolvedPath}\nDiff:\n${diff}${wroteOutsideResult(args.resolvedPath)}`;
     } catch (error) {
       if (error instanceof ContinueError) {
         throw error;

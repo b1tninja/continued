@@ -691,6 +691,12 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
        * Loop worker's worktree; absolute paths stay as they are.
        */
       workspaceDirs?: string[];
+      /**
+       * File edits is IDGAF: the file tools may name a path outside
+       * the workspace (tools/permissions/outsideEdits.ts). The decision was
+       * made by tools/evaluatePolicy; this lets the tool resolve the path.
+       */
+      allowOutsideWorkspace?: boolean;
     },
     {
       contextItems: ContextItem[];
@@ -789,6 +795,8 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
       args: Record<string, unknown>;
       /** As for tools/call: resolve paths against these folders */
       workspaceDirs?: string[];
+      /** As for tools/call: File edits is IDGAF */
+      allowOutsideWorkspace?: boolean;
     },
     {
       preprocessedArgs?: Record<string, unknown>;

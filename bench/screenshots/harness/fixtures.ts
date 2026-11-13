@@ -13,6 +13,9 @@ import { listEffectiveRules } from "core/tools/permissions/effectiveRules";
 import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { parsePolicyFile } from "core/tools/permissions/settingsFile";
 import { createLoop, enterWait } from "core/util/loopMode";
+import { addBlockedCall } from "@gui/redux/slices/blockedCallsSlice";
+import { setPolicyLevel } from "@gui/redux/slices/uiSlice";
+import { POLICY_AREAS } from "core/tools/permissions/policy";
 import type { MockIdeMessenger } from "@gui/context/MockIdeMessenger";
 import {
   newSession,
@@ -22,6 +25,7 @@ import {
   setRecoveryHold,
   setTaskPlan,
 } from "@gui/redux/slices/sessionSlice";
+import { setOnboardingCard } from "@gui/redux/slices/uiSlice";
 import type { setupStore } from "@gui/redux/store";
 import { AUDIT_FIXTURES } from "./auditFixtures";
 
@@ -432,6 +436,39 @@ export const FIXTURES: Record<string, Fixture> = {
     store.dispatch(setTaskPlan(PLAN));
     store.dispatch(setLoop(loopState()));
   },
+  /** Loop mode at IDGAF with seven refused calls: the one-line chip and the blocked badge */
+  "loop-idgaf": ({ store }) => {
+    store.dispatch(newSession(session([], "Fix parseConfig")));
+    store.dispatch(setMode("loop" as never));
+    store.dispatch(setTaskPlan(PLAN));
+    store.dispatch(setLoop(loopState()));
+    for (const area of POLICY_AREAS) {
+      store.dispatch(setPolicyLevel({ area, level: "idgaf" }));
+    }
+    for (let i = 0; i < 7; i++) {
+      store.dispatch(
+        addBlockedCall({
+          id: String(i),
+          toolName: "run_terminal_command",
+          summary: `rm -rf build-${i}`,
+          source: i % 2 ? "auto" : "deny-rule",
+          reason: "Deletes files outside the task",
+          parsedArgs: { command: `rm -rf build-${i}` },
+          at: NOW.getTime(),
+        } as never),
+      );
+    }
+  },
+  /** The same, with the blocked list open above the mode bar */
+  "loop-blocked-open": async (ctx) => {
+    await (FIXTURES as Record<string, Fixture>)["loop-idgaf"](ctx);
+    await new Promise((r) => setTimeout(r, 800));
+    (
+      document.querySelector(
+        "[data-testid=recently-blocked-toggle]",
+      ) as HTMLElement
+    )?.click();
+  },
   "permissions-editor": permissionsEditor,
   /** The Settings page, Tools tab, with "Commands and secrets" */
   "settings-tools": async ({ navigate }) => {
@@ -637,6 +674,56 @@ Object.assign(FIXTURES, {
   "chat-first-run": ({ store }: FixtureContext) => {
     store.dispatch(newSession());
   },
+});
+
+/** The onboarding card on its Local tab, with Ollama running and one model installed. */
+function onboardingLocal(
+  steps: (ctx: FixtureContext) => Promise<void> | void = () => {},
+): Fixture {
+  return async (ctx) => {
+    ctx.messenger.responseHandlers["llm/listModels"] = (async () => [
+      "llama3.1:8b",
+      "qwen3:8b",
+    ]) as never;
+    ctx.store.dispatch(
+      setOnboardingCard({ show: true, activeTab: "Local" as never }),
+    );
+    await sleep(700);
+    await steps(ctx);
+  };
+}
+
+const clickButton = (name: string) => {
+  [...document.querySelectorAll("button")]
+    .find((b) => b.textContent?.trim() === name)
+    ?.click();
+};
+
+Object.assign(FIXTURES, {
+  /** Onboarding, Local tab: the suggested model and the two buttons */
+  "onboarding-local": onboardingLocal(),
+  /** The Configure model chooser, open on Ollama with an installed model picked */
+  "onboarding-local-chooser": onboardingLocal(async () => {
+    clickButton("Configure model");
+    await sleep(400);
+  }),
+  /** The chooser on an OpenAI-compatible server, with More open */
+  "onboarding-local-server": onboardingLocal(async () => {
+    clickButton("Configure model");
+    await sleep(300);
+    const select = document.querySelector<HTMLSelectElement>(
+      '[data-testid="local-model-chooser"] select',
+    )!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )!.set!;
+    setter.call(select, "openai");
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await sleep(300);
+    clickButton("More");
+    await sleep(300);
+  }),
 });
 
 Object.assign(FIXTURES, AUDIT_FIXTURES);

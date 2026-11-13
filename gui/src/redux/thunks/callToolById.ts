@@ -10,6 +10,7 @@ import {
 import { ContinueError, ContinueErrorReason } from "core/util/errors";
 
 import { callClientTool } from "../../util/clientTools/callClientTool";
+import { allowOutsideWorkspaceOf } from "../../util/outsideEdits";
 import { selectSelectedChatModel } from "../slices/configSlice";
 import {
   acceptToolCall,
@@ -61,6 +62,7 @@ export const callToolById = createAsyncThunk<
   await snapshotBeforeEdit(toolCallState, state.session.history, {
     dispatch,
     ide: extra.ideMessenger.ide,
+    allowOutside: allowOutsideWorkspaceOf(state),
   });
 
   let output: ContextItem[] | undefined = undefined;
@@ -98,6 +100,10 @@ export const callToolById = createAsyncThunk<
     // Tool is called on core side
     const result = await extra.ideMessenger.request("tools/call", {
       toolCall: toolCallState.toolCall,
+      // File edits at IDGAF: the file tools may leave the workspace
+      ...(allowOutsideWorkspaceOf(getState())
+        ? { allowOutsideWorkspace: true }
+        : {}),
     });
     if (result.status === "error") {
       throw new Error(result.error);
@@ -192,7 +198,11 @@ export const callToolById = createAsyncThunk<
 async function snapshotBeforeEdit(
   toolCallState: ToolCallState,
   history: RootState["session"]["history"],
-  { dispatch, ide }: { dispatch: AppThunkDispatch; ide: IDE },
+  {
+    dispatch,
+    ide,
+    allowOutside,
+  }: { dispatch: AppThunkDispatch; ide: IDE; allowOutside?: boolean },
 ) {
   const toolName = toolCallState.toolCall.function.name;
   if (!CHECKPOINT_TOOL_NAMES.includes(toolName)) {
@@ -208,6 +218,7 @@ async function snapshotBeforeEdit(
       toolName,
       toolCallState.parsedArgs,
       ide,
+      { allowOutside },
     );
     for (const uri of uris) {
       dispatch(

@@ -3,17 +3,10 @@ import { ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 import { ToolCallState } from "core";
 import {
   autonomyForPolicy,
-  loopTokensFromUsage,
   LOOP_AUTONOMY,
   replanDiff,
   type ReplanDiffItem,
 } from "core/util/loopMode";
-import {
-  describeRoundUsage,
-  describeTimeUsage,
-  describeTokenUsage,
-  loopUsage,
-} from "core/util/loopUsage";
 import {
   budgetFromInput,
   NO_PLAN_BUDGET,
@@ -84,7 +77,6 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
   const loopStatus = useAppSelector((s) => s.session.loop?.status);
   const loop = useAppSelector((s) => s.session.loop);
   const taskPlan = useAppSelector((s) => s.session.taskPlan);
-  const sessionUsage = useAppSelector((s) => s.session.usage);
   // The budget step is out of sight until asked for; Skip leaves it at None
   const planLevel = useAppSelector((s) => selectLoopPolicy(s).plan);
   const questionsLevel = useAppSelector((s) => selectLoopPolicy(s).questions);
@@ -182,23 +174,6 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
               {loop.replanReason}
             </div>
           )}
-          {loop && (
-            <div
-              data-testid="plan-card-usage"
-              className="mt-1 text-description"
-              title="What the loop has used, and what is left to divide among the to-dos"
-            >
-              {(() => {
-                const u = loopUsage(loop, {
-                  sessionTokens: sessionUsage
-                    ? loopTokensFromUsage(sessionUsage)
-                    : 0,
-                  now: new Date(),
-                });
-                return `${describeRoundUsage(u.rounds)} · ${describeTokenUsage(u.tokens)} · ${describeTimeUsage(u.time)}`;
-              })()}
-            </div>
-          )}
           {diff && (
             <div data-testid="plan-card-diff" className="mt-1">
               <div className="text-description">
@@ -247,17 +222,6 @@ export function PlanCard({ toolCallState, historyIndex }: PlanCardProps) {
             />
           </div>
         </details>
-      )}
-      {args.ok && args.decisions.length > 0 && panelAnswers && (
-        <div
-          data-testid="plan-card-decisions-pointer"
-          className="mt-1 text-xs text-description"
-        >
-          {args.decisions.length} decision
-          {args.decisions.length === 1 ? "" : "s"} for you: answer
-          {args.decisions.length === 1 ? "s" : ""} in the Questions panel above
-          the input, or in the plan file.
-        </div>
       )}
       {args.ok && args.decisions.length > 0 && !panelAnswers && (
         <div data-testid="plan-card-decisions" className="mt-1 text-xs">

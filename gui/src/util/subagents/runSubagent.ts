@@ -36,6 +36,7 @@ import { renderChatMessage } from "core/util/messageContent";
 import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
 import { selectActiveTools } from "../../redux/selectors/selectActiveTools";
 import { selectApprovalSettings } from "../../redux/selectors/selectAutoApproval";
+import { allowOutsideWorkspaceOf } from "../outsideEdits";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import {
   acceptToolCall,
@@ -488,6 +489,9 @@ export async function driveSubagent(
         toolName: name,
         args: current.parsedArgs ?? {},
         ...(input.workspaceDirs ? { workspaceDirs: input.workspaceDirs } : {}),
+        ...(allowOutsideWorkspaceOf(getState())
+          ? { allowOutsideWorkspace: true }
+          : {}),
       });
       if (pre.status === "success") {
         if (pre.content.errorMessage) {
@@ -556,6 +560,9 @@ export async function driveSubagent(
           toolCall: current.toolCall,
           ...(input.workspaceDirs
             ? { workspaceDirs: input.workspaceDirs }
+            : {}),
+          ...(allowOutsideWorkspaceOf(getState())
+            ? { allowOutsideWorkspace: true }
             : {}),
         }),
         signal,

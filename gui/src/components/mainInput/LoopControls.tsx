@@ -547,6 +547,7 @@ export function LoopControls({
             <input
               type="number"
               data-testid="loop-replan-count"
+              aria-label="Number of re-plans"
               min={1}
               value={replan.replans}
               onChange={(e) => {
