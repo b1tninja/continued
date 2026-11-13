@@ -25,7 +25,7 @@ import {
  * it) is read as that area's default with a notice, and is never written.
  */
 export interface PolicyFileSettings extends PolicySettings {
-  /** Deny rules that bind at every level, IDGAF included. */
+  /** Deny rules that bind at every level below IDGAF (recorded at IDGAF). */
   floor?: string[];
   /** MCP servers whose read-only hints the person trusts, by display name. */
   mcpServers?: Record<string, "trusted">;
