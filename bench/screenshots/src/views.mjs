@@ -127,11 +127,11 @@ export const VIEWS = {
   "settings-help": { fixture: "settings-help", note: "Settings, Help tab" },
   "agents-running": {
     fixture: "agents-running",
-    note: "the agents tree with long names and unknown costs",
+    note: "the agents panel: Active and Done groups, long names, unknown costs",
   },
   "agents-ended": {
     fixture: "agents-ended",
-    note: "the agents tree after every agent ended, one interrupted",
+    note: "the agents panel after every agent ended (Done folded), one interrupted",
   },
   catalogue: {
     fixture: "catalogue",
