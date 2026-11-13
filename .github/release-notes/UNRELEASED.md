@@ -31,6 +31,7 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 ## Behaviour changes
 
 - **The terminal agent fails closed when the rule check throws.** Before, with the permission levels at their defaults and no rules of your own, an internal error in the rule check left the call to the list default, which in `continuous -p`, `continuous serve` and loop workers allows `Bash` and every unlisted tool, so the command ran with no protected-path check. Now the call asks in the terminal UI and over ACP, is held as an approval question inside a loop, and is refused in `-p` and `serve` with the reason "The permission rules could not be checked (internal error), so this call was not allowed automatically." The audit trail records it as decided by the system. Nothing changes while the rule check works.
+- **`continuous serve`: `GET /state` masks every field.** The conversation and a pending permission were masked; the queued messages (`messageQueue`), the held questions (`pendingQuestions`) and the loop (`loop`) were added after the masking, so a key typed into a queued message or quoted in a held approval was returned as typed. They now go through the same display masker and secret scanner. A client that reads those fields sees a placeholder where a recognised secret was; nothing else in the response changes.
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
 
 ## File edits at IDGAF now reach outside the workspace
