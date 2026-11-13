@@ -45,3 +45,7 @@ continuous --trust-project-config
 ```
 
 Trust given in VS Code and by `continuous project trust` is the same record.
+
+## git-ai
+
+The terminal agent can call [git-ai](https://github.com/git-ai-project/git-ai) around each file edit to record authorship. It is off. To turn it on, set `"gitAiIntegration": true` in `settings.json` in your own Continuous folder; a `settings.json` inside a project is never read for this. When on, `git-ai` is looked up on `PATH` skipping relative entries and anything inside the workspace, and run by its full path, so a repository cannot supply the program.
