@@ -844,10 +844,21 @@ function bedrock(ok: boolean): Fixture {
   };
 }
 
+/** OpenRouter provider setup with the one-time "Pull model information" card. */
+function catalogue(): Fixture {
+  return async ({ messenger }) => {
+    const h = messenger.responseHandlers as any;
+    h["modelCatalog/status"] = async () => ({ policy: "ask" });
+    h["modelCatalog/cached"] = async () => null;
+    await sleep(400);
+  };
+}
+
 // The loop frame is mounted on its own (see main.tsx, LoopFrameDemo); the state is in the name.
 const noop: Fixture = async () => {};
 
 Object.assign(FIXTURES, {
+  catalogue: catalogue(),
   "loop-frame-running": noop,
   "loop-frame-waiting": noop,
   "loop-frame-failed": noop,
