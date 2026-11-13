@@ -40,3 +40,18 @@ At File edits = IDGAF (the top level, also reached by `--auto`), the agent can c
 - Lower levels are unchanged: Manual, Cautious and Automatic ask, Permissive holds it by the outside-paths protection.
 - Still binding at IDGAF: the locked policy files, a tool switched off, an organisation ceiling and the `floor:` rules you wrote. Secret-file name checks inside the file tools, and the webview's own write guard (used for plan files), are not changed.
 - Separate fix: an absolute path inside the workspace given to the new-file tool is now written where it says, not under a folder named after the drive.
+
+## Recovery: doctor config, safe mode and reset (terminal agent)
+
+New:
+
+- **`continuous doctor config`** (also `continuous config check [file]`) says whether `config.yaml`, `permissions.yaml`, every hook settings file and each MCP server entry parses, with the line, column and key of each problem and never the file's text. For each main control (the five permission levels and the preset, floor and rule counts, each Protection, the tainted-session rule, your hooks and the project's, project trust, the global folder, the environment passed to commands, the run limits) it prints the value in force and its source: default, user file, project file, flag or env. `--json` has a stable schema (`continuous.doctor.config/1`); the exit code is 1 when something is broken. Secrets are masked. `continuous doctor` alone now lists its topics.
+- **`--safe`** for `continuous`, `continuous -p` and `continuous serve`: starts without project configuration, hooks (yours and the project's), MCP servers, agent files such as `AGENTS.md`, rules, skills and the environment install, with no permission level looser than its default. It prints one line on stderr naming what was skipped. Use it when a broken hook, settings file or MCP server stops a start.
+- **`continuous reset --sessions | --trust | --permissions | --caches | --all`**: a dry run that lists every path with its size, and with `--yes` moves those entries to `reset-backups/<time>/` in the global folder rather than deleting them. Your models and keys are never in a scope, and `~/.continue` is never touched.
+
+See the Recovery page in the docs.
+
+Behaviour changes:
+
+- **A hook's reason for flagging a result is shown in full in the terminal UI.** A PostToolUse hook's "A hook flagged this result: <reason>" was hidden behind a tool's one-line summary (Read, List, Search, Edit, Write) or cut at 100 characters; it is now printed whole under the summary.
+- **`trusted-project.json` is listed among the product's own files**, so like `trusted-hooks.json` it is a protected path: an agent's write to a file of that name in a configuration folder now meets the same lock.
