@@ -26,6 +26,7 @@ import { createSession } from "../session.js";
 import { messageQueue } from "../stream/messageQueue.js";
 import { constructSystemMessage } from "../systemMessage.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
+import { exitOnBrokenConfig } from "../util/configFileGate.js";
 import { gracefulExit } from "../util/exit.js";
 import { formatError } from "../util/formatError.js";
 import { getGitDiffSnapshot } from "../util/git.js";
@@ -113,6 +114,9 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     prepareServeAccessOrExit(options);
 
   // Environment install script will be deferred until after server startup to avoid blocking
+
+  // A broken hooks or permissions file stops the start (exit code 2)
+  await exitOnBrokenConfig(options);
 
   // Initialize services with tool permission overrides
   const { permissionOverrides } = processCommandFlags(options);

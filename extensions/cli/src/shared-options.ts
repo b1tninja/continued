@@ -121,6 +121,7 @@ export function mergeParentOptions(parentCommand: Command, options: any): any {
     // silently when a subcommand such as serve or acp is named after it.
     "policy",
     "trustProjectHooks",
+    "ignoreBrokenConfig",
     "maxBudgetUsd",
     "maxTurns",
     "maxDuration",

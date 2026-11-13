@@ -3,11 +3,12 @@ import fs from "fs";
 import YAML from "yaml";
 
 import { logger } from "../util/logger.js";
+import { asPredicate } from "../util/readPolicyFile.js";
 
 import {
   PERMISSIONS_YAML_PATH,
   PermissionsYamlConfig,
-  loadPermissionsYaml,
+  readPermissionsYaml,
 } from "./permissionsYamlLoader.js";
 
 /**
@@ -35,7 +36,16 @@ export function generatePolicyRule(toolName: string, toolArgs: any): string {
 export async function addPolicyToYaml(policyRule: string): Promise<void> {
   try {
     // Load existing config or create empty one
-    const config: PermissionsYamlConfig = loadPermissionsYaml() || {};
+    // A broken file is not an empty one: writing over it would destroy what
+    // the person wrote.
+    const existing = readPermissionsYaml();
+    if (existing.status === "broken") {
+      throw new Error(
+        `${existing.path} ${asPredicate(existing.error)}; fix it before adding rules`,
+      );
+    }
+    const config: PermissionsYamlConfig =
+      existing.status === "ok" ? existing.value : {};
 
     // Ensure allow array exists
     if (!config.allow) {
