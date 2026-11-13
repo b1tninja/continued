@@ -57,6 +57,8 @@ import {
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import { IdeShadow } from "./tools/permissions/auto/shadowIde";
 import { getAuditTrail } from "./tools/permissions/audit/global";
+import { recordAutoAnswer } from "./tools/permissions/audit/autoAnswer";
+import { setQuestionsLevel } from "./context/mcp/mcpElicitation";
 import { registerAuditListHandlers } from "./tools/permissions/audit/listingHandlers";
 import { machineAuditHost } from "./tools/permissions/audit/listingHost";
 import {
@@ -83,6 +85,12 @@ import { globalProfileStatus } from "./llm/llms/bedrockHelpers";
 import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
+import {
+  pullOpenRouterCatalog,
+  readModelCatalogPolicy,
+  readOpenRouterCatalog,
+  saveModelCatalogPolicy,
+} from "./llm/modelCatalogStore";
 import {
   convertConnectionToAccount,
   saveProviderModelsToAccount,
@@ -437,6 +445,51 @@ export class Core {
         return [];
       }
     });
+
+    on("modelCatalog/status", async () => {
+      const cached = readOpenRouterCatalog();
+      return {
+        policy: readModelCatalogPolicy(),
+        ...(cached
+          ? {
+              openrouter: {
+                fetchedAt: cached.fetchedAt,
+                count: cached.models.length,
+              },
+            }
+          : {}),
+      };
+    });
+
+    on("modelCatalog/cached", async () => {
+      const cached = readOpenRouterCatalog();
+      return cached
+        ? { fetchedAt: cached.fetchedAt, models: cached.models }
+        : null;
+    });
+
+    // The one request to openrouter.ai: runs only on the person's say-so.
+    on("modelCatalog/pull", async () => {
+      try {
+        const catalog = await pullOpenRouterCatalog(
+          (await this.configHandler.loadConfig()).config?.requestOptions,
+        );
+        return {
+          ok: true as const,
+          fetchedAt: catalog.fetchedAt,
+          models: catalog.models,
+        };
+      } catch (e: any) {
+        return {
+          ok: false as const,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    });
+
+    on("modelCatalog/setPolicy", async (msg) => ({
+      saved: saveModelCatalogPolicy(msg.data.policy),
+    }));
 
     on("models/detectLocal", async () => detectLocalServers());
 
@@ -795,6 +848,10 @@ export class Core {
       );
       this.shadowIde.afterAutoReview(data.callId, reply.by);
       return reply;
+    });
+
+    on("audit/autoAnswer", async ({ data }) => {
+      recordAutoAnswer(getAuditTrail(), data);
     });
 
     on("audit/answer", async ({ data }) => {
@@ -2036,8 +2093,10 @@ export class Core {
       return { url: "" };
     });
 
-    on("tools/call", async ({ data: { toolCall, workspaceDirs } }) =>
-      this.handleToolCall(toolCall, workspaceDirs),
+    on(
+      "tools/call",
+      async ({ data: { toolCall, workspaceDirs, allowOutsideWorkspace } }) =>
+        this.handleToolCall(toolCall, workspaceDirs, allowOutsideWorkspace),
     );
 
     this.registerPolicyHandlers();
@@ -2091,6 +2150,9 @@ export class Core {
           // The tainted-session rule's fact; nothing when the rule is off
           ...taintInput(sessionId, callId),
         });
+        // Core keeps the Questions level it was last told, for what is asked
+        // outside a tool call (an MCP server's elicitation)
+        setQuestionsLevel(approval?.levels?.questions);
         recordPolicyDecision(
           getAuditTrail(),
           { session: sessionId, callId, toolName, parsedArgs, approval, agent },
@@ -2118,7 +2180,9 @@ export class Core {
 
     on(
       "tools/preprocessArgs",
-      async ({ data: { toolName, args, workspaceDirs } }) => {
+      async ({
+        data: { toolName, args, workspaceDirs, allowOutsideWorkspace },
+      }) => {
         const { config } = await this.configHandler.loadConfig();
         if (!config) {
           throw new Error("Config not loaded");
@@ -2134,6 +2198,7 @@ export class Core {
             ide: workspaceDirs?.length
               ? ideInWorkspace(this.ide, workspaceDirs)
               : this.ide,
+            ...(allowOutsideWorkspace ? { allowOutsideWorkspace } : {}),
           });
           return {
             preprocessedArgs,
@@ -2183,7 +2248,11 @@ export class Core {
    * worktree): the tool sees those folders as the workspace, and the exact
    * edit tools, otherwise applied through the client's diff review, run here.
    */
-  private async handleToolCall(toolCall: ToolCall, workspaceDirs?: string[]) {
+  private async handleToolCall(
+    toolCall: ToolCall,
+    workspaceDirs?: string[],
+    allowOutsideWorkspace?: boolean,
+  ) {
     const { config } = await this.configHandler.loadConfig();
     if (!config) {
       throw new Error("Config not loaded");
@@ -2221,6 +2290,7 @@ export class Core {
         config,
         ide: inWorkspace ? ideInWorkspace(this.ide, inWorkspace) : this.ide,
         workspaceDirs: inWorkspace,
+        ...(allowOutsideWorkspace ? { allowOutsideWorkspace } : {}),
         llm: config.selectedModelByRole.chat,
         // The model picks the URL of fetch_url_content: the global request
         // headers go only to the configured model endpoints, not to any host
@@ -2491,13 +2561,13 @@ export class Core {
   private async handleCompleteOnboarding(
     msg: Message<CompleteOnboardingPayload>,
   ) {
-    const { mode } = msg.data;
+    const { mode, local } = msg.data;
 
     let editConfigYamlCallback: (config: ConfigYaml) => ConfigYaml;
 
     switch (mode) {
       case OnboardingModes.LOCAL:
-        editConfigYamlCallback = setupLocalConfig;
+        editConfigYamlCallback = (config) => setupLocalConfig(config, local);
         break;
 
       default:

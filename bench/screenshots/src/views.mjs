@@ -47,6 +47,34 @@ export const VIEWS = {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",
   },
+  "loop-plan-tile": {
+    fixture: "loop-plan-tile",
+    note: "Loop mode: the plan card as a collapsed tile (title, file link, round line, one root row)",
+  },
+  "loop-plan-running": {
+    fixture: "loop-plan-running",
+    note: "Loop mode: the plan tree open while running: done fold, current item with live lines, upcoming rows, trace and auto-answer",
+  },
+  "loop-plan-waiting": {
+    fixture: "loop-plan-waiting",
+    note: "Loop mode: a re-plan waits to be accepted: dropped struck through, new to-do, kept folded; opens by itself",
+  },
+  "loop-plan-failed": {
+    fixture: "loop-plan-failed",
+    note: "Loop mode: an item failed and a repair runs: check output, fix-forward line; opens by itself",
+  },
+  "loop-plan-finished": {
+    fixture: "loop-plan-finished",
+    note: "Loop mode: finished, every to-do done folded into one row",
+  },
+  "loop-idgaf": {
+    fixture: "loop-idgaf",
+    note: "Loop mode at IDGAF with seven blocked calls: the one-line IDGAF chip and the blocked badge in the mode bar",
+  },
+  "loop-blocked-open": {
+    fixture: "loop-blocked-open",
+    note: "Loop mode: the Recently blocked list opened from its badge",
+  },
   "settings-models": {
     fixture: "settings-models",
     note: "Settings, Models tab",
@@ -76,6 +104,10 @@ export const VIEWS = {
   "agents-ended": {
     fixture: "agents-ended",
     note: "the agents tree after every agent ended, one interrupted",
+  },
+  catalogue: {
+    fixture: "catalogue",
+    note: "OpenRouter provider setup with the one-time prompt to pull the model list",
   },
   "bedrock-ok": {
     fixture: "bedrock-ok",
@@ -112,6 +144,38 @@ export const VIEWS = {
   "audit-inbox": {
     fixture: "audit-inbox",
     note: "Settings, Permissions, Inbox: open asks oldest first, ages, possibly-ended label, Show older",
+  },
+  "onboarding-local": {
+    fixture: "onboarding-local",
+    note: "Onboarding, Local tab: the suggested model with Connect and Configure model",
+  },
+  "onboarding-local-chooser": {
+    fixture: "onboarding-local-chooser",
+    note: "Onboarding, Local tab, with the Configure model chooser open",
+  },
+  "onboarding-local-server": {
+    fixture: "onboarding-local-server",
+    note: "The chooser on an OpenAI-compatible server, with More open",
+  },
+  "loop-frame-running": {
+    fixture: "loop-frame-running",
+    note: "the gradient loop frame round a stand-in loop dock, running",
+  },
+  "loop-frame-waiting": {
+    fixture: "loop-frame-waiting",
+    note: "the loop frame, solid amber: waiting on you",
+  },
+  "loop-frame-failed": {
+    fixture: "loop-frame-failed",
+    note: "the loop frame, solid red: an item failed, repairing",
+  },
+  "loop-frame-finished": {
+    fixture: "loop-frame-finished",
+    note: "the loop frame, solid green: finished",
+  },
+  "loop-frame-stopped": {
+    fixture: "loop-frame-stopped",
+    note: "the loop frame, solid grey: stopped",
   },
   "settings-tools": {
     fixture: "settings-tools",

@@ -229,9 +229,9 @@ describe("obfuscated commands the safety floor cannot see", () => {
     expect(cmd("rm -rf /", idgaf).policy).toBe(ALLOW);
   });
 
-  it("does not run a substitution the floor only asks about", () => {
+  it("does not run a substitution the floor only asks about; at IDGAF nobody is asked, so it is refused", () => {
     expect(cmd("echo $(date)", handsOff).policy).toBe(ASK);
-    expect(cmd("echo $(date)", idgaf).policy).toBe(ASK);
+    expect(cmd("echo $(date)", idgaf).policy).toBe(OFF);
   });
 });
 

@@ -15,6 +15,7 @@ import type {
   TerminalEnvironmentMode,
   TerminalEnvironmentStatus,
 } from "../util/terminalEnvironment";
+import type { CatalogModel } from "../llm/openRouterCatalog";
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type {
@@ -691,6 +692,12 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
        * Loop worker's worktree; absolute paths stay as they are.
        */
       workspaceDirs?: string[];
+      /**
+       * File edits is IDGAF: the file tools may name a path outside
+       * the workspace (tools/permissions/outsideEdits.ts). The decision was
+       * made by tools/evaluatePolicy; this lets the tool resolve the path.
+       */
+      allowOutsideWorkspace?: boolean;
     },
     {
       contextItems: ContextItem[];
@@ -778,12 +785,19 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
   "tools/autoReview": [AutoReviewRequest, AutoReviewReply];
   /** The person's answer to a call that asked, for the audit trail */
   "audit/answer": [{ callId: string; approved: boolean }, void];
+  /** A question answered for the person, where Questions is IDGAF (core/util/autoAnswer.ts) */
+  "audit/autoAnswer": [
+    { callId: string; question: string; answer: string; source: string },
+    void,
+  ];
   "tools/preprocessArgs": [
     {
       toolName: string;
       args: Record<string, unknown>;
       /** As for tools/call: resolve paths against these folders */
       workspaceDirs?: string[];
+      /** As for tools/call: File edits is IDGAF */
+      allowOutsideWorkspace?: boolean;
     },
     {
       preprocessedArgs?: Record<string, unknown>;
@@ -797,6 +811,30 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
   "process/isBackgrounded": [{ toolCallId: string }, boolean];
   "process/killTerminalProcess": [{ toolCallId: string }, void];
   "mdm/setLicenseKey": [{ licenseKey: string }, boolean];
+  /**
+   * The dated local copy of OpenRouter's public model list. `status` and
+   * `cached` read the file only; `pull` is the one request to openrouter.ai
+   * and runs only when the person asks.
+   */
+  "modelCatalog/status": [
+    undefined,
+    {
+      policy: "ask" | "never";
+      openrouter?: { fetchedAt: string; count: number };
+    },
+  ];
+  "modelCatalog/cached": [
+    undefined,
+    { fetchedAt: string; models: CatalogModel[] } | null,
+  ];
+  "modelCatalog/pull": [
+    undefined,
+    (
+      | { ok: true; fetchedAt: string; models: CatalogModel[] }
+      | { ok: false; error: string }
+    ),
+  ];
+  "modelCatalog/setPolicy": [{ policy: "ask" | "never" }, { saved: boolean }];
   "models/fetch": [
     { provider: string; apiKey?: string; apiBase?: string },
     {

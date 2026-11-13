@@ -18,7 +18,8 @@ import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { askProtectionHit } from "./askProtections";
 import { deputyCallHit, type DeputyCallInput } from "./deputyCall";
-import { builtinRuleOn } from "./policy";
+import { outsideTargetReason } from "./outsideEdits";
+import { builtinRuleOn, questionsNeverAsk } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
 import type { Sink } from "./taint/taintSinks";
@@ -182,10 +183,49 @@ export interface EvaluateInput extends TaintedSessionInput {
 export function evaluateToolPolicyWithRules(
   input: EvaluateInput,
 ): ToolPolicyResult {
-  return applyTaintedSessionRule(
+  return noAskAtIdgaf(
     input,
-    lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input))),
+    applyTaintedSessionRule(
+      input,
+      lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input))),
+    ),
   );
+}
+
+export const IDGAF_NO_ASK_REASON =
+  "Not run: this would ask, and Questions is IDGAF, so nobody is asked. What stopped it is a floor that no level lifts.";
+
+/**
+ * Questions is IDGAF: nothing asks. A call whose own area is at the top level is allowed
+ * outright, so what is left asking there is a floor that no level lifts (a
+ * command that hides what it runs, a write to a path built at run time, a
+ * tainted session). Such a call is refused instead of held for the person,
+ * who has said they will not be asked. An area below the top level keeps its own
+ * asking: that is the Tool use, File edits or Context use setting, not a
+ * question.
+ */
+function noAskAtIdgaf(
+  input: EvaluateInput,
+  result: ToolPolicyResult,
+): ToolPolicyResult {
+  if (
+    result.policy !== "allowedWithPermission" ||
+    !questionsNeverAsk(input.approval?.levels.questions)
+  ) {
+    return result;
+  }
+  const level = levelOfCall(input.approval, input.toolName, input.tool, {
+    parsedArgs: input.parsedArgs,
+    cwd: input.cwd,
+    shell: input.shell,
+  })?.level;
+  if (level !== "idgaf") return result;
+  return {
+    ...result,
+    policy: "disabled",
+    source: result.source ?? "floor",
+    reason: `${IDGAF_NO_ASK_REASON}${result.reason ? ` (${result.reason})` : ""}`,
+  };
 }
 
 /**
@@ -316,25 +356,73 @@ function firstProtectedHit(
       largeChangeLines: input.largeChangeLines,
       cwd: input.cwd,
     }),
-    deputyCallHit({
-      toolName,
-      parsedArgs,
-      resolved: resolved
-        ? {
-            path: resolvedPath,
-            withinWorkspace: resolved.isWithinWorkspace,
-          }
-        : undefined,
-      cwd: input.cwd,
-      workspaceDirs: input.workspaceDirs,
-      resolvePath: input.resolvePath,
-      schema: tool?.function?.parameters,
-      approval: input.approval,
-      flavor: input.platform,
-      home: input.home,
-      mcp: !!tool?.uri?.startsWith("mcp:") && !!tool?.originalFunctionName,
-    }),
+    deputyCallHit(deputyInputOf(input, resolved, resolvedPath)),
   ].find((hit) => hit !== undefined);
+}
+
+function deputyInputOf(
+  input: EvaluateInput,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): DeputyCallInput {
+  const { tool, toolName, parsedArgs } = input;
+  return {
+    toolName,
+    parsedArgs,
+    resolved: resolved
+      ? {
+          path: resolvedPath,
+          withinWorkspace: resolved.isWithinWorkspace,
+        }
+      : undefined,
+    cwd: input.cwd,
+    workspaceDirs: input.workspaceDirs,
+    resolvePath: input.resolvePath,
+    schema: tool?.function?.parameters,
+    approval: input.approval,
+    flavor: input.platform,
+    home: input.home,
+    mcp: !!tool?.uri?.startsWith("mcp:") && !!tool?.originalFunctionName,
+  };
+}
+
+/** The decision's reason; at IDGAF on File edits it also names a target outside the workspace. */
+function reasonWithOutsideTarget(
+  input: EvaluateInput,
+  decision: { source?: DecisionSource; policy: ToolPolicy; reason?: string },
+  area: string | undefined,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): string | undefined {
+  if (
+    decision.source !== "idgaf" ||
+    decision.policy !== "allowedWithoutPermission" ||
+    area !== "edits"
+  ) {
+    return decision.reason;
+  }
+  const note = outsideTargetNote(input, resolved, resolvedPath);
+  return note ? `${decision.reason ?? ""} ${note}`.trim() : decision.reason;
+}
+
+/**
+ * The absolute path a File edits call reaches outside the workspace, when
+ * IDGAF lets it through: said in the decision, so the audit trail and the
+ * transcript name the place. The built-in rule is not consulted for the
+ * judgement (it may be switched off, and the fact stays true).
+ */
+function outsideTargetNote(
+  input: EvaluateInput,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): string | undefined {
+  const hit = deputyCallHit({
+    ...deputyInputOf(input, resolved, resolvedPath),
+    approval: undefined,
+  });
+  const suffix = ", outside the workspace";
+  if (!hit?.path.endsWith(suffix)) return undefined;
+  return outsideTargetReason(hit.path.slice(0, -suffix.length));
 }
 
 function evaluateRules(input: EvaluateInput): ToolPolicyResult {
@@ -503,11 +591,19 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     shell: input.shell,
   });
 
+  const reason = reasonWithOutsideTarget(
+    input,
+    decision,
+    found?.area,
+    resolved,
+    resolvedPath,
+  );
+
   return {
     policy: decision.policy,
     displayValue,
     source: decision.source,
-    ...(decision.reason ? { reason: decision.reason } : {}),
+    ...(reason ? { reason } : {}),
     ...(decision.protection ? { protection: decision.protection } : {}),
     ...(decision.rule ? { rule: decision.rule } : {}),
     ...(found?.readOnly ? { readOnly: found.readOnly } : {}),

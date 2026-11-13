@@ -250,7 +250,7 @@ describe("Loop mode's driver in the CLI", () => {
   });
 
   async function stuckThenCheckReplaced(
-    plan: "yolo" | "permissive" | "cautious",
+    plan: "idgaf" | "permissive" | "cautious",
   ) {
     await savePlan(
       {
@@ -283,7 +283,7 @@ describe("Loop mode's driver in the CLI", () => {
     return nextTurn(history().length);
   }
 
-  for (const level of ["yolo", "permissive"] as const) {
+  for (const level of ["idgaf", "permissive"] as const) {
     it(`a re-plan that replaces a check goes on by itself at Plan edits ${level}, with a notice`, async () => {
       const next = await stuckThenCheckReplaced(level);
       expect(next?.kind).toBe("item");
@@ -319,7 +319,11 @@ describe("Loop mode's driver in the CLI", () => {
       },
       cwd,
     );
-    setPolicyLevels({ ...getPolicyLevels(), plan: "yolo", questions: "yolo" });
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "idgaf",
+      questions: "idgaf",
+    });
     startLoopFromPlan("normal");
     expect(loopNow().autoDecisions?.at(-1)).toMatchObject({
       kind: "question",

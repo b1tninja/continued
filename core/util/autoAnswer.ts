@@ -44,3 +44,35 @@ export function autoAnsweredLine(question: string, answer: string): string {
     t.length > n ? `${t.slice(0, n - 1)}…` : t;
   return `Auto-answered: ${clip(question.replace(/\s+/g, " "), 100)} -> ${clip(answer, 100)}`;
 }
+
+/** What a person at Questions: IDGAF is shown instead of a question. */
+export interface QuestionAnsweredForYou {
+  text: string;
+  basis: AutoAnswer["basis"];
+  /** The setting that decided, for the audit trail: "Questions: IDGAF" */
+  source: string;
+  /** The compact line: "Auto-answered: <question> -> <answer>" */
+  line: string;
+}
+
+/**
+ * Answers a question without asking anyone, the way every surface does when
+ * the Questions area is IDGAF: the option labelled "(recommended)",
+ * else the model's pick, else the first option, else the best-judgment line.
+ * One function, so the IDE extension, the terminal, headless runs and
+ * `continuous serve` cannot give different answers.
+ */
+export function answerWithoutAsking(input: {
+  question: string;
+  options?: readonly string[];
+  pick?: string;
+  source: string;
+}): QuestionAnsweredForYou {
+  const answer = autoAnswerFor(input.options, input.pick);
+  return {
+    text: answer.text,
+    basis: answer.basis,
+    source: input.source,
+    line: autoAnsweredLine(input.question, answer.text),
+  };
+}

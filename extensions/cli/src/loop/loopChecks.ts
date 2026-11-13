@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "child_process";
 
+import { questionsNeverAsk } from "core/tools/permissions/policy.js";
 import { getCommandExecutor } from "core/util/commandExecutor.js";
 import { holdCheck, recordCheck } from "core/util/loopMode.js";
 import { withRealExitCode } from "core/util/shell.js";
@@ -220,7 +221,8 @@ export async function runLoopCheck(
       const loop = getSessionLoop();
       if (!loop) return;
       commitLoop(
-        decision.denialReason === "loop"
+        decision.denialReason === "loop" &&
+          !questionsNeverAsk(loop.policy?.questions)
           ? holdCheck(loop)
           : recordCheck(
               loop,

@@ -1,4 +1,5 @@
 import { inferResolvedUriFromRelativePath } from "../../util/ideUtils";
+import { outsideWriteNote } from "./outsideNote";
 
 import { ToolImpl } from ".";
 import { throwIfFileIsSecurityConcern } from "../../indexing/ignore";
@@ -19,6 +20,8 @@ export const createNewFileImpl: ToolImpl = async (args, extras) => {
   const resolvedFileUri = await inferResolvedUriFromRelativePath(
     filepath,
     extras.ide,
+    undefined,
+    { allowOutside: extras.allowOutsideWorkspace },
   );
   if (resolvedFileUri) {
     throwIfFileIsSecurityConcern(getCleanUriPath(resolvedFileUri));
@@ -54,7 +57,12 @@ export const createNewFileImpl: ToolImpl = async (args, extras) => {
       {
         name: getUriPathBasename(resolvedFileUri),
         description: getCleanUriPath(resolvedFileUri),
-        content: append ? "Added to the file" : "File created successfuly",
+        content: [
+          append ? "Added to the file" : "File created successfuly",
+          await outsideWriteNote(extras, resolvedFileUri),
+        ]
+          .filter(Boolean)
+          .join("\n"),
         uri: {
           type: "file",
           value: resolvedFileUri,

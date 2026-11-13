@@ -10,12 +10,14 @@ import { setLocalStorage } from "@gui/util/localStorage";
 import { shouldForwardProp } from "@gui/styles/shouldForwardProp";
 import App from "@gui/App";
 import { BedrockConnectionTester } from "@gui/forms/BedrockConnectionTester";
+import { ProviderSetupFlow } from "@gui/components/ProviderSetup/ProviderSetupFlow";
 import "@gui/index.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { Provider } from "react-redux";
 import { StyleSheetManager } from "styled-components";
 import { FIXTURES, seedMessenger, sendConfig } from "./fixtures";
+import { LoopFrameDemo } from "./LoopFrameDemo";
 import { applyTheme, type ThemeName } from "./themes";
 
 declare global {
@@ -64,7 +66,14 @@ async function main() {
         <StyleSheetManager shouldForwardProp={shouldForwardProp}>
           <IdeMessengerProvider messenger={messenger}>
             <Provider store={store}>
-              {fixtureName.startsWith("bedrock") ? (
+              {fixtureName.startsWith("catalogue") ? (
+                <div className="bg-background text-foreground p-2">
+                  <ProviderSetupFlow
+                    initialProvider="openrouter"
+                    onDone={() => {}}
+                  />
+                </div>
+              ) : fixtureName.startsWith("bedrock") ? (
                 <div className="bg-background text-foreground p-2">
                   <BedrockConnectionTester
                     connection={{ region: "eu-west-1" }}
@@ -73,6 +82,11 @@ async function main() {
                     onModelsLoaded={() => {}}
                   />
                 </div>
+              ) : fixtureName.startsWith("loop-frame-") ? (
+                <LoopFrameDemo
+                  state={fixtureName.slice("loop-frame-".length) as never}
+                  animate={params.get("animate") === "1"}
+                />
               ) : (
                 <App />
               )}

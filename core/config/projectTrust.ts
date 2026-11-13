@@ -43,6 +43,7 @@ export const PROJECT_CONFIG_SCOPES = [
   "data",
   "rc",
   "worktree",
+  "environment",
 ] as const;
 
 export type ProjectConfigScope = (typeof PROJECT_CONFIG_SCOPES)[number];
@@ -360,6 +361,7 @@ const SCOPE_NOUN: Record<ProjectConfigScope, string> = {
   data: "data destination file",
   rc: "config override",
   worktree: "worktree setup file",
+  environment: "environment install file",
 };
 
 export function untrustedScopeMessage(
@@ -403,6 +405,7 @@ const LAYOUT: Record<ProjectConfigScope, ScopeLayout> = {
   data: { dirs: ["data"], extensions: [".yaml", ".yml"] },
   rc: { rootRc: true },
   worktree: { files: ["worktrees.json"] },
+  environment: { files: ["environment.json"] },
 };
 
 function hasExtension(name: string, extensions: string[]): boolean {
@@ -888,6 +891,16 @@ function summarizeWorktree(file: string, content: string): string[] {
   return lines.length > 0 ? lines : [`${base}: no setup commands`];
 }
 
+function summarizeEnvironment(file: string, content: string): string[] {
+  const base = path.basename(uriToFsPath(file) ?? file);
+  const raw = parseLoose(content);
+  if (!raw || typeof raw !== "object") return [`${base} (could not be read)`];
+  const install = (raw as Record<string, unknown>).install;
+  return typeof install === "string" && install.trim()
+    ? [clip(`${base}: install: ${install}`)]
+    : [`${base}: no install command`];
+}
+
 /** What a file would do, without secret values. */
 export function summarizeScopeFile(
   scope: ProjectConfigScope,
@@ -909,6 +922,8 @@ export function summarizeScopeFile(
         return summarizeRc(file.path, file.content);
       case "worktree":
         return summarizeWorktree(file.path, file.content);
+      case "environment":
+        return summarizeEnvironment(file.path, file.content);
       default:
         return [];
     }

@@ -197,13 +197,15 @@ describe("Questions decides who answers", () => {
     ).toBe("person");
   });
 
-  test("an approval is never decided by the agent", () => {
+  test("an approval is never decided by the agent: at IDGAF it is refused, not held", () => {
     const held = holdQuestion(
       loopWith({ questions: "idgaf" }),
       { itemId: "1", question: "Run it?", kind: "approval" },
       T0,
     );
-    expect(held.ok && held.question.decidedAlone).toBeUndefined();
+    expect(held.ok && held.question.decidedAlone).toBe(true);
+    expect(held.ok && held.question.autoAnswer?.text).toMatch(/^Refused/);
+    expect(held.ok && held.loop.questions.some((q) => !q.answerId)).toBe(false);
   });
 });
 

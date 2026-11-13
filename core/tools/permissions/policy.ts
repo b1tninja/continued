@@ -650,5 +650,14 @@ export function planHandoff(input: PlanHandoffInput): PlanHandoff {
  * agent (see core/util/autoAnswer.ts). The loop's own gates use this one test.
  */
 export function questionsAutoAnswer(level: PolicyLevel): boolean {
-  return level === "automatic" || level === "permissive" || level === "yolo";
+  return level === "automatic" || level === "permissive" || level === "idgaf";
+}
+
+/**
+ * Questions is IDGAF (a saved `yolo`, its old name, reads as IDGAF): nothing asks, in a loop or outside one, on any
+ * surface. The person's own "you decide" list does not apply, and a question
+ * is answered for the agent (core/util/autoAnswer.ts) rather than shown.
+ */
+export function questionsNeverAsk(level: PolicyLevel | undefined): boolean {
+  return typeof level === "string" && parsePolicyLevel(level) === "idgaf";
 }
