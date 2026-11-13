@@ -31,6 +31,12 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 ## Behaviour changes
 
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
+- **Commands cannot answer prompts.** Commands the agent runs (both terminal tools, background jobs, loop checks) get no open standard input, and Windows PowerShell is started with `-NonInteractive`. Before, `Read-Host`, a `Remove-Item` confirmation, the `curl` alias asking for `-Uri` and `read` in bash, WSL or a container waited until the timeout (2 minutes in the editor, 3 in the terminal agent). Now they fail at once with PowerShell's NonInteractive error, or read end of file. A script that relied on typing into it in the agent never worked; one that reads optional input now sees none. Hooks keep their standard input.
+- **Exit codes are real.** Windows PowerShell reported 1 for any failing program; both terminal tools now report the program's own code (a script that exits 3 is `exit code 3`). Output is unchanged. The last statement still decides, as in every shell: `a; b` is `b`'s result.
+- **Pagers print and end.** Commands get `PAGER=cat`, `GIT_PAGER=cat`, `MANPAGER=cat` and, when it is not set, `LESS=FRX`, so `git log` and `man` no longer wait in `less`. A name in `terminal.passEnv` is never overridden, and `terminal.environment: inherit` keeps the host's values.
+- **`terminal.passEnv` reaches WSL.** With commands running in WSL, the passed names are added to `WSLENV` with `/u`; before, they stopped at the WSL boundary.
+- **macOS with no `$SHELL` runs zsh.** An editor started without `$SHELL` ran commands in `/bin/bash` while the tool description said `/bin/zsh`; commands now run in `/bin/zsh`. The description is unchanged.
+- **Windows output in the machine's code page.** Output that is not UTF-8 is decoded in the system's OEM code page (437 on a US machine) instead of always as GBK, so `café` no longer arrives as CJK mojibake; the terminal agent no longer shows U+FFFD for it. Code page 936 decodes as before. No UTF-8 prelude is sent to PowerShell.
 
 ## File edits at IDGAF now reach outside the workspace
 
