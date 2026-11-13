@@ -9,7 +9,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -65,7 +64,6 @@ import {
 import { streamEditThunk } from "../../redux/thunks/edit";
 import { loadLastSession } from "../../redux/thunks/session";
 import { streamResponseThunk } from "../../redux/thunks/streamResponse";
-import { isJetBrains, isMetaEquivalentKeyPressed } from "../../util";
 import { ToolCallDiv } from "./ToolCallDiv";
 import { McpAppTurn } from "./ToolCallDiv/McpAppTurn";
 import { isMcpAppTurn } from "./ToolCallDiv/mcpAppTurnContent";
@@ -78,7 +76,7 @@ import InlineErrorMessage from "../../components/mainInput/InlineErrorMessage";
 import { resolveEditorContent } from "../../components/mainInput/TipTapEditor/utils/resolveEditorContent";
 import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
 import { RootState } from "../../redux/store";
-import { cancelStream, interruptStream } from "../../redux/thunks/cancelStream";
+import { interruptStream } from "../../redux/thunks/cancelStream";
 import { getLocalStorage, setLocalStorage } from "../../util/localStorage";
 import { EmptyChatBody } from "./EmptyChatBody";
 import { ExploreDialogWatcher } from "./ExploreDialogWatcher";
@@ -159,32 +157,11 @@ export function Chat() {
   const hasDismissedExploreDialog = useAppSelector(
     (state) => state.ui.hasDismissedExploreDialog,
   );
-  const jetbrains = useMemo(() => {
-    return isJetBrains();
-  }, []);
 
   const { paused: autoScrollPaused, scrollToLatest } = useAutoScroll(
     stepsDivRef,
     history,
   );
-
-  useEffect(() => {
-    // Cmd + Backspace to delete current step
-    const listener = (e: KeyboardEvent) => {
-      if (
-        e.key === "Backspace" &&
-        (jetbrains ? e.altKey : isMetaEquivalentKeyPressed(e)) &&
-        !e.shiftKey
-      ) {
-        void dispatch(cancelStream());
-      }
-    };
-    window.addEventListener("keydown", listener);
-
-    return () => {
-      window.removeEventListener("keydown", listener);
-    };
-  }, [isStreaming, jetbrains, isInEdit]);
 
   const { widget, highlights } = useFindWidget(
     stepsDivRef,
