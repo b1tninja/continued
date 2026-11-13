@@ -422,6 +422,7 @@ export async function unrollBlocks(
     modeModels: assistant.modeModels,
     toolPermissions: assistant.toolPermissions,
     terminal: assistant.terminal,
+    modelCatalog: assistant.modelCatalog,
   };
 
   if (injectRequestOptions) {
@@ -446,6 +447,7 @@ export async function unrollBlocks(
     | "rulesByMode"
     | "toolPermissions"
     | "terminal"
+    | "modelCatalog"
   >)[] = ["models", "context", "data", "mcpServers", "prompts", "docs"];
 
   // Process all sections in parallel

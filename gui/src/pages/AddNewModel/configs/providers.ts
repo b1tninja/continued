@@ -282,8 +282,10 @@ export const providers: Partial<Record<string, ProviderInfo>> = {
     ],
     packages: [
       {
-        title: "Loading models...",
-        description: "Fetching available models from OpenRouter",
+        // No OpenRouter model ids are bundled: the repo has no verified ones,
+        // and the list is downloaded from openrouter.ai on request.
+        title: "Model list not downloaded",
+        description: "Refresh from openrouter.ai, or type a model id",
         params: { model: "placeholder" },
         isOpenSource: false,
       },

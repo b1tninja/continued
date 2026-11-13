@@ -30,12 +30,17 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 ## Behaviour changes
 
+- A root `--policy` or `--trust-project-hooks` now reaches `continuous serve` and `continuous acp` when it is written before the subcommand. Before, `continuous --policy careful serve` dropped the policy without a word and ran with the default one.
+- The git-ai integration is now off by default. The terminal agent used to run `git-ai` (found through PATH, with the workspace as its working directory) around every file edit whenever it was installed. It now runs only if your own `settings.json` in your Continuous folder says `"gitAiIntegration": true`, and then only the `git-ai` found in an absolute PATH entry outside the workspace, by its full path. A project cannot switch it on.
+- `continuous serve` no longer runs the `install` command from `.continuous/environment.json` or `.continue/environment.json` unless the folder is trusted. Run `continuous project trust` (or pass `--trust-project-config`) to keep the old behaviour; `serve` prints one line on stderr when it skips the file. Set `"environmentInstall": false` in your own `settings.json` to turn it off even for a trusted folder. See the workspace trust page.
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
 - A loop's time budget no longer counts the time it waits on you. While every open item waits on an answer, or a re-plan waits on its plan card, the clock stops, so a Supervised loop that waited 40 minutes against a 60 minute budget keeps its 40 minutes of work. The time meter and time left agree, and the stop message names both ("ran 52 minutes of work (100 minutes including waiting for you)"). A loop saved by an earlier build loads as having waited 0, and a run where nobody waits behaves as before.
 - A loop stopped by its token or time budget now records which one as data, `stopBudget: { kind, used, max }`, beside the stop message (tokens are counted, time is milliseconds). Loops saved earlier have no such field. The extension's own stop path does not write it yet.
 - When a run limit (`--max-budget-usd`, `--max-turns`, `--max-duration`) ends `cn serve` while a loop is held, the loop is now marked stopped with the limit as its reason before the process exits. Before, it stayed `running` in the saved session.
 - A worker of a parallel wave in the terminal agent is stopped after 30 minutes or, when sooner, when its to-do's own time limit or the loop's remaining time (waiting on you not counted) is used up. It used to get a fixed 30 minutes whatever the budget.
 - On Windows the editor's worktree git commands pass `core.longpaths=true` for that command only, so a deep path no longer fails a worktree checkout at 260 characters. Nothing is written to your repository's configuration.
+- **The terminal agent's `Fetch` tool now uses the same hardened fetch as the IDE.** It used to hand Node's global `fetch` to the shared implementation, which ignores the pinned address the safety check resolved (so a name that changed its answer between the check and the connection could reach a private address), your proxy, CA bundle, `verifySsl` and client certificate. It now goes through `@continuedev/fetch` with the pin and your `requestOptions` transport settings. Your `requestOptions.headers` are sent only to your configured models' hosts, never to a URL the model chose. If you relied on `Fetch` working without your proxy or CA settings, it will now use them.
+- **A fetched page is labelled with the URL it was read from, not the one the model asked for.** After a redirect the item's name source, `uri` and the spotlight source name the final URL, so a page that redirected to another host says so. Redirects are still followed one hop at a time and still refused when they lead from a public address to a private one. Not changed: a redirect to a different public host does not ask for approval.
 
 ## File edits at IDGAF now reach outside the workspace
 
@@ -45,3 +50,9 @@ At File edits = IDGAF (the top level, also reached by `--auto`), the agent can c
 - Lower levels are unchanged: Manual, Cautious and Automatic ask, Permissive holds it by the outside-paths protection.
 - Still binding at IDGAF: the locked policy files, a tool switched off, an organisation ceiling and the `floor:` rules you wrote. Secret-file name checks inside the file tools, and the webview's own write guard (used for plan files), are not changed.
 - Separate fix: an absolute path inside the workspace given to the new-file tool is now written where it says, not under a folder named after the drive.
+
+## Model lists are downloaded when you ask, not when a screen opens
+
+- Provider setup no longer contacts `ollama.com` or `openrouter.ai` when it opens. Ollama asks "Download the latest model list from ollama.com?"; OpenRouter asks "Pull the latest model information from OpenRouter?" with **Pull now**, **Not now** and **Don't ask again** (saved as `modelCatalog: never` in `config.yaml`). **Refresh** stays on the model step.
+- The OpenRouter list (names, context sizes, per-token prices) is kept on this computer, dated, in `model-catalog/openrouter.json` in the global folder, and read from there afterwards. If the site cannot be reached, the list you already had stays.
+- The details are in [PRIVACY.md](https://github.com/b1tninja/continuous/blob/main/PRIVACY.md) and the OpenRouter provider page.

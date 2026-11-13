@@ -1,12 +1,12 @@
 # Installing Continuous
 
-Continuous is an unofficial, community-maintained fork of the Continue VS Code extension. It is **not** published to the VS Code Marketplace or Open VSX. You install it from a `.vsix` file attached to each [GitHub release](https://github.com/b1tninja/continuous/releases).
+Continuous is an unofficial, community-maintained fork of the Continue VS Code extension. It is published to the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=b1tninja.continuous) as `b1tninja.continuous` (search for **Continuous** in the Extensions view and check the publisher is `b1tninja`), and it is **not** on Open VSX. This guide covers the other way: installing by hand from the `.vsix` file attached to each [GitHub release](https://github.com/b1tninja/continuous/releases), for when the Marketplace is not reachable or you want a specific build.
 
 Continuous is not affiliated with Continue Dev, Inc.
 
 **Requirements:** VS Code 1.105 or newer (or a VS Code-based editor built on it). Older versions cannot load the extension and will refuse to install it, so they keep the previously installed version.
 
-The current release is [Continuous 2.4.4](https://github.com/b1tninja/continuous/releases/tag/v2.4.4-vscode).
+The current release is on the [latest release page](https://github.com/b1tninja/continuous/releases/latest). The file names below use 2.4.4 as the example version.
 
 ## Option 1: install the latest release
 
