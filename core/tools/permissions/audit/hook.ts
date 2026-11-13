@@ -1,4 +1,5 @@
 import type { ToolPolicy } from "@continuedev/terminal-security";
+import { createHash } from "node:crypto";
 import { levelOfCall, type ApprovalSettings } from "../approval";
 import type { AutoReviewReply } from "../auto/handler";
 import type { ToolPolicyResult } from "../evaluate";
@@ -9,8 +10,9 @@ import type { AuditTrail } from "./trail";
 /**
  * The hook in core's decision path (plans/reviewer-audit.md, P12c): turns what
  * `evaluateToolPolicyWithRules` and `autoReviewToolCall` returned into a
- * `decision` record. A call without an id is not recorded, because its outcome
- * could not be joined to it.
+ * `decision` record. A call without an id is still recorded, under a made-up
+ * id marked `synthetic` (see `syntheticCallId`); its outcome cannot be
+ * joined to it, but the decision is not lost.
  */
 export interface AuditCallContext {
   session?: string;
@@ -40,10 +42,37 @@ function argsText(args: Record<string, unknown>): string {
   }
 }
 
+let syntheticCounter = 0;
+
+/**
+ * An id for a decision the host sent no call id for: `nocall-<hash>-<n>`.
+ * The hash is of the session, turn, tool and arguments, so it is the same for
+ * the same call; `n` counts calls without ids in this process so two identical
+ * ones stay two rows. It cannot match an outcome, and the record says so.
+ */
+export function syntheticCallId(
+  ctx: Pick<AuditCallContext, "session" | "turn" | "toolName" | "parsedArgs">,
+  n: number,
+): string {
+  const hash = createHash("sha256")
+    .update(
+      JSON.stringify([
+        ctx.session ?? "",
+        ctx.turn ?? "",
+        ctx.toolName,
+        argsText(ctx.parsedArgs),
+      ]),
+    )
+    .digest("hex")
+    .slice(0, 12);
+  return `nocall-${hash}-${n}`;
+}
+
 function baseInput(
   ctx: AuditCallContext,
 ): Omit<DecisionInput, "policy" | "by"> | null {
-  if (!ctx.callId) return null;
+  const synthetic = !ctx.callId;
+  const callId = ctx.callId || syntheticCallId(ctx, ++syntheticCounter);
   let area: string | undefined;
   let level: string | undefined;
   try {
@@ -57,7 +86,8 @@ function baseInput(
   }
   return {
     session: ctx.session ?? "unknown",
-    callId: ctx.callId,
+    callId,
+    ...(synthetic ? { synthetic: true } : {}),
     ...(ctx.turn === undefined ? {} : { turn: ctx.turn }),
     tool: ctx.toolName,
     args: argsText(ctx.parsedArgs),
