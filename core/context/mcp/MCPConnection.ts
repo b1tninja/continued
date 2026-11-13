@@ -2,6 +2,7 @@ import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { Readable } from "stream";
 import { homedir } from "os";
 import { fileURLToPath } from "url";
 
@@ -133,9 +134,9 @@ class MCPConnection {
   private transport: Transport;
   private connectionPromise: Promise<unknown> | null = null;
   private stdioStderr = new StdioOutputBuffer();
-  // When the child's stderr last delivered a chunk, so the failure message can
-  // wait for a pipe that is still being read after the child exited.
-  private stdioStderrLastAt = 0;
+  // The stream the child's stderr is read from, so the failure message can
+  // check that it was read to the end.
+  private stdioStderrStream: Readable | null = null;
   private stdioEnv: Record<string, string> = {};
 
   constructor(
@@ -290,6 +291,7 @@ class MCPConnection {
     this.errors = [];
     this.infos = [];
     this.stdioStderr = new StdioOutputBuffer();
+    this.stdioStderrStream = null;
 
     this.abortController.abort();
     this.abortController = new AbortController();
@@ -562,17 +564,29 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
           // Include stderr if the stdio server wrote any. Capped, and masked
           // with the shared secret scanner. stdout is the protocol channel
           // and is not captured.
-          if (this.options.type === "stdio") {
-            // The transport closes when the child exits, which can be before
-            // its last stderr chunks have been read. Wait until the pipe has
-            // been quiet for a moment, for at most two seconds.
-            const waitStart = Date.now();
-            while (
-              Date.now() - this.stdioStderrLastAt < 200 &&
-              Date.now() - waitStart < 2000
-            ) {
-              await new Promise<void>((resolve) => setTimeout(resolve, 50));
-            }
+          const stderrStream = this.stdioStderrStream;
+          if (
+            stderrStream &&
+            !stderrStream.readableEnded &&
+            !stderrStream.destroyed
+          ) {
+            // The transport closes on the child's "close" event, which Node
+            // emits after the child's stdio has reached end of file, so a
+            // child that exited has normally been read to the end already.
+            // This covers the hop through the transport's own stream. A child
+            // that is still running (a timeout) never ends its stderr, hence
+            // the cap.
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            await Promise.race([
+              new Promise<void>((resolve) => {
+                stderrStream.once("end", resolve);
+                stderrStream.once("close", resolve);
+              }),
+              new Promise<void>((resolve) => {
+                timer = setTimeout(resolve, 250);
+              }),
+            ]);
+            clearTimeout(timer);
           }
           if (this.options.type === "stdio" && !this.stdioStderr.isEmpty) {
             errorMessage += `\n\nProcess output:\nSTDERR:\n${this.stdioStderr.render(this.stdioEnv)}`;
@@ -855,8 +869,9 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
 
     // Capture stdio output for better error reporting
     this.stdioEnv = env;
-    transport.stderr?.on("data", (data: Buffer) => {
-      this.stdioStderrLastAt = Date.now();
+    const stderrStream = transport.stderr as Readable | null;
+    this.stdioStderrStream = stderrStream;
+    stderrStream?.on("data", (data: Buffer) => {
       this.stdioStderr.append(data.toString());
     });
 

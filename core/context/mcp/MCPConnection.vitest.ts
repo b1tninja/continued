@@ -371,6 +371,10 @@ describe("MCPConnection", () => {
       // Assembled at run time so the file holds no literal that looks like a key.
       const canary = ["AKIA", "QXZN2M4K", "KPQR5TWV"].join("");
       const envSecret = "plain-looking-secret-value-77";
+      // The child ends with `process.exitCode`, not `process.exit()`. Its
+      // stderr is a pipe, which Node writes asynchronously on Linux and macOS,
+      // and `process.exit()` drops whatever is still queued: the child itself
+      // would never write the last line.
       const conn = new MCPConnection({
         name: "noisy-mcp",
         id: "noisy-id",
@@ -380,7 +384,7 @@ describe("MCPConnection", () => {
           "-e",
           `console.error("key " + process.env.NOISY_API_KEY + " and ${canary}");` +
             `console.error("x".repeat(200000));` +
-            `console.error("final words"); process.exit(1);`,
+            `console.error("final words"); process.exitCode = 1;`,
         ],
         env: { NOISY_API_KEY: envSecret },
         timeout: 5000,
