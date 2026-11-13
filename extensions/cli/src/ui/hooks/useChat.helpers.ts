@@ -51,6 +51,7 @@ interface ProcessSlashCommandResultOptions {
   onShowJobsSelector?: () => void;
   onShowExportSelector?: () => void;
   onShowLoopInbox?: () => void;
+  onShowRewindSelector?: () => void;
   onClear?: () => void;
 }
 
@@ -69,6 +70,7 @@ export function processSlashCommandResult({
   onShowJobsSelector,
   onShowExportSelector,
   onShowLoopInbox,
+  onShowRewindSelector,
   onClear,
 }: ProcessSlashCommandResultOptions): string | null {
   if (result.exit) {
@@ -112,6 +114,11 @@ export function processSlashCommandResult({
 
   if (result.openLoopInbox && onShowLoopInbox) {
     onShowLoopInbox();
+    return null;
+  }
+
+  if (result.openRewindSelector && onShowRewindSelector) {
+    onShowRewindSelector();
     return null;
   }
 

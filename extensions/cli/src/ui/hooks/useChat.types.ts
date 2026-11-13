@@ -22,6 +22,7 @@ export interface UseChatProps {
   onShowJobsSelector?: () => void;
   onShowLoopInbox?: () => void;
   onShowExportSelector?: () => void;
+  onShowRewindSelector?: () => void;
   onReload?: () => Promise<void>;
   onClear?: () => void;
   onRefreshStatic?: () => void;
@@ -81,6 +82,7 @@ export interface SlashCommandResult {
   openJobsSelector?: boolean;
   openExportSelector?: boolean;
   openLoopInbox?: boolean;
+  openRewindSelector?: boolean;
   compact?: boolean;
   diffContent?: string;
 }
