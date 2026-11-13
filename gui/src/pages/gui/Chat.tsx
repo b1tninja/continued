@@ -81,6 +81,7 @@ import { cancelStream, interruptStream } from "../../redux/thunks/cancelStream";
 import { getLocalStorage, setLocalStorage } from "../../util/localStorage";
 import { EmptyChatBody } from "./EmptyChatBody";
 import { ExploreDialogWatcher } from "./ExploreDialogWatcher";
+import { JumpToLatest } from "./JumpToLatest";
 import { TranscriptMessage } from "./TranscriptMessage";
 import { useAutoScroll } from "./useAutoScroll";
 
@@ -161,7 +162,10 @@ export function Chat() {
     return isJetBrains();
   }, []);
 
-  useAutoScroll(stepsDivRef, history);
+  const { paused: autoScrollPaused, scrollToLatest } = useAutoScroll(
+    stepsDivRef,
+    history,
+  );
 
   useEffect(() => {
     // Cmd + Backspace to delete current step
@@ -565,6 +569,7 @@ export function Chat() {
         {/* Inside the scroll area, so it does not push the input down */}
         <ToolDialectNotice />
       </StepsDiv>
+      <JumpToLatest paused={autoScrollPaused} scrollToLatest={scrollToLatest} />
       <div className={"relative shrink-0"}>
         <CacheMissNotice />
         <ColdCacheNotice />
