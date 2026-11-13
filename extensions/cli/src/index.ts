@@ -30,6 +30,7 @@ import {
   validateFlags,
 } from "./flags/flagValidator.js";
 import { configureConsoleForHeadless, safeStderr } from "./init.js";
+import { applySafeMode, SAFE_FLAG_HELP } from "./safeMode.js";
 import { addCommonOptions, mergeParentOptions } from "./shared-options.js";
 import { markUnhandledError } from "./util/errorState.js";
 import { gracefulExit } from "./util/exit.js";
@@ -153,6 +154,7 @@ program
 // Root command - chat functionality (default)
 // Add common options to the root command
 addRunLimitOptions(addCommonOptions(program))
+  .option("--safe", SAFE_FLAG_HELP)
   .argument("[prompt]", "Optional prompt to send to the assistant")
   .option("-p, --print", "Print response and exit (useful for pipes)")
   .option(
@@ -225,6 +227,9 @@ addRunLimitOptions(addCommonOptions(program))
     if (!validation.isValid) {
       handleValidationErrors(validation.errors);
     }
+
+    // --safe, before anything reads a settings or project file
+    applySafeMode(options);
 
     if (options.verbose) {
       logger.setLevel("debug");
@@ -311,9 +316,13 @@ program
     "--allow-origin <origin...>",
     "A browser origin that may call the server, exactly (http://localhost:3000). Default: none",
   )
+  .option("--safe", SAFE_FLAG_HELP)
   .action(async (prompt, options) => {
     // Merge parent options with subcommand options
     const mergedOptions = mergeParentOptions(program, options);
+    // `cn --safe serve` and `cn serve --safe` are the same
+    if (program.opts().safe) mergedOptions.safe = true;
+    applySafeMode(mergedOptions);
 
     if (mergedOptions.verbose) {
       logger.setLevel("debug");
