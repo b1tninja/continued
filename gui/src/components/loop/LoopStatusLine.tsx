@@ -57,13 +57,11 @@ export function LoopStatusLine({
   taskPlan,
   settingsOpen,
   onToggleSettings,
-  settingsId,
 }: {
   loop: LoopState;
   taskPlan?: TaskPlan;
   settingsOpen: boolean;
   onToggleSettings: () => void;
-  settingsId: string;
 }) {
   const dispatch = useAppDispatch();
   const entry = useAppSelector(selectModeEntry);
@@ -252,8 +250,8 @@ export function LoopStatusLine({
           data-testid="loop-settings-toggle"
           aria-label="Loop settings"
           title="Loop settings"
+          aria-haspopup="dialog"
           aria-expanded={settingsOpen}
-          aria-controls={settingsOpen ? settingsId : undefined}
           className={ICON_BUTTON}
           onClick={onToggleSettings}
         >

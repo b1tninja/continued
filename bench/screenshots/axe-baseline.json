@@ -79,9 +79,7 @@
     },
     "loop-finished": {},
     "loop-stopped": {},
-    "loop-settings-open": {
-      "color-contrast": 1
-    },
+    "loop-settings-open": {},
     "loop-questions": {},
     "loop-replan": {},
     "loop-plan-failed": {
