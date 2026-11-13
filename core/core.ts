@@ -39,7 +39,7 @@ import { listEffectiveRules } from "./tools/permissions/effectiveRules";
 import { testToolCall } from "./tools/permissions/testToolCall";
 import { readUserLargeChangeLines } from "./tools/permissions/userLimits";
 import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
-import { resolveShell } from "./util/shell";
+import { executionShell } from "./util/shell";
 import { modelToolFetch } from "./util/modelToolFetch";
 import { BuiltInToolNames } from "./tools/builtIn";
 import {
@@ -770,7 +770,7 @@ export class Core {
           reviewerPrompt: readUserReviewerPrompt(),
           trustedDomains: readUserTrustedDomains(),
           envNames: readUserEnvNames(),
-          shell: resolveShell().kind,
+          shell: executionShell((await this.ide.getIdeInfo()).remoteName).kind,
           reviewerReasoning: reasoningOptionsForEffort(
             config.modeModels?.reviewer?.reasoningEffort,
           ),
@@ -2092,8 +2092,9 @@ export class Core {
           largeChangeLines: readUserLargeChangeLines(),
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
           ...deputyWorkspace(dirs),
-          // The shell terminal commands run in
-          shell: resolveShell().kind,
+          // The shell that will read a terminal command: the one started
+          // here, or unknown when it goes to a remote window's terminal
+          shell: executionShell((await this.ide.getIdeInfo()).remoteName).kind,
           // The tainted-session rule's fact; nothing when the rule is off
           ...taintInput(sessionId, callId),
         });

@@ -70,6 +70,7 @@ function getShellCommand(command: string): { shell: string; args: string[] } {
 
 import { fileURLToPath } from "node:url";
 import { getCommandExecutor } from "../../util/commandExecutor";
+import { executionShell, LOCAL_REMOTE_NAMES } from "../../util/shell";
 import { terminalEnvironment } from "../../util/terminalEnvironment";
 import { commandLintGate } from "../permissions/commandLint";
 import { missingBinaryGate } from "../permissions/missingBinaryGate";
@@ -140,13 +141,22 @@ const getColorEnv = () => ({
 // (or fail with ENOENT when the local shell doesn't match the remote OS).
 // All remote types delegate to ide.runCommand() which routes through VS Code's
 // integrated terminal and executes in the correct remote environment.
-const LOCAL_ONLY = ["", "local"];
+const LOCAL_ONLY = LOCAL_REMOTE_NAMES;
 
 /**
  * Why a command is not run: the place it should run in is not there (WSL asked
  * for and not installed, which never falls back to the host), or the lint.
  */
-function commandBlocked(command: string): string | undefined {
+function commandBlocked(
+  command: string,
+  remoteName?: string,
+): string | undefined {
+  if (executionShell(remoteName).source === "terminal") {
+    // The command goes to a remote window's terminal: this machine's shell
+    // does not read it, so its dialect rules (no && in Windows PowerShell)
+    // do not apply and nothing is started here that could be missing
+    return commandLintGate(command, "unknown");
+  }
   const executor = getCommandExecutor();
   return (
     executor.unavailable ??
@@ -177,7 +187,7 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
   const toolCallId = extras.toolCallId || "";
 
   // Mistakes in how the command is written, before the shell reports them
-  const lintMessage = commandBlocked(command);
+  const lintMessage = commandBlocked(command, ideInfo.remoteName);
   if (lintMessage) {
     return commandNotRun(lintMessage);
   }
