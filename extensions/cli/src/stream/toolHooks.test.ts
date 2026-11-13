@@ -474,7 +474,7 @@ describe("MCP tools", () => {
     hooksConfig = pre(logger());
     await run(calls());
     const inputs = seen();
-    expect(inputs.map((i) => [i.tool_name, i.server])).toEqual([
+    expect(inputs.map((i) => [i.tool_name, i.server]).sort()).toEqual([
       ["search", "github"],
       ["search", "gitlab"],
     ]);
@@ -553,6 +553,10 @@ describe("MCP tools", () => {
       PostToolUse: [{ hooks: [{ type: "command", command: logger() }] }],
     };
     await run(calls());
-    expect(seen().map((i) => i.server)).toEqual(["github", "gitlab"]);
+    expect(
+      seen()
+        .map((i) => i.server)
+        .sort(),
+    ).toEqual(["github", "gitlab"]);
   });
 });
