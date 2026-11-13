@@ -96,6 +96,7 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 | 2.12.0  | Commands start with a scrubbed environment, an audit trail, MCP tool pinning, `toolDialect` for models that write tool calls as text, dollar budgets                    |
 | 2.12.1  | More built-in ask rules (destructive commands, large edits, dependencies, hosts), Test connection for OpenAI-compatible endpoints                                       |
 | 2.14.0  | `continuous serve` token and request checks, MCP OAuth hardening, no calls to Continue servers, opt-in web search, run limits                                           |
+| 2.16.0  | IDGAF never asks, loops go on when permissive, CLI trust gates and hardened fetch, model lists only on request, the plan tree                                           |
 
 ## Where it is heading
 
