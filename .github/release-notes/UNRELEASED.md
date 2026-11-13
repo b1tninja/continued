@@ -31,6 +31,11 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 ## Behaviour changes
 
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
+- A loop's time budget no longer counts the time it waits on you. While every open item waits on an answer, or a re-plan waits on its plan card, the clock stops, so a Supervised loop that waited 40 minutes against a 60 minute budget keeps its 40 minutes of work. The time meter and time left agree, and the stop message names both ("ran 52 minutes of work (100 minutes including waiting for you)"). A loop saved by an earlier build loads as having waited 0, and a run where nobody waits behaves as before.
+- A loop stopped by its token or time budget now records which one as data, `stopBudget: { kind, used, max }`, beside the stop message (tokens are counted, time is milliseconds). Loops saved earlier have no such field. The extension's own stop path does not write it yet.
+- When a run limit (`--max-budget-usd`, `--max-turns`, `--max-duration`) ends `cn serve` while a loop is held, the loop is now marked stopped with the limit as its reason before the process exits. Before, it stayed `running` in the saved session.
+- A worker of a parallel wave in the terminal agent is stopped after 30 minutes or, when sooner, when its to-do's own time limit or the loop's remaining time (waiting on you not counted) is used up. It used to get a fixed 30 minutes whatever the budget.
+- On Windows the editor's worktree git commands pass `core.longpaths=true` for that command only, so a deep path no longer fails a worktree checkout at 260 characters. Nothing is written to your repository's configuration.
 
 ## File edits at IDGAF now reach outside the workspace
 
