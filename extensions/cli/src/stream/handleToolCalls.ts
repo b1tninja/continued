@@ -2,8 +2,13 @@ import type { ChatHistoryItem, ToolStatus } from "core/index.js";
 import { stripImages } from "core/util/messageContent.js";
 import { createHistoryItem } from "core/util/messageConversion.js";
 
-import { isAutoReviewEnabled } from "src/permissions/coreRules.js";
+import {
+  isAutoReviewEnabled,
+  liftAtIdgaf,
+  runsAtIdgaf,
+} from "src/permissions/coreRules.js";
 import { checkToolPermission } from "src/permissions/permissionChecker.js";
+import { effectiveLevels } from "src/permissions/policyLevels.js";
 import { withReadOnlyMcp } from "src/permissions/readOnlyMcp.js";
 
 import { cliAuditSession, cliAuditTrail } from "../audit/cliAudit.js";
@@ -366,6 +371,21 @@ export async function handleToolCalls(
   return false;
 }
 
+function safeRunsAtIdgaf(
+  levels: ReturnType<typeof effectiveLevels>,
+  mode: Parameters<typeof runsAtIdgaf>[1],
+  tool: Tool,
+): boolean {
+  try {
+    return runsAtIdgaf(levels, mode, {
+      name: tool.name,
+      readonly: tool.readonly,
+    });
+  } catch {
+    return false;
+  }
+}
+
 export async function getRequestTools(isHeadless: boolean) {
   const availableTools = await getAllAvailableTools(isHeadless);
 
@@ -374,14 +394,21 @@ export async function getRequestTools(isHeadless: boolean) {
       SERVICE_NAMES.TOOL_PERMISSIONS,
     );
 
+  const mode = permissionsState.currentMode;
+  const levels = effectiveLevels(mode);
   const allowedTools: Tool[] = [];
   for (const tool of availableTools) {
-    const result = withReadOnlyMcp(
-      checkToolPermission(
-        { name: tool.name, arguments: {} },
-        permissionsState.permissions,
+    // IDGAF: a tool the CLI's own policy asks about or excludes is offered,
+    // headless too, and runs (runsAtIdgaf); a structural limit stays
+    const result = liftAtIdgaf(
+      withReadOnlyMcp(
+        checkToolPermission(
+          { name: tool.name, arguments: {} },
+          permissionsState.permissions,
+        ),
+        tool,
       ),
-      tool,
+      safeRunsAtIdgaf(levels, mode, tool),
     );
 
     // Headless runs have no one to ask, so "ask" tools are normally not offered.

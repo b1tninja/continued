@@ -1,7 +1,10 @@
 import type { AssistantUnrolled, ModelConfig } from "@continuedev/config-yaml";
 import type { ToolPolicy } from "@continuedev/terminal-security";
 import type { ChatHistoryItem } from "core/index.js";
-import type { ApprovalSettings } from "core/tools/permissions/approval.js";
+import {
+  levelOfCall,
+  type ApprovalSettings,
+} from "core/tools/permissions/approval.js";
 import {
   autoReviewToolCall,
   type AutoReviewDeps,
@@ -15,6 +18,7 @@ import {
   type ToolPolicyResult,
 } from "core/tools/permissions/evaluate.js";
 import { mcpRuleName } from "core/tools/permissions/names.js";
+import type { PolicyLevels } from "core/tools/permissions/policy.js";
 import { readUserTrustedDomains } from "core/tools/permissions/readRuleSources.js";
 import { processedPathArgs } from "core/tools/permissions/realPath.js";
 import type { ToolPermissions as CoreToolPermissions } from "core/tools/permissions/rules.js";
@@ -28,7 +32,11 @@ import { readUserGuidance } from "core/util/userGuidance.js";
 import { createLlmApi } from "../config.js";
 import { logger } from "../util/logger.js";
 
-import type { PermissionPolicy } from "./types.js";
+import type {
+  PermissionCheckResult,
+  PermissionMode,
+  PermissionPolicy,
+} from "./types.js";
 
 /**
  * The `toolPermissions` rules of config.yaml and the Auto reviewer, applied in
@@ -409,6 +417,57 @@ export async function evaluateWithCoreRules(
     by: "rules",
     source: result.source,
     ...(result.rule ? { rule: result.rule } : {}),
+  };
+}
+
+/**
+ * IDGAF on the call's area: the CLI's own `ask` and `exclude` (permissions.yaml,
+ * `--ask`, `--exclude`, the catch-all `*`, a headless subagent's asks) do not
+ * stop it, the same as core's rules and guards do not (core's
+ * idgafRunsEverything, the one place IDGAF overrides a decision). Plan mode is
+ * a mode with its own role, not a level, and keeps its own policies.
+ */
+export function runsAtIdgaf(
+  levels: PolicyLevels,
+  mode: PermissionMode | undefined,
+  call: {
+    name: string;
+    arguments?: Record<string, unknown>;
+    readonly?: boolean;
+  },
+): boolean {
+  if (mode === "plan") return false;
+  const args = call.arguments ?? {};
+  const core = toCoreCall(call.name, args);
+  const found = levelOfCall(
+    { levels },
+    core?.toolName ?? call.name,
+    { readonly: !!call.readonly },
+    {
+      parsedArgs: core?.parsedArgs ?? args,
+      cwd: process.cwd(),
+      shell: resolveShell().kind,
+    },
+  );
+  return found?.level === "idgaf";
+}
+
+/**
+ * The CLI's own result for a call that runs at IDGAF: allowed, keeping what it
+ * would have been (`idgafLifted`) for the audit trail. A structural limit stays.
+ */
+export function liftAtIdgaf(
+  result: PermissionCheckResult,
+  runs: boolean,
+): PermissionCheckResult & {
+  idgafLifted?: Exclude<PermissionPolicy, "allow">;
+} {
+  if (!runs || result.permission === "allow") return result;
+  if (result.matchedPolicy?.structural) return result;
+  return {
+    ...result,
+    permission: "allow",
+    idgafLifted: result.permission as Exclude<PermissionPolicy, "allow">,
   };
 }
 
