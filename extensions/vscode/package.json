@@ -2,7 +2,7 @@
   "name": "continuous",
   "icon": "media/icon.png",
   "author": "b1tninja",
-  "version": "2.16.0",
+  "version": "2.16.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/b1tninja/continuous"
@@ -221,17 +221,17 @@
         "continuous.enableQuickActions": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Enable the experimental Quick Actions feature. Read our walkthrough to learn about configuration and how to share feedback: [Continuous docs â€º Walkthrough: Quick Actions (experimental)](https://b1tninja.github.io/continuous/customize/overview)"
+          "markdownDescription": "Enable the experimental Quick Actions feature. Read our walkthrough to learn about configuration and how to share feedback: [Continuous docs › Walkthrough: Quick Actions (experimental)](https://b1tninja.github.io/continuous/customize/overview)"
         },
         "continuous.enableTabAutocomplete": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable Continuous's tab autocomplete feature. Read our walkthrough to learn about configuration and how to share feedback: [Continuous docs â€º Walkthrough: Tab Autocomplete (beta)](https://b1tninja.github.io/continuous/customize/deep-dives/autocomplete)"
+          "markdownDescription": "Enable Continuous's tab autocomplete feature. Read our walkthrough to learn about configuration and how to share feedback: [Continuous docs › Walkthrough: Tab Autocomplete (beta)](https://b1tninja.github.io/continuous/customize/deep-dives/autocomplete)"
         },
         "continuous.enableNextEdit": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable Continuous's next edit feature. Read our docs to learn about configuration and how to share feedback: [Continuous docs â€º Features â€º Autocomplete â€º Next Edit (experimental)](https://b1tninja.github.io/continuous/ide-extensions/autocomplete/next-edit)"
+          "markdownDescription": "Enable Continuous's next edit feature. Read our docs to learn about configuration and how to share feedback: [Continuous docs › Features › Autocomplete › Next Edit (experimental)](https://b1tninja.github.io/continuous/ide-extensions/autocomplete/next-edit)"
         },
         "continuous.pauseTabAutocompleteOnBattery": {
           "type": "boolean",
