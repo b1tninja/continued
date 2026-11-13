@@ -17,6 +17,7 @@ import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
 import { projectCommand } from "./commands/project.js";
+import { registerExportCommand } from "./commands/registerExportCommand.js";
 import { registerLocalCommands } from "./commands/registerLocalCommands.js";
 import { registerRecoveryCommands } from "./commands/registerRecoveryCommands.js";
 import { review } from "./commands/review.js";
@@ -304,26 +305,7 @@ program
   });
 
 // Export subcommand: a masked transcript, never the session JSON
-program
-  .command("export <session>")
-  .description(
-    "Write a session as a masked transcript (Markdown or HTML) to stdout or --out; <session> is an id, the start of one, or last",
-  )
-  .option("--format <format>", "md (default) or html")
-  .option("--out <file>", "Write to this file instead of stdout")
-  .option("--force", "Replace --out if it exists")
-  .option("--reasoning", "Include the model's reasoning (left out by default)")
-  .action(async (session: string, options) => {
-    const { exportCommand } = await import("./export/exportCommand.js");
-    await gracefulExit(
-      exportCommand(session, {
-        format: options.format,
-        out: options.out,
-        force: options.force,
-        includeReasoning: options.reasoning,
-      }),
-    );
-  });
+registerExportCommand(program);
 
 // Serve subcommand
 program
