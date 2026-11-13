@@ -3,7 +3,7 @@ import { ModelDescription } from "core";
 import { useContext, useState } from "react";
 import Shortcut from "../../../components/gui/Shortcut";
 import { useProviderSetupDialog } from "../../../components/ProviderSetup/useProviderSetupDialog";
-import { useEditModel } from "../../../components/mainInput/Lump/useEditBlock";
+import { useModelConfigDialog } from "../../../components/ModelConfig/useModelConfigDialog";
 import { Card, Divider, Toggle } from "../../../components/ui";
 import { useAuth } from "../../../context/Auth";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
@@ -62,7 +62,7 @@ export function ModelsSection() {
     );
   }
 
-  const handleConfigureModel = useEditModel();
+  const handleConfigureModel = useModelConfigDialog();
 
   const { openSetup } = useProviderSetupDialog();
 

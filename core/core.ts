@@ -14,6 +14,11 @@ import { ConfigHandler } from "./config/ConfigHandler";
 import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveToolDialect } from "./config/yaml/saveToolDialect";
+import {
+  getModelBlock,
+  previewModelEdit,
+  saveModelEdit,
+} from "./config/modelEdit/modelBlockEdit";
 import { getOllamaShowHint } from "./util/ollamaShowHint";
 import { probeStatusFor } from "./util/measuredFacts";
 import {
@@ -988,6 +993,24 @@ export class Core {
         );
       }
       return { saved };
+    });
+
+    on("config/getModelBlock", async (msg) => getModelBlock(msg.data.title));
+    on("config/previewModelEdit", async (msg) =>
+      previewModelEdit(msg.data.title, msg.data.ops),
+    );
+    on("config/saveModelEdit", async (msg) => {
+      const result = saveModelEdit(
+        msg.data.title,
+        msg.data.ops,
+        msg.data.baseHash,
+      );
+      if (result.saved) {
+        await this.configHandler.reloadConfig(
+          "Model settings changed (config/saveModelEdit message)",
+        );
+      }
+      return result;
     });
 
     on("config/getTerminalEnvironment", async () => ({
