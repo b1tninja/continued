@@ -32,7 +32,7 @@
 
 ## Install and set up
 
-Continuous is installed from a `.vsix` file. Downloads, checksums and troubleshooting are in the
+Install Continuous from the Extensions view (publisher `b1tninja`), or by hand from a `.vsix` file on a GitHub release. Downloads, checksums and troubleshooting for the `.vsix` are in the
 [install guide](https://github.com/b1tninja/continuous/blob/main/docs/continuous-install.md).
 Source and issues: [github.com/b1tninja/continuous](https://github.com/b1tninja/continuous).
 
