@@ -1,0 +1,111 @@
+---
+title: "Slash commands"
+---
+
+In an interactive session of the terminal agent, a line that starts with `/` is a command, not a message. Type `/` to see the list and filter it as you type; Tab completes the selected one.
+
+A line is read as a command only when `/` is its first character. If the word after it is not part of any command's name, the line is sent to the model as ordinary text; a near miss answers `Unknown command`.
+
+## Session
+
+| Command          | What it does                                                                                                    |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `/help`          | Show the keyboard shortcuts                                                                                     |
+| `/info`          | Show the version, the config file and model in use, the session's title and id, and its token usage and cost    |
+| `/clear`         | Clear the chat history                                                                                          |
+| `/compact`       | Replace the history with a summary of it, to free context                                                       |
+| `/title <text>`  | Set the session's title                                                                                         |
+| `/rename <text>` | The same as `/title`                                                                                            |
+| `/exit`          | Leave the session                                                                                               |
+
+## Sessions on disk
+
+| Command          | What it does                                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `/resume`        | Pick an earlier session and continue it                                                                                                 |
+| `/sessions`      | Show all sessions. It opens the same picker as `/resume`                                                                                |
+| `/fork`          | Print `continuous --fork <id>` for this session, and copy it to the clipboard when one is available. Run it to branch off a copy        |
+| `/export`        | Pick a session and write it to a JSON file                                                                                              |
+| `/import <file>` | Read a session from a JSON file written by `/export`. If a session with that id already exists, the import gets a new id                |
+
+## Model and configuration
+
+| Command   | What it does                                                                    |
+| --------- | ------------------------------------------------------------------------------- |
+| `/model`  | Switch between the chat models of the current config                            |
+| `/config` | Switch to another configuration                                                 |
+| `/mcp`    | List the MCP servers of the config; restart or stop one, or all of them         |
+| `/init`   | Ask the agent to write an `AGENTS.md` file that describes this codebase         |
+
+`/init` sends a prepared prompt to the model, so it is a normal turn: the file is written with the edit tools and asks for approval like any other edit.
+
+## Permissions
+
+| Command          | What it does                                                                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/policy`        | Show the preset and the level of each of the five areas                                                                                   |
+| `/policy <spec>` | Set them: a preset, a level, or `area=level` pairs. The same value as [`--policy`](/cli/reference#--policy)                               |
+| `/untaint`       | Acknowledge the untrusted content this session has read, so that network, publish and credential calls stop asking because of it          |
+
+```text
+/policy
+/policy acceptEdits
+/policy tools=permissive plan=manual
+/policy idgaf
+```
+
+`/policy <spec>` applies at once, with no confirmation, updates a running loop, and is saved to `permissions.yaml` for the next session and for the VS Code extension. IDGAF is the exception: it holds for this session and is never written. With no argument the command prints one line per area, for example:
+
+```text
+Preset: Careful
+
+Level of each area:
+  Context use  Permissive Reads anything no rule stops.
+  Tool use     Cautious   Runs what your Always rules and tool settings cover, asks otherwise.
+  File edits   Manual     You review each diff.
+  Plan edits   Cautious   In Loop, re-plans that add no to-do go on. A first plan waits.
+  Questions    Cautious   You decide, except types a rule gives the agent.
+```
+
+`/untaint` answers `Nothing to acknowledge` when the session has not been marked. The rule it lifts is `toolPermissions.auto.environment.taintedSessionRule` in your own `config.yaml`, which is `off` unless you set it to `ask`.
+
+## Loops and background work
+
+| Command | What it does                                                                                                                                   |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/loop` | Open the loop's inbox: answer its questions, allow or refuse a held call, change its level or strategy, resume it, or stop it after this item |
+| `/jobs` | List background jobs                                                                                                                           |
+
+See [Loop mode](/ide-extensions/agent/loop-mode).
+
+## Skills
+
+| Command                      | What it does                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `/skills`                    | List the skills found, each with its description and path                                          |
+| `/import-skill <url-or-name>` | Ask the agent to import a skill from a URL or by name into `~/.continuous/skills`                  |
+
+Skills are read from `.continuous/skills`, `.continue/skills` and `.claude/skills` in the current folder, and from `~/.continuous/skills`.
+
+## Updates
+
+`/update` opens a menu with **Run update** and a switch for auto-updates. Neither installs anything in Continuous: **Run update** answers with the address of the releases page. To update, see [Install the terminal agent](/cli/install#update-and-uninstall).
+
+## Commands from your configuration
+
+Three more kinds of command appear in the same list after the built-in ones:
+
+- **Prompts**: each entry under `prompts` in the config is a command named after the prompt. What you type after it is appended to the prompt's text.
+- **Invokable rules**: a rule with `invokable: true` is a command named after the rule.
+- **Skills**: each skill is a command. Running it tells the agent to load that skill.
+
+A built-in command wins over a prompt, rule or skill of the same name.
+
+## Remote mode
+
+Three commands are defined for an interface attached to a running `continuous serve` instead of a local session: `/exit` (leave the remote environment), `/diff` (show the remote working tree's diff) and `/apply` (apply that diff to the local working tree). In that mode they replace every command above. No command in this version starts the terminal interface in that mode, so you will not see them; they are listed because the code defines them.
+
+## Related
+
+- [First session](/cli/first-session)
+- [Command reference](/cli/reference)
