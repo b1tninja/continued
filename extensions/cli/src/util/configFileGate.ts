@@ -8,6 +8,7 @@
 import { findBrokenHookFiles } from "../hooks/hookConfig.js";
 import { safeStderr } from "../init.js";
 import { readPermissionsYaml } from "../permissions/permissionsYamlLoader.js";
+import { isSafeMode } from "../safeMode.js";
 
 import { gracefulExit } from "./exit.js";
 import {
@@ -64,6 +65,9 @@ export async function exitOnBrokenConfig(
   options: { ignoreBrokenConfig?: boolean },
   where: ConfigFileLocations = {},
 ): Promise<void> {
+  // --safe does not read hooks or project files, and is the way out when a
+  // broken one stops a start: it must not be refused by them
+  if (isSafeMode()) return;
   const refusal = checkConfigFiles(
     process.cwd(),
     !!options.ignoreBrokenConfig,

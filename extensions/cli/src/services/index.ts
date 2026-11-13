@@ -17,6 +17,7 @@ import { MCPService } from "./MCPService.js";
 import { ModelService } from "./ModelService.js";
 import { quizService } from "./QuizService.js";
 import { ResourceMonitoringService } from "./ResourceMonitoringService.js";
+import { SafeModeHookService } from "./SafeModeHookService.js";
 import { serviceContainer } from "./ServiceContainer.js";
 import { SystemMessageService } from "./SystemMessageService.js";
 import {
@@ -47,7 +48,8 @@ const agentFileService = new AgentFileService();
 const toolPermissionService = new ToolPermissionService();
 const systemMessageService = new SystemMessageService();
 const gitAiIntegrationService = new GitAiIntegrationService();
-const hookService = new HookService();
+// Reads no settings file under --safe (see safeMode.ts)
+const hookService: HookService = new SafeModeHookService();
 
 /** SessionStart hooks, once the hook service is ready. Never throws. */
 async function fireSessionStartOnce(options: object): Promise<void> {

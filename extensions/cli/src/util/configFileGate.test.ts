@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readPermissionsYaml } from "../permissions/permissionsYamlLoader.js";
+import { setSafeMode } from "../safeMode.js";
 
 import {
   BROKEN_CONFIG_EXIT_CODE,
@@ -113,6 +114,19 @@ describe("headless start check for broken policy files", () => {
     vi.spyOn(process, "cwd").mockReturnValue(cwd);
     fs.writeFileSync(path.join(home, ".claude", "settings.json"), "{");
     await exitOnBrokenConfig({ ignoreBrokenConfig: true }, where());
+    expect(gracefulExit).not.toHaveBeenCalled();
+  });
+
+  it("exitOnBrokenConfig does not exit in safe mode", async () => {
+    vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    vi.spyOn(process, "cwd").mockReturnValue(cwd);
+    fs.writeFileSync(path.join(home, ".claude", "settings.json"), "{");
+    setSafeMode(true);
+    try {
+      await exitOnBrokenConfig({}, where());
+    } finally {
+      setSafeMode(false);
+    }
     expect(gracefulExit).not.toHaveBeenCalled();
   });
 

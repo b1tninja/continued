@@ -17,6 +17,7 @@ import {
 import { processRule } from "./hubLoader.js";
 import { AGENT_FILES, rulesDirs } from "./instructionFiles.js";
 import { PermissionMode } from "./permissions/types.js";
+import { isSafeMode } from "./safeMode.js";
 import { serviceContainer } from "./services/ServiceContainer.js";
 import { ConfigServiceState, SERVICE_NAMES } from "./services/types.js";
 import { SYSTEM_MARKERS } from "./systemMessageMarkers.js";
@@ -79,6 +80,8 @@ function getRuleNameFromPath(filePath: string): string {
  */
 export function loadMarkdownRulesWithMetadata(): RuleObject[] {
   const rules: RuleObject[] = [];
+  // --safe: no rules folder is read
+  if (isSafeMode()) return rules;
 
   for (const dir of rulesDirs()) {
     if (!fs.existsSync(dir)) continue;
@@ -165,7 +168,8 @@ export async function constructSystemMessage(
   let agentContent = "";
 
   try {
-    for (const fileName of AGENT_FILES) {
+    // --safe: no agent file (AGENTS.md and the like) is read
+    for (const fileName of isSafeMode() ? [] : AGENT_FILES) {
       const filePath = path.join(process.cwd(), fileName);
 
       if (fs.existsSync(filePath)) {

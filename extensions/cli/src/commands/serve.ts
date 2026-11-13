@@ -11,6 +11,7 @@ import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js"
 import { processCommandFlags } from "../flags/flagProcessor.js";
 import { loopWaveRunning } from "../loop/loopSession.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
+import { isSafeMode } from "../safeMode.js";
 import {
   getService,
   initializeServices,
@@ -340,8 +341,9 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       timeoutSeconds,
     });
 
-    // Run environment install script after server startup
-    runEnvironmentInstallSafe();
+    // Run environment install script after server startup (not under --safe:
+    // it is a command from a project file)
+    if (!isSafeMode()) runEnvironmentInstallSafe();
 
     // If initial prompt provided, queue it for processing
     const initialPrompt = prependPrompt(

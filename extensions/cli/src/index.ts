@@ -18,6 +18,7 @@ import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
 import { projectCommand } from "./commands/project.js";
 import { registerLocalCommands } from "./commands/registerLocalCommands.js";
+import { registerRecoveryCommands } from "./commands/registerRecoveryCommands.js";
 import { review } from "./commands/review.js";
 import { registerReviewerCommand } from "./commands/reviewEval.js";
 import { sandboxCommand } from "./commands/sandbox.js";
@@ -29,6 +30,7 @@ import {
   validateFlags,
 } from "./flags/flagValidator.js";
 import { configureConsoleForHeadless, safeStderr } from "./init.js";
+import { applySafeMode, SAFE_FLAG_HELP } from "./safeMode.js";
 import { addCommonOptions, mergeParentOptions } from "./shared-options.js";
 import { markUnhandledError } from "./util/errorState.js";
 import { gracefulExit } from "./util/exit.js";
@@ -153,6 +155,7 @@ program
 // Root command - chat functionality (default)
 // Add common options to the root command
 addRunLimitOptions(addCommonOptions(program))
+  .option("--safe", SAFE_FLAG_HELP)
   .argument("[prompt]", "Optional prompt to send to the assistant")
   .option("-p, --print", "Print response and exit (useful for pipes)")
   .option(
@@ -229,6 +232,9 @@ addRunLimitOptions(addCommonOptions(program))
     if (!validation.isValid) {
       handleValidationErrors(validation.errors);
     }
+
+    // --safe, before anything reads a settings or project file
+    applySafeMode(options);
 
     if (options.verbose) {
       logger.setLevel("debug");
@@ -315,9 +321,13 @@ program
     "--allow-origin <origin...>",
     "A browser origin that may call the server, exactly (http://localhost:3000). Default: none",
   )
+  .option("--safe", SAFE_FLAG_HELP)
   .action(async (prompt, options) => {
     // Merge parent options with subcommand options
     const mergedOptions = mergeParentOptions(program, options);
+    // `cn --safe serve` and `cn serve --safe` are the same
+    if (program.opts().safe) mergedOptions.safe = true;
+    applySafeMode(mergedOptions);
 
     if (mergedOptions.verbose) {
       logger.setLevel("debug");
@@ -381,10 +391,15 @@ program
 program
   .command("doctor [topic] [urls...]")
   .description(
-    "Diagnose proxy and certificate problems (doctor network [url...])",
+    "Read-only diagnostics: doctor config (settings files and each control's value and source), doctor network [url...] (proxy and certificates)",
   )
-  .action(async (topic: string | undefined, urls: string[]) => {
-    await gracefulExit(await doctorCommand(topic, urls));
+  .option("--json", "config: machine-readable output")
+  .action(async (topic: string | undefined, urls: string[], options) => {
+    const code = await doctorCommand(topic, urls, {
+      json: options.json,
+      flags: program.opts(),
+    });
+    await gracefulExit(code);
   });
 
 // Reviewer evaluation: dry by default, --run sends the requests
@@ -437,6 +452,9 @@ program
 
 // Local-file subcommands: secrets, clean, plan
 registerLocalCommands(program);
+
+// Recovery subcommands: config check
+registerRecoveryCommands(program);
 
 // Sandbox status subcommand
 program
