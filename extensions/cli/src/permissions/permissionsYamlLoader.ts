@@ -20,6 +20,32 @@ export interface PermissionsYamlConfig {
 }
 
 /**
+ * Why a parsed permissions.yaml cannot be used, or undefined when it can.
+ * An empty file, or one holding only comments, is an empty policy.
+ */
+export function permissionsYamlProblem(parsed: unknown): string | undefined {
+  if (parsed === null || parsed === undefined) return undefined;
+  if (typeof parsed !== "object" || Array.isArray(parsed)) {
+    return "has the wrong structure (expected a mapping with allow, ask and exclude lists)";
+  }
+  const validKeys = ["allow", "ask", "exclude"];
+  // The policy levels share this file (see core settingsFile): its keys
+  // are read there, not here
+  const policyKeys: readonly string[] = POLICY_FILE_KEYS;
+  const record = parsed as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (policyKeys.includes(key)) continue;
+    if (!validKeys.includes(key)) {
+      return `has the wrong structure (unrecognised top-level key "${key.slice(0, 40)}")`;
+    }
+    if (record[key] && !Array.isArray(record[key])) {
+      return `has the wrong structure ("${key}" must be a list)`;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Loads permissions from ~/.continue/permissions.yaml
  * Returns null if file doesn't exist or can't be parsed
  */
@@ -38,20 +64,9 @@ export function loadPermissionsYaml(
     const parsed = YAML.parse(content) as PermissionsYamlConfig;
 
     // Validate the structure
-    if (parsed && typeof parsed === "object") {
-      const validKeys = ["allow", "ask", "exclude"];
-      // The policy levels share this file (see core settingsFile): its keys
-      // are read there, not here
-      const policyKeys: readonly string[] = POLICY_FILE_KEYS;
-      const hasValidStructure = Object.keys(parsed).every(
-        (key) =>
-          policyKeys.includes(key) ||
-          (validKeys.includes(key) &&
-            (!parsed[key as keyof PermissionsYamlConfig] ||
-              Array.isArray(parsed[key as keyof PermissionsYamlConfig]))),
-      );
-
-      if (hasValidStructure) {
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const problem = permissionsYamlProblem(parsed);
+      if (!problem) {
         logger.debug("Loaded permissions from YAML", {
           allow: parsed.allow?.length || 0,
           ask: parsed.ask?.length || 0,
@@ -180,7 +195,16 @@ ask: []
 exclude: []
 `;
 
-    await fs.promises.writeFile(PERMISSIONS_YAML_PATH, defaultContent, "utf-8");
+    try {
+      // "wx": never replace a file another process created in the meantime
+      await fs.promises.writeFile(PERMISSIONS_YAML_PATH, defaultContent, {
+        encoding: "utf-8",
+        flag: "wx",
+      });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return;
+      throw error;
+    }
     logger.info("Created default permissions.yaml", {
       path: PERMISSIONS_YAML_PATH,
     });

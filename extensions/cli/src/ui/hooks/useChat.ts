@@ -983,6 +983,7 @@ export function useChat({
 
     // Handle policy creation if requested
     if (approved && createPolicy && currentRequest) {
+      let saved = false;
       try {
         const { generatePolicyRule, addPolicyToYaml } =
           await import("../../permissions/policyWriter.js");
@@ -993,6 +994,7 @@ export function useChat({
         );
 
         await addPolicyToYaml(policyRule);
+        saved = true;
         logger.debug(`Policy created: ${policyRule}`);
 
         // Reload permissions to pick up the new policy without requiring restart
@@ -1001,7 +1003,18 @@ export function useChat({
         logger.error("Failed to create policy or reload permissions", {
           error,
         });
-        // Continue with the approval even if policy creation/reload fails
+        // Continue with the approval even if policy creation/reload fails,
+        // and say when the rule was not saved: a log line is not enough for
+        // "always".
+        if (!saved) {
+          const { policySaveFailureNotice } =
+            await import("../../permissions/policyWriter.js");
+          const notice = policySaveFailureNotice(error);
+          setChatHistory((prev) => [
+            ...prev,
+            { message: { role: "system", content: notice }, contextItems: [] },
+          ]);
+        }
       }
     }
 
