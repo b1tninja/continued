@@ -31,6 +31,9 @@ const ALLOWED = new Set([
   "bench/runner.mjs",
   // says once that earlier versions used the word
   "docs/ide-extensions/agent/permissions-page.mdx",
+  // reference pages that say `yolo` is still read as `idgaf`
+  "docs/cli/reference.mdx",
+  "docs/reference/permissions-yaml.mdx",
 ]);
 
 const SKIP_DIR = new Set(["node_modules", "dist", "out", "build", ".git"]);
