@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import { getAllSlashCommands } from "./commands/commands.js";
 import { handleInit } from "./commands/init.js";
+import { exportCurrentSession } from "./export/exportCommand.js";
 import { handleInfoSlashCommand } from "./infoScreen.js";
 import { syncRunningLoopPolicy } from "./loop/loopSession.js";
 import { handleUntaint } from "./permissions/cliTaint.js";
@@ -223,10 +224,19 @@ function isValidExportedSession(data: unknown): data is ExportedSession {
   );
 }
 
-function handleExport(_args: string[]): SlashCommandResult {
+/**
+ * `/export [path]`: a masked transcript of this session (Markdown, or HTML
+ * for a .html path). `/export --json` opens the session picker that writes
+ * the session JSON `/import` reads.
+ */
+function handleExport(args: string[]): SlashCommandResult {
+  if (args.includes("--json")) {
+    return { exit: false, openExportSelector: true };
+  }
+  const result = exportCurrentSession(args);
   return {
     exit: false,
-    openExportSelector: true,
+    output: result.ok ? chalk.green(result.message) : chalk.red(result.message),
   };
 }
 

@@ -54,3 +54,13 @@ At File edits = IDGAF (the top level, also reached by `--auto`), the agent can c
 - A headless run whose model call fails (network, a bad key, a rate limit, an HTTP error from the provider, a context that is too long) now exits **4** instead of 1.
 - A headless run whose configuration gives it no usable model, or that sets `--max-budget-usd` on a model with no price, now exits **2** instead of 1, the code a broken hooks or permissions file and `serve`'s refusal to start already use.
 - A headless run exits **5** instead of 1 when a `UserPromptSubmit` hook blocks the prompt, and instead of 0 when the turn ended at the refusal cap because tool calls kept being refused.
+
+## Terminal agent: export a session as a masked transcript
+
+### New
+
+- `continuous export <session> [--format md|html] [--out file] [--force]` and `/export [path]` in the terminal UI write a session as Markdown (or one self-contained HTML page): the title and a date, your messages, the replies and the tool calls, every text through the audit masker, tool output cut at 2000 characters, reasoning left out unless `--reasoning`, and no system prompt, attached files, paths or session id. An existing file is not replaced without `--force`. See [Export a session](https://github.com/b1tninja/continuous/blob/main/docs/cli/export.mdx).
+
+### Behaviour changes
+
+- `/export` with no argument now writes the masked Markdown transcript. The session JSON that `/import` reads moved to `/export --json`.

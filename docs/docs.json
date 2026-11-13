@@ -207,6 +207,7 @@
               "cli/run-limits",
               "cli/headless-output",
               "cli/exit-codes",
+              "cli/export",
               "guides/acp",
               "guides/instinct",
               "guides/running-continue-without-internet",

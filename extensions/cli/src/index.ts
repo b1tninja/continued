@@ -292,6 +292,28 @@ program
     });
   });
 
+// Export subcommand: a masked transcript, never the session JSON
+program
+  .command("export <session>")
+  .description(
+    "Write a session as a masked transcript (Markdown or HTML) to stdout or --out; <session> is an id, the start of one, or last",
+  )
+  .option("--format <format>", "md (default) or html")
+  .option("--out <file>", "Write to this file instead of stdout")
+  .option("--force", "Replace --out if it exists")
+  .option("--reasoning", "Include the model's reasoning (left out by default)")
+  .action(async (session: string, options) => {
+    const { exportCommand } = await import("./export/exportCommand.js");
+    await gracefulExit(
+      exportCommand(session, {
+        format: options.format,
+        out: options.out,
+        force: options.force,
+        includeReasoning: options.reasoning,
+      }),
+    );
+  });
+
 // Serve subcommand
 program
   .command("serve [prompt]", { hidden: true })
