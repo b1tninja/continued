@@ -98,8 +98,8 @@ function refuseRepeatedCalls(
       toRun.push(tc);
       continue;
     }
-    ctx.callbacks?.onToolStart?.(tc.name, tc.arguments);
-    ctx.callbacks?.onToolResult?.(verdict.refusal, tc.name, "canceled");
+    ctx.callbacks?.onToolStart?.(tc.name, tc.arguments, tc.id);
+    ctx.callbacks?.onToolResult?.(verdict.refusal, tc.name, "canceled", tc.id);
     if (ctx.useService) {
       ctx.chatHistorySvc.addToolResult(tc.id, verdict.refusal, "canceled");
     } else {

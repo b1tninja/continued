@@ -59,6 +59,8 @@ export type ToolPermissionPrompt = (
   toolArgs: any,
   requestId: string,
   preview?: ToolCallPreview[],
+  /** The model's id for the call being asked about, when the caller has one */
+  toolCallId?: string,
 ) => void;
 
 export interface Tool {
