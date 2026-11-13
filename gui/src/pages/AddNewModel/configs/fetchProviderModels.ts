@@ -5,6 +5,7 @@ import { ModelPackage } from "./models";
 import { models } from "./models";
 import { ollamaStaticModels, providers } from "./providers";
 import type { CatalogModel } from "core/llm/openRouterCatalog";
+import { setOpenRouterCatalog } from "core/llm/utils/catalogPricing";
 
 interface FetchedModel {
   name: string;
@@ -155,6 +156,7 @@ const bundled = {
 export const resetCatalogueAnswers = () => {
   answered.clear();
   openRouterListDate = undefined;
+  setOpenRouterCatalog(undefined);
   if (providers.ollama && bundled.ollama) {
     providers.ollama.packages = bundled.ollama;
   }
@@ -175,6 +177,13 @@ function catalogToFetched(models: CatalogModel[]): FetchedModel[] {
 }
 
 function applyOpenRouterList(models: CatalogModel[], fetchedAt: string) {
+  // The same list prices the usage readouts in this window
+  setOpenRouterCatalog({
+    schemaVersion: 1,
+    source: "https://openrouter.ai/api/v1/models",
+    fetchedAt,
+    models,
+  });
   if (!providers.openrouter) return;
   providers.openrouter.packages =
     catalogToFetched(models).map(toOpenRouterPackage);

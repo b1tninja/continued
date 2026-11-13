@@ -1,6 +1,5 @@
 import { Editor, EditorContent, JSONContent } from "@tiptap/react";
 import { ContextProviderDescription, InputModifiers } from "core";
-import { modelSupportsImages } from "core/llm/autodetect";
 import {
   memo,
   useCallback,
@@ -18,6 +17,8 @@ import InputToolbar, { ToolbarOptions } from "../InputToolbar";
 import { AttachMenu } from "../InputToolbar/AttachMenu";
 import { ComboBoxItem } from "../types";
 import { DragOverlay } from "./components/DragOverlay";
+import { DropNotice } from "./drop/DropNotice";
+import { useChatInputDrop } from "./drop/useChatInputDrop";
 import { InputBoxDiv } from "./components/StyledComponents";
 import { useMainEditor } from "./MainEditorProvider";
 import "./TipTapEditor.css";
@@ -143,7 +144,12 @@ function TipTapEditorInner(props: TipTapEditorProps) {
     }
   }, [isStreaming, props.isMainInput]);
 
-  const [showDragOverMsg, setShowDragOverMsg] = useState(false);
+  const drop = useChatInputDrop({
+    editor,
+    ideMessenger,
+    availableContextProviders: props.availableContextProviders,
+    model: defaultModel,
+  });
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
@@ -231,50 +237,7 @@ function TipTapEditorInner(props: TipTapEditorProps) {
       onClick={() => {
         editor?.commands.focus();
       }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        setShowDragOverMsg(true);
-      }}
-      onDragLeave={(e) => {
-        if (e.relatedTarget === null) {
-          if (e.shiftKey) {
-            setShowDragOverMsg(false);
-          } else {
-            setTimeout(() => setShowDragOverMsg(false), 2000);
-          }
-        }
-      }}
-      onDragEnter={() => {
-        setShowDragOverMsg(true);
-      }}
-      onDrop={(event) => {
-        setShowDragOverMsg(false);
-        if (
-          !defaultModel ||
-          !modelSupportsImages(
-            defaultModel.provider,
-            defaultModel.model,
-            defaultModel.title,
-            defaultModel.capabilities,
-          )
-        ) {
-          return;
-        }
-        let file = event.dataTransfer.files[0];
-        void handleImageFile(ideMessenger, file).then((result) => {
-          if (!editor) {
-            return;
-          }
-          if (result) {
-            const [_, dataUrl] = result;
-            const { schema } = editor.state;
-            const node = schema.nodes.image.create({ src: dataUrl });
-            const tr = editor.state.tr.insert(0, node);
-            editor.view.dispatch(tr);
-          }
-        });
-        event.preventDefault();
-      }}
+      {...drop.handlers}
     >
       <div className="px-2.5 pt-2 pb-1">
         <div className="flex items-start gap-1">
@@ -299,6 +262,9 @@ function TipTapEditorInner(props: TipTapEditorProps) {
             }}
           />
         </div>
+        {drop.note && (
+          <DropNotice text={drop.note} onDismiss={drop.dismissNote} />
+        )}
         <InputToolbar
           isMainInput={props.isMainInput}
           toolbarOptions={props.toolbarOptions}
@@ -309,15 +275,7 @@ function TipTapEditorInner(props: TipTapEditorProps) {
         />
       </div>
 
-      {showDragOverMsg &&
-        modelSupportsImages(
-          defaultModel?.provider || "",
-          defaultModel?.model || "",
-          defaultModel?.title,
-          defaultModel?.capabilities,
-        ) && (
-          <DragOverlay show={showDragOverMsg} setShow={setShowDragOverMsg} />
-        )}
+      <DragOverlay show={drop.dragActive} hint={drop.hint} />
       <div id={TIPPY_DIV_ID} className="fixed z-50" />
     </InputBoxDiv>
   );

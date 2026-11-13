@@ -51,6 +51,7 @@
                   "ide-extensions/agent/terminal-environment",
                   "ide-extensions/agent/permissions-page",
                   "ide-extensions/agent/model-setup",
+                  "ide-extensions/agent/accessibility",
                   "ide-extensions/agent/how-to-customize",
                   "ide-extensions/agent/context-selection"
                 ]
@@ -222,11 +223,16 @@
               "guides/ollama-guide",
               "guides/cn-serve",
               "cli/run-limits",
+              "cli/headless-output",
+              "cli/exit-codes",
+              "cli/export",
+              "cli/notifications",
               "guides/acp",
               "guides/instinct",
               "guides/running-continue-without-internet",
               "guides/custom-code-rag",
-              "guides/how-to-self-host-a-model"
+              "guides/how-to-self-host-a-model",
+              "cli/recovery"
             ]
           },
           {

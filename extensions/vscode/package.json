@@ -360,6 +360,18 @@
         "group": "Continuous"
       },
       {
+        "command": "continuous.addToChat",
+        "category": "Continuous",
+        "title": "Add to Continuous Chat",
+        "group": "Continuous"
+      },
+      {
+        "command": "continuous.addOpenTabsToChat",
+        "category": "Continuous",
+        "title": "Add All Open Tabs to Continuous Chat",
+        "group": "Continuous"
+      },
+      {
         "command": "continuous.newSession",
         "category": "Continuous",
         "title": "New Session",
@@ -643,12 +655,35 @@
         },
         {
           "command": "continuous.openInNewWindow"
+        },
+        {
+          "command": "continuous.selectFilesAsContext",
+          "when": "false"
+        },
+        {
+          "command": "continuous.addToChat",
+          "when": "editorIsOpen && resourceScheme =~ /^(file|vscode-remote|vscode-vfs)$/"
+        },
+        {
+          "command": "continuous.addOpenTabsToChat",
+          "when": "editorIsOpen"
         }
       ],
       "editor/context": [
         {
           "submenu": "continuous.continueSubMenu",
           "group": "0_acontinue"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "continuous.addToChat",
+          "group": "continuous@1",
+          "when": "resourceScheme =~ /^(file|vscode-remote|vscode-vfs)$/"
+        },
+        {
+          "command": "continuous.addOpenTabsToChat",
+          "group": "continuous@2"
         }
       ],
       "editor/title/run": [
@@ -667,12 +702,18 @@
           "command": "continuous.focusEdit",
           "group": "Continuous",
           "when": "!editorReadonly"
+        },
+        {
+          "command": "continuous.addToChat",
+          "group": "Continuous",
+          "when": "!editorHasSelection && resourceScheme =~ /^(file|vscode-remote|vscode-vfs)$/"
         }
       ],
       "explorer/context": [
         {
-          "command": "continuous.selectFilesAsContext",
-          "group": "1_debug@1"
+          "command": "continuous.addToChat",
+          "group": "1_debug@1",
+          "when": "resourceScheme =~ /^(file|vscode-remote|vscode-vfs)$/"
         }
       ],
       "view/title": [

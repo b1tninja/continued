@@ -105,7 +105,7 @@ export function mergeParentOptions(parentCommand: Command, options: any): any {
     "readonly",
     "auto",
     "autoReview",
-    "tools",
+    "policy",
     "verbose",
     "rule",
     "mcp",
@@ -117,10 +117,8 @@ export function mergeParentOptions(parentCommand: Command, options: any): any {
     "agent",
     "betaSubagentTool",
     "trustProjectConfig",
-    // Safety flags: a root --policy or --trust-project-hooks must not be dropped
-    // silently when a subcommand such as serve or acp is named after it.
-    "policy",
     "trustProjectHooks",
+    "ignoreBrokenConfig",
     "maxBudgetUsd",
     "maxTurns",
     "maxDuration",

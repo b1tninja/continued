@@ -67,6 +67,12 @@ import {
 } from "./tools/permissions/audit/hook";
 import { registerAuditOverview } from "./tools/permissions/audit/overviewHandler";
 import {
+  diffPolicySettings,
+  recordFileEdits,
+  recordSettingChanges,
+  rememberSettings,
+} from "./tools/permissions/settingChanges";
+import {
   readPolicyFile,
   writePolicyFile,
 } from "./tools/permissions/settingsFile";
@@ -86,6 +92,7 @@ import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
 import {
+  loadOpenRouterPrices,
   pullOpenRouterCatalog,
   readModelCatalogPolicy,
   readOpenRouterCatalog,
@@ -120,7 +127,7 @@ import { ChatDescriber } from "./util/chatDescriber";
 import { compactConversation } from "./util/conversationCompaction";
 import { GlobalContext } from "./util/GlobalContext";
 import { reasoningOptionsForEffort } from "./util/modelUse";
-import historyManager from "./util/history";
+import historyManager, { damagedSessionNotice } from "./util/history";
 import {
   editConfigFile,
   getConfigYamlPath,
@@ -225,6 +232,7 @@ import { ContinueError, ContinueErrorReason } from "./util/errors";
 import { loadSubagentDefinitions } from "./subagents/loadSubagents";
 import { shareSession } from "./util/historyUtils";
 import { Logger } from "./util/Logger.js";
+import { MessageAbortControllers } from "./util/messageAbortControllers";
 
 export class Core {
   configHandler: ConfigHandler;
@@ -237,17 +245,12 @@ export class Core {
   private shadowIde = new IdeShadow();
   llmLogger = new LLMLogger();
 
-  private messageAbortControllers = new Map<string, AbortController>();
+  private messageAbortControllers = new MessageAbortControllers();
   private addMessageAbortController(id: string): AbortController {
-    const controller = new AbortController();
-    this.messageAbortControllers.set(id, controller);
-    controller.signal.addEventListener("abort", () => {
-      this.messageAbortControllers.delete(id);
-    });
-    return controller;
+    return this.messageAbortControllers.add(id);
   }
   private abortById(messageId: string) {
-    this.messageAbortControllers.get(messageId)?.abort();
+    this.messageAbortControllers.abort(messageId);
   }
 
   invoke<T extends keyof ToCoreProtocol>(
@@ -445,6 +448,9 @@ export class Core {
         return [];
       }
     });
+
+    // Cost figures use the downloaded prices, if there are any (a file read)
+    loadOpenRouterPrices();
 
     on("modelCatalog/status", async () => {
       const cached = readOpenRouterCatalog();
@@ -739,7 +745,27 @@ export class Core {
     on("policy/load", async () => readPolicyFile(policyFilePath()));
 
     on("policy/save", async ({ data }) => {
-      writePolicyFile(policyFilePath(), data);
+      const file = policyFilePath();
+      const before = readPolicyFile(file).settings;
+      try {
+        // An edit of the file since the last look is its own entry, not this save's
+        recordFileEdits(getAuditTrail(), before);
+      } catch {
+        // the audit never blocks a save
+      }
+      writePolicyFile(file, data);
+      // The settings page changed levels, built-in switches or the question
+      // lists: what moved is written to the audit trail. Never blocks the save.
+      try {
+        const trail = getAuditTrail();
+        const after = readPolicyFile(file).settings;
+        recordSettingChanges(trail, diffPolicySettings(before, after), {
+          source: "gui-settings",
+        });
+        rememberSettings(trail, after);
+      } catch {
+        // the audit never blocks a save
+      }
     });
 
     on("policy/rules", async ({ data }) => {
@@ -1028,7 +1054,14 @@ export class Core {
     });
 
     on("history/load", (msg) => {
-      return historyManager.load(msg.data.id);
+      const result = historyManager.loadWithStatus(msg.data.id);
+      if (result.damaged) {
+        // The file was moved aside, not replaced: say where it is, once.
+        const notice = damagedSessionNotice(result.damaged);
+        console.warn(notice);
+        void this.ide.showToast("warning", notice);
+      }
+      return result.session;
     });
 
     on("history/save", (msg) => {
@@ -1559,12 +1592,16 @@ export class Core {
 
     on("llm/streamChat", (msg) => {
       const abortController = this.addMessageAbortController(msg.messageId);
-      return llmStreamChat(
-        this.configHandler,
+      return this.messageAbortControllers.releaseWhenDone(
+        msg.messageId,
         abortController,
-        msg,
-        this.ide,
-        this.messenger,
+        llmStreamChat(
+          this.configHandler,
+          abortController,
+          msg,
+          this.ide,
+          this.messenger,
+        ),
       );
     });
 
@@ -1576,12 +1613,15 @@ export class Core {
       }
       const abortController = this.addMessageAbortController(msg.messageId);
 
-      const completion = await model.complete(
-        msg.data.prompt,
-        abortController.signal,
-        msg.data.completionOptions,
-      );
-      return completion;
+      try {
+        return await model.complete(
+          msg.data.prompt,
+          abortController.signal,
+          msg.data.completionOptions,
+        );
+      } finally {
+        this.messageAbortControllers.release(msg.messageId, abortController);
+      }
     });
     on("llm/listModels", this.handleListModels.bind(this));
 

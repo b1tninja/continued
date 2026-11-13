@@ -71,6 +71,17 @@
       "color-contrast": 1,
       "scrollable-region-focusable": 1
     },
+    "loop-running": {
+      "color-contrast": 1
+    },
+    "loop-failed": {
+      "color-contrast": 1
+    },
+    "loop-finished": {},
+    "loop-stopped": {},
+    "loop-settings-open": {},
+    "loop-questions": {},
+    "loop-replan": {},
     "loop-plan-failed": {
       "color-contrast": 3,
       "label-content-name-mismatch": 2
@@ -78,7 +89,7 @@
     "loop-plan-finished": {},
     "loop-plan-running": {
       "color-contrast": 3,
-      "label-content-name-mismatch": 2
+      "label-content-name-mismatch": 3
     },
     "loop-plan-tile": {
       "color-contrast": 1

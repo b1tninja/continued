@@ -38,6 +38,7 @@ The VS Code extension and the terminal agent keep everything on your machine: on
 | `input_history.json`       | The terminal agent's input history                                          | Delete. `continuous clean` does not touch it                |
 | `.onboarding_complete`     | The terminal agent's first-start question was answered                      | Delete to be asked again                                    |
 | `worktrees/`               | Git worktrees of parallel loop workers                                      | See below                                                   |
+| `cache/`                   | The terminal agent's compiled-code cache (`cache/compile`), which makes later starts faster | Delete; it is rebuilt                       |
 | `bedrock-catalog`, `.utils`, `.diffs`, `.migrations`, `.configs` | Caches, downloaded tools, pending diffs, migration markers | Delete                              |
 
 `continuous clean` is a dry run unless you add `--yes`, and it touches only `sessions`, `logs` and `dev_data`. Deleting a file is not secure erasure: an SSD, a backup or a snapshot can keep the bytes, so rotate any key that was in a file you removed.

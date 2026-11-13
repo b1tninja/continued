@@ -132,7 +132,8 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   },
   {
     name: "export",
-    description: "Export a session to JSON file",
+    description:
+      "Export this session as a masked Markdown transcript: /export [path] [--force]; --json for the session file /import reads",
     category: "system",
   },
   {
