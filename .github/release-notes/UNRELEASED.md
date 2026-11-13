@@ -28,6 +28,10 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 - The generated hub/API SDK client (`packages/continue-sdk`) is deleted, together with the terminal agent's API client service and the `CONTINUE_API_BASE` setting. The code no longer names a Continue-operated host, and `core/egress/egress-allowlist.json` has no entry for one.
 - `--config owner/slug` (a hub assistant) now fails with "hub assistants are not supported; pass a config.yaml path". Pass a path to a `config.yaml`.
 
+## New
+
+- **Checkpoints and `/rewind` in the terminal agent.** Before Edit, MultiEdit or Write changes a file, a copy of it is kept with the session under `~/.continuous/checkpoints/<session id>/`. `/rewind` lists the session's prompts with the files written in each and offers: restore the files to before a prompt, rewind the conversation to before it, or both; `r` redoes the last rewind until the agent writes again. A file changed outside the agent since its last write is shown with its line counts and needs a `y` (overwrite) or `s` (skip it). `continuous rewind <session> [--to <n>] [--mode files|conversation|both] [--redo]` does the same from a script and stops with nothing changed when a file was changed outside the agent, unless `--yes` or `--skip-changed`. **Files changed by shell commands or MCP tools are not covered.** Only the files the agent writes are copied, never the whole tree and never with git; limits are 2 MiB per file, 100 prompts and 64 MiB per session, and a deleted session's copies are removed with it. `CONTINUOUS_CHECKPOINTS=off` turns copies off. See `docs/cli/checkpoints.mdx`.
+
 ## Behaviour changes
 
 - A root `--policy` or `--trust-project-hooks` now reaches `continuous serve` and `continuous acp` when it is written before the subcommand. Before, `continuous --policy careful serve` dropped the policy without a word and ran with the default one.
