@@ -93,7 +93,7 @@ export function jobCount(c) {
   if (c.gui) n += 1;
   if (c.binary) n += 1;
   if (c.vscode) n += 1;
-  if (c.packages) n += 7; // package list job + 6 package legs
+  if (c.packages) n += 1; // one job tests the six packages
   if (c.e2e) n += 1 + 1 + 10; // test-file matrix job, linux package, 10 e2e legs
   if (c.jetbrains) n += 1;
   if (c.cli) n += 3; // lint, test, smoke-api

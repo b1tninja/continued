@@ -457,3 +457,16 @@ Known limits: `vitest related` follows static imports and `import()` with a lite
 `import(variable)`; 189 test files use `vi.mock` and 115 core test files read files from disk (research
 note 3.1). The deny list catches fixtures by location only; a test that reads a file elsewhere is the case
 shadow mode is there to measure.
+
+### (b) The six package legs are one job
+
+`packages-checks` runs `npm test` in each of the six packages in one job (each in its own log group;
+every package runs after one fails, and the job fails if any did). It replaces `get-packages-matrix` and
+the six legs, 7 jobs to 1, and drops each leg's second `npm ci` (setup-packages has just installed and
+built the same lockfiles). It is the first step of the research note's `unit` job (phase 2 b), which
+will also take the gui, VS Code and binary tests.
+
+Not folded here, because the research note gives them a different home: `pins-and-notice` and
+`prettier-check` go into the `static` job of phase 2 a (prettier is part of the required gate, Supply
+Chain is advisory, so merging them is a policy choice for that step), and `dependency-review` is to run
+only when a manifest, a lockfile or a workflow changed.

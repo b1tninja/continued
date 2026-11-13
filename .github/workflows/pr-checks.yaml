@@ -252,27 +252,13 @@ jobs:
           npm run esbuild
           npm run check:native-modules-deferred
 
-  get-packages-matrix:
-    if: inputs.run_packages != 'false'
-    runs-on: ubuntu-latest
-    outputs:
-      packages: ${{ steps.get-packages.outputs.packages }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Get package list
-        id: get-packages
-        run: |
-          packages=$(find packages/ -maxdepth 1 -type d -not -path packages/ -exec basename {} \; | sort | jq -R -s -c 'split("\n")[:-1]')
-          echo "packages=$packages" >> $GITHUB_OUTPUT
-          echo "Found packages: $packages"
-
+  # One job for the six packages (was a list job plus one leg per package). Measured (docs/ci-merge-gate.md
+  # section 8): each leg spent about 87 % of its 0.9 minutes on checkout and setup to run 2 to 17 s of
+  # tests. A first step toward the `unit` job of plans/research/ci-pipeline-redesign.md (phase 2 b).
+  # Every package is still tested when an earlier one fails; the job fails if any did.
   packages-checks:
     if: inputs.run_packages != 'false'
-    needs: get-packages-matrix
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        package: ${{ fromJson(needs.get-packages-matrix.outputs.packages) }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -287,11 +273,26 @@ jobs:
           is_fork: ${{ github.event.pull_request.head.repo.fork == true }}
           is_dependabot: ${{ github.actor == 'dependabot[bot]' }}
 
-      - name: Test and check ${{ matrix.package }}
+      # node_modules and dist come from setup-packages (a clean `npm ci` and build of this source),
+      # which is what each leg's own `npm ci` reinstalled.
+      - name: Test every package
         run: |
-          cd packages/${{ matrix.package }}
-          npm ci
-          npm test
+          failed=""
+          for dir in packages/*/; do
+            pkg=$(basename "$dir")
+            echo "::group::$pkg"
+            if (cd "$dir" && npm test); then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::packages/$pkg: npm test failed"
+              failed="$failed $pkg"
+            fi
+          done
+          if [ -n "$failed" ]; then
+            echo "Failed packages:$failed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
         env:
           IGNORE_API_KEY_TESTS: ${{ steps.llm-changes.outputs.ignore_api_tests }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -457,7 +458,6 @@ jobs:
       - gui-checks
       - binary-checks
       - vscode-checks
-      - get-packages-matrix
       - packages-checks
       - vscode-get-test-file-matrix
       - vscode-package-extension-linux
