@@ -325,7 +325,7 @@ describe("the settings beside the levels", () => {
     );
   });
 
-  it("a IDGAF left from an earlier session is dropped by the load", async () => {
+  it("an IDGAF the webview remembered survives the load (a reload or restart)", async () => {
     const ideMessenger = new MockIdeMessenger();
     ideMessenger.responseHandlers["policy/load"] = (async () => ({
       settings: {
@@ -344,6 +344,9 @@ describe("the settings beside the levels", () => {
       store.dispatch(setPolicyLevel({ area: "tools", level: "idgaf" }));
       await store.dispatch(loadPolicySettings());
     });
-    expect(store.getState().ui.policyLevels.tools).toBe("cautious");
+    expect(store.getState().ui.policyLevels.tools).toBe("idgaf");
+    // the other areas come from the file
+    expect(store.getState().ui.policyLevels.context).toBe("permissive");
+    expect(store.getState().ui.policyLevels.edits).toBe("manual");
   });
 });

@@ -1,8 +1,9 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import type {
-  PolicyArea,
-  PolicyLevel,
-  PolicyLevels,
+import {
+  parsePolicyLevel,
+  type PolicyArea,
+  type PolicyLevel,
+  type PolicyLevels,
 } from "core/tools/permissions/policy";
 import type { PolicyFileUpdate } from "core/tools/permissions/settingsFile";
 import {
@@ -15,18 +16,21 @@ import { ThunkApiType } from "../store";
 
 /**
  * The levels and settings live in the file the CLI shares
- * (~/.continuous/permissions.yaml); core reads and writes it. At startup the
- * file replaces whatever the webview remembered, which is how a IDGAF from an
- * earlier session is dropped: IDGAF is for one session only.
+ * (~/.continuous/permissions.yaml); core reads and writes it, and never writes
+ * IDGAF there. At startup the file replaces what the webview remembered,
+ * except an area the person had at IDGAF: a reload or a restart must not drop
+ * IDGAF in the middle of an unattended run. It stays until the person changes it.
  */
 export const loadPolicySettings = createAsyncThunk<void, void, ThunkApiType>(
   "policy/load",
-  async (_, { dispatch, extra }) => {
+  async (_, { dispatch, extra, getState }) => {
     try {
       const res = await extra.ideMessenger.request("policy/load", undefined);
       if (res.status !== "success") return;
       const { settings, notices } = res.content;
-      dispatch(setPolicyLevels(settings.levels));
+      dispatch(
+        setPolicyLevels(keepIdgaf(getState().ui.policyLevels, settings.levels)),
+      );
       dispatch(
         setPolicyExtras({
           maxNewPlanItems: settings.maxNewPlanItems,
@@ -46,6 +50,18 @@ export const loadPolicySettings = createAsyncThunk<void, void, ThunkApiType>(
     }
   },
 );
+
+/** The file's levels, with every area the webview remembered at IDGAF kept there. */
+export function keepIdgaf(
+  remembered: Partial<PolicyLevels> | undefined,
+  fromFile: PolicyLevels,
+): PolicyLevels {
+  const out = { ...fromFile };
+  for (const area of Object.keys(out) as PolicyArea[]) {
+    if (parsePolicyLevel(remembered?.[area]) === "idgaf") out[area] = "idgaf";
+  }
+  return out;
+}
 
 /** Writes the levels (never IDGAF) and the settings a person can change. */
 export const savePolicySettings = createAsyncThunk<void, void, ThunkApiType>(
