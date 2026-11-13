@@ -514,6 +514,24 @@ export interface LoopItemState {
    * LOOP_MAX_REPAIRS_PER_ITEM). To-dos a repair splits it into inherit it.
    */
   repairs?: number;
+  /**
+   * The round whose accepted re-plan added this to-do, for the R chip in the
+   * plan tree. Missing on the to-dos the loop started with and on loops saved
+   * before this field: they show no chip.
+   */
+  addedInRound?: number;
+}
+
+/** A to-do an accepted re-plan took out of the plan (LoopState.replacedItems) */
+export interface LoopReplacedItem {
+  /** The id the to-do had */
+  id: string;
+  /** Its text, when the loop could tell which plan text it had */
+  text?: string;
+  /** The round of the re-plan that took it out */
+  round: number;
+  /** The to-do that took its place; only for a repair that left exactly one */
+  replacedBy?: string;
 }
 
 /**
@@ -897,6 +915,11 @@ export interface LoopState {
   waitedMs?: number;
   /** Why the last re-plan did or did not start the next round by itself */
   replanReason?: string;
+  /**
+   * To-dos accepted re-plans took out of the plan, oldest first, the last 20.
+   * Missing on loops saved before this field: the plan tree shows none.
+   */
+  replacedItems?: LoopReplacedItem[];
   /** What the loop decided for the person by their policy, oldest first (capped) */
   autoDecisions?: LoopAutoDecision[];
   /** Tool calls the person allowed from an approval question (grantKey) */
