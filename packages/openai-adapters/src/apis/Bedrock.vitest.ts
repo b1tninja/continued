@@ -141,12 +141,30 @@ describe("BedrockApi networking (requestOptions)", () => {
     expect(handler.constructor.name).toBe("NodeHttpHandler");
   });
 
+  // useSystemCa is set in both cases: left out it follows the platform (on for
+  // Windows and macOS), and the system store alone asks for a custom handler.
   it("does not proxy hosts listed in noProxy", async () => {
     clear();
     const handler = await handlerOf({
-      requestOptions: { proxy: "http://proxy:1", noProxy: ["*.amazonaws.com"] },
+      requestOptions: {
+        proxy: "http://proxy:1",
+        noProxy: ["*.amazonaws.com"],
+        useSystemCa: false,
+      },
     });
     expect(handler.constructor.name).not.toBe("NodeHttpHandler");
+  });
+
+  it("keeps a custom handler for the system store when the proxy is bypassed", async () => {
+    clear();
+    const handler = await handlerOf({
+      requestOptions: {
+        proxy: "http://proxy:1",
+        noProxy: ["*.amazonaws.com"],
+        useSystemCa: true,
+      },
+    });
+    expect(handler.constructor.name).toBe("NodeHttpHandler");
   });
 });
 
