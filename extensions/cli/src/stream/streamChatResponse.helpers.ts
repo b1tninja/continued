@@ -255,12 +255,18 @@ async function coreRulesVerdict(
       history: autoReview ? services.chatHistory.getHistory() : undefined,
       ...(mcpServer
         ? {
-            mcp: { serverName: mcpServer, toolName: toolCall.name },
+            mcp: {
+              serverName: mcpServer,
+              toolName: toolCall.tool?.mcpToolName ?? toolCall.name,
+            },
             mcpSchema: toolCall.tool?.parameters as unknown as Record<
               string,
               unknown
             >,
-            mcpDefinitionChange: mcpPinChange(mcpServer, toolCall.name),
+            mcpDefinitionChange: mcpPinChange(
+              mcpServer,
+              toolCall.tool?.mcpToolName ?? toolCall.name,
+            ),
           }
         : {}),
     });
