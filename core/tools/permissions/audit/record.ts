@@ -22,7 +22,7 @@ export type AuditBy = "rules" | "reviewer" | "person" | "system";
 
 export interface AuditEnvelope {
   v: typeof AUDIT_VERSION;
-  ev: "decision" | "outcome" | "turn" | "policy" | "shadow";
+  ev: "decision" | "outcome" | "turn" | "policy" | "shadow" | "setting";
   /** UTC, ISO 8601 */
   ts: string;
   session: string;
@@ -142,6 +142,11 @@ export interface DecisionEvent extends AuditEnvelope {
    * tell the two apart here.
    */
   recovered?: true;
+  /**
+   * The host gave the call no id, so `callId` was made up here
+   * (`nocall-<hash>-<n>`). Such a line cannot be joined to an outcome.
+   */
+  synthetic?: true;
 }
 
 export interface OutcomeEvent extends AuditEnvelope {
@@ -210,6 +215,51 @@ export interface PolicyEvent extends AuditEnvelope {
   maskedKinds?: string[];
 }
 
+/** Where a settings change came from. */
+export type SettingChangeSource =
+  "cli-policy" | "flag" | "gui-settings" | "file" | "cli-command";
+
+/**
+ * What kind of setting changed. A reader that does not know a kind shows it
+ * as written; new kinds are added here without a version bump.
+ */
+export type SettingChangeKind =
+  | "level"
+  | "preset"
+  | "floor"
+  | "builtin"
+  | "mcp-trust"
+  | "plan-terminal"
+  | "project-trust"
+  | "hook-trust";
+
+/**
+ * A change to a permission setting that is not a rule: a level, the preset
+ * the levels add up to, a floor rule, a built-in rule switched off, a trusted
+ * MCP server, or trust granted to a project's configuration or hooks.
+ * It records the setting's name and its old and new value (a level word, on or
+ * off, a floor rule as masked text, or a trust scope); never file contents.
+ * It is a separate `ev` from `policy`, so a reader written before it existed
+ * skips it, as it skips every kind it does not know.
+ */
+export interface SettingEvent extends AuditEnvelope {
+  ev: "setting";
+  kind: SettingChangeKind;
+  op: "set" | "add" | "remove" | "grant" | "revoke";
+  source: SettingChangeSource;
+  /** The area, built-in rule id, server name, floor rule or trust scope */
+  name: string;
+  from?: string;
+  to?: string;
+  /** The change lets something run, or run unasked, that did not before */
+  loosens: boolean;
+  /** How it was confirmed: a prompt answered, a flag typed on the command line, the IDE's own dialog */
+  confirmed?: "prompt" | "flag" | "native";
+  /** The session the change was made in, when it is not this file's */
+  viaSession?: string;
+  maskedKinds?: string[];
+}
+
 /**
  * What the reviewer WOULD have decided for a call it was not asked about
  * (shadow mode, ROADMAP B16). It sits beside the real decision, joined by
@@ -236,7 +286,12 @@ export interface ShadowEvent extends AuditEnvelope {
 }
 
 export type AuditRecord =
-  DecisionEvent | OutcomeEvent | TurnEvent | PolicyEvent | ShadowEvent;
+  | DecisionEvent
+  | OutcomeEvent
+  | TurnEvent
+  | PolicyEvent
+  | ShadowEvent
+  | SettingEvent;
 
 /** A record as the builders produce it: the writer adds `v`, `ts` and `seq`. */
 export type AuditDraft = DistributiveOmit<AuditRecord, "v" | "seq" | "ts"> & {
@@ -272,6 +327,8 @@ export interface DecisionInput {
   modelMain?: string;
   /** Set for a recovered call; also derived from the call id */
   recovered?: boolean;
+  /** Set when `callId` was generated because the host sent none */
+  synthetic?: boolean;
 }
 
 const clean = <T extends object>(o: T): T =>
@@ -422,5 +479,39 @@ export function shadowDraft(input: ShadowInput): AuditDraft {
     reviewer: clean({ ...input.reviewer }),
     agent: auditAgentOf(input.agent),
     maskedKinds: reason?.kinds.length ? reason.kinds : undefined,
+  }) as AuditDraft;
+}
+
+export interface SettingInput {
+  session?: string;
+  kind: SettingChangeKind;
+  op: SettingEvent["op"];
+  source: SettingChangeSource;
+  name: string;
+  from?: string;
+  to?: string;
+  loosens: boolean;
+  confirmed?: SettingEvent["confirmed"];
+  viaSession?: string;
+}
+
+const MAX_SETTING_FIELD_CHARS = 300;
+
+export function settingDraft(input: SettingInput): AuditDraft {
+  const name = maskText(input.name);
+  const from = input.from === undefined ? undefined : maskText(input.from);
+  const to = input.to === undefined ? undefined : maskText(input.to);
+  const kinds = [
+    ...new Set([...name.kinds, ...(from?.kinds ?? []), ...(to?.kinds ?? [])]),
+  ];
+  const { session, ...rest } = input;
+  return clean({
+    ...rest,
+    session: session ?? POLICY_SESSION,
+    ev: "setting" as const,
+    name: clipMasked(name.text, MAX_SETTING_FIELD_CHARS),
+    from: from ? clipMasked(from.text, MAX_SETTING_FIELD_CHARS) : undefined,
+    to: to ? clipMasked(to.text, MAX_SETTING_FIELD_CHARS) : undefined,
+    maskedKinds: kinds.length ? kinds : undefined,
   }) as AuditDraft;
 }

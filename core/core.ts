@@ -67,6 +67,12 @@ import {
 } from "./tools/permissions/audit/hook";
 import { registerAuditOverview } from "./tools/permissions/audit/overviewHandler";
 import {
+  diffPolicySettings,
+  recordFileEdits,
+  recordSettingChanges,
+  rememberSettings,
+} from "./tools/permissions/settingChanges";
+import {
   readPolicyFile,
   writePolicyFile,
 } from "./tools/permissions/settingsFile";
@@ -688,7 +694,27 @@ export class Core {
     on("policy/load", async () => readPolicyFile(policyFilePath()));
 
     on("policy/save", async ({ data }) => {
-      writePolicyFile(policyFilePath(), data);
+      const file = policyFilePath();
+      const before = readPolicyFile(file).settings;
+      try {
+        // An edit of the file since the last look is its own entry, not this save's
+        recordFileEdits(getAuditTrail(), before);
+      } catch {
+        // the audit never blocks a save
+      }
+      writePolicyFile(file, data);
+      // The settings page changed levels, built-in switches or the question
+      // lists: what moved is written to the audit trail. Never blocks the save.
+      try {
+        const trail = getAuditTrail();
+        const after = readPolicyFile(file).settings;
+        recordSettingChanges(trail, diffPolicySettings(before, after), {
+          source: "gui-settings",
+        });
+        rememberSettings(trail, after);
+      } catch {
+        // the audit never blocks a save
+      }
     });
 
     on("policy/rules", async ({ data }) => {
