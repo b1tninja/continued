@@ -77,6 +77,7 @@ jobs:
         with:
           fetch-depth: 2
       - uses: actions/setup-node@v7
+        id: node
         with:
           node-version-file: ".nvmrc"
 
@@ -90,11 +91,12 @@ jobs:
             node scripts/versionCheck.js
           fi
 
+      # Same key as the setup-component action's root cache (same `npm ci`), so a hit is shared.
       - uses: actions/cache@v6
         id: root-cache
         with:
           path: node_modules
-          key: ${{ runner.os }}-root-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-root-node-modules-node${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install root dependencies
         if: steps.root-cache.outputs.cache-hit != 'true'
@@ -103,11 +105,13 @@ jobs:
       # prettier-plugin-tailwindcss loads gui/tailwind.config.cjs, which needs the gui
       # dependencies (tailwindcss, ...). Without them 0.8+ fails on every gui file, and
       # it sorts classes differently than a normal checkout does.
+      # Its own key: this is `npm ci --ignore-scripts`, which is not what the gui checks install,
+      # so it must not be restored there (or the other way round).
       - uses: actions/cache@v6
         id: gui-cache
         with:
           path: gui/node_modules
-          key: ${{ runner.os }}-gui-node-modules-${{ hashFiles('gui/package-lock.json') }}
+          key: ${{ runner.os }}-gui-node-modules-noscripts-node${{ steps.node.outputs.node-version }}-${{ hashFiles('gui/package-lock.json') }}
 
       - name: Install gui dependencies
         if: steps.gui-cache.outputs.cache-hit != 'true'
