@@ -358,7 +358,7 @@ function getHandlerDedupeKey(handler: HookHandler): string {
   }
 }
 
-function getMatcherValue(input: HookInput): string | undefined {
+export function getMatcherValue(input: HookInput): string | undefined {
   const eventName = input.hook_event_name as HookEventName;
 
   if (NO_MATCHER_EVENTS.includes(eventName)) {

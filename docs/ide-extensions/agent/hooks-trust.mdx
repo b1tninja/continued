@@ -14,6 +14,16 @@ When a command runs a script inside the workspace, the fingerprint also includes
 
 `continuous hooks` (or `continuous hooks list`) shows two things: your own hooks, each under the settings file it comes from (`~/.claude/settings.json` or the `settings.json` in the Continuous folder), and this project's hooks with whether they are trusted. Your own hooks always run. A file of yours that cannot be read as a JSON object is named, without quoting it, because none of its hooks run.
 
+## Trying a hook
+
+```text
+continuous hooks test <event> [--tool <name>] [--server <name>] [--input '<json>']
+```
+
+builds a sample input for the event (`PreToolUse` with the tool `Bash` and the command `echo hello` unless you say otherwise), finds the hook groups that match it and runs their hooks, so you can see them work before a session depends on them. No tool is run. For each group it prints whether the matcher matched, and for each hook that ran: whether it is yours or the project's, the exit code, the first line of stderr, how long it took, and its decision (block with the reason, `allow`, `ask`, or none), plus any rewritten input or added context. `--tool` and `--server` set the tool for a tool event (a `--server` lets a `mcp__<server>__<tool>` matcher match). `--input` is a JSON object merged over the sample, for example `--input '{"tool_input":{"command":"rm -rf /"}}'`; it cannot change the event name.
+
+The hooks really run, so a command hook executes (an `http` hook sends the sample input) and may have side effects. The trust rules are the same as in a session: this project's hooks run only when they are trusted (or with `--trust-project-hooks`), and when they are not, the output says how many were held back and runs nothing from them. A project hook is masked and its `allow` is ignored, as in a session. A `prompt` or `agent` hook shows as failed, because those types are not supported yet.
+
 ## A project hook cannot approve a call
 
 A hook from a project settings file can block a call or ask you to confirm it, but an `allow` answer from it is ignored (a notice is logged). Only hooks in your own settings can turn a call the CLI would ask about into an allowed one. Deny rules, always-on rules and protected paths apply after any hook either way. If you relied on a project hook to skip questions, move that hook to your own settings.

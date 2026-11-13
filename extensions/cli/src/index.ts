@@ -362,15 +362,32 @@ program
 
 // Hooks subcommand
 program
-  .command("hooks [action]")
+  .command("hooks [action] [event]")
   .description(
-    "Show, trust or revoke this project's hooks (list, trust, revoke)",
+    "Show, trust or revoke hooks (list, trust, revoke), or try the hooks for a sample event without running a tool (test <event>)",
   )
   .option("-y, --yes", "Trust without asking, for scripts")
-  .action(async (action: string | undefined, options) => {
-    const code = await hooksCommand(action, { yes: options.yes });
-    await gracefulExit(code);
-  });
+  .option(
+    "--tool <name>",
+    "test: the tool name for a tool event (default Bash)",
+  )
+  .option("--server <name>", "test: the MCP server, for a tool event")
+  .option(
+    "--input <json>",
+    "test: a JSON object merged over the sample hook input",
+  )
+  .action(
+    async (action: string | undefined, event: string | undefined, options) => {
+      const code = await hooksCommand(action, {
+        yes: options.yes,
+        event,
+        tool: options.tool,
+        server: options.server,
+        input: options.input,
+      });
+      await gracefulExit(code);
+    },
+  );
 
 // Connection diagnostics
 program

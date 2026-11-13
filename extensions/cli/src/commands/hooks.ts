@@ -8,6 +8,7 @@ import * as readline from "node:readline/promises";
 
 import { getProjectHookFiles, loadHooksConfig } from "../hooks/hookConfig.js";
 import { getUserHookFiles } from "../hooks/hookListing.js";
+import { hooksTestCommand } from "../hooks/hooksTest.js";
 import {
   fingerprintProjectHooks,
   isProjectTrusted,
@@ -20,6 +21,11 @@ import type { ProjectHookFile } from "../hooks/hookTrust.js";
 export interface HooksCommandOptions {
   /** Skip the question; for scripts. */
   yes?: boolean;
+  /** `test`: the event to try and how to build its sample input. */
+  event?: string;
+  tool?: string;
+  server?: string;
+  input?: string;
 }
 
 function out(line = ""): void {
@@ -72,6 +78,7 @@ export async function hooksCommand(
   options: HooksCommandOptions = {},
   cwd: string = process.cwd(),
 ): Promise<number> {
+  if (action === "test") return hooksTestCommand(options, cwd);
   const files = getProjectHookFiles(cwd);
   const fingerprint = fingerprintProjectHooks(cwd, files);
 
@@ -137,7 +144,7 @@ export async function hooksCommand(
 
     default:
       process.stderr.write(
-        `Unknown action '${action}'. Use list, trust or revoke.\n`,
+        `Unknown action '${action}'. Use list, trust, revoke or test.\n`,
       );
       return 1;
   }
