@@ -128,6 +128,13 @@ const getColorEnv = () => ({
   CLICOLOR_FORCE: "1",
 });
 
+/** A foreground command: colours on, and no open standard input, so a prompt fails instead of waiting. */
+const spawnOptions = (cwd: string): childProcess.SpawnOptions => ({
+  cwd,
+  env: getColorEnv(),
+  stdio: COMMAND_STDIO,
+});
+
 // Only spawn processes locally when there is no remote workspace.
 // With extensionKind: ["ui", "workspace"], the extension host almost always
 // runs on the local machine. childProcess.spawn() executes on the extension
@@ -212,12 +219,7 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
 
           // Use spawn with color environment
           const { shell, args } = getShellCommand(command);
-          const childProc = childProcess.spawn(shell, args, {
-            cwd,
-            env: getColorEnv(), // Add enhanced environment for colors
-            // No open standard input: a prompt must fail, not wait
-            stdio: COMMAND_STDIO,
-          });
+          const childProc = childProcess.spawn(shell, args, spawnOptions(cwd));
 
           // Track this process for foreground cancellation
           if (toolCallId && waitForCompletion) {
@@ -490,11 +492,7 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
               const childProc = childProcess.spawn(
                 nonStreamingShell,
                 nonStreamingArgs,
-                {
-                  cwd,
-                  env: getColorEnv(),
-                  stdio: COMMAND_STDIO,
-                },
+                spawnOptions(cwd),
               );
 
               // Track this process for foreground cancellation
