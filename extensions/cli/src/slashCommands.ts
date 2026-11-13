@@ -337,6 +337,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   "import-skill": (args) => handleImportSkill(args),
   sessions: handleSessions,
   export: handleExport,
+  rewind: () => ({ openRewindSelector: true }),
   import: handleImport,
 };
 

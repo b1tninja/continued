@@ -7,7 +7,7 @@
 import fs from "fs";
 import path from "path";
 
-import type { ChatHistoryItem, MessageContent } from "core/index.js";
+import type { ChatHistoryItem } from "core/index.js";
 import { getSessionFilePath } from "core/util/paths.js";
 
 import { env } from "../env.js";
@@ -15,7 +15,7 @@ import { services } from "../services/index.js";
 import { getCurrentSession } from "../session.js";
 import { logger } from "../util/logger.js";
 
-import { promptHash, promptLabel, type TurnRef } from "./model.js";
+import { messageText, promptHash, promptLabel, type TurnRef } from "./model.js";
 import { pruneOrphanedCheckpoints } from "./prune.js";
 import { CheckpointStore } from "./store.js";
 
@@ -52,15 +52,6 @@ export function checkpointStoreFor(sessionId: string): CheckpointStore {
     }
   }
   return cached;
-}
-
-/** Plain text of a message, for labels and turn matching. */
-export function messageText(content: MessageContent): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("\n");
 }
 
 /** The turn a write belongs to: the last user message in the history. */

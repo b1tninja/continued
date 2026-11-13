@@ -1,6 +1,8 @@
 /** Types and small helpers shared by the checkpoint store and its users. */
 import { createHash } from "crypto";
 
+import type { MessageContent } from "core/index.js";
+
 export type SkipReason =
   /** Larger than `maxFileBytes` */
   | "too_large"
@@ -131,4 +133,13 @@ export function promptLabel(text: string, max = 72): string {
 
 export function promptHash(text: string): string {
   return sha256(text).slice(0, 16);
+}
+
+/** Plain text of a message, for labels and turn matching. */
+export function messageText(content: MessageContent): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => (part.type === "text" ? part.text : ""))
+    .join("\n");
 }

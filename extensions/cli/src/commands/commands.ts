@@ -131,6 +131,12 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
     category: "system",
   },
   {
+    name: "rewind",
+    description:
+      "Restore files the agent wrote, rewind the conversation, or both; redo the last rewind",
+    category: "system",
+  },
+  {
     name: "export",
     description: "Export a session to JSON file",
     category: "system",
