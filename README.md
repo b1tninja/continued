@@ -61,7 +61,7 @@ Continuous adds what upstream stopped before reaching. The release notes list ev
 
 - **Plan mode** ends with a saved plan file and **Build** or **Keep planning**; choices you kept for yourself become decisions on the plan.
 - **Loop mode** builds a plan's to-dos one at a time, each in a fresh context, with a check that must pass for an item to count as done, an inbox for the model's questions, budgets, and three autonomy levels (Supervised, Auto, Unattended). It runs in the IDE, in the CLI and headless through `cn serve`.
-- **Subagents** from `.continue/agents/` (and Claude Code's `.claude/agents/`), each with its own card, model, tokens and Stop.
+- **Subagents** from `.continuous/agents/` (the older `.continue/agents/` and Claude Code's `.claude/agents/` are read too), each with its own card, model, tokens and Stop.
 - **Task lists** kept with the session, so compaction does not lose the agent's place, and a queue for messages typed while it works.
 - **A terminal agent**, `continuous`, installable from each release. `continuous acp` runs it as an Agent Client Protocol agent for editors such as Zed and JetBrains IDEs.
 
