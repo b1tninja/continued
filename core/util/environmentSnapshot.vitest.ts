@@ -12,6 +12,10 @@ import {
   parseEnvDetail,
   type GatherInput,
 } from "./environmentSnapshot";
+import { secretCases } from "./secretScan/fixtures";
+
+// Assembled by the fixtures, so no token-shaped literal sits in this file
+const PAT = secretCases().find((c) => c.ruleId === "github-pat")!.value;
 
 const MACHINE = {
   home: "C:\\Users\\zzcanaryuser",
@@ -50,8 +54,7 @@ const REPO = {
   "rev-parse --is-inside-work-tree": "true\n",
   "branch --show-current": "feature/login\n",
   "status --porcelain": " M src/app.ts\0?? notes/todo.md\0",
-  "remote get-url":
-    "https://ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/acme/api.git\n",
+  "remote get-url": `https://${PAT}@github.com/acme/api.git\n`,
   "config user.name": "Alex Example\n",
   "config user.email": "alex@example.com\n",
 };
@@ -89,7 +92,7 @@ describe("gatherEnvironment (ENV6)", () => {
       "10.20.30.40",
       "Alex Example",
       "alex@example.com",
-      "ghp_",
+      PAT,
     ]) {
       expect(all).not.toContain(never);
     }
