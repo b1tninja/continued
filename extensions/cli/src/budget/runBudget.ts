@@ -1,5 +1,11 @@
 import { costOf, type CostModel } from "core/util/costOf.js";
 
+import {
+  REFRESH_HINT,
+  priceSourceNote,
+  type PriceListStatus,
+} from "./openRouterPrices.js";
+
 /**
  * The run limits of a plain headless run (`cn -p`) or `cn serve`: dollars,
  * model requests and wall-clock time. Semantics are ours, defined here and in
@@ -66,14 +72,31 @@ function hasPrice(model: CostModel): boolean {
   );
 }
 
-/** Why a dollar budget cannot be held on this model, or undefined when it can. */
+/**
+ * Why a dollar budget cannot be held on this model, or undefined when it can.
+ * `prices` is the state of the downloaded OpenRouter list, which prices
+ * OpenRouter models the tables do not know.
+ */
 export function unpricedBudgetProblem(
   limits: RunLimits,
   model: CostModel,
   allowUnpriced: boolean | undefined,
+  prices?: PriceListStatus,
 ): string | undefined {
   if (!positive(limits.maxBudgetUsd) || allowUnpriced) return undefined;
   if (hasPrice(model)) return undefined;
+  if (model.provider.toLowerCase() === "openrouter") {
+    const id = `${model.provider}/${model.model}`;
+    const escape =
+      "or pass --budget-allow-unpriced to run without the dollar cap";
+    if (!prices || prices.state === "none") {
+      return `--max-budget-usd cannot be held on ${id}: there is no downloaded OpenRouter price list on this computer. To download the public list, ${REFRESH_HINT} (it contacts openrouter.ai once), ${escape}.`;
+    }
+    if (prices.state === "tooOld") {
+      return `--max-budget-usd cannot be held on ${id}: the downloaded OpenRouter price list is ${prices.ageDays} days old (downloaded ${prices.fetchedAt.slice(0, 10)}), and a dollar cap is not held on prices older than 90 days. ${REFRESH_HINT}, ${escape}.`;
+    }
+    return `--max-budget-usd cannot be held on ${id}: the downloaded OpenRouter list (${prices.fetchedAt.slice(0, 10)}) has no price for this model id. Pick a priced model, or ${REFRESH_HINT} in case it was added since, ${escape}.`;
+  }
   return `--max-budget-usd cannot be held on ${model.provider}/${model.model}: the cost table has no price for it, so spend would read as unknown. Pick a priced model, or pass --budget-allow-unpriced to run without the dollar cap.`;
 }
 
@@ -104,6 +127,11 @@ export class RunBudget {
 
   get requests(): number {
     return this.calls;
+  }
+
+  /** "prices from openrouter.ai as of <date>" when the model is priced from the downloaded list. */
+  get priceNote(): string | undefined {
+    return this.priced ? priceSourceNote(this.opts.model) : undefined;
   }
 
   /** Whether the dollar cap is actually being enforced for this run. */

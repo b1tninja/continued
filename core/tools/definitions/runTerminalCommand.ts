@@ -1,4 +1,5 @@
 import os from "os";
+import { resolveShell } from "../../util/shell";
 import { TERMINAL_ENV_NOTICE } from "../../util/terminalEnvironment";
 import { Tool } from "../..";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "../builtIn";
@@ -8,20 +9,20 @@ import {
 } from "@continuedev/terminal-security";
 
 /**
- * Get the preferred shell for the current platform
- * @returns The preferred shell command or path
+ * The host's shell, as the executor starts it (resolveShell), so the sentence
+ * and the program that runs the command cannot disagree: they did on macOS
+ * with no `$SHELL`, where this said /bin/zsh and the command ran in /bin/bash.
+ * A WSL or container preference is left out on purpose: the text stays what it
+ * was for them.
  */
-function getPreferredShell(): string {
-  const platform = os.platform();
-
-  if (platform === "win32") {
-    return "powershell.exe";
-  } else if (platform === "darwin") {
-    return process.env.SHELL || "/bin/zsh";
-  } else {
-    // Linux and other Unix-like systems
-    return process.env.SHELL || "/bin/bash";
-  }
+export function getPreferredShell(
+  opts: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv } = {},
+): string {
+  return resolveShell({
+    platform: opts.platform ?? os.platform(),
+    env: opts.env ?? process.env,
+    terminalShell: "default",
+  }).executable;
 }
 
 const PLATFORM_INFO = `Choose terminal commands and scripts optimized for ${os.platform()} and ${os.arch()} and shell ${getPreferredShell()}.`;

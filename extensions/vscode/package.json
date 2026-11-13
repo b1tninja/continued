@@ -2,7 +2,7 @@
   "name": "continuous",
   "icon": "media/icon.png",
   "author": "b1tninja",
-  "version": "2.14.0",
+  "version": "2.16.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/b1tninja/continuous"
@@ -350,13 +350,25 @@
       },
       {
         "command": "continuous.forceAutocomplete",
-        "title": "Continuous: Force Autocomplete",
+        "title": "Force Autocomplete",
         "category": "Continuous"
       },
       {
         "command": "continuous.selectFilesAsContext",
         "category": "Continuous",
         "title": "Select Files as Context",
+        "group": "Continuous"
+      },
+      {
+        "command": "continuous.addToChat",
+        "category": "Continuous",
+        "title": "Add to Continuous Chat",
+        "group": "Continuous"
+      },
+      {
+        "command": "continuous.addOpenTabsToChat",
+        "category": "Continuous",
+        "title": "Add All Open Tabs to Continuous Chat",
         "group": "Continuous"
       },
       {
@@ -481,17 +493,17 @@
       {
         "command": "continuous.forceNextEdit",
         "category": "Continuous",
-        "title": "Continuous: Force Next Edit"
+        "title": "Force Next Edit"
       },
       {
         "command": "continuous.acceptJump",
         "category": "Continuous",
-        "title": "Continuous: Accept Jump Suggestion"
+        "title": "Accept Jump Suggestion"
       },
       {
         "command": "continuous.rejectJump",
         "category": "Continuous",
-        "title": "Continuous: Reject Jump Suggestion"
+        "title": "Reject Jump Suggestion"
       },
       {
         "command": "continuous.openInNewWindow",
@@ -643,12 +655,35 @@
         },
         {
           "command": "continuous.openInNewWindow"
+        },
+        {
+          "command": "continuous.selectFilesAsContext",
+          "when": "false"
+        },
+        {
+          "command": "continuous.addToChat",
+          "when": "editorIsOpen && resourceScheme =~ /^(file|vscode-remote|vscode-vfs)$/"
+        },
+        {
+          "command": "continuous.addOpenTabsToChat",
+          "when": "editorIsOpen"
         }
       ],
       "editor/context": [
         {
           "submenu": "continuous.continueSubMenu",
           "group": "0_acontinue"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "continuous.addToChat",
+          "group": "continuous@1",
+          "when": "resourceScheme =~ /^(file|vscode-remote|vscode-vfs)$/"
+        },
+        {
+          "command": "continuous.addOpenTabsToChat",
+          "group": "continuous@2"
         }
       ],
       "editor/title/run": [
@@ -667,12 +702,18 @@
           "command": "continuous.focusEdit",
           "group": "Continuous",
           "when": "!editorReadonly"
+        },
+        {
+          "command": "continuous.addToChat",
+          "group": "Continuous",
+          "when": "!editorHasSelection && resourceScheme =~ /^(file|vscode-remote|vscode-vfs)$/"
         }
       ],
       "explorer/context": [
         {
-          "command": "continuous.selectFilesAsContext",
-          "group": "1_debug@1"
+          "command": "continuous.addToChat",
+          "group": "1_debug@1",
+          "when": "resourceScheme =~ /^(file|vscode-remote|vscode-vfs)$/"
         }
       ],
       "view/title": [

@@ -33,6 +33,7 @@
                   "ide-extensions/agent/quick-start",
                   "ide-extensions/agent/how-it-works",
                   "ide-extensions/agent/plan-mode",
+                  "ide-extensions/agent/loop-mode",
                   "ide-extensions/agent/task-list",
                   "ide-extensions/agent/plan-files",
                   "ide-extensions/agent/loop-budgets",
@@ -50,6 +51,7 @@
                   "ide-extensions/agent/terminal-environment",
                   "ide-extensions/agent/permissions-page",
                   "ide-extensions/agent/model-setup",
+                  "ide-extensions/agent/accessibility",
                   "ide-extensions/agent/how-to-customize",
                   "ide-extensions/agent/context-selection"
                 ]
@@ -85,6 +87,17 @@
                   "ide-extensions/edit/context-selection"
                 ]
               }
+            ]
+          },
+          {
+            "group": "Terminal agent",
+            "expanded": false,
+            "icon": "terminal",
+            "pages": [
+              "cli/install",
+              "cli/first-session",
+              "cli/reference",
+              "cli/slash-commands"
             ]
           },
           {
@@ -185,6 +198,11 @@
             "icon": "code",
             "pages": [
               "reference",
+              "reference/permissions-yaml",
+              "reference/settings-json",
+              "reference/environment-variables",
+              "reference/vscode",
+              "reference/storage-and-reset",
               "reference/yaml-migration",
               "reference/json-reference",
               "reference/surface-facts",
@@ -205,11 +223,16 @@
               "guides/ollama-guide",
               "guides/cn-serve",
               "cli/run-limits",
+              "cli/headless-output",
+              "cli/exit-codes",
+              "cli/export",
+              "cli/notifications",
               "guides/acp",
               "guides/instinct",
               "guides/running-continue-without-internet",
               "guides/custom-code-rag",
-              "guides/how-to-self-host-a-model"
+              "guides/how-to-self-host-a-model",
+              "cli/recovery"
             ]
           },
           {

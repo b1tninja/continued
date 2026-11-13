@@ -8,6 +8,12 @@ import {
 import { commandLintGate } from "core/tools/permissions/commandLint.js";
 import { missingBinaryGate } from "core/tools/permissions/missingBinaryGate.js";
 import { getCommandExecutor } from "core/util/commandExecutor.js";
+import { decodeCommandOutput } from "core/util/commandOutput.js";
+import {
+  COMMAND_STDIO,
+  commandEnvironment,
+  realExitInvocation,
+} from "core/util/commandSpawn.js";
 import { getTerminalShellPreference } from "core/util/shell.js";
 import {
   TERMINAL_ENV_NOTICE,
@@ -113,9 +119,10 @@ function commandBlocked(command: string): string | undefined {
   );
 }
 
-// Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL
+// Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL;
+// PowerShell is asked for the exit code the command's own program chose
 function getShellCommand(command: string): { shell: string; args: string[] } {
-  return getCommandExecutor().invocation(command);
+  return realExitInvocation(getCommandExecutor(), command);
 }
 
 export function runCommandInBackground(command: string): {
@@ -229,7 +236,9 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
       // Use same shell logic as core implementation
       const { shell, args } = getShellCommand(command);
       const child = spawn(shell, args, {
-        env: terminalEnvironment(shellChildEnv()),
+        env: commandEnvironment(terminalEnvironment(shellChildEnv())),
+        // No open standard input: a prompt must fail, not wait for the timeout
+        stdio: COMMAND_STDIO,
       });
       let stdout = "";
       let stderr = "";
@@ -344,13 +353,14 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
       resetTimeout();
 
       const onStdout = (data: Buffer) => {
-        stdout += data.toString();
+        // On Windows, PowerShell's code page when the bytes are not UTF-8
+        stdout += decodeCommandOutput(data);
         resetTimeout();
         showCurrentOutput();
       };
 
       const onStderr = (data: Buffer) => {
-        stderr += data.toString();
+        stderr += decodeCommandOutput(data);
         resetTimeout();
         showCurrentOutput();
       };

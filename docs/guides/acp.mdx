@@ -27,7 +27,8 @@ The editor sends the project folder as the session's working directory, and the 
 
 - One session per process. A second `session/new` is refused; start another process for another conversation.
 - Text prompts, and file references (`resource_link`), which reach the model as `@<uri>`.
-- The model's reply as streamed text, and each tool call with its kind (read, edit, delete, search, execute, fetch or other), a title, the file path when the arguments name one, and its result, trimmed to 50,000 characters.
+- The model's reply as streamed text, and each tool call with its kind (read, edit, delete, search, execute, fetch or other), a title, the file path when the arguments name one, and its result, masked and then trimmed to 50,000 characters. A result or an error passes through the display masker and the secret scanner before it is sent, as the call's arguments do, so a key a command printed is shown as a placeholder in the editor; the model still gets the real text. The masking is by pattern, so a secret in a shape no rule lists is not caught.
+- Several calls of one tool in a turn. Each result is reported under the `toolCallId` of the call it belongs to, whichever finishes first.
 - Cancel. A cancelled prompt ends with the stop reason `cancelled`, and permission requests waiting at that moment are refused.
 
 ## What is not supported
