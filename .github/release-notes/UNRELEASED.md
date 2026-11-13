@@ -30,5 +30,15 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 ## Behaviour changes
 
+- The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
 - **The terminal agent's `Fetch` tool now uses the same hardened fetch as the IDE.** It used to hand Node's global `fetch` to the shared implementation, which ignores the pinned address the safety check resolved (so a name that changed its answer between the check and the connection could reach a private address), your proxy, CA bundle, `verifySsl` and client certificate. It now goes through `@continuedev/fetch` with the pin and your `requestOptions` transport settings. Your `requestOptions.headers` are sent only to your configured models' hosts, never to a URL the model chose. If you relied on `Fetch` working without your proxy or CA settings, it will now use them.
 - **A fetched page is labelled with the URL it was read from, not the one the model asked for.** After a redirect the item's name source, `uri` and the spotlight source name the final URL, so a page that redirected to another host says so. Redirects are still followed one hop at a time and still refused when they lead from a public address to a private one. Not changed: a redirect to a different public host does not ask for approval.
+
+## File edits at IDGAF now reach outside the workspace
+
+At File edits = IDGAF (the top level, also reached by `--auto`), the agent can create, edit and write files outside the workspace folder, in the editor, the terminal UI, headless `-p` and `serve`, with no prompt and no refusal. Before, a headless run refused such a write whatever the level, and the editor's exact edit tools treated an absolute path elsewhere as a file that does not exist.
+
+- Each such write is listed in the audit trail as allowed by the level, with the resolved absolute path, and the tool result says `Wrote outside the workspace: <path>`.
+- Lower levels are unchanged: Manual, Cautious and Automatic ask, Permissive holds it by the outside-paths protection.
+- Still binding at IDGAF: the locked policy files, a tool switched off, an organisation ceiling and the `floor:` rules you wrote. Secret-file name checks inside the file tools, and the webview's own write guard (used for plan files), are not changed.
+- Separate fix: an absolute path inside the workspace given to the new-file tool is now written where it says, not under a folder named after the drive.
