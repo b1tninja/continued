@@ -12,6 +12,7 @@ import { TextResourceContents } from "@modelcontextprotocol/sdk/types.js";
 import Parser from "web-tree-sitter";
 import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
 import { LLMConfigurationStatuses } from "./llm/constants";
+import type { EnvironmentNotice } from "./util/environmentMessages";
 import type { EnvironmentSnapshot } from "./util/environmentPrompt";
 import type {
   SubagentRunStatus,
@@ -403,6 +404,17 @@ export interface Session {
 export interface SessionEnvironment {
   snapshot: EnvironmentSnapshot;
   detail: "minimal" | "standard" | "full";
+  /**
+   * The three texts as first sent (the editor keeps them, so a later
+   * renderer cannot change a saved session's bytes).
+   */
+  strings?: {
+    systemLine: string;
+    toolSentence: string;
+    firstMessageBlock: string;
+  };
+  /** Date notices already sent, each on the user message it was added to. */
+  notices?: EnvironmentNotice[];
 }
 
 /** Where one plan item is in Loop mode. The task list shows it too. */

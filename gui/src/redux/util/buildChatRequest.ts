@@ -11,6 +11,11 @@ import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { SystemMessageToolCodeblocksFramework } from "core/tools/systemMessageTools/toolCodeblocks";
 import { BuiltInToolNames } from "core/tools/builtIn";
+import { withTerminalToolSentence } from "core/tools/definitions/terminalToolText";
+import {
+  placeEnvironment,
+  withLeadingText,
+} from "core/util/environmentMessages";
 import { loopRunPlanBlock, withLoopPlanBlock } from "core/util/loopMode";
 import { taskPlanTailMessage } from "core/util/taskPlan";
 import {
@@ -103,8 +108,19 @@ export function buildChatRequest(
     throw new Error("No chat model selected");
   }
 
-  // Get tools and apply model-level overrides (disabled, description, etc.)
+  // The session's environment texts, rendered once by core and frozen with
+  // the session (core/util/environmentSession.ts); absent until core answers.
+  const environment = state.session.environment?.strings;
+
+  // Get tools and apply model-level overrides (disabled, description, etc.).
+  // The terminal tool names the shell the session's executor runs.
   let activeTools = selectActiveTools(state);
+  if (environment?.toolSentence) {
+    activeTools = withTerminalToolSentence(
+      activeTools,
+      environment.toolSentence,
+    );
+  }
   if (model.toolOverrides?.length) {
     const { tools: overriddenTools, errors } = applyToolOverrides(
       activeTools,
@@ -164,12 +180,17 @@ export function buildChatRequest(
   // Construct messages (excluding system message). The use's prompt choice
   // (`modeModels.<use>.prompt`) picks the turn text: a Loop item may run on
   // the short text while Agent mode keeps the full one.
-  const baseSystemMessage = getBaseSystemMessage(
+  // The system line (the platform and where the session facts are) goes
+  // last, the same bytes in chat, agent and plan, and in every folder.
+  const modeSystemMessage = getBaseSystemMessage(
     state.session.mode,
     model,
     activeTools,
     use ? promptChoiceFor(state.config.config.modeModels, use) : undefined,
   );
+  const baseSystemMessage = environment?.systemLine
+    ? `${modeSystemMessage}\n\n${environment.systemLine}`
+    : modeSystemMessage;
 
   const systemMessage = systemToolsFramework
     ? addSystemMessageToolsToSystemMessage(
@@ -229,13 +250,30 @@ export function buildChatRequest(
   const tail = use
     ? tailFor(state.config.config.modeModels, use, model.model)
     : undefined;
+  // The first-message block goes before the first user message's text, the
+  // frozen bytes of the session's start, so every request extends the last.
+  const withEnvironment = environment?.firstMessageBlock
+    ? placeEnvironment(
+        withoutMessageIds,
+        (item) => item.message.role === "user",
+        (item, add) => ({
+          ...item,
+          message: {
+            ...item.message,
+            content: withLeadingText(item.message.content, add.first ?? ""),
+          } as typeof item.message,
+        }),
+        environment.firstMessageBlock,
+      )
+    : withoutMessageIds;
+
   const withTail = tail
-    ? withoutMessageIds.map((item) =>
+    ? withEnvironment.map((item) =>
         item.message.role === "user"
           ? { ...item, message: withTurnTail([item.message], tail)[0] }
           : item,
       )
-    : withoutMessageIds;
+    : withEnvironment;
 
   const {
     messages,

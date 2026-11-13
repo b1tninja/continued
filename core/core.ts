@@ -15,6 +15,7 @@ import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveToolDialect } from "./config/yaml/saveToolDialect";
 import { getOllamaShowHint } from "./util/ollamaShowHint";
+import { editorSessionEnvironment } from "./util/environmentSession";
 import { probeStatusFor } from "./util/measuredFacts";
 import {
   openAICompatBase,
@@ -983,6 +984,13 @@ export class Core {
     on("history/save", (msg) => {
       historyManager.save(msg.data);
     });
+
+    on("environment/session", async (msg) =>
+      editorSessionEnvironment({
+        saved: msg.data?.saved,
+        workspaceDirs: () => this.ide.getWorkspaceDirs(),
+      }),
+    );
 
     on("history/share", async (msg) => {
       const session = historyManager.load(msg.data.id);

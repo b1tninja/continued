@@ -20,6 +20,7 @@ import os from "node:os";
 import type { Detail } from "./environmentContract";
 import type { EnvironmentSnapshot } from "./environmentPrompt";
 import {
+  configuredTerminalShellPreference,
   getTerminalShellPreference,
   resolveShell,
   type ShellEnvironment,
@@ -213,7 +214,15 @@ export function localFolderOf(root: string): string | undefined {
 }
 
 /** The shell half of the snapshot: synchronous, from settings and the process alone. */
-export function gatherShellFacts(input: GatherInput = {}): ShellFacts {
+export function gatherShellFacts(given: GatherInput = {}): ShellFacts {
+  // A new snapshot reads the setting, not a shell an earlier session froze
+  const input: GatherInput = {
+    ...given,
+    terminalShell:
+      given.terminalShell ??
+      configuredTerminalShellPreference(given.env) ??
+      "default",
+  };
   const platform = input.platform ?? process.platform;
   const preference = preferenceOf(input);
   const resolved = guarded(() => resolveShell(input), undefined);

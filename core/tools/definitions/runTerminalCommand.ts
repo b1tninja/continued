@@ -1,37 +1,36 @@
-import os from "os";
-import { TERMINAL_ENV_NOTICE } from "../../util/terminalEnvironment";
+import { renderEnvironment } from "../../util/environmentPrompt";
+import { baseSnapshot } from "../../util/environmentSnapshot";
 import { Tool } from "../..";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "../builtIn";
+import {
+  terminalToolDescription,
+  terminalToolSystemPrefix,
+} from "./terminalToolText";
 import {
   evaluateTerminalCommandSecurity,
   ToolPolicy,
 } from "@continuedev/terminal-security";
 
 /**
- * Get the preferred shell for the current platform
- * @returns The preferred shell command or path
+ * The shell sentence of the core process's own machine, for a request built
+ * before the editor's session has its snapshot. A session's request replaces
+ * it with the session's `toolSentence` (`withTerminalToolSentence`), the
+ * renderer's text that the CLI's Bash tool uses too. It names no folder.
  */
-function getPreferredShell(): string {
-  const platform = os.platform();
-
-  if (platform === "win32") {
-    return "powershell.exe";
-  } else if (platform === "darwin") {
-    return process.env.SHELL || "/bin/zsh";
-  } else {
-    // Linux and other Unix-like systems
-    return process.env.SHELL || "/bin/bash";
+function processShellSentence(): string {
+  try {
+    return renderEnvironment(baseSnapshot(), {
+      surface: "ide-agent",
+      detail: "standard",
+    }).toolSentence;
+  } catch {
+    return "";
   }
 }
 
-const PLATFORM_INFO = `Choose terminal commands and scripts optimized for ${os.platform()} and ${os.arch()} and shell ${getPreferredShell()}.`;
+const PROCESS_SENTENCE = processShellSentence();
 
-const RUN_COMMAND_NOTES = `The shell is not stateful and will not remember any previous commands.\
-      When a command is run in the background ALWAYS suggest using shell commands to stop it; NEVER suggest using Ctrl+C.\
-      When suggesting subsequent shell commands ALWAYS format them in shell command blocks.\
-      Do NOT perform actions requiring special/admin privileges.\
-      IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed, awk, etc). A command that writes a file (redirection, Set-Content, node -e or python -c calling a write) counts as a file edit: use the edit tools for it, and if an edit was refused, the command is refused too.\
-      ${TERMINAL_ENV_NOTICE}      ${PLATFORM_INFO}`;
+export { withTerminalToolSentence } from "./terminalToolText";
 
 export const runTerminalCommandTool: Tool = {
   type: "function",
@@ -43,7 +42,7 @@ export const runTerminalCommandTool: Tool = {
   group: BUILT_IN_GROUP_NAME,
   function: {
     name: BuiltInToolNames.RunTerminalCommand,
-    description: `Run a terminal command in the current directory.\n${RUN_COMMAND_NOTES}`,
+    description: terminalToolDescription(PROCESS_SENTENCE),
     parameters: {
       type: "object",
       required: ["command"],
@@ -72,10 +71,7 @@ export const runTerminalCommandTool: Tool = {
     );
   },
   systemMessageDescription: {
-    prefix: `To run a terminal command, use the ${BuiltInToolNames.RunTerminalCommand} tool
-${RUN_COMMAND_NOTES}
-You can also optionally include the waitForCompletion argument set to false to run the command in the background.      
-For example, to see the git log, you could respond with:`,
+    prefix: terminalToolSystemPrefix(PROCESS_SENTENCE),
     exampleArgs: [["command", "git log"]],
   },
 };
