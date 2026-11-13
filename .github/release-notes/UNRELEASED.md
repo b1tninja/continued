@@ -31,6 +31,7 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 ## Behaviour changes
 
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
+- Prompt cache, once: the first request after upgrading writes the prompt cache once because the prompt prefix changed. The changes are all in text sent to the model: the `multi_edit` / `MultiEdit` tool description is shorter (the same rules in about a quarter of the words), the terminal agent's git status in the environment block is capped at 40 files and 4,000 characters (the rest is counted in a "... and N more changed files" line, files listed by path), and, with tool search on, the `search_tools` description now lists every deferrable tool and no longer changes after a search. Tool search is still off by default. In the terminal agent the tools a search activated are now read from the conversation, so a resumed session keeps the tools its history already called and a new session in the same process starts with none.
 
 ## File edits at IDGAF now reach outside the workspace
 
