@@ -18,6 +18,7 @@ import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
 import { projectCommand } from "./commands/project.js";
 import { registerLocalCommands } from "./commands/registerLocalCommands.js";
+import { registerRecoveryCommands } from "./commands/registerRecoveryCommands.js";
 import { review } from "./commands/review.js";
 import { registerReviewerCommand } from "./commands/reviewEval.js";
 import { sandboxCommand } from "./commands/sandbox.js";
@@ -376,10 +377,15 @@ program
 program
   .command("doctor [topic] [urls...]")
   .description(
-    "Diagnose proxy and certificate problems (doctor network [url...])",
+    "Read-only diagnostics: doctor config (settings files and each control's value and source), doctor network [url...] (proxy and certificates)",
   )
-  .action(async (topic: string | undefined, urls: string[]) => {
-    await gracefulExit(await doctorCommand(topic, urls));
+  .option("--json", "config: machine-readable output")
+  .action(async (topic: string | undefined, urls: string[], options) => {
+    const code = await doctorCommand(topic, urls, {
+      json: options.json,
+      flags: program.opts(),
+    });
+    await gracefulExit(code);
   });
 
 // Reviewer evaluation: dry by default, --run sends the requests
@@ -432,6 +438,9 @@ program
 
 // Local-file subcommands: secrets, clean, plan
 registerLocalCommands(program);
+
+// Recovery subcommands: config check
+registerRecoveryCommands(program);
 
 // Sandbox status subcommand
 program
