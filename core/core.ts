@@ -2500,13 +2500,13 @@ export class Core {
   private async handleCompleteOnboarding(
     msg: Message<CompleteOnboardingPayload>,
   ) {
-    const { mode } = msg.data;
+    const { mode, local } = msg.data;
 
     let editConfigYamlCallback: (config: ConfigYaml) => ConfigYaml;
 
     switch (mode) {
       case OnboardingModes.LOCAL:
-        editConfigYamlCallback = setupLocalConfig;
+        editConfigYamlCallback = (config) => setupLocalConfig(config, local);
         break;
 
       default:
