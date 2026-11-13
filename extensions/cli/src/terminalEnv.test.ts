@@ -1,6 +1,9 @@
 import { EventEmitter } from "events";
 
-import { setTerminalEnvironmentSettings } from "core/util/terminalEnvironment.js";
+import {
+  setTerminalEnvironmentSettings,
+  withPagerDefaults,
+} from "core/util/terminalEnvironment.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const spawn = vi.hoisted(() => vi.fn());
@@ -54,10 +57,14 @@ describe("terminal tool environment", () => {
     expect((await runAndGetEnv()).GITHUB_TOKEN).toBe("ghp");
   });
 
-  it("inherit gives the same environment as before the change", async () => {
+  it("inherit gives the same environment as before the change, plus the pager defaults", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant");
     setTerminalEnvironmentSettings({ environment: "inherit" });
-    expect(await runAndGetEnv()).toEqual(shellChildEnv());
+    // PAGER, GIT_PAGER, MANPAGER and LESS are filled in only where the host
+    // does not set them; everything else is the host's environment as is
+    expect(await runAndGetEnv()).toEqual(
+      withPagerDefaults(shellChildEnv() as Record<string, string>),
+    );
   });
 
   it("the tool description carries the static notice", () => {

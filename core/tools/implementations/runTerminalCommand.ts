@@ -1,6 +1,11 @@
-import iconv from "iconv-lite";
 import childProcess from "node:child_process";
 import os from "node:os";
+import {
+  COMMAND_STDIO,
+  commandEnvironment,
+  realExitInvocation,
+} from "../../util/commandSpawn";
+import { decodeCommandOutput } from "../../util/commandOutput";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 
 // Default timeout for terminal commands (2 minutes)
@@ -47,25 +52,14 @@ function releaseStreams(child: childProcess.ChildProcess): void {
   child.stderr?.destroy?.();
 }
 
-// Automatically decode the buffer according to the platform to avoid garbled Chinese
+// UTF-8, or on Windows the machine's OEM code page when the bytes are not UTF-8
 function getDecodedOutput(data: Buffer): string {
-  if (process.platform === "win32") {
-    try {
-      let out = iconv.decode(data, "utf-8");
-      if (/�/.test(out)) {
-        out = iconv.decode(data, "gbk");
-      }
-      return out;
-    } catch {
-      return iconv.decode(data, "gbk");
-    }
-  } else {
-    return data.toString();
-  }
+  return decodeCommandOutput(data);
 } // Simple helper function to use login shell on Unix/macOS and PowerShell on Windows
 function getShellCommand(command: string): { shell: string; args: string[] } {
-  // Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL
-  return getCommandExecutor().invocation(command);
+  // Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL;
+  // PowerShell is asked for the exit code the command's own program chose
+  return realExitInvocation(getCommandExecutor(), command);
 }
 
 import { fileURLToPath } from "node:url";
@@ -125,12 +119,20 @@ function resolveWorkingDirectory(workspaceDirs: string[]): string {
 
 // Add color-supporting environment variables
 const getColorEnv = () => ({
-  ...terminalEnvironment(),
+  // Pagers that print and end: a command has no terminal to page in
+  ...commandEnvironment(terminalEnvironment()),
   FORCE_COLOR: "1",
   COLORTERM: "truecolor",
   TERM: "xterm-256color",
   CLICOLOR: "1",
   CLICOLOR_FORCE: "1",
+});
+
+/** A foreground command: colours on, and no open standard input, so a prompt fails instead of waiting. */
+const spawnOptions = (cwd: string): childProcess.SpawnOptions => ({
+  cwd,
+  env: getColorEnv(),
+  stdio: COMMAND_STDIO,
 });
 
 // Only spawn processes locally when there is no remote workspace.
@@ -217,10 +219,7 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
 
           // Use spawn with color environment
           const { shell, args } = getShellCommand(command);
-          const childProc = childProcess.spawn(shell, args, {
-            cwd,
-            env: getColorEnv(), // Add enhanced environment for colors
-          });
+          const childProc = childProcess.spawn(shell, args, spawnOptions(cwd));
 
           // Track this process for foreground cancellation
           if (toolCallId && waitForCompletion) {
@@ -493,10 +492,7 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
               const childProc = childProcess.spawn(
                 nonStreamingShell,
                 nonStreamingArgs,
-                {
-                  cwd,
-                  env: getColorEnv(),
-                },
+                spawnOptions(cwd),
               );
 
               // Track this process for foreground cancellation
