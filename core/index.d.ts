@@ -2034,6 +2034,13 @@ export interface ToolExtras {
    * folders; the exact edit tools run only with this set.
    */
   workspaceDirs?: string[];
+  /**
+   * Set when File edits is IDGAF, which says nothing asks: the file
+   * tools may then name a path outside the workspace folders. The permission
+   * layer has already decided the call; this only lets the tool resolve the
+   * path instead of treating it as not a target.
+   */
+  allowOutsideWorkspace?: boolean;
 }
 
 export interface McpToolMeta {
@@ -2073,6 +2080,8 @@ export interface Tool {
     args: Record<string, unknown>,
     extras: {
       ide: IDE;
+      /** As for ToolExtras: File edits is IDGAF */
+      allowOutsideWorkspace?: boolean;
     },
   ) => Promise<Record<string, unknown>>;
   evaluateToolCallPolicy?: (
@@ -3004,8 +3013,28 @@ export interface Skill {
   license?: string;
 }
 
+/**
+ * A local model the person chose on the onboarding Local tab instead of the
+ * suggested default. Everything but `chatModel` is optional.
+ */
+export interface LocalOnboardingChoice {
+  /** A provider id of the config schema: ollama, lmstudio, llama.cpp, vllm, openai. */
+  provider: string;
+  chatModel: string;
+  /** Shown in the model picker; the model name when absent. */
+  chatTitle?: string;
+  /** The server address; the provider's own default when absent. */
+  apiBase?: string;
+  /** Autocomplete (FIM) model. Ollama falls back to the suggested default. */
+  fimModel?: string;
+  /** Embeddings model. Ollama falls back to the suggested default. */
+  embeddingsModel?: string;
+}
+
 export interface CompleteOnboardingPayload {
   mode: OnboardingModes;
+  /** The Local tab's own choice; the suggested Ollama setup when absent. */
+  local?: LocalOnboardingChoice;
 }
 
 export interface CompiledMessagesResult {

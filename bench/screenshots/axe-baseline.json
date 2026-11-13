@@ -85,6 +85,18 @@
     "loop-plan-waiting": {
       "color-contrast": 1,
       "label-content-name-mismatch": 1
+    },
+    "onboarding-local": {
+      "button-name": 1,
+      "select-name": 1
+    },
+    "onboarding-local-chooser": {
+      "button-name": 1,
+      "select-name": 1
+    },
+    "onboarding-local-server": {
+      "button-name": 1,
+      "select-name": 1
     }
   }
 }
