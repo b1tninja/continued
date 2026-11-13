@@ -33,7 +33,6 @@ import { checkToolPermission } from "../permissions/permissionChecker.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import {
   effectiveLevels,
-  getPolicyLevels,
   policyIsDefault,
   approvalExtras,
 } from "../permissions/policyLevels.js";
@@ -192,9 +191,8 @@ async function promptForPermission(
 
 /**
  * The `toolPermissions` rules from config.yaml and the Auto reviewer (`--auto-review`),
- * run by core's engine. Any failure here leaves the CLI's own result in place
- * for rules, and for the reviewer it is an unusable reviewer (asks, or refuses
- * when headless), never an allow.
+ * run by core's engine. A failure here is never an allow: the call asks, and
+ * is refused when headless (see the catch in coreRulesVerdict).
  */
 /** The permission mode, or the normal one when the service is not up yet. */
 function currentPermissionMode(): "normal" | "plan" | "auto" {
@@ -266,25 +264,18 @@ async function coreRulesVerdict(
     });
   } catch (e) {
     logger.warn("Could not apply toolPermissions rules", { error: e });
-    // Fail toward asking, and toward refusing when nobody can be asked.
-    return autoReview ||
-      assistantHasRules() ||
-      !policyIsDefault(getPolicyLevels())
-      ? { decision: "ask", by: "system", reason: "Could not check your rules." }
-      : undefined;
+    // Fail closed, at the default levels too: the engine also holds the
+    // protected-path, floor and deny checks, so a call it could not look at
+    // is never left to a list default (which allows Bash and unlisted tools
+    // in a headless run). An ask goes to the person, is held by a loop, and
+    // is a refusal when nobody can be asked. The audit trail gets the verdict.
+    return { decision: "ask", by: "system", reason: ENGINE_ERROR_REASON };
   }
 }
 
-function assistantHasRules(): boolean {
-  try {
-    const state = serviceContainer.getSync<ModelServiceState>(
-      SERVICE_NAMES.MODEL,
-    );
-    return !!state?.value?.assistant?.toolPermissions;
-  } catch {
-    return false;
-  }
-}
+/** What the person, the model and the audit trail are told when the rule check itself failed. */
+export const ENGINE_ERROR_REASON =
+  "The permission rules could not be checked (internal error), so this call was not allowed automatically.";
 
 // Helper function to check if tool permission is needed. The decision and who
 // made it go to the audit trail; the outcome is written where the call ends.
