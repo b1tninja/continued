@@ -22,10 +22,9 @@ import {
 } from "core/tools/permissions/policy";
 import { useEffect, useId, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
-import { selectIdgafAreas } from "../../redux/selectors/selectAutoApproval";
 import { applyPolicyPreset } from "../../redux/thunks/policySettings";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
-import { CHIP, LEVEL_TONES, idgafSentence } from "./levelStyle";
+import { CHIP, LEVEL_TONES, IDGAF_SENTENCE } from "./levelStyle";
 
 type Glyph = typeof BoltIcon;
 
@@ -116,10 +115,9 @@ export function PresetSelect({
   const summary = summarizeLevels(levels);
   // At the top level the chip is the warning: one line, the sentence on hover and by
   // aria-describedby (there is no separate banner)
-  const idgafAreas = useAppSelector(selectIdgafAreas);
   const idgafDescriptionId = useId();
   const warn = placement === "toolbar" && preset === "idgaf";
-  const sentence = idgafSentence(idgafAreas);
+  const sentence = IDGAF_SENTENCE;
   // The Listbox button manages its own aria-describedby, so set ours directly
   const button = useRef<HTMLButtonElement>(null);
   useEffect(() => {
