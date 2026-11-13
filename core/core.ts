@@ -39,7 +39,7 @@ import { listEffectiveRules } from "./tools/permissions/effectiveRules";
 import { testToolCall } from "./tools/permissions/testToolCall";
 import { readUserLargeChangeLines } from "./tools/permissions/userLimits";
 import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
-import { resolveShell } from "./util/shell";
+import { executionShell } from "./util/shell";
 import { modelToolFetch } from "./util/modelToolFetch";
 import { BuiltInToolNames } from "./tools/builtIn";
 import {
@@ -770,7 +770,7 @@ export class Core {
           reviewerPrompt: readUserReviewerPrompt(),
           trustedDomains: readUserTrustedDomains(),
           envNames: readUserEnvNames(),
-          shell: resolveShell().kind,
+          shell: executionShell((await this.ide.getIdeInfo()).remoteName).kind,
           reviewerReasoning: reasoningOptionsForEffort(
             config.modeModels?.reviewer?.reasoningEffort,
           ),
@@ -2071,6 +2071,9 @@ export class Core {
         const tool = config.tools.find((t) => t.function.name === toolName);
         // The folder lets git be vouched as read-only after its config is checked
         const dirs = await this.ide.getWorkspaceDirs();
+        // The shell that will read a terminal command: the one started here,
+        // or unknown when it goes to a remote window's terminal
+        const shell = executionShell((await this.ide.getIdeInfo()).remoteName);
         const result = evaluateToolPolicyWithRules({
           tool,
           toolName,
@@ -2092,8 +2095,7 @@ export class Core {
           largeChangeLines: readUserLargeChangeLines(),
           ...(dirs[0] ? { cwd: uriToPath(dirs[0]) } : {}),
           ...deputyWorkspace(dirs),
-          // The shell terminal commands run in
-          shell: resolveShell().kind,
+          shell: shell.kind,
           // The tainted-session rule's fact; nothing when the rule is off
           ...taintInput(sessionId, callId),
         });
@@ -2102,7 +2104,15 @@ export class Core {
         setQuestionsLevel(approval?.levels?.questions);
         recordPolicyDecision(
           getAuditTrail(),
-          { session: sessionId, callId, toolName, parsedArgs, approval, agent },
+          {
+            session: sessionId,
+            callId,
+            toolName,
+            parsedArgs,
+            approval,
+            agent,
+            shell,
+          },
           basePolicy,
           result,
         );
