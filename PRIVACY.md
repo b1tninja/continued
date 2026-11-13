@@ -37,7 +37,6 @@ Your messages, the files and tool output the agent reads, and the conversation s
 - **MCP servers** you add, and their sign-in pages.
 - **Pages you name**: `@url`, the `fetch_url` tool and docs indexing fetch the sites you point them at, directly from your machine.
 - **Docs on GitHub**: a docs entry on github.com uses the GitHub API.
-- **Model lists in provider setup**: when the provider setup screen opens, it looks up model lists with public GET requests to `openrouter.ai` and `ollama.com`. This is tracked for a later release.
 - **Chromium**: one download, only if you accept the install prompt.
 
 The embeddings model is bundled; nothing is downloaded from Hugging Face at run time.
@@ -57,6 +56,8 @@ API keys are not kept in the repository. In VS Code they are stored encrypted in
 ## Older builds
 
 Builds 2.12.0 and 2.12.1 sent web search queries and, for sites with `useLocalCrawling: false`, docs URLs to a proxy run by the upstream Continue project, with the extension version, operating system, a machine id and a key embedded in the code. They also told the model to add a `Co-Authored-By: Continue` trailer to commits. Upgrade to a release that includes the egress fix and the attribution fix ([#626](https://github.com/b1tninja/continuous/pull/626)).
+
+Builds 2.14.0 and earlier looked up model lists on `openrouter.ai` and `ollama.com` (public GET requests, no key) as soon as the provider setup screen opened. From 2.16.0 that happens only when you choose Download, Pull now or Refresh.
 
 ## Reporting a privacy or security problem
 
