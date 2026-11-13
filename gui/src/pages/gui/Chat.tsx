@@ -81,6 +81,7 @@ import { cancelStream, interruptStream } from "../../redux/thunks/cancelStream";
 import { getLocalStorage, setLocalStorage } from "../../util/localStorage";
 import { EmptyChatBody } from "./EmptyChatBody";
 import { ExploreDialogWatcher } from "./ExploreDialogWatcher";
+import { TranscriptMessage } from "./TranscriptMessage";
 import { useAutoScroll } from "./useAutoScroll";
 
 // Helper function to find the index of the latest conversation summary
@@ -537,17 +538,18 @@ export function Chat() {
 
       <StepsDiv
         ref={stepsDivRef}
+        role="region"
+        aria-label="Conversation"
         className={`pt-[8px] ${showScrollbar ? "thin-scrollbar" : "no-scrollbar"} ${history.length > 0 ? "min-h-0 flex-1 overflow-y-scroll" : "shrink-0"}`}
       >
         {highlights}
         {history
           .filter((item) => item.message.role !== "system")
           .map((item, index: number) => (
-            <div
+            <TranscriptMessage
               key={item.message.id}
-              style={{
-                minHeight: index === history.length - 1 ? "200px" : 0,
-              }}
+              role={item.message.role}
+              minHeight={index === history.length - 1 ? "200px" : 0}
             >
               <ErrorBoundary
                 FallbackComponent={fallbackRender}
@@ -558,7 +560,7 @@ export function Chat() {
                 {renderChatHistoryItem(item, index)}
               </ErrorBoundary>
               {index === history.length - 1 && <InlineErrorMessage />}
-            </div>
+            </TranscriptMessage>
           ))}
         {/* Inside the scroll area, so it does not push the input down */}
         <ToolDialectNotice />
