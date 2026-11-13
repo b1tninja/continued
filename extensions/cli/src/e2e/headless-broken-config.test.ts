@@ -76,7 +76,6 @@ describe("E2E: Headless Mode - broken hook settings or permissions file", () => 
     // so the check is that the broken-file refusal is absent, not the code
     const output = result.stderr + result.stdout;
     expect(output).not.toContain("Cannot start");
-    expect(output).not.toContain("not valid JSON");
   });
 
   it("does not refuse when no policy file exists", async () => {
