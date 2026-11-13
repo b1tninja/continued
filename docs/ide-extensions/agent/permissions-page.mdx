@@ -192,3 +192,7 @@ continuous permissions adopt '<rule>' --from <file> [--yes-allow-everything] [--
 ## When the rule check itself fails
 
 If the rule check throws an error (a bug, or a settings read that fails mid-call), the call is never allowed on the strength of a default. The editor refuses it. The terminal agent asks you; a loop holds it as an approval question; `continuous -p`, `continuous serve` and a run with nobody to ask refuse it and tell the model why. The audit trail records the decision as the system's, with the reason "The permission rules could not be checked (internal error), so this call was not allowed automatically."
+
+## Agent files can only narrow
+
+An agent file passed with `continuous --agent <file or slug>` can take tools away but never widens your policy. A tool its `tools:` key leaves out is excluded in every mode. A tool it lists is decided by your own `--allow`, `--ask` and `--exclude` flags, `permissions.yaml`, the mode and the five levels, exactly as without the file: a file that lists `Bash` does not make `Bash` run without asking. The file's list no longer ends in an implicit "allow everything else". An agent file with no `tools:` key changes nothing.
