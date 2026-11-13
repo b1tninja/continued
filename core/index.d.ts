@@ -1187,6 +1187,12 @@ export interface Usage {
     latencyMs?: number;
     /** An ID that identifies this call in the provider's logs and billing. */
     requestId?: string;
+    /**
+     * The service tier that served the request, as the provider names it
+     * (Bedrock `serviceTier.type`: `default`, `priority`, `flex`,
+     * `reserved`). Prices in the tables are standard-tier prices.
+     */
+    serviceTier?: string;
   };
   promptTokensDetails?: {
     cachedTokens?: number;

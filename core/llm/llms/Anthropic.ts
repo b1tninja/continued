@@ -76,6 +76,12 @@ export function anthropicSamplingParams(
   return { temperature, top_p: topP };
 }
 
+/** `usage.service_tier` of a Messages response, when it is a string. */
+function serviceTierOf(usage: unknown): string | undefined {
+  const tier = (usage as { service_tier?: unknown } | undefined)?.service_tier;
+  return typeof tier === "string" && tier ? tier : undefined;
+}
+
 class Anthropic extends BaseLLM {
   static providerName = "anthropic";
   static defaultOptions: Partial<LLMOptions> = {
@@ -393,6 +399,7 @@ class Anthropic extends BaseLLM {
             usage: withResponseInfo(usage, {
               stopReason: json.stop_reason,
               requestId: response.headers?.get?.("request-id") ?? json.id,
+              serviceTier: serviceTierOf(json.usage),
             }),
           }
         : {}),
@@ -437,6 +444,8 @@ class Anthropic extends BaseLLM {
     let lastToolUseName: string | undefined;
     let stopReason: string | undefined;
     let messageId: string | undefined;
+    // `usage.service_tier` of message_start: standard, priority or batch
+    let serviceTier: string | undefined;
     let sawMessageStop = false;
     // Set while a content block has started (or streamed) and not stopped.
     let blockOpen = false;
@@ -458,6 +467,7 @@ class Anthropic extends BaseLLM {
           const startEvent = rawEvent as RawMessageStartEvent;
           messageId = startEvent.message.id;
           usage = this.anthropicUsage(startEvent.message.usage);
+          serviceTier = serviceTierOf(startEvent.message.usage);
           break;
         case "message_delta":
           // Update usage information during streaming
@@ -560,6 +570,7 @@ class Anthropic extends BaseLLM {
         // The header is what Anthropic support asks for; the message ID is
         // the fallback when a proxy strips it.
         requestId: response.headers?.get?.("request-id") ?? messageId,
+        serviceTier,
       }),
     };
   }
