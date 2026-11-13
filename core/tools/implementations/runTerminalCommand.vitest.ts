@@ -167,6 +167,26 @@ describe("runTerminalCommandImpl", () => {
     }
   });
 
+  // Before, a command that asks a question waited for the two-minute timeout
+  it("a command that prompts fails or reads nothing, and does not wait", async () => {
+    const windows = process.platform === "win32";
+    const command = windows ? "Read-Host 'name'" : "read x; echo got=$x";
+    for (const onPartialOutput of [undefined, vi.fn()]) {
+      const started = Date.now();
+      const result = await runTerminalCommandImpl(
+        { command, waitForCompletion: true },
+        createMockExtras({ onPartialOutput }),
+      );
+      expect(Date.now() - started).toBeLessThan(20_000);
+      if (windows) {
+        expect(result[0].content).toMatch(/NonInteractive/);
+        expect(result[0].status).toMatch(/Command failed/);
+      } else if (onPartialOutput) {
+        expect(result[0].content).toContain("got=");
+      }
+    }
+  }, 60_000);
+
   it("should stream output when onPartialOutput is provided", async () => {
     // This test uses Node to create a command that outputs data incrementally
     const command = `node -e "

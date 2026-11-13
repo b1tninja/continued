@@ -50,6 +50,7 @@ describe("resolveShell", () => {
     expect(shell.executable).toBe("powershell.exe");
     expect(shell.args("ls")).toEqual([
       "-NoLogo",
+      "-NonInteractive",
       "-ExecutionPolicy",
       "Bypass",
       "-Command",

@@ -1,6 +1,7 @@
 import iconv from "iconv-lite";
 import childProcess from "node:child_process";
 import os from "node:os";
+import { COMMAND_STDIO } from "../../util/commandSpawn";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 
 // Default timeout for terminal commands (2 minutes)
@@ -220,6 +221,8 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
           const childProc = childProcess.spawn(shell, args, {
             cwd,
             env: getColorEnv(), // Add enhanced environment for colors
+            // No open standard input: a prompt must fail, not wait
+            stdio: COMMAND_STDIO,
           });
 
           // Track this process for foreground cancellation
@@ -496,6 +499,7 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
                 {
                   cwd,
                   env: getColorEnv(),
+                  stdio: COMMAND_STDIO,
                 },
               );
 

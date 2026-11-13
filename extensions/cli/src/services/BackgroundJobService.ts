@@ -1,5 +1,6 @@
 import { ChildProcess, spawn } from "child_process";
 
+import { COMMAND_STDIO } from "core/util/commandSpawn.js";
 import { terminalEnvironment } from "core/util/terminalEnvironment.js";
 
 import { shellChildEnv } from "../childEnv.js";
@@ -65,7 +66,8 @@ export class BackgroundJobService {
     job.status = "running";
 
     const child = spawn(shell, args, {
-      stdio: "pipe",
+      // Output is piped; standard input is not left open (a prompt must fail)
+      stdio: COMMAND_STDIO,
       env: terminalEnvironment(shellChildEnv()),
     });
     this.processes.set(jobId, child);

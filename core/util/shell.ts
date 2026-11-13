@@ -233,8 +233,13 @@ export function resolveShell(opts: ShellEnvironment = {}): ResolvedShell {
     return {
       kind: "powershell",
       executable: "powershell.exe",
+      // -NonInteractive: a prompt (Read-Host, a confirmation, a cmdlet asking
+      // for a missing mandatory parameter such as the `curl` alias's -Uri)
+      // fails at once with PowerShell's own error instead of waiting for an
+      // answer nobody can type
       args: (command) => [
         "-NoLogo",
+        "-NonInteractive",
         "-ExecutionPolicy",
         "Bypass",
         "-Command",

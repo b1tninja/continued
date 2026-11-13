@@ -39,6 +39,20 @@ describe("command executor environment", () => {
     expect(spawn.mock.calls[0][2].env).toEqual({ CANARY_TOKEN: "c" });
   });
 
+  it("leaves no standard input open unless the caller sets stdio", () => {
+    const local = getCommandExecutor({ platform: "linux", env: {} });
+    local.spawn("ls");
+    expect(spawn.mock.calls[0][2].stdio).toEqual(["ignore", "pipe", "pipe"]);
+    local.spawn("ls", { stdio: "pipe" });
+    expect(spawn.mock.calls[1][2].stdio).toBe("pipe");
+    getCommandExecutor({
+      platform: "linux",
+      terminalShell: { kind: "container", runtime: "docker" },
+      containerStatus: { runtime: "docker" } as never,
+    }).spawn("ls");
+    expect(spawn.mock.calls[2][2].stdio).toEqual(["ignore", "pipe", "pipe"]);
+  });
+
   it("WSL keeps WSLENV and the basics in allowlist mode", () => {
     vi.stubEnv("WSLENV", "FOO/p");
     vi.stubEnv("GITHUB_TOKEN", "ghp");
