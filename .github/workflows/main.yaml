@@ -192,7 +192,9 @@ jobs:
           out=$(HOME="$home" "$prefix/bin/continuous" --version)
           echo "continuous --version: $out"
           test "$out" = "$version"
-          test -d "$home/.continuous"
+          # --version no longer creates the config directory (it must not touch the home folder);
+          # what the install must never do is write the upstream folder name
+          test ! -e "$home/.continue"
 
       - name: Upload the CLI artifact
         uses: actions/upload-artifact@v7
