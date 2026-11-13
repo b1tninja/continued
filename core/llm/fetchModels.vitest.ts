@@ -65,6 +65,70 @@ describe("fetchModels: separate input/output limits", () => {
     expect(String(url)).not.toContain("api.anthropic.com");
   });
 
+  it("Anthropic: follows has_more and last_id until the list ends", async () => {
+    const pages = [
+      {
+        data: [{ id: "claude-a", display_name: "A" }],
+        has_more: true,
+        last_id: "claude-a",
+      },
+      {
+        data: [{ id: "claude-b", display_name: "B" }],
+        has_more: false,
+        last_id: "claude-b",
+      },
+    ];
+    const fn = vi.fn(
+      async () => new Response(JSON.stringify(pages.shift()), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fn);
+    const models = await fetchModels("anthropic", "key");
+    expect(models.map((m) => m.modelId)).toEqual(["claude-a", "claude-b"]);
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(String((fn.mock.calls[0] as any)[0])).toBe(
+      "https://api.anthropic.com/v1/models?limit=100",
+    );
+    expect(String((fn.mock.calls[1] as any)[0])).toBe(
+      "https://api.anthropic.com/v1/models?limit=100&after_id=claude-a",
+    );
+  });
+
+  it("Anthropic: stops at the page cap when has_more never clears", async () => {
+    let n = 0;
+    const fn = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ id: `claude-${n}` }],
+            has_more: true,
+            last_id: `claude-${n++}`,
+          }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal("fetch", fn);
+    const models = await fetchModels("anthropic", "key");
+    expect(fn).toHaveBeenCalledTimes(10);
+    expect(models).toHaveLength(10);
+  });
+
+  it("Anthropic: a repeated cursor ends the loop", async () => {
+    const fn = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ id: "x" }],
+            has_more: true,
+            last_id: "x",
+          }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal("fetch", fn);
+    await fetchModels("anthropic", "key");
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
   it("Gemini: input budget equals inputTokenLimit", async () => {
     respond({
       models: [
