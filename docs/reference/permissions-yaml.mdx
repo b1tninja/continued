@@ -27,7 +27,7 @@ allow:
   - Bash(npm test)
 ```
 
-Most of this is written for you: the toolbar and **Settings, Tools** in the extension, and `/policy` in the terminal agent, save the levels here. The Permissions page explains what the levels and presets mean; this page lists the keys.
+Most of this is written for you: the toolbar and **Settings, Tools** in the extension, and `/policy` in the terminal agent, save the levels here. The extension's **Custom policy** editor (see the [Permissions page](/ide-extensions/agent/permissions-page#custom-policy)) writes every key in the table except the terminal agent's lists and `sandbox`. The Permissions page explains what the levels and presets mean; this page lists the keys.
 
 ## Keys
 
@@ -39,14 +39,14 @@ Most of this is written for you: the toolbar and **Settings, Tools** in the exte
 | `levels.plan`            | level                                  | `cautious`                               | extension, `/policy`                         |
 | `levels.questions`       | level                                  | `cautious`                               | extension, `/policy`                         |
 | `plan.maxNewItems`       | whole number, 0 or more                | `5`                                      | extension                                    |
-| `plan.allowTerminal`     | `true` / `false` (or `on` / `off`)     | `false`                                  | by hand                                      |
-| `plan.mcpTools`          | list of `server/tool`, `server/*` or `server` | none                              | by hand                                      |
-| `questions.delivery`     | `inbox` or `wait`                      | `inbox`                                  | extension                                    |
+| `plan.allowTerminal`     | `true` / `false` (or `on` / `off`)     | `false`                                  | by hand, extension (Custom policy) |
+| `plan.mcpTools`          | list of `server/tool`, `server/*` or `server` | none                              | by hand, extension (Custom policy) |
+| `questions.delivery`     | `inbox` or `wait`                      | `inbox`                                  | extension (Custom policy) |
 | `questions.youDecide`    | list of question types                 | `scope`, `irreversible`, `security`, `cost` | extension                                 |
 | `questions.agentDecides` | list of question types                 | `detail`                                 | extension                                    |
 | `builtin.<id>`           | `on` / `off` (or `true` / `false`)     | every rule on                            | extension (written only when `off`)          |
-| `floor`                  | list of rules                          | none                                     | by hand                                      |
-| `mcpServers.<name>`      | `trusted`                              | none                                     | by hand                                      |
+| `floor`                  | list of rules                          | none                                     | by hand, extension (Custom policy) |
+| `mcpServers.<name>`      | `trusted`                              | none                                     | by hand, extension (Custom policy) |
 | `allow`, `ask`, `exclude` | list of terminal agent rules          | none                                     | terminal agent ("always allow")              |
 | `sandbox`                | reserved                               |                                          | accepted, nothing reads it yet               |
 
@@ -99,7 +99,7 @@ floor:
   - writeFile(**/.env)
 ```
 
-The Permissions page shows them as locked. They are changed only by editing this file.
+The Permissions page shows them as locked. Change them in this file, or in the extension's **Custom policy** editor (the **Always-on Never** list), which keeps the file's comments and the other keys.
 
 ### `mcpServers`
 

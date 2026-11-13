@@ -14,6 +14,7 @@ import {
   type PolicySettings,
   type QuestionDelivery,
 } from "./policy.js";
+import { validateRuleText } from "./ruleAnalysis.js";
 
 /**
  * The one settings file the IDE and the CLI both read: permissions.yaml in the
@@ -149,6 +150,89 @@ export interface PolicyFileUpdate {
     agentDecides?: string[];
   };
   builtin?: Partial<Record<BuiltinRuleId, boolean>>;
+  /** The whole `floor:` list as it should be; each entry a valid rule */
+  floor?: string[];
+  /** The servers whose read-only hints are trusted; every other entry is removed */
+  trustedMcpServers?: string[];
+  /** The whole `plan.mcpTools` list: "server/tool", "server/*" or "server" */
+  planMcpTools?: string[];
+  /** `plan.allowTerminal` */
+  planAllowTerminal?: boolean;
+}
+
+/** Why an update cannot be written, or undefined. Nothing is written when it cannot. */
+export function policyUpdateProblem(
+  update: PolicyFileUpdate,
+): string | undefined {
+  for (const rule of update.floor ?? []) {
+    const why = validateRuleText(rule, "deny");
+    if (why) return `floor: ${JSON.stringify(rule)}: ${why}`;
+  }
+  for (const name of update.trustedMcpServers ?? []) {
+    if (typeof name !== "string" || !name.trim() || hasControl(name)) {
+      return `mcpServers: ${JSON.stringify(name)} is not a server name.`;
+    }
+  }
+  for (const entry of update.planMcpTools ?? []) {
+    if (!isPlanMcpTool(entry)) {
+      return `plan.mcpTools: ${JSON.stringify(entry)}: write server/tool, server/* or server.`;
+    }
+  }
+  return undefined;
+}
+
+const hasControl = (text: string) =>
+  [...text].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127);
+
+/** "server", "server/*" or "server/tool": one slash at most, no empty part, no control characters. */
+function isPlanMcpTool(entry: unknown): boolean {
+  if (typeof entry !== "string" || entry !== entry.trim() || !entry) {
+    return false;
+  }
+  if (hasControl(entry)) return false;
+  const parts = entry.split("/");
+  return parts.length <= 2 && parts.every((p) => p.length > 0);
+}
+
+/**
+ * Make the list at `at` hold exactly `list`, editing the existing sequence in
+ * place: kept entries keep their comments and place, removed ones go, new
+ * ones are added at the end. An empty list removes the key.
+ */
+function setStringList(
+  doc: YAML.Document,
+  at: (string | number)[],
+  list: readonly string[],
+): void {
+  const wanted = list.map((v) => v.trim()).filter(Boolean);
+  if (wanted.length === 0) {
+    if (doc.hasIn(at)) doc.deleteIn(at);
+    return;
+  }
+  const node = doc.getIn(at, true);
+  if (!YAML.isSeq(node)) {
+    doc.setIn(at, wanted);
+    return;
+  }
+  const valueOf = (item: unknown) =>
+    String(YAML.isScalar(item) ? item.value : item).trim();
+  const kept = node.items.filter((item) => wanted.includes(valueOf(item)));
+  // An empty `[]` written in flow style reads better one entry per line
+  if (kept.length === 0) node.flow = false;
+  node.items = kept;
+  const present = new Set(node.items.map(valueOf));
+  for (const value of wanted) {
+    if (!present.has(value)) {
+      node.items.push(doc.createNode(value));
+      present.add(value);
+    }
+  }
+}
+
+/** Remove an empty mapping left behind at `key`. */
+function dropEmptyMap(doc: YAML.Document, key: string): void {
+  const node = doc.get(key, true);
+  if (YAML.isMap(node) && node.items.length === 0) doc.delete(key);
 }
 
 /**
@@ -191,6 +275,37 @@ export function applyPolicyUpdate(
     const builtin = doc.get("builtin") as YAML.YAMLMap | undefined;
     if (builtin && builtin.items.length === 0) doc.delete("builtin");
   }
+  if (update.floor) setStringList(doc, ["floor"], update.floor);
+  if (update.planMcpTools) {
+    setStringList(doc, ["plan", "mcpTools"], update.planMcpTools);
+    dropEmptyMap(doc, "plan");
+  }
+  if (update.planAllowTerminal !== undefined) {
+    if (update.planAllowTerminal) doc.setIn(["plan", "allowTerminal"], true);
+    else if (doc.hasIn(["plan", "allowTerminal"])) {
+      doc.deleteIn(["plan", "allowTerminal"]);
+      dropEmptyMap(doc, "plan");
+    }
+  }
+  if (update.trustedMcpServers) {
+    const wanted = new Set(update.trustedMcpServers.map((n) => n.trim()));
+    const servers = doc.get("mcpServers", true);
+    if (YAML.isMap(servers)) {
+      servers.items = servers.items.filter((pair) => {
+        const name = String(
+          YAML.isScalar(pair.key) ? pair.key.value : pair.key,
+        );
+        const value = YAML.isScalar(pair.value) ? pair.value.value : pair.value;
+        return value !== "trusted" || wanted.has(name);
+      });
+    }
+    for (const name of wanted) {
+      if (doc.getIn(["mcpServers", name]) !== "trusted") {
+        doc.setIn(["mcpServers", name], "trusted");
+      }
+    }
+    dropEmptyMap(doc, "mcpServers");
+  }
   return String(doc);
 }
 
@@ -207,6 +322,8 @@ export function readPolicyFile(file: string): PolicyFileRead {
 }
 
 export function writePolicyFile(file: string, update: PolicyFileUpdate): void {
+  const problem = policyUpdateProblem(update);
+  if (problem) throw new Error(`Not saved: ${problem}`);
   let existing: string | undefined;
   try {
     existing = fs.readFileSync(file, "utf-8");
