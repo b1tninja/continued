@@ -2,6 +2,13 @@
 
 Staging note for the next release. Fold it into that release's `<tag>.md` (the release job reads `.github/release-notes/<tag>.md`) and delete this file.
 
+## New: add an MCP server from a README snippet
+
+- `continuous mcp add <paste-or-file>` reads what a server's README tells you to paste (Claude Desktop, Cursor, VS Code, Zed, OpenCode, Codex and Devin JSON or TOML, `npx`, `uvx` and `docker run` lines, an `https://` URL, `claude mcp add` and `code --add-mcp` lines, VS Code and Cursor install links) and adds the server to your own `config.yaml`, comments kept. Nothing runs on paste.
+- It shows the exact command or URL and blocks a download run by a shell, `docker --privileged`, a mount of `/` or the Docker socket, and plain `http://` to another host. It warns about unpinned `npx`/`uvx` packages, shell wrappers, risky docker flags and keys written into the snippet.
+- It asks once before a test connection (the test runs the command), lists the server's tools, resources and prompts without calling any, marks descriptions that read like instructions, and gives a fix for a missing Node.js, uv or Docker, a timeout or a sign-in. `--dry-run` connects to nothing and writes nothing.
+- Keys go to `~/.continuous/.env` as `${{ secrets.NAME }}`; a name already in use is refused. The settings dialog for the same steps is a follow-up. See "Add a server from a README snippet" in the MCP docs.
+
 ## Privacy: Continuous no longer contacts Continue-operated servers
 
 Earlier builds said they collect no telemetry, and the claim was not fully accurate. This change makes it accurate.
