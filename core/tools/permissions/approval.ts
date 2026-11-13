@@ -9,6 +9,7 @@ import {
   type PolicyLevels,
 } from "./policy";
 import type { ShellKind } from "../../util/shell";
+import type { GuardSettings } from "./guards";
 import type { ProtectedKind } from "./protected";
 
 /**
@@ -33,6 +34,8 @@ export interface ApprovalSettings {
   builtin?: Partial<Record<BuiltinRuleId, boolean>>;
   /** Deny rules that bind at every level, IDGAF included */
   floor?: string[];
+  /** Guards the person turned on (guards.ts): refuse at every level, IDGAF included */
+  guards?: GuardSettings;
 }
 
 /** Protected-path kinds whose built-in rule the person switched off. */

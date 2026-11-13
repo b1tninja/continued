@@ -107,10 +107,16 @@ export function resetPolicyLevels(): void {
 }
 
 /** What core's engine is given besides the levels. */
-export function approvalExtras(): Pick<ApprovalSettings, "builtin" | "floor"> {
+export function approvalExtras(): Pick<
+  ApprovalSettings,
+  "builtin" | "floor" | "guards"
+> {
   return {
     ...(extras.builtin ? { builtin: extras.builtin } : {}),
     ...(extras.floor?.length ? { floor: extras.floor } : {}),
+    ...(extras.guards && Object.values(extras.guards).includes(true)
+      ? { guards: extras.guards }
+      : {}),
   };
 }
 
@@ -123,6 +129,7 @@ export function policyIsDefault(l: PolicyLevels): boolean {
   return (
     toolLevelsAreDefault(l) &&
     !extra.floor &&
+    !extra.guards &&
     !Object.values(extra.builtin ?? {}).includes(false)
   );
 }

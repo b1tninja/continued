@@ -13,6 +13,7 @@ import {
   type PolicyLevels,
   type QuestionType,
 } from "core/tools/permissions/policy";
+import type { GuardSettings } from "core/tools/permissions/guards";
 import {
   defaultOnboardingCardState,
   OnboardingCardState,
@@ -74,6 +75,8 @@ export interface PolicyExtras {
   questionDelivery?: "inbox" | "wait";
   /** `plan.allowTerminal`: Plan mode is offered the terminal (the CLI); written only by the Custom policy page */
   planAllowTerminal?: boolean;
+  /** Guards the person turned on (core guards.ts); absent means off */
+  guards?: GuardSettings;
 }
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";

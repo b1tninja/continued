@@ -18,8 +18,9 @@ import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { askProtectionHit } from "./askProtections";
 import { deputyCallHit, type DeputyCallInput } from "./deputyCall";
+import { guardLabel, guardOn, guardRuleText } from "./guards";
 import { outsideTargetReason } from "./outsideEdits";
-import { builtinRuleOn, questionsNeverAsk } from "./policy";
+import { areaOfTool, builtinRuleOn, questionsNeverAsk } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
 import type { Sink } from "./taint/taintSinks";
@@ -416,13 +417,52 @@ function outsideTargetNote(
   resolved: ResolvedPath | null | undefined,
   resolvedPath: string | undefined,
 ): string | undefined {
+  const target = outsideTargetOf(input, resolved, resolvedPath);
+  return target ? outsideTargetReason(target) : undefined;
+}
+
+/**
+ * The path a call reaches outside the workspace, or undefined. The built-in
+ * rule is not consulted (it may be switched off; the fact stays true).
+ */
+function outsideTargetOf(
+  input: EvaluateInput,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): string | undefined {
   const hit = deputyCallHit({
     ...deputyInputOf(input, resolved, resolvedPath),
     approval: undefined,
   });
   const suffix = ", outside the workspace";
   if (!hit?.path.endsWith(suffix)) return undefined;
-  return outsideTargetReason(hit.path.slice(0, -suffix.length));
+  return hit.path.slice(0, -suffix.length);
+}
+
+/**
+ * A guard the person turned on (guards.ts) that this call trips, as a
+ * refusal. Guards bind at every level, IDGAF included, and never ask.
+ */
+function guardRefusal(
+  input: EvaluateInput,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): { rule: string; reason: string } | undefined {
+  if (!guardOn(input.approval, "edits-outside-workspace")) return undefined;
+  const call = {
+    parsedArgs: input.parsedArgs,
+    cwd: input.cwd,
+    shell: input.shell,
+  };
+  if (areaOfTool(input.toolName, input.tool, call) !== "edits") {
+    return undefined;
+  }
+  const target = outsideTargetOf(input, resolved, resolvedPath);
+  if (!target) return undefined;
+  return {
+    rule: guardRuleText("edits-outside-workspace"),
+    reason: `Blocked by your guard "${guardLabel("edits-outside-workspace")}", which binds at every level: the target is outside the workspace: ${target}.`,
+  };
 }
 
 function evaluateRules(input: EvaluateInput): ToolPolicyResult {
@@ -534,6 +574,16 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
         reason: `Blocked by your floor rule ${floorMatch.rule.raw}, which binds at every level.`,
       };
     }
+  }
+  const guarded = guardRefusal(input, resolved, resolvedPath);
+  if (guarded) {
+    return {
+      policy: "disabled",
+      displayValue,
+      source: "floor",
+      rule: guarded.rule,
+      reason: guarded.reason,
+    };
   }
 
   const rules = input.permissionSources

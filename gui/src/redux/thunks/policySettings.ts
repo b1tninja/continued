@@ -40,6 +40,7 @@ export const loadPolicySettings = createAsyncThunk<void, void, ThunkApiType>(
           trustedMcpServers: Object.keys(settings.mcpServers ?? {}),
           questionDelivery: settings.questions?.delivery,
           planAllowTerminal: settings.planAllowTerminal,
+          guards: settings.guards ?? {},
         }),
       );
       for (const notice of notices) console.warn(notice);
@@ -68,6 +69,7 @@ export const savePolicySettings = createAsyncThunk<void, void, ThunkApiType>(
           : {}),
       },
       builtin: policyExtras.builtin,
+      ...(policyExtras.guards ? { guards: policyExtras.guards } : {}),
     };
     const res = await extra.ideMessenger.request("policy/save", update);
     if (res.status !== "success") {

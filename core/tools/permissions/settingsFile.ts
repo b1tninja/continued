@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as YAML from "yaml";
 import { writeFileAtomicSync } from "../../util/atomicWrite.js";
+import { GUARD_IDS, type GuardId, type GuardSettings } from "./guards.js";
 import {
   BUILTIN_RULES,
   DEFAULT_POLICY_LEVELS,
@@ -37,6 +38,8 @@ export interface PolicyFileSettings extends PolicySettings {
   planMcpTools?: string[];
   /** Offer the terminal in Plan mode (the CLI; it still asks). Default false. */
   planAllowTerminal?: boolean;
+  /** Guards the person turned on (guards.ts); each refuses at every level */
+  guards?: GuardSettings;
 }
 
 export interface PolicyFileRead {
@@ -54,6 +57,7 @@ export const POLICY_FILE_KEYS = [
   "floor",
   "mcpServers",
   "sandbox",
+  "guards",
 ] as const;
 
 const BUILTIN_IDS = new Set<string>(BUILTIN_RULES.map((r) => r.id));
@@ -137,6 +141,24 @@ export function parsePolicyFile(text: string | undefined): PolicyFileRead {
   }
   const allowTerminal = asBool(raw.plan?.allowTerminal);
   if (allowTerminal !== undefined) settings.planAllowTerminal = allowTerminal;
+  if (raw.guards !== undefined && raw.guards !== null) {
+    if (typeof raw.guards !== "object" || Array.isArray(raw.guards)) {
+      notices.push("guards: use a mapping of guard ids to on or off.");
+    } else {
+      const guards: GuardSettings = {};
+      for (const [id, value] of Object.entries(raw.guards)) {
+        const on = asBool(value);
+        if (!GUARD_IDS.has(id)) {
+          notices.push(`guards.${id}: there is no guard with that id.`);
+        } else if (on === undefined) {
+          notices.push(`guards.${id}: use on or off.`);
+        } else {
+          guards[id as GuardId] = on;
+        }
+      }
+      settings.guards = guards;
+    }
+  }
   return { settings, notices };
 }
 
@@ -158,6 +180,8 @@ export interface PolicyFileUpdate {
   planMcpTools?: string[];
   /** `plan.allowTerminal` */
   planAllowTerminal?: boolean;
+  /** Guards by id: written `on` when on, removed when off (absent means off) */
+  guards?: GuardSettings;
 }
 
 /** Why an update cannot be written, or undefined. Nothing is written when it cannot. */
@@ -305,6 +329,15 @@ export function applyPolicyUpdate(
       }
     }
     dropEmptyMap(doc, "mcpServers");
+  }
+  if (update.guards) {
+    for (const [id, on] of Object.entries(update.guards)) {
+      if (!GUARD_IDS.has(id)) continue;
+      if (on === true) doc.setIn(["guards", id], "on");
+      else doc.deleteIn(["guards", id]);
+    }
+    const guards = doc.get("guards") as YAML.YAMLMap | undefined;
+    if (YAML.isMap(guards) && guards.items.length === 0) doc.delete("guards");
   }
   return String(doc);
 }
