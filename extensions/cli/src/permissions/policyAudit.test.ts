@@ -36,9 +36,21 @@ afterEach(() => {
 
 const changes = () => listChanges(path.join(dir, "audit"));
 
-describe("/policy changes are audited", () => {
-  it("records who, what, from, to and the surface", async () => {
-    await handleSlashCommands("/policy tools=permissive", {} as never);
+describe("/policy raises ask once, and every change is audited", () => {
+  it("a raise to Permissive does not apply until it is confirmed, and names what changes", async () => {
+    const r = await handleSlashCommands(
+      "/policy tools=permissive",
+      {} as never,
+    );
+    expect(r?.output).toContain("tools cautious to permissive");
+    expect(r?.output).toContain("Nothing was changed");
+    expect(r?.output).toContain("/policy tools=permissive --yes");
+    expect(getPolicyLevels().tools).toBe("cautious");
+    expect(changes()).toEqual([]);
+  });
+
+  it("with --yes it applies, and the audit line says who, what, from, to and how", async () => {
+    await handleSlashCommands("/policy tools=permissive --yes", {} as never);
     expect(getPolicyLevels().tools).toBe("permissive");
     const rows = changes();
     expect(rows.map((r) => r.kind)).toEqual(["level", "preset"]);
@@ -46,22 +58,36 @@ describe("/policy changes are audited", () => {
       ev: "setting",
       source: "cli-policy",
       loosens: true,
-      summary: "set tools: cautious -> permissive",
+      summary: "set tools: cautious -> permissive (confirmed: prompt)",
     });
     expect(rows[1].summary).toContain("careful -> custom");
   });
 
-  it("a lowering is recorded as not loosening", async () => {
-    await handleSlashCommands("/policy handsOff", {} as never);
+  it("IDGAF asks too, and says it lasts one session", async () => {
+    const r = await handleSlashCommands("/policy idgaf", {} as never);
+    expect(r?.output).toContain("idgaf lasts this session only");
+    expect(getPolicyLevels().tools).toBe("cautious");
+  });
+
+  it("lowering never asks, and is audited", async () => {
+    await handleSlashCommands("/policy handsOff --yes", {} as never);
     const before = changes().length;
-    await handleSlashCommands("/policy careful", {} as never);
+    const r = await handleSlashCommands("/policy careful", {} as never);
+    expect(r?.output).not.toContain("Nothing was changed");
+    expect(getPolicyLevels().tools).toBe("cautious");
     const added = changes().slice(before);
     expect(added.length).toBeGreaterThan(0);
     expect(added.every((c) => !c.loosens)).toBe(true);
+    expect(added.every((c) => !c.summary.includes("confirmed"))).toBe(true);
   });
 
-  it("a spec that does not parse records nothing", async () => {
-    await handleSlashCommands("/policy tools=never", {} as never);
+  it("Manual to Cautious is not a raise toward the levels that ask", async () => {
+    await handleSlashCommands("/policy edits=cautious", {} as never);
+    expect(getPolicyLevels().edits).toBe("cautious");
+  });
+
+  it("a spec that does not parse changes and records nothing", async () => {
+    await handleSlashCommands("/policy tools=never --yes", {} as never);
     expect(changes()).toEqual([]);
   });
 });
