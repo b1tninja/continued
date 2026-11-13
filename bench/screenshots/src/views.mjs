@@ -75,6 +75,26 @@ export const VIEWS = {
     fixture: "loop-settings-open",
     note: "Loop mode with the gear opened: strategy, Parallel and the note",
   },
+  "loop-plan-tile": {
+    fixture: "loop-plan-tile",
+    note: "Loop mode: the plan card as a collapsed tile (title, file link, round line, one root row)",
+  },
+  "loop-plan-running": {
+    fixture: "loop-plan-running",
+    note: "Loop mode: the plan tree open while running: done fold, current item with live lines, upcoming rows, trace and auto-answer",
+  },
+  "loop-plan-waiting": {
+    fixture: "loop-plan-waiting",
+    note: "Loop mode: a re-plan waits to be accepted: dropped struck through, new to-do, kept folded; opens by itself",
+  },
+  "loop-plan-failed": {
+    fixture: "loop-plan-failed",
+    note: "Loop mode: an item failed and a repair runs: check output, fix-forward line; opens by itself",
+  },
+  "loop-plan-finished": {
+    fixture: "loop-plan-finished",
+    note: "Loop mode: finished, every to-do done folded into one row",
+  },
   "loop-idgaf": {
     fixture: "loop-idgaf",
     note: "Loop mode at IDGAF with seven blocked calls: the one-line IDGAF chip and the blocked badge in the mode bar",
@@ -112,6 +132,10 @@ export const VIEWS = {
   "agents-ended": {
     fixture: "agents-ended",
     note: "the agents tree after every agent ended, one interrupted",
+  },
+  catalogue: {
+    fixture: "catalogue",
+    note: "OpenRouter provider setup with the one-time prompt to pull the model list",
   },
   "bedrock-ok": {
     fixture: "bedrock-ok",

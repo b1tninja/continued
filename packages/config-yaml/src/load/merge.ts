@@ -27,6 +27,9 @@ export function mergePackages(
       ? { rulesByMode: { ...current.rulesByMode, ...incoming.rulesByMode } }
       : {}),
     ...mergeToolPermissionsField(current, incoming),
+    ...((incoming.modelCatalog ?? current.modelCatalog)
+      ? { modelCatalog: incoming.modelCatalog ?? current.modelCatalog }
+      : {}),
     requestOptions: mergeConfigYamlRequestOptions(
       current.requestOptions,
       incoming.requestOptions,
@@ -138,6 +141,9 @@ export function mergeUnrolledAssistants(
       ? { rulesByMode: { ...current.rulesByMode, ...incoming.rulesByMode } }
       : {}),
     ...mergeToolPermissionsField(current, incoming),
+    ...((incoming.modelCatalog ?? current.modelCatalog)
+      ? { modelCatalog: incoming.modelCatalog ?? current.modelCatalog }
+      : {}),
     requestOptions: mergeConfigYamlRequestOptions(
       current.requestOptions,
       incoming.requestOptions,
