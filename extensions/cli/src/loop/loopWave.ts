@@ -90,10 +90,11 @@ const gitErrorText = (e: unknown): string => {
 };
 
 /**
- * The worktree helper `cn review` uses, until the core helper (L4 P2)
- * lands: a detached worktree in the temp directory with the uncommitted
- * changes and a baseline commit, and a plain `git apply` to the main
- * checkout, checked first so a refusal changes nothing.
+ * The worktree helper `cn review` uses. The core helper
+ * (`core/util/worktree.ts`, L4 P2) exists and the IDE uses it, but the CLI
+ * has not moved to it: a detached worktree in the temp directory with the
+ * uncommitted changes and a baseline commit, and a plain `git apply` to the
+ * main checkout, checked first so a refusal changes nothing.
  */
 const defaultWorktrees: LoopWorktreeOps = {
   create: (itemId) => createWorktree(Number.parseInt(itemId, 10) || 0),
