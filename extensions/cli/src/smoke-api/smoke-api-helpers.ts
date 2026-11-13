@@ -4,6 +4,15 @@ import path from "path";
 
 import { execaNode, type Subprocess } from "execa";
 
+/**
+ * These tests call a paid API with a real key. A key in the environment is not
+ * consent to that: they also need RUN_SMOKE_API=1, which the smoke-api job
+ * sets. Without it every variable reads as unset, so each suite skips.
+ */
+export function smokeEnv(name: string): string | undefined {
+  return process.env.RUN_SMOKE_API === "1" ? process.env[name] : undefined;
+}
+
 export interface SmokeTestContext {
   cliPath: string;
   testDir: string;
