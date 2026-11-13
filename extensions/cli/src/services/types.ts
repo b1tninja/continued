@@ -159,6 +159,8 @@ export interface ServiceInitOptions {
     ask?: string[];
     exclude?: string[];
     mode?: PermissionMode;
+    /** See InitializeToolServiceOverrides.interactiveDefaults */
+    interactiveDefaults?: boolean;
   };
 }
 

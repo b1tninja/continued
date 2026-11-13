@@ -145,6 +145,7 @@ export async function initializeServices(initOptions: ServiceInitOptions = {}) {
           ask: overrides.ask,
           exclude: overrides.exclude,
           isHeadless: initOptions.headless,
+          interactiveDefaults: overrides.interactiveDefaults,
         };
         // Only set the boolean flag that corresponds to the mode
         if (overrides.mode) {
