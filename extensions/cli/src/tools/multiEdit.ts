@@ -13,6 +13,7 @@ import {
 import { editTool, validateAndResolveFilePath } from "./edit.js";
 import { readFileTool } from "./readFile.js";
 import { Tool } from "./types.js";
+import { wroteOutsideResult } from "./workspaceBoundary.js";
 import { generateDiff } from "./writeFile.js";
 
 export interface EditOperation {
@@ -170,7 +171,7 @@ WARNINGS:
         args.file_path,
       );
 
-      return `Successfully edited ${args.file_path} with ${args.editCount} edit${args.editCount === 1 ? "" : "s"}\nDiff:\n${diff}`;
+      return `Successfully edited ${args.file_path} with ${args.editCount} edit${args.editCount === 1 ? "" : "s"}\nDiff:\n${diff}${wroteOutsideResult(args.file_path)}`;
     } catch (error) {
       if (error instanceof ContinueError) {
         throw error;
