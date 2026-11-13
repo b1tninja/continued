@@ -2,7 +2,7 @@
 // intervals, and paired comparisons of every arm against a baseline arm over
 // the same (task, rep) pairs, using the lab's exact McNemar test and paired
 // bootstrap (lib/compare.mjs). Pure over an array of run records.
-import { mcnemarExact, pairedBootstrap } from "../lib/compare.mjs";
+import { clusterBootstrap, mcnemarExact } from "../lib/compare.mjs";
 import { fmtRate, median, wilson } from "../lib/stats.mjs";
 
 const key = (r) => `${r.task}\u0000${r.rep}`;
@@ -87,6 +87,7 @@ export function pairedCompare(runsA, runsB) {
     let b = 0; // only B ok
     let c = 0; // only A ok
     const diffs = [];
+    const byTask = new Map();
     for (const [ra, rb] of pairs) {
       const x = okA(ra);
       const y = okB(rb);
@@ -94,6 +95,8 @@ export function pairedCompare(runsA, runsB) {
       if (y && !x) b++;
       if (x && !y) c++;
       diffs.push(Number(y) - Number(x));
+      if (!byTask.has(ra.task)) byTask.set(ra.task, []);
+      byTask.get(ra.task).push(Number(y) - Number(x));
     }
     return {
       pairs: diffs.length,
@@ -101,7 +104,8 @@ export function pairedCompare(runsA, runsB) {
       onlyA: c,
       p: mcnemarExact(b, c),
       diff: diffs.length ? sum(diffs) / diffs.length : 0,
-      ci: pairedBootstrap(diffs),
+      // resample whole tasks: the reps of a task are not independent draws
+      ci: clusterBootstrap([...byTask.values()]),
     };
   };
   return {
@@ -181,7 +185,7 @@ export function formatReport(records, { baseline = "A0", price } = {}) {
       out.push(
         "| arm | pairs | success: only arm / only " +
           baseline +
-          " | diff [95% bootstrap] | exact McNemar p | first command ok: only arm / only " +
+          " | diff [95% bootstrap over tasks] | exact McNemar p | first command ok: only arm / only " +
           baseline +
           " | diff [95%] | p |",
       );
