@@ -74,6 +74,12 @@ describe("resolveShell", () => {
     expect(shell.executable).toBe("/bin/bash");
   });
 
+  it("is zsh on a Mac when SHELL is not set, as the tool description says", () => {
+    const shell = resolveShell({ platform: "darwin", env: {} });
+    expect(shell.kind).toBe("zsh");
+    expect(shell.executable).toBe("/bin/zsh");
+  });
+
   it("a shell it does not parse is unknown, and keeps its path", () => {
     const shell = resolveShell({
       platform: "linux",

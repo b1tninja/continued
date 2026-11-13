@@ -199,7 +199,9 @@ export function wslArgs(command: string, distro?: string): string[] {
 
 /**
  * The shell terminal commands run in: Windows PowerShell on Windows, the
- * person's login shell elsewhere (bash when `$SHELL` is not set). WSL is a
+ * person's login shell elsewhere. When `$SHELL` is not set (an editor started
+ * from the Dock on some setups), that is zsh on macOS, every new account's
+ * shell since 10.15, and bash elsewhere. WSL is a
  * Linux, so it takes the second branch. On Windows a preference for WSL
  * (`terminalShell`, the editor's setting, or `CONTINUOUS_TERMINAL_SHELL`) runs
  * commands in bash inside that distribution instead.
@@ -260,7 +262,8 @@ export function resolveShell(opts: ShellEnvironment = {}): ResolvedShell {
       runsProfile: true,
     };
   }
-  const executable = env.SHELL || "/bin/bash";
+  const executable =
+    env.SHELL || (platform === "darwin" ? "/bin/zsh" : "/bin/bash");
   return {
     kind: shellKindOf(executable),
     executable,
