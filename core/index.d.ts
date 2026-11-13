@@ -1415,6 +1415,9 @@ interface Reasoning {
   endAt?: number;
 }
 
+/** How a turn ended early: Stop, or a request that failed for good. */
+export type TurnInterruption = "stopped" | "failed";
+
 export interface ChatHistoryItem {
   message: ChatMessage;
   contextItems: ContextItemWithId[];
@@ -1426,6 +1429,11 @@ export interface ChatHistoryItem {
   reasoning?: Reasoning;
   appliedRules?: RuleMetadata[];
   conversationSummary?: string;
+  /**
+   * Set on the last item kept from a turn that the person stopped or that
+   * failed.
+   */
+  interrupted?: TurnInterruption;
   /**
    * Request-time only, never saved: a prompt cache point goes right after this
    * item (a fork point, such as a Loop item's first message), so a retry, a

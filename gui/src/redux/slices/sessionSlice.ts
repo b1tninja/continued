@@ -33,6 +33,7 @@ import {
   LoopState,
   TaskPlan,
   TurnCheckpoint,
+  TurnInterruption,
   Usage,
 } from "core";
 import { mergeReasoningDetails } from "core/llm/openaiTypeConverters";
@@ -377,7 +378,10 @@ export const sessionSlice = createSlice({
         curMessage.isGatheringContext = payload;
       }
     },
-    clearDanglingMessages: (state) => {
+    clearDanglingMessages: (
+      state,
+      action: PayloadAction<TurnInterruption | undefined>,
+    ) => {
       // This is used during cancellation
       // After the last user or tool message, we can have thinking and or valid assitant message (content or generated tool calls) OR nothing.
       // The only thing allowed after the last assistant message that has either content or generated tool calls
@@ -385,6 +389,9 @@ export const sessionSlice = createSlice({
       if (state.history.length < 2) {
         return;
       }
+      // Stop or a failed request (not a retry or a steer) marks the turn it
+      // ended
+      const interruption = action?.payload;
 
       const lastUserOrToolIdx = findLastIndex(
         state.history,
@@ -397,7 +404,12 @@ export const sessionSlice = createSlice({
         const hasGeneratedMsg = message.toolCallStates?.some(
           (toolCallState) => toolCallState.status !== "generating",
         );
-        if (message.message.content || hasGeneratedMsg) {
+        // Reasoning is not an answer: a turn stopped while the model was
+        // still thinking has nothing to send back as an assistant turn
+        if (
+          (message.message.role !== "thinking" && message.message.content) ||
+          hasGeneratedMsg
+        ) {
           validAssistantMessageIdx = i;
           // Cancel any tool calls that are dangling and generated
           if (message.toolCallStates) {
@@ -415,6 +427,28 @@ export const sessionSlice = createSlice({
       }
 
       if (validAssistantMessageIdx === -1) {
+        // Reasoning the model wrote before it was stopped stays on screen:
+        // keep the turn up to it, marked. It is never sent (constructMessages
+        // leaves out reasoning with no answer after it).
+        const lastThinkingIdx = findLastIndex(
+          state.history,
+          (item) =>
+            item.message.role === "thinking" &&
+            !!(
+              renderChatMessage(item.message).trim() ||
+              item.reasoning?.text?.trim()
+            ),
+        );
+        if (interruption && lastThinkingIdx > lastUserOrToolIdx) {
+          state.history = state.history.slice(0, lastThinkingIdx + 1);
+          const thinking = state.history[lastThinkingIdx];
+          thinking.interrupted = interruption;
+          if (thinking.reasoning?.active) {
+            thinking.reasoning.active = false;
+            thinking.reasoning.endAt = Date.now();
+          }
+          return;
+        }
         const lastMsg = state.history[lastUserOrToolIdx];
         const lastRole = lastMsg.message.role as "user" | "tool";
         if (lastRole === "user") {
@@ -422,9 +456,13 @@ export const sessionSlice = createSlice({
           state.history = state.history.slice(0, lastUserOrToolIdx);
         } else {
           state.history = state.history.slice(0, lastUserOrToolIdx + 1);
+          if (interruption) lastMsg.interrupted = interruption;
         }
       } else {
         state.history = state.history.slice(0, validAssistantMessageIdx + 1);
+        if (interruption) {
+          state.history[validAssistantMessageIdx].interrupted = interruption;
+        }
       }
     },
     // Trigger value picked up by editor with isMainInput to set its content

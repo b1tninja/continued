@@ -10,4 +10,6 @@ Staging note for the next release. Fold it into that release's `<tag>.md` (the r
 
 ## Fixes
 
+- **Stopping a reply while the model is still reasoning no longer breaks the next request.** Stop, or a request that failed, used to keep the model's reasoning as if it were an answer, so the next message sent a reply holding only reasoning; Bedrock refused it ("no content in assistant message before conversational turn change") and other providers could reject it too. The reasoning stays on screen but is no longer sent, a partial answer is kept as before, and a tool call that was still being written is cancelled. Saved sessions that already hold such a reply are sent correctly too.
+
 - Bedrock no longer fails with "no content in assistant message before conversational turn change". A turn that converts to nothing (a reply stopped or failed before any text, reasoning a non-Claude model can't take back, a tool call without an id, a user message whose context or image rendered empty) is now left out and the turns around it are joined, so the request keeps the alternating roles Converse requires. The CLI, which sent two messages of the same role in that case, gets the same repair. A history that was already valid is sent byte for byte as before, so prompt caching is unaffected.
