@@ -179,6 +179,10 @@ The interactive terminal agent shows one line in its header, once per user: "Per
 
 `~/.continuous/permissions.yaml` that exists but is not valid YAML, or has the wrong structure (an unknown top-level key, or `allow`, `ask` or `exclude` that is not a list), is no longer read as "no rules". `cn -p` and `cn serve` refuse to start and exit with code 2, naming the file and the line and column of the error, never its contents. Pass `--ignore-broken-config` to continue with the file ignored; headless runs then use only the defaults, which allow `Bash`. The interactive agent starts and prints a WARNING block. A missing file is fine. `continuous permissions add` will not write over a broken file.
 
+## Raising a level in the terminal agent
+
+`/policy` asks once before it moves an area up to Automatic, Permissive or IDGAF from a lower level. The first run changes nothing and prints one line naming each area and both levels, such as `Permission levels: tools cautious to permissive. Fewer calls will ask first. Nothing was changed. Run "/policy tools=permissive --yes" to apply it.` Run it again with `--yes` to apply it. Lowering a level, or moving from Manual to Cautious, never asks. `--policy` on the command line is already explicit, so it does not ask. Every change, asked or not, is written to the [audit trail](/ide-extensions/agent/audit-trail#setting-changes) with where it came from.
+
 ## From the terminal agent
 
 ```text

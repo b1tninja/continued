@@ -4,6 +4,7 @@ import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-y
 import chalk from "chalk";
 import type { Session } from "core/index.js";
 import { POLICY_PRESET_ORDER } from "core/tools/permissions/policy.js";
+import { raiseConfirmation } from "core/tools/permissions/settingChanges.js";
 import historyManager from "core/util/history.js";
 import { v4 as uuidv4 } from "uuid";
 
@@ -12,6 +13,10 @@ import { handleInit } from "./commands/init.js";
 import { handleInfoSlashCommand } from "./infoScreen.js";
 import { syncRunningLoopPolicy } from "./loop/loopSession.js";
 import { handleUntaint } from "./permissions/cliTaint.js";
+import {
+  auditLevelChange,
+  rememberSavedPolicyFile,
+} from "./permissions/policyAudit.js";
 import {
   describePolicy,
   getPolicyLevels,
@@ -116,18 +121,42 @@ function handleTitle(args: string[]) {
 }
 
 function handlePolicy(args: string[]): SlashCommandResult {
-  const spec = args.join(" ").trim();
+  // `--yes` answers the question a raise asks; it is not part of the spec
+  const confirmed = args.some((a) => a === "--yes" || a === "-y");
+  const spec = args
+    .filter((a) => a !== "--yes" && a !== "-y")
+    .join(" ")
+    .trim();
   if (spec) {
     const parsed = parsePolicySpec(spec);
     if (!parsed.ok) {
       return { exit: false, output: chalk.yellow(parsed.error) };
     }
+    const before = getPolicyLevels();
+    // Lowering never asks. Moving an area up to Automatic, Permissive or IDGAF
+    // asks once, in a line that names what changes.
+    const question = raiseConfirmation(before, parsed.levels);
+    if (question && !confirmed) {
+      return {
+        exit: false,
+        output: chalk.yellow(
+          `${question} Nothing was changed. Run "/policy ${spec} --yes" to apply it.`,
+        ),
+      };
+    }
     setPolicyLevels(parsed.levels);
+    auditLevelChange(
+      before,
+      parsed.levels,
+      "cli-policy",
+      question ? "prompt" : undefined,
+    );
     if (parsed.deprecated) process.stderr.write(`${parsed.deprecated}\n`);
     syncRunningLoopPolicy();
     try {
       // Saved for the next session, and for the IDE; IDGAF is never written
       savePolicyFile();
+      rememberSavedPolicyFile();
     } catch (e: any) {
       return {
         exit: false,
