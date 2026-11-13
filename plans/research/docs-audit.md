@@ -514,7 +514,7 @@ Each has a default marked "recommended, pending owner".
 ## Further research
 
 - **Accuracy of the 42 mention-level rows.** Each needs the sentence read against the code. The fork-written pages passed every check made here, so the upstream pages (Plan mode, the Chat, Edit and Autocomplete groups, the guides) are where errors are most likely.
-- **The images.** 30 files under `docs/images` and more in subfolders were not opened.
+- **The images.** The 33 files under `docs/images` were not opened.
 - **What `/update` does** given that `PRIVACY.md` calls the update check a stub (`extensions/cli/src/services/UpdateService.ts` still compares versions and can call `performUpdate`).
 - **Whether `Ctrl/Cmd+L` closes the sidebar when chat is focused**, as `ide-extensions/quick-start.mdx:147` says.
 - **The in-product strings of the GUI beyond the product name**: tooltips and empty states were searched for "Continue" only. A pass for strings that describe behaviour (defaults, what a toggle does) against the docs would find a second kind of drift.
