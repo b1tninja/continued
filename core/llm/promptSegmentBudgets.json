@@ -52,7 +52,7 @@
       "maxTokens": 67
     },
     "env.date+git": {
-      "maxTokens": 53
+      "maxTokens": 1500
     },
     "task-list": {
       "maxTokens": 13

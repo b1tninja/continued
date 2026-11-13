@@ -61,7 +61,12 @@ export function localDayOf(date: Date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+// The fields of ShellEnvironment, written out so the type survives in
+// packages that resolve core's declarations with node16 rules
 export interface ExecutionShellInput extends ShellEnvironment {
+  platform?: NodeJS.Platform;
+  env?: Record<string, string | undefined>;
+  terminalShell?: TerminalShellPreference | "default";
   /** The editor's remote name (`ideInfo.remoteName`); absent or `local` on this machine. */
   remoteName?: string;
 }

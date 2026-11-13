@@ -3,6 +3,7 @@ import * as os from "os";
 import * as path from "path";
 
 import type { ChatHistoryItem } from "core/index.js";
+import type { EnvironmentSnapshot } from "core/util/environmentPrompt.js";
 import type { ChatCompletionTool } from "openai/resources.mjs";
 import { vi } from "vitest";
 
@@ -10,6 +11,7 @@ import {
   environmentContextBlock,
   resetEnvironmentContextBlock,
 } from "../environmentContext.js";
+import { getCurrentSession, startNewSession } from "../session.js";
 import { multiEditTool } from "../tools/multiEdit.js";
 import { presentPlanTool } from "../tools/presentPlan.js";
 import { readFileTool } from "../tools/readFile.js";
@@ -131,6 +133,24 @@ export function scenarioTools(spec: CliScenarioSpec): ChatCompletionTool[] {
   return [...builtins.map(toChatTool), ...(spec.mcp ?? []).map(fakeMcp)];
 }
 
+/** The scenarios' environment: a Linux machine with bash, in a repository. */
+export function scenarioSnapshot(localDay: string): EnvironmentSnapshot {
+  return {
+    version: 1,
+    takenAt: `${localDay}T09:00:00.000Z`,
+    localDay,
+    platform: "linux",
+    arch: "x64",
+    shell: {
+      shell: { kind: "bash", source: "spawned", label: "bash" },
+      executable: "/bin/bash",
+      os: { value: "linux", confidence: "known", source: "platform linux" },
+    },
+    workspace: { home: "/home/dev", user: "dev", cwd: "/home/dev/project" },
+    git: { isRepo: true, branch: "main", statusZ: " M src/app.ts\0" },
+  };
+}
+
 /** Writes the instruction files the system message reads and enters the folder. */
 export function enterScenarioDir(): void {
   fs.mkdirSync(path.join(SCENARIO_DIR, ".continue", "rules"), {
@@ -188,6 +208,13 @@ export async function buildCliScenario(
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(`${spec.date ?? "2026-11-10"}T09:00:00Z`));
   resetEnvironmentContextBlock();
+  // A fixed snapshot on a fresh session, so the environment bytes are the
+  // same on every machine (the real gatherer is tested in core)
+  startNewSession();
+  getCurrentSession().environment = {
+    snapshot: scenarioSnapshot(spec.date ?? "2026-11-10"),
+    detail: "standard",
+  };
   try {
     // Machine facts (folder, platform) become fixed words: hashes are portable.
     const base = normalize(

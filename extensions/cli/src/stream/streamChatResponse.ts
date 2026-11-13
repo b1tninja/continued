@@ -15,6 +15,7 @@ import type { ChatCompletionTool } from "openai/resources.mjs";
 
 import { runStoppedAfter, runStoppedBefore } from "../budget/runLimits.js";
 import { pruneLastMessage } from "../compaction.js";
+import { ensureSessionEnvironment } from "../environmentContext.js";
 import {
   endItemRunOverBudget,
   stopLoopItemOverBudget,
@@ -422,6 +423,9 @@ export async function processStreamingResponse(
   // The request: system message, validated history with the environment
   // block and the use's tail on the user messages, task list block last (see
   // buildChatRequestBody for why the order matters to the prompt cache).
+  // The block comes from the session's snapshot, gathered once (async, git
+  // calls stop after 2 s) and saved with the session.
+  await ensureSessionEnvironment();
   const requestBody = buildChatRequestBody({
     model,
     chatHistory,
