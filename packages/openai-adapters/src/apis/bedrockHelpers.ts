@@ -513,6 +513,17 @@ export function effortToBudgetTokens(effort: BedrockReasoningEffort): number {
 const ADAPTIVE_THINKING_MODEL =
   /claude-(opus|sonnet|haiku|fable|mythos)-(4-[6-9]|[5-9])/;
 
+/**
+ * Claude models whose `thinking.display` defaults to "omitted" (empty thinking
+ * text), and those that think with no `thinking` field. Same as
+ * `thinkingDisplayDefaultsToOmitted` and `thinksByDefault` in
+ * core/llm/llms/anthropicThinking.ts.
+ */
+const OMITTED_DISPLAY_MODEL =
+  /claude-(?:(?:opus|sonnet|haiku)-(?:4-[7-9]|[5-9])|fable|mythos)/;
+const THINKS_BY_DEFAULT_MODEL =
+  /claude-(?:(?:opus|sonnet|haiku)-[5-9]|fable|mythos)/;
+
 /** What a Converse request sends to turn a model's reasoning on or off. */
 export interface BedrockReasoningRequest {
   /** Spread into `additionalModelRequestFields`; empty when nothing is sent. */
@@ -529,7 +540,8 @@ const REASONING_EFFORT_MODEL = /(^|\.)(qwen\.|deepseek\.v3)/i;
 
 /**
  * The reasoning switch per model family, measured live on 2026-11-08: Claude
- * takes Anthropic's `thinking`; Nova 2 takes `reasoningConfig` with a
+ * takes Anthropic's `thinking` (with `display: "summarized"` where the
+ * thinking would otherwise arrive empty); Nova 2 takes `reasoningConfig` with a
  * `maxReasoningEffort` and no `maxTokens` at `high`; Qwen3 and DeepSeek V3.2
  * take `reasoning_effort` (low, medium, high to turn on, `"none"` to turn off,
  * sent only when reasoning is explicitly off); DeepSeek R1, the other Nova
@@ -544,11 +556,25 @@ export function bedrockReasoningFields(
 ): BedrockReasoningRequest {
   const none = { additionalModelRequestFields: {}, omitMaxTokens: false };
   if (/claude/i.test(modelId)) {
-    if (!reasoning) return none;
+    // `display: "summarized"` where the thinking would otherwise arrive empty;
+    // a model that thinks anyway gets that field with reasoning off too
+    const summarize = OMITTED_DISPLAY_MODEL.test(modelId);
+    if (!reasoning) {
+      return summarize && THINKS_BY_DEFAULT_MODEL.test(modelId)
+        ? {
+            additionalModelRequestFields: {
+              thinking: { type: "adaptive", display: "summarized" },
+            },
+            omitMaxTokens: false,
+          }
+        : none;
+    }
     if (ADAPTIVE_THINKING_MODEL.test(modelId)) {
       return {
         additionalModelRequestFields: {
-          thinking: { type: "adaptive" },
+          thinking: summarize
+            ? { type: "adaptive", display: "summarized" }
+            : { type: "adaptive" },
           output_config: { effort: budgetTokensToEffort(budgetTokens) },
         },
         omitMaxTokens: false,

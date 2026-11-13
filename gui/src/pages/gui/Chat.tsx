@@ -493,7 +493,10 @@ export function Chat() {
 
       if (message.role === "thinking") {
         const thinkingContent = renderChatMessage(message);
-        if (!thinkingContent?.trim()) {
+        const thinkingInProgress = index === history.length - 1 && isStreaming;
+        // An empty block (a model that hides its thinking) has nothing to
+        // reopen once it is done; while it streams it still says "Thinking"
+        if (!thinkingContent?.trim() && !thinkingInProgress) {
           return null;
         }
         return (
@@ -503,7 +506,7 @@ export function Chat() {
               redactedThinking={message.redactedThinking}
               index={index}
               prevItem={index > 0 ? history[index - 1] : null}
-              inProgress={index === history.length - 1 && isStreaming}
+              inProgress={thinkingInProgress}
               signature={message.signature}
             />
           </div>

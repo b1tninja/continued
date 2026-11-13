@@ -2457,6 +2457,8 @@ export interface ContinueUIConfig {
   nudgeLeakedToolCalls?: boolean;
   /** The first-run overview on Settings > Permissions was dismissed. Never shown again. */
   permissionsIntroDismissed?: boolean;
+  /** Leave the model's thinking open after the answer starts, instead of folding it to "Thought for Ns". Default false. */
+  keepThinkingExpanded?: boolean;
 }
 
 export interface ContextMenuConfig {
