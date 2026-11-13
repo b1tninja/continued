@@ -32,6 +32,11 @@ on:
       run_jetbrains:
         type: string
         default: "true"
+      # JSON array of the changed files, from the merge gate's `changes` job, for affected-only unit
+      # tests on pull requests (scripts/ci/affected-tests.mjs); empty means run everything.
+      changed_files:
+        type: string
+        default: ""
   schedule:
     - cron: "23 5 * * *"
   workflow_dispatch:
@@ -125,12 +130,18 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
+      # Jest always runs in full. Vitest: on pull requests, the tests related to the changed core
+      # modules plus a smoke set, or everything when narrowing is not safe; in shadow mode (the
+      # default) the selection is only reported (docs/ci-merge-gate.md section 9).
       - name: Run tests
         run: |
-          cd core
-          npm test
-          npm run vitest
+          (cd core && npm test)
+          node scripts/ci/affected-tests.mjs --suite core-vitest
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGED_FILES: ${{ inputs.changed_files }}
+          # Unset: shadow mode (select, report, run everything). `on`: run the selection.
+          AFFECTED_TESTS: ${{ vars.CI_AFFECTED_TESTS }}
           IGNORE_API_KEY_TESTS: ${{ steps.llm-changes.outputs.ignore_api_tests }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -171,9 +182,12 @@ jobs:
           npm run lint
 
       - name: Run tests
-        run: |
-          cd gui
-          npm test
+        run: node scripts/ci/affected-tests.mjs --suite gui
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGED_FILES: ${{ inputs.changed_files }}
+          # Unset: shadow mode (select, report, run everything). `on`: run the selection.
+          AFFECTED_TESTS: ${{ vars.CI_AFFECTED_TESTS }}
 
   binary-checks:
     if: inputs.run_binary != 'false'

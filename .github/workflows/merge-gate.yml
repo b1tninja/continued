@@ -44,6 +44,7 @@ jobs:
       e2e: ${{ steps.areas.outputs.e2e }}
       jetbrains: ${{ steps.areas.outputs.jetbrains }}
       cli: ${{ steps.areas.outputs.cli }}
+      changed_files: ${{ steps.areas.outputs.changed_files }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -88,6 +89,14 @@ jobs:
           fi
           { echo "draft=$draft"; cat "$RUNNER_TEMP/areas.txt"; } | tee -a "$GITHUB_OUTPUT"
 
+          # The list for affected-only tests (scripts/ci/affected-tests.mjs), as a JSON array; empty
+          # when it is too long to be worth narrowing, which makes every suite run in full.
+          if [ "$(grep -c . "$RUNNER_TEMP/files.txt" || true)" -le 150 ]; then
+            echo "changed_files=$(jq -R -s -c 'split("\n") | map(select(length > 0))' "$RUNNER_TEMP/files.txt")" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed_files=" >> "$GITHUB_OUTPUT"
+          fi
+
           {
             echo "### Changed files ($(wc -l < "$RUNNER_TEMP/files.txt"))"
             echo '```'
@@ -111,6 +120,7 @@ jobs:
       run_packages: ${{ needs.changes.outputs.packages }}
       run_e2e: ${{ needs.changes.outputs.e2e }}
       run_jetbrains: ${{ needs.changes.outputs.jetbrains }}
+      changed_files: ${{ needs.changes.outputs.changed_files }}
 
   cli-pr-checks:
     needs: changes
@@ -119,6 +129,8 @@ jobs:
       contents: read
     uses: ./.github/workflows/cli-pr-checks.yml
     secrets: inherit
+    with:
+      changed_files: ${{ needs.changes.outputs.changed_files }}
 
   # The aggregate. `if: always()` makes it run (and report) even when a needed job failed or was
   # skipped; a plain job-level skip would report success to branch protection.

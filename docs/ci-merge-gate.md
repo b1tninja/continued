@@ -405,3 +405,55 @@ The five largest time sinks:
 5. Repeated setup: `build-packages.js` (installs and builds all six packages) runs in about 25 jobs per
    push at 18 to 29 s each (about 10 runner-minutes); the six package legs spend 87 % of their time on it
    to run 2 to 17 s of tests each; the CLI builds core three times (20 s each).
+
+## 9. Affected-only tests, folded jobs and the e2e file list
+
+Each part follows section 8's measurements and the phases of `plans/research/ci-pipeline-redesign.md`
+(PR #805), and keeps the rule of section 7: when in doubt, run more. `merge-gate` stays the only check to
+require. The shared build of the packages is not here: PR #650 caches the built packages
+(`packages/*/{node_modules,dist}`, keyed on their sources and lockfiles) in every job that needs them,
+which the research note adopts as is (its section 3.2) and which needs no extra stage on the critical path.
+
+### (a) Affected-only unit tests, shadow mode first (CI44)
+
+`scripts/ci/affected-tests.mjs` (pure planning functions, tested by `affected-tests.test.mjs` under
+`node --test`, run in Supply Chain) plans one of the three suites the research note selects at file level:
+`core-vitest`, `gui` and `cli`. Core's jest suite (about 40 s) and the VS Code vitest suite always run in
+full. On a `pull_request` event the selection is `vitest related --run --passWithNoTests` on the changed
+modules of the suite's own directory plus the smoke set in `scripts/ci/smoke-tests.json` (a proposal: the
+owner chooses the final list). The suite runs in full when:
+
+- the event is anything but `pull_request` (`merge_group`, nightly, dispatch, push);
+- the changed-file list is missing, empty or longer than 150 files (`changes` then passes no list), or
+  more than 60 of the files are in the suite's directory;
+- any relevant file is a manifest or lockfile, a `tsconfig*.json`, a vitest, vite, jest or babel config,
+  `.npmrc` or `.nvmrc`, a test setup or global-setup file, anything under a `test/` directory, a fixture
+  (`fixtures/`, `__fixtures__/`, `testdata/`), a snapshot, a golden file or a `__mocks__/` file;
+- a file in the suite's directory is not a JS/TS module (JSON, YAML, `.scm`, CSS: read from disk or by
+  a bundler, not seen by the module graph), was deleted or renamed away, or has unusual characters;
+- a file is in an area the suite consumes across a `file:` link or a built `dist/` (`packages/` for all
+  three, `core/` for gui and cli). Whether vitest follows such a change into the consumer's tests is
+  unverified (research note 3.1), so that stays a directory-level decision;
+- a file is outside every known area (root, `scripts/`, `.github/`, `eval/`, ...);
+- planning itself throws.
+
+Files in areas the suite does not consume are ignored (an intellij change does not widen the core tests).
+The command runs as an argv array with no shell on Linux, and each path is passed as `./<path>` after a
+character check, so a file name cannot inject an option or a command.
+
+**Shadow mode is the default.** Unless the repository variable `CI_AFFECTED_TESTS` is `on`, the job writes
+the plan (mode, reason, selection inputs) to the step summary and runs the full suite. The research note
+asks for two weeks of shadow runs with no escape (a failing test the selection would not have run) before
+the variable is set; after that, a post-merge or nightly failure in a test a pull request skipped counts as
+an escape, and two in a month turn selection off again (unset the variable). Setting or unsetting it is a
+repository setting, an owner action that this change does not take.
+
+Safety nets once it is on: the post-merge check now runs the core (jest and vitest), gui and CLI unit
+suites in full after every push to `main` (CI24 extended), and the nightly PR Checks and CLI PR Checks runs
+stay full. Type checks, lint, the CLI smoke and e2e tests, the package tests and the VS Code e2e tests are
+never narrowed.
+
+Known limits: `vitest related` follows static imports and `import()` with a literal path, not
+`import(variable)`; 189 test files use `vi.mock` and 115 core test files read files from disk (research
+note 3.1). The deny list catches fixtures by location only; a test that reads a file elsewhere is the case
+shadow mode is there to measure.
