@@ -30,6 +30,7 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 ## Behaviour changes
 
+- `continuous serve` no longer runs the `install` command from `.continuous/environment.json` or `.continue/environment.json` unless the folder is trusted. Run `continuous project trust` (or pass `--trust-project-config`) to keep the old behaviour; `serve` prints one line on stderr when it skips the file. Set `"environmentInstall": false` in your own `settings.json` to turn it off even for a trusted folder. See the workspace trust page.
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
 
 ## File edits at IDGAF now reach outside the workspace
