@@ -1,17 +1,10 @@
 name: CLI PR Checks
 
-# PRs run one OS and one Node version (fast); the full OS x Node matrix runs nightly.
+# Called by the Merge Gate workflow (merge-gate.yml) for non-draft PRs that change the CLI, core or
+# packages; also runs nightly on main and on dispatch. PRs run one OS and one Node version (fast);
+# the full OS x Node matrix runs nightly and on dispatch.
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - "docs/**"
-      - "docs-site/**"
-      - "plans/**"
-      - "**/*.md"
-      - "**/*.mdx"
-      - "LICENSE"
+  workflow_call:
   schedule:
     - cron: "41 5 * * *"
   workflow_dispatch:
@@ -21,8 +14,10 @@ permissions:
 
 # A newer push to the same branch/PR supersedes the run in flight; without this
 # the fork's runner pool fills with stale runs and nothing starts.
+# The group name is a literal: in a called workflow github.workflow is the caller's name, which would
+# put this and PR Checks into one group and cancel each other.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: cli-pr-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 # onnxruntime-node's postinstall fetches its CUDA libraries from GitHub releases on Linux. Packaging drops them and nothing here uses a GPU, so don't let that download fail the job.
@@ -39,7 +34,6 @@ jobs:
         uses: ./.github/actions/track-rerun
 
   lint:
-    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -76,11 +70,10 @@ jobs:
           npm run lint
 
   test:
-    if: github.event.pull_request.draft != true
     strategy:
       matrix:
-        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","windows-latest","macos-latest"]') }}
-        node-version: ${{ fromJSON(github.event_name == 'pull_request' && '[22]' || '[22,24]') }}
+        os: ${{ fromJSON(contains(fromJSON('["pull_request","merge_group"]'), github.event_name) && '["ubuntu-latest"]' || '["ubuntu-latest","windows-latest","macos-latest"]') }}
+        node-version: ${{ fromJSON(contains(fromJSON('["pull_request","merge_group"]'), github.event_name) && '[22]' || '[22,24]') }}
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
@@ -143,7 +136,7 @@ jobs:
 
   smoke-api:
     # Only runs when secrets are available (not on fork PRs)
-    if: (github.event.pull_request.head.repo.full_name == github.repository) && github.event.pull_request.draft != true
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -191,7 +184,9 @@ jobs:
   # This action at least lets us manage the list of required tests via source control
   # so that creators of new jobs can add them to this list
   require-all-checks-to-pass-cli:
-    if: (always()) && github.event.pull_request.draft != true
+    # Nightly and dispatch runs only; under the Merge Gate the called workflow's result is evaluated
+    # by the gate (docs/ci-merge-gate.md), and this job would be one more runner slot.
+    if: always() && github.event_name != 'pull_request' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     needs:
       - lint
