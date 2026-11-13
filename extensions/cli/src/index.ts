@@ -390,11 +390,30 @@ program
 program
   .command("doctor [topic] [urls...]")
   .description(
-    "Diagnose proxy and certificate problems (doctor network [url...])",
+    "Diagnose proxy and certificate problems (doctor network [url...]), or show what the agent is told about this machine (doctor env)",
   )
-  .action(async (topic: string | undefined, urls: string[]) => {
-    await gracefulExit(await doctorCommand(topic, urls));
-  });
+  .option("--json", "doctor env: print the renderer's object as JSON")
+  .option(
+    "--surface <surface>",
+    "doctor env: preview another surface (cli, ide-agent, subagent, ...)",
+  )
+  .option(
+    "--detail <level>",
+    "doctor env: preview another detail level (minimal, standard, full)",
+  )
+  .action(
+    async (
+      topic: string | undefined,
+      urls: string[],
+      opts: { json?: boolean; surface?: string; detail?: string },
+    ) => {
+      await gracefulExit(
+        await doctorCommand(topic, urls, {
+          env: { json: opts.json, surface: opts.surface, detail: opts.detail },
+        }),
+      );
+    },
+  );
 
 // Reviewer evaluation: dry by default, --run sends the requests
 registerReviewerCommand(program, gracefulExit);

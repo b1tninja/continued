@@ -24,6 +24,8 @@ import {
 
 import type { NetworkRequestOptions } from "../util/networkFetch.js";
 
+import { doctorEnvCommand, type DoctorEnvOptions } from "./doctorEnv.js";
+
 const PROXY_VARS = [
   "HTTPS_PROXY",
   "https_proxy",
@@ -173,6 +175,8 @@ export interface DoctorOptions {
   /** Where to write; defaults to stdout. */
   write?: (line: string) => void;
   requestOptions?: NetworkRequestOptions;
+  /** `doctor env`: --json, --surface, --detail. */
+  env?: Omit<DoctorEnvOptions, "write">;
 }
 
 /** Returns the process exit code: 0 when every URL answered. */
@@ -182,8 +186,11 @@ export async function doctorCommand(
   options: DoctorOptions = {},
 ): Promise<number> {
   const write = options.write ?? ((line) => process.stdout.write(`${line}\n`));
+  if (topic === "env") {
+    return doctorEnvCommand({ ...options.env, write });
+  }
   if (topic !== "network") {
-    write("Usage: continuous doctor network [url...]");
+    write("Usage: continuous doctor network [url...] | doctor env [--json]");
     return 1;
   }
   write("Network settings");
