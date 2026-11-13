@@ -26,18 +26,19 @@ Tests are `bench/lab/test/envshell.test.mjs` (`cd bench/lab && npm test`).
 
 ## The arms
 
-| Arm | The model is told                                                            | The harness does                                                               |
-| --- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| A0  | nothing about the host                                                       | nothing                                                                        |
-| A1  | what the product says today (`<env>` with `Platform:` and the tool sentence) | nothing                                                                        |
-| A2  | one line: OS and shell                                                       | nothing                                                                        |
-| A3  | the guidance block for the shell (placeholder text)                          | nothing                                                                        |
-| A4  | A3                                                                           | appends a corrective hint to the result of a failed command                    |
-| A5  | A3                                                                           | does not run a command the shell's parser cannot read; returns the reject text |
-| A6  | the guidance block for bash in WSL                                           | runs commands in WSL (`wsl.exe -- bash -lc`)                                   |
-| A7  | the guidance block for the WRONG shell (control)                             | nothing                                                                        |
+| Arm | The model is told                                                                                                    | The harness does                                                               |
+| --- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| A0  | nothing about the host                                                                                               | nothing                                                                        |
+| A1  | what the CLI says today: `<env>` with `Platform:`, and a tool sentence that already says PowerShell 5.1 and not `&&` | nothing                                                                        |
+| A1i | the IDE terminal tool's sentence today (only `shell powershell.exe`, no `&&` warning)                                | nothing                                                                        |
+| A2  | one line: OS and shell                                                                                               | nothing                                                                        |
+| A3  | the guidance block for the shell (placeholder text)                                                                  | nothing                                                                        |
+| A4  | A3                                                                                                                   | appends a corrective hint to the result of a failed command                    |
+| A5  | A3                                                                                                                   | does not run a command the shell's parser cannot read; returns the reject text |
+| A6  | the guidance block for bash in WSL                                                                                   | runs commands in WSL (`wsl.exe -- bash -lc`)                                   |
+| A7  | the guidance block for the WRONG shell (control)                                                                     | nothing                                                                        |
 
-A1 is copied from `extensions/cli/src/systemMessage.ts` and `core/tools/definitions/runTerminalCommand.ts` as read on 2026-11-12; if either changes, update `CURRENT` in `arms.mjs`. The `guidanceSha` in every record says which guidance text was used, so a later edit of the placeholder does not silently mix with old results.
+A1 is copied from `extensions/cli/src/systemMessage.ts` and `extensions/cli/src/tools/runTerminalCommand.ts` (`describeShell`) as read on 2026-11-12; `A1i` is the IDE tool sentence (`core/tools/definitions/runTerminalCommand.ts`, before #765). If either changes, update `cliText` and `ideText` in `arms.mjs`. The `guidanceSha` in every record says which guidance text was used, so a later edit of the placeholder does not silently mix with old results.
 
 ## Failure taxonomy
 

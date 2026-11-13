@@ -283,7 +283,9 @@ test("arms: the same task text, different environment text", () => {
     ),
   );
   assert.ok(/Platform: win32/.test(built.A1.system));
-  assert.ok(/shell powershell\.exe/.test(built.A1.toolDescription));
+  assert.ok(/not &&/.test(built.A1.toolDescription));
+  assert.ok(/shell powershell\.exe/.test(built.A1i.toolDescription));
+  assert.ok(!/&&/.test(built.A1i.toolDescription));
   assert.ok(/Windows PowerShell 5\.1/.test(built.A2.system));
   assert.ok(built.A3.system.includes("<environment>"));
   assert.equal(built.A3.guidanceSha, built.A4.guidanceSha);

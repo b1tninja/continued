@@ -2,7 +2,8 @@
 // its host, and what the harness does after a failing or foreign command.
 //
 //   A0  nothing about the environment
-//   A1  what the product says today (copied; see CURRENT below)
+//   A1  what the CLI says today (copied, see below)
+//   A1i what the IDE tool says today (before #765)
 //   A2  one line: OS and shell
 //   A3  the guidance text per shell ("Environment block v2")
 //   A4  A3 plus a corrective hint appended to the result of a failed command
@@ -40,24 +41,44 @@ export const TOOL = (description) => ({
 
 export const BASE_TOOL_DESCRIPTION = "Run a command in the current directory.";
 
-// What the product says today. Sources (origin/main, read 2026-11-12):
-//   extensions/cli/src/systemMessage.ts  baseSystemMessage: the <env> block
-//   core/tools/definitions/runTerminalCommand.ts  PLATFORM_INFO and notes
+// What the product says today, in the two surfaces. Sources (origin/main, read
+// 2026-11-12):
+//   CLI  extensions/cli/src/systemMessage.ts (the <env> block) and
+//        extensions/cli/src/tools/runTerminalCommand.ts (describeShell, in the
+//        tool description: it already says Windows PowerShell 5.1 and "not &&")
+//   IDE  core/tools/definitions/runTerminalCommand.ts (PLATFORM_INFO: only
+//        "optimized for win32 and x64 and shell powershell.exe"; #765 changes it)
 // Copied, not imported, so the lab keeps no product dependency; a drift test
 // is a ROADMAP row (EV85), not part of this change.
-const CURRENT = {
-  win32: { platform: "win32", arch: "x64", shell: "powershell.exe" },
-  linux: { platform: "linux", arch: "x64", shell: "/bin/bash" },
-};
-
-function currentText(host, cwd) {
-  const c =
-    host.shell === "bash" || host.shell === "wsl"
-      ? CURRENT.linux
-      : CURRENT.win32;
+function cliText(host, cwd) {
+  const wsl = host.shell === "wsl";
+  const shellSentence =
+    host.shell === "powershell"
+      ? "Runs in Windows PowerShell 5.1 (powershell.exe) on Windows: chain commands with ; or a newline, not &&, and use PowerShell cmdlets and syntax."
+      : wsl
+        ? "Runs in bash as a login shell inside WSL, started from the workspace folder (a Windows drive appears as /mnt/c): use bash syntax and Linux paths."
+        : "Runs in bash as a login shell on linux.";
+  const platform = host.shell === "powershell" ? "win32" : "linux";
   return {
-    system: `Here is useful information about the environment you are running in:\n<env>\nWorking directory: ${cwd}\nIs directory a git repo: ${host.git ?? false}\nPlatform: ${c.platform}\n</env>`,
-    tool: `Run a terminal command in the current directory.\nThe shell is not stateful and will not remember any previous commands. Choose terminal commands and scripts optimized for ${c.platform} and ${c.arch} and shell ${c.shell}.`,
+    system: `Here is useful information about the environment you are running in:
+<env>
+Working directory: ${cwd}
+Is directory a git repo: ${host.git ?? false}
+Platform: ${platform}
+</env>`,
+    tool: `Executes a terminal command and returns the output. ${shellSentence}
+Secrets in the host environment are not passed to commands; the person can allow a name in terminal.passEnv.
+
+Commands are automatically executed from the current working directory (${cwd}), so there's no need to change directories with 'cd' commands.`,
+  };
+}
+
+function ideText(host) {
+  const win = host.shell === "powershell";
+  return {
+    system: "",
+    tool: `Run a terminal command in the current directory.
+The shell is not stateful and will not remember any previous commands. Choose terminal commands and scripts optimized for ${win ? "win32" : "linux"} and x64 and shell ${win ? "powershell.exe" : "/bin/bash"}.`,
   };
 }
 
@@ -232,11 +253,14 @@ export function buildArm(armId, host, cwd) {
     case "A0":
       break;
     case "A1": {
-      const c = currentText(host, cwd);
+      const c = cliText(host, cwd);
       system += `\n${c.system}`;
       toolDescription = c.tool;
       break;
     }
+    case "A1i":
+      toolDescription = ideText(host).tool;
+      break;
     case "A2":
       system += `\n${MINIMAL[shell]}`;
       break;
@@ -273,4 +297,4 @@ export function buildArm(armId, host, cwd) {
   };
 }
 
-export const ARM_IDS = ["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7"];
+export const ARM_IDS = ["A0", "A1", "A1i", "A2", "A3", "A4", "A5", "A6", "A7"];
