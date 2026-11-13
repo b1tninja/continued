@@ -15,6 +15,7 @@ import { AutoReviewSessions } from "core/tools/permissions/auto/state.js";
 import type { DecisionSource } from "core/tools/permissions/decide.js";
 import {
   evaluateToolPolicyWithRules,
+  type IdgafOverride,
   type ToolPolicyResult,
 } from "core/tools/permissions/evaluate.js";
 import { mcpRuleName } from "core/tools/permissions/names.js";
@@ -226,6 +227,8 @@ export interface CoreVerdict {
   rule?: string;
   /** The reviewer's model, latency and usage, when it decided */
   reviewer?: AutoReviewReply["reviewer"];
+  /** IDGAF ran the call past this objection (core's idgafOverride) */
+  idgafOverride?: IdgafOverride;
 }
 
 export interface CoreRulesInput {
@@ -417,6 +420,7 @@ export async function evaluateWithCoreRules(
     by: "rules",
     source: result.source,
     ...(result.rule ? { rule: result.rule } : {}),
+    ...(result.idgafOverride ? { idgafOverride: result.idgafOverride } : {}),
   };
 }
 

@@ -4,7 +4,14 @@ import { levelOfCall, type ApprovalSettings } from "../approval";
 import type { AutoReviewReply } from "../auto/handler";
 import type { ToolPolicyResult } from "../evaluate";
 import { taintedField } from "../taint/taintWiring";
-import type { AuditAgent, AuditBy, AuditPolicy, DecisionInput } from "./record";
+import type { IdgafOverride } from "../evaluate";
+import type {
+  AuditAgent,
+  AuditBy,
+  AuditPolicy,
+  AuditWouldHave,
+  DecisionInput,
+} from "./record";
 import type { AuditTrail } from "./trail";
 
 /**
@@ -126,6 +133,16 @@ function closeRefused(trail: AuditTrail, callId: string): void {
   trail.outcome({ callId, ran: false });
 }
 
+/** The audit form of what IDGAF ran past. */
+export function auditWouldHave(o: IdgafOverride): AuditWouldHave {
+  return {
+    policy: o.policy === "disabled" ? "deny" : "ask",
+    ...(o.source ? { source: o.source } : {}),
+    ...(o.rule ? { rule: o.rule } : {}),
+    ...(o.reason ? { reason: o.reason } : {}),
+  };
+}
+
 /** Record what the rules decided. Never throws. */
 export function recordPolicyDecision(
   trail: AuditTrail,
@@ -146,6 +163,9 @@ export function recordPolicyDecision(
       source: result.source ?? "tool-setting",
       rule: result.rule,
       reason: result.reason,
+      ...(result.idgafOverride
+        ? { level: "idgaf", wouldHave: auditWouldHave(result.idgafOverride) }
+        : {}),
     });
     if (policy === "deny") closeRefused(trail, base.callId);
   } catch {
