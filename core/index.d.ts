@@ -884,8 +884,17 @@ export interface LoopState {
   noProgressRounds: number;
   /** Items in a row that ended failed; reset by one that is done */
   consecutiveFailures?: number;
-  /** When every open item started waiting on the person (status waiting) */
+  /**
+   * When the loop started waiting on the person: every open item waits
+   * (status waiting) or a re-plan's card does (status awaiting_plan)
+   */
   waitingSince?: string;
+  /**
+   * Milliseconds the loop spent waiting on the person since `startedAt`,
+   * without the wait in progress. The time budget does not count them
+   * (loopElapsedMs). Absent in loops saved before it existed: 0.
+   */
+  waitedMs?: number;
   /** Why the last re-plan did or did not start the next round by itself */
   replanReason?: string;
   /** What the loop decided for the person by their policy, oldest first (capped) */
@@ -918,6 +927,15 @@ export interface LoopState {
   stopReason?: LoopStopReason;
   /** One line for the person: what stopped it */
   stopDetail?: string;
+  /** Set beside stopDetail when a budget stopped the loop: which, and how much */
+  stopBudget?: LoopStopBudget;
+}
+
+/** Which loop budget stopped it. Tokens are counted, time is milliseconds. */
+export interface LoopStopBudget {
+  kind: "tokens" | "time";
+  used: number;
+  max: number;
 }
 
 /** A message queued in the chat input; `editorState` is the editor's JSON. */

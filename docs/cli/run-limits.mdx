@@ -18,6 +18,8 @@ continuous -p --max-budget-usd 2 --max-turns 40 --max-duration 15 "fix the faili
 
 The flags apply to `-p` runs and to `serve`. In `serve` they cover the whole server process: when a limit is reached the server stops with the limit's exit code. The interactive chat refuses them rather than pretend to enforce them.
 
+When a limit is reached while `serve` holds a loop, the loop is marked stopped before the process exits, with the reason "A run limit was reached: ..." followed by the limit's message, so a later resume says why it ended. A running item or wave of workers is stopped first and its items go back to pending.
+
 ## Semantics
 
 These are this project's own definitions. `--max-turns` and `--max-budget-usd` are also flags of Claude Code's `-p` mode, whose [CLI reference](https://code.claude.com/docs/en/cli-reference) describes `--max-turns` as limiting "the number of agentic turns" and `--max-budget-usd` as stopping the run "once estimated spend on API calls reaches this amount", counting only the current run when a session is resumed, and warns that "spend can pass the cap". Ours follow the same ideas with these differences:

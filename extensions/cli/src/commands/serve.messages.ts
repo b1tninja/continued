@@ -13,6 +13,7 @@ import {
 import { safeStderr } from "../init.js";
 import { runLoopCheck } from "../loop/loopChecks.js";
 import { loopWakeDelay, nextLoopTurn } from "../loop/loopDriver.js";
+import { stopLoopForRunLimit } from "../loop/loopRunLimit.js";
 import { prepareLoopTurn } from "../loop/loopSession.js";
 import { getSessionLoop, interruptRunningLoop } from "../loop/loopSession.js";
 import { startWave } from "../loop/loopWave.js";
@@ -418,6 +419,7 @@ async function drainMessages(ctx: ServeMessageContext) {
     const runStop = currentRunStop();
     if (runStop) {
       state.serverRunning = false;
+      stopLoopForRunLimit(`A run limit was reached: ${runStop.detail}`);
       await gracefulExit(reportRunStop(runStop, safeStderr));
       break;
     }
