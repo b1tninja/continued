@@ -141,6 +141,7 @@ async function askWithHooks(
   const hooked = await firePermissionRequest(
     toolCall.name,
     toolCall.preprocessResult?.args ?? toolCall.arguments,
+    toolCall.tool?.mcpServer,
   );
   if (hooked.blocked) return false;
   notifyAttention(

@@ -7,6 +7,8 @@
 import * as readline from "node:readline/promises";
 
 import { getProjectHookFiles, loadHooksConfig } from "../hooks/hookConfig.js";
+import { getUserHookFiles } from "../hooks/hookListing.js";
+import { hooksTestCommand } from "../hooks/hooksTest.js";
 import {
   fingerprintProjectHooks,
   isProjectTrusted,
@@ -20,6 +22,11 @@ import { auditTrust } from "../permissions/policyAudit.js";
 export interface HooksCommandOptions {
   /** Skip the question; for scripts. */
   yes?: boolean;
+  /** `test`: the event to try and how to build its sample input. */
+  event?: string;
+  tool?: string;
+  server?: string;
+  input?: string;
 }
 
 function out(line = ""): void {
@@ -31,6 +38,24 @@ function describe(cwd: string, files: ProjectHookFile[]): void {
   for (const file of files) out(`  ${file.path}`);
   out();
   for (const line of listProjectHandlers(files, cwd)) out(`  ${line}`);
+  out();
+}
+
+/** The user's own hooks, each file with what it defines. They always run. */
+function describeUserHooks(cwd: string): void {
+  const files = getUserHookFiles(cwd);
+  if (files.length === 0) return;
+  out("Your own hooks (always run, from your settings):");
+  for (const file of files) {
+    out(`  ${file.path}`);
+    if (file.unreadable) {
+      out(
+        "    could not be read as a JSON object: none of its hooks run. Fix the file.",
+      );
+      continue;
+    }
+    for (const line of listProjectHandlers([file], cwd)) out(`    ${line}`);
+  }
   out();
 }
 
@@ -54,11 +79,13 @@ export async function hooksCommand(
   options: HooksCommandOptions = {},
   cwd: string = process.cwd(),
 ): Promise<number> {
+  if (action === "test") return hooksTestCommand(options, cwd);
   const files = getProjectHookFiles(cwd);
   const fingerprint = fingerprintProjectHooks(cwd, files);
 
   switch (action ?? "list") {
     case "list": {
+      describeUserHooks(cwd);
       if (files.length === 0) {
         out("This project defines no hooks.");
         return 0;
@@ -125,7 +152,7 @@ export async function hooksCommand(
 
     default:
       process.stderr.write(
-        `Unknown action '${action}'. Use list, trust or revoke.\n`,
+        `Unknown action '${action}'. Use list, trust, revoke or test.\n`,
       );
       return 1;
   }
