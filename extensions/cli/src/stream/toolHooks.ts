@@ -33,7 +33,7 @@ export async function runPreToolUseHooks(
     call.name,
     call.arguments,
     call.id,
-    call.tool.mcpServer,
+    call.tool?.mcpServer,
   );
 
   if (result.blocked) {
@@ -82,7 +82,7 @@ export async function runPostToolUseHooks(
       call.arguments,
       toolResult,
       call.id,
-      call.tool.mcpServer,
+      call.tool?.mcpServer,
     );
     const notes: string[] = [];
     if (result.blocked && result.blockReason) {
@@ -104,7 +104,7 @@ export async function runPostToolUseFailureHooks(
 ): Promise<void> {
   try {
     await firePostToolUseFailure(call.name, call.arguments, call.id, error, {
-      server: call.tool.mcpServer,
+      server: call.tool?.mcpServer,
     });
   } catch (hookError) {
     logger.warn(`PostToolUseFailure hooks failed for ${call.name}`, hookError);
