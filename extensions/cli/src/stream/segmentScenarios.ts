@@ -15,6 +15,7 @@ import { getCurrentSession, startNewSession } from "../session.js";
 import { multiEditTool } from "../tools/multiEdit.js";
 import { presentPlanTool } from "../tools/presentPlan.js";
 import { readFileTool } from "../tools/readFile.js";
+import { runTerminalCommandTool } from "../tools/runTerminalCommand.js";
 import { taskListTool } from "../tools/taskList.js";
 import { writeFileTool } from "../tools/writeFile.js";
 
@@ -116,16 +117,10 @@ export function scenarioTools(spec: CliScenarioSpec): ChatCompletionTool[] {
   const builtins = [
     readFileTool,
     writeFileTool,
-    // The real Bash tool describes the host OS, so a fixed stand-in keeps
-    // the goldens the same on every platform.
-    {
-      name: "Bash",
-      description: "Run a shell command and return its output.",
-      parameters: {
-        required: ["command"],
-        properties: { command: { type: "string" } },
-      },
-    },
+    // The real Bash tool: its shell sentence comes from the session's fixed
+    // snapshot (scenarioSnapshot) and it names no folder, so the goldens are
+    // the same on every machine.
+    runTerminalCommandTool,
     ...(spec.taskListBlock ? [taskListTool] : []),
     multiEditTool,
     ...(spec.mode === "plan" ? [presentPlanTool] : []),
