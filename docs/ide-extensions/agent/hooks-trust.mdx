@@ -44,7 +44,17 @@ If a hook sets both, the stricter one applies, and a value that is not understoo
 
 `transcript_path` is empty: there is no transcript file. Some things are logged and not obeyed yet: a `Stop` hook that asks the assistant to continue, a `PreCompact` hook that blocks, and context from `SessionStart` (it is not added to the conversation). A `PermissionRequest` hook can deny a call but its `allow` does not skip the question, because the question may be one a rule insisted on. `SessionEnd` does not run on a signal or a crash.
 
-Not covered yet: the `args` form that runs a command without a shell, an `if` filter, `prompt_id`, `agent_id` and the other optional input fields, and hooks in the IDE extensions. Hooks are a guardrail, not a boundary: the search and glob tools and MCP tools do not call tool hooks.
+Not covered yet: the `args` form that runs a command without a shell, an `if` filter, `prompt_id`, `agent_id` and the other optional input fields, and hooks in the IDE extensions. Hooks are a guardrail, not a boundary. Every tool call in the terminal agent, MCP tools and the search and list tools included, fires `PreToolUse` and `PostToolUse`; hooks do not exist in the IDE extensions.
+
+## Matching a tool, and MCP tools
+
+A hook's `matcher` is a regular expression tested against `tool_name` (not anchored: `Edit` also matches `MultiEdit`; write `^Edit$` for an exact name). An empty matcher or `*` matches every call. This is how it works today and it differs from Claude Code, which treats a plain name or a `|` list as an exact match.
+
+An MCP tool fires its hooks under the tool's own name as the server reports it (`tool_name`, unchanged), and the input has one more field, `server`, the name of the MCP server. Two servers that both expose a tool called `search` are told apart by `server`. A built-in tool has no `server` field.
+
+An MCP tool can also be matched by the qualified name `mcp__<server>__<tool>`, the form Claude Code and the permission rules use (the server name is lower-cased and made safe for a name, the same way as in permission rules). A matcher that contains `mcp__` is tested against that name as well as the raw one, so `mcp__github__.*` guards every tool of the `github` server and `mcp__github__search` only its `search`. The qualified name is an extra match: a matcher that does not contain `mcp__` is tested only against the raw name, exactly as before, so a matcher for a built-in tool never starts to match an MCP server's tools.
+
+`PreToolUse`, `PostToolUse`, `PostToolUseFailure` and `PermissionRequest` carry `server` for MCP tools.
 
 ## What a hook is sent
 

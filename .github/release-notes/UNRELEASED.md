@@ -31,6 +31,7 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 ## Behaviour changes
 
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
+- **MCP tools can be matched by `mcp__<server>__<tool>` in a hook, and the hook input names the server.** Tool hooks (`PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`) already ran for MCP tools, but under the server's own tool name, so a matcher written the Claude Code way (`mcp__github__.*`) never matched and a guard hook for an MCP server silently did not run. Now the input has a `server` field for an MCP tool (`tool_name` is unchanged), and a matcher that contains `mcp__` is also tested against `mcp__<server>__<tool>`. Matching against the raw name is unchanged, and a matcher without `mcp__` never sees the qualified name, so no existing matcher changes meaning. See the Hooks and trust page.
 
 ## File edits at IDGAF now reach outside the workspace
 
