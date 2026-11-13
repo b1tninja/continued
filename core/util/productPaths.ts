@@ -96,6 +96,8 @@ export const PRODUCT_STATE_PATHS = [
   "worktrees",
   "bedrock-catalog",
   "model-catalog",
+  // the terminal agent's compiled-code cache, `cache/compile`
+  "cache",
   "input_history.json",
   "retirement-notices.json",
   ".onboarding_complete",
