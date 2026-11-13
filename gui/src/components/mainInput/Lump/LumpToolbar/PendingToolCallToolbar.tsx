@@ -5,6 +5,7 @@ import { selectPendingToolCalls } from "../../../../redux/selectors/selectToolCa
 import { callToolById } from "../../../../redux/thunks/callToolById";
 import { cancelToolCallThunk } from "../../../../redux/thunks/cancelToolCall";
 import { useApprovalFocus } from "../../../a11y/useApprovalFocus";
+import { useRestoreFocusOnResolve } from "../../../a11y/useRestoreFocusOnResolve";
 import { getAltKeyLabel, getMetaKeyLabel, isJetBrains } from "../../../../util";
 import { Button } from "../../../ui";
 import { useMainEditor } from "../../TipTapEditor";
@@ -28,6 +29,12 @@ export function PendingToolCallToolbar() {
   const editor = useMainEditor();
   const acceptRef = useRef<HTMLButtonElement>(null);
   useApprovalFocus(pendingToolCalls[0]?.toolCallId, acceptRef);
+  // When the last pending action resolves the toolbar disappears; give focus
+  // to the chat input instead of letting it fall to the page.
+  const focusHandlers = useRestoreFocusOnResolve(
+    pendingToolCalls.length > 0,
+    () => editor.mainEditor?.commands.focus(),
+  );
 
   if (pendingToolCalls.length === 0) {
     return null;
@@ -55,6 +62,7 @@ export function PendingToolCallToolbar() {
           : "Approval needed"
       }
       data-testid="pending-tool-call-toolbar"
+      {...focusHandlers}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 px-1 pb-0.5">
         <span className="min-w-0 basis-full text-2xs text-description xs:basis-auto">
