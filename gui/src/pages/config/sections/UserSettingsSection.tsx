@@ -2,6 +2,7 @@ import {
   SharedConfigSchema,
   modifyAnyConfigWithSharedConfig,
 } from "core/config/sharedConfig";
+import { DEFAULT_AUTOCOMPLETE_OPTS } from "core/util/parameters";
 import { useContext, useEffect, useState } from "react";
 import { Card, Toggle, useFontSize } from "../../../components/ui";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
@@ -67,10 +68,17 @@ export function UserSettingsSection() {
   const enableAutoApproval = config.experimental?.enableAutoApproval ?? false;
   const allowAnonymousTelemetry = config.allowAnonymousTelemetry ?? true;
 
+  // Unset values show what autocomplete actually uses (core's defaults); the
+  // debounce fallback here used to say 250 ms while core waited 350 ms
   const useAutocompleteMultilineCompletions =
-    config.tabAutocompleteOptions?.multilineCompletions ?? "auto";
-  const modelTimeout = config.tabAutocompleteOptions?.modelTimeout ?? 150;
-  const debounceDelay = config.tabAutocompleteOptions?.debounceDelay ?? 250;
+    config.tabAutocompleteOptions?.multilineCompletions ??
+    DEFAULT_AUTOCOMPLETE_OPTS.multilineCompletions;
+  const modelTimeout =
+    config.tabAutocompleteOptions?.modelTimeout ??
+    DEFAULT_AUTOCOMPLETE_OPTS.modelTimeout;
+  const debounceDelay =
+    config.tabAutocompleteOptions?.debounceDelay ??
+    DEFAULT_AUTOCOMPLETE_OPTS.debounceDelay;
   const fontSize = useFontSize();
 
   const cancelChangeDisableAutocomplete = () => {
