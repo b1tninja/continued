@@ -1,4 +1,4 @@
-import type { TaskPlan } from "core/index.js";
+import type { LoopItemState, TaskPlan } from "core/index.js";
 import {
   createLoop,
   enterWait,
@@ -42,7 +42,7 @@ describe("workerTimeoutMs", () => {
     expect(workerTimeoutMs({ loop, plan: p }, T0)).toBe(10 * 60_000);
     const earlier = {
       ...loop,
-      items: loop.items.map((i) =>
+      items: loop.items.map((i: LoopItemState) =>
         i.id === "1" ? { ...i, usage: { tokens: 0, ms: 4 * 60_000 } } : i,
       ),
     };
