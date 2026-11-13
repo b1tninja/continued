@@ -27,6 +27,14 @@ export interface InitializeToolServiceOverrides {
   exclude?: string[];
   mode?: PermissionMode;
   isHeadless?: boolean;
+  /**
+   * Use the interactive default lists (Bash and unlisted tools ask) even
+   * though this process is headless. A Loop worker of a terminal-UI parent
+   * sets it: nobody types into the worker, but its asks become held
+   * questions for the parent's person, so it must not take the headless
+   * defaults (Bash and every unlisted tool allowed) its parent never had.
+   */
+  interactiveDefaults?: boolean;
 }
 
 export interface ToolPermissionServiceState {
@@ -69,6 +77,14 @@ export class ToolPermissionService
       isHeadless: false,
       modePolicyCount: 0,
     });
+  }
+
+  /** Set from InitializeToolServiceOverrides.interactiveDefaults */
+  private interactiveDefaults = false;
+
+  /** Which default lists apply: the headless ones only for a headless run that did not ask for the interactive ones. */
+  private headlessDefaults(): boolean {
+    return this.currentState.isHeadless && !this.interactiveDefaults;
   }
 
   /**
@@ -239,6 +255,9 @@ export class ToolPermissionService
     if (runtimeOverrides?.isHeadless !== undefined) {
       this.setState({ isHeadless: runtimeOverrides.isHeadless });
     }
+    if (runtimeOverrides?.interactiveDefaults !== undefined) {
+      this.interactiveDefaults = runtimeOverrides.interactiveDefaults;
+    }
 
     const modePolicies = this.generateModePolicies();
     // An agent file only narrows: its excludes go in front of whatever the
@@ -270,7 +289,7 @@ export class ToolPermissionService
                 commandLineFlags: runtimeOverrides,
                 personalSettings: true,
                 useDefaults: true,
-                isHeadless: this.currentState.isHeadless,
+                isHeadless: this.headlessDefaults(),
               }),
             ),
           },
@@ -282,7 +301,7 @@ export class ToolPermissionService
         commandLineFlags: runtimeOverrides,
         personalSettings: true, // Enable loading from ~/.continue/permissions.yaml
         useDefaults: true,
-        isHeadless: this.currentState.isHeadless,
+        isHeadless: this.headlessDefaults(),
       });
       allPolicies = [...compiledPolicies];
     }

@@ -256,16 +256,21 @@ function abortWave(): void {
 
 function workerOptions(): LoopWorkerInput["options"] {
   let mode: PermissionMode = "normal";
+  // Unknown counts as interactive: the stricter default lists, whose asks
+  // the worker holds as questions rather than running
+  let parentHeadless = false;
   try {
     const permissions = getServiceSync<ToolPermissionServiceState>(
       SERVICE_NAMES.TOOL_PERMISSIONS,
     );
     mode = permissions.value?.currentMode ?? "normal";
+    parentHeadless = permissions.value?.isHeadless ?? false;
   } catch {
     // The worker still loads the settings file.
   }
   const policy = {
     mode,
+    parentHeadless,
     ...getCommandPermissionFlags(),
     levels: getPolicyLevels(),
   };
