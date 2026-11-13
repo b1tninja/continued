@@ -181,6 +181,14 @@ export const VIEWS = {
     fixture: "settings-tools",
     note: "Settings, Tools tab, with Commands and secrets",
   },
+  "drop-target": {
+    fixture: "drop-target",
+    note: "the chat input while a file is dragged over it: the drop target and the VS Code Shift hint",
+  },
+  "drop-refused": {
+    fixture: "drop-refused",
+    note: "the chat input after a drop of .env and a file outside the workspace: the refusal note",
+  },
 };
 
 export const VIEW_NAMES = Object.keys(VIEWS);
