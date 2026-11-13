@@ -229,7 +229,7 @@ export class MCPService
   }
 
   /**
-   * A call ran, so it was approved (or the person runs at YOLO): pin it. The
+   * A call ran, so it was approved (or the person runs at IDGAF): pin it. The
    * first call to a server pins all of its tools, and a changed launch
    * definition is accepted here; both are announced.
    */

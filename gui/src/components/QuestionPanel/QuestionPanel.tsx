@@ -17,7 +17,13 @@ import {
   type LoopAnswerInput,
 } from "../../redux/thunks/loop";
 import { answerLimitQuestionThunk } from "../../redux/thunks/loopBudget";
-import { recordPlanAnswer } from "../../util/planDecisions";
+import { autoAnswerPlanFile, recordPlanAnswer } from "../../util/planDecisions";
+import { selectEffectiveLevels } from "../../redux/selectors/selectAutoApproval";
+import {
+  policyLevelLabel,
+  questionsNeverAsk,
+} from "core/tools/permissions/policy";
+import { autoAnsweredLine } from "core/util/autoAnswer";
 import { AnswerChoices } from "./AnswerChoices";
 
 /**
@@ -261,11 +267,47 @@ export function QuestionPanel() {
     };
   }, [fileUri, callId, ideMessenger]);
 
+  // Questions is IDGAF: a plan's open decisions are answered from what it
+  // offered, so the person is shown a line and nothing waits (a plan made
+  // earlier or opened later is covered here; present_plan covers a new one)
+  const level = useAppSelector((s) => selectEffectiveLevels(s).questions);
+  const neverAsk = questionsNeverAsk(level);
+  const [autoLines, setAutoLines] = useState<string[]>([]);
+  useEffect(() => {
+    if (!neverAsk || !fileUri || !fileDecisions) return;
+    if (fileDecisions.every((d) => d.answer)) return;
+    let cancelled = false;
+    void autoAnswerPlanFile(ideMessenger.ide, fileUri)
+      .then((answers) => {
+        if (cancelled || answers.length === 0) return;
+        const source = `Questions: ${policyLevelLabel("questions", level)}`;
+        setFileDecisions((previous) =>
+          answeredDecisions(previous ?? [], answers),
+        );
+        setAutoLines((lines) => [
+          ...lines,
+          ...answers.map((a) => autoAnsweredLine(a.question, a.answer)),
+        ]);
+        answers.forEach((a, i) => {
+          void ideMessenger.request("audit/autoAnswer", {
+            callId: `plan-decision-${Date.now()}-${i}`,
+            question: a.question,
+            answer: a.answer,
+            source,
+          });
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [neverAsk, fileUri, fileDecisions, ideMessenger, level]);
+
   const open = (loop?.questions ?? []).filter(
     (q) => !q.answerId && !q.decidedAlone,
   );
   const decisions =
-    args?.ok && fileUri
+    args?.ok && fileUri && !neverAsk
       ? answeredDecisions(
           args.decisions,
           (fileDecisions ?? []).flatMap((d) =>
@@ -276,38 +318,53 @@ export function QuestionPanel() {
   const itemText = (id?: string) =>
     taskPlan?.items.find((i) => i.id === id)?.text;
   const count = open.length + decisions.length;
-  if (count === 0) return null;
+  const autoNotice = autoLines.length > 0 && (
+    <div
+      data-testid="auto-answered"
+      className="mx-1 mb-1 px-2 text-2xs text-description-muted"
+    >
+      {autoLines.map((line) => (
+        <div key={line} className="break-words">
+          {line}
+        </div>
+      ))}
+    </div>
+  );
+  if (count === 0) return autoNotice || null;
 
   return (
-    <div
-      data-testid="question-panel"
-      role="region"
-      aria-label="Questions for you"
-      className="mx-1 mb-1 rounded border border-solid border-link px-2 py-1 text-xs"
-    >
-      <div className="flex items-center gap-1 text-description">
-        <QuestionMarkCircleIcon className="h-3 w-3 shrink-0" />
-        <span className="font-medium text-foreground">
-          {count} question{count === 1 ? "" : "s"} for you
-        </span>
+    <>
+      {autoNotice}
+      <div
+        data-testid="question-panel"
+        role="region"
+        aria-label="Questions for you"
+        className="mx-1 mb-1 rounded border border-solid border-link px-2 py-1 text-xs"
+      >
+        <div className="flex items-center gap-1 text-description">
+          <QuestionMarkCircleIcon className="h-3 w-3 shrink-0" />
+          <span className="font-medium text-foreground">
+            {count} question{count === 1 ? "" : "s"} for you
+          </span>
+        </div>
+        <ul className="m-0 max-h-72 list-none overflow-y-auto p-0">
+          {decisions.map((d) => (
+            <PlanDecisionRow
+              key={d.question}
+              decision={d}
+              fileUri={fileUri!}
+              onRecorded={setFileDecisions}
+            />
+          ))}
+          {open.map((q) => (
+            <LoopQuestionRow
+              key={q.id}
+              question={q}
+              itemText={itemText(q.itemId)}
+            />
+          ))}
+        </ul>
       </div>
-      <ul className="m-0 max-h-72 list-none overflow-y-auto p-0">
-        {decisions.map((d) => (
-          <PlanDecisionRow
-            key={d.question}
-            decision={d}
-            fileUri={fileUri!}
-            onRecorded={setFileDecisions}
-          />
-        ))}
-        {open.map((q) => (
-          <LoopQuestionRow
-            key={q.id}
-            question={q}
-            itemText={itemText(q.itemId)}
-          />
-        ))}
-      </ul>
-    </div>
+    </>
   );
 }

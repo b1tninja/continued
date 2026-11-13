@@ -13,6 +13,9 @@ import { listEffectiveRules } from "core/tools/permissions/effectiveRules";
 import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { parsePolicyFile } from "core/tools/permissions/settingsFile";
 import { createLoop, enterWait } from "core/util/loopMode";
+import { addBlockedCall } from "@gui/redux/slices/blockedCallsSlice";
+import { setPolicyLevel } from "@gui/redux/slices/uiSlice";
+import { POLICY_AREAS } from "core/tools/permissions/policy";
 import type { MockIdeMessenger } from "@gui/context/MockIdeMessenger";
 import {
   newSession,
@@ -675,6 +678,39 @@ export const FIXTURES: Record<string, Fixture> = {
     store.dispatch(setTaskPlan(PLAN));
     store.dispatch(setLoop(loopState()));
   },
+  /** Loop mode at IDGAF with seven refused calls: the one-line chip and the blocked badge */
+  "loop-idgaf": ({ store }) => {
+    store.dispatch(newSession(session([], "Fix parseConfig")));
+    store.dispatch(setMode("loop" as never));
+    store.dispatch(setTaskPlan(PLAN));
+    store.dispatch(setLoop(loopState()));
+    for (const area of POLICY_AREAS) {
+      store.dispatch(setPolicyLevel({ area, level: "idgaf" }));
+    }
+    for (let i = 0; i < 7; i++) {
+      store.dispatch(
+        addBlockedCall({
+          id: String(i),
+          toolName: "run_terminal_command",
+          summary: `rm -rf build-${i}`,
+          source: i % 2 ? "auto" : "deny-rule",
+          reason: "Deletes files outside the task",
+          parsedArgs: { command: `rm -rf build-${i}` },
+          at: NOW.getTime(),
+        } as never),
+      );
+    }
+  },
+  /** The same, with the blocked list open above the mode bar */
+  "loop-blocked-open": async (ctx) => {
+    await (FIXTURES as Record<string, Fixture>)["loop-idgaf"](ctx);
+    await new Promise((r) => setTimeout(r, 800));
+    (
+      document.querySelector(
+        "[data-testid=recently-blocked-toggle]",
+      ) as HTMLElement
+    )?.click();
+  },
   "permissions-editor": permissionsEditor,
   /** The Settings page, Tools tab, with "Commands and secrets" */
   "settings-tools": async ({ navigate }) => {
@@ -792,7 +828,15 @@ function bedrock(ok: boolean): Fixture {
   };
 }
 
+// The loop frame is mounted on its own (see main.tsx, LoopFrameDemo); the state is in the name.
+const noop: Fixture = async () => {};
+
 Object.assign(FIXTURES, {
+  "loop-frame-running": noop,
+  "loop-frame-waiting": noop,
+  "loop-frame-failed": noop,
+  "loop-frame-finished": noop,
+  "loop-frame-stopped": noop,
   "settings-models": settingsTab("models"),
   "settings-rules": settingsTab("rules"),
   "settings-permissions": async (ctx) => {

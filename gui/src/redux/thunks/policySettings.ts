@@ -16,8 +16,8 @@ import { ThunkApiType } from "../store";
 /**
  * The levels and settings live in the file the CLI shares
  * (~/.continuous/permissions.yaml); core reads and writes it. At startup the
- * file replaces whatever the webview remembered, which is how a YOLO from an
- * earlier session is dropped: YOLO is for one session only.
+ * file replaces whatever the webview remembered, which is how a IDGAF from an
+ * earlier session is dropped: IDGAF is for one session only.
  */
 export const loadPolicySettings = createAsyncThunk<void, void, ThunkApiType>(
   "policy/load",
@@ -47,7 +47,7 @@ export const loadPolicySettings = createAsyncThunk<void, void, ThunkApiType>(
   },
 );
 
-/** Writes the levels (never YOLO) and the settings a person can change. */
+/** Writes the levels (never IDGAF) and the settings a person can change. */
 export const savePolicySettings = createAsyncThunk<void, void, ThunkApiType>(
   "policy/save",
   async (_, { getState, extra }) => {

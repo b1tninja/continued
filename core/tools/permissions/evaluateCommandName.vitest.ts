@@ -28,7 +28,7 @@ const run = (
     ...extra,
   });
 
-const at = (tools: "yolo" | "permissive" | "automatic") => ({
+const at = (tools: "idgaf" | "permissive" | "automatic") => ({
   approval: { levels: { ...DEFAULT_POLICY_LEVELS, tools } },
 });
 
@@ -69,7 +69,7 @@ describe("a variable where the command name is asks", () => {
   });
 
   it.each(cases)("%s: %j is not loosened by any level", (shell, command) => {
-    for (const level of ["yolo", "permissive", "automatic"] as const) {
+    for (const level of ["idgaf", "permissive", "automatic"] as const) {
       expect(run(command, shell, at(level)).policy, level).toBe(ASK);
     }
   });
