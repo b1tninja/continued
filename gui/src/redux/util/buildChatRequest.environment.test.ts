@@ -6,6 +6,7 @@ import { renderEnvironment } from "core/util/environmentPrompt";
 import { describe, expect, it } from "vitest";
 import { getEmptyRootState } from "../../util/test/mockStore";
 import type { RootState } from "../store";
+import { recordDateNotice } from "../thunks/sessionEnvironment";
 import { buildChatRequest } from "./buildChatRequest";
 
 const model: ModelDescription = {
@@ -152,5 +153,42 @@ describe("the session environment in the IDE request (ENV13, ENV14)", () => {
       "fix it",
     );
     expect(String(messages[0].content)).not.toContain("<env>");
+  });
+});
+
+describe("the date notice in the IDE request (ENV32)", () => {
+  function recordOn(state: RootState, today: string) {
+    let current = state;
+    const dispatch = ((action: { type: string; payload: unknown }) => {
+      if (action.type === "session/setSessionEnvironment") {
+        current = {
+          ...current,
+          session: { ...current.session, environment: action.payload as never },
+        };
+      }
+      return action;
+    }) as never;
+    const added = recordDateNotice(() => current, dispatch, today);
+    return { added, state: current };
+  }
+
+  it("is added once on a later day, at the end of the newest user message", () => {
+    const { added, state } = recordOn(stateWith("agent"), "2026-11-13");
+    expect(added).toBe(true);
+    const users = buildChatRequest(state).messages.filter(
+      (m) => m.role === "user",
+    );
+    expect(text(users[1].content)).toBe(
+      'and the test\n\n<context name="environment-update">\nToday\'s date is now 2026-11-13 (the session started on 2026-11-12).\n</context>',
+    );
+    expect(text(users[0].content)).toBe(`${env.firstMessageBlock}\n\nfix it`);
+    // The same day again adds nothing, and the notice does not move
+    const again = recordOn(state, "2026-11-13");
+    expect(again.added).toBe(false);
+    expect(again.state.session.environment?.notices).toHaveLength(1);
+  });
+
+  it("the same day adds nothing", () => {
+    expect(recordOn(stateWith("agent"), "2026-11-12").added).toBe(false);
   });
 });

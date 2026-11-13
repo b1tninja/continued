@@ -1,6 +1,9 @@
+import { withDateNotice } from "core/util/environmentMessages";
+import { localDayOf } from "core/util/environmentUpdate";
 import { IIdeMessenger } from "../../context/IdeMessenger";
 import { setSessionEnvironment } from "../slices/sessionSlice";
 import type { AppDispatch, RootState } from "../store";
+import { buildChatRequest } from "../util/buildChatRequest";
 
 /** The session core was last asked about from this webview. */
 let askedFor: string | undefined;
@@ -48,4 +51,34 @@ export async function ensureSessionEnvironment(
   } catch {
     // No environment: the request is built without it
   }
+}
+
+/**
+ * Records a date notice when the person's local day has moved on since the
+ * session started (or since its last notice): on the newest user message of
+ * the request about to be built, saved with the session, so it stays on that
+ * message in every later request (ENV32). Returns whether one was added.
+ */
+export function recordDateNotice(
+  getState: () => RootState,
+  dispatch: AppDispatch,
+  today: string = localDayOf(),
+): boolean {
+  const env = getState().session.environment;
+  if (!env?.snapshot?.localDay) return false;
+  const before = env.notices ?? [];
+  const last = before.length
+    ? before[before.length - 1].localDay
+    : env.snapshot.localDay;
+  if (today <= last) return false;
+  let userTurns: number;
+  try {
+    userTurns = buildChatRequest(getState()).userTurns;
+  } catch {
+    return false;
+  }
+  const next = withDateNotice(env.snapshot, before, userTurns, today);
+  if (next === before) return false;
+  dispatch(setSessionEnvironment({ ...env, notices: [...next] }));
+  return true;
 }

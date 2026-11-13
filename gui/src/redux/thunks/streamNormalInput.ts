@@ -80,6 +80,7 @@ import { refuseRoleCalls } from "./refuseRoleCalls";
 import {
   ensureSessionEnvironment,
   needsSessionEnvironment,
+  recordDateNotice,
 } from "./sessionEnvironment";
 import { checkToolDialectLeak } from "./noteToolDialectLeak";
 import { nudgeLeakedToolCall } from "./nudgeLeakedToolCall";
@@ -108,6 +109,7 @@ export const streamNormalInput = createAsyncThunk<
     if (needsSessionEnvironment(getState())) {
       await ensureSessionEnvironment(getState, dispatch, extra.ideMessenger);
     }
+    recordDateNotice(getState, dispatch);
     const state = getState();
     const selectedChatModel = selectSelectedChatModel(state);
 

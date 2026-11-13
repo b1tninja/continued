@@ -6,6 +6,12 @@ import {
   resolveEnvironmentDetail,
 } from "core/util/environmentDetail.js";
 import {
+  placeEnvironment,
+  withDateNotice,
+  withTrailingText,
+  type EnvironmentNotice,
+} from "core/util/environmentMessages.js";
+import {
   CONTEXT_CLOSE,
   ENVIRONMENT_BLOCK_OPEN as BLOCK_OPEN,
   renderEnvironment,
@@ -18,6 +24,7 @@ import {
   baseSnapshot,
   gatherEnvironment,
   isEnvironmentSnapshot,
+  localDayOf,
   type GatherInput,
 } from "core/util/environmentSnapshot.js";
 import type { ChatCompletionMessageParam } from "openai/resources.mjs";
@@ -247,6 +254,49 @@ export function resetEnvironmentContextBlock(): void {
 export function withEnvironmentBlock(
   messages: ChatCompletionMessageParam[],
   environmentBlock: string = environmentContextBlock(),
+  notices: readonly EnvironmentNotice[] = environmentNotices(),
+): ChatCompletionMessageParam[] {
+  const withBlock = withFirstBlock(messages, environmentBlock);
+  if (notices.length === 0 || withBlock === messages) return withBlock;
+  // Each date notice stays on the user message it was first added to
+  return placeEnvironment(
+    withBlock,
+    (m) => m.role === "user",
+    (m, add) =>
+      ({
+        ...m,
+        content: withTrailingText(m.content, add.notices.join("\n\n")),
+      }) as ChatCompletionMessageParam,
+    undefined,
+    notices,
+  );
+}
+
+/** The date notices this session has sent, each on its user message. */
+export function environmentNotices(): readonly EnvironmentNotice[] {
+  return savedOf(currentSession())?.notices ?? [];
+}
+
+/**
+ * Records a date notice when the person's local day has moved on since the
+ * session started (or since the last notice): on the newest of the request's
+ * `userTurns` user messages, saved with the session, so later requests carry
+ * it on the same message and earlier bytes never change (ENV32).
+ */
+export function noteDateRollover(
+  userTurns: number,
+  today: string = localDayOf(),
+): void {
+  const env = savedOf(currentSession());
+  if (!env) return;
+  const before = env.notices ?? [];
+  const next = withDateNotice(env.snapshot, before, userTurns, today);
+  if (next !== before) env.notices = [...next];
+}
+
+function withFirstBlock(
+  messages: ChatCompletionMessageParam[],
+  environmentBlock: string,
 ): ChatCompletionMessageParam[] {
   const index = messages.findIndex((m) => m.role === "user");
   if (index === -1) return messages;

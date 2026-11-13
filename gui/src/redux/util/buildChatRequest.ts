@@ -15,6 +15,7 @@ import { withTerminalToolSentence } from "core/tools/definitions/terminalToolTex
 import {
   placeEnvironment,
   withLeadingText,
+  withTrailingText,
 } from "core/util/environmentMessages";
 import { loopRunPlanBlock, withLoopPlanBlock } from "core/util/loopMode";
 import { taskPlanTailMessage } from "core/util/taskPlan";
@@ -29,6 +30,8 @@ import { selectSelectedChatModel } from "../slices/configSlice";
 import type { RootState } from "../store";
 import { constructMessages } from "./constructMessages";
 import { getBaseSystemMessage } from "./getBaseSystemMessage";
+
+const NOTICE_SEPARATOR = "\n\n";
 
 /** The plan block of the running item's run, kept between its requests. */
 const runPlanMemo: { key?: string; block?: string } = {};
@@ -83,6 +86,8 @@ export interface ChatRequest {
   appliedRuleIndex: number;
   /** Set when the model takes tools as text in the system message. */
   systemToolsFramework: SystemMessageToolCodeblocksFramework | undefined;
+  /** How many user messages the request's history has (for the date notice). */
+  userTurns: number;
 }
 
 /**
@@ -252,20 +257,31 @@ export function buildChatRequest(
     : undefined;
   // The first-message block goes before the first user message's text, the
   // frozen bytes of the session's start, so every request extends the last.
-  const withEnvironment = environment?.firstMessageBlock
-    ? placeEnvironment(
-        withoutMessageIds,
-        (item) => item.message.role === "user",
-        (item, add) => ({
-          ...item,
-          message: {
-            ...item.message,
-            content: withLeadingText(item.message.content, add.first ?? ""),
-          } as typeof item.message,
-        }),
-        environment.firstMessageBlock,
-      )
-    : withoutMessageIds;
+  // A date notice (ENV32) rides at the end of the user message it was first
+  // added to, so it never moves and earlier bytes never change.
+  const notices = state.session.environment?.notices ?? [];
+  const withEnvironment =
+    environment?.firstMessageBlock || notices.length
+      ? placeEnvironment(
+          withoutMessageIds,
+          (item) => item.message.role === "user",
+          (item, add) => ({
+            ...item,
+            message: {
+              ...item.message,
+              content: withTrailingText(
+                withLeadingText(item.message.content, add.first ?? ""),
+                add.notices.join(NOTICE_SEPARATOR),
+              ),
+            } as typeof item.message,
+          }),
+          environment?.firstMessageBlock,
+          notices,
+        )
+      : withoutMessageIds;
+  const userTurns = withoutMessageIds.filter(
+    (item) => item.message.role === "user",
+  ).length;
 
   const withTail = tail
     ? withEnvironment.map((item) =>
@@ -310,5 +326,6 @@ export function buildChatRequest(
     appliedRules,
     appliedRuleIndex,
     systemToolsFramework,
+    userTurns,
   };
 }

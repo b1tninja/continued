@@ -15,7 +15,10 @@ import type { ChatCompletionTool } from "openai/resources.mjs";
 
 import { runStoppedAfter, runStoppedBefore } from "../budget/runLimits.js";
 import { pruneLastMessage } from "../compaction.js";
-import { ensureSessionEnvironment } from "../environmentContext.js";
+import {
+  ensureSessionEnvironment,
+  noteDateRollover,
+} from "../environmentContext.js";
 import {
   endItemRunOverBudget,
   stopLoopItemOverBudget,
@@ -426,6 +429,13 @@ export async function processStreamingResponse(
   // The block comes from the session's snapshot, gathered once (async, git
   // calls stop after 2 s) and saved with the session.
   await ensureSessionEnvironment();
+  // A later local day than the session's: one notice on the newest user
+  // message, kept there (ENV32). A compaction request is one-shot.
+  if (!isCompacting) {
+    noteDateRollover(
+      chatHistory.filter((item) => item.message.role === "user").length,
+    );
+  }
   const requestBody = buildChatRequestBody({
     model,
     chatHistory,

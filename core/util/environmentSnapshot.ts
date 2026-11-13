@@ -19,6 +19,7 @@ import os from "node:os";
 
 import type { Detail } from "./environmentContract";
 import type { EnvironmentSnapshot } from "./environmentPrompt";
+import { localDayOf } from "./environmentUpdate";
 import {
   configuredTerminalShellPreference,
   getTerminalShellPreference,
@@ -34,6 +35,8 @@ import {
   type ShellFacts,
   type YesNoUnknown,
 } from "./shellDescription";
+
+export { localDayOf };
 
 export const GIT_TIMEOUT_MS = 2000;
 export const DETAIL_LEVELS: readonly Detail[] = ["minimal", "standard", "full"];
@@ -52,14 +55,6 @@ export function parseEnvDetail(value: unknown): Detail | undefined {
   return (DETAIL_LEVELS as readonly string[]).includes(v)
     ? (v as Detail)
     : undefined;
-}
-
-/** The person's local calendar day, `YYYY-MM-DD` (not the UTC day). */
-export function localDayOf(date: Date = new Date()): string {
-  const y = String(date.getFullYear()).padStart(4, "0");
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 // The fields of ShellEnvironment, written out so the type survives in

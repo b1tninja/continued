@@ -29,3 +29,11 @@ export function renderEnvironmentUpdate(
     CONTEXT_CLOSE,
   ].join("\n");
 }
+
+/** The person's local calendar day, `YYYY-MM-DD` (not the UTC day). */
+export function localDayOf(date: Date = new Date()): string {
+  const y = String(date.getFullYear()).padStart(4, "0");
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}

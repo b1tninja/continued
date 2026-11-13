@@ -8,7 +8,9 @@ import {
   environmentContextBlock,
   environmentDetail,
   environmentDisclosure,
+  environmentNotices,
   inheritEnvironment,
+  noteDateRollover,
   resetEnvironmentContextBlock,
   sessionEnvironment,
   setAssistantEnvironmentDetail,
@@ -103,6 +105,41 @@ describe("the session's environment", () => {
     expect(environmentDisclosure()).toEqual(parent);
     inheritEnvironment(undefined);
     expect(environmentDisclosure()).not.toEqual(parent);
+  });
+});
+
+describe("the date notice (ENV32)", () => {
+  const conversation = (n: number): ChatCompletionMessageParam[] =>
+    Array.from({ length: n }, (_, i) => [
+      { role: "user" as const, content: `u${i}` },
+      { role: "assistant" as const, content: `a${i}` },
+    ]).flat();
+
+  it("lands on the newest user message once, and stays on it", async () => {
+    startNewSession();
+    const env = await ensureSessionEnvironment();
+    const started = env.snapshot.localDay;
+    const nextDay = "2999-01-02";
+    // Same day: nothing
+    noteDateRollover(1, started);
+    expect(environmentNotices()).toEqual([]);
+    const first = withEnvironmentBlock(conversation(1));
+    // The next day, third request: the notice goes on user message 3
+    noteDateRollover(3, nextDay);
+    const third = withEnvironmentBlock(conversation(3));
+    expect(third[4].content).toBe(
+      `u2\n\n<context name="environment-update">\nToday's date is now ${nextDay} (the session started on ${started}).\n</context>`,
+    );
+    // Earlier messages keep their bytes
+    expect(third[0]).toEqual(first[0]);
+    expect(third[2].content).toBe("u1");
+    // A later request the same day: the notice stays where it was
+    noteDateRollover(4, nextDay);
+    const fourth = withEnvironmentBlock(conversation(4));
+    expect(fourth.slice(0, 6)).toEqual(third.slice(0, 6));
+    expect(fourth[6].content).toBe("u3");
+    // It is saved with the session, so a resumed session keeps it
+    expect(getCurrentSession().environment?.notices).toHaveLength(1);
   });
 });
 
