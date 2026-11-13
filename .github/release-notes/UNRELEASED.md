@@ -64,3 +64,9 @@ At File edits = IDGAF (the top level, also reached by `--auto`), the agent can c
 ### Behaviour changes
 
 - `/export` with no argument now writes the masked Markdown transcript. The session JSON that `/import` reads moved to `/export --json`.
+
+## Terminal agent: attention notifications
+
+### New
+
+- The terminal UI can ring the terminal bell and/or raise an OS notification (Windows toast, macOS Notification Center, `notify-send`) when a tool call waits for approval, a question waits for an answer, or a turn of at least 30 seconds has finished. Off by default; turn it on with `notifications` in your own `settings.json` (a project cannot). The notice names the tool and the state only, repeats within 10 seconds are dropped, nothing goes over the network, and a missing notifier fails silently. Focus is not detected yet, so `when: "unfocused"` acts as `always`. See [Attention notifications](https://github.com/b1tninja/continuous/blob/main/docs/cli/notifications.mdx).

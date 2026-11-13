@@ -208,6 +208,7 @@
               "cli/headless-output",
               "cli/exit-codes",
               "cli/export",
+              "cli/notifications",
               "guides/acp",
               "guides/instinct",
               "guides/running-continue-without-internet",
