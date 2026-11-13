@@ -3,6 +3,10 @@ import { ApplyState, ApplyToFilePayload, ContextItem } from "core";
 import { EDIT_MODE_STREAM_ID } from "core/edit/constants";
 import { logAgentModeEditOutcome } from "../../util/editOutcomeLogger";
 import {
+  allowOutsideWorkspaceOf,
+  outsideEditNote,
+} from "../../util/outsideEdits";
+import {
   problemsAfterEdit,
   rememberProblemsBeforeEdit,
 } from "../../util/problemsAfterEdit";
@@ -131,6 +135,14 @@ export const handleApplyStateUpdate = createAsyncThunk<
                   );
                   if (problems) contextItems.push(problems);
                 }
+
+                // Said once, so the person can see the edit left the workspace
+                const outside = await outsideEditNote(
+                  extra.ideMessenger.ide,
+                  applyState.filepath,
+                  allowOutsideWorkspaceOf(getState()),
+                );
+                if (outside) contextItems.push(outside);
 
                 dispatch(
                   updateToolCallOutput({
