@@ -40,3 +40,9 @@ At File edits = IDGAF (the top level, also reached by `--auto`), the agent can c
 - Lower levels are unchanged: Manual, Cautious and Automatic ask, Permissive holds it by the outside-paths protection.
 - Still binding at IDGAF: the locked policy files, a tool switched off, an organisation ceiling and the `floor:` rules you wrote. Secret-file name checks inside the file tools, and the webview's own write guard (used for plan files), are not changed.
 - Separate fix: an absolute path inside the workspace given to the new-file tool is now written where it says, not under a folder named after the drive.
+
+## Headless runs: an event stream
+
+### New
+
+- `continuous -p --format stream-json` prints one JSON object per line: `init`, `usage` per model request, `message`, `tool_use`, `tool_decision` (allowed, asked or refused, and by what), `tool_result`, `run_limit`, `error`, and a last `result` line with the exit code, counts and cost. The stream is versioned (`schemaVersion: 1`), checked against a JSON Schema in `extensions/cli/spec/stream-json.schema.json`, and every field goes through the audit masker; tool output is cut at 4000 characters. Nothing else is written to stdout in this mode. See [Headless output](https://github.com/b1tninja/continuous/blob/main/docs/cli/headless-output.mdx).

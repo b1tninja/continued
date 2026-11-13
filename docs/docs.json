@@ -205,6 +205,7 @@
               "guides/ollama-guide",
               "guides/cn-serve",
               "cli/run-limits",
+              "cli/headless-output",
               "guides/acp",
               "guides/instinct",
               "guides/running-continue-without-internet",

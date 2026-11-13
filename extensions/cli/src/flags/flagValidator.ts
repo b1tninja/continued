@@ -3,6 +3,7 @@
  * Provides consistent validation across all commands and proper error reporting
  */
 
+import { HEADLESS_FORMATS } from "../headless/streamJsonEvents.js";
 import { safeStderr } from "../init.js";
 
 export interface ValidationOptions {
@@ -78,10 +79,13 @@ function validateSilentFlag(options: ValidationOptions): ValidationError[] {
 function validateFormatValue(options: ValidationOptions): ValidationError[] {
   const errors: ValidationError[] = [];
 
-  if (options.format && options.format !== "json") {
+  if (
+    options.format &&
+    !(HEADLESS_FORMATS as readonly string[]).includes(options.format)
+  ) {
     errors.push({
       code: "INVALID_FORMAT_VALUE",
-      message: "Error: --format currently only supports 'json'",
+      message: `Error: --format supports ${HEADLESS_FORMATS.map((f) => `'${f}'`).join(" and ")}`,
     });
   }
 

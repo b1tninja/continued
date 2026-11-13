@@ -7,6 +7,7 @@ import { ChatDescriber } from "core/util/chatDescriber.js";
 import * as runLimits from "../budget/runLimits.js";
 import { compactChatHistory, findCompactionIndex } from "../compaction.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
+import * as headless from "../headless/streamJsonHeadless.js";
 import { runStopHooks } from "../hooks/lifecycleHooks.js";
 import {
   describePromptBlocked,
@@ -50,7 +51,7 @@ export interface ChatOptions extends ExtendedCommandOptions {
   headless?: boolean;
   resume?: boolean;
   fork?: string; // Fork from an existing session ID
-  format?: "json"; // Output format for headless mode
+  format?: headless.HeadlessFormat; // Output format for headless mode
   silent?: boolean; // Strip <think></think> tags and excess whitespace
 }
 
@@ -139,27 +140,22 @@ async function getStreamingResponse(
   llmApi: BaseLlmApi,
 ): Promise<string> {
   const abortController = new AbortController();
-
-  if (compactionIndex !== null && compactionIndex !== undefined) {
-    // Use service to compute history for LLM
-    const historyForLLM =
-      services.chatHistory.getHistoryForLLM(compactionIndex);
-
-    return await streamChatResponse(
-      historyForLLM,
-      model,
-      llmApi,
-      abortController,
-    );
-  } else {
-    // No compaction - get full history from service
-    return await streamChatResponse(
-      services.chatHistory.getHistory(),
-      model,
-      llmApi,
-      abortController,
-    );
-  }
+  // --format stream-json: the stream hears each reply and finished request
+  const { callbacks, options } = headless.streamJsonHooks();
+  // The service's history for the LLM after a compaction, else the full one
+  const history =
+    compactionIndex !== null && compactionIndex !== undefined
+      ? services.chatHistory.getHistoryForLLM(compactionIndex)
+      : services.chatHistory.getHistory();
+  return await streamChatResponse(
+    history,
+    model,
+    llmApi,
+    abortController,
+    callbacks,
+    false,
+    options,
+  );
 }
 
 // Helper function to process and output response in headless mode
@@ -167,8 +163,10 @@ function processAndOutputResponse(
   finalResponse: string,
   isHeadless: boolean,
   silent?: boolean,
-  format?: "json",
+  format?: headless.HeadlessFormat,
 ): void {
+  // stream-json keeps the answer for its `result` line and prints nothing
+  if (headless.noteHeadlessAnswer(finalResponse, silent, format)) return;
   if (isHeadless && finalResponse && finalResponse.trim()) {
     let processedResponse = finalResponse;
 
@@ -193,7 +191,7 @@ async function handleAutoCompaction(
   model: ModelConfig,
   llmApi: BaseLlmApi,
   isHeadless: boolean,
-  format?: "json",
+  format?: headless.HeadlessFormat,
 ): Promise<number | null> {
   const { handleAutoCompaction: coreAutoCompaction } =
     await import("../stream/streamChatResponse.autoCompaction.js");
@@ -257,7 +255,7 @@ async function handleAutoCompaction(
     llmApi,
     {
       isHeadless,
-      format,
+      format: format === "json" ? format : undefined,
       callbacks,
     },
   );
@@ -301,7 +299,7 @@ interface ProcessMessageOptions {
   model: ModelConfig;
   llmApi: BaseLlmApi;
   isHeadless: boolean;
-  format?: "json";
+  format?: headless.HeadlessFormat;
   silent?: boolean;
   compactionIndex?: number | null;
   firstAssistantResponse?: boolean;
@@ -458,6 +456,7 @@ async function runHeadlessMode(
     services.chatHistory.setHistory(chatHistory);
     compactionIndex = findCompactionIndex(chatHistory);
   }
+  headless.startStreamJsonRun(options.format, model); // stream-json: the `init` line
 
   // Handle additional prompts from --prompt flags
   const { processAndCombinePrompts } =
@@ -530,7 +529,7 @@ async function runHeadlessMode(
   }
 
   // exit after headless mode completes: a run limit has its own exit code
-  await gracefulExit(runLimits.exitCodeOfRun(options.format));
+  await gracefulExit(headless.endHeadlessRun(options.format));
 }
 
 export async function chat(prompt?: string, options: ChatOptions = {}) {
@@ -551,6 +550,7 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
     if (options.headless) {
       // Headless path - no Ink, no TUI, works in TTY-less environments
       logger.debug("Running in headless mode (TTY-less compatible)");
+      headless.beginStreamJson(options.format);
       await runHeadlessMode(prompt, options);
       return;
     }
@@ -631,7 +631,7 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
     // Stop active time tracking BEFORE graceful exit
     telemetryService.stopActiveTime();
 
-    await gracefulExit(1);
+    await gracefulExit(headless.failHeadlessRun(options, err));
   } finally {
     // Stop active time tracking for normal completion
     telemetryService.stopActiveTime();

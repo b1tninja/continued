@@ -156,7 +156,7 @@ addRunLimitOptions(addCommonOptions(program))
   .option("-p, --print", "Print response and exit (useful for pipes)")
   .option(
     "--format <format>",
-    "Output format for headless mode (json). Only works with -p/--print flag.",
+    "Output format for headless mode: json, or stream-json (one JSON event per line on stdout). Only works with -p/--print flag.",
   )
   .option(
     "--silent",
