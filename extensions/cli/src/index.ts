@@ -160,7 +160,11 @@ addRunLimitOptions(addCommonOptions(program))
   .option("-p, --print", "Print response and exit (useful for pipes)")
   .option(
     "--format <format>",
-    "Output format for headless mode (json). Only works with -p/--print flag.",
+    "Output format for headless mode: json, or stream-json (one JSON event per line on stdout). Only works with -p/--print flag.",
+  )
+  .option(
+    "--output-schema <file>",
+    "Headless (-p): check the final answer against this JSON Schema file; exit 6 when it does not match",
   )
   .option(
     "--silent",
@@ -216,6 +220,7 @@ addRunLimitOptions(addCommonOptions(program))
     const validation = validateFlags({
       print: options.print,
       format: options.format,
+      outputSchema: options.outputSchema,
       silent: options.silent,
       readonly: options.readonly,
       auto: options.auto,
@@ -296,6 +301,28 @@ program
     await listSessionsCommand({
       format: options.json ? "json" : undefined,
     });
+  });
+
+// Export subcommand: a masked transcript, never the session JSON
+program
+  .command("export <session>")
+  .description(
+    "Write a session as a masked transcript (Markdown or HTML) to stdout or --out; <session> is an id, the start of one, or last",
+  )
+  .option("--format <format>", "md (default) or html")
+  .option("--out <file>", "Write to this file instead of stdout")
+  .option("--force", "Replace --out if it exists")
+  .option("--reasoning", "Include the model's reasoning (left out by default)")
+  .action(async (session: string, options) => {
+    const { exportCommand } = await import("./export/exportCommand.js");
+    await gracefulExit(
+      exportCommand(session, {
+        format: options.format,
+        out: options.out,
+        force: options.force,
+        includeReasoning: options.reasoning,
+      }),
+    );
   });
 
 // Serve subcommand

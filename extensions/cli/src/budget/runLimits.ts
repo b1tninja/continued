@@ -5,6 +5,7 @@ import type { Command } from "commander";
 import { costSince, costMarkOf } from "core/util/loopCost.js";
 
 import { cliAuditSession, cliAuditTrail } from "../audit/cliAudit.js";
+import { configError } from "../headless/exitCodes.js";
 import { getGlobalDir } from "../hooks/hookTrust.js";
 import { safeStderr } from "../init.js";
 import { getSessionUsage } from "../session.js";
@@ -147,7 +148,7 @@ export function startRunLimits(
     model,
     options.budgetAllowUnpriced,
   );
-  if (problem) throw new Error(problem);
+  if (problem) throw configError(problem);
   const start = costMarkOf(getSessionUsage());
   const budget = new RunBudget({
     limits,
