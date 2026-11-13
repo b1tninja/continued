@@ -1124,4 +1124,42 @@ Object.assign(FIXTURES, {
 
 Object.assign(FIXTURES, AUDIT_FIXTURES);
 
+/** A drag event as Chromium builds it, with VS Code's types set. */
+function dispatchDrag(type: string, data: Record<string, string>) {
+  const target = document.querySelector(
+    "[data-testid=editor-input-main]",
+  ) as HTMLElement | null;
+  if (!target) return;
+  const dataTransfer = new DataTransfer();
+  for (const [k, v] of Object.entries(data)) dataTransfer.setData(k, v);
+  target.dispatchEvent(
+    new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer }),
+  );
+}
+
+const WORKSPACE = "file:///Users/user/workspace1";
+
+Object.assign(FIXTURES, {
+  /** A file dragged over the input (not yet dropped): the drop target */
+  "drop-target": async ({ store }: FixtureContext) => {
+    store.dispatch(newSession());
+    await sleep(800);
+    dispatchDrag("dragenter", {
+      "application/vnd.code.uri-list": `${WORKSPACE}/src/app.ts`,
+    });
+    await sleep(200);
+  },
+  /** A drop of .env and a file outside the workspace: the refusal note */
+  "drop-refused": async ({ store }: FixtureContext) => {
+    store.dispatch(newSession());
+    await sleep(800);
+    const uris = [`${WORKSPACE}/.env`, "file:///tmp/elsewhere/notes.md"];
+    dispatchDrag("drop", {
+      ResourceURLs: JSON.stringify(uris),
+      "application/vnd.code.uri-list": uris.join("\r\n"),
+    });
+    await sleep(400);
+  },
+});
+
 export const FIXTURE_NAMES = Object.keys(FIXTURES);
