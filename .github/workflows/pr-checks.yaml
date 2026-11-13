@@ -54,6 +54,7 @@ env:
 jobs:
   track-rerun:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: (github.run_attempt > 1) && github.event.pull_request.draft != true
     steps:
       - uses: actions/checkout@v7
@@ -63,11 +64,26 @@ jobs:
   prettier-check:
     if: inputs.run_prettier != 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
+      # Two commits deep: the merge commit and its first parent (the base), so the step below can
+      # tell whether this PR touches the extension version.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"
+
+      # main.yaml refuses to publish an odd minor version, which is found only at release time.
+      # Run the same script at review time when a PR changes the extension's package.json.
+      - name: Check the VS Code extension version has an even minor
+        if: github.event_name == 'pull_request'
+        run: |
+          if git diff --name-only HEAD^1 HEAD | grep -qx 'extensions/vscode/package.json'; then
+            cd extensions/vscode
+            node scripts/versionCheck.js
+          fi
 
       - uses: actions/cache@v6
         id: root-cache
@@ -98,6 +114,7 @@ jobs:
   core-checks:
     if: inputs.run_core != 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
         with:
@@ -147,6 +164,7 @@ jobs:
   gui-checks:
     if: inputs.run_gui != 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - name: Setup packages
@@ -178,6 +196,7 @@ jobs:
   binary-checks:
     if: inputs.run_binary != 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Setup packages
@@ -201,6 +220,7 @@ jobs:
   vscode-checks:
     if: inputs.run_vscode != 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Setup packages
@@ -241,6 +261,7 @@ jobs:
   get-packages-matrix:
     if: inputs.run_packages != 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       packages: ${{ steps.get-packages.outputs.packages }}
     steps:
@@ -256,6 +277,7 @@ jobs:
     if: inputs.run_packages != 'false'
     needs: get-packages-matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         package: ${{ fromJson(needs.get-packages-matrix.outputs.packages) }}
@@ -295,6 +317,7 @@ jobs:
   vscode-get-test-file-matrix:
     if: inputs.run_e2e != 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       test_file_matrix: ${{ steps.vscode-get-test-file-matrix.outputs.test_file_matrix }}
     steps:
@@ -437,6 +460,7 @@ jobs:
     # workflow's own result is what the gate evaluates, and this job would be one more runner slot.
     if: always() && github.event_name != 'pull_request' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs:
       - prettier-check
       - core-checks

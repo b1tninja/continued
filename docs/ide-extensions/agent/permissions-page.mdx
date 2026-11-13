@@ -175,6 +175,14 @@ An empty chat shows the same tip as one dismissible line: "New here? Each area h
 
 The interactive terminal agent shows one line in its header, once per user: "Permissions: Careful preset. Change it with /policy (presets, or area=level). Shown once." It names "a custom mix" when the levels match no preset. It never shows with `-p`, in `serve` or without a terminal, and its flag (`cliFirstRunBannerShown`) lives in the global context file, separate from the editor's.
 
+## A permissions.yaml that does not parse
+
+`~/.continuous/permissions.yaml` that exists but is not valid YAML, or has the wrong structure (an unknown top-level key, or `allow`, `ask` or `exclude` that is not a list), is no longer read as "no rules". `cn -p` and `cn serve` refuse to start and exit with code 2, naming the file and the line and column of the error, never its contents. Pass `--ignore-broken-config` to continue with the file ignored; headless runs then use only the defaults, which allow `Bash`. The interactive agent starts and prints a WARNING block. A missing file is fine. `continuous permissions add` will not write over a broken file.
+
+## Raising a level in the terminal agent
+
+`/policy` asks once before it moves an area up to Automatic, Permissive or IDGAF from a lower level. The first run changes nothing and prints one line naming each area and both levels, such as `Permission levels: tools cautious to permissive. Fewer calls will ask first. Nothing was changed. Run "/policy tools=permissive --yes" to apply it.` Run it again with `--yes` to apply it. Lowering a level, or moving from Manual to Cautious, never asks. `--policy` on the command line is already explicit, so it does not ask. Every change, asked or not, is written to the [audit trail](/ide-extensions/agent/audit-trail#setting-changes) with where it came from.
+
 ## From the terminal agent
 
 ```text
@@ -188,3 +196,11 @@ continuous permissions adopt '<rule>' --from <file> [--yes-allow-everything] [--
 `list` prints the same data as the page. `test` takes a tool (`runTerminalCommand` or `Bash`, `readFile`, `writeFile`, `listDirectory`, `fetchUrl`, `grepSearch`, `searchWeb`, or `mcp__server__tool`) and the call's argument, for example `continuous permissions test Bash git push origin main`. `--level area=level` tries another level for one area and may be repeated. The command reads your `config.yaml` and `permissions.yaml` and does not load an assistant, so rules that come from an assistant are not listed by the terminal command.
 
 `add`, `remove` and `adopt` change your own `config.yaml` with the same checks and friction as the page, and write the same audit record (source `cli`). They exit 0 when the change was made (or previewed with `--dry-run`), 2 when a confirmation is missing and 1 on any refusal: a rule that cannot be read, an Always rule that is already held (see Refusals), a file that cannot be read or written, or a rule that is not there. A change that loosens needs `--yes` (removing a Never or Ask rule, or adding an Always rule); a broad Always rule needs `--yes-allow-everything`. There is no editor dialog in the terminal: the flag is the confirmation. `adopt` reads the rule from the workspace or assistant file you name with `--from`, shows what it changes, and copies it.
+
+## When the rule check itself fails
+
+If the rule check throws an error (a bug, or a settings read that fails mid-call), the call is never allowed on the strength of a default. The editor refuses it. The terminal agent asks you; a loop holds it as an approval question; `continuous -p`, `continuous serve` and a run with nobody to ask refuse it and tell the model why. The audit trail records the decision as the system's, with the reason "The permission rules could not be checked (internal error), so this call was not allowed automatically."
+
+## Agent files can only narrow
+
+An agent file passed with `continuous --agent <file or slug>` can take tools away but never widens your policy. A tool its `tools:` key leaves out is excluded in every mode. A tool it lists is decided by your own `--allow`, `--ask` and `--exclude` flags, `permissions.yaml`, the mode and the five levels, exactly as without the file: a file that lists `Bash` does not make `Bash` run without asking. The file's list no longer ends in an implicit "allow everything else". An agent file with no `tools:` key changes nothing.

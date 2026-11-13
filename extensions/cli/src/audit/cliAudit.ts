@@ -4,6 +4,7 @@ import type { AuditAgent } from "core/tools/permissions/audit/record.js";
 import type { AuditTrail } from "core/tools/permissions/audit/trail.js";
 import { taintedField } from "core/tools/permissions/taint/taintWiring.js";
 
+import { activeStreamJson } from "../headless/streamJsonRun.js";
 import { CLI_SESSION_ID } from "../permissions/coreRules.js";
 import { getCurrentSession } from "../session.js";
 import { logger } from "../util/logger.js";
@@ -75,6 +76,12 @@ export function recordCliDecision(
   trace: ApprovalTrace,
   result: { approved: boolean; denialMessage?: string },
 ): void {
+  try {
+    // --format stream-json reports the decision whether or not the trail is on
+    activeStreamJson()?.toolDecision(call, trace, result);
+  } catch {
+    // the stream never blocks a call
+  }
   try {
     const trail = cliAuditTrail();
     if (!trail.enabled) return;

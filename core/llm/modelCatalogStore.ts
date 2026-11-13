@@ -6,6 +6,7 @@ import type { RequestOptions } from "../index.js";
 import { editConfigFile, getContinueGlobalPath } from "../util/paths.js";
 import { networkFetch } from "../util/networkFetch.js";
 
+import { setOpenRouterCatalog } from "./utils/catalogPricing.js";
 import {
   CATALOG_SCHEMA_VERSION,
   MAX_CATALOG_BYTES,
@@ -67,6 +68,19 @@ export function writeOpenRouterCatalog(
 }
 
 /**
+ * Put the copy on disk (if any) in front of the cost functions of this
+ * process. A local read; never fetches. `maxAgeDays` is for a dollar budget:
+ * a list older than that prices nothing.
+ */
+export function loadOpenRouterPrices(
+  opts: { maxAgeDays?: number; file?: string } = {},
+): ModelCatalog | undefined {
+  const catalog = readOpenRouterCatalog(opts.file);
+  setOpenRouterCatalog(catalog, { maxAgeDays: opts.maxAgeDays });
+  return catalog;
+}
+
+/**
  * Download the public list and keep it. One GET, no key, no body. Throws with
  * a short message when the host cannot be reached or the answer is not a
  * model list; the cached file is left as it was.
@@ -108,6 +122,8 @@ export async function pullOpenRouterCatalog(
     models,
   };
   writeOpenRouterCatalog(catalog, opts.file);
+  // Prices apply to the next request of this process, with no restart
+  setOpenRouterCatalog(catalog);
   return catalog;
 }
 

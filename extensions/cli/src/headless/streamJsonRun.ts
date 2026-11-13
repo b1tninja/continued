@@ -1,0 +1,339 @@
+import type { ChatHistoryItem, SessionUsage } from "core/index.js";
+import { clipMasked } from "core/tools/permissions/audit/mask.js";
+import {
+  maskArgsForDisplay,
+  maskCommandForDisplay,
+} from "core/tools/permissions/displayMask.js";
+
+import {
+  STREAM_JSON_SCHEMA_VERSION,
+  type InitEvent,
+  type RunErrorKind,
+  type RunStatus,
+  type StreamJsonEvent,
+  type StreamJsonEventBody,
+  type ToolDecisionEvent,
+} from "./streamJsonEvents.js";
+
+/** The longest string kept in a `tool_use` argument. */
+export const STREAM_JSON_ARG_CHARS = 2000;
+/** The longest `tool_result` output. */
+export const STREAM_JSON_OUTPUT_CHARS = 4000;
+
+/** What the permission path learned about one call (see audit/cliAudit.ts). */
+export interface DecisionFacts {
+  verdict?: {
+    by: "rules" | "reviewer" | "system";
+    source?: string;
+    rule?: string;
+    reason?: string;
+  };
+  askedPerson?: boolean;
+  held?: boolean;
+}
+
+export interface StreamJsonRunOptions {
+  /** Writes one line, newline included. */
+  write: (line: string) => void;
+  now?: () => number;
+  /** The session's usage totals, read after each request. */
+  usage?: () => SessionUsage | undefined;
+}
+
+interface UsageMark {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: number;
+}
+
+function markOf(usage: SessionUsage | undefined): UsageMark {
+  return {
+    input: usage?.promptTokens ?? 0,
+    output: usage?.completionTokens ?? 0,
+    cacheRead: usage?.promptTokensDetails?.cachedTokens ?? 0,
+    cacheWrite: usage?.promptTokensDetails?.cacheWriteTokens ?? 0,
+    cost: usage?.totalCost ?? 0,
+  };
+}
+
+/** Dollars to six places, so a sum of small requests does not print a float tail. */
+function usd(n: number): number {
+  return Math.round(Math.max(0, n) * 1e6) / 1e6;
+}
+
+function maskAndClip(text: string, max: number) {
+  const masked = maskCommandForDisplay(text);
+  return {
+    text: clipMasked(masked, max),
+    length: masked.length,
+    truncated: masked.length > max,
+  };
+}
+
+function clipStrings(value: unknown): unknown {
+  if (typeof value === "string") {
+    return clipMasked(value, STREAM_JSON_ARG_CHARS);
+  }
+  if (Array.isArray(value)) return value.map(clipStrings);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [
+        k,
+        clipStrings(v),
+      ]),
+    );
+  }
+  return value;
+}
+
+/** Masks every string of a call's arguments and cuts the long ones. */
+function maskArgs(value: unknown): Record<string, unknown> {
+  const masked = clipStrings(maskArgsForDisplay(value));
+  return masked && typeof masked === "object" && !Array.isArray(masked)
+    ? (masked as Record<string, unknown>)
+    : { value: masked };
+}
+
+function isEnded(status: string): status is "done" | "errored" | "canceled" {
+  return status === "done" || status === "errored" || status === "canceled";
+}
+
+/**
+ * One headless run's event stream. It only formats and writes: the callers
+ * hand it what happened (a reply, the history after a change, a decision, a
+ * finished request), and every text goes through the display masker (the
+ * audit masker plus the environment-assignment pass) before it is written.
+ *
+ * Order: `init` first, `result` last and exactly once. For one call,
+ * `tool_use` comes before its `tool_decision`, which comes before its
+ * `tool_result`. Calls of one round run at the same time, so their results
+ * are written as each finishes.
+ */
+export class StreamJsonRun {
+  private seq = 0;
+  private finished = false;
+  private readonly started: number;
+  private readonly now: () => number;
+  private readonly seenCalls = new Set<string>();
+  private readonly endedCalls = new Set<string>();
+  private requests = 0;
+  private toolCalls = 0;
+  private refusals = 0;
+  private startMark: UsageMark;
+  private lastMark: UsageMark;
+
+  constructor(private readonly options: StreamJsonRunOptions) {
+    this.now = options.now ?? Date.now;
+    this.started = this.now();
+    this.startMark = this.lastMark = markOf(options.usage?.());
+  }
+
+  get isFinished(): boolean {
+    return this.finished;
+  }
+
+  private emit(body: StreamJsonEventBody): void {
+    if (this.finished) return;
+    const { type, ...rest } = body;
+    const event = {
+      type,
+      seq: ++this.seq,
+      time: new Date(this.now()).toISOString(),
+      ...rest,
+    } as StreamJsonEvent;
+    this.options.write(JSON.stringify(event) + "\n");
+  }
+
+  /**
+   * The first line. Calls already in `history` (a resumed session) are not
+   * this run's, and spend restored with the session does not count.
+   */
+  init(
+    facts: Omit<InitEvent, "type" | "seq" | "time" | "schemaVersion">,
+    history: ChatHistoryItem[] = [],
+  ): void {
+    for (const item of history) {
+      for (const state of item.toolCallStates ?? []) {
+        this.seenCalls.add(state.toolCallId);
+        this.endedCalls.add(state.toolCallId);
+      }
+    }
+    this.startMark = this.lastMark = markOf(this.options.usage?.());
+    this.emit({
+      type: "init",
+      schemaVersion: STREAM_JSON_SCHEMA_VERSION,
+      ...facts,
+    });
+  }
+
+  /** One complete reply of the model. */
+  message(content: string): void {
+    if (!content.trim()) return;
+    this.emit({
+      type: "message",
+      role: "assistant",
+      content: maskCommandForDisplay(content),
+    });
+  }
+
+  /**
+   * The conversation after a change: writes `tool_use` for a call not seen
+   * before and `tool_result` the first time a call has ended.
+   */
+  observeHistory(history: ChatHistoryItem[]): void {
+    for (const item of history) {
+      for (const state of item.toolCallStates ?? []) {
+        const callId = state.toolCallId;
+        const tool = state.toolCall?.function?.name ?? "";
+        if (!this.seenCalls.has(callId)) {
+          this.seenCalls.add(callId);
+          this.toolCalls++;
+          this.emit({
+            type: "tool_use",
+            callId,
+            tool,
+            args: maskArgs(state.parsedArgs ?? {}),
+          });
+        }
+        if (isEnded(state.status) && !this.endedCalls.has(callId)) {
+          this.endedCalls.add(callId);
+          const raw = (state.output ?? [])
+            .map((o) => (typeof o.content === "string" ? o.content : ""))
+            .join("\n");
+          const out = maskAndClip(raw, STREAM_JSON_OUTPUT_CHARS);
+          this.emit({
+            type: "tool_result",
+            callId,
+            tool,
+            status: state.status,
+            output: out.text,
+            outputLength: out.length,
+            truncated: out.truncated,
+          });
+        }
+      }
+    }
+  }
+
+  /** The permission system's decision on one call. */
+  toolDecision(
+    call: { id: string; name: string },
+    facts: DecisionFacts,
+    result: { approved: boolean; denialMessage?: string },
+  ): void {
+    const asked = !!(facts.askedPerson || facts.held);
+    const decision: ToolDecisionEvent["decision"] = asked
+      ? "asked"
+      : result.approved
+        ? "allowed"
+        : "refused";
+    if (!result.approved && !facts.held) this.refusals++;
+    const v = facts.verdict;
+    const reason = v?.reason ?? result.denialMessage;
+    this.emit({
+      type: "tool_decision",
+      callId: call.id,
+      tool: call.name,
+      decision,
+      by: facts.askedPerson ? "person" : (v?.by ?? "rules"),
+      ...(v?.source ? { source: v.source } : {}),
+      ...(v?.rule ? { rule: maskCommandForDisplay(v.rule) } : {}),
+      ...(reason ? { reason: maskCommandForDisplay(reason) } : {}),
+      ...(facts.askedPerson
+        ? {
+            answer: result.approved
+              ? ("approved" as const)
+              : ("denied" as const),
+          }
+        : {}),
+      ...(facts.held ? { held: true as const } : {}),
+    });
+  }
+
+  /** A model request finished and its usage is on the session. */
+  requestDone(): void {
+    const usage = this.options.usage?.();
+    const mark = markOf(usage);
+    const last = this.lastMark;
+    this.lastMark = mark;
+    this.requests++;
+    this.emit({
+      type: "usage",
+      request: this.requests,
+      inputTokens: Math.max(0, mark.input - last.input),
+      outputTokens: Math.max(0, mark.output - last.output),
+      cacheReadTokens: Math.max(0, mark.cacheRead - last.cacheRead),
+      cacheWriteTokens: Math.max(0, mark.cacheWrite - last.cacheWrite),
+      costUsd: usd(mark.cost - last.cost),
+      totalCostUsd: usd(mark.cost - this.startMark.cost),
+      costEstimated: !!usage?.costEstimated,
+    });
+  }
+
+  runLimit(stop: {
+    reason: "budget" | "turns" | "duration";
+    phase: "before-call" | "after-call";
+    detail: string;
+    spentUsd?: number;
+    exitCode: number;
+  }): void {
+    this.emit({
+      type: "run_limit",
+      reason: stop.reason,
+      phase: stop.phase,
+      message: stop.detail,
+      exitCode: stop.exitCode,
+      ...(stop.spentUsd === undefined ? {} : { spentUsd: usd(stop.spentUsd) }),
+    });
+  }
+
+  error(kind: RunErrorKind, message: string, code?: string): void {
+    this.emit({
+      type: "error",
+      kind,
+      message: maskCommandForDisplay(message),
+      ...(code ? { code } : {}),
+    });
+  }
+
+  /** The last line. A second call writes nothing. */
+  finish(end: { status: RunStatus; exitCode: number; result?: string }): void {
+    if (this.finished) return;
+    const usage = this.options.usage?.();
+    const mark = markOf(usage);
+    const start = this.startMark;
+    this.emit({
+      type: "result",
+      schemaVersion: STREAM_JSON_SCHEMA_VERSION,
+      status: end.status,
+      exitCode: end.exitCode,
+      result: maskCommandForDisplay(end.result ?? ""),
+      durationMs: Math.max(0, this.now() - this.started),
+      numRequests: this.requests,
+      numToolCalls: this.toolCalls,
+      numRefusals: this.refusals,
+      usage: {
+        inputTokens: Math.max(0, mark.input - start.input),
+        outputTokens: Math.max(0, mark.output - start.output),
+        cacheReadTokens: Math.max(0, mark.cacheRead - start.cacheRead),
+        cacheWriteTokens: Math.max(0, mark.cacheWrite - start.cacheWrite),
+      },
+      totalCostUsd: usd(mark.cost - start.cost),
+      costEstimated: !!usage?.costEstimated,
+    });
+    this.finished = true;
+  }
+}
+
+let active: StreamJsonRun | undefined;
+
+/** The run's event stream, when `--format stream-json` is on. */
+export function activeStreamJson(): StreamJsonRun | undefined {
+  return active;
+}
+
+export function setActiveStreamJson(run: StreamJsonRun | undefined): void {
+  active = run;
+}

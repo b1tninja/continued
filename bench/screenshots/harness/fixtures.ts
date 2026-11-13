@@ -12,7 +12,7 @@ import type {
 import { listEffectiveRules } from "core/tools/permissions/effectiveRules";
 import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy";
 import { parsePolicyFile } from "core/tools/permissions/settingsFile";
-import { createLoop, enterWait } from "core/util/loopMode";
+import { createLoop, enterWait, stopLoop } from "core/util/loopMode";
 import { addBlockedCall } from "@gui/redux/slices/blockedCallsSlice";
 import { setPolicyLevel } from "@gui/redux/slices/uiSlice";
 import { POLICY_AREAS } from "core/tools/permissions/policy";
@@ -178,6 +178,20 @@ const PLAN: TaskPlan = {
   ],
   updatedAt: NOW.toISOString(),
 } as TaskPlan;
+
+function loopScene(
+  store: Store,
+  change: (loop: LoopState) => LoopState,
+  // A running loop takes its next step when nothing streams, which in the
+  // harness ends in an error; a turn in flight keeps the picture still
+  inFlight = false,
+): void {
+  store.dispatch(newSession(session([], "Fix parseConfig")));
+  store.dispatch(setMode("loop" as never));
+  store.dispatch(setTaskPlan(PLAN));
+  store.dispatch(setLoop(change(loopState())));
+  if (inFlight) store.dispatch(setActive());
+}
 
 function loopState(): LoopState {
   // the real clock: a loop whose start is far in the past is stopped by its own time budget
@@ -385,6 +399,13 @@ function tileFixture(opts: {
           "[data-testid=plan-tree-root] > div",
         ) as HTMLElement | null
       )?.click();
+      // and the fold of the finished items, to show what was replaced
+      await new Promise((r) => setTimeout(r, 100));
+      (
+        document.querySelector(
+          "[data-testid=plan-tree-fold-done] > div",
+        ) as HTMLElement | null
+      )?.click();
     }
   };
 }
@@ -423,7 +444,7 @@ export const FIXTURES: Record<string, Fixture> = {
       ({
         ...withItems({
           "1": { status: "done" },
-          "2": { status: "running", attempts: 1 },
+          "2": { status: "running", attempts: 1, addedInRound: 2 },
         })(loop),
         current: {
           kind: "item",
@@ -431,6 +452,14 @@ export const FIXTURES: Record<string, Fixture> = {
           historyIndex: 2,
           startedAt: new Date(Date.now() - 130_000).toISOString(),
         },
+        replacedItems: [
+          {
+            id: "0",
+            text: "Re-run the gates on the PR head",
+            round: 2,
+            replacedBy: "2",
+          },
+        ],
         autoDecisions: [
           {
             kind: "plan",
@@ -678,6 +707,119 @@ export const FIXTURES: Record<string, Fixture> = {
     store.dispatch(setMode("loop" as never));
     store.dispatch(setTaskPlan(PLAN));
     store.dispatch(setLoop(loopState()));
+  },
+  /** Loop mode, running item 2: the status line, "Now:" and the progress */
+  "loop-running": ({ store }) => {
+    loopScene(
+      store,
+      (loop) => ({
+        ...loop,
+        title: "Fix parseConfig so defaults merge before the unit converts",
+        status: "running",
+        waitingSince: undefined,
+        current: {
+          kind: "item",
+          itemId: "2",
+          historyIndex: 0,
+          startedAt: new Date().toISOString(),
+        },
+      }),
+      true,
+    );
+  },
+  /** Three questions wait on the person: the tray shows one, with a pager */
+  "loop-questions": ({ store }) => {
+    const question = (id: string, text: string) => ({
+      id,
+      itemId: "2",
+      question: text,
+      kind: "blocking" as const,
+      options: [
+        "Merge it as it is (recommended)",
+        "Leave it open",
+        "Write the record first",
+      ],
+      askedAt: new Date().toISOString(),
+    });
+    loopScene(store, (loop) => ({
+      ...loop,
+      status: "waiting",
+      questions: [
+        question(
+          "q1",
+          "PR #7 is open and green by its own report. Should I merge it as-is, or wait for you?",
+        ),
+        question("q2", "Which branch should the migration land on?"),
+        question("q3", "Do you want the gate record written into the repo?"),
+      ],
+    }));
+  },
+  /** A re-plan waits to be accepted: the tray holds Review diff, Keep planning, Accept plan */
+  "loop-replan": ({ store }) => {
+    loopScene(store, (loop) => ({
+      ...loop,
+      status: "awaiting_plan",
+      replanReason:
+        "Item 2 failed twice: the test runner is not installed, so the plan adds an install step first.",
+    }));
+  },
+  /** An item failed and its repair re-plan runs: the red state */
+  "loop-failed": ({ store }) => {
+    loopScene(
+      store,
+      (loop) => ({
+        ...loop,
+        status: "replanning",
+        waitingSince: undefined,
+        items: loop.items.map((i) =>
+          i.id === "2" ? { ...i, status: "failed" as const } : i,
+        ),
+        current: {
+          kind: "replan",
+          itemId: "2",
+          historyIndex: 0,
+          startedAt: new Date().toISOString(),
+        },
+      }),
+      true,
+    );
+  },
+  /** Every item done: Close replaces Stop */
+  "loop-finished": ({ store }) => {
+    loopScene(store, (loop) =>
+      stopLoop(
+        {
+          ...loop,
+          items: loop.items.map((i) => ({ ...i, status: "done" as const })),
+        },
+        "done",
+        "Every item is done.",
+      ),
+    );
+  },
+  /** The person stopped the loop: Resume and Close */
+  "loop-stopped": ({ store }) => {
+    loopScene(store, (loop) =>
+      stopLoop(loop, "stopped", "You stopped the loop."),
+    );
+  },
+  /** The gear opened: strategy, Parallel and the note */
+  "loop-settings-open": async ({ store }) => {
+    loopScene(
+      store,
+      (loop) => ({
+        ...loop,
+        status: "running",
+        waitingSince: undefined,
+      }),
+      true,
+    );
+    await new Promise((r) => setTimeout(r, 800));
+    (
+      document.querySelector(
+        "[data-testid=loop-settings-toggle]",
+      ) as HTMLElement
+    )?.click();
   },
   /** Loop mode at IDGAF with seven refused calls: the one-line chip and the blocked badge */
   "loop-idgaf": ({ store }) => {
@@ -981,5 +1123,43 @@ Object.assign(FIXTURES, {
 });
 
 Object.assign(FIXTURES, AUDIT_FIXTURES);
+
+/** A drag event as Chromium builds it, with VS Code's types set. */
+function dispatchDrag(type: string, data: Record<string, string>) {
+  const target = document.querySelector(
+    "[data-testid=editor-input-main]",
+  ) as HTMLElement | null;
+  if (!target) return;
+  const dataTransfer = new DataTransfer();
+  for (const [k, v] of Object.entries(data)) dataTransfer.setData(k, v);
+  target.dispatchEvent(
+    new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer }),
+  );
+}
+
+const WORKSPACE = "file:///Users/user/workspace1";
+
+Object.assign(FIXTURES, {
+  /** A file dragged over the input (not yet dropped): the drop target */
+  "drop-target": async ({ store }: FixtureContext) => {
+    store.dispatch(newSession());
+    await sleep(800);
+    dispatchDrag("dragenter", {
+      "application/vnd.code.uri-list": `${WORKSPACE}/src/app.ts`,
+    });
+    await sleep(200);
+  },
+  /** A drop of .env and a file outside the workspace: the refusal note */
+  "drop-refused": async ({ store }: FixtureContext) => {
+    store.dispatch(newSession());
+    await sleep(800);
+    const uris = [`${WORKSPACE}/.env`, "file:///tmp/elsewhere/notes.md"];
+    dispatchDrag("drop", {
+      ResourceURLs: JSON.stringify(uris),
+      "application/vnd.code.uri-list": uris.join("\r\n"),
+    });
+    await sleep(400);
+  },
+});
 
 export const FIXTURE_NAMES = Object.keys(FIXTURES);

@@ -26,7 +26,12 @@ export interface SinkCall {
   toolName: string;
   parsedArgs: Record<string, unknown>;
   /** The tool as the engine holds it, for MCP and read-only claims */
-  tool?: { uri?: string; originalFunctionName?: string; readonly?: boolean };
+  tool?: {
+    uri?: string;
+    originalFunctionName?: string;
+    readonly?: boolean;
+    mcpFromWorkspace?: boolean;
+  };
   /** The tool's resolved target: `isWithinWorkspace` false is a write outside */
   resolved?: { isWithinWorkspace: boolean } | null;
   /** Hosts the person trusts (their own config only) */
@@ -162,8 +167,10 @@ const FILE_WRITES = new Set(["writeFile"]);
 export function sinkOfCall(call: SinkCall): Sink | undefined {
   const { toolName, parsedArgs, tool } = call;
   if (tool?.uri?.startsWith("mcp:") && tool.originalFunctionName) {
-    // A server that says a tool only reads is believed for sending purposes
-    return tool.readonly === true
+    // `readonly` is a server's hint, believed only for a server the person
+    // trusts (mcpTrust.ts), and never for one the open folder brought. For any
+    // other server the call is a send.
+    return tool.readonly === true && !tool.mcpFromWorkspace
       ? undefined
       : { class: "mcp-send", detail: tool.originalFunctionName };
   }

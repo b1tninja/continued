@@ -27,6 +27,7 @@ env:
 jobs:
   track-rerun:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: (github.run_attempt > 1) && github.event.pull_request.draft != true
     steps:
       - uses: actions/checkout@v7
@@ -35,6 +36,7 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -76,6 +78,7 @@ jobs:
         node-version: ${{ fromJSON(contains(fromJSON('["pull_request","merge_group"]'), github.event_name) && '[22]' || '[22,24]') }}
       fail-fast: false
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -138,6 +141,7 @@ jobs:
     # Only runs when secrets are available (not on fork PRs)
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -190,6 +194,7 @@ jobs:
     # by the gate (docs/ci-merge-gate.md), and this job would be one more runner slot.
     if: always() && github.event_name != 'pull_request' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs:
       - lint
       - test

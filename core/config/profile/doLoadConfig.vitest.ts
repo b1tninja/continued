@@ -60,6 +60,7 @@ vi.mock("../../tools/callTool", () => ({
 }));
 vi.mock("../../tools/mcpToolName", () => ({
   getMCPToolName: vi.fn(),
+  assignMcpToolNames: vi.fn(() => []),
 }));
 vi.mock("../../util/tts", () => ({
   TTS: { setup: vi.fn() },

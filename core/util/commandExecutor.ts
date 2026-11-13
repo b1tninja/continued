@@ -1,5 +1,6 @@
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { spawn } from "node:child_process";
+import { COMMAND_STDIO, commandEnvironment } from "./commandSpawn";
 import { containerArgs } from "./containerArgs";
 import {
   containerUnavailableMessage,
@@ -86,11 +87,13 @@ export function getCommandExecutor(
       args: shell.args(command),
     }),
     // A caller that passes its own `env` owns it; otherwise the host's
-    // secrets are not handed on (terminalEnvironment)
+    // secrets are not handed on (terminalEnvironment). The same for `stdio`:
+    // without one, standard input is not left open (COMMAND_STDIO)
     spawn: (command, options) =>
       spawn(shell.executable, shell.args(command), {
         ...options,
-        env: options?.env ?? terminalEnvironment(),
+        stdio: options?.stdio ?? COMMAND_STDIO,
+        env: options?.env ?? commandEnvironment(terminalEnvironment()),
       }),
     describe: () =>
       wsl
@@ -144,7 +147,10 @@ function containerExecutor(
       args: run(command, process.cwd()),
     }),
     spawn: (command, options) =>
-      spawn(runtime, run(command, cwdOf(options)), options ?? {}),
+      spawn(runtime, run(command, cwdOf(options)), {
+        ...options,
+        stdio: options?.stdio ?? COMMAND_STDIO,
+      }),
     describe: () =>
       `bash in a ${runtime} container (${image}): the workspace folder only, no network, no capabilities, no host secrets`,
   };
