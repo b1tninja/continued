@@ -20,6 +20,7 @@
     "bedrock-ok": {
       "color-contrast": 1
     },
+    "catalogue": {},
     "chat": {},
     "chat-first-run": {},
     "conversation": {
@@ -81,6 +82,22 @@
     "loop-settings-open": {},
     "loop-questions": {},
     "loop-replan": {},
+    "loop-plan-failed": {
+      "color-contrast": 3,
+      "label-content-name-mismatch": 2
+    },
+    "loop-plan-finished": {},
+    "loop-plan-running": {
+      "color-contrast": 3,
+      "label-content-name-mismatch": 2
+    },
+    "loop-plan-tile": {
+      "color-contrast": 1
+    },
+    "loop-plan-waiting": {
+      "color-contrast": 1,
+      "label-content-name-mismatch": 1
+    },
     "onboarding-local": {
       "button-name": 1,
       "select-name": 1

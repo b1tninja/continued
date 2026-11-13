@@ -33,6 +33,7 @@
                   "ide-extensions/agent/quick-start",
                   "ide-extensions/agent/how-it-works",
                   "ide-extensions/agent/plan-mode",
+                  "ide-extensions/agent/loop-mode",
                   "ide-extensions/agent/task-list",
                   "ide-extensions/agent/plan-files",
                   "ide-extensions/agent/loop-budgets",
@@ -85,6 +86,17 @@
                   "ide-extensions/edit/context-selection"
                 ]
               }
+            ]
+          },
+          {
+            "group": "Terminal agent",
+            "expanded": false,
+            "icon": "terminal",
+            "pages": [
+              "cli/install",
+              "cli/first-session",
+              "cli/reference",
+              "cli/slash-commands"
             ]
           },
           {
@@ -185,6 +197,11 @@
             "icon": "code",
             "pages": [
               "reference",
+              "reference/permissions-yaml",
+              "reference/settings-json",
+              "reference/environment-variables",
+              "reference/vscode",
+              "reference/storage-and-reset",
               "reference/yaml-migration",
               "reference/json-reference",
               "reference/surface-facts",
