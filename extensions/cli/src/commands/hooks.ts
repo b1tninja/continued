@@ -7,6 +7,7 @@
 import * as readline from "node:readline/promises";
 
 import { getProjectHookFiles, loadHooksConfig } from "../hooks/hookConfig.js";
+import { getUserHookFiles } from "../hooks/hookListing.js";
 import {
   fingerprintProjectHooks,
   isProjectTrusted,
@@ -30,6 +31,24 @@ function describe(cwd: string, files: ProjectHookFile[]): void {
   for (const file of files) out(`  ${file.path}`);
   out();
   for (const line of listProjectHandlers(files, cwd)) out(`  ${line}`);
+  out();
+}
+
+/** The user's own hooks, each file with what it defines. They always run. */
+function describeUserHooks(cwd: string): void {
+  const files = getUserHookFiles(cwd);
+  if (files.length === 0) return;
+  out("Your own hooks (always run, from your settings):");
+  for (const file of files) {
+    out(`  ${file.path}`);
+    if (file.unreadable) {
+      out(
+        "    could not be read as a JSON object: none of its hooks run. Fix the file.",
+      );
+      continue;
+    }
+    for (const line of listProjectHandlers([file], cwd)) out(`    ${line}`);
+  }
   out();
 }
 
@@ -58,6 +77,7 @@ export async function hooksCommand(
 
   switch (action ?? "list") {
     case "list": {
+      describeUserHooks(cwd);
       if (files.length === 0) {
         out("This project defines no hooks.");
         return 0;

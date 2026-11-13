@@ -78,7 +78,10 @@ function mergeHooksConfigs(
 /**
  * Settings files that belong to the user. These always load.
  */
-function getUserSettingsFilePaths(cwd: string, homeDir?: string): string[] {
+export function getUserSettingsFilePaths(
+  cwd: string,
+  homeDir?: string,
+): string[] {
   const home = homeDir ?? os.homedir();
   const paths = [path.join(home, ".claude", "settings.json")];
   // Undefined when CONTINUE_GLOBAL_DIR points inside the project; see hookTrust.
