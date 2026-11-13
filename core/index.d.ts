@@ -1415,8 +1415,11 @@ interface Reasoning {
   endAt?: number;
 }
 
-/** How a turn ended early: Stop, or a request that failed for good. */
-export type TurnInterruption = "stopped" | "failed";
+/**
+ * How a turn ended early: Stop, a request that failed for good, or a window
+ * that closed or reloaded while it ran.
+ */
+export type TurnInterruption = "stopped" | "failed" | "reloaded";
 
 export interface ChatHistoryItem {
   message: ChatMessage;
@@ -1431,7 +1434,7 @@ export interface ChatHistoryItem {
   conversationSummary?: string;
   /**
    * Set on the last item kept from a turn that the person stopped or that
-   * failed.
+   * failed, or that a reload cut off. The chat offers Resume for it.
    */
   interrupted?: TurnInterruption;
   /**

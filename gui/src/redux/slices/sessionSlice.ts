@@ -39,6 +39,7 @@ import {
 import { mergeReasoningDetails } from "core/llm/openaiTypeConverters";
 import { addRequestUsage } from "core/llm/utils/sessionUsage";
 import { interruptSubagentRuns } from "../../util/subagents/interrupt";
+import { markTurnCutOffOnLoad } from "../../util/resumeTurn";
 import { abortLoopWorkers } from "../../util/subagents/loopWorkers";
 import { addFileSnapshot } from "core/util/checkpoints";
 import { restoreLoop } from "core/util/loopMode";
@@ -390,7 +391,7 @@ export const sessionSlice = createSlice({
         return;
       }
       // Stop or a failed request (not a retry or a steer) marks the turn it
-      // ended
+      // ended, so the chat can offer Resume
       const interruption = action?.payload;
 
       const lastUserOrToolIdx = findLastIndex(
@@ -1020,6 +1021,9 @@ export const sessionSlice = createSlice({
         // A subagent cannot outlive the window that ran it: one saved while
         // running is shown as interrupted, not spinning forever.
         interruptSubagentRuns(state.history);
+        // A turn the window closed on is offered Resume (reads the tool
+        // calls' saved status, so it runs before they are ended below)
+        markTurnCutOffOnLoad(state.history);
         // A session saved mid-turn (the queue saves it at once) can hold a
         // tool call that was running or still being generated. Nothing
         // finishes it after a reload or crash, and a tool that looks running

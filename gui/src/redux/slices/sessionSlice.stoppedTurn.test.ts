@@ -1,7 +1,11 @@
-import type { ChatHistoryItem } from "core";
+import type { ChatHistoryItem, Session } from "core";
 import { describe, expect, it } from "vitest";
 import { constructMessages } from "../util/constructMessages";
-import { clearDanglingMessages, sessionSlice } from "./sessionSlice";
+import {
+  clearDanglingMessages,
+  newSession,
+  sessionSlice,
+} from "./sessionSlice";
 
 const reducer = sessionSlice.reducer;
 type SessionState = ReturnType<typeof reducer>;
@@ -142,5 +146,34 @@ describe("clearDanglingMessages after Stop or a failure", () => {
       clearDanglingMessages(undefined),
     );
     expect(state.history).toEqual([]);
+  });
+});
+
+describe("loading a session cut off by a reload", () => {
+  function load(history: ChatHistoryItem[]) {
+    const session = {
+      sessionId: "s1",
+      title: "t",
+      workspaceDirectory: "",
+      history,
+    } as Session;
+    return reducer(stateWith([]), newSession(session));
+  }
+
+  it("marks a turn that was still reasoning", () => {
+    const state = load([user, placeholder, thinking]);
+    expect(state.history.at(-1)?.interrupted).toBe("reloaded");
+    expect(state.history.at(-1)?.reasoning?.active).toBe(false);
+  });
+
+  it("does not mark a finished turn", () => {
+    const state = load([
+      user,
+      {
+        message: { role: "assistant", content: "Done." },
+        contextItems: [],
+      },
+    ]);
+    expect(state.history.at(-1)?.interrupted).toBeUndefined();
   });
 });
