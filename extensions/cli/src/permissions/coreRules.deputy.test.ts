@@ -235,3 +235,72 @@ describe("an MCP tool's path argument, from its schema, through the CLI", () => 
     },
   );
 });
+
+describe("File edits outside the working folder, by level, through the CLI", () => {
+  const editLevels = (edits: PolicyLevel): ApprovalSettings => ({
+    levels: { ...levels("cautious"), edits },
+  });
+  const run = (
+    tool: string,
+    args: Record<string, unknown>,
+    edits: PolicyLevel,
+    over: { headless?: boolean; deny?: string[] } = {},
+  ) =>
+    evaluateWithCoreRules({
+      cliToolName: tool,
+      args,
+      cliPermission: "ask",
+      assistantPermissions: over.deny ? { deny: over.deny } : undefined,
+      approval: editLevels(edits),
+      isHeadless: over.headless ?? false,
+      cwd: ws,
+    });
+  const targets = [
+    ["Write", { filepath: path.join(outside, "new.txt") }],
+    ["Edit", { file_path: path.join(outside, "target.txt") }],
+    ["MultiEdit", { file_path: path.join(outside, "target.txt") }],
+  ] as const;
+
+  it("IDGAF allows each, headless too, by the rules, and names the path", async () => {
+    for (const [tool, args] of targets) {
+      for (const headless of [false, true]) {
+        const v = await run(tool, args, "idgaf", { headless });
+        expect(v?.decision, `${tool} headless=${headless}`).toBe("allow");
+        expect(v?.by).toBe("rules");
+        expect(v?.source).toBe("idgaf");
+        expect(v?.reason).toContain("File edits is set to IDGAF");
+        expect(v?.reason).toContain("The target is outside the workspace: ");
+      }
+    }
+  });
+
+  it("IDGAF ignores a Never rule on the path", async () => {
+    const v = await run("Write", targets[0][1], "idgaf", {
+      deny: ["writeFile(**)"],
+    });
+    expect(v?.decision).toBe("allow");
+  });
+
+  it("IDGAF still refuses the product's own policy files", async () => {
+    const v = await run(
+      "Write",
+      { filepath: path.join(os.homedir(), ".continuous", "permissions.yaml") },
+      "idgaf",
+    );
+    expect(v?.decision).toBe("deny");
+  });
+
+  it("Manual, Cautious, Automatic and Permissive hold each of them", async () => {
+    for (const edits of [
+      "manual",
+      "cautious",
+      "automatic",
+      "permissive",
+    ] as const) {
+      for (const [tool, args] of targets) {
+        const v = await run(tool, args, edits);
+        expect(v?.decision, `${edits} ${tool}`).toBe("ask");
+      }
+    }
+  });
+});

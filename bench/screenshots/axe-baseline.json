@@ -80,6 +80,18 @@
     "loop-stopped": {},
     "loop-settings-open": {},
     "loop-questions": {},
-    "loop-replan": {}
+    "loop-replan": {},
+    "onboarding-local": {
+      "button-name": 1,
+      "select-name": 1
+    },
+    "onboarding-local-chooser": {
+      "button-name": 1,
+      "select-name": 1
+    },
+    "onboarding-local-server": {
+      "button-name": 1,
+      "select-name": 1
+    }
   }
 }
