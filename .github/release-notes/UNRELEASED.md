@@ -30,6 +30,7 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 ## Behaviour changes
 
+- A root `--policy` or `--trust-project-hooks` now reaches `continuous serve` and `continuous acp` when it is written before the subcommand. Before, `continuous --policy careful serve` dropped the policy without a word and ran with the default one.
 - The git-ai integration is now off by default. The terminal agent used to run `git-ai` (found through PATH, with the workspace as its working directory) around every file edit whenever it was installed. It now runs only if your own `settings.json` in your Continuous folder says `"gitAiIntegration": true`, and then only the `git-ai` found in an absolute PATH entry outside the workspace, by its full path. A project cannot switch it on.
 - `continuous serve` no longer runs the `install` command from `.continuous/environment.json` or `.continue/environment.json` unless the folder is trusted. Run `continuous project trust` (or pass `--trust-project-config`) to keep the old behaviour; `serve` prints one line on stderr when it skips the file. Set `"environmentInstall": false` in your own `settings.json` to turn it off even for a trusted folder. See the workspace trust page.
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
