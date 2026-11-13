@@ -174,11 +174,7 @@ export function LumpToolbar() {
     return () => {
       document.removeEventListener("keydown", handleToolCallKeyboardShortcuts);
     };
-  }, [
-    firstPendingToolCall,
-    hasRunningTerminalCommand,
-    runningTerminalCalls,
-  ]);
+  }, [firstPendingToolCall, hasRunningTerminalCommand, runningTerminalCalls]);
 
   switch (kind) {
     case "applying":

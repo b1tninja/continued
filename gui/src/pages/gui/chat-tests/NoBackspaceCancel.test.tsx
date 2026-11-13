@@ -1,10 +1,7 @@
 import { act, fireEvent } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { MockIdeMessenger } from "../../../context/MockIdeMessenger";
-import {
-  EMPTY_CONFIG,
-  updateConfig,
-} from "../../../redux/slices/configSlice";
+import { EMPTY_CONFIG, updateConfig } from "../../../redux/slices/configSlice";
 import { newSession, setActive } from "../../../redux/slices/sessionSlice";
 import { setupStore } from "../../../redux/store";
 import { renderWithProviders } from "../../../util/test/render";
@@ -22,7 +19,10 @@ const COMBOS = [
 async function setup(withPendingToolCall: boolean) {
   const ideMessenger = new MockIdeMessenger();
   const store = setupStore({ ideMessenger });
-  await renderWithProviders(<Chat />, { store, mockIdeMessenger: ideMessenger });
+  await renderWithProviders(<Chat />, {
+    store,
+    mockIdeMessenger: ideMessenger,
+  });
   const input = await getElementByTestId(
     "continue-input-box-main-editor-input",
   );
@@ -85,8 +85,8 @@ describe("Backspace shortcuts do not cancel", () => {
         fireEvent.keyDown(input, { key: "Backspace", ...init });
         fireEvent.keyDown(document, { key: "Backspace", ...init });
       });
-      const status = store.getState().session.history[0].toolCallStates?.[0]
-        .status;
+      const status =
+        store.getState().session.history[0].toolCallStates?.[0].status;
       expect(status).toBe("generated");
     });
   }
