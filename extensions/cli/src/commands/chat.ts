@@ -53,6 +53,7 @@ export interface ChatOptions extends ExtendedCommandOptions {
   fork?: string; // Fork from an existing session ID
   format?: headless.HeadlessFormat; // Output format for headless mode
   silent?: boolean; // Strip <think></think> tags and excess whitespace
+  outputSchema?: string; // --output-schema: a JSON Schema the final answer must match
 }
 
 export async function initializeChatHistory(
@@ -435,11 +436,11 @@ async function runHeadlessMode(
   const { llmApi, model } = modelState;
 
   if (!model) {
-    throw new Error("No models were found.");
+    throw headless.configError("No models were found.");
   }
 
   if (!llmApi) {
-    throw new Error("No LLM API instance found.");
+    throw headless.configError("No LLM API instance found.");
   }
 
   // Run limits (--max-budget-usd, --max-turns, --max-duration): refuses a
@@ -550,7 +551,7 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
     if (options.headless) {
       // Headless path - no Ink, no TUI, works in TTY-less environments
       logger.debug("Running in headless mode (TTY-less compatible)");
-      headless.beginStreamJson(options.format);
+      headless.beginHeadlessRun(options);
       await runHeadlessMode(prompt, options);
       return;
     }

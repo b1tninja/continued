@@ -10,6 +10,7 @@ export interface ValidationOptions {
   // Root command specific flags
   print?: boolean;
   format?: string;
+  outputSchema?: string;
   silent?: boolean;
 
   // Common flags
@@ -55,6 +56,22 @@ function validateFormatFlag(options: ValidationOptions): ValidationError[] {
   }
 
   return errors;
+}
+
+/**
+ * Validate that --output-schema only works with -p/--print
+ */
+function validateOutputSchemaFlag(
+  options: ValidationOptions,
+): ValidationError[] {
+  return options.outputSchema && !options.print
+    ? [
+        {
+          code: "OUTPUT_SCHEMA_REQUIRES_PRINT",
+          message: "Error: --output-schema can only be used with -p/--print",
+        },
+      ]
+    : [];
 }
 
 /**
@@ -193,6 +210,7 @@ export function validateFlags(options: ValidationOptions): ValidationResult {
   const validators = [
     validateFormatFlag,
     validateSilentFlag,
+    validateOutputSchemaFlag,
     validateFormatValue,
     validateModeFlags,
     validateSessionFlags,

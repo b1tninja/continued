@@ -202,3 +202,140 @@ describe("E2E: -p --format stream-json", () => {
     expect(result.exitCode).toBe(21);
   }, 30000);
 });
+
+describe("E2E: headless exit codes", () => {
+  let context: any;
+  let mockServer: MockLLMServer | undefined;
+
+  beforeEach(async () => {
+    context = await createTestContext();
+  });
+
+  afterEach(async () => {
+    if (mockServer) await cleanupMockLLMServer(mockServer);
+    mockServer = undefined;
+    await cleanupTestContext(context);
+  });
+
+  const answering = (text: string) => (req: any, res: any) => {
+    req.on("data", () => {});
+    req.on("end", () =>
+      sse(res, [
+        { choices: [{ index: 0, delta: { content: text } }] },
+        { usage: { prompt_tokens: 5, completion_tokens: 2 } },
+      ]),
+    );
+  };
+
+  it("exits 6 when the answer does not match --output-schema, 0 when it does", async () => {
+    const schemaPath = path.join(context.testDir, "s.json");
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        type: "object",
+        required: ["ok"],
+        properties: { ok: { type: "boolean" } },
+      }),
+    );
+    mockServer = await setupMockLLMTest(context, {
+      customHandler: answering('{"ok":"yes"}'),
+    });
+    const bad = await runCLI(context, {
+      args: [
+        "-p",
+        "--output-schema",
+        schemaPath,
+        "--config",
+        context.configPath,
+        "q",
+      ],
+      timeout: 20000,
+      expectError: true,
+    });
+    expect(bad.exitCode).toBe(6);
+    expect(bad.stdout).toContain('{"ok":"yes"}');
+    expect(bad.stderr).toMatch(/does not match --output-schema/);
+
+    await cleanupMockLLMServer(mockServer);
+    mockServer = await setupMockLLMTest(context, {
+      customHandler: answering('{"ok":true}'),
+    });
+    const good = await runCLI(context, {
+      args: [
+        "-p",
+        "--output-schema",
+        schemaPath,
+        "--config",
+        context.configPath,
+        "q",
+      ],
+      timeout: 20000,
+    });
+    expect(good.exitCode).toBe(0);
+  }, 45000);
+
+  it("exits 2 on an unusable --output-schema file, before any model request", async () => {
+    mockServer = await setupMockLLMTest(context, {
+      customHandler: answering("{}"),
+    });
+    const result = await runCLI(context, {
+      args: [
+        "-p",
+        "--format",
+        "stream-json",
+        "--output-schema",
+        path.join(context.testDir, "missing.json"),
+        "--config",
+        context.configPath,
+        "q",
+      ],
+      timeout: 20000,
+      expectError: true,
+    });
+    expect(result.exitCode).toBe(2);
+    const events = result.stdout
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l));
+    expect(events.map((e) => e.type)).toEqual(["error", "result"]);
+    expect(events[1]).toMatchObject({ status: "error", exitCode: 2 });
+  }, 30000);
+
+  it("exits 4 when the provider answers with an HTTP error", async () => {
+    mockServer = await setupMockLLMTest(context, {
+      customHandler: (req, res) => {
+        req.on("data", () => {});
+        req.on("end", () => {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: {
+                message: "Incorrect API key",
+                type: "invalid_request_error",
+              },
+            }),
+          );
+        });
+      },
+    });
+    const result = await runCLI(context, {
+      args: [
+        "-p",
+        "--format",
+        "stream-json",
+        "--config",
+        context.configPath,
+        "q",
+      ],
+      timeout: 30000,
+      expectError: true,
+    });
+    const events = result.stdout
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l));
+    expect(events.at(-2)).toMatchObject({ type: "error", kind: "provider" });
+    expect(events.at(-1)).toMatchObject({ type: "result", exitCode: 4 });
+    expect(result.exitCode).toBe(4);
+  }, 40000);
+});

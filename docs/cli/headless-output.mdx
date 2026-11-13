@@ -30,10 +30,10 @@ Every line has `type`, `seq` (1, 2, 3 ... with no gaps) and `time` (ISO 8601, UT
 | `tool_decision` | The permission system decided                                              | `callId`, `tool`, `decision` (`allowed`, `asked`, `refused`), `by` (`rules`, `reviewer`, `system`, `person`), `source`, `rule`, `reason`, `answer`, `held` |
 | `tool_result`   | A call ended                                                               | `callId`, `tool`, `status` (`done`, `errored`, `canceled`), `output`, `outputLength`, `truncated`                                        |
 | `run_limit`     | A run limit ended the run                                                  | `reason` (`budget`, `turns`, `duration`), `phase`, `message`, `exitCode`, `spentUsd`                                                     |
-| `error`         | The run failed                                                             | `kind` (`config`, `refused`, `provider`, `internal`), `message`, `code`                                                  |
+| `error`         | The run failed                                                             | `kind` (`config`, `refused`, `provider`, `output_schema`, `internal`), `message`, `code`                                                  |
 | `result`        | Last line of every run, whatever ended it                                  | `schemaVersion`, `status` (`success`, `error`, `refused`, `stopped`, `interrupted`), `exitCode`, `result`, `durationMs`, `numRequests`, `numToolCalls`, `numRefusals`, `usage`, `totalCostUsd`, `costEstimated` |
 
-`result.exitCode` is the code the process exits with; a run limit's codes are on [Run limits](/cli/run-limits).
+`result.exitCode` is the code the process exits with; see [Exit codes](/cli/exit-codes).
 
 ### Order
 

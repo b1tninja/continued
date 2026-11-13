@@ -183,7 +183,9 @@
         "type": { "const": "error" },
         "seq": { "type": "integer", "minimum": 1 },
         "time": { "type": "string" },
-        "kind": { "enum": ["config", "refused", "provider", "internal"] },
+        "kind": {
+          "enum": ["config", "refused", "provider", "output_schema", "internal"]
+        },
         "message": { "type": "string" },
         "code": { "type": "string" }
       }

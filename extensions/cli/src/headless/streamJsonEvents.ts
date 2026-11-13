@@ -138,7 +138,8 @@ export interface RunLimitEvent extends EventBase<"run_limit"> {
   spentUsd?: number;
 }
 
-export type RunErrorKind = "config" | "refused" | "provider" | "internal";
+export type RunErrorKind =
+  "config" | "refused" | "provider" | "output_schema" | "internal";
 
 /** The run failed. A `result` line with the same exit code follows. */
 export interface ErrorEvent extends EventBase<"error"> {

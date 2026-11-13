@@ -159,6 +159,10 @@ addRunLimitOptions(addCommonOptions(program))
     "Output format for headless mode: json, or stream-json (one JSON event per line on stdout). Only works with -p/--print flag.",
   )
   .option(
+    "--output-schema <file>",
+    "Headless (-p): check the final answer against this JSON Schema file; exit 6 when it does not match",
+  )
+  .option(
     "--silent",
     "Strip <think></think> tags and excess whitespace from output. Only works with -p/--print flag.",
   )
@@ -208,6 +212,7 @@ addRunLimitOptions(addCommonOptions(program))
     const validation = validateFlags({
       print: options.print,
       format: options.format,
+      outputSchema: options.outputSchema,
       silent: options.silent,
       readonly: options.readonly,
       auto: options.auto,

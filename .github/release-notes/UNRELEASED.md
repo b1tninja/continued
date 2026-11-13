@@ -46,3 +46,11 @@ At File edits = IDGAF (the top level, also reached by `--auto`), the agent can c
 ### New
 
 - `continuous -p --format stream-json` prints one JSON object per line: `init`, `usage` per model request, `message`, `tool_use`, `tool_decision` (allowed, asked or refused, and by what), `tool_result`, `run_limit`, `error`, and a last `result` line with the exit code, counts and cost. The stream is versioned (`schemaVersion: 1`), checked against a JSON Schema in `extensions/cli/spec/stream-json.schema.json`, and every field goes through the audit masker; tool output is cut at 4000 characters. Nothing else is written to stdout in this mode. See [Headless output](https://github.com/b1tninja/continuous/blob/main/docs/cli/headless-output.mdx).
+- `continuous -p --output-schema <file>` checks the final answer against a JSON Schema and exits 6 when it does not match. The schema is read before the first request (an unusable file exits 2) and is not sent to the model. See [Exit codes](https://github.com/b1tninja/continuous/blob/main/docs/cli/exit-codes.mdx).
+- The exit codes of a headless run are documented in one table, which a test compares with the code: 0 success, 1 error, 2 config, 3 secrets found, 4 provider, 5 refused, 6 output schema, 20 to 22 run limits, 130 interrupted.
+
+### Behaviour changes
+
+- A headless run whose model call fails (network, a bad key, a rate limit, an HTTP error from the provider, a context that is too long) now exits **4** instead of 1.
+- A headless run whose configuration gives it no usable model, or that sets `--max-budget-usd` on a model with no price, now exits **2** instead of 1, the code a broken hooks or permissions file and `serve`'s refusal to start already use.
+- A headless run exits **5** instead of 1 when a `UserPromptSubmit` hook blocks the prompt, and instead of 0 when the turn ended at the refusal cap because tool calls kept being refused.

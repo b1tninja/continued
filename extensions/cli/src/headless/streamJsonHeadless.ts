@@ -4,15 +4,21 @@ import type { ChatHistoryItem } from "core/index.js";
 import { RUN_STOP_EXIT_CODE, type RunStop } from "../budget/runBudget.js";
 import * as runLimits from "../budget/runLimits.js";
 import { stripThinkTags } from "../commands/chatOutput.js";
-import { safeStdout } from "../init.js";
+import { safeStderr, safeStdout } from "../init.js";
 import { services } from "../services/index.js";
 import { getSessionUsage } from "../session.js";
+import { refusalCapReached } from "../stream/refusalCap.js";
 import type { StreamChatResponseOptions } from "../stream/streamChatResponse.js";
 import type { StreamCallbacks } from "../stream/streamChatResponse.types.js";
 import { hadUnhandledError } from "../util/errorState.js";
-import { describeNetworkFailure } from "../util/networkError.js";
 import { getVersion } from "../version.js";
 
+import { classifyHeadlessFailure, HEADLESS_EXIT_CODES } from "./exitCodes.js";
+import {
+  loadOutputSchema,
+  outputSchemaProblem,
+  type OutputSchema,
+} from "./outputSchema.js";
 import {
   isStreamJson,
   type RunErrorKind,
@@ -25,6 +31,7 @@ import {
 } from "./streamJsonRun.js";
 
 export { isStreamJson, type HeadlessFormat } from "./streamJsonEvents.js";
+export { configError } from "./exitCodes.js";
 
 function sessionUsage() {
   try {
@@ -57,9 +64,22 @@ function ensureRun(): StreamJsonRun {
   return run;
 }
 
-/** Call at the start of a headless run: with `--format stream-json` the stream exists from here on. */
-export function beginStreamJson(format: string | undefined): void {
-  if (isStreamJson(format)) ensureRun();
+let outputSchema: OutputSchema | undefined;
+
+/**
+ * Call at the start of a headless run: with `--format stream-json` the
+ * stream exists from here on, so a failure after this still ends in a
+ * `result` line. Reads `--output-schema` before any model request; a bad
+ * file throws a config error.
+ */
+export function beginHeadlessRun(options: {
+  format?: string;
+  outputSchema?: string;
+}): void {
+  if (isStreamJson(options.format)) ensureRun();
+  outputSchema = options.outputSchema
+    ? loadOutputSchema(options.outputSchema)
+    : undefined;
 }
 
 interface HistorySource {
@@ -130,21 +150,44 @@ export function startStreamJsonRun(
   );
 }
 
-/** The final answer of a stream-json run, for its `result` line. */
-let streamJsonAnswer = "";
+/** The run's final answer, for `--output-schema` and the stream's `result` line. */
+let finalAnswer = "";
 
 /**
- * With `--format stream-json` keeps the final answer for the `result` line
- * and returns true: nothing but events goes to stdout. Otherwise false.
+ * Keeps the final answer. Returns true with `--format stream-json`: the
+ * answer then goes in the `result` line and nothing but events is printed.
  */
 export function noteHeadlessAnswer(
   answer: string,
   silent: boolean | undefined,
   format: string | undefined,
 ): boolean {
-  if (!isStreamJson(format)) return false;
-  streamJsonAnswer = silent ? stripThinkTags(answer) : answer;
-  return true;
+  finalAnswer = silent ? stripThinkTags(answer) : answer;
+  return isStreamJson(format);
+}
+
+/** The problem that makes a finished run fail: the refusal cap, or an answer that does not match the schema. */
+function finishedRunProblem():
+  | { kind: "refused" | "output_schema"; message: string; exitCode: number }
+  | undefined {
+  if (refusalCapReached()) {
+    return {
+      kind: "refused",
+      message:
+        "The run ended because tool calls kept being refused (the refusal cap).",
+      exitCode: HEADLESS_EXIT_CODES.refused,
+    };
+  }
+  const problem =
+    outputSchema && outputSchemaProblem(outputSchema, finalAnswer);
+  if (problem) {
+    return {
+      kind: "output_schema",
+      message: problem,
+      exitCode: HEADLESS_EXIT_CODES.outputSchema,
+    };
+  }
+  return undefined;
 }
 
 /**
@@ -155,12 +198,43 @@ export function noteHeadlessAnswer(
 export function endHeadlessRun(format: string | undefined): number {
   const limitCode = runLimits.exitCodeOfRun(format);
   const stop = runLimits.currentRunStop();
-  streamJsonRunLimit(stop);
-  const exitCode = limitCode === 0 && hadUnhandledError() ? 1 : limitCode;
+  if (stop) {
+    streamJsonRunLimit(stop);
+    finishStreamJson({
+      status: "stopped",
+      exitCode: limitCode,
+      result: finalAnswer,
+    });
+    return limitCode;
+  }
+  const problem = finishedRunProblem();
+  if (problem) {
+    if (isStreamJson(format)) {
+      activeStreamJson()?.error(problem.kind, problem.message);
+    } else {
+      safeStderr(
+        format === "json"
+          ? JSON.stringify({
+              status: "error",
+              kind: problem.kind,
+              message: problem.message,
+              exitCode: problem.exitCode,
+            }) + "\n"
+          : `${problem.message} (exit ${problem.exitCode})\n`,
+      );
+    }
+    finishStreamJson({
+      status: problem.kind === "refused" ? "refused" : "error",
+      exitCode: problem.exitCode,
+      result: finalAnswer,
+    });
+    return problem.exitCode;
+  }
+  const exitCode = hadUnhandledError() ? HEADLESS_EXIT_CODES.error : 0;
   finishStreamJson({
-    status: stop ? "stopped" : exitCode === 0 ? "success" : "error",
+    status: exitCode === 0 ? "success" : "error",
     exitCode,
-    result: streamJsonAnswer,
+    result: finalAnswer,
   });
   return exitCode;
 }
@@ -170,15 +244,10 @@ export function failHeadlessRun(
   options: { headless?: boolean; format?: string },
   error: Error,
 ): number {
-  if (!options.headless) return 1;
-  const network = describeNetworkFailure(error);
-  failStreamJson(options.format, {
-    kind: network ? "provider" : "internal",
-    message: network?.message ?? (error.message || String(error)),
-    code: network?.code,
-    exitCode: 1,
-  });
-  return 1;
+  if (!options.headless) return HEADLESS_EXIT_CODES.error;
+  const failure = classifyHeadlessFailure(error);
+  failStreamJson(options.format, failure);
+  return failure.exitCode;
 }
 
 /** What the model loop is given so the stream hears each reply and each finished request. */

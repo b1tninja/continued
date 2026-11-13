@@ -206,6 +206,7 @@
               "guides/cn-serve",
               "cli/run-limits",
               "cli/headless-output",
+              "cli/exit-codes",
               "guides/acp",
               "guides/instinct",
               "guides/running-continue-without-internet",
