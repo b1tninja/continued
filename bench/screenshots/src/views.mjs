@@ -149,6 +149,18 @@ export const VIEWS = {
     fixture: "audit-inbox",
     note: "Settings, Permissions, Inbox: open asks oldest first, ages, possibly-ended label, Show older",
   },
+  "onboarding-local": {
+    fixture: "onboarding-local",
+    note: "Onboarding, Local tab: the suggested model with Connect and Configure model",
+  },
+  "onboarding-local-chooser": {
+    fixture: "onboarding-local-chooser",
+    note: "Onboarding, Local tab, with the Configure model chooser open",
+  },
+  "onboarding-local-server": {
+    fixture: "onboarding-local-server",
+    note: "The chooser on an OpenAI-compatible server, with More open",
+  },
   "loop-frame-running": {
     fixture: "loop-frame-running",
     note: "the gradient loop frame round a stand-in loop dock, running",
