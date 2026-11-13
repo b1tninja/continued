@@ -32,6 +32,7 @@ import {
   createTextToolRecovery,
   dialectToolsFromConverse,
   fillMissingToolResults,
+  repairConverseTurns,
   recoveredCallId,
   recoverFromText,
   type RecoveredCall,
@@ -1455,12 +1456,9 @@ class Bedrock extends BaseLLM {
     let currentBlocks: ContentBlock[] = [];
 
     const converted: Message[] = [];
+    // A turn that converts to nothing is left out here and the turns around
+    // it are joined by repairConverseTurns below
     const pushCurrentMessage = () => {
-      if (currentBlocks.length === 0 && converted.length > 1) {
-        throw new Error(
-          `Bedrock: no content in ${currentRole} message before conversational turn change`,
-        );
-      }
       if (currentBlocks.length > 0) {
         converted.push({
           role: currentRole,
@@ -1605,6 +1603,12 @@ class Bedrock extends BaseLLM {
       pushCurrentMessage();
     }
 
+    // An assistant reply stopped or failed before any text, reasoning this
+    // model can't take back, a tool call without an id: any of them leaves an
+    // empty turn, and Converse refuses two user or two assistant messages in
+    // a row
+    const repaired = repairConverseTurns(converted);
+
     // If caching is enabled, we add cache_control parameter to the last two user messages
     // The second-to-last because it retrieves potentially already cached contents,
     // The last one because we want it cached for later retrieval.
@@ -1618,13 +1622,13 @@ class Bedrock extends BaseLLM {
       );
     if (cacheConversation) {
       this._addCachingToLastTwoUserMessages(
-        converted,
+        repaired,
         cache?.ttl,
         cache?.afterTextOnly ?? bedrockCachePointAfterTextOnly(modelId),
       );
     }
 
-    return converted;
+    return repaired;
   }
 
   /**

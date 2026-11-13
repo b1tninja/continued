@@ -59,6 +59,7 @@ import {
   isStreamingToolUseUnsupportedError,
   leaksDsmlMarker,
   normalizeToolUseIds,
+  repairConverseTurns,
   repairStreamedToolInput,
   ThinkingSplit,
   ToolInputGate,
@@ -577,17 +578,21 @@ export class BedrockApi implements BaseLlmApi {
       pushCurrentMessage();
     }
 
+    // A turn that converted to nothing (a reply stopped before any text, say)
+    // would leave two user or two assistant messages in a row
+    const repaired = repairConverseTurns(converted);
+
     // If caching is enabled, add cache points
     if (cache?.conversation) {
       this._addCachingToLastTwoUserMessages(
-        converted,
+        repaired,
         cache.ttl,
         pinned,
         cache.afterTextOnly ?? false,
       );
     }
 
-    return converted;
+    return repaired;
   }
 
   /**

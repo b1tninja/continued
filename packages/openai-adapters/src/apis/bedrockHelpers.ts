@@ -458,6 +458,107 @@ export function fillMissingToolResults<
   return filled;
 }
 
+/** The text of a user turn added only because a conversation must start with one. */
+export const CONVERSE_LEADING_USER_TEXT = ".";
+
+type ConverseBlockLike = {
+  text?: unknown;
+  toolUse?: { toolUseId?: string };
+  toolResult?: { toolUseId?: string; content?: Array<{ text?: unknown }> };
+  cachePoint?: unknown;
+};
+
+function isBlankText(block: ConverseBlockLike): boolean {
+  return typeof block.text === "string" && block.text.trim() === "";
+}
+
+/**
+ * Makes converted Converse messages a conversation Bedrock accepts, without
+ * touching one that already is. Converse wants roles that alternate, a user
+ * message first, no message without content and no blank text block, and a
+ * toolResult only in the message right after its toolUse.
+ *
+ * A history breaks that when a turn converts to nothing: an assistant reply
+ * that was stopped or failed before any text, one that held only reasoning
+ * the model can't take back, a tool call without an id or name, a user
+ * message whose context rendered empty. Such a turn is dropped and the
+ * turns around it, now of the same role, are joined in order. A toolResult
+ * that no longer follows its toolUse becomes text, as one without any
+ * toolUse already does. A cache point is kept only where it follows content.
+ */
+export function repairConverseTurns<
+  M extends { role?: string; content?: ConverseBlockLike[] },
+>(messages: M[]): M[] {
+  const kept: M[] = [];
+  for (const message of messages) {
+    const content = message.content ?? [];
+    let changed = false;
+    const blocks: ConverseBlockLike[] = [];
+    for (const block of content) {
+      const afterContent =
+        blocks.length > 0 && blocks[blocks.length - 1].cachePoint === undefined;
+      if (
+        isBlankText(block) ||
+        (block.cachePoint !== undefined && !afterContent)
+      ) {
+        changed = true;
+        continue;
+      }
+      blocks.push(block);
+    }
+    if (blocks.length === 0) continue;
+    const previous = kept[kept.length - 1];
+    if (previous && previous.role === message.role) {
+      kept[kept.length - 1] = {
+        ...previous,
+        content: [...(previous.content ?? []), ...blocks],
+      } as M;
+    } else {
+      kept.push(changed ? ({ ...message, content: blocks } as M) : message);
+    }
+  }
+
+  // A toolResult must answer a toolUse of the message just before it
+  for (let i = 0; i < kept.length; i++) {
+    const message = kept[i];
+    const content = message.content ?? [];
+    if (message.role !== "user" || !content.some((b) => b.toolResult)) {
+      continue;
+    }
+    const previous = kept[i - 1];
+    const used = new Set(
+      previous?.role === "assistant"
+        ? (previous.content ?? []).map((b) => b.toolUse?.toolUseId)
+        : [],
+    );
+    const unmatched = (b: ConverseBlockLike) =>
+      b.toolResult !== undefined && !used.has(b.toolResult.toolUseId);
+    if (!content.some(unmatched)) continue;
+    kept[i] = {
+      ...message,
+      content: content.map((block) => {
+        if (!unmatched(block)) return block;
+        const output =
+          (block.toolResult!.content ?? [])
+            .map((part) => (typeof part.text === "string" ? part.text : ""))
+            .filter((text) => text !== "")
+            .join("\n") || "No tool output";
+        return {
+          text: `Tool call output for Tool Call ID ${block.toolResult!.toolUseId}:\n\n${output}`,
+        };
+      }),
+    } as M;
+  }
+
+  if (kept.length > 0 && kept[0].role !== "user") {
+    kept.unshift({
+      role: "user",
+      content: [{ text: CONVERSE_LEADING_USER_TEXT }],
+    } as M);
+  }
+  return kept;
+}
+
 /**
  * Whether Bedrock refused a request because it does not know the model ID.
  * Happens when `crossRegionInference: auto` put a geographic prefix on a

@@ -9,3 +9,7 @@ Staging note for the next release. Fold it into that release's `<tag>.md` (the r
 ## Behaviour changes
 
 - **Ctrl+Backspace no longer cancels anything.** Ctrl+Backspace (Cmd+Backspace on macOS, Alt+Backspace in JetBrains) used to stop the running response and reject a pending tool call, even when you were only deleting a word in the chat input, and work was lost that way. Backspace with any of those modifiers now only edits text, while a response is streaming too. Stop a response or a running terminal command with the **Stop** button, and reject a command with its **Reject** button. The `Shift+Ctrl+Backspace` (`Shift+Cmd+Backspace`) shortcut that rejects all diff changes in VS Code is unchanged.
+
+## Fixes
+
+- Bedrock no longer fails with "no content in assistant message before conversational turn change". A turn that converts to nothing (a reply stopped or failed before any text, reasoning a non-Claude model can't take back, a tool call without an id, a user message whose context or image rendered empty) is now left out and the turns around it are joined, so the request keeps the alternating roles Converse requires. The CLI, which sent two messages of the same role in that case, gets the same repair. A history that was already valid is sent byte for byte as before, so prompt caching is unaffected.
