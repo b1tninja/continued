@@ -10,10 +10,11 @@ import {
   pollUntilIdle,
   shutdownServe,
   smokeServeHeaders,
+  smokeEnv,
   type SmokeTestContext,
 } from "./smoke-api-helpers.js";
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const ANTHROPIC_API_KEY = smokeEnv("ANTHROPIC_API_KEY");
 
 describe.skipIf(!ANTHROPIC_API_KEY)(
   "Smoke: Serve mode → real Anthropic API",

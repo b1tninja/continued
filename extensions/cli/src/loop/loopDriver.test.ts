@@ -758,7 +758,8 @@ describe("Loop mode's driver in the CLI", () => {
       services.toolPermissions.switchMode("auto");
       runItem("done");
       await runCheck("1");
-      // The code the check chose, on Windows PowerShell too (withRealExitCode)
+      // The code the check chose, on every platform: under PowerShell the
+      // check runs through withRealExitCode (core/util/shell.ts).
       const code = 3;
       expect(loopNow().items[0]).toMatchObject({
         status: "pending",
