@@ -82,6 +82,8 @@
     "loop-settings-open": {
       "color-contrast": 1
     },
+    "loop-questions": {},
+    "loop-replan": {},
     "loop-plan-failed": {
       "color-contrast": 3,
       "label-content-name-mismatch": 2

@@ -286,8 +286,11 @@ describe("Loop mode", () => {
 
     // The model's choices were kept, and they appear in their own panel
     expect(h.loop().questions[0].options).toEqual(["ABNF", "PEG", "Both"]);
-    const panel = document.querySelector("[data-testid=question-panel]")!;
-    expect(panel.textContent).toContain("1 question for you");
+    const panel = document.querySelector("[data-testid=needs-you-tray]")!;
+    expect(panel.textContent).toContain("Needs you");
+    expect(
+      panel.querySelector("[data-testid=needs-you-pager]")!.textContent,
+    ).toBe("1 of 1");
     expect(
       [...panel.querySelectorAll("[data-testid=loop-choice-option]")].map(
         (b) => b.textContent,
@@ -316,7 +319,15 @@ describe("Loop mode", () => {
     );
     await waitFor(() => expect(h.loop().status).toBe("stopped"));
     expect(h.prompt(2)).toContain(": PEG");
-    expect(document.querySelector("[data-testid=question-panel]")).toBeNull();
+    // Nothing waits any more: the tray is one quiet line
+    expect(
+      document.querySelector("[data-testid=needs-you-question]"),
+    ).toBeNull();
+    expect(
+      document
+        .querySelector("[data-testid=needs-you-tray]")!
+        .getAttribute("data-quiet"),
+    ).toBe("true");
   });
 
   test("Other opens a field for an answer of your own", async () => {
@@ -567,7 +578,7 @@ describe("Loop mode", () => {
     ).toBe("true");
     expect(tree.textContent).toContain("Install vitest");
     expect(
-      document.querySelector("[data-testid=plan-card-replan-reason]")!
+      document.querySelector("[data-testid=needs-you-plan-reason]")!
         .textContent,
     ).toContain("Why you are asked");
     // State is an icon and a word for a screen reader, not a bracket mark
@@ -592,7 +603,7 @@ describe("Loop mode", () => {
 
     const cont = await waitFor(() => {
       const el = document.querySelector<HTMLElement>(
-        "[data-testid=plan-card-loop-continue]",
+        "[data-testid=needs-you-accept-plan]",
       );
       expect(el).not.toBeNull();
       return el!;
@@ -798,7 +809,7 @@ describe("Loop mode", () => {
     );
   });
 
-  test("with Questions Cautious the same irreversible question waits in the panel", async () => {
+  test("with Questions Cautious the same irreversible question waits in the tray", async () => {
     const h = await setup(["Drop the old table"]);
     h.turns.push(
       ask(
@@ -814,8 +825,9 @@ describe("Loop mode", () => {
     await waitFor(() => expect(h.loop().status).toBe("waiting"));
     expect(h.loop().questions[0].answerId).toBeUndefined();
     expect(h.loop().autoDecisions).toBeUndefined();
+    // In a loop the question is in the Needs you tray, not the panel
     expect(
-      document.querySelector("[data-testid=question-panel]"),
+      document.querySelector("[data-testid=needs-you-question]"),
     ).not.toBeNull();
   });
 
