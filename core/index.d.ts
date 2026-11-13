@@ -303,6 +303,11 @@ export interface ModelUsage {
   cost: number;
   /** How many of `requests` could be priced. Fewer than `requests` means `cost` is partial. */
   pricedRequests: number;
+  /**
+   * Set when some of `cost` came from a downloaded price list: where it came
+   * from and the date of the oldest list used. The figure is an estimate.
+   */
+  priceEstimate?: { source: string; fetchedAt: string };
 }
 
 export interface SessionUsage extends Usage {
@@ -514,6 +519,24 @@ export interface LoopItemState {
    * LOOP_MAX_REPAIRS_PER_ITEM). To-dos a repair splits it into inherit it.
    */
   repairs?: number;
+  /**
+   * The round whose accepted re-plan added this to-do, for the R chip in the
+   * plan tree. Missing on the to-dos the loop started with and on loops saved
+   * before this field: they show no chip.
+   */
+  addedInRound?: number;
+}
+
+/** A to-do an accepted re-plan took out of the plan (LoopState.replacedItems) */
+export interface LoopReplacedItem {
+  /** The id the to-do had */
+  id: string;
+  /** Its text, when the loop could tell which plan text it had */
+  text?: string;
+  /** The round of the re-plan that took it out */
+  round: number;
+  /** The to-do that took its place; only for a repair that left exactly one */
+  replacedBy?: string;
 }
 
 /**
@@ -884,10 +907,24 @@ export interface LoopState {
   noProgressRounds: number;
   /** Items in a row that ended failed; reset by one that is done */
   consecutiveFailures?: number;
-  /** When every open item started waiting on the person (status waiting) */
+  /**
+   * When the loop started waiting on the person: every open item waits
+   * (status waiting) or a re-plan's card does (status awaiting_plan)
+   */
   waitingSince?: string;
+  /**
+   * Milliseconds the loop spent waiting on the person since `startedAt`,
+   * without the wait in progress. The time budget does not count them
+   * (loopElapsedMs). Absent in loops saved before it existed: 0.
+   */
+  waitedMs?: number;
   /** Why the last re-plan did or did not start the next round by itself */
   replanReason?: string;
+  /**
+   * To-dos accepted re-plans took out of the plan, oldest first, the last 20.
+   * Missing on loops saved before this field: the plan tree shows none.
+   */
+  replacedItems?: LoopReplacedItem[];
   /** What the loop decided for the person by their policy, oldest first (capped) */
   autoDecisions?: LoopAutoDecision[];
   /** Tool calls the person allowed from an approval question (grantKey) */
@@ -918,6 +955,15 @@ export interface LoopState {
   stopReason?: LoopStopReason;
   /** One line for the person: what stopped it */
   stopDetail?: string;
+  /** Set beside stopDetail when a budget stopped the loop: which, and how much */
+  stopBudget?: LoopStopBudget;
+}
+
+/** Which loop budget stopped it. Tokens are counted, time is milliseconds. */
+export interface LoopStopBudget {
+  kind: "tokens" | "time";
+  used: number;
+  max: number;
 }
 
 /** A message queued in the chat input; `editorState` is the editor's JSON. */
@@ -3026,12 +3072,20 @@ export interface CompiledMessagesResult {
 
 export interface AddToChatPayload {
   data: AddToChatPayloadItem[];
+  /** Resources the host would not add, so the chat can say why. */
+  refused?: AddToChatRefusal[];
 }
 
-interface AddToChatPayloadItem {
+export interface AddToChatPayloadItem {
   type: "file" | "folder";
+  /** A URI string, read by the `file` or `folder` provider at send time. */
   fullPath: string;
   name: string;
+}
+
+export interface AddToChatRefusal {
+  name: string;
+  reason: "secret" | "outside-workspace" | "not-found" | "unsaved";
 }
 
 export interface MessageOption {

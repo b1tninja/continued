@@ -33,7 +33,6 @@ import { checkToolPermission } from "../permissions/permissionChecker.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import {
   effectiveLevels,
-  getPolicyLevels,
   policyIsDefault,
   approvalExtras,
 } from "../permissions/policyLevels.js";
@@ -98,7 +97,12 @@ export function handlePermissionDenied(
     content: deniedMessage,
   });
 
-  callbacks?.onToolResult?.(deniedMessage, toolCall.name, "canceled");
+  callbacks?.onToolResult?.(
+    deniedMessage,
+    toolCall.name,
+    "canceled",
+    toolCall.id,
+  );
   logger.debug(`Tool call rejected (${reason}) - stopping stream`);
 }
 
@@ -137,6 +141,7 @@ async function askWithHooks(
   const hooked = await firePermissionRequest(
     toolCall.name,
     toolCall.preprocessResult?.args ?? toolCall.arguments,
+    toolCall.tool?.mcpServer,
   );
   if (hooked.blocked) return false;
   notifyAttention(
@@ -173,6 +178,7 @@ async function promptForPermission(
         event.toolCall.arguments,
         event.requestId,
         event.toolCall.preview,
+        toolCall.id,
       );
     }
   };
@@ -192,9 +198,8 @@ async function promptForPermission(
 
 /**
  * The `toolPermissions` rules from config.yaml and the Auto reviewer (`--auto-review`),
- * run by core's engine. Any failure here leaves the CLI's own result in place
- * for rules, and for the reviewer it is an unusable reviewer (asks, or refuses
- * when headless), never an allow.
+ * run by core's engine. A failure here is never an allow: the call asks, and
+ * is refused when headless (see the catch in coreRulesVerdict).
  */
 /** The permission mode, or the normal one when the service is not up yet. */
 function currentPermissionMode(): "normal" | "plan" | "auto" {
@@ -250,12 +255,18 @@ async function coreRulesVerdict(
       history: autoReview ? services.chatHistory.getHistory() : undefined,
       ...(mcpServer
         ? {
-            mcp: { serverName: mcpServer, toolName: toolCall.name },
+            mcp: {
+              serverName: mcpServer,
+              toolName: toolCall.tool?.mcpToolName ?? toolCall.name,
+            },
             mcpSchema: toolCall.tool?.parameters as unknown as Record<
               string,
               unknown
             >,
-            mcpDefinitionChange: mcpPinChange(mcpServer, toolCall.name),
+            mcpDefinitionChange: mcpPinChange(
+              mcpServer,
+              toolCall.tool?.mcpToolName ?? toolCall.name,
+            ),
           }
         : {}),
     });
@@ -266,25 +277,18 @@ async function coreRulesVerdict(
     });
   } catch (e) {
     logger.warn("Could not apply toolPermissions rules", { error: e });
-    // Fail toward asking, and toward refusing when nobody can be asked.
-    return autoReview ||
-      assistantHasRules() ||
-      !policyIsDefault(getPolicyLevels())
-      ? { decision: "ask", by: "system", reason: "Could not check your rules." }
-      : undefined;
+    // Fail closed, at the default levels too: the engine also holds the
+    // protected-path, floor and deny checks, so a call it could not look at
+    // is never left to a list default (which allows Bash and unlisted tools
+    // in a headless run). An ask goes to the person, is held by a loop, and
+    // is a refusal when nobody can be asked. The audit trail gets the verdict.
+    return { decision: "ask", by: "system", reason: ENGINE_ERROR_REASON };
   }
 }
 
-function assistantHasRules(): boolean {
-  try {
-    const state = serviceContainer.getSync<ModelServiceState>(
-      SERVICE_NAMES.MODEL,
-    );
-    return !!state?.value?.assistant?.toolPermissions;
-  } catch {
-    return false;
-  }
-}
+/** What the person, the model and the audit trail are told when the rule check itself failed. */
+export const ENGINE_ERROR_REASON =
+  "The permission rules could not be checked (internal error), so this call was not allowed automatically.";
 
 // Helper function to check if tool permission is needed. The decision and who
 // made it go to the audit trail; the outcome is written where the call ends.
@@ -787,7 +791,7 @@ export async function preprocessStreamedToolCalls(
       preprocessedCalls.push(preprocessedCall);
     } catch (error) {
       // Notify the UI about the tool start, even though it failed
-      callbacks?.onToolStart?.(toolCall.name, toolCall.arguments);
+      callbacks?.onToolStart?.(toolCall.name, toolCall.arguments, toolCall.id);
 
       const errorReason =
         error instanceof ContinueError
@@ -819,7 +823,7 @@ export async function preprocessStreamedToolCalls(
       });
 
       // Notify about the error
-      callbacks?.onToolError?.(errorMessage, toolCall.name);
+      callbacks?.onToolError?.(errorMessage, toolCall.name, toolCall.id);
     }
   }
 
@@ -894,14 +898,14 @@ export async function executeStreamedToolCalls(
     try {
       const repeated = loopRepeat.check(call);
       if (repeated) {
-        callbacks?.onToolStart?.(call.name, call.arguments);
+        callbacks?.onToolStart?.(call.name, call.arguments, call.id);
         entriesByIndex.set(index, {
           role: "tool",
           tool_call_id: call.id,
           content: repeated,
           status: "canceled",
         });
-        callbacks?.onToolResult?.(repeated, call.name, "canceled");
+        callbacks?.onToolResult?.(repeated, call.name, "canceled", call.id);
         try {
           services.chatHistory.addToolResult(call.id, repeated, "canceled");
         } catch {}
@@ -914,7 +918,7 @@ export async function executeStreamedToolCalls(
       });
 
       // Notify tool start before permission check to display in UI fallbacks
-      callbacks?.onToolStart?.(call.name, call.arguments);
+      callbacks?.onToolStart?.(call.name, call.arguments, call.id);
 
       // PreToolUse hooks run before the permission check, so it sees the final
       // arguments. A blocked call goes back to the model with the hook's
@@ -933,6 +937,7 @@ export async function executeStreamedToolCalls(
           String(blockedEntry.content),
           call.name,
           "canceled",
+          call.id,
         );
         try {
           services.chatHistory.addToolResult(
@@ -982,6 +987,7 @@ export async function executeStreamedToolCalls(
           String(deniedEntry.content),
           call.name,
           "canceled",
+          call.id,
         );
         // Immediate service update for UI feedback
         try {
@@ -1038,7 +1044,12 @@ export async function executeStreamedToolCalls(
               status: "done",
             };
             entriesByIndex.set(index, entry);
-            callbacks?.onToolResult?.(toolResult, approvedCall.name, "done");
+            callbacks?.onToolResult?.(
+              toolResult,
+              approvedCall.name,
+              "done",
+              approvedCall.id,
+            );
             // Immediate service update for UI feedback
             try {
               services.chatHistory.addToolResult(
@@ -1067,7 +1078,11 @@ export async function executeStreamedToolCalls(
               content: errorMessage,
               status: "errored",
             });
-            callbacks?.onToolError?.(errorMessage, approvedCall.name);
+            callbacks?.onToolError?.(
+              errorMessage,
+              approvedCall.name,
+              approvedCall.id,
+            );
             // Immediate service update for UI feedback
             try {
               services.chatHistory.addToolResult(
@@ -1093,7 +1108,7 @@ export async function executeStreamedToolCalls(
         content: errorMessage,
         status: "errored",
       });
-      callbacks?.onToolError?.(errorMessage, call.name);
+      callbacks?.onToolError?.(errorMessage, call.name, call.id);
       // Treat permission errors like execution errors but do not stop the batch
       try {
         services.chatHistory.addToolResult(

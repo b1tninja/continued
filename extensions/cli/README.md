@@ -1,8 +1,8 @@
-# Continue CLI
+# Continuous CLI
 
-The Continue CLI (`cn`) is a customizable command line coding agent.
+The Continuous CLI (`cn`) is a customizable command line coding agent.
 
-![Continue CLI Demo](./media/demo.gif)
+![Continuous CLI Demo](./media/demo.gif)
 
 ## Installation
 
@@ -108,9 +108,6 @@ The CLI adds no attribution to commits or pull request text. To ask for it, set 
 
 - `cn`: Start an interactive chat session
 - `cn ls`: List recent sessions with TUI selector to choose one to resume
-- `cn login`: Authenticate with Continue
-- `cn logout`: Sign out of current session
-- `cn remote`: Launch a remote instance
 - `cn serve`: Start HTTP server mode
 
 ### Session Listing (`cn ls`)

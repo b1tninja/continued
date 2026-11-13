@@ -6,7 +6,6 @@ import { CompletionProvider } from "core/autocomplete/CompletionProvider";
 import { ConfigHandler } from "core/config/ConfigHandler";
 import { EXTENSION_NAME } from "core/util/constants";
 import { Core } from "core/core";
-import { walkDirAsync } from "core/indexing/walkDir";
 import { isModelInstaller } from "core/llm";
 import { NextEditLoggingService } from "core/nextEdit/NextEditLoggingService";
 import { startLocalLemonade } from "core/util/lemonadeHelper";
@@ -41,9 +40,14 @@ import EditDecorationManager from "./quickEdit/EditDecorationManager";
 import { QuickEdit, QuickEditShowParams } from "./quickEdit/QuickEditQuickPick";
 import {
   addCodeToContextFromRange,
-  addEntireFileToContext,
   addHighlightedCodeToContext,
 } from "./util/addCode";
+import {
+  AddToChatHost,
+  buildAddToChatPayload,
+  uriOfTabInput,
+  urisFromCommandArgs,
+} from "./util/addToChat";
 import { Battery } from "./util/battery";
 import { getMetaKeyLabel } from "./util/util";
 import { openEditorAndRevealRange } from "./util/vscode";
@@ -102,6 +106,49 @@ function waitForSidebarReady(
 
     checkReadyState();
   });
+}
+
+const vscodeAddToChatHost: AddToChatHost = {
+  workspaceDirs: () =>
+    (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.toString()),
+  stat: async (uri) => {
+    try {
+      const stat = await vscode.workspace.fs.stat(vscode.Uri.parse(uri));
+      return stat.type & vscode.FileType.Directory ? "folder" : "file";
+    } catch {
+      return undefined;
+    }
+  },
+};
+
+/**
+ * Sends files and folders to the chat input as `@file` and `@folder` chips
+ * through the `addToChat` message, opening the chat view first if it is
+ * closed. The webview inserts the chips, skips duplicates, focuses the input
+ * and announces the result.
+ */
+async function addResourcesToChat(
+  uris: vscode.Uri[],
+  sidebar: ContinueGUIWebviewViewProvider,
+) {
+  const payload = await buildAddToChatPayload(
+    uris.map((uri) => uri.toString()),
+    vscodeAddToChatHost,
+  );
+  if (payload.data.length === 0 && !payload.refused?.length) {
+    void vscode.window.showInformationMessage(
+      "There is no file or folder to add to the chat.",
+    );
+    return;
+  }
+  focusGUI();
+  if (!sidebar.isReady) {
+    const isReady = await waitForSidebarReady(sidebar, 5000, 100);
+    if (!isReady) {
+      return;
+    }
+  }
+  void sidebar.webviewProtocol?.request("addToChat", payload);
 }
 
 // Copy everything over from extension.ts
@@ -448,39 +495,33 @@ const getCommandsMap: (
       void sidebar.webviewProtocol.request("setupApiKey", undefined);
       focusGUI();
     },
+    // The Explorer's former "Select Files as Context" pasted every selected
+    // file in full (folders recursively) with no size cap or credential
+    // check. The id stays for existing keybindings and now adds chips.
     "continuous.selectFilesAsContext": async (
-      firstUri: vscode.Uri,
-      uris: vscode.Uri[],
+      clicked?: unknown,
+      selected?: unknown,
     ) => {
-      if (uris === undefined) {
-        throw new Error("No files were selected");
-      }
-
-      vscode.commands.executeCommand("continuous.continueGUIView.focus");
-
-      for (const uri of uris) {
-        // If it's a folder, add the entire folder contents recursively by using walkDir (to ignore ignored files)
-        const isDirectory = await vscode.workspace.fs
-          .stat(uri)
-          ?.then((stat) => stat.type === vscode.FileType.Directory);
-        if (isDirectory) {
-          for await (const fileUri of walkDirAsync(uri.toString(), ide, {
-            source: "vscode continuous.selectFilesAsContext command",
-          })) {
-            await addEntireFileToContext(
-              vscode.Uri.parse(fileUri),
-              sidebar.webviewProtocol,
-              ide.ideUtils,
-            );
-          }
-        } else {
-          await addEntireFileToContext(
-            uri,
-            sidebar.webviewProtocol,
-            ide.ideUtils,
-          );
-        }
-      }
+      await vscode.commands.executeCommand(
+        "continuous.addToChat",
+        clicked,
+        selected,
+      );
+    },
+    "continuous.addToChat": async (clicked?: unknown, selected?: unknown) => {
+      const uris = urisFromCommandArgs<vscode.Uri>(
+        clicked instanceof vscode.Uri ? clicked : undefined,
+        selected,
+        vscode.window.activeTextEditor?.document.uri,
+      );
+      await addResourcesToChat(uris, sidebar);
+    },
+    "continuous.addOpenTabsToChat": async () => {
+      const uris = vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .map((tab) => uriOfTabInput<vscode.Uri>(tab.input))
+        .filter((uri): uri is vscode.Uri => !!uri);
+      await addResourcesToChat(uris, sidebar);
     },
     "continuous.logAutocompleteOutcome": (
       completionId: string,

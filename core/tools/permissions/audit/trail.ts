@@ -2,6 +2,7 @@ import {
   decisionDraft,
   outcomeDraft,
   policyDraft,
+  settingDraft,
   shadowDraft,
   turnDraft,
   type AuditAgent,
@@ -9,6 +10,7 @@ import {
   type DecisionInput,
   type OutcomeInput,
   type PolicyInput,
+  type SettingInput,
   type ShadowInput,
 } from "./record";
 import { pruneAudit, type PruneResult } from "./reader";
@@ -219,6 +221,24 @@ export class AuditTrail {
     let ok = true;
     this.guard(() => {
       const result = this.writer.write(policyDraft(input));
+      if (!result.ok) {
+        ok = false;
+        this.fail(result.error);
+      }
+    });
+    return ok;
+  }
+
+  /**
+   * A change to a permission setting that is not a rule (level, preset,
+   * floor, built-in switch, trust). Returns false when it could not be
+   * written; the change itself is not undone.
+   */
+  setting(input: SettingInput): boolean {
+    if (!this.enabled) return true;
+    let ok = true;
+    this.guard(() => {
+      const result = this.writer.write(settingDraft(input));
       if (!result.ok) {
         ok = false;
         this.fail(result.error);

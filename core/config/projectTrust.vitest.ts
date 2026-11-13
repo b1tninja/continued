@@ -4,6 +4,7 @@ import * as path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { tryLink } from "../tools/permissions/testLinks";
 import {
   beginTrustCheck,
   decideFromFiles,
@@ -105,11 +106,15 @@ describe("project config trust", () => {
     expect(isScopeTrusted(project, "mcp", "abc", globalDir)).toBe(false);
   });
 
-  it("skips symlinks and matches a file URI to the same relative path", () => {
+  it("skips symlinks and matches a file URI to the same relative path", (ctx) => {
     const file = write(".continue/mcpServers/a.json", "{}\n");
     const link = path.join(project, ".continuous", "mcpServers");
     fs.mkdirSync(path.dirname(link), { recursive: true });
-    fs.symlinkSync(path.dirname(file), link);
+    // A junction on Windows, which needs no privilege; lstat reports it as a
+    // link like any other, so the case runs on every platform.
+    const made = tryLink(path.dirname(file), link);
+    if (!made.ok) return ctx.skip(made.reason);
+    expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
     const found = readScopeFilesFromDisk(project, "mcp");
     expect(found.map((item) => path.basename(item.path))).toEqual(["a.json"]);
 

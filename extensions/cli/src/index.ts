@@ -17,7 +17,9 @@ import { hooksCommand } from "./commands/hooks.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { permissionsCommand } from "./commands/permissions.js";
 import { projectCommand } from "./commands/project.js";
+import { registerExportCommand } from "./commands/registerExportCommand.js";
 import { registerLocalCommands } from "./commands/registerLocalCommands.js";
+import { registerRecoveryCommands } from "./commands/registerRecoveryCommands.js";
 import { review } from "./commands/review.js";
 import { registerReviewerCommand } from "./commands/reviewEval.js";
 import { sandboxCommand } from "./commands/sandbox.js";
@@ -29,6 +31,7 @@ import {
   validateFlags,
 } from "./flags/flagValidator.js";
 import { configureConsoleForHeadless, safeStderr } from "./init.js";
+import { applySafeMode, SAFE_FLAG_HELP } from "./safeMode.js";
 import { addCommonOptions, mergeParentOptions } from "./shared-options.js";
 import { markUnhandledError } from "./util/errorState.js";
 import { gracefulExit } from "./util/exit.js";
@@ -153,11 +156,16 @@ program
 // Root command - chat functionality (default)
 // Add common options to the root command
 addRunLimitOptions(addCommonOptions(program))
+  .option("--safe", SAFE_FLAG_HELP)
   .argument("[prompt]", "Optional prompt to send to the assistant")
   .option("-p, --print", "Print response and exit (useful for pipes)")
   .option(
     "--format <format>",
-    "Output format for headless mode (json). Only works with -p/--print flag.",
+    "Output format for headless mode: json, or stream-json (one JSON event per line on stdout). Only works with -p/--print flag.",
+  )
+  .option(
+    "--output-schema <file>",
+    "Headless (-p): check the final answer against this JSON Schema file; exit 6 when it does not match",
   )
   .option(
     "--silent",
@@ -172,6 +180,10 @@ addRunLimitOptions(addCommonOptions(program))
   .option(
     "--trust-project-hooks",
     "Run this project's hooks for this session without asking (see `continuous hooks`)",
+  )
+  .option(
+    "--ignore-broken-config",
+    "Headless (-p, serve): continue when a hook settings file or permissions.yaml is present but unparseable, with that file ignored. Without it the run exits with code 2",
   )
   .option(
     "--trust-project-config",
@@ -209,6 +221,7 @@ addRunLimitOptions(addCommonOptions(program))
     const validation = validateFlags({
       print: options.print,
       format: options.format,
+      outputSchema: options.outputSchema,
       silent: options.silent,
       readonly: options.readonly,
       auto: options.auto,
@@ -225,6 +238,9 @@ addRunLimitOptions(addCommonOptions(program))
     if (!validation.isValid) {
       handleValidationErrors(validation.errors);
     }
+
+    // --safe, before anything reads a settings or project file
+    applySafeMode(options);
 
     if (options.verbose) {
       logger.setLevel("debug");
@@ -259,14 +275,14 @@ addRunLimitOptions(addCommonOptions(program))
     // Agent files can provide their own prompts, and resume can work without new input
     if (options.print && !prompt && !options.agent && !options.resume) {
       safeStderr(
-        "Error: A prompt is required when using the -p/--print flag, unless --prompt, --agent, or --resume is provided.\n\n",
+        "Error: A prompt is required when using the -p/--print flag, unless --agent or --resume is provided.\n\n",
       );
       safeStderr("Usage examples:\n");
       safeStderr('  cn -p "please review my current git diff"\n');
       safeStderr('  echo "hello" | cn -p\n');
       safeStderr('  cn -p "analyze the code in src/"\n');
-      safeStderr("  cn -p --agent my-org/my-agent\n");
-      safeStderr("  cn -p --prompt my-org/my-prompt\n");
+      safeStderr("  cn -p --agent ./agents/my-agent.md\n");
+      safeStderr("  cn -p --prompt ./notes.md 'summarize these notes'\n");
       safeStderr("  cn -p --resume\n");
       await gracefulExit(1);
     }
@@ -287,6 +303,9 @@ program
       format: options.json ? "json" : undefined,
     });
   });
+
+// Export subcommand: a masked transcript, never the session JSON
+registerExportCommand(program);
 
 // Serve subcommand
 program
@@ -311,9 +330,13 @@ program
     "--allow-origin <origin...>",
     "A browser origin that may call the server, exactly (http://localhost:3000). Default: none",
   )
+  .option("--safe", SAFE_FLAG_HELP)
   .action(async (prompt, options) => {
     // Merge parent options with subcommand options
     const mergedOptions = mergeParentOptions(program, options);
+    // `cn --safe serve` and `cn serve --safe` are the same
+    if (program.opts().safe) mergedOptions.safe = true;
+    applySafeMode(mergedOptions);
 
     if (mergedOptions.verbose) {
       logger.setLevel("debug");
@@ -363,24 +386,46 @@ program
 
 // Hooks subcommand
 program
-  .command("hooks [action]")
+  .command("hooks [action] [event]")
   .description(
-    "Show, trust or revoke this project's hooks (list, trust, revoke)",
+    "Show, trust or revoke hooks (list, trust, revoke), or try the hooks for a sample event without running a tool (test <event>)",
   )
   .option("-y, --yes", "Trust without asking, for scripts")
-  .action(async (action: string | undefined, options) => {
-    const code = await hooksCommand(action, { yes: options.yes });
-    await gracefulExit(code);
-  });
+  .option(
+    "--tool <name>",
+    "test: the tool name for a tool event (default Bash)",
+  )
+  .option("--server <name>", "test: the MCP server, for a tool event")
+  .option(
+    "--input <json>",
+    "test: a JSON object merged over the sample hook input",
+  )
+  .action(
+    async (action: string | undefined, event: string | undefined, options) => {
+      const code = await hooksCommand(action, {
+        yes: options.yes,
+        event,
+        tool: options.tool,
+        server: options.server,
+        input: options.input,
+      });
+      await gracefulExit(code);
+    },
+  );
 
 // Connection diagnostics
 program
   .command("doctor [topic] [urls...]")
   .description(
-    "Diagnose proxy and certificate problems (doctor network [url...])",
+    "Read-only diagnostics: doctor config (settings files and each control's value and source), doctor network [url...] (proxy and certificates)",
   )
-  .action(async (topic: string | undefined, urls: string[]) => {
-    await gracefulExit(await doctorCommand(topic, urls));
+  .option("--json", "config: machine-readable output")
+  .action(async (topic: string | undefined, urls: string[], options) => {
+    const code = await doctorCommand(topic, urls, {
+      json: options.json,
+      flags: program.opts(),
+    });
+    await gracefulExit(code);
   });
 
 // Reviewer evaluation: dry by default, --run sends the requests
@@ -434,6 +479,9 @@ program
 // Local-file subcommands: secrets, clean, plan
 registerLocalCommands(program);
 
+// Recovery subcommands: config check
+registerRecoveryCommands(program);
+
 // Sandbox status subcommand
 program
   .command("sandbox [action]")
@@ -475,7 +523,7 @@ addAuditSuggestOptions(
   program
     .command("audit [action] [session]")
     .description(
-      "Read the audit trail of tool call decisions (list, show <session>, inbox, suggest, shadow, prune)",
+      "Read the audit trail of tool call decisions (list, show <session>, changes, inbox, suggest, shadow, prune)",
     )
     .option("--json", "Machine-readable output")
     .option("--session <id>", "Only this session")

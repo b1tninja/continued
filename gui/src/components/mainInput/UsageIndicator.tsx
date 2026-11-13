@@ -88,6 +88,12 @@ export function UsageIndicator() {
           ? "Cost: no price known for these models, tokens only."
           : `Estimated cost: ${summary.costIsPartial ? "at least " : ""}${formatCost(summary.cost)}${summary.costIsPartial ? " (some models have no known price)" : ""}`}
       </span>
+      {summary.cost !== undefined && summary.priceListDate && (
+        <span className="text-description-muted" data-testid="usage-price-date">
+          Estimate: OpenRouter prices from the list downloaded{" "}
+          {summary.priceListDate.slice(0, 10)}
+        </span>
+      )}
       {models.length > 1 &&
         models.map((m) => (
           <span
