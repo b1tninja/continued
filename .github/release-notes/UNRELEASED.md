@@ -49,6 +49,7 @@ At File edits = IDGAF (the top level, also reached by `--auto`), the agent can c
 ## JetBrains: the plugin loads in 2026.2 IDEs
 
 - The JetBrains plugin declares the JCEF plugin dependency (`com.intellij.modules.jcef`) that JetBrains 2026.2 requires. Before, the Continuous tool window failed to load there with `NoClassDefFoundError: com/intellij/ui/jcef/JBCefApp`. Older IDE versions are unaffected: up to 2026.1 the id is an alias of the core platform. Not yet tried in a real 2026.2 IDE.
+
 ## Model lists are downloaded when you ask, not when a screen opens
 
 - Provider setup no longer contacts `ollama.com` or `openrouter.ai` when it opens. Ollama asks "Download the latest model list from ollama.com?"; OpenRouter asks "Pull the latest model information from OpenRouter?" with **Pull now**, **Not now** and **Don't ask again** (saved as `modelCatalog: never` in `config.yaml`). **Refresh** stays on the model step.
