@@ -355,6 +355,30 @@ describe("PendingToolCallToolbar: why it is asking", () => {
     );
   });
 
+  it("writes out a hidden character in the command and says there is one", async () => {
+    await setup([
+      call("a", {
+        toolCall: {
+          id: "a",
+          type: "function",
+          function: { name: "run_terminal_command", arguments: "{}" },
+        },
+        parsedArgs: { command: "rm notes‮txt.sh" },
+      }),
+    ]);
+    expect(screen.getByTestId("pending-action-block-a").textContent).toBe(
+      "rm notes⟦U+202E⟧txt.sh",
+    );
+    expect(screen.getByTestId("hidden-characters-a").textContent).toContain(
+      "1 hidden character is in this call",
+    );
+  });
+
+  it("has no hidden-character line for an ordinary call", async () => {
+    await setup([terminal("a")]);
+    expect(screen.queryByTestId("hidden-characters-a")).toBeNull();
+  });
+
   it("Accept all says how many calls it runs and asks to check each one", async () => {
     await setup([terminal("a"), call("b"), call("c")]);
     expect(screen.getByTestId("accept-all-tool-calls").title).toBe(
