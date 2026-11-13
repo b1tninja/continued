@@ -101,7 +101,7 @@ export const GUIDANCE = {
     "- Chain with `;`. `&&` and `||` are a parse error in 5.1. To run B only after A succeeds: `A; if ($?) { B }`.",
     "- Environment variables: `$env:NAME` (read) and `$env:NAME = 'x'` (set for this command). `$NAME`, `%NAME%` and `NAME=x cmd` do not work.",
     "- `ls`, `cat`, `rm`, `cp`, `curl` are PowerShell aliases with PowerShell parameters: `ls -la`, `rm -rf` and `curl -s` fail. Use Get-ChildItem, Remove-Item -Recurse -Force, `curl.exe`, or node and git, which behave the same everywhere.",
-    "- No grep, sed, awk, head, tail, wc, touch. Use Select-String, Select-Object -First, Measure-Object, New-Item.",
+    "- grep, sed, awk, head, tail, wc and touch exist only if Git for Windows or similar put them on PATH: check with Get-Command before relying on them, or use Select-String, Select-Object -First, Measure-Object and New-Item.",
     "- `>` and `Out-File` write UTF-16 in 5.1, and Set-Content -Encoding UTF8 adds a byte order mark. To write a file as plain UTF-8 text use [System.IO.File]::WriteAllText(path, text) (no BOM), or node.",
     "- Quote a path with spaces. `/dev/null` is `$null`. A bash heredoc is a here-string: @'...'@ on its own lines.",
     "- A command that waits for input or never exits will time out: pass non-interactive flags, and start servers with Start-Process.",

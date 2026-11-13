@@ -21,7 +21,7 @@ export const CLASSES = {
   "path-form":
     "a path in another host's form (/c/Users, /mnt/c, /tmp, /dev/null in PowerShell; C:\\ in bash)",
   "alias-flags":
-    "a command that exists but with another shell's flags (ls -la, rm -rf, curl -s, mkdir -p in PowerShell)",
+    "a command that exists but with another shell's flags (ls -la, rm -rf, curl -s in PowerShell)",
   "tool-missing":
     "a Unix tool that the host shell does not have (grep, sed, awk, head, tail, wc, touch, which)",
   "foreign-syntax":
@@ -300,9 +300,9 @@ const SIGNALS = [
   {
     code: "S041",
     cls: "alias-flags",
-    says: "rm with -r, -f or -rf",
+    says: "rm -rf (rm -r alone works in 5.1)",
     wrongIn: ["powershell", "pwsh"],
-    re: new RegExp(`${CMD_START}rm\\s+-[rRf]+\\b`),
+    re: new RegExp(`${CMD_START}rm\\s+-(?:[rR]f|f[rR]|[rR][rRf]+)\\b`),
     certain: false,
   },
   {
@@ -316,7 +316,7 @@ const SIGNALS = [
   {
     code: "S043",
     cls: "alias-flags",
-    says: "mkdir -p, cp -r, mv -f, cat -n, sort -x, echo -e, kill -9, ps aux",
+    says: "mv -f, cat -n, sort -x, echo -e, kill -9, ps aux (measured to fail in 5.1; mkdir -p and cp -r work)",
     wrongIn: ["powershell", "pwsh"],
     re: new RegExp(
       `${CMD_START}(?:mkdir\\s+-p|cp\\s+-[rRaf]+|mv\\s+-[fin]+|cat\\s+-[nbAE]+|sort\\s+-[a-zA-Z]+|echo\\s+-[neE]\\b|kill\\s+-\\d+|ps\\s+-?aux)\\b`,
@@ -447,7 +447,7 @@ const OUTPUT_PATTERNS = [
   },
   {
     cls: "alias-flags",
-    re: /A parameter cannot be found that matches parameter name|Cannot bind parameter|AmbiguousParameter|Parameter set cannot be resolved/i,
+    re: /A parameter cannot be found that matches parameter name|Cannot bind parameter|AmbiguousParameter|Parameter set cannot be resolved|Missing an argument for parameter|missing mandatory parameters|Parameter cannot be processed because the parameter name|Cannot find a process with the name/i,
   },
   {
     cls: "tool-missing",
@@ -455,7 +455,7 @@ const OUTPUT_PATTERNS = [
   },
   {
     cls: "path-form",
-    re: /Cannot find (?:a )?drive|DriveNotFound|DirectoryNotFoundException|The system cannot find the (?:path|file) specified|No such file or directory|Cannot find path/i,
+    re: /Cannot find (?:a )?drive|DriveNotFound|DirectoryNotFoundException|The system cannot find the (?:path|file) specified|No such file or directory|Cannot find path|Could not find a part of the path/i,
   },
 ];
 
@@ -502,11 +502,21 @@ export function classifyOutcome({
       break;
     }
   }
-  const strong = signals.find((s) => s.certain) ?? signals[0];
-  const ambiguous = !cls || cls === "tool-missing" || cls === "path-form";
-  if (strong && ambiguous) {
-    cls = strong.cls;
-    evidence = `text signal ${strong.code}: ${strong.says}`;
+  // The output names the class. Only when it says nothing do the text's own
+  // CERTAIN signals decide: a missing tool, a foreign path and a failing
+  // program print the same words, and a tool that is installed (Git for
+  // Windows puts grep and sed on PATH) can fail for its own reasons.
+  if (
+    cls === "tool-missing" &&
+    signals.some((s) => s.cls === "foreign-syntax")
+  ) {
+    cls = "foreign-syntax";
+    evidence = "not found, and the text is written for another shell";
+  }
+  const certain = signals.find((s) => s.certain);
+  if (!cls && certain) {
+    cls = certain.cls;
+    evidence = `text signal ${certain.code}: ${certain.says}`;
   }
   if (!cls) {
     cls = "other";
