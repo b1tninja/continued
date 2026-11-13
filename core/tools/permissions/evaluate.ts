@@ -18,9 +18,15 @@ import type { ShellKind } from "../../util/shell";
 import { isPrivateFetchTarget } from "../../util/networkAddress";
 import { askProtectionHit } from "./askProtections";
 import { deputyCallHit, type DeputyCallInput } from "./deputyCall";
-import { builtinRuleOn } from "./policy";
+import { outsideTargetReason } from "./outsideEdits";
+import { builtinRuleOn, questionsNeverAsk } from "./policy";
 import { parsePermissions, uriToPath } from "./names";
 import { findProtected } from "./protectedCall";
+import type { Sink } from "./taint/taintSinks";
+import {
+  applyTaintedSessionRule,
+  type TaintedSessionInput,
+} from "./taint/taintRule";
 import { runtimeWriteTarget } from "./runtimeWriteTarget";
 import { policyFileHit, POLICY_FILE_REASON } from "./selfProtect";
 import type { ProtectedHit, ProtectedKind } from "./protected";
@@ -112,9 +118,11 @@ export interface ToolPolicyResult {
   readOnly?: string;
   /** The rule that decided, as written in config.yaml. */
   rule?: string;
+  /** Set only in a tainted session: the sink class the call is (taint/taintSinks.ts) */
+  taintSink?: Sink;
 }
 
-export interface EvaluateInput {
+export interface EvaluateInput extends TaintedSessionInput {
   tool:
     | (Pick<
         Tool,
@@ -175,20 +183,62 @@ export interface EvaluateInput {
 export function evaluateToolPolicyWithRules(
   input: EvaluateInput,
 ): ToolPolicyResult {
-  return lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input)));
+  return noAskAtIdgaf(
+    input,
+    applyTaintedSessionRule(
+      input,
+      lockRuntimeWrites(input, lockPolicyFiles(input, evaluateRules(input))),
+    ),
+  );
+}
+
+export const IDGAF_NO_ASK_REASON =
+  "Not run: this would ask, and Questions is IDGAF, so nobody is asked. What stopped it is a floor that no level lifts.";
+
+/**
+ * Questions is IDGAF: nothing asks. A call whose own area is at the top level is allowed
+ * outright, so what is left asking there is a floor that no level lifts (a
+ * command that hides what it runs, a write to a path built at run time, a
+ * tainted session). Such a call is refused instead of held for the person,
+ * who has said they will not be asked. An area below the top level keeps its own
+ * asking: that is the Tool use, File edits or Context use setting, not a
+ * question.
+ */
+function noAskAtIdgaf(
+  input: EvaluateInput,
+  result: ToolPolicyResult,
+): ToolPolicyResult {
+  if (
+    result.policy !== "allowedWithPermission" ||
+    !questionsNeverAsk(input.approval?.levels.questions)
+  ) {
+    return result;
+  }
+  const level = levelOfCall(input.approval, input.toolName, input.tool, {
+    parsedArgs: input.parsedArgs,
+    cwd: input.cwd,
+    shell: input.shell,
+  })?.level;
+  if (level !== "idgaf") return result;
+  return {
+    ...result,
+    policy: "disabled",
+    source: result.source ?? "floor",
+    reason: `${IDGAF_NO_ASK_REASON}${result.reason ? ` (${result.reason})` : ""}`,
+  };
 }
 
 /**
  * ROADMAP B31. The path guards read a path as it is written, so a terminal
  * command whose write target is built when it runs (`$d`, a wildcard, a
  * backtick, a bare name after a `cd` into the home folder) is not covered by
- * them. At YOLO, which would otherwise run it, it asks. It only tightens: a
+ * them. At IDGAF, which would otherwise run it, it asks. It only tightens: a
  * call already refused or already asked is left as it is, and no rule or
  * setting loosens it. The sandbox that denies writes to the policy folders (W8)
  * is what holds for certain.
  */
 export const RUNTIME_WRITE_REASON =
-  "This command writes to a path built when it runs, which the path guards cannot read, so at YOLO it asks.";
+  "This command writes to a path built when it runs, which the path guards cannot read, so at IDGAF it asks.";
 
 function lockRuntimeWrites(
   input: EvaluateInput,
@@ -208,7 +258,7 @@ function lockRuntimeWrites(
     cwd: input.cwd,
     shell: input.shell,
   })?.level;
-  if (level !== "yolo") return result;
+  if (level !== "idgaf") return result;
   const why = runtimeWriteTarget(command, input.shell, input.cwd);
   if (!why) return result;
   return {
@@ -221,10 +271,10 @@ function lockRuntimeWrites(
 
 /**
  * The locked floor (selfProtect.ts): a call that would write or delete a
- * permission or policy file asks, and is refused at Automatic and YOLO, where
+ * permission or policy file asks, and is refused at Automatic and IDGAF, where
  * nobody is there to say yes to a change that undoes the other protections.
  * That holds for a path the call names. A terminal command is read as it is
- * written, so a path built when it runs is not seen here; at YOLO such a
+ * written, so a path built when it runs is not seen here; at IDGAF such a
  * command asks instead (lockRuntimeWrites).
  * It runs after everything else and only tightens, so no rule, level or
  * built-in switch can loosen it.
@@ -253,7 +303,7 @@ function lockPolicyFiles(
     shell: input.shell,
   })?.level;
   // A scan that gave up cannot say the call is a write: it asks, never refuses.
-  const refuse = (level === "automatic" || level === "yolo") && !hit.capped;
+  const refuse = (level === "automatic" || level === "idgaf") && !hit.capped;
   if (!refuse && result.policy === "allowedWithPermission") return result;
   return {
     ...result,
@@ -306,25 +356,73 @@ function firstProtectedHit(
       largeChangeLines: input.largeChangeLines,
       cwd: input.cwd,
     }),
-    deputyCallHit({
-      toolName,
-      parsedArgs,
-      resolved: resolved
-        ? {
-            path: resolvedPath,
-            withinWorkspace: resolved.isWithinWorkspace,
-          }
-        : undefined,
-      cwd: input.cwd,
-      workspaceDirs: input.workspaceDirs,
-      resolvePath: input.resolvePath,
-      schema: tool?.function?.parameters,
-      approval: input.approval,
-      flavor: input.platform,
-      home: input.home,
-      mcp: !!tool?.uri?.startsWith("mcp:") && !!tool?.originalFunctionName,
-    }),
+    deputyCallHit(deputyInputOf(input, resolved, resolvedPath)),
   ].find((hit) => hit !== undefined);
+}
+
+function deputyInputOf(
+  input: EvaluateInput,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): DeputyCallInput {
+  const { tool, toolName, parsedArgs } = input;
+  return {
+    toolName,
+    parsedArgs,
+    resolved: resolved
+      ? {
+          path: resolvedPath,
+          withinWorkspace: resolved.isWithinWorkspace,
+        }
+      : undefined,
+    cwd: input.cwd,
+    workspaceDirs: input.workspaceDirs,
+    resolvePath: input.resolvePath,
+    schema: tool?.function?.parameters,
+    approval: input.approval,
+    flavor: input.platform,
+    home: input.home,
+    mcp: !!tool?.uri?.startsWith("mcp:") && !!tool?.originalFunctionName,
+  };
+}
+
+/** The decision's reason; at IDGAF on File edits it also names a target outside the workspace. */
+function reasonWithOutsideTarget(
+  input: EvaluateInput,
+  decision: { source?: DecisionSource; policy: ToolPolicy; reason?: string },
+  area: string | undefined,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): string | undefined {
+  if (
+    decision.source !== "idgaf" ||
+    decision.policy !== "allowedWithoutPermission" ||
+    area !== "edits"
+  ) {
+    return decision.reason;
+  }
+  const note = outsideTargetNote(input, resolved, resolvedPath);
+  return note ? `${decision.reason ?? ""} ${note}`.trim() : decision.reason;
+}
+
+/**
+ * The absolute path a File edits call reaches outside the workspace, when
+ * IDGAF lets it through: said in the decision, so the audit trail and the
+ * transcript name the place. The built-in rule is not consulted for the
+ * judgement (it may be switched off, and the fact stays true).
+ */
+function outsideTargetNote(
+  input: EvaluateInput,
+  resolved: ResolvedPath | null | undefined,
+  resolvedPath: string | undefined,
+): string | undefined {
+  const hit = deputyCallHit({
+    ...deputyInputOf(input, resolved, resolvedPath),
+    approval: undefined,
+  });
+  const suffix = ", outside the workspace";
+  if (!hit?.path.endsWith(suffix)) return undefined;
+  return outsideTargetReason(hit.path.slice(0, -suffix.length));
 }
 
 function evaluateRules(input: EvaluateInput): ToolPolicyResult {
@@ -380,7 +478,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
   // It only ever tightens: a call that is already refused stays refused.
   // A private or local URL always asks. Permissive (Hands-off) and an allow
   // rule can loosen the tool's own "ask", so this is a protection, like a
-  // protected path. YOLO still reaches past it.
+  // protected path. IDGAF still reaches past it.
   const privateUrl =
     toolName === "fetch_url_content" &&
     isPrivateFetchTarget(parsedArgs.url, processedArgs)
@@ -390,7 +488,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
         } satisfies ProtectedHit)
       : undefined;
   // A tool whose MCP definition changed since approval asks again. Never in
-  // the skip list: no setting turns it off, and YOLO alone reaches past it.
+  // the skip list: no setting turns it off, and IDGAF alone reaches past it.
   const changedDefinition = changedDefinitionHit(
     tool.mcpDefinitionChange,
     basePolicy,
@@ -410,7 +508,7 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     envHit,
   });
 
-  // The floor: deny rules the person wrote to bind even at YOLO
+  // The floor: deny rules the person wrote to bind even at IDGAF
   const floorRules = parsePermissions({ deny: input.approval?.floor }, "floor");
   if (floorRules.length) {
     const isMcpCall =
@@ -445,14 +543,14 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     : parsePermissions(input.permissions);
   const call = { parsedArgs, cwd: input.cwd, shell: input.shell };
   const found = levelOfCall(input.approval, toolName, tool, call);
-  // A hidden command is not loosened at any level, YOLO included. Otherwise
-  // YOLO reaches past a refusal, a rule and a protected path, and Permissive
+  // A hidden command is not loosened at any level, IDGAF included. Otherwise
+  // IDGAF reaches past a refusal, a rule and a protected path, and Permissive
   // acts only on a call that would otherwise ask.
   const hidden =
     floorOn && hidesTheCommand(commandText, input.shell, input.envNames);
   const loosening = hidden
     ? undefined
-    : found?.level === "yolo" || evaluated === "allowedWithPermission"
+    : found?.level === "idgaf" || evaluated === "allowedWithPermission"
       ? approvalLoosening({
           approval: input.approval,
           tool,
@@ -493,11 +591,19 @@ function evaluateRules(input: EvaluateInput): ToolPolicyResult {
     shell: input.shell,
   });
 
+  const reason = reasonWithOutsideTarget(
+    input,
+    decision,
+    found?.area,
+    resolved,
+    resolvedPath,
+  );
+
   return {
     policy: decision.policy,
     displayValue,
     source: decision.source,
-    ...(decision.reason ? { reason: decision.reason } : {}),
+    ...(reason ? { reason } : {}),
     ...(decision.protection ? { protection: decision.protection } : {}),
     ...(decision.rule ? { rule: decision.rule } : {}),
     ...(found?.readOnly ? { readOnly: found.readOnly } : {}),

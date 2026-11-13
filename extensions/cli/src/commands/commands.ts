@@ -1,4 +1,4 @@
-import { type AssistantConfig } from "@continuedev/sdk";
+import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-yaml";
 
 import {
   getSkillSlashCommandName,
@@ -99,9 +99,15 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
     category: "system",
   },
   {
+    name: "untaint",
+    description:
+      "Acknowledge the untrusted content in this session (taintedSessionRule)",
+    category: "system",
+  },
+  {
     name: "policy",
     description:
-      "Show or set who decides per area: /policy, /policy yolo, /policy tools=permissive",
+      "Show or set who decides per area: /policy, /policy idgaf, /policy tools=permissive",
     category: "system",
   },
   {
@@ -121,12 +127,13 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   },
   {
     name: "import-skill",
-    description: "Import a skill from a URL or name into ~/.continue/skills",
+    description: "Import a skill from a URL or name into ~/.continuous/skills",
     category: "system",
   },
   {
     name: "export",
-    description: "Export a session to JSON file",
+    description:
+      "Export this session as a masked Markdown transcript: /export [path] [--force]; --json for the session file /import reads",
     category: "system",
   },
   {

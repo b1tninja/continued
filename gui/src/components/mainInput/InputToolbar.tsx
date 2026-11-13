@@ -10,6 +10,7 @@ import ModelSelect from "../modelSelection/ModelSelect";
 import { Button } from "../ui";
 import { useFontSize } from "../ui/font";
 import ContextStatus from "./ContextStatus";
+import { ModelRetirementChip } from "./ModelRetirementChip";
 import { ModelToolChip } from "./ModelToolChip";
 import HoverItem, { HoverButton } from "./InputToolbar/HoverItem";
 import { OverflowMenu } from "./InputToolbar/OverflowMenu";
@@ -62,6 +63,7 @@ function InputToolbar(props: InputToolbarProps) {
             </HoverItem>
           </ToolTip>
           {!isInEdit && <ModelToolChip />}
+          {!isInEdit && <ModelRetirementChip />}
         </div>
 
         <div

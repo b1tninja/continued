@@ -151,6 +151,28 @@ describe("Bedrock", () => {
       });
     });
 
+    it("passes the proxy/CA request handler to the credential chain only when configured", async () => {
+      const saved = { ...process.env };
+      for (const k of ["HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"]) {
+        delete process.env[k];
+      }
+      try {
+        const proxied = await new TestBedrock({
+          ...base,
+          requestOptions: { proxy: "http://127.0.0.1:9", useSystemCa: false },
+        } as any)["_credentialChainInit"]("p");
+        expect((proxied as any).clientConfig.requestHandler).toBeDefined();
+
+        const plain = await new TestBedrock({
+          ...base,
+          requestOptions: { useSystemCa: false },
+        } as any)["_credentialChainInit"]("p");
+        expect((plain as any).clientConfig).toBeUndefined();
+      } finally {
+        process.env = saved;
+      }
+    });
+
     it("selects bearer auth for an API key and never asks for IAM credentials", async () => {
       // Without authSchemePreference the AWS SDK may choose SigV4 and fail with "Could not
       // load credentials" on machines that only have a Bedrock API key.

@@ -8,13 +8,14 @@ import { Handler, HTTPResponse, Page } from "puppeteer";
 // @prettier-ignore
 import PCR from "puppeteer-chromium-resolver";
 
-import { ContinueConfig, IDE } from "../../..";
+import { ContinueConfig, IDE, RequestOptions } from "../../..";
 import { resolvesToNonPublic } from "../../../util/networkAddress";
 import {
   editConfigFile,
   getChromiumPath,
   getContinueUtilsPath,
 } from "../../../util/paths";
+import { chromiumNetworkArgs } from "./chromiumNetworkArgs";
 import { chromiumBuildFor, downloadVerifiedChromium } from "./chromiumDownload";
 import { PageData } from "./DocsCrawler";
 
@@ -26,6 +27,7 @@ export class ChromiumCrawler {
     private readonly startUrl: URL,
     private readonly maxRequestsPerCrawl: number,
     private readonly maxDepth: number,
+    private readonly requestOptions?: RequestOptions,
   ) {}
 
   static setUseChromiumForDocsCrawling(useChromiumForDocsCrawling: boolean) {
@@ -70,6 +72,7 @@ export class ChromiumCrawler {
     const browser = await stats.puppeteer.launch({
       args: [
         "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36",
+        ...chromiumNetworkArgs(this.startUrl, this.requestOptions),
       ],
       executablePath: stats.executablePath,
     });

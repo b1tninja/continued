@@ -36,7 +36,6 @@ import {
   modelSupportsOneHourCache,
   modelSupportsPromptCacheControl,
   modelUsesLocalPrefixCache,
-  LOCAL_CACHE_WARM_MS,
   promptCacheStatus,
 } from "../../util/promptCache";
 import { buildLedgerEntry } from "../../util/cacheLedger";
@@ -47,6 +46,7 @@ import {
   expectedRoute,
   promptCacheKey,
 } from "../../util/cacheSafeguards";
+import { localCacheWarmMs } from "../../util/localWarmWindow";
 import { totalInputTokens } from "core/llm/utils/cacheStats";
 import { ThunkApiType } from "../store";
 import { buildChatRequest } from "../util/buildChatRequest";
@@ -75,6 +75,8 @@ import {
   preprocessToolCalls,
   refuseTruncatedToolCalls,
 } from "./preprocessToolCallArgs";
+import { allowOutsideWorkspaceOf } from "../../util/outsideEdits";
+import { refuseRoleCalls } from "./refuseRoleCalls";
 import { checkToolDialectLeak } from "./noteToolDialectLeak";
 import { nudgeLeakedToolCall } from "./nudgeLeakedToolCall";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
@@ -153,12 +155,12 @@ export const streamNormalInput = createAsyncThunk<
     const cacheKeyFor = (route: string | undefined) =>
       promptCacheKey(
         selectedChatModel,
-        activeTools.map((t) => t.function.name),
+        activeTools,
         finalSystem ? renderChatMessage(finalSystem) : undefined,
         // Each message after the system one, so an edit or removal of an earlier
         // message is told apart from a conversation that only grew.
         messages.filter((m) => m.role !== "system"),
-        route,
+        { route, options: completionOptions },
       );
     const routeExpected = expectedRoute(
       selectedChatModel,
@@ -303,7 +305,9 @@ export const streamNormalInput = createAsyncThunk<
                   requestAt: localCache
                     ? start
                     : (cacheResolution.nextState.lastRequestAt ?? start),
-                  ...(localCache && { lifetimeMs: LOCAL_CACHE_WARM_MS }),
+                  ...(localCache && {
+                    lifetimeMs: localCacheWarmMs(selectedChatModel),
+                  }),
                   readTokens:
                     message.usage.promptTokensDetails?.cachedTokens ?? 0,
                   totalInputTokens: total,
@@ -465,13 +469,26 @@ export const streamNormalInput = createAsyncThunk<
         selectedChatModel.completionOptions?.maxTokens,
     );
 
+    // A call to a tool the mode's role may not use is refused, offered or not
+    refuseRoleCalls(dispatch, selectPendingToolCalls(getState()), {
+      mode: state1.session.mode,
+      tools: state1.config.config.tools,
+      planMcpTools: state1.ui.policyExtras.planMcpTools,
+      trustedMcpServers: state1.ui.policyExtras.trustedMcpServers,
+    });
+
     // 2. Pre-process args to catch invalid args before checking policies
     const state2 = getState();
     if (streamAborter.signal.aborted || !state2.session.isStreaming) {
       return;
     }
     const generatedCalls2 = selectPendingToolCalls(state2);
-    await preprocessToolCalls(dispatch, extra.ideMessenger, generatedCalls2);
+    await preprocessToolCalls(
+      dispatch,
+      extra.ideMessenger,
+      generatedCalls2,
+      allowOutsideWorkspaceOf(state2),
+    );
 
     // 3. Security check: evaluate updated policies based on args
     const state3 = getState();

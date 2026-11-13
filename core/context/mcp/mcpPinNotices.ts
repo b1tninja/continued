@@ -1,7 +1,7 @@
 /**
  * What the person is told when MCP pins change on their behalf: the tools
  * the first approval pinned, and a launch definition that was re-pinned (at
- * YOLO nothing asked first, so this is the only trace). Also written to the
+ * IDGAF nothing asked first, so this is the only trace). Also written to the
  * audit trail. Messages carry names only: never arguments, URLs or env values.
  */
 import { getAuditTrail } from "../../tools/permissions/audit/global";

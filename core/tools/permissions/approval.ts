@@ -24,14 +24,14 @@ import type { ProtectedKind } from "./protected";
  *   model, which the caller asks (core's `tools/autoReview`).
  * - permissive: a call the rules left open runs. A deny rule, an ask rule, a
  *   protected path and the safety floor still win.
- * - yolo: every call runs, whatever a rule, a protected path or the safety
+ * - idgaf: every call runs, whatever a rule, a protected path or the safety
  *   floor says. Only a tool switched off stays off.
  */
 export interface ApprovalSettings {
   levels: PolicyLevels;
   /** Built-in rules by id; absent means on (see BUILTIN_RULES) */
   builtin?: Partial<Record<BuiltinRuleId, boolean>>;
-  /** Deny rules that bind at every level, YOLO included */
+  /** Deny rules that bind at every level, IDGAF included */
   floor?: string[];
 }
 
@@ -49,9 +49,9 @@ export function skippedProtections(
 
 /** What a level decided, for the decision chip. */
 export interface Loosening {
-  source: "permissive" | "yolo";
+  source: "permissive" | "idgaf";
   reason: string;
-  /** Allows the call whatever else applies (YOLO). */
+  /** Allows the call whatever else applies (IDGAF). */
   absolute?: boolean;
 }
 
@@ -139,7 +139,7 @@ export interface LooseningInput {
 /**
  * Whether the level for this call's area allows it without asking. The caller
  * applies the result only to a call that is still open (no rule matched, not
- * protected, not refused), except for YOLO, which is absolute.
+ * protected, not refused), except for IDGAF, which is absolute.
  */
 export function approvalLoosening(
   input: LooseningInput,
@@ -153,10 +153,10 @@ export function approvalLoosening(
   if (!found) return undefined;
   const what = found.readOnly ? ` (the command ${found.readOnly})` : "";
 
-  if (found.level === "yolo") {
+  if (found.level === "idgaf") {
     return {
-      source: "yolo",
-      reason: `Allowed: ${found.area === "context" ? "Context use" : found.area === "edits" ? "File edits" : "Tool use"} is set to YOLO${what}.`,
+      source: "idgaf",
+      reason: `Allowed: ${found.area === "context" ? "Context use" : found.area === "edits" ? "File edits" : "Tool use"} is set to IDGAF${what}.`,
       absolute: true,
     };
   }

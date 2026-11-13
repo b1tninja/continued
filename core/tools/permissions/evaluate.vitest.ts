@@ -150,7 +150,7 @@ describe("file tools", () => {
 });
 
 describe("candidate cap", () => {
-  it("a floor rule still refuses a padded command at YOLO", () => {
+  it("a floor rule still refuses a padded command at IDGAF", () => {
     const pad = Array.from({ length: 900 }, (_, i) => `f${i}`).join(" ");
     const r = evaluateToolPolicyWithRules({
       tool: terminalTool as any,
@@ -159,7 +159,7 @@ describe("candidate cap", () => {
       parsedArgs: { command: `ls ${pad}; git push` },
       permissions: undefined,
       approval: {
-        levels: POLICY_PRESETS.yolo.levels,
+        levels: POLICY_PRESETS.idgaf.levels,
         floor: ["runTerminalCommand(git push*)"],
       },
     });

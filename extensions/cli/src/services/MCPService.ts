@@ -1,6 +1,11 @@
 import { decodeFQSN, getTemplateVariables } from "@continuedev/config-yaml";
-import { type AssistantConfig } from "@continuedev/sdk";
+import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-yaml";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import {
+  listPromptsPaged,
+  listToolsPaged,
+} from "core/context/mcp/mcpClientLists.js";
+import { connectModernIfSupported } from "core/context/mcp/mcpModernConnect.js";
 import { announcePins } from "core/context/mcp/mcpPinNotices.js";
 import {
   adoptLegacyPin,
@@ -224,7 +229,7 @@ export class MCPService
   }
 
   /**
-   * A call ran, so it was approved (or the person runs at YOLO): pin it. The
+   * A call ran, so it was approved (or the person runs at IDGAF): pin it. The
    * first call to a server pins all of its tools, and a changed launch
    * definition is accepted here; both are announced.
    */
@@ -263,28 +268,45 @@ export class MCPService
   }
 
   /**
-   * Run a tool by name
+   * Run a tool of one server. With `serverName` the call goes to that server
+   * and no other. Without it the name must belong to exactly one connected
+   * server: when two offer it the call is refused, because running "whichever
+   * connected first" is how an approval card and the executed server differ.
    */
-  public async runTool(name: string, args: Record<string, any>) {
-    for (const connection of this.connections.values()) {
-      if (connection.status === "connected" && connection.client) {
-        const tool = connection.tools.find((t) => t.name === name);
-        if (tool) {
-          const serverName = connection.config!.name;
-          return await this.withTokenRefresh(serverName, async () => {
-            const conn = this.connections.get(serverName);
-            if (!conn?.client) {
-              throw new Error(`Client for ${serverName} not available`);
-            }
-            const result = await conn.client.callTool({
-              name,
-              arguments: args,
-            });
-            await this.recordPins(conn, name);
-            return result;
-          });
+  public async runTool(
+    name: string,
+    args: Record<string, any>,
+    serverName?: string,
+  ) {
+    const owners = [...this.connections.values()].filter(
+      (c) =>
+        c.status === "connected" &&
+        c.client &&
+        (serverName === undefined || c.config?.name === serverName) &&
+        c.tools.some((t) => t.name === name),
+    );
+    if (owners.length > 1) {
+      throw new Error(
+        `Tool ${name} is offered by more than one MCP server (${owners
+          .map((c) => c.config?.name)
+          .join(", ")}); refusing to guess which one to run`,
+      );
+    }
+    const [owner] = owners;
+    if (owner) {
+      const ownerName = owner.config!.name;
+      return await this.withTokenRefresh(ownerName, async () => {
+        const conn = this.connections.get(ownerName);
+        if (!conn?.client) {
+          throw new Error(`Client for ${ownerName} not available`);
         }
-      }
+        const result = await conn.client.callTool({
+          name,
+          arguments: args,
+        });
+        await this.recordPins(conn, name);
+        return result;
+      });
     }
     throw new Error(`Tool ${name} not found`);
   }
@@ -345,8 +367,7 @@ export class MCPService
     try {
       if (unrendered.length > 0) {
         const message = `${serverConfig.name} MCP Server has unresolved secrets: ${unrendered.join(", ")}
-For personal use you can set the secret in the hub at https://continue.dev/settings/secrets or pass it to the CLI environment.
-Org-level secrets can only be used for MCP by Background Agents (https://docs.continue.dev/hub/agents/overview) when \"Include in Env\" is enabled for the secret.`;
+Set each secret as an environment variable or in a .env file (~/.continuous/.env, .continuous/.env, .continue/.env or .env in the project). Secrets are never fetched from a server.`;
         if (this.isHeadless) {
           throw new Error(message);
         } else {
@@ -371,7 +392,9 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
               if (!conn?.client) {
                 throw new Error(`Client for ${serverName} not available`);
               }
-              return (await conn.client.listPrompts()).prompts;
+              const { items, warning } = await listPromptsPaged(conn.client);
+              if (warning) connection.warnings.push(warning);
+              return items;
             },
           );
         } catch (error) {
@@ -393,7 +416,9 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
               if (!conn?.client) {
                 throw new Error(`Client for ${serverName} not available`);
               }
-              return (await conn.client.listTools()).tools;
+              const { items, warning } = await listToolsPaged(conn.client);
+              if (warning) connection.warnings.push(warning);
+              return items;
             },
           );
         } catch (error) {
@@ -491,9 +516,31 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
     connection: ServerConnection,
   ): Promise<Client> {
     const client = new Client(
-      { name: "continue-cli-client", version: "1.0.0" },
+      { name: "continuous-cli-client", version: "1.0.0" },
       { capabilities: {} },
     );
+
+    // Revision 2026-07-28 servers answer `server/discover` and need no handshake;
+    // everything else (and any failure of the probe) takes the classic path.
+    if (
+      !("command" in serverConfig) &&
+      (serverConfig.type === undefined ||
+        serverConfig.type === "streamable-http") &&
+      serverConfig.requestOptions?.verifySsl !== false
+    ) {
+      const modern = await connectModernIfSupported({
+        url: serverConfig.url,
+        clientInfo: { name: "continuous-cli-client", version: "1.0.0" },
+        headers: {
+          ...serverConfig.requestOptions?.headers,
+          ...((serverConfig.apiKey ||
+            this.apiKeyCache.get(serverConfig.name)) && {
+            Authorization: `Bearer ${serverConfig.apiKey ?? this.apiKeyCache.get(serverConfig.name)}`,
+          }),
+        },
+      });
+      if (modern) return modern as unknown as Client;
+    }
 
     if ("command" in serverConfig) {
       // STDIO: no need to check type, just if command is present

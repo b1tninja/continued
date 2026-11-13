@@ -1,0 +1,28 @@
+---
+title: "Web search"
+description: "Offer the search_web tool and the @web context provider with a search endpoint you run or choose"
+---
+
+Continuous has no default web search. It does not send your queries to any service of ours, and without configuration the `search_web` tool and the `@web` context provider do not exist: the model is not told about them and `@web` is reported as unavailable.
+
+To turn them on, point Continuous at your own search endpoint with environment variables in the environment that starts the editor or the terminal agent:
+
+| Variable                    | Meaning                                                                                              |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `CONTINUOUS_WEB_SEARCH_URL` | An `http` or `https` URL of a SearXNG-compatible JSON search endpoint, for example `https://search.example.org/search` |
+| `CONTINUOUS_WEB_SEARCH_KEY` | Optional. Sent as `Authorization: Bearer <key>` to that endpoint and to nothing else                 |
+
+The request is `GET <url>?q=<query>&format=json`. The reply must be JSON shaped like `{ "results": [{ "title": "...", "url": "...", "content": "..." }] }`, which is what [SearXNG](https://docs.searxng.org/) returns when its JSON format is enabled. A small proxy in front of Brave, Tavily, Exa or another provider can speak the same shape. The request carries the query and, if you set one, the key. It carries no machine id, no version and no operating system.
+
+The search tool is still subject to the permission rules (`searchWeb`), so you can set it to ask or to deny.
+
+To add the context provider as well:
+
+```yaml config.yaml
+context:
+  - provider: web
+    params:
+      n: 5
+```
+
+Read the key from a secret store of your choice when you launch the editor, for example `CONTINUOUS_WEB_SEARCH_KEY=$(pass show search-key) code .`, rather than writing it into a config file.

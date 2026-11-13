@@ -174,6 +174,30 @@ mcpServers:
       callbackPort: 3456
 ```
 
+### Servers without dynamic client registration
+
+Some servers (GitHub's remote MCP server is one) do not let clients register themselves, and some require an administrator to allow-list the redirect URL (Datadog). Register an OAuth client with the provider, give it the redirect URL `http://localhost:<callbackPort>` (or `http://127.0.0.1:<callbackPort>` with `redirectHost: 127.0.0.1`), and configure it here. The secret comes from the secrets store:
+
+```yaml
+mcpServers:
+  - name: GitHub
+    type: streamable-http
+    url: https://api.githubcopilot.com/mcp/
+    oauth:
+      clientId: Iv1.0123456789abcdef
+      clientSecret: ${{ secrets.GITHUB_MCP_CLIENT_SECRET }}
+      callbackPort: 8765
+```
+
+With a `clientId` set, Continuous skips dynamic registration and uses that client for the authorization and token requests.
+
+### What the sign-in checks
+
+- The redirect URL is registered exactly as it is used, with no query string, and the per-sign-in `state` value is sent in the authorization request and must come back unchanged.
+- If the authorization server advertises `authorization_response_iss_parameter_supported` ([RFC 9207](https://www.rfc-editor.org/rfc/rfc9207)), a response without a matching `iss` is rejected. A response whose `iss` differs from the server's issuer is rejected in every case, and the code is never sent to the token endpoint.
+- The local redirect server listens on `127.0.0.1` (and `::1` when the redirect host is `localhost`), never on all interfaces, and closes when the sign-in ends.
+- Dynamic registration sends `application_type: native`.
+
 If sign-in fails or is abandoned (denied in the browser, a wrong code, or no response for 5 minutes), the partial registration is cleared so the next attempt starts clean.
 
 <Note>

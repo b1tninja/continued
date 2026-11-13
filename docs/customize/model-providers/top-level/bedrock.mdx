@@ -205,6 +205,10 @@ Prompt caching is not supported in JSON configuration files, so use the YAML syn
 
 The cache lifetime is chosen from the chat toolbar, and 1 hour is available only for some Claude models; Nova takes 5 minutes only. See [Prompt Caching](../../deep-dives/prompt-caching.mdx).
 
+## Broken streamed tool input
+
+Some Qwen3 models on Bedrock stream a tool call whose input is cut or missing its opening `{"`. By default Continuous holds the call, and when the input does not parse it retries the request once through Converse. Set `CONTINUE_BEDROCK_REPAIR_STREAMED_TOOL_INPUT=1` in the environment that starts the editor or the CLI to repair such input instead, for model ids that contain `qwen.qwen3-` only. A repair is made only when it invents no value: a missing opening `{"` is added when every top-level key is one the tool declares, and brackets left open after a complete value (a string, `true`, `false`, `null` or a closer) are closed. Input that ends after a number, `{`, `,` or `:` is not repaired and is retried as before. It is off by default.
+
 ## When Bedrock refuses a request field
 
 Some models refuse an optional field: Qwen, the newer Mistral models and gpt-oss refuse `stopSequences`, and GPT, Grok and some Nova requests refuse a `cachePoint`. Continuous knows the documented cases up front and never sends those fields to such models. If a model still refuses one of these two fields, the request is sent once more without it, the model is remembered for the rest of the run, and the `cn` command line says so once and lists it in its exit summary, with the config change that makes it permanent: `defaultCompletionOptions.promptCaching: false` for cache points, or removing `stop` from the model's options. Fields that change the answer, such as tools or the system prompt, are never dropped this way. Nothing is remembered across runs; put the setting in `config.yaml` to make it stick.

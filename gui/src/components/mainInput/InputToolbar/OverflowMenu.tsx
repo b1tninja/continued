@@ -31,7 +31,7 @@ function ReasoningRow() {
       content={label + (warmCacheNote ? ` ${warmCacheNote}` : "")}
     >
       <HoverButton
-        aria-label={label}
+        aria-label={`Reasoning: ${enabled ? "on" : "off"}`}
         aria-pressed={enabled}
         data-testid="reasoning-toggle"
         className="w-full justify-start gap-2 px-2 text-xs text-foreground"

@@ -14,6 +14,8 @@
 
 > **Unofficial, community-maintained fork.** Continuous is not affiliated with, endorsed by, or supported by Continue Dev, Inc.
 
+**Privacy:** no telemetry, no account, and only the model hosts you configure are contacted. Details: [PRIVACY.md](https://github.com/b1tninja/continuous/blob/main/PRIVACY.md).
+
 ## Features
 
 - **Agent**: hand it a development task; it reads and edits files and runs tools, asking before anything risky.
@@ -30,7 +32,7 @@
 
 ## Install and set up
 
-Continuous is installed from a `.vsix` file. Downloads, checksums and troubleshooting are in the
+Install Continuous from the Extensions view (publisher `b1tninja`), or by hand from a `.vsix` file on a GitHub release. Downloads, checksums and troubleshooting for the `.vsix` are in the
 [install guide](https://github.com/b1tninja/continuous/blob/main/docs/continuous-install.md).
 Source and issues: [github.com/b1tninja/continuous](https://github.com/b1tninja/continuous).
 

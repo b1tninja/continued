@@ -1,9 +1,9 @@
 import {
+  BoltIcon,
   CheckIcon,
   ChevronDownIcon,
   ClipboardDocumentListIcon,
   EyeIcon,
-  ExclamationTriangleIcon,
   PencilSquareIcon,
   QuestionMarkCircleIcon,
   WrenchScrewdriverIcon,
@@ -15,6 +15,7 @@ import {
   POLICY_LEVELS,
   POLICY_PRESETS,
   policyLevelLabel,
+  presetOf,
   type PolicyArea,
   type PolicyLevel,
 } from "core/tools/permissions/policy";
@@ -24,14 +25,14 @@ import {
   REVIEWABLE_AREAS,
   selectAutoApproval,
   selectEffectiveLevels,
-  selectYoloAreas,
+  selectIdgafAreas,
 } from "../../redux/selectors/selectAutoApproval";
 import {
   applyPolicyPreset,
   changePolicyLevel,
 } from "../../redux/thunks/policySettings";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
-import { CHIP, LEVEL_GLYPHS, LEVEL_TONES } from "./levelStyle";
+import { CHIP, LEVEL_GLYPHS, LEVEL_TONES, idgafSentence } from "./levelStyle";
 import { PresetSelect } from "./PresetSelect";
 
 const AREA_ICONS: Record<PolicyArea, typeof EyeIcon> = {
@@ -229,36 +230,49 @@ export function PolicyControls() {
 }
 
 /**
- * Shown above the input for as long as any area is at YOLO. It has no close
- * button on purpose: the way to remove it is to leave YOLO.
+ * One chip in the mode bar for as long as any area is at IDGAF: a bolt, the
+ * word and (when there is room) "nothing asks", tinted red. The sentence that
+ * used to fill a banner is the tooltip and the accessible description, so it
+ * is reachable by keyboard and screen reader, not only by hover. There is no
+ * close button on purpose: the chip is the state, and choosing it goes back
+ * to Careful, the same as the Careful preset.
  */
-export function YoloBanner() {
+export function IdgafChip() {
   const dispatch = useAppDispatch();
-  const areas = useAppSelector(selectYoloAreas);
-  if (areas.length === 0) return null;
-  const names = areas
-    .map((a) => `${POLICY_AREA_LABELS[a]} (${policyLevelLabel(a, "yolo")})`)
-    .join(", ");
+  const areas = useAppSelector(selectIdgafAreas);
+  const descriptionId = useId();
+  const preset = presetOf(useAppSelector((s) => s.ui.policyLevels));
+  // At the IDGAF preset the preset chip already says so, and carries the sentence
+  if (areas.length === 0 || preset === "idgaf") return null;
+  const sentence = idgafSentence(areas);
   return (
-    <div
-      role="alert"
-      data-testid="yolo-banner"
-      className="flex items-center gap-2 bg-error/15 px-2 py-0.5 text-2xs text-error"
-    >
-      <ExclamationTriangleIcon className="h-3 w-3 shrink-0" />
-      <span className="flex-1">
-        {names}: nothing asks. Never rules, Ask rules, protected paths and the
-        built-in rule check are ignored for these.
-      </span>
+    <>
       <button
         type="button"
-        className="cursor-pointer border-none bg-transparent text-2xs text-error underline"
+        data-testid="idgaf-chip"
+        data-roving=""
+        aria-describedby={descriptionId}
+        title={`${sentence} Select to go back to Careful.`}
         onClick={() =>
           void dispatch(applyPolicyPreset(POLICY_PRESETS.careful.levels))
         }
+        className={`${CHIP} ${LEVEL_TONES.idgaf.chip} cursor-pointer`}
       >
-        Back to Careful
+        <BoltIcon
+          className={`h-3 w-3 shrink-0 ${LEVEL_TONES.idgaf.icon}`}
+          aria-hidden="true"
+        />
+        <span>IDGAF</span>
+        <span className="hidden min-[481px]:inline">· nothing asks</span>
+        <span className="sr-only">. Select to go back to Careful.</span>
       </button>
-    </div>
+      <span
+        id={descriptionId}
+        data-testid="idgaf-description"
+        className="sr-only"
+      >
+        {sentence}
+      </span>
+    </>
   );
 }

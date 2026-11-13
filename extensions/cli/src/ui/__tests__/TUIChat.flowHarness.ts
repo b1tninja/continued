@@ -172,9 +172,6 @@ export async function registerFlowServices({
     authConfig: null,
     isAuthenticated: false,
   });
-  serviceContainer.registerValue(SERVICE_NAMES.API_CLIENT, {
-    apiClient: null,
-  });
   serviceContainer.registerValue(SERVICE_NAMES.CONFIG, {
     config: assistant,
     configPath: undefined,

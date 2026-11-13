@@ -1,10 +1,22 @@
 import { JSDOM } from "jsdom";
 
-export async function findFaviconPath(url: URL): Promise<string | undefined> {
+import type { RequestOptions } from "..";
+
+import { fetchWithGuardedRedirects } from "./guardedFetch";
+import { networkFetchWith } from "./networkFetch";
+
+export async function findFaviconPath(
+  url: URL,
+  requestOptions?: RequestOptions,
+): Promise<string | undefined> {
   const baseUrl = `${url.protocol}//${url.hostname}`;
 
   try {
-    const response = await fetch(baseUrl);
+    const response = await fetchWithGuardedRedirects(
+      new URL(baseUrl),
+      networkFetchWith(requestOptions),
+      { stayOnStartHost: true },
+    );
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -32,9 +44,20 @@ export async function findFaviconPath(url: URL): Promise<string | undefined> {
 
 export async function getFaviconBase64(
   faviconUrl: string,
+  requestOptions?: RequestOptions,
+  /** Host of the page that linked the icon: only it may be non-public. */
+  pageHost?: string,
 ): Promise<string | undefined> {
   try {
-    const response = await fetch(faviconUrl);
+    const target = new URL(faviconUrl);
+    const response = await fetchWithGuardedRedirects(
+      target,
+      networkFetchWith(requestOptions),
+      {
+        stayOnStartHost: true,
+        refuseNonPublicStart: target.hostname !== pageHost,
+      },
+    );
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -56,10 +79,13 @@ export async function getFaviconBase64(
   }
 }
 
-export async function fetchFavicon(url: URL): Promise<string | undefined> {
-  const faviconPath = await findFaviconPath(url);
+export async function fetchFavicon(
+  url: URL,
+  requestOptions?: RequestOptions,
+): Promise<string | undefined> {
+  const faviconPath = await findFaviconPath(url, requestOptions);
   if (faviconPath) {
-    return getFaviconBase64(faviconPath);
+    return getFaviconBase64(faviconPath, requestOptions, url.hostname);
   }
   return undefined;
 }

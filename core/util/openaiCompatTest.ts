@@ -24,6 +24,9 @@ import {
   recordingEnabled,
   recordProbe,
 } from "./measuredFacts.js";
+import { testAnthropicConnection } from "./anthropicSurfaceTest.js";
+import type { RetirementNotice } from "./modelRetirement.js";
+import { recordLive } from "./retirementNoticeState.js";
 import { getOllamaShowHint } from "./ollamaShowHint.js";
 import { surfaceForProvider } from "./surfaceFacts.js";
 import { recoverableDialect } from "./toolDialectLeak.js";
@@ -46,6 +49,8 @@ export interface OpenAICompatTestInput {
   /** For tests: the measured-facts file and today's date. */
   measuredFile?: string;
   now?: string;
+  /** For tests: the retirement-notice state file (Anthropic only). */
+  noticeFile?: string;
 }
 
 export type TestFetch = (
@@ -84,6 +89,8 @@ export type OpenAICompatTestResult =
       probe?: OpenAICompatProbe | { ok: false; error: string };
       /** Template line from llama.cpp /props or Ollama /api/show, when the server answered. */
       template?: string;
+      /** Anthropic only: deprecation or retirement notices for the tested model. */
+      retirement?: RetirementNotice[];
     }
   | { ok: false; error: string };
 
@@ -190,10 +197,43 @@ function templateNoteFor(
     : template;
 }
 
+/**
+ * Anthropic's surface: list the models with the user's key and read their
+ * lifecycle (core/util/anthropicSurfaceTest.ts). The lifecycle fields are kept
+ * locally so the model chip and the start-up notice can use them offline.
+ */
+async function testAnthropic(
+  input: OpenAICompatTestInput,
+): Promise<OpenAICompatTestResult> {
+  const today = input.now ?? new Date().toISOString().slice(0, 10);
+  const res = await testAnthropicConnection({
+    apiKey: input.apiKey,
+    apiBase: input.apiBase,
+    models: input.model ? [input.model] : [],
+    timeoutMs: input.timeoutMs,
+    fetchFn: input.fetchFn,
+    now: today,
+  });
+  if (!res.ok) return res;
+  if (input.record !== false && recordingEnabled()) {
+    for (const m of res.listed) {
+      if (m.retiresAt || (m.lifecycle && m.lifecycle !== "active")) {
+        recordLive(m.id, m, today, input.noticeFile);
+      }
+    }
+  }
+  return {
+    ok: true,
+    models: res.models,
+    ...(res.notices.length ? { retirement: res.notices } : {}),
+  };
+}
+
 /** Test one endpoint; never throws. */
 export async function testOpenAICompatConnection(
   input: OpenAICompatTestInput,
 ): Promise<OpenAICompatTestResult> {
+  if (input.provider === "anthropic") return testAnthropic(input);
   const base = openAICompatBase(input.provider, input.apiBase);
   if (!base) return { ok: false, error: "Enter the API base URL first." };
   const listed = await call(input, `${base}/models`, "GET");

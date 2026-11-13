@@ -7,6 +7,10 @@ import {
   promptCacheSupportsLifetime,
 } from "@continuedev/llm-info";
 
+import {
+  noteSamplingOmitted,
+  omitsSampling,
+} from "./anthropicSamplingGuard.js";
 import type { CacheTtl } from "./cacheTtl.js";
 import {
   familyRuleFor,
@@ -613,8 +617,17 @@ export function bedrockSamplingParams(
   temperature: number | undefined,
   topP: number | undefined,
   reasoning: boolean,
+  omitSampling?: boolean,
 ): { temperature?: number; topP?: number } {
+  if (omitSampling === true) {
+    noteSamplingOmitted(modelId, true);
+    return {};
+  }
   if (!/claude/i.test(modelId)) return { temperature, topP };
+  if (omitsSampling(modelId, omitSampling)) {
+    noteSamplingOmitted(modelId);
+    return {};
+  }
   if (reasoning) return {};
   if (temperature !== undefined && topP !== undefined) return { temperature };
   return { temperature, topP };

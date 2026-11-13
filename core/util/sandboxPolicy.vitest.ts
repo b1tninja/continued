@@ -556,14 +556,14 @@ describe("sandboxAutoApproval", () => {
       "manual",
       "allow-rule",
       "permissive",
-      "yolo",
+      "idgaf",
     ];
     for (const level of POLICY_LEVELS) {
       for (const source of sources) {
         if (
           source === "allow-rule" ||
           source === "permissive" ||
-          source === "yolo"
+          source === "idgaf"
         )
           continue;
         const r = run({

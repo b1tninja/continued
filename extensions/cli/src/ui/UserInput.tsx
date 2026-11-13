@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 
-import { type AssistantConfig } from "@continuedev/sdk";
+import type { AssistantUnrolled as AssistantConfig } from "@continuedev/config-yaml";
 import { Box, Text, useApp, useInput } from "ink";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
@@ -16,6 +16,8 @@ import { escapeEvents } from "../util/cli.js";
 import { InputHistory } from "../util/inputHistory.js";
 import { logger } from "../util/logger.js";
 
+import type { LoopFrameInfo } from "./components/loopFrame.js";
+import { LoopFrameTop } from "./components/LoopFrameTop.js";
 import { FileSearchUI } from "./FileSearchUI.js";
 import { useClipboardMonitor } from "./hooks/useClipboardMonitor.js";
 import {
@@ -111,6 +113,8 @@ interface UserInputProps {
   isRemoteMode?: boolean;
   onImageInClipboardChange?: (hasImage: boolean) => void;
   onShowEditSelector?: () => void;
+  /** While a loop is on: the prompt box takes its state colour, icon and word */
+  loopFrame?: LoopFrameInfo;
 }
 
 const UserInput: React.FC<UserInputProps> = ({
@@ -129,6 +133,7 @@ const UserInput: React.FC<UserInputProps> = ({
   isRemoteMode = false,
   onImageInClipboardChange,
   onShowEditSelector,
+  loopFrame,
 }) => {
   const [textBuffer] = useState(() => new TextBuffer());
   const [inputHistory] = useState(() => new InputHistory());
@@ -826,15 +831,21 @@ const UserInput: React.FC<UserInputProps> = ({
   // State for showing image paste hint
   const [_hasImageInClipboard, _setHasImageInClipboard] = useState(false);
 
-  // Monitor clipboard for images and show helpful hints
-  const { checkNow: _checkClipboardNow } = useClipboardMonitor({
-    onImageStatusChange: (hasImage) => {
+  // Stable, so a keystroke's render does not restart the clipboard poll
+  const handleImageStatusChange = useCallback(
+    (hasImage: boolean) => {
       _setHasImageInClipboard(hasImage);
       // Also notify parent component
       if (onImageInClipboardChange) {
         onImageInClipboardChange(hasImage);
       }
     },
+    [onImageInClipboardChange],
+  );
+
+  // Monitor clipboard for images and show helpful hints
+  const { checkNow: _checkClipboardNow } = useClipboardMonitor({
+    onImageStatusChange: handleImageStatusChange,
     enabled: !disabled && inputMode,
     pollInterval: 2000,
   });
@@ -1007,12 +1018,23 @@ const UserInput: React.FC<UserInputProps> = ({
     <Box flexDirection="column">
       <InterruptedBanner wasInterrupted={!!wasInterrupted} />
 
+      {/* The loop's state is the box's top border (label) and colour */}
+      {loopFrame && <LoopFrameTop info={loopFrame} />}
+
       {/* Input box */}
       <Box
         borderStyle="round"
-        borderTop={true}
+        borderTop={!loopFrame}
         paddingX={1}
-        borderColor={showBashMode ? "yellow" : isRemoteMode ? "cyan" : "gray"}
+        borderColor={
+          loopFrame
+            ? loopFrame.color
+            : showBashMode
+              ? "yellow"
+              : isRemoteMode
+                ? "cyan"
+                : "gray"
+        }
       >
         <Text
           color={showBashMode ? "yellow" : isRemoteMode ? "cyan" : "blue"}

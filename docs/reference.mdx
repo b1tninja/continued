@@ -117,6 +117,7 @@ The `models` section defines the language models used in your configuration. Mod
   - `stop`: An array of stop tokens that will terminate the completion.
   - `reasoning`: Boolean to enable thinking/reasoning for Anthropic Claude 3.7+ and some Ollama models.
   - `reasoningBudgetTokens`: Budget tokens for thinking/reasoning in Anthropic Claude 3.7+ models.
+  - `omitSampling`: Advanced. `true` leaves `temperature`, `topP` and `topK` out of the request for this model; `false` sends them even to a Claude model that refuses them. Unset follows the model: Claude 4.7 and later, Fable and Mythos refuse the three, so they are left out whatever the config sets, with one debug-log line per model. Applies to Anthropic, Bedrock and Vertex AI Claude requests.
   - `promptCaching`: Boolean to cache the tool definitions, system prompt and conversation for Claude models on Anthropic, Amazon Bedrock, Vertex AI and OpenRouter, and the system prompt and conversation for Amazon Nova 2 Lite, Pro, Lite and Micro on Bedrock. On Anthropic and Bedrock it is on by default in Agent, Plan and Background modes (and in the CLI) when neither this nor `cacheBehavior` says anything; off in Chat, and off by default on Vertex AI and OpenRouter. `false` turns it off and also overrides `cacheBehavior`. See [Prompt Caching](./customize/deep-dives/prompt-caching.mdx).
   - `keepAlive`: For Ollama, the number of seconds to keep the model loaded after the last request (default: `1800`).
 
@@ -433,12 +434,12 @@ The snake*case tool name also works as a rule name, for example `read_file(**/.e
 
 **Where the rules apply.** The same checks run wherever a tool call can start, not only in the chat.
 
-- **Headless runs** (`continuous -p`) allow Bash and any tool with no entry of its own, since nobody is there to ask. A deny rule, a floor deny rule and a protected path still hold, and a call that would have asked is refused.
-- **Loop workers** in the terminal agent (parallel to-dos) load the same settings, flags and policy levels as the session that started them, and never switch to Auto mode. A worker cannot ask, so a call that would ask is refused.
+- **Headless runs** (`continuous -p`) allow Bash and any tool with no entry of its own, since nobody is there to ask. A deny rule, an always-on rule and a protected path still hold, and a call that would have asked is refused.
+- **Loop workers** in the terminal agent (parallel to-dos) load the same settings, flags and policy levels as the session that started them, and never switch to Auto mode. They also take the same default lists: a worker of the terminal UI asks about `Bash` and unlisted tools as the terminal UI does, and a worker of `continuous -p` or `continuous serve` takes the headless lists. A worker cannot ask, so a call that would ask is held as an approval question for the loop and refused for now.
 - **MCP app tool calls** (a tool an MCP app's panel calls itself) go through the same check as a call the model made, and wait for you when it asks. A turn an app starts is labeled with the app's name in the chat and in the text sent to the model.
-- **Agents window** tool calls go through deny rules, floor rules and protected paths; a call that asks is confirmed with you or not run.
-- **Fetching a URL** that is private or local, including a name that resolves to such an address, always asks. Hands-off and an allow rule do not skip it; YOLO does.
-- **A command too long to read in full** (rules check up to 800 readings of it) counts as a match for deny, ask, effect and protected-path checks, including a floor rule at YOLO.
+- **Agents window** tool calls go through deny rules, always-on rules and protected paths; a call that asks is confirmed with you or not run.
+- **Fetching a URL** that is private or local, including a name that resolves to such an address, always asks. Hands-off and an allow rule do not skip it; IDGAF does.
+- **A command too long to read in full** (rules check up to 800 readings of it) counts as a match for deny, ask, effect and protected-path checks, including an always-on rule at IDGAF.
 - **`/cmd`** runs the command it generates only when the terminal tool's policy allows it without asking; otherwise the command is shown and not run.
 
 **Patterns.** In file and directory rules, `*` matches within one folder and `**` matches across folders (`**/.env` matches `.env` and `a/b/.env`). Paths are compared with forward slashes, so one rule works on Windows and macOS. A file rule is matched against both the path the model wrote and the full path it resolves to. In command rules, `*` matches anything, including `/`.
@@ -469,7 +470,7 @@ The home directory is recognised however it is written (`~`, `$HOME`, `%USERPROF
 
 **Shared configs.** If a shared assistant and your own config both set `toolPermissions`, the lists are combined, with one limit: only your own `config.yaml` (and your own `permissions.yaml`, and what you choose in the settings) can add `allow` rules. An `allow` rule that comes from a hub assistant, a shared config or a project folder is ignored, and a one-line notice in the config errors names it (the terminal CLI logs it). `deny` and `ask` rules from any source are kept, because they can only make a call stricter. To use a rule from a shared assistant, copy it into your own `config.yaml`. This is the same rule that applies to the `terminal` settings.
 
-**The permission files are locked.** A call that would write or delete a file the product loads as configuration, code, rules or hooks asks every time, and is refused at Automatic and YOLO. That covers everything in the global folder (`~/.continuous`, `~/.continue`, or the folder `CONTINUOUS_GLOBAL_DIR` or `CONTINUE_GLOBAL_DIR` names: `config.yaml`, `config.ts`, `permissions.yaml`, `.env`, the trust and pin files, `agents/`, `prompts/`, `checks/`, `rules/`), a project's `.continue/` or `.continuous/` folder (except `plans/`), `.claude/settings.json`, `.claude/settings.local.json`, `.claude/agents/` and `.claude/skills/`, and `.continuerc.*`. It reads Windows spellings of the same file (`\?\` and `\.\` prefixes, 8.3 short names, file URIs) and every string in an MCP call's arguments. The list comes from one registry in the code, so a new loader cannot read a path that is not locked. A command that builds its path at run time (a variable, a wildcard, a backtick, or a bare name after a `cd` into your home folder) is not seen by the lock, so at YOLO it asks; only the sandbox covers that for certain.
+**The permission files are locked.** A call that would write or delete a file the product loads as configuration, code, rules or hooks asks every time, and is refused at Automatic and IDGAF. That covers everything in the global folder (`~/.continuous`, `~/.continue`, or the folder `CONTINUOUS_GLOBAL_DIR` or `CONTINUE_GLOBAL_DIR` names: `config.yaml`, `config.ts`, `permissions.yaml`, `.env`, the trust and pin files, `agents/`, `prompts/`, `checks/`, `rules/`), a project's `.continue/` or `.continuous/` folder (except `plans/`), `.claude/settings.json`, `.claude/settings.local.json`, `.claude/agents/` and `.claude/skills/`, and `.continuerc.*`. It reads Windows spellings of the same file (`\?\` and `\.\` prefixes, 8.3 short names, file URIs) and every string in an MCP call's arguments. The list comes from one registry in the code, so a new loader cannot read a path that is not locked. A command that builds its path at run time (a variable, a wildcard, a backtick, or a bare name after a `cd` into your home folder) is not seen by the lock, so at IDGAF it asks; only the sandbox covers that for certain.
 
 **When a call is refused,** the chat shows which rule did it, and the model is told not to retry or work around it.
 
@@ -491,9 +492,9 @@ If a narrow rule cannot be made, the button says why and does nothing: commands 
 | **Cautious**   | What your Always rules and tool settings cover runs; the rest asks.                                                                                                                                                                                              |
 | **Automatic**  | As Cautious, and a [reviewer model](./customize/model-roles/reviewer.mdx) decides what is left. Experimental.                                                                                                                                                    |
 | **Permissive** | Anything no rule stops runs, and file edits are accepted. Never rules, Ask rules, protected paths and the built-in rule check still apply.                                                                                                                       |
-| **YOLO**       | Everything runs without asking. Never rules, Ask rules, protected paths and the built-in rule check are ignored (always-on rules still bind). A warning stays above the input for as long as an area is at YOLO. Plan edits and Questions call this level IDGAF. |
+| **IDGAF**      | Everything runs without asking. Never rules, Ask rules, protected paths and the built-in rule check are ignored (always-on rules still bind). A warning stays above the input for as long as an area is at IDGAF. |
 
-Except for YOLO, a level sits on top of the rules, never above them. The order is: always-on rules, then Never rules, then tools you switched off and commands the built-in rule check refuses, then protected paths, then Ask rules, then Always rules, and only then the level. A tool you switched off stays off even at YOLO.
+Except for IDGAF, a level sits on top of the rules, never above them. The order is: always-on rules, then Never rules, then tools you switched off and commands the built-in rule check refuses, then protected paths, then Ask rules, then Always rules, and only then the level. A tool you switched off stays off even at IDGAF.
 
 ---
 
@@ -594,7 +595,7 @@ List of documentation sites to index.
 - `name` (**required**): Name of the documentation site, displayed in dropdowns, etc.
 - `startUrl` (**required**): Start page for crawling - usually root or intro page for docs
 - `favicon`: URL for site favicon (default is `/favicon.ico` from `startUrl`).
-- `useLocalCrawling`: Crawl on this machine. This is the default. Set to `false` to send the site URL to the upstream crawl service.
+- `useLocalCrawling`: Ignored. Documentation sites are always crawled on this machine; no crawl service is used. Kept so existing configs still load.
 
 **Example:**
 
@@ -624,6 +625,9 @@ The [Model Context Protocol](https://modelcontextprotocol.io/introduction) is a 
 - `requestOptions`: Optional request options for `sse` and `streamable-http` servers. Same format as [model requestOptions](#models).
 - `oauth`: Optional OAuth settings for `sse` and `streamable-http` servers.
   - `callbackPort`: Port of the local server that receives the browser redirect while signing in (default `3000`).
+  - `clientId`: Client id of an OAuth client you registered with the server's authorization server. When set, dynamic client registration is not used.
+  - `clientSecret`: Secret of that client, if it has one. Write it as `${{ secrets.NAME }}`, never inline.
+  - `redirectHost`: Host name in the redirect URL, `localhost` (default) or `127.0.0.1`. The local server listens on loopback addresses only either way.
 - `connectionTimeout`: Optional timeout for _initial_ connection to MCP server
 
 **Example:**

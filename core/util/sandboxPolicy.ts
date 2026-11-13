@@ -12,8 +12,8 @@ import {
 } from "../tools/permissions/protectedPaths";
 import {
   POLICY_AREAS,
-  POLICY_LEVELS,
   builtinRuleOn,
+  parsePolicyLevel,
   type BuiltinRuleId,
 } from "../tools/permissions/policy";
 import { canonicalRuleName } from "../tools/permissions/names";
@@ -167,7 +167,7 @@ function prepare(input: SandboxCompileInput): { ctx?: Ctx; errs: string[] } {
   }
   const levels = (input.levels ?? {}) as Record<string, unknown>;
   for (const area of POLICY_AREAS) {
-    if (!POLICY_LEVELS.includes(levels[area] as never)) {
+    if (!parsePolicyLevel(levels[area])) {
       errs.push(`levels.${area}: "${String(levels[area])}" is not a level`);
     }
   }
@@ -507,9 +507,11 @@ function compile(input: SandboxCompileInput): SandboxCompileResult {
   addReadPolicy(acc, ctx);
   addNetwork(acc, ctx, dest);
   checkOverlap(acc, ctx);
-  if (Object.values(ctx.input.levels).includes("yolo")) {
+  if (
+    Object.values(ctx.input.levels).some((l) => parsePolicyLevel(l) === "idgaf")
+  ) {
     acc.warnings.push(
-      "a level is YOLO: the policy ignores rules at that level, but the OS config is unchanged and still applies to commands that run in the sandbox",
+      "a level is IDGAF: the policy ignores rules at that level, but the OS config is unchanged and still applies to commands that run in the sandbox",
     );
   }
   if (acc.conflicts.length > 0) {
@@ -527,7 +529,13 @@ function compile(input: SandboxCompileInput): SandboxCompileResult {
     workspace: ctx.ws,
     homeDir: ctx.home,
     readPolicy,
-    levels: { ...input.levels },
+    // `yolo`, the old spelling of idgaf, is written as idgaf
+    levels: Object.fromEntries(
+      Object.entries(input.levels).map(([a, l]) => [
+        a,
+        parsePolicyLevel(l) ?? l,
+      ]),
+    ) as typeof input.levels,
     config: {
       filesystem: {
         denyRead: dedupeSorted(acc.fs.denyRead),

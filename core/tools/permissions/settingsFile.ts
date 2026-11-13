@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as YAML from "yaml";
+import { writeFileAtomicSync } from "../../util/atomicWrite.js";
 import {
   BUILTIN_RULES,
   DEFAULT_POLICY_LEVELS,
   normalizePolicy,
+  parsePolicyLevel,
   POLICY_AREAS,
   type BuiltinRuleId,
   type PolicyArea,
@@ -19,14 +21,21 @@ import {
  * with the CLI's own `allow`, `ask` and `exclude` lists, which this module
  * never touches.
  *
- * YOLO and IDGAF are session-only: a saved `yolo` is read as that area's
- * default with a notice, and is never written.
+ * IDGAF is session-only: a saved `idgaf` (or `yolo`, which 2.14.x wrote for
+ * it) is read as that area's default with a notice, and is never written.
  */
 export interface PolicyFileSettings extends PolicySettings {
-  /** Deny rules that bind at every level, YOLO included. */
+  /** Deny rules that bind at every level, IDGAF included. */
   floor?: string[];
   /** MCP servers whose read-only hints the person trusts, by display name. */
   mcpServers?: Record<string, "trusted">;
+  /**
+   * MCP tools the person lets Plan mode use, whatever the server claims:
+   * "server/tool", "server/*" or "server" (plans/research/tr-owner-decisions.md, 1).
+   */
+  planMcpTools?: string[];
+  /** Offer the terminal in Plan mode (the CLI; it still asks). Default false. */
+  planAllowTerminal?: boolean;
 }
 
 export interface PolicyFileRead {
@@ -73,13 +82,13 @@ export function parsePolicyFile(text: string | undefined): PolicyFileRead {
     }
   }
 
-  // YOLO is never read from disk
+  // IDGAF is never read from disk; `yolo` is its old spelling
   const levelsIn: Record<string, unknown> = { ...(raw.levels ?? {}) };
   for (const area of POLICY_AREAS) {
-    if (levelsIn[area] === "yolo") {
+    if (parsePolicyLevel(levelsIn[area]) === "idgaf") {
       delete levelsIn[area];
       notices.push(
-        `levels.${area}: yolo is for one session only, so ${DEFAULT_POLICY_LEVELS[area]} applies.`,
+        `levels.${area}: idgaf is for one session only, so ${DEFAULT_POLICY_LEVELS[area]} applies.`,
       );
     }
   }
@@ -120,6 +129,13 @@ export function parsePolicyFile(text: string | undefined): PolicyFileRead {
     }
     settings.mcpServers = servers;
   }
+  if (Array.isArray(raw.plan?.mcpTools)) {
+    settings.planMcpTools = raw.plan.mcpTools.filter(
+      (t: unknown): t is string => typeof t === "string" && t.length > 0,
+    );
+  }
+  const allowTerminal = asBool(raw.plan?.allowTerminal);
+  if (allowTerminal !== undefined) settings.planAllowTerminal = allowTerminal;
   return { settings, notices };
 }
 
@@ -137,7 +153,7 @@ export interface PolicyFileUpdate {
 
 /**
  * The file's text with the update applied, keeping every other key and
- * comment. Levels at YOLO are not written: the area keeps what the file had.
+ * comment. Levels at IDGAF are not written: the area keeps what the file had.
  */
 export function applyPolicyUpdate(
   text: string | undefined,
@@ -149,7 +165,7 @@ export function applyPolicyUpdate(
   if (update.levels) {
     for (const area of POLICY_AREAS as readonly PolicyArea[]) {
       const level = update.levels[area];
-      if (level === "yolo") continue;
+      if (parsePolicyLevel(level) === "idgaf") continue;
       doc.setIn(["levels", area], level);
     }
   }
@@ -198,5 +214,7 @@ export function writePolicyFile(file: string, update: PolicyFileUpdate): void {
     if (e?.code !== "ENOENT") throw e;
   }
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, applyPolicyUpdate(existing, update), "utf-8");
+  // Temp file and rename: a kill during the write cannot leave half a
+  // permissions.yaml, which would read as "no rules".
+  writeFileAtomicSync(file, applyPolicyUpdate(existing, update));
 }

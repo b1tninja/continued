@@ -98,8 +98,8 @@ export function selectLoopPolicy(state: RootState): LoopPolicy {
   return loopPolicyOf(selectPolicySettings(state));
 }
 
-/** Areas set to YOLO (IDGAF on Plan edits and Questions), for the banner. */
-export function selectYoloAreas(state: RootState): PolicyArea[] {
+/** Areas set to IDGAF, for the banner. */
+export function selectIdgafAreas(state: RootState): PolicyArea[] {
   const levels = selectEffectiveLevels(state);
-  return POLICY_AREAS.filter((a) => levels[a] === "yolo");
+  return POLICY_AREAS.filter((a) => levels[a] === "idgaf");
 }

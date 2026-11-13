@@ -8,7 +8,10 @@
  * (host name only, owner-only, never a key); `--no-record` or
  * `probes.record: false` in ~/.continuous/config.yaml turns that off. When the
  * model wrote its call as text the output ends with a config snippet to
- * paste: nothing is changed automatically.
+ * paste: nothing is changed automatically. With `--provider anthropic` it
+ * lists models with the user's own key (ANTHROPIC_API_KEY, or the variable
+ * named by --api-key-env) and, with --model, warns when that model is deprecated
+ * or retiring (core/util/anthropicSurfaceTest.ts).
  */
 
 import {
@@ -28,6 +31,7 @@ export interface TestConnectionOptions {
   record?: boolean;
   /** For tests. */
   measuredFile?: string;
+  noticeFile?: string;
   now?: string;
   fetchFn?: TestFetch;
   env?: Record<string, string | undefined>;
@@ -75,6 +79,11 @@ export function formatTestResult(
     }
   }
   if (r.template) lines.push(r.template);
+  for (const n of r.retirement ?? []) {
+    lines.push(
+      `Warning: ${n.message}${n.from === "live" ? " (from your key)" : ""}`,
+    );
+  }
   return lines;
 }
 
@@ -87,11 +96,13 @@ export async function testConnectionCommand(
     return 2;
   }
   const env = options.env ?? process.env;
-  const apiKey = options.apiKeyEnv ? env[options.apiKeyEnv] : undefined;
-  if (options.apiKeyEnv && !apiKey) {
-    process.stderr.write(
-      `The environment variable ${options.apiKeyEnv} is not set\n`,
-    );
+  // Anthropic is tested with the user's own key: ANTHROPIC_API_KEY unless --api-key-env names another.
+  const keyEnv =
+    options.apiKeyEnv ??
+    (options.provider === "anthropic" ? "ANTHROPIC_API_KEY" : undefined);
+  const apiKey = keyEnv ? env[keyEnv] : undefined;
+  if (keyEnv && !apiKey) {
+    process.stderr.write(`The environment variable ${keyEnv} is not set\n`);
     return 2;
   }
   const result = await testOpenAICompatConnection({
@@ -102,6 +113,7 @@ export async function testConnectionCommand(
     fetchFn: options.fetchFn,
     record: options.record !== false,
     measuredFile: options.measuredFile,
+    noticeFile: options.noticeFile,
     now: options.now,
   });
   process.stdout.write(

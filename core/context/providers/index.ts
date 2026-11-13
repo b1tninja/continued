@@ -32,6 +32,7 @@ import SearchContextProvider from "./SearchContextProvider";
 import TerminalContextProvider from "./TerminalContextProvider";
 import URLContextProvider from "./URLContextProvider";
 import WebContextProvider from "./WebContextProvider";
+import { isWebSearchConfigured } from "./webSearchBackend";
 
 /**
  * Note: We are currently omitting the following providers due to bugs:
@@ -76,6 +77,10 @@ export const Providers: (typeof BaseContextProvider)[] = [
 export function contextProviderClassFromName(
   name: ContextProviderName,
 ): typeof BaseContextProvider | undefined {
+  // "web" exists only when the user has set up their own search endpoint
+  if (name === "web" && !isWebSearchConfigured()) {
+    return undefined;
+  }
   const provider = Providers.find((cls) => cls.description.title === name);
 
   return provider;

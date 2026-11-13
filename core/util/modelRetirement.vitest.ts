@@ -1,0 +1,146 @@
+import { allModelProviders } from "@continuedev/llm-info";
+import fs from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  findRetirementRow,
+  RETIREMENT_ROWS,
+  retirementNotice,
+} from "./modelRetirement.js";
+
+const NOW = "2026-11-11";
+const today = new Date().toISOString().slice(0, 10);
+const note = (provider: string, model: string, now = NOW, live?: any) =>
+  retirementNotice({ provider, model, now, live });
+
+describe("the checked-in table", () => {
+  it("carries a source URL and a fetch date on every row", () => {
+    for (const r of RETIREMENT_ROWS) {
+      expect(r.source, r.id).toMatch(/^https:\/\//);
+      expect(r.fetchedOn, r.id).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(() => new RegExp(r.match, "i"), r.id).not.toThrow();
+      expect(new RegExp(r.match, "i").test(r.id), r.id).toBe(true);
+    }
+  });
+
+  it("agrees with itself: a retired state has a past date, a past firm date is retired", () => {
+    for (const r of RETIREMENT_ROWS) {
+      if (r.state === "retired") {
+        expect(r.retiresAt, r.id).toBeTruthy();
+        expect(r.retiresAt! <= today, r.id).toBe(true);
+      }
+      if (r.retiresAt && !r.notSoonerThan && r.retiresAt <= today) {
+        expect(r.state, `${r.id} passed ${r.retiresAt}: mark it retired`).toBe(
+          "retired",
+        );
+      }
+    }
+  });
+
+  it("fails when a firm retirement date has passed and the catalog still lists the model as current", () => {
+    const stale: string[] = [];
+    for (const p of allModelProviders) {
+      if (p.id !== "anthropic") continue;
+      for (const m of p.models) {
+        const row = findRetirementRow("anthropic", m.model);
+        if (!row?.retiresAt || row.notSoonerThan) continue;
+        if (row.retiresAt <= today && m.lifecycle !== "retired") {
+          stale.push(`${m.model} (retired ${row.retiresAt})`);
+        }
+        if (row.state === "deprecated" && !m.lifecycle) {
+          stale.push(`${m.model} (deprecated ${row.deprecatedAt})`);
+        }
+      }
+    }
+    expect(stale, "mark these with lifecycle in packages/llm-info").toEqual([]);
+  });
+
+  it("does not recommend a retiring or retired model in the model catalog page", () => {
+    const mdx = fs.readFileSync(
+      path.resolve(__dirname, "../../docs/customize/model-catalog.mdx"),
+      "utf8",
+    );
+    const ids = mdx.match(/claude-[a-z0-9.-]+/g) ?? [];
+    for (const id of ids) {
+      const n = note("anthropic", id.replace(/^us\.anthropic\./, ""), today);
+      expect(n?.message, id).toBeUndefined();
+    }
+  });
+});
+
+describe("retirementNotice", () => {
+  it("warns with the date and the replacement for Sonnet 4.5", () => {
+    const n = note("anthropic", "claude-sonnet-4-5-20250929");
+    expect(n).toMatchObject({
+      severity: "retiring",
+      retiresAt: "2026-11-30",
+      daysLeft: 19,
+      replacement: "claude-sonnet-5-5",
+      from: "table",
+      sourceUrl: expect.stringContaining("model-deprecations"),
+    });
+    expect(n?.message).toContain("2026-11-30");
+    expect(n?.message).toContain("claude-sonnet-5-5");
+  });
+
+  it("matches the alias form too", () => {
+    expect(note("anthropic", "claude-sonnet-4-5")?.severity).toBe("retiring");
+  });
+
+  it("says a 'not sooner than' date is only that", () => {
+    const n = note("anthropic", "claude-opus-4-5");
+    expect(n?.severity).toBe("possible");
+    expect(n?.message).toContain("may retire from 2026-11-24");
+  });
+
+  it("is silent for Haiku 4.5, whose earliest date passed without a notice", () => {
+    expect(note("anthropic", "claude-haiku-4-5-20251001")).toBeUndefined();
+  });
+
+  it("says retired once the date has passed", () => {
+    expect(note("anthropic", "claude-sonnet-4-5", "2026-12-01")?.severity).toBe(
+      "retired",
+    );
+    expect(note("anthropic", "claude-opus-4-1-20250805")?.severity).toBe(
+      "retired",
+    );
+  });
+
+  it("is silent outside the 60-day window and for current models", () => {
+    expect(note("anthropic", "claude-opus-4-5", "2026-09-01")).toBeUndefined();
+    expect(note("anthropic", "claude-sonnet-5-5")).toBeUndefined();
+    expect(note("anthropic", "claude-opus-4-8")).toBeUndefined();
+  });
+
+  it("never applies to Bedrock or Vertex, which keep their own schedules", () => {
+    expect(
+      note("bedrock", "anthropic.claude-sonnet-4-5-20250929-v1:0"),
+    ).toBeUndefined();
+    expect(note("vertexai", "claude-sonnet-4-5@20250929")).toBeUndefined();
+  });
+
+  it("prefers the date the user's own key returned", () => {
+    const n = note("anthropic", "claude-sonnet-4-5-20250929", NOW, {
+      lifecycle: "deprecated",
+      deprecatedAt: "2026-09-30T00:00:00Z",
+      retiresAt: "2026-12-15T00:00:00Z",
+    });
+    expect(n).toMatchObject({ from: "live", retiresAt: "2026-12-15" });
+    expect(n?.sourceUrl).toBeUndefined();
+  });
+
+  it("warns from a live deprecation for a model the table does not know", () => {
+    const n = note("anthropic", "claude-future-1", NOW, {
+      lifecycle: "deprecated",
+      retiresAt: "2026-12-01",
+    });
+    expect(n?.severity).toBe("retiring");
+    expect(n?.replacement).toBeUndefined();
+  });
+
+  it("changes its key when the dates or severity change", () => {
+    const a = note("anthropic", "claude-sonnet-4-5");
+    const b = note("anthropic", "claude-sonnet-4-5", "2026-12-01");
+    expect(a?.key).not.toBe(b?.key);
+  });
+});

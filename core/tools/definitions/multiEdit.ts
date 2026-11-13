@@ -115,6 +115,7 @@ WARNINGS:
     const fileUri = await validateSearchAndReplaceFilepath(
       args.filepath,
       extras.ide,
+      { allowOutside: extras.allowOutsideWorkspace },
     );
 
     const editingFileContents = await extras.ide.readFile(fileUri);

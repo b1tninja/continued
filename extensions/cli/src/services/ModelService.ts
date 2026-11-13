@@ -159,6 +159,14 @@ export class ModelService
     );
   }
 
+  /** The active model's provider and API model id (not its display name). */
+  getModelId(): { provider: string; model: string } | null {
+    const m = this.currentState.model as { provider?: string; model?: string };
+    return m?.provider && m?.model
+      ? { provider: m.provider, model: m.model }
+      : null;
+  }
+
   /**
    * Get model information for display
    */

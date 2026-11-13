@@ -1,5 +1,6 @@
 import { ConfigDependentToolParams, Tool } from "..";
 import { isRecommendedAgentModel } from "../llm/toolSupport";
+import { isWebSearchConfigured } from "../context/providers/webSearchBackend";
 import { historyAgeingEnabled } from "../util/contextAgeing";
 import * as toolDefinitions from "./definitions";
 
@@ -31,7 +32,11 @@ export const getConfigDependentToolDefinitions = async (
   tools.push(await toolDefinitions.readSkillTool(params));
   tools.push(await toolDefinitions.subagentTool(params));
 
-  tools.push(toolDefinitions.searchWebTool);
+  // Only with the user's own search endpoint (CONTINUOUS_WEB_SEARCH_URL);
+  // there is no default backend, so by default the tool does not exist.
+  if (isWebSearchConfigured()) {
+    tools.push(toolDefinitions.searchWebTool);
+  }
 
   // Off by default: the tool list is part of every request's cached prefix
   if (historyAgeingEnabled()) {

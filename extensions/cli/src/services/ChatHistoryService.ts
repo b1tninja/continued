@@ -20,8 +20,23 @@ export interface ChatHistoryState {
  * Service for managing chat history as the single source of truth
  * Provides immutable updates and automatic React integration via events
  */
+/**
+ * How many history snapshots undo keeps. Every change pushed a copy of the
+ * whole history and nothing trimmed it, so the stack grew with the square
+ * of the session. Nothing in the CLI calls undo today; the cap keeps the API.
+ */
+export const MAX_UNDO_SNAPSHOTS = 50;
+
+function pushBounded<T>(stack: T[], item: T): void {
+  stack.push(item);
+  if (stack.length > MAX_UNDO_SNAPSHOTS) {
+    stack.splice(0, stack.length - MAX_UNDO_SNAPSHOTS);
+  }
+}
+
 export class ChatHistoryService extends BaseService<ChatHistoryState> {
-  // Simple undo/redo stacks for history snapshots
+  // Simple undo/redo stacks for history snapshots, at most
+  // MAX_UNDO_SNAPSHOTS each
   private past: ChatHistoryItem[][] = [];
   private future: ChatHistoryItem[][] = [];
   // Memoized snapshot for referential stability in getState()
@@ -52,7 +67,7 @@ export class ChatHistoryService extends BaseService<ChatHistoryState> {
     const { recordUndo = true, compactionIndex, persist } = options;
     const prev = this.currentState.history;
     if (recordUndo) {
-      this.past.push([...prev]);
+      pushBounded(this.past, [...prev]);
       this.future = [];
     }
     this.setState({
@@ -466,14 +481,14 @@ export class ChatHistoryService extends BaseService<ChatHistoryState> {
   undo(): void {
     if (!this.canUndo()) return;
     const prev = this.past.pop()!;
-    this.future.push([...this.currentState.history]);
+    pushBounded(this.future, [...this.currentState.history]);
     this.setHistoryInternal(prev, { recordUndo: false });
   }
 
   redo(): void {
     if (!this.canRedo()) return;
     const next = this.future.pop()!;
-    this.past.push([...this.currentState.history]);
+    pushBounded(this.past, [...this.currentState.history]);
     this.setHistoryInternal(next, { recordUndo: false });
   }
 

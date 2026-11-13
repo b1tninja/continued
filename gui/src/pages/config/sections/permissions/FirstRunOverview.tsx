@@ -52,7 +52,7 @@ export function FirstRunOverview({ onDismiss }: { onDismiss: () => void }) {
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Dismiss the permissions overview"
+          aria-label="Got it, dismiss the permissions overview"
           data-testid="permissions-intro-dismiss"
           className="flex h-6 min-w-6 flex-none cursor-pointer items-center justify-center gap-1 rounded-sm border border-solid border-border bg-transparent px-1 text-2xs text-foreground"
         >
@@ -62,7 +62,7 @@ export function FirstRunOverview({ onDismiss }: { onDismiss: () => void }) {
       </div>
       <p className="my-1 text-2xs text-description-muted">
         The agent&apos;s power is split into five areas. Each area has its own
-        level, from Manual (you decide everything) to YOLO (nothing asks).
+        level, from Manual (you decide everything) to IDGAF (nothing asks).
       </p>
       <ul className="m-0 flex flex-col gap-0.5 p-0 text-2xs">
         {POLICY_AREAS.map((area) => (

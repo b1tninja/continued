@@ -13,7 +13,7 @@ import { classifyReadOnly } from "./readOnlyCommand";
 /**
  * The permission and policy files protect themselves. A call that would write
  * or delete one is a locked floor: no setting, rule or level lets it run
- * unasked, YOLO included, because a model that can edit the policy can undo
+ * unasked, IDGAF included, because a model that can edit the policy can undo
  * every other protection. `protect-config` is a separate, switchable rule over
  * the wider set of files that change what runs later; this one has no switch.
  *
@@ -27,7 +27,7 @@ import { classifyReadOnly } from "./readOnlyCommand";
  * Like protected paths this reads the path as written and resolved, and a
  * terminal command by its words: it is a guard that sees what is visible, not
  * a sandbox. A path built at run time (a variable, a glob, a backtick, a bare
- * name after a `cd` into the home folder) is not seen: at YOLO a command with
+ * name after a `cd` into the home folder) is not seen: at IDGAF a command with
  * such a write target asks (runtimeWriteTarget.ts, ROADMAP B31), and the
  * sandbox that denies writes to these folders (W8) is what holds for certain.
  */

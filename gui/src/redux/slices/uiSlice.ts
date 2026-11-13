@@ -6,6 +6,7 @@ import { MessageModes, RuleWithSource, Tool } from "core";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
 import {
   DEFAULT_POLICY_LEVELS,
+  parsePolicyLevel,
   type BuiltinRuleId,
   type PolicyArea,
   type PolicyLevel,
@@ -65,6 +66,10 @@ export interface PolicyExtras {
   builtin?: Partial<Record<BuiltinRuleId, boolean>>;
   /** Deny rules that bind at every level; read from the file, never written here */
   floor?: string[];
+  /** MCP tools Plan mode may use ("server/tool", "server/*"); read from the file, never written here */
+  planMcpTools?: string[];
+  /** MCP servers whose read-only hints the person trusts; read from the file, never written here */
+  trustedMcpServers?: string[];
 }
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";
@@ -186,11 +191,14 @@ export const uiSlice = createSlice({
     ) => {
       state.policyLevels = {
         ...state.policyLevels,
-        [payload.area]: payload.level,
+        // a message from an older host may still say "yolo"
+        [payload.area]: parsePolicyLevel(payload.level) ?? payload.level,
       };
     },
     setPolicyLevels: (state, { payload }: PayloadAction<PolicyLevels>) => {
-      state.policyLevels = { ...payload };
+      state.policyLevels = Object.fromEntries(
+        Object.entries(payload).map(([a, l]) => [a, parsePolicyLevel(l) ?? l]),
+      ) as PolicyLevels;
     },
     setPolicyExtras: (
       state,

@@ -303,6 +303,11 @@ export interface ModelUsage {
   cost: number;
   /** How many of `requests` could be priced. Fewer than `requests` means `cost` is partial. */
   pricedRequests: number;
+  /**
+   * Set when some of `cost` came from a downloaded price list: where it came
+   * from and the date of the oldest list used. The figure is an estimate.
+   */
+  priceEstimate?: { source: string; fetchedAt: string };
 }
 
 export interface SessionUsage extends Usage {
@@ -514,6 +519,24 @@ export interface LoopItemState {
    * LOOP_MAX_REPAIRS_PER_ITEM). To-dos a repair splits it into inherit it.
    */
   repairs?: number;
+  /**
+   * The round whose accepted re-plan added this to-do, for the R chip in the
+   * plan tree. Missing on the to-dos the loop started with and on loops saved
+   * before this field: they show no chip.
+   */
+  addedInRound?: number;
+}
+
+/** A to-do an accepted re-plan took out of the plan (LoopState.replacedItems) */
+export interface LoopReplacedItem {
+  /** The id the to-do had */
+  id: string;
+  /** Its text, when the loop could tell which plan text it had */
+  text?: string;
+  /** The round of the re-plan that took it out */
+  round: number;
+  /** The to-do that took its place; only for a repair that left exactly one */
+  replacedBy?: string;
 }
 
 /**
@@ -538,9 +561,24 @@ export type QuestionType =
   | "design"
   | "detail";
 
+/**
+ * Something the loop decided for the person under the policy they set (a
+ * re-plan it accepted, a question it answered). Always by `system`; `source`
+ * names the setting ("Plan edits: IDGAF", "Questions: Permissive").
+ */
+export interface LoopAutoDecision {
+  kind: "plan" | "question";
+  by: "system";
+  source: string;
+  text: string;
+  at: string;
+}
+
 export interface LoopQuestion {
   /** IDGAF: the agent decided this itself; it never reached the inbox */
   decidedAlone?: boolean;
+  /** Questions is permissive: the answer the system chose, and under which setting */
+  autoAnswer?: { text: string; by: "system"; source: string };
   id: string;
   /** The item it is about; none for a question about the whole plan */
   itemId?: string;
@@ -641,7 +679,7 @@ export interface LoopBudget {
 /**
  * How much the loop does without the person. It follows the approval mode
  * the person picked when the loop starts (Manual: supervised; Auto-approve
- * and Auto: auto; YOLO: unattended) and can be changed while it runs. See
+ * and Auto: auto; IDGAF: unattended) and can be changed while it runs. See
  * LOOP_AUTONOMY in core/util/loopMode.ts.
  */
 export type LoopAutonomy = "supervised" | "auto" | "unattended" | "idgaf";
@@ -869,10 +907,26 @@ export interface LoopState {
   noProgressRounds: number;
   /** Items in a row that ended failed; reset by one that is done */
   consecutiveFailures?: number;
-  /** When every open item started waiting on the person (status waiting) */
+  /**
+   * When the loop started waiting on the person: every open item waits
+   * (status waiting) or a re-plan's card does (status awaiting_plan)
+   */
   waitingSince?: string;
+  /**
+   * Milliseconds the loop spent waiting on the person since `startedAt`,
+   * without the wait in progress. The time budget does not count them
+   * (loopElapsedMs). Absent in loops saved before it existed: 0.
+   */
+  waitedMs?: number;
   /** Why the last re-plan did or did not start the next round by itself */
   replanReason?: string;
+  /**
+   * To-dos accepted re-plans took out of the plan, oldest first, the last 20.
+   * Missing on loops saved before this field: the plan tree shows none.
+   */
+  replacedItems?: LoopReplacedItem[];
+  /** What the loop decided for the person by their policy, oldest first (capped) */
+  autoDecisions?: LoopAutoDecision[];
   /** Tool calls the person allowed from an approval question (grantKey) */
   grants: string[];
   /** A plan-wide answer asked to re-plan now */
@@ -901,6 +955,15 @@ export interface LoopState {
   stopReason?: LoopStopReason;
   /** One line for the person: what stopped it */
   stopDetail?: string;
+  /** Set beside stopDetail when a budget stopped the loop: which, and how much */
+  stopBudget?: LoopStopBudget;
+}
+
+/** Which loop budget stopped it. Tokens are counted, time is milliseconds. */
+export interface LoopStopBudget {
+  kind: "tokens" | "time";
+  used: number;
+  max: number;
 }
 
 /** A message queued in the chat input; `editorState` is the editor's JSON. */
@@ -1275,7 +1338,7 @@ interface McpUiState {
 
 interface ToolCallDecision {
   outcome: "allowed" | "blocked";
-  /** A rule, the safety check, a switch, YOLO, the Auto reviewer, or the user ("once"). */
+  /** A rule, the safety check, a switch, IDGAF, the Auto reviewer, or the user ("once"). */
   source: string;
   /** One line saying why. */
   reason?: string;
@@ -1299,6 +1362,9 @@ interface ToolCallState {
   processedArgs?: Record<string, any>; // Added in preprocesing step
   /** Why this call is waiting for approval, when a rule or protected path says so. */
   policyNote?: string;
+  /** The rule (as written in config.yaml) and the kind of check that made the call wait. */
+  policyRule?: string;
+  policySource?: string;
   /** Why the call ran or was refused, for the decision chip. Set by the policy check. */
   decision?: ToolCallDecision;
   output?: ContextItem[];
@@ -1991,6 +2057,13 @@ export interface ToolExtras {
    * folders; the exact edit tools run only with this set.
    */
   workspaceDirs?: string[];
+  /**
+   * Set when File edits is IDGAF, which says nothing asks: the file
+   * tools may then name a path outside the workspace folders. The permission
+   * layer has already decided the call; this only lets the tool resolve the
+   * path instead of treating it as not a target.
+   */
+  allowOutsideWorkspace?: boolean;
 }
 
 export interface McpToolMeta {
@@ -2018,6 +2091,8 @@ export interface Tool {
   faviconUrl?: string;
   group: string;
   originalFunctionName?: string;
+  /** An MCP tool from a server the open folder brought, not the person's own config */
+  mcpFromWorkspace?: boolean;
   systemMessageDescription?: {
     prefix: string;
     exampleArgs?: Array<[string, string | number]>;
@@ -2028,6 +2103,8 @@ export interface Tool {
     args: Record<string, unknown>,
     extras: {
       ide: IDE;
+      /** As for ToolExtras: File edits is IDGAF */
+      allowOutsideWorkspace?: boolean;
     },
   ) => Promise<Record<string, unknown>>;
   evaluateToolCallPolicy?: (
@@ -2038,7 +2115,7 @@ export interface Tool {
   mcpMeta?: McpToolMeta;
   /**
    * An MCP tool whose definition changed, or that appeared, after the person
-   * approved its server. It asks again at every level but YOLO until a call to
+   * approved its server. It asks again at every level but IDGAF until a call to
    * it is approved. `summary` says what changed.
    */
   mcpDefinitionChange?: {
@@ -2097,6 +2174,12 @@ export interface BaseCompletionOptions {
   reasoning?: boolean;
   reasoningBudgetTokens?: number;
   promptCaching?: boolean;
+  /**
+   * Advanced. `true` leaves temperature, topP and topK out of the request;
+   * `false` sends them even to a Claude model that refuses them (4.7 and
+   * later); unset follows the model.
+   */
+  omitSampling?: boolean;
   /**
    * Lifetime of prompt cache entries written by this request. Only honoured by
    * providers that support it (Anthropic and Claude models on Bedrock); omit
@@ -2331,6 +2414,12 @@ export type InternalSseMcpOptions = BaseInternalMCPOptions & {
 export interface McpOauthSettings {
   /** Port of the local redirect server used while signing in (default 3000). */
   callbackPort?: number;
+  /** Pre-registered OAuth client id; skips dynamic client registration. */
+  clientId?: string;
+  /** Secret of the pre-registered client (use a secrets reference). */
+  clientSecret?: string;
+  /** Host in the redirect URI: "localhost" (default) or "127.0.0.1". */
+  redirectHost?: "localhost" | "127.0.0.1";
 }
 
 export type InternalWebsocketMcpOptions = BaseInternalMCPOptions & {
@@ -2947,8 +3036,28 @@ export interface Skill {
   license?: string;
 }
 
+/**
+ * A local model the person chose on the onboarding Local tab instead of the
+ * suggested default. Everything but `chatModel` is optional.
+ */
+export interface LocalOnboardingChoice {
+  /** A provider id of the config schema: ollama, lmstudio, llama.cpp, vllm, openai. */
+  provider: string;
+  chatModel: string;
+  /** Shown in the model picker; the model name when absent. */
+  chatTitle?: string;
+  /** The server address; the provider's own default when absent. */
+  apiBase?: string;
+  /** Autocomplete (FIM) model. Ollama falls back to the suggested default. */
+  fimModel?: string;
+  /** Embeddings model. Ollama falls back to the suggested default. */
+  embeddingsModel?: string;
+}
+
 export interface CompleteOnboardingPayload {
   mode: OnboardingModes;
+  /** The Local tab's own choice; the suggested Ollama setup when absent. */
+  local?: LocalOnboardingChoice;
 }
 
 export interface CompiledMessagesResult {
@@ -2963,12 +3072,20 @@ export interface CompiledMessagesResult {
 
 export interface AddToChatPayload {
   data: AddToChatPayloadItem[];
+  /** Resources the host would not add, so the chat can say why. */
+  refused?: AddToChatRefusal[];
 }
 
-interface AddToChatPayloadItem {
+export interface AddToChatPayloadItem {
   type: "file" | "folder";
+  /** A URI string, read by the `file` or `folder` provider at send time. */
   fullPath: string;
   name: string;
+}
+
+export interface AddToChatRefusal {
+  name: string;
+  reason: "secret" | "outside-workspace" | "not-found" | "unsaved";
 }
 
 export interface MessageOption {

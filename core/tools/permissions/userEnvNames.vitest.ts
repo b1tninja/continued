@@ -114,9 +114,9 @@ const terminalTool = {
 
 const allLevels = {
   ...DEFAULT_POLICY_LEVELS,
-  context: "yolo",
-  tools: "yolo",
-  edits: "yolo",
+  context: "idgaf",
+  tools: "idgaf",
+  edits: "idgaf",
 } as any;
 
 function decide(command: string, envNames: any) {
@@ -127,7 +127,7 @@ function decide(command: string, envNames: any) {
     parsedArgs: { command },
     permissions: undefined,
     shell: "bash",
-    // YOLO: only a name that is dangerous asks here
+    // IDGAF: only a name that is dangerous asks here
     approval: { levels: allLevels },
     envNames,
   }).policy;

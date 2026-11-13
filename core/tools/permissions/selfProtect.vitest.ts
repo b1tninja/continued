@@ -92,12 +92,12 @@ const FILES = [
 
 describe("the policy files are a locked floor", () => {
   describe.each(FILES)("%s", (file) => {
-    it("the edit tool asks below Automatic and is refused at Automatic and YOLO", () => {
+    it("the edit tool asks below Automatic and is refused at Automatic and IDGAF", () => {
       for (const level of LEVELS) {
         expect(edit(file, at(level)).policy).toBe(ASK);
       }
       expect(edit(file, at("automatic")).policy).toBe(OFF);
-      expect(edit(file, at("yolo")).policy).toBe(OFF);
+      expect(edit(file, at("idgaf")).policy).toBe(OFF);
     });
   });
 
@@ -106,9 +106,9 @@ describe("the policy files are a locked floor", () => {
     expect(
       edit("~/.continue/permissions.yaml", at("cautious", off)).policy,
     ).toBe(ASK);
-    expect(edit("~/.continue/permissions.yaml", at("yolo", off))).toMatchObject(
-      { policy: OFF, source: "floor" },
-    );
+    expect(
+      edit("~/.continue/permissions.yaml", at("idgaf", off)),
+    ).toMatchObject({ policy: OFF, source: "floor" });
   });
 
   it("an allow rule cannot loosen it", () => {
@@ -134,7 +134,7 @@ describe("the policy files are a locked floor", () => {
       "multi_edit",
       "single_find_and_replace",
     ]) {
-      expect(edit("~/.continue/config.yaml", at("yolo"), t).policy).toBe(OFF);
+      expect(edit("~/.continue/config.yaml", at("idgaf"), t).policy).toBe(OFF);
     }
   });
 
@@ -152,7 +152,7 @@ describe("the policy files are a locked floor", () => {
       "python -c \"open('/x','w')\" > $HOME/.continue/mcp-tool-pins.json",
     ])("%s", (command) => {
       expect(run(command, at("cautious")).policy).toBe(ASK);
-      expect(run(command, at("yolo"))).toMatchObject({
+      expect(run(command, at("idgaf"))).toMatchObject({
         policy: OFF,
         source: "floor",
       });
@@ -165,7 +165,7 @@ describe("the policy files are a locked floor", () => {
         "grep allow ~/.continue/permissions.yaml",
         "git add .continue/rules/a.md",
       ]) {
-        expect(run(c, at("yolo")).policy).toBe(ALLOW);
+        expect(run(c, at("idgaf")).policy).toBe(ALLOW);
       }
     });
   });
@@ -174,7 +174,7 @@ describe("the policy files are a locked floor", () => {
     it("write_file with a visible path is locked", () => {
       const args = { path: "~/.continue/permissions.yaml", content: "x" };
       expect(mcp("write_file", args, at("cautious")).policy).toBe(ASK);
-      expect(mcp("write_file", args, at("yolo")).policy).toBe(OFF);
+      expect(mcp("write_file", args, at("idgaf")).policy).toBe(OFF);
     });
 
     it("move_file onto the policy file is locked (destination)", () => {
@@ -182,24 +182,25 @@ describe("the policy files are a locked floor", () => {
         source: "/tmp/e.yaml",
         destination: "~/.continue/config.yaml",
       };
-      expect(mcp("move_file", args, at("yolo")).policy).toBe(OFF);
+      expect(mcp("move_file", args, at("idgaf")).policy).toBe(OFF);
     });
 
     it("a read-only MCP tool naming it is not", () => {
       const args = { path: "~/.continue/config.yaml" };
-      expect(mcp("read_file", args, at("yolo"), true).policy).toBe(ALLOW);
+      expect(mcp("read_file", args, at("idgaf"), true).policy).toBe(ALLOW);
     });
   });
 
   describe("ordinary paths are unchanged", () => {
     it("files, commands and MCP calls elsewhere", () => {
-      expect(edit("src/a.ts", at("yolo")).policy).toBe(ALLOW);
+      expect(edit("src/a.ts", at("idgaf")).policy).toBe(ALLOW);
       expect(edit("notes/continue-config.yaml", at("cautious")).policy).toBe(
         ALLOW,
       );
-      expect(run("echo hi > out.txt", at("yolo")).policy).toBe(ALLOW);
+      expect(run("echo hi > out.txt", at("idgaf")).policy).toBe(ALLOW);
       expect(
-        mcp("write_file", { path: "src/b.ts", content: "" }, at("yolo")).policy,
+        mcp("write_file", { path: "src/b.ts", content: "" }, at("idgaf"))
+          .policy,
       ).toBe(ALLOW);
     });
   });

@@ -2,6 +2,7 @@ import {
   decisionDraft,
   outcomeDraft,
   policyDraft,
+  settingDraft,
   shadowDraft,
   turnDraft,
   type AuditAgent,
@@ -9,6 +10,7 @@ import {
   type DecisionInput,
   type OutcomeInput,
   type PolicyInput,
+  type SettingInput,
   type ShadowInput,
 } from "./record";
 import { pruneAudit, type PruneResult } from "./reader";
@@ -132,18 +134,27 @@ export class AuditTrail {
   }
 
   /** The person's answer to an ask. */
-  answer(callId: string, approved: boolean): void {
+  answer(
+    callId: string,
+    approved: boolean,
+    by: "person" | "system" = "person",
+  ): void {
     this.guard(() => {
       const p = this.pending.get(callId);
       if (!p || p.policy !== "ask") return;
       this.decision({
         ...p.input,
         policy: approved ? "allow" : "deny",
-        by: "person",
+        by,
         source: undefined,
         rule: undefined,
         reviewer: undefined,
-        reason: approved ? "The person approved it." : "The person refused it.",
+        reason:
+          by === "system"
+            ? "Answered over a connection with no access token (--no-auth)."
+            : approved
+              ? "The person approved it."
+              : "The person refused it.",
       });
       if (!approved) this.outcome({ callId, ran: false });
     });
@@ -210,6 +221,24 @@ export class AuditTrail {
     let ok = true;
     this.guard(() => {
       const result = this.writer.write(policyDraft(input));
+      if (!result.ok) {
+        ok = false;
+        this.fail(result.error);
+      }
+    });
+    return ok;
+  }
+
+  /**
+   * A change to a permission setting that is not a rule (level, preset,
+   * floor, built-in switch, trust). Returns false when it could not be
+   * written; the change itself is not undone.
+   */
+  setting(input: SettingInput): boolean {
+    if (!this.enabled) return true;
+    let ok = true;
+    this.guard(() => {
+      const result = this.writer.write(settingDraft(input));
       if (!result.ok) {
         ok = false;
         this.fail(result.error);

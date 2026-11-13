@@ -1,6 +1,6 @@
 import { useContext, useState } from "react";
 import type { ToolDialectSetting } from "@continuedev/config-yaml";
-import { openAICompatDefaultBase } from "core/util/openaiCompatBases";
+import { connectionTestDefaultBase } from "core/util/anthropicSurfaceTest";
 import type { OpenAICompatTestResult } from "core/util/openaiCompatTest";
 import {
   recoveryConfirmText,
@@ -68,6 +68,10 @@ export function OpenAICompatConnectionTester({
     setProbedModel(undefined);
     setRecovery(undefined);
     try {
+      if (provider === "anthropic") {
+        // One read-only listing; no tool probe on this surface.
+        return setResult(await run(model || undefined));
+      }
       const listed = await run();
       if (!listed.ok || listed.models.length === 0) return setResult(listed);
       const pick =
@@ -104,8 +108,8 @@ export function OpenAICompatConnectionTester({
     }
   }
 
-  const needsBase = !openAICompatDefaultBase(provider) && !apiBase?.trim();
-  const defaultBase = openAICompatDefaultBase(provider);
+  const defaultBase = connectionTestDefaultBase(provider);
+  const needsBase = !defaultBase && !apiBase?.trim();
   return (
     <div className="flex flex-col gap-2">
       <div>
@@ -146,6 +150,24 @@ export function OpenAICompatConnectionTester({
           </span>
         </Alert>
       )}
+
+      {result?.ok &&
+        result.retirement?.map((n) => (
+          <Alert
+            key={n.key}
+            type="warning"
+            size="sm"
+            role="status"
+            data-testid="retirement-notice"
+          >
+            <span className="block text-xs">{n.message}</span>
+            <span className="block text-xs opacity-80">
+              {n.from === "live"
+                ? "From your key's model list."
+                : `Checked-in table, read ${n.fetchedOn}.`}
+            </span>
+          </Alert>
+        ))}
 
       {probe && (
         <Alert

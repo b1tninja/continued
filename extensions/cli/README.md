@@ -1,30 +1,36 @@
-# Continue CLI
+# Continuous CLI
 
-The Continue CLI (`cn`) is a customizable command line coding agent.
+The Continuous CLI (`cn`) is a customizable command line coding agent.
 
-![Continue CLI Demo](./media/demo.gif)
+![Continuous CLI Demo](./media/demo.gif)
 
 ## Installation
 
-**macOS / Linux:**
+Read a script before you run it, then run it. **macOS / Linux:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/continuedev/continue/main/extensions/cli/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/b1tninja/continuous/main/extensions/cli/scripts/install.sh -o install.sh
+less install.sh
+bash install.sh
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-irm https://raw.githubusercontent.com/continuedev/continue/main/extensions/cli/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/b1tninja/continuous/main/extensions/cli/scripts/install.ps1 -OutFile install.ps1
+notepad install.ps1
+.\install.ps1
 ```
 
-Or install with npm if you have Node.js 20+:
+Or install a release tarball with npm if you have Node.js 22+ (see [Installing Continuous](../../docs/continuous-install.md) for pinning a version):
 
 ```bash
-npm i -g @continuedev/cli
+npm i -g https://github.com/b1tninja/continuous/releases/download/v2.14.0-vscode/continuous-cli-2.14.0.tgz
 ```
 
 ## Usage
+
+The command is `continuous`, with the short alias `cn`.
 
 ```bash
 cn
@@ -102,9 +108,6 @@ The CLI adds no attribution to commits or pull request text. To ask for it, set 
 
 - `cn`: Start an interactive chat session
 - `cn ls`: List recent sessions with TUI selector to choose one to resume
-- `cn login`: Authenticate with Continue
-- `cn logout`: Sign out of current session
-- `cn remote`: Launch a remote instance
 - `cn serve`: Start HTTP server mode
 
 ### Session Listing (`cn ls`)

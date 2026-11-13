@@ -2,6 +2,7 @@ import * as fs from "fs";
 
 import { validateMultiEdit } from "core/edit/searchAndReplace/multiEditValidation.js";
 import { executeMultiFindAndReplace } from "core/edit/searchAndReplace/performReplace.js";
+import { writeFileAtomicSync } from "core/util/atomicWrite.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 
 import { telemetryService } from "../telemetry/telemetryService.js";
@@ -13,6 +14,7 @@ import {
 import { editTool, validateAndResolveFilePath } from "./edit.js";
 import { readFileTool } from "./readFile.js";
 import { Tool } from "./types.js";
+import { wroteOutsideResult } from "./workspaceBoundary.js";
 import { generateDiff } from "./writeFile.js";
 
 export interface EditOperation {
@@ -143,7 +145,7 @@ WARNINGS:
     editCount: number;
   }) => {
     try {
-      fs.writeFileSync(args.file_path, args.newContent, "utf-8");
+      writeFileAtomicSync(args.file_path, args.newContent);
 
       // Get lines for telemetry
       const { added, removed } = calculateLinesOfCodeDiff(
@@ -170,7 +172,7 @@ WARNINGS:
         args.file_path,
       );
 
-      return `Successfully edited ${args.file_path} with ${args.editCount} edit${args.editCount === 1 ? "" : "s"}\nDiff:\n${diff}`;
+      return `Successfully edited ${args.file_path} with ${args.editCount} edit${args.editCount === 1 ? "" : "s"}\nDiff:\n${diff}${wroteOutsideResult(args.file_path)}`;
     } catch (error) {
       if (error instanceof ContinueError) {
         throw error;

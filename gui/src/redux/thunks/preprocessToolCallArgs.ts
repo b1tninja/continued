@@ -49,6 +49,7 @@ export async function preprocessToolCalls(
   dispatch: AppThunkDispatch,
   ideMessenger: IIdeMessenger,
   generatedToolCalls: ToolCallState[],
+  allowOutsideWorkspace = false,
 ): Promise<void> {
   // Tool call pre-processing
   await Promise.all(
@@ -59,6 +60,7 @@ export async function preprocessToolCalls(
       const result = await ideMessenger.request("tools/preprocessArgs", {
         toolName: tcState.toolCall.function.name,
         args: tcState.parsedArgs,
+        ...(allowOutsideWorkspace ? { allowOutsideWorkspace } : {}),
       });
       if (result.status === "success") {
         preprocessedArgs = result.content.preprocessedArgs;

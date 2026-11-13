@@ -8,6 +8,7 @@ import { generatePolicyRule } from "../../permissions/policyWriter.js";
 import { ToolCallPreview } from "../../tools/types.js";
 import { defaultBoxStyles } from "../styles.js";
 
+import { ToolArgsDetail } from "./ToolArgsDetail.js";
 import { ToolPreview } from "./ToolPreview.js";
 
 // show dangerous commmand warning only once per CLI process
@@ -137,6 +138,8 @@ export const ToolPermissionSelector: React.FC<ToolPermissionSelectorProps> = ({
           toolCallPreview={toolCallPreview}
         />
       </Box>
+
+      <ToolArgsDetail toolArgs={toolArgs} />
 
       <Box marginTop={1} flexDirection="column">
         <Text color="dim">Would you like to continue?</Text>

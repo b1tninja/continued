@@ -20,10 +20,13 @@ import {
   openAICompatBase,
   testOpenAICompatConnection,
 } from "./util/openaiCompatTest";
+import { currentNotice, dismissCurrentNotice } from "./util/retirementStartup";
+import { isDismissed } from "./util/retirementNoticeState";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { deputyWorkspace } from "./tools/permissions/workspaceRoots";
 import { uriToPath } from "./tools/permissions/names";
+import { taintInput } from "./tools/permissions/taint/taintWiring";
 import type { PolicyLevels } from "./tools/permissions/policy";
 import {
   readRuleSources,
@@ -31,11 +34,14 @@ import {
   ruleSourcesOfLoadedConfig,
 } from "./tools/permissions/readRuleSources";
 import { readUserEnvNames } from "./tools/permissions/userEnvNames";
+import { readUserReviewerPrompt } from "./tools/permissions/userReviewerPrompt";
 import { listEffectiveRules } from "./tools/permissions/effectiveRules";
 import { testToolCall } from "./tools/permissions/testToolCall";
 import { readUserLargeChangeLines } from "./tools/permissions/userLimits";
 import { initTreeSitterBash } from "./tools/permissions/treeSitterBash";
 import { resolveShell } from "./util/shell";
+import { modelToolFetch } from "./util/modelToolFetch";
+import { BuiltInToolNames } from "./tools/builtIn";
 import {
   credentialUrlNames,
   getTerminalEnvironmentStatus,
@@ -51,6 +57,8 @@ import {
 import { autoReviewToolCall } from "./tools/permissions/auto/handler";
 import { IdeShadow } from "./tools/permissions/auto/shadowIde";
 import { getAuditTrail } from "./tools/permissions/audit/global";
+import { recordAutoAnswer } from "./tools/permissions/audit/autoAnswer";
+import { setQuestionsLevel } from "./context/mcp/mcpElicitation";
 import { registerAuditListHandlers } from "./tools/permissions/audit/listingHandlers";
 import { machineAuditHost } from "./tools/permissions/audit/listingHost";
 import {
@@ -58,6 +66,12 @@ import {
   recordReviewDecision,
 } from "./tools/permissions/audit/hook";
 import { registerAuditOverview } from "./tools/permissions/audit/overviewHandler";
+import {
+  diffPolicySettings,
+  recordFileEdits,
+  recordSettingChanges,
+  rememberSettings,
+} from "./tools/permissions/settingChanges";
 import {
   readPolicyFile,
   writePolicyFile,
@@ -77,6 +91,13 @@ import { globalProfileStatus } from "./llm/llms/bedrockHelpers";
 import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
+import {
+  loadOpenRouterPrices,
+  pullOpenRouterCatalog,
+  readModelCatalogPolicy,
+  readOpenRouterCatalog,
+  saveModelCatalogPolicy,
+} from "./llm/modelCatalogStore";
 import {
   convertConnectionToAccount,
   saveProviderModelsToAccount,
@@ -106,7 +127,7 @@ import { ChatDescriber } from "./util/chatDescriber";
 import { compactConversation } from "./util/conversationCompaction";
 import { GlobalContext } from "./util/GlobalContext";
 import { reasoningOptionsForEffort } from "./util/modelUse";
-import historyManager from "./util/history";
+import historyManager, { damagedSessionNotice } from "./util/history";
 import {
   editConfigFile,
   getConfigYamlPath,
@@ -127,6 +148,7 @@ import {
   ContextItemId,
   ContextItemWithId,
   IdeSettings,
+  McpOauthSettings,
   ModelDescription,
   Position,
   RangeInFile,
@@ -191,6 +213,7 @@ import {
 } from "./config/workspace/workspaceBlocks";
 import { MCPManagerSingleton } from "./context/mcp/MCPManagerSingleton";
 import { performAuth, removeMCPAuth } from "./context/mcp/MCPOauth";
+import { oauthOptionsFromSettings } from "./context/mcp/mcpOauthSettings";
 import { myersDiff } from "./diff/myers";
 import { ApplyAbortManager } from "./edit/applyAbortManager";
 import { streamDiffLines } from "./edit/streamDiffLines";
@@ -209,6 +232,7 @@ import { ContinueError, ContinueErrorReason } from "./util/errors";
 import { loadSubagentDefinitions } from "./subagents/loadSubagents";
 import { shareSession } from "./util/historyUtils";
 import { Logger } from "./util/Logger.js";
+import { MessageAbortControllers } from "./util/messageAbortControllers";
 
 export class Core {
   configHandler: ConfigHandler;
@@ -221,17 +245,12 @@ export class Core {
   private shadowIde = new IdeShadow();
   llmLogger = new LLMLogger();
 
-  private messageAbortControllers = new Map<string, AbortController>();
+  private messageAbortControllers = new MessageAbortControllers();
   private addMessageAbortController(id: string): AbortController {
-    const controller = new AbortController();
-    this.messageAbortControllers.set(id, controller);
-    controller.signal.addEventListener("abort", () => {
-      this.messageAbortControllers.delete(id);
-    });
-    return controller;
+    return this.messageAbortControllers.add(id);
   }
   private abortById(messageId: string) {
-    this.messageAbortControllers.get(messageId)?.abort();
+    this.messageAbortControllers.abort(messageId);
   }
 
   invoke<T extends keyof ToCoreProtocol>(
@@ -422,12 +441,61 @@ export class Core {
           msg.data.provider,
           msg.data.apiKey,
           msg.data.apiBase,
+          (await this.configHandler.loadConfig()).config?.requestOptions,
         );
       } catch (error: any) {
         void this.ide.showToast("error", error.message);
         return [];
       }
     });
+
+    // Cost figures use the downloaded prices, if there are any (a file read)
+    loadOpenRouterPrices();
+
+    on("modelCatalog/status", async () => {
+      const cached = readOpenRouterCatalog();
+      return {
+        policy: readModelCatalogPolicy(),
+        ...(cached
+          ? {
+              openrouter: {
+                fetchedAt: cached.fetchedAt,
+                count: cached.models.length,
+              },
+            }
+          : {}),
+      };
+    });
+
+    on("modelCatalog/cached", async () => {
+      const cached = readOpenRouterCatalog();
+      return cached
+        ? { fetchedAt: cached.fetchedAt, models: cached.models }
+        : null;
+    });
+
+    // The one request to openrouter.ai: runs only on the person's say-so.
+    on("modelCatalog/pull", async () => {
+      try {
+        const catalog = await pullOpenRouterCatalog(
+          (await this.configHandler.loadConfig()).config?.requestOptions,
+        );
+        return {
+          ok: true as const,
+          fetchedAt: catalog.fetchedAt,
+          models: catalog.models,
+        };
+      } catch (e: any) {
+        return {
+          ok: false as const,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    });
+
+    on("modelCatalog/setPolicy", async (msg) => ({
+      saved: saveModelCatalogPolicy(msg.data.policy),
+    }));
 
     on("models/detectLocal", async () => detectLocalServers());
 
@@ -677,7 +745,27 @@ export class Core {
     on("policy/load", async () => readPolicyFile(policyFilePath()));
 
     on("policy/save", async ({ data }) => {
-      writePolicyFile(policyFilePath(), data);
+      const file = policyFilePath();
+      const before = readPolicyFile(file).settings;
+      try {
+        // An edit of the file since the last look is its own entry, not this save's
+        recordFileEdits(getAuditTrail(), before);
+      } catch {
+        // the audit never blocks a save
+      }
+      writePolicyFile(file, data);
+      // The settings page changed levels, built-in switches or the question
+      // lists: what moved is written to the audit trail. Never blocks the save.
+      try {
+        const trail = getAuditTrail();
+        const after = readPolicyFile(file).settings;
+        recordSettingChanges(trail, diffPolicySettings(before, after), {
+          source: "gui-settings",
+        });
+        rememberSettings(trail, after);
+      } catch {
+        // the audit never blocks a save
+      }
     });
 
     on("policy/rules", async ({ data }) => {
@@ -756,6 +844,7 @@ export class Core {
           enabled: config.experimental?.enableAutoApproval === true,
           reviewer: config.selectedModelByRole.reviewer,
           guidance: readUserGuidance(),
+          reviewerPrompt: readUserReviewerPrompt(),
           trustedDomains: readUserTrustedDomains(),
           envNames: readUserEnvNames(),
           shell: resolveShell().kind,
@@ -785,6 +874,10 @@ export class Core {
       );
       this.shadowIde.afterAutoReview(data.callId, reply.by);
       return reply;
+    });
+
+    on("audit/autoAnswer", async ({ data }) => {
+      recordAutoAnswer(getAuditTrail(), data);
     });
 
     on("audit/answer", async ({ data }) => {
@@ -866,6 +959,15 @@ export class Core {
         new Date().toISOString().slice(0, 10),
       ),
     );
+
+    // Retirement notice for the model chip: offline, dismissible.
+    on("model/retirementNotice", async (msg) => {
+      const notice = currentNotice(msg.data);
+      return notice && !isDismissed(notice.key) ? { notice } : {};
+    });
+    on("model/dismissRetirementNotice", async (msg) => {
+      dismissCurrentNotice(msg.data);
+    });
 
     // Cached per model per process; no hint (an empty object) on any failure.
     on("ollama/showHint", async (msg) => ({
@@ -952,7 +1054,14 @@ export class Core {
     });
 
     on("history/load", (msg) => {
-      return historyManager.load(msg.data.id);
+      const result = historyManager.loadWithStatus(msg.data.id);
+      if (result.damaged) {
+        // The file was moved aside, not replaced: say where it is, once.
+        const notice = damagedSessionNotice(result.damaged);
+        console.warn(notice);
+        void this.ide.showToast("warning", notice);
+      }
+      return result.session;
     });
 
     on("history/save", (msg) => {
@@ -1375,9 +1484,9 @@ export class Core {
     on("mcp/startAuthentication", async (msg) => {
       const manager = MCPManagerSingleton.getInstance();
       const connection = manager.getConnection(msg.data.serverId);
-      const callbackPort = (
-        connection?.options as { oauth?: { callbackPort?: number } } | undefined
-      )?.oauth?.callbackPort;
+      const oauthSettings = (
+        connection?.options as { oauth?: McpOauthSettings } | undefined
+      )?.oauth;
       const oauthScope = connection
         ? (
             await import("./context/mcp/workspaceMcpPolicy")
@@ -1394,7 +1503,7 @@ export class Core {
           this.ide,
           // same proxy / CA settings as the connection itself
           {
-            callbackPort,
+            ...oauthOptionsFromSettings(oauthSettings),
             fetchFn: connection?.getFetch() as any,
             oauthScope,
           },
@@ -1483,12 +1592,16 @@ export class Core {
 
     on("llm/streamChat", (msg) => {
       const abortController = this.addMessageAbortController(msg.messageId);
-      return llmStreamChat(
-        this.configHandler,
+      return this.messageAbortControllers.releaseWhenDone(
+        msg.messageId,
         abortController,
-        msg,
-        this.ide,
-        this.messenger,
+        llmStreamChat(
+          this.configHandler,
+          abortController,
+          msg,
+          this.ide,
+          this.messenger,
+        ),
       );
     });
 
@@ -1500,12 +1613,15 @@ export class Core {
       }
       const abortController = this.addMessageAbortController(msg.messageId);
 
-      const completion = await model.complete(
-        msg.data.prompt,
-        abortController.signal,
-        msg.data.completionOptions,
-      );
-      return completion;
+      try {
+        return await model.complete(
+          msg.data.prompt,
+          abortController.signal,
+          msg.data.completionOptions,
+        );
+      } finally {
+        this.messageAbortControllers.release(msg.messageId, abortController);
+      }
     });
     on("llm/listModels", this.handleListModels.bind(this));
 
@@ -2017,8 +2133,10 @@ export class Core {
       return { url: "" };
     });
 
-    on("tools/call", async ({ data: { toolCall, workspaceDirs } }) =>
-      this.handleToolCall(toolCall, workspaceDirs),
+    on(
+      "tools/call",
+      async ({ data: { toolCall, workspaceDirs, allowOutsideWorkspace } }) =>
+        this.handleToolCall(toolCall, workspaceDirs, allowOutsideWorkspace),
     );
 
     this.registerPolicyHandlers();
@@ -2069,7 +2187,12 @@ export class Core {
           ...deputyWorkspace(dirs),
           // The shell terminal commands run in
           shell: resolveShell().kind,
+          // The tainted-session rule's fact; nothing when the rule is off
+          ...taintInput(sessionId, callId),
         });
+        // Core keeps the Questions level it was last told, for what is asked
+        // outside a tool call (an MCP server's elicitation)
+        setQuestionsLevel(approval?.levels?.questions);
         recordPolicyDecision(
           getAuditTrail(),
           { session: sessionId, callId, toolName, parsedArgs, approval, agent },
@@ -2097,7 +2220,9 @@ export class Core {
 
     on(
       "tools/preprocessArgs",
-      async ({ data: { toolName, args, workspaceDirs } }) => {
+      async ({
+        data: { toolName, args, workspaceDirs, allowOutsideWorkspace },
+      }) => {
         const { config } = await this.configHandler.loadConfig();
         if (!config) {
           throw new Error("Config not loaded");
@@ -2113,6 +2238,7 @@ export class Core {
             ide: workspaceDirs?.length
               ? ideInWorkspace(this.ide, workspaceDirs)
               : this.ide,
+            ...(allowOutsideWorkspace ? { allowOutsideWorkspace } : {}),
           });
           return {
             preprocessedArgs,
@@ -2162,7 +2288,11 @@ export class Core {
    * worktree): the tool sees those folders as the workspace, and the exact
    * edit tools, otherwise applied through the client's diff review, run here.
    */
-  private async handleToolCall(toolCall: ToolCall, workspaceDirs?: string[]) {
+  private async handleToolCall(
+    toolCall: ToolCall,
+    workspaceDirs?: string[],
+    allowOutsideWorkspace?: boolean,
+  ) {
     const { config } = await this.configHandler.loadConfig();
     if (!config) {
       throw new Error("Config not loaded");
@@ -2200,9 +2330,16 @@ export class Core {
         config,
         ide: inWorkspace ? ideInWorkspace(this.ide, inWorkspace) : this.ide,
         workspaceDirs: inWorkspace,
+        ...(allowOutsideWorkspace ? { allowOutsideWorkspace } : {}),
         llm: config.selectedModelByRole.chat,
-        fetch: (url, init) =>
-          fetchwithRequestOptions(url, init, config.requestOptions),
+        // The model picks the URL of fetch_url_content: the global request
+        // headers go only to the configured model endpoints, not to any host
+        // it names. Other tools (HTTP tools, search) keep the global options.
+        fetch:
+          tool.function.name === BuiltInToolNames.FetchUrlContent
+            ? modelToolFetch(config)
+            : (url, init) =>
+                fetchwithRequestOptions(url, init, config.requestOptions),
         tool,
         toolCallId: toolCall.id,
         onPartialOutput,
@@ -2464,13 +2601,13 @@ export class Core {
   private async handleCompleteOnboarding(
     msg: Message<CompleteOnboardingPayload>,
   ) {
-    const { mode } = msg.data;
+    const { mode, local } = msg.data;
 
     let editConfigYamlCallback: (config: ConfigYaml) => ConfigYaml;
 
     switch (mode) {
       case OnboardingModes.LOCAL:
-        editConfigYamlCallback = setupLocalConfig;
+        editConfigYamlCallback = (config) => setupLocalConfig(config, local);
         break;
 
       default:

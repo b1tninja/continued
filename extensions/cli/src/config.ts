@@ -7,13 +7,8 @@ import {
   LLMConfig,
   onFieldFallback,
 } from "@continuedev/openai-adapters";
-import {
-  Configuration,
-  DefaultApi,
-} from "@continuedev/sdk/dist/api/dist/index.js";
 
 import { AuthConfig } from "./auth/workos.js";
-import { env } from "./env.js";
 import { logger } from "./util/logger.js";
 import { getUniqueId } from "./util/uniqueId.js";
 import { getVersion } from "./version.js";
@@ -23,7 +18,7 @@ import { getVersion } from "./version.js";
  */
 function getUserAgent(): string {
   const version = getVersion();
-  return `Continue-CLI/${version}`;
+  return `Continuous-CLI/${version}`;
 }
 
 /**
@@ -121,6 +116,7 @@ export function createLlmApi(
     apiBase: model.apiBase,
     requestOptions: model.requestOptions,
     env: model.env,
+    omitSampling: model.defaultCompletionOptions?.omitSampling,
     // Prompt caching settings. The Bedrock adapter reads `promptCaching` and
     // `cacheBehavior`; see `bedrockCachingSettings` for what it gets when the
     // model config says nothing. The Anthropic adapter has its own
@@ -164,15 +160,4 @@ export function getLlmApi(
   }
 
   return [llmApi, model];
-}
-
-export function getApiClient(
-  accessToken: string | undefined | null,
-): DefaultApi {
-  return new DefaultApi(
-    new Configuration({
-      basePath: env.apiBase.replace(/\/$/, ""),
-      accessToken: accessToken ?? undefined,
-    }),
-  );
 }

@@ -73,6 +73,8 @@ function active(
     {},
     loopItem,
     hasTaskList,
+    undefined,
+    undefined,
   );
 }
 

@@ -24,7 +24,7 @@ const report = listEffectiveRules({
   ],
   cliFile: { exclude: ["Write(.git/**)"] },
   maxNewPlanItems: 3,
-  notices: ["permissions.yaml: levels.tools: yolo is for one session only"],
+  notices: ["permissions.yaml: levels.tools: idgaf is for one session only"],
 });
 
 const askResult = {
@@ -189,6 +189,6 @@ describe("PermissionsSection", () => {
 
   it("shows the notices the reader of the files reported", async () => {
     await setup();
-    expect(screen.getByText(/yolo is for one session only/)).toBeTruthy();
+    expect(screen.getByText(/idgaf is for one session only/)).toBeTruthy();
   });
 });

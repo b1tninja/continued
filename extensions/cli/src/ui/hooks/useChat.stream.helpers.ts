@@ -3,6 +3,8 @@ import type { ChatHistoryItem, ToolCallState, ToolStatus } from "core/index.js";
 import { ALL_BUILT_IN_TOOLS } from "src/tools/allBuiltIns.js";
 import { logger } from "src/util/logger.js";
 
+import { runStopHooks } from "../../hooks/lifecycleHooks.js";
+import { notifyPerson } from "../../notify/attention.js";
 import { services } from "../../services/index.js";
 import { getCurrentSession, updateSessionTitle } from "../../session.js";
 
@@ -280,6 +282,7 @@ export async function executeStreaming({
   streamCallbacks,
   currentCompactionIndex,
 }: ExecuteStreamingOptions): Promise<void> {
+  const startedAt = Date.now();
   const { getHistoryForLLM } = await import("../../compaction.js");
   const { streamChatResponse } =
     await import("../../stream/streamChatResponse.js");
@@ -311,6 +314,14 @@ export async function executeStreaming({
         controller,
         streamCallbacks,
       );
+    }
+    // A turn the person cancelled is not a finished turn
+    if (!controller.signal.aborted) {
+      await runStopHooks();
+      notifyPerson({
+        kind: "turn-finished",
+        durationMs: Date.now() - startedAt,
+      });
     }
   }
 }
