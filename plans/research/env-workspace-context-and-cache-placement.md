@@ -297,10 +297,11 @@ The IDE sends nothing today, so adding its block is a byte change for IDE sessio
 ## 8. Not verified
 
 - Cursor's placement and update policy (forum posts only). Windsurf's mechanism. Claude Code's exact slot for selection context.
-- When and why Cline dropped `environment_details`. The 2026 tree does not contain it; its history was not read.
-- Whether our Anthropic and Bedrock adapters accept a text part after `tool_result` blocks in the same user message. Not needed for the recommendation, which attaches only to user-typed turns.
+- When and why Cline dropped `environment_details`. The 2026 tree does not contain it, its `CHANGELOG.md` does not mention it, and its history was not read.
 - Whether the model uses a path-and-range delta well. Copilot's code comment is the only evidence, and the eval design note should measure it (EV117).
 - The simulation's assumptions (section 4.3).
+
+Section 10 resolves the adapter question that was listed here.
 
 ## 9. Proposed ROADMAP rows (exact text)
 
@@ -329,15 +330,86 @@ Ids EV101 to EV120, assigned to this note. Format as the privacy note: ID, Scope
 | EV119 | Do not put workspace facts in tool descriptions: a test that every tool description is byte-identical across two workspace roots, two branches and two active files                                                                                                                                                                                                                                                                                         | EV66                       | Not started (S); 2.18.0 candidate              |
 | EV120 | Docs: a "What the agent sees about your editor" table in `docs/` (fields, defaults, settings, what never leaves), shared with the privacy note's `PRIVACY.md` section (EV75)                                                                                                                                                                                                                                                                                | EV103, EV75                | Not started (XS); 2.18.0 candidate             |
 
+## 10. Follow-up: uncertainties resolved or narrowed (2026-11-12)
+
+1. **Do harnesses attach editor context to tool rounds? Copilot: no (resolved, primary).**
+   - Copilot's `agentPrompts-cache_BPs_multi_round` snapshot (`vscode-copilot-chat` `5863f5a`, `src/extension/prompts/node/agent/test/__snapshots__/agentPrompts-arctic-fox/`) shows `<context>` and `<userRequest>` only in the user turn.
+   - The tool rounds after it carry tool results with a cache marker on the latest one and no context block.
+   - Together with Gemini CLI (no IDE context while a call is pending) and Codex (IDE context on user input), three of the four harnesses with per-turn editor context attach it to user turns only. Roo is the exception.
+   - This supports EV103's "user turns only".
+2. **Could we attach to tool rounds if EV117 asks for it? Yes (resolved, by reading).**
+   - The Anthropic adapter merges consecutive `tool` and `user` messages into one Anthropic user turn (`packages/openai-adapters/src/apis/Anthropic.ts:420-440`).
+   - So a text part after the `tool_result` blocks is what the CLI task list block already produces at the tail.
+   - No adapter change would be needed. The breakpoint positions would need EV107's check.
+3. **What Claude Code does at compaction (resolved, primary).** From `https://code.claude.com/docs/en/context-window` ("What survives compaction"):
+   - It re-injects CLAUDE.md and memory from disk and reads a fresh git status snapshot.
+   - It re-reads up to five recently modified files; a file over 5,000 tokens comes back as a path reference.
+   - Invoked skills are capped at 5,000 tokens each.
+
+   This is the same "re-send in full once after compaction" rule as Gemini CLI's `forceFullIdeContext` (`client.ts:307`, `:421`, `:1307`). EV104 and EV179 follow it.
+
+4. **Provider detail that changes the simulation: Gemini 4 (resolved, primary; simulation refined).**
+   - Gemini 4 reuses a previous request in full only when the new request adds at least 2,050 tokens. Otherwise the last 2,050 tokens are processed again at the standard rate (`https://aistudio.google.com/docs/caching`).
+   - The script in #770 adds a `gemini4-implicit` price, assuming read 0.25x (OpenRouter's figure), no write surcharge and 300 seconds.
+   - Results for the 6,000-token prefix, relative to A0:
+
+     | Placement                   | Cost  |
+     | --------------------------- | ----- |
+     | A, system, live             | 2.46x |
+     | B, first user message, live | 2.28x |
+     | C, frozen on every message  | 1.58x |
+     | C, frozen on user turns     | 1.17x |
+     | C, floating tail            | 1.00x |
+     | D, delta on change          | 1.12x |
+     | E, pull only                | 1.08x |
+     | F, hybrid                   | 1.01x |
+
+   - On Gemini 4 a small floating tail is free: it falls inside the 2,050 tokens that are reprocessed anyway.
+   - That is the one provider where the tail beats the hybrid. It is a reason to let the prompt profile choose the placement per family later (EV171), not to change the default.
+5. **Cursor (narrowed, still unverified).** Staff replies in the forum thread (2026-04-13 and 2026-04-27) say:
+   - Open and recently viewed file paths and line counts, without content, are attached to the first user message.
+   - This is "not currently configurable".
+
+   No primary documentation states it. It stays unverified.
+
+## 11. Further research topics, ranked
+
+| Rank | Question                                                                                            | Why                                                                        | Method                                                                                                                                                                     | Cost and time                             | Blockers                                                                               |
+| ---- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1    | Does a path-and-range delta change task success or wasted calls, and does in-loop staleness matter? | Decides EV103's default and whether a tail is worth it (EV117)             | The eval design note's harness: three arms (none, delta, floating tail) on tasks that say "fix this" or "this function" with a selection; n of at least 3 per model family | 1 to 2 days, plus model budget            | The eval harness (`research-env-eval-design`) and model access (Claude 5.5-gen quotas) |
+| 2    | How close is the simulator to real caches?                                                          | Every number in section 4.3 is ideal-provider arithmetic                   | Replay one recorded session per provider through `core/util/cacheReplay.ts` and `envCacheSim.mjs`; compare read share with the cache ledger (EV177)                        | Half a day per provider, plus a few cents | Live calls, J0's ledger                                                                |
+| 3    | How often does the person edit, switch files or select while the agent is in a tool loop?           | Sets the real in-loop staleness (28% is synthetic)                         | Count editor events between user turns and during loops, locally (EV115)                                                                                                   | 1 day after EV103                         | EV103, J0                                                                              |
+| 4    | What do GPT-5.6 implicit mode and OpenRouter-to-Gemini do with a part after the last breakpoint?    | The floating-tail option depends on it                                     | A probe that sends the same prefix with three tail variants and reads `cached_tokens` and `cache_write_tokens`                                                             | Half a day                                | Live access                                                                            |
+| 5    | Do masked or relative paths make the model write wrong paths in tool calls?                         | The privacy default (basenames, `~`) must not cost correctness             | A bench scenario where the model must edit a file named only by its displayed path, on Windows and POSIX roots                                                             | Half a day                                | None                                                                                   |
+| 6    | Why did Cline drop `environment_details` in its SDK rewrite?                                        | A peer's reason (cost, model confusion, or architecture) is cheap evidence | Read Cline's history and issues around the SDK move                                                                                                                        | 1 to 2 hours                              | None                                                                                   |
+| 7    | What exactly does Cursor send?                                                                      | The only large editor without published source                             | Capture requests through a local proxy in a sandbox with a throwaway account                                                                                               | Half a day                                | Terms of service; low value next to ranks 1 to 5                                       |
+
+## 12. More proposed ROADMAP rows (EV171 to EV180, exact text)
+
+Same format as section 9.
+
+| ID    | Scope                                                                                                                                                                                                                                                                              | Needs        | State                                          |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------- |
+| EV171 | Placement per model family: the prompt profile may choose "floating tail" instead of "delta" for the editor block where the provider reprocesses the last tokens anyway (Gemini 4 implicit: 2,050 tokens); default stays delta; a C82 scenario per choice                          | EV103, EV117 | Not started (S); later                         |
+| EV172 | If EV117 favours in-loop freshness: attach the editor delta to tool-result turns as a text part after the `tool_result` blocks (the Anthropic adapter already merges them, `Anthropic.ts:420-440`), and check with EV107 that the cache markers stay on the last two user messages | EV117, EV107 | Not started (S); later                         |
+| EV173 | Build the CLI environment block with `workspaceIdentityBlock` (#770) instead of the inline template in `environmentContext.ts`, keeping the C65 cap and the EV63 fence; one prompt-byte change with C74                                                                            | EV101, C65   | Not started (S); prompt-byte; 2.18.0 candidate |
+| EV174 | IDE identity inputs: read `getWorkspaceDirs`, `getRepoName` and `getBranch` once per session with a 2 second timeout each, in VS Code and JetBrains; a failure leaves the field out                                                                                                | EV102        | Not started (S); 2.18.0 candidate              |
+| EV175 | IDE editor-state source: one bridge call returning the active file, primary selection range, error and warning counts for that file and the tab count, in VS Code and JetBrains, so EV103 does not make five calls per turn                                                        | EV103        | Not started (M); 2.18.0 candidate              |
+| EV176 | Prompt profiles and the editor block: `short` and `tailored` profiles keep the same block bytes (no per-profile wording), so a profile switch is not a prefix change; a golden per profile                                                                                         | EV103        | Not started (S); later                         |
+| EV177 | Calibrate `envCacheSim.mjs` against one live session per provider (read share, writes) through `cacheReplay.ts` and the ledger; record the gap in the research note                                                                                                                | EV118, J0    | Measurement; later                             |
+| EV178 | Freeze the rendered IDE user message (context items, editor delta, tail) with the history item, as Copilot does, so replaying or resuming a session produces the same bytes; a test resends a saved session and compares                                                           | EV103        | Not started (S); 2.18.0 candidate              |
+| EV179 | After compaction, re-attach the active file path and up to five recently edited paths (paths only, no content), as Claude Code re-reads its recent files                                                                                                                           | EV104        | Not started (S); later                         |
+| EV180 | Record `currentFile` attach sizes (Mod-Enter, `defaultContext`) in the local ledger, to choose EV112's cap from data                                                                                                                                                               | EV112, J0    | Not started (XS); later                        |
+
 ## Appendix A. The simulation script
 
-The script is `envCacheSim.mjs`. It is plain Node 22 and needs no dependencies. Running `node envCacheSim.mjs` prints the tables for all twelve conditions; `--json` gives the raw numbers.
+The script is `bench/src/envCacheSim.mjs`, in draft #770 (branch `bench-env-cache-sim`). It is plain Node 22 and needs no dependencies. Running `node bench/src/envCacheSim.mjs` prints the tables for all conditions; `--json` gives the raw numbers.
 
 It defines:
 
 - `makeSession`, the seeded session generator.
 - `PLACEMENTS`, nine placements.
-- `PRICES`: Anthropic 5m and 1h, GPT-5.6 30m, OpenAI legacy.
+- `PRICES`: Anthropic 5m and 1h, GPT-5.6 30m, OpenAI legacy, Gemini 4 implicit.
 - `simulate`, the block-level prefix cache.
 
-EV118 proposes adding it under `bench/src/` with tests. Until then it is reproduced in the pull request that adds it (draft, branch `bench-env-cache-sim`).
+Its tests are `bench/src/envCacheSim.test.mjs`, run with `node --test`. The same draft adds `core/util/workspaceContext.ts` (EV101, EV106, EV116): pure, capped, escaped formatters for the identity block and the editor delta. Nothing is wired into a prompt.
