@@ -13,13 +13,18 @@ import type {
 } from "core/index.js";
 import { totalInputTokens } from "core/llm/utils/cacheStats.js";
 import { addRequestUsage } from "core/llm/utils/sessionUsage.js";
-import historyManager from "core/util/history.js";
+import historyManager, {
+  damagedSessionNotice,
+  isQuarantinedSessionFile,
+  readSessionFile,
+} from "core/util/history.js";
 import { restoreLoop } from "core/util/loopMode.js";
 import { v4 as uuidv4 } from "uuid";
 
 import { DEFAULT_SESSION_TITLE } from "./constants/session.js";
 import { env } from "./env.js";
 import { logger } from "./util/logger.js";
+import { userNotice } from "./util/userNotice.js";
 
 // Re-export BaseSessionMetadata for external consumers
 export type { BaseSessionMetadata };
@@ -394,7 +399,10 @@ export function loadSession(): Session | null {
       .readdirSync(sessionDir)
       .filter(
         (f) =>
-          f.endsWith(".json") && f !== "sessions.json" && !f.includes(".tmp"),
+          f.endsWith(".json") &&
+          f !== "sessions.json" &&
+          !f.includes(".tmp") &&
+          !isQuarantinedSessionFile(f),
       )
       .map((f) => ({
         name: f,
@@ -403,27 +411,56 @@ export function loadSession(): Session | null {
       }))
       .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 
-    // Newest first. A truncated or half-written file is skipped; the temp
-    // files from an atomic save are not .json, so they are not candidates.
+    // Newest first. A damaged file is set aside (kept beside the others as
+    // <id>.corrupt-<time>.json) and the next one is tried; the person is
+    // told, because the session they get is not the one they last used.
+    const passedOver: string[] = [];
     for (const file of files) {
+      let read: ReturnType<typeof readSessionFile>;
       try {
-        const session = JSON.parse(
-          fs.readFileSync(file.path, "utf8"),
-        ) as Session;
-        if (!session || typeof session !== "object" || Array.isArray(session)) {
-          continue;
-        }
-        SessionManager.getInstance().setSession(session);
-        return session;
+        read = readSessionFile(file.path);
       } catch (error) {
+        // Could not be read, or could not be set aside: left where it is
         logger.error("Error loading session:", error);
+        passedOver.push(file.path);
+        continue;
       }
+      if (!read) continue;
+      if ("damaged" in read) {
+        if (read.damaged) passedOver.push(read.damaged.keptAt);
+        continue;
+      }
+      SessionManager.getInstance().setSession(read.session);
+      if (passedOver.length > 0) {
+        userNotice(resumedEarlierNotice(passedOver, read.session));
+      }
+      return read.session;
+    }
+    if (passedOver.length > 0) {
+      userNotice(
+        `${couldNotBeRead(passedOver)} There is no earlier session to resume; starting a new one.`,
+      );
     }
     return null;
   } catch (error) {
     logger.error("Error loading session:", error);
     return null;
   }
+}
+
+function couldNotBeRead(keptAt: string[]): string {
+  return keptAt.length === 1
+    ? `The newest session could not be read (kept at ${keptAt[0]}).`
+    : `The ${keptAt.length} newest sessions could not be read (kept at ${keptAt.join(", ")}).`;
+}
+
+/** Said when --resume did not resume the session the person last used. */
+function resumedEarlierNotice(keptAt: string[], session: Session): string {
+  const title = session.title || DEFAULT_SESSION_TITLE;
+  const where = session.workspaceDirectory
+    ? ` from ${session.workspaceDirectory}`
+    : "";
+  return `${couldNotBeRead(keptAt)} Resumed the one before it: "${title}"${where}.`;
 }
 
 /**
@@ -599,8 +636,9 @@ export async function listSessions(
  */
 export function loadSessionById(sessionId: string): Session | null {
   try {
-    const session = historyManager.load(sessionId);
-    return session;
+    const result = historyManager.loadWithStatus(sessionId);
+    if (result.damaged) userNotice(damagedSessionNotice(result.damaged));
+    return result.session;
   } catch (error) {
     logger.error("Error loading session by ID:", error);
     return null;

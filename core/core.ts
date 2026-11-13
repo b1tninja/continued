@@ -114,7 +114,7 @@ import { ChatDescriber } from "./util/chatDescriber";
 import { compactConversation } from "./util/conversationCompaction";
 import { GlobalContext } from "./util/GlobalContext";
 import { reasoningOptionsForEffort } from "./util/modelUse";
-import historyManager from "./util/history";
+import historyManager, { damagedSessionNotice } from "./util/history";
 import {
   editConfigFile,
   getConfigYamlPath,
@@ -977,7 +977,14 @@ export class Core {
     });
 
     on("history/load", (msg) => {
-      return historyManager.load(msg.data.id);
+      const result = historyManager.loadWithStatus(msg.data.id);
+      if (result.damaged) {
+        // The file was moved aside, not replaced: say where it is, once.
+        const notice = damagedSessionNotice(result.damaged);
+        console.warn(notice);
+        void this.ide.showToast("warning", notice);
+      }
+      return result.session;
     });
 
     on("history/save", (msg) => {

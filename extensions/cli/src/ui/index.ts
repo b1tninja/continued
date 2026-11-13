@@ -7,6 +7,7 @@ import { initializeServices } from "../services/index.js";
 import { ServiceContainerProvider } from "../services/ServiceContainerContext.js";
 import { isHeadlessMode, isTTYless } from "../util/cli.js";
 import { logger } from "../util/logger.js";
+import { holdUserNotices } from "../util/userNotice.js";
 
 import { AppRoot } from "./AppRoot.js";
 
@@ -93,6 +94,10 @@ export async function startTUIChat(
   } else if (!customStdin) {
     logger.warn("stdin is not a TTY or does not support setRawMode");
   }
+
+  // From here the screen belongs to Ink: lines for the person wait for the
+  // chat instead of being written across it.
+  holdUserNotices();
 
   // Start the TUI immediately - it will handle loading states
   const renderOptions: RenderOptions = {

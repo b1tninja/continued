@@ -32,6 +32,7 @@ import {
 import { telemetryService } from "../../telemetry/telemetryService.js";
 import { formatError } from "../../util/formatError.js";
 import { logger } from "../../util/logger.js";
+import { setUserNoticeSink } from "../../util/userNotice.js";
 
 import {
   handleAutoCompaction,
@@ -150,12 +151,18 @@ export function useChat({
         svc.on("stateChanged", listener);
         serviceListenerCleanupRef.current = () =>
           svc.off("stateChanged", listener);
+        // Lines the person has to see (a damaged session file, a session
+        // that is not being saved) go into the chat while the UI is up.
+        setUserNoticeSink((text) => {
+          svc.addSystemMessage(text);
+        });
       })
       .catch((error) => {
         logger.error("Failed to initialize ChatHistoryService", { error });
       });
 
     return () => {
+      setUserNoticeSink(undefined);
       serviceListenerCleanupRef.current?.();
       serviceListenerCleanupRef.current = null;
     };
