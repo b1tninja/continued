@@ -3,6 +3,7 @@ import path from "path";
 import { maskArgsForDisplay } from "core/tools/permissions/displayMask.js";
 
 import type { StreamCallbacks } from "../stream/streamChatResponse.types.js";
+import { maskForSupervisor } from "../util/maskForSupervisor.js";
 
 import { JsonRpcPeer, RPC_CODES, RpcError } from "./rpc.js";
 
@@ -51,8 +52,27 @@ type ToolKind =
   | "other";
 
 interface OpenCall {
+  /** The id the editor knows the call by */
   id: string;
   name: string;
+  /** The model's id for the call: what pairs a result with its call */
+  key?: string;
+}
+
+/**
+ * The open call a result, an error or a permission request belongs to. With
+ * the model's call id, only the call started under that id: calls of one turn
+ * run at the same time, so two calls of one tool finish in any order, and a
+ * match by name would hand the first to finish the other's `toolCallId`.
+ * The name is the fallback only for a caller that passes no id.
+ */
+export function findOpenCall(
+  open: readonly OpenCall[],
+  name: string | undefined,
+  key: string | undefined,
+): number {
+  if (key !== undefined) return open.findIndex((c) => c.key === key);
+  return open.findIndex((c) => c.name === name);
 }
 
 const MAX_RESULT_CHARS = 50_000;
@@ -78,6 +98,15 @@ function argPath(args: unknown): string | undefined {
     if (typeof v === "string" && path.isAbsolute(v)) return v;
   }
   return undefined;
+}
+
+/**
+ * A tool's result or error as the editor may show it: the same two masking
+ * passes `GET /state` of `serve` uses, then the length cap.
+ */
+export function resultTextForClient(text: unknown): string {
+  const s = typeof text === "string" ? text : String(text ?? "");
+  return maskForSupervisor(s).slice(0, MAX_RESULT_CHARS);
 }
 
 function titleFor(name: string, rawArgs: unknown): string {
@@ -278,8 +307,8 @@ export class AcpAgent {
 
   private callbacks(sessionId: string, signal: AbortSignal): StreamCallbacks {
     const open: OpenCall[] = [];
-    const startCall = (name: string, args: unknown): OpenCall => {
-      const call = { id: `call_${++this.toolSeq}`, name };
+    const startCall = (name: string, args: unknown, key?: string): OpenCall => {
+      const call = { id: `call_${++this.toolSeq}`, name, key };
       open.push(call);
       const loc = argPath(args);
       this.update(sessionId, {
@@ -294,11 +323,12 @@ export class AcpAgent {
       return call;
     };
     const finish = (
-      name: string,
+      name: string | undefined,
       status: "completed" | "failed",
       text: string,
+      key?: string,
     ) => {
-      const index = open.findIndex((c) => c.name === name);
+      const index = findOpenCall(open, name, key);
       if (index < 0) return;
       const [call] = open.splice(index, 1);
       this.update(sessionId, {
@@ -308,7 +338,9 @@ export class AcpAgent {
         content: [
           {
             type: "content",
-            content: { type: "text", text: text.slice(0, MAX_RESULT_CHARS) },
+            // Masked before it is cut, so a secret the cut would split is
+            // not sent as a recognisable half. The model got the real text.
+            content: { type: "text", text: resultTextForClient(text) },
           },
         ],
       });
@@ -322,17 +354,24 @@ export class AcpAgent {
           content: { type: "text", text: content },
         });
       },
-      onToolStart: (name, args) => {
-        startCall(name, args);
+      onToolStart: (name, args, callId) => {
+        startCall(name, args, callId);
       },
-      onToolResult: (result, name, status) => {
-        finish(name, status === "done" ? "completed" : "failed", result);
+      onToolResult: (result, name, status, callId) => {
+        finish(
+          name,
+          status === "done" ? "completed" : "failed",
+          result,
+          callId,
+        );
       },
-      onToolError: (error, name) => {
-        if (name) finish(name, "failed", error);
+      onToolError: (error, name, callId) => {
+        if (name || callId !== undefined) finish(name, "failed", error, callId);
       },
-      onToolPermissionRequest: (name, args, requestId) => {
-        const call = open.find((c) => c.name === name) ?? startCall(name, args);
+      onToolPermissionRequest: (name, args, requestId, _preview, callId) => {
+        const call =
+          open[findOpenCall(open, name, callId)] ??
+          startCall(name, args, callId);
         this.pendingPermissions.add(requestId);
         void this.askClient({ sessionId, call, name, args, requestId, signal });
       },

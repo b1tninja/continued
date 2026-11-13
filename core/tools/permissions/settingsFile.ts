@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as YAML from "yaml";
+import { writeFileAtomicSync } from "../../util/atomicWrite.js";
 import {
   BUILTIN_RULES,
   DEFAULT_POLICY_LEVELS,
@@ -213,5 +214,7 @@ export function writePolicyFile(file: string, update: PolicyFileUpdate): void {
     if (e?.code !== "ENOENT") throw e;
   }
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, applyPolicyUpdate(existing, update), "utf-8");
+  // Temp file and rename: a kill during the write cannot leave half a
+  // permissions.yaml, which would read as "no rules".
+  writeFileAtomicSync(file, applyPolicyUpdate(existing, update));
 }

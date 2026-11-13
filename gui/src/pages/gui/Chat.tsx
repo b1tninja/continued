@@ -26,6 +26,7 @@ import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
 import { ToolDialectNotice } from "../../components/mainInput/ToolDialectNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
 import { AgentsList } from "../../components/BackgroundMode/AgentsList";
+import { NeedsYouTray } from "../../components/loop/NeedsYouTray";
 import { LoopInbox } from "../../components/mainInput/LoopInbox";
 import {
   QuestionPanel,
@@ -81,6 +82,8 @@ import { cancelStream, interruptStream } from "../../redux/thunks/cancelStream";
 import { getLocalStorage, setLocalStorage } from "../../util/localStorage";
 import { EmptyChatBody } from "./EmptyChatBody";
 import { ExploreDialogWatcher } from "./ExploreDialogWatcher";
+import { JumpToLatest } from "./JumpToLatest";
+import { TranscriptMessage } from "./TranscriptMessage";
 import { useAutoScroll } from "./useAutoScroll";
 
 // Helper function to find the index of the latest conversation summary
@@ -160,7 +163,10 @@ export function Chat() {
     return isJetBrains();
   }, []);
 
-  useAutoScroll(stepsDivRef, history);
+  const { paused: autoScrollPaused, scrollToLatest } = useAutoScroll(
+    stepsDivRef,
+    history,
+  );
 
   useEffect(() => {
     // Cmd + Backspace to delete current step
@@ -537,17 +543,18 @@ export function Chat() {
 
       <StepsDiv
         ref={stepsDivRef}
+        role="region"
+        aria-label="Conversation"
         className={`pt-[8px] ${showScrollbar ? "thin-scrollbar" : "no-scrollbar"} ${history.length > 0 ? "min-h-0 flex-1 overflow-y-scroll" : "shrink-0"}`}
       >
         {highlights}
         {history
           .filter((item) => item.message.role !== "system")
           .map((item, index: number) => (
-            <div
+            <TranscriptMessage
               key={item.message.id}
-              style={{
-                minHeight: index === history.length - 1 ? "200px" : 0,
-              }}
+              role={item.message.role}
+              minHeight={index === history.length - 1 ? "200px" : 0}
             >
               <ErrorBoundary
                 FallbackComponent={fallbackRender}
@@ -558,11 +565,12 @@ export function Chat() {
                 {renderChatHistoryItem(item, index)}
               </ErrorBoundary>
               {index === history.length - 1 && <InlineErrorMessage />}
-            </div>
+            </TranscriptMessage>
           ))}
         {/* Inside the scroll area, so it does not push the input down */}
         <ToolDialectNotice />
       </StepsDiv>
+      <JumpToLatest paused={autoScrollPaused} scrollToLatest={scrollToLatest} />
       <div className={"relative shrink-0"}>
         <CacheMissNotice />
         <ColdCacheNotice />
@@ -572,7 +580,8 @@ export function Chat() {
         {!hasLoop && <TaskListPanel />}
         <LoopInbox />
         <AgentsList />
-        <QuestionPanel />
+        {/* A loop asks through its Needs you tray, which holds the same questions */}
+        {hasLoop ? <NeedsYouTray /> : <QuestionPanel />}
         <QueuedMessages
           onSendNow={sendNowOrSteer}
           onSteerNow={(ids) => void steerNow(ids)}
