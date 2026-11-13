@@ -219,6 +219,7 @@ import { ContinueError, ContinueErrorReason } from "./util/errors";
 import { loadSubagentDefinitions } from "./subagents/loadSubagents";
 import { shareSession } from "./util/historyUtils";
 import { Logger } from "./util/Logger.js";
+import { MessageAbortControllers } from "./util/messageAbortControllers";
 
 export class Core {
   configHandler: ConfigHandler;
@@ -231,17 +232,12 @@ export class Core {
   private shadowIde = new IdeShadow();
   llmLogger = new LLMLogger();
 
-  private messageAbortControllers = new Map<string, AbortController>();
+  private messageAbortControllers = new MessageAbortControllers();
   private addMessageAbortController(id: string): AbortController {
-    const controller = new AbortController();
-    this.messageAbortControllers.set(id, controller);
-    controller.signal.addEventListener("abort", () => {
-      this.messageAbortControllers.delete(id);
-    });
-    return controller;
+    return this.messageAbortControllers.add(id);
   }
   private abortById(messageId: string) {
-    this.messageAbortControllers.get(messageId)?.abort();
+    this.messageAbortControllers.abort(messageId);
   }
 
   invoke<T extends keyof ToCoreProtocol>(
@@ -1508,12 +1504,16 @@ export class Core {
 
     on("llm/streamChat", (msg) => {
       const abortController = this.addMessageAbortController(msg.messageId);
-      return llmStreamChat(
-        this.configHandler,
+      return this.messageAbortControllers.releaseWhenDone(
+        msg.messageId,
         abortController,
-        msg,
-        this.ide,
-        this.messenger,
+        llmStreamChat(
+          this.configHandler,
+          abortController,
+          msg,
+          this.ide,
+          this.messenger,
+        ),
       );
     });
 
@@ -1525,12 +1525,15 @@ export class Core {
       }
       const abortController = this.addMessageAbortController(msg.messageId);
 
-      const completion = await model.complete(
-        msg.data.prompt,
-        abortController.signal,
-        msg.data.completionOptions,
-      );
-      return completion;
+      try {
+        return await model.complete(
+          msg.data.prompt,
+          abortController.signal,
+          msg.data.completionOptions,
+        );
+      } finally {
+        this.messageAbortControllers.release(msg.messageId, abortController);
+      }
     });
     on("llm/listModels", this.handleListModels.bind(this));
 
