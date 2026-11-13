@@ -20,6 +20,29 @@ You can include the currently open file as context by pressing opt/alt + enter w
 
 You can include a specific file in your current workspace by typing '@Files' and selecting the file.
 
+## How to Drag Files and Folders In
+
+Drop files, folders, images or text on the chat input. In VS Code, hold Shift while dragging: without it, VS Code takes the drop itself and the chat input never sees it.
+
+| You drop                                     | It becomes                                                                                                         |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| A workspace file, from the Explorer or a tab | An `@` file chip, the same as picking the file from '@Files'. The file is read when you send, not when you drop it |
+| A workspace folder                           | An `@` folder chip. A folder is a search scope: its relevant parts are retrieved, not every file in it             |
+| An image                                     | An image in the message, if the selected model reads images. At most 10 images per message, 5 MB each              |
+| Text                                         | Text at the cursor, with hidden characters (bidi controls, zero-width spaces, tag characters) removed              |
+| A link                                       | The link as text. Nothing is fetched                                                                               |
+
+Some drops are refused, and the input says which file and why:
+
+- Files that look like they hold secrets: `.env` files, keys and certificates (`*.pem`, `*.key`, `id_rsa`), and folders such as `.ssh` and `.aws`. This is the same list the '@Files' picker leaves out. Nothing reads a refused file.
+- Files outside the workspace folders.
+- Files dragged from the operating system's file manager, other than images. The chat gets the file's name but not its location, so it cannot add it by reference; add it with '@Files' instead.
+- Images when the selected model does not read them, and SVG files as images (add an SVG from the workspace to send it as text).
+
+Dragging is a shortcut, not the only way: the `+` button at the left of the input has "Add context (@)" and an image picker.
+
+Since VS Code 1.140, drops from the Explorer and from editor tabs do not reach extension webviews even with Shift held ([microsoft/vscode#339036](https://github.com/microsoft/vscode/issues/339036)); files dragged from the operating system still arrive. Until VS Code fixes it, use '@Files' for workspace files. In JetBrains IDEs the chat runs in an off-screen browser, which is reported not to receive drops; use '@Files' and the `+` button there.
+
 ## Codebase Search
 
 For better codebase awareness, see our [guide on making agent mode aware of codebases and documentation](../../guides/codebase-documentation-awareness.mdx).
