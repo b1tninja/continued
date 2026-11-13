@@ -1,6 +1,10 @@
 import type { CommandExecutor } from "./commandExecutor";
-import { withRealExitCode } from "./shell";
-import { withPagerDefaults } from "./terminalEnvironment";
+import { getTerminalShellPreference, withRealExitCode } from "./shell";
+import {
+  passedEnvNames,
+  withPagerDefaults,
+  withWslEnvNames,
+} from "./terminalEnvironment";
 
 /**
  * How a command the agent starts is given its standard streams, in one place
@@ -47,11 +51,17 @@ export function realExitInvocation(
  * `env` is the host's environment after the scrub (`terminalEnvironment`);
  * this adds what a command with no terminal needs: pagers that print and end
  * (`withPagerDefaults`, which leaves the person's `terminal.passEnv` names
- * alone).
+ * alone). When the command runs in WSL, the `terminal.passEnv` names are added
+ * to `WSLENV` so they arrive there (`withWslEnvNames`).
  */
 export function commandEnvironment(
   env: Readonly<Record<string, string>>,
-  opts: { platform?: NodeJS.Platform } = {},
+  opts: { platform?: NodeJS.Platform; wsl?: boolean } = {},
 ): Record<string, string> {
-  return withPagerDefaults(env, opts);
+  const platform = opts.platform ?? process.platform;
+  const wsl =
+    opts.wsl ??
+    (platform === "win32" && getTerminalShellPreference()?.kind === "wsl");
+  const paged = withPagerDefaults(env, { platform });
+  return wsl ? withWslEnvNames(paged, passedEnvNames()) : paged;
 }

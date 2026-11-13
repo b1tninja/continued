@@ -217,6 +217,47 @@ export function withPagerDefaults(
   return out;
 }
 
+/**
+ * `env` with `names` added to `WSLENV`, so that `wsl.exe` hands them to the
+ * command inside the distribution: a Windows variable reaches WSL only when
+ * `WSLENV` names it, so a name the person passed with `terminal.passEnv` used
+ * to stop at the WSL boundary. Each name gets `/u` (from Windows into WSL
+ * only), and a name `WSLENV` already lists, with any flags, is left as it is.
+ * Only names that are set in `env` are added, and only names go into
+ * `WSLENV`: the values travel as the variables themselves.
+ */
+export function withWslEnvNames(
+  env: Readonly<Record<string, string>>,
+  names: readonly string[],
+): Record<string, string> {
+  // Windows environment names compare without case
+  const key =
+    Object.keys(env).find((k) => k.toUpperCase() === "WSLENV") ?? "WSLENV";
+  const current = env[key] ?? "";
+  const entries = current.split(":").filter(Boolean);
+  const listed = new Set(
+    entries.map((entry) => entry.split("/")[0].toUpperCase()),
+  );
+  const present = new Set(Object.keys(env).map((k) => k.toUpperCase()));
+  const added: string[] = [];
+  for (const name of names) {
+    // A name with `:` or `/` would break the list; WSLENV itself is not a value to forward
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
+    const upper = name.toUpperCase();
+    if (upper === "WSLENV" || listed.has(upper) || !present.has(upper))
+      continue;
+    listed.add(upper);
+    added.push(`${name}/u`);
+  }
+  if (!added.length) return { ...env };
+  return { ...env, [key]: [...entries, ...added].join(":") };
+}
+
+/** The names the person passed with `terminal.passEnv` (names only). */
+export function passedEnvNames(): string[] {
+  return [...(configured?.passEnv ?? [])];
+}
+
 function scrubPolicyFor(
   mode: TerminalEnvironmentMode,
   settings: TerminalEnvironmentSettings | undefined,

@@ -1,8 +1,13 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { getCommandExecutor } from "./commandExecutor";
-import { COMMAND_STDIO, realExitInvocation } from "./commandSpawn";
+import {
+  COMMAND_STDIO,
+  commandEnvironment,
+  realExitInvocation,
+} from "./commandSpawn";
 import { withRealExitCode } from "./shell";
+import { setTerminalEnvironmentSettings } from "./terminalEnvironment";
 
 /** Runs to the end and reports what the command printed and how long it took. */
 function finish(
@@ -157,4 +162,25 @@ describe("the exit code is the program's own", () => {
       expect(b.err).toMatch(/line:1 /);
     }
   }, 120_000);
+});
+
+describe("commandEnvironment", () => {
+  it("adds the passEnv names to WSLENV only when the command runs in WSL", () => {
+    setTerminalEnvironmentSettings({ passEnv: ["MY_TOKEN"] });
+    try {
+      const base = { MY_TOKEN: "v", PATH: "x" };
+      expect(
+        commandEnvironment(base, { platform: "win32", wsl: true }).WSLENV,
+      ).toBe("MY_TOKEN/u");
+      expect(
+        commandEnvironment(base, { platform: "win32", wsl: false }).WSLENV,
+      ).toBeUndefined();
+      // Not Windows: never WSL's way in
+      expect(commandEnvironment(base, { platform: "linux" }).WSLENV).toBe(
+        undefined,
+      );
+    } finally {
+      setTerminalEnvironmentSettings(undefined);
+    }
+  });
 });

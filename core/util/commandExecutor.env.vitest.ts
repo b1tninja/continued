@@ -7,6 +7,7 @@ vi.mock("node:child_process", async (orig) => ({
 }));
 
 import { getCommandExecutor } from "./commandExecutor";
+import { setTerminalShellPreference } from "./shell";
 import { setTerminalEnvironmentSettings } from "./terminalEnvironment";
 
 afterEach(() => {
@@ -62,6 +63,36 @@ describe("command executor environment", () => {
       containerStatus: { runtime: "docker" } as never,
     }).spawn("ls");
     expect(spawn.mock.calls[2][2].stdio).toEqual(["ignore", "pipe", "pipe"]);
+  });
+
+  it("WSL gets the passEnv names in WSLENV, and not a withheld name", () => {
+    vi.stubEnv("WSLENV", "FOO/p");
+    vi.stubEnv("PASSED_TOKEN", "p");
+    vi.stubEnv("WITHHELD_TOKEN", "w");
+    setTerminalEnvironmentSettings({ passEnv: ["PASSED_TOKEN"] });
+    setTerminalShellPreference({ kind: "wsl" });
+    try {
+      getCommandExecutor({
+        platform: "win32",
+        terminalShell: { kind: "wsl" },
+        wslDistros: [{ name: "Ubuntu", state: "Running", version: 2 } as never],
+      }).spawn("ls");
+    } finally {
+      setTerminalShellPreference(undefined);
+    }
+    const env = spawn.mock.calls[0][2].env;
+    if (process.platform === "win32") {
+      expect(env.WSLENV).toBe("FOO/p:PASSED_TOKEN/u");
+    }
+    expect(env.WITHHELD_TOKEN).toBeUndefined();
+    expect(env.WSLENV ?? "").not.toContain("WITHHELD_TOKEN");
+  });
+
+  it("the host's shell does not get a WSLENV it did not have", () => {
+    vi.stubEnv("PASSED_TOKEN", "p");
+    setTerminalEnvironmentSettings({ passEnv: ["PASSED_TOKEN"] });
+    getCommandExecutor({ platform: "linux", env: {} }).spawn("ls");
+    expect(spawn.mock.calls[0][2].env.WSLENV).toBeUndefined();
   });
 
   it("WSL keeps WSLENV and the basics in allowlist mode", () => {

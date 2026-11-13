@@ -5,6 +5,7 @@ import {
   TERMINAL_ENV_NOTICE,
   terminalEnvironment,
   withPagerDefaults,
+  withWslEnvNames,
 } from "./terminalEnvironment";
 
 const posix = {
@@ -181,5 +182,47 @@ describe("withPagerDefaults", () => {
     const input = { PAGER: "less" };
     withPagerDefaults(input, { platform: "linux" });
     expect(input).toEqual({ PAGER: "less" });
+  });
+});
+
+describe("withWslEnvNames", () => {
+  it("adds a passed name with /u after what WSLENV already lists", () => {
+    const env = withWslEnvNames(
+      { WSLENV: "FOO/p", MY_TOKEN: "v", Path: "C:\\Windows" },
+      ["MY_TOKEN"],
+    );
+    expect(env.WSLENV).toBe("FOO/p:MY_TOKEN/u");
+    expect(env.MY_TOKEN).toBe("v");
+  });
+
+  it("creates WSLENV when there is none", () => {
+    expect(withWslEnvNames({ A: "1" }, ["A"]).WSLENV).toBe("A/u");
+  });
+
+  it("keeps a name WSLENV lists already, with its own flags, and the host's spelling of WSLENV", () => {
+    const env = withWslEnvNames({ WslEnv: "my_token/p", MY_TOKEN: "v" }, [
+      "MY_TOKEN",
+    ]);
+    expect(env).toEqual({ WslEnv: "my_token/p", MY_TOKEN: "v" });
+  });
+
+  it("leaves out a name that is not set, a withheld name, WSLENV and names that would break the list", () => {
+    const env = withWslEnvNames(
+      { WSLENV: "", PASSED: "1", "BAD:NAME": "x", WITHHELD_KEY: "s" },
+      ["PASSED", "NOT_SET", "WSLENV", "BAD:NAME", "a/b"],
+    );
+    expect(env.WSLENV).toBe("PASSED/u");
+    expect(env.WSLENV).not.toContain("WITHHELD_KEY");
+  });
+
+  it("never puts a value in WSLENV", () => {
+    const env = withWslEnvNames({ SECRET_NAME: "sk-value" }, ["SECRET_NAME"]);
+    expect(env.WSLENV).not.toContain("sk-value");
+  });
+
+  it("does not change its input", () => {
+    const input = { WSLENV: "X/p", A: "1" };
+    withWslEnvNames(input, ["A"]);
+    expect(input).toEqual({ WSLENV: "X/p", A: "1" });
   });
 });
