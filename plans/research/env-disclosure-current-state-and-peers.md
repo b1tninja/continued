@@ -331,4 +331,4 @@ Effect on the rows: EV6 says "UTF-16 with a BOM" and drops the encoding-flag adv
 
 ## 13. Fix made in a separate draft pull request
 
-Branch `env-state-fixes`, draft: the IDE terminal description's Windows sentence only (the pull request list has the number). Everything else in section 4 changes the CLI preamble or the goldens and waits for the bundle with #750.
+Branch `env-state-fixes`, draft: the IDE terminal description's Windows sentence only (#765). Everything else in section 4 changes the CLI preamble or the goldens and waits for the bundle with #750.
