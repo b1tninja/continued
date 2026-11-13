@@ -470,3 +470,23 @@ Not folded here, because the research note gives them a different home: `pins-an
 `prettier-check` go into the `static` job of phase 2 a (prettier is part of the required gate, Supply
 Chain is advisory, so merging them is a policy choice for that step), and `dependency-review` is to run
 only when a manifest, a lockfile or a workflow changed.
+
+### (c) The VS Code e2e tests
+
+When they run is unchanged: only for a non-draft pull request whose change touches `core/`, `gui/`,
+`extensions/vscode/` or `packages/` (or a path outside every known area), which is the `e2e` area of
+`changed-areas.mjs`; drafts run no code checks at all (section 7). `packages/` stays in the condition
+because the packages are bundled into the extension (the `e2e:ci:run-yaml` legs exercise config-yaml).
+
+The list of test files is now computed by `vscode-package-extension-linux` from the source tree
+(`e2e/tests/X.test.ts` becomes `e2e/_output/tests/X.test.js`), as the research note's `vsix-linux` job
+does, and `vscode-get-test-file-matrix` is gone: it installed, built and compiled everything for 1.1
+minutes only to list five files. The listing step runs first and stops the run if a test file is named
+in a way the mapping does not cover; each leg still compiles the tests, so a compile error fails the run.
+Same 10 legs, same names.
+
+The 10 legs stay separate jobs. Two jobs (one per command, research note phase 2 d) would save about
+8 x 57 s of repeated setup and 8 queue slots per e2e push, but the five files of a command share one
+`CONTINUE_GLOBAL_DIR` (`e2e/test-continue` or `e2e/test-continue-yaml`), `e2e/storage` and the installed
+test extensions, so one file could leave state for the next. The research note asks for one trial run on
+a branch first; that needs a runner and is not part of this change.

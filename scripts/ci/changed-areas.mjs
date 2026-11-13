@@ -94,7 +94,7 @@ export function jobCount(c) {
   if (c.binary) n += 1;
   if (c.vscode) n += 1;
   if (c.packages) n += 1; // one job tests the six packages
-  if (c.e2e) n += 1 + 1 + 10; // test-file matrix job, linux package, 10 e2e legs
+  if (c.e2e) n += 1 + 10; // linux package (also lists the e2e files), 10 e2e legs
   if (c.jetbrains) n += 1;
   if (c.cli) n += 3; // lint, test, smoke-api
   n += 2; // Supply Chain (own workflow, runs for every non-docs change)
