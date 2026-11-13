@@ -47,6 +47,26 @@ export const VIEWS = {
     fixture: "loop",
     note: "Loop mode: the plan card, per-item budgets and loop controls",
   },
+  "loop-running": {
+    fixture: "loop-running",
+    note: "Loop mode, running item 2: the status line with Now:, progress, round and budget",
+  },
+  "loop-failed": {
+    fixture: "loop-failed",
+    note: "Loop mode, a failed item being repaired: the red state",
+  },
+  "loop-finished": {
+    fixture: "loop-finished",
+    note: "Loop mode, every item done: the green state, Close",
+  },
+  "loop-stopped": {
+    fixture: "loop-stopped",
+    note: "Loop mode stopped by the person: Resume and Close",
+  },
+  "loop-settings-open": {
+    fixture: "loop-settings-open",
+    note: "Loop mode with the gear opened: strategy, Parallel and the note",
+  },
   "loop-plan-tile": {
     fixture: "loop-plan-tile",
     note: "Loop mode: the plan card as a collapsed tile (title, file link, round line, one root row)",
