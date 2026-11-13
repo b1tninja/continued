@@ -32,6 +32,7 @@ import {
 import { telemetryService } from "../../telemetry/telemetryService.js";
 import { formatError } from "../../util/formatError.js";
 import { logger } from "../../util/logger.js";
+import { setUserNoticeSink } from "../../util/userNotice.js";
 
 import {
   handleAutoCompaction,
@@ -150,12 +151,18 @@ export function useChat({
         svc.on("stateChanged", listener);
         serviceListenerCleanupRef.current = () =>
           svc.off("stateChanged", listener);
+        // Lines the person has to see (a damaged session file, a session
+        // that is not being saved) go into the chat while the UI is up.
+        setUserNoticeSink((text) => {
+          svc.addSystemMessage(text);
+        });
       })
       .catch((error) => {
         logger.error("Failed to initialize ChatHistoryService", { error });
       });
 
     return () => {
+      setUserNoticeSink(undefined);
       serviceListenerCleanupRef.current?.();
       serviceListenerCleanupRef.current = null;
     };
@@ -983,6 +990,7 @@ export function useChat({
 
     // Handle policy creation if requested
     if (approved && createPolicy && currentRequest) {
+      let saved = false;
       try {
         const { generatePolicyRule, addPolicyToYaml } =
           await import("../../permissions/policyWriter.js");
@@ -993,6 +1001,7 @@ export function useChat({
         );
 
         await addPolicyToYaml(policyRule);
+        saved = true;
         logger.debug(`Policy created: ${policyRule}`);
 
         // Reload permissions to pick up the new policy without requiring restart
@@ -1001,7 +1010,18 @@ export function useChat({
         logger.error("Failed to create policy or reload permissions", {
           error,
         });
-        // Continue with the approval even if policy creation/reload fails
+        // Continue with the approval even if policy creation/reload fails,
+        // and say when the rule was not saved: a log line is not enough for
+        // "always".
+        if (!saved) {
+          const { policySaveFailureNotice } =
+            await import("../../permissions/policyWriter.js");
+          const notice = policySaveFailureNotice(error);
+          setChatHistory((prev) => [
+            ...prev,
+            { message: { role: "system", content: notice }, contextItems: [] },
+          ]);
+        }
       }
     }
 

@@ -4,6 +4,7 @@ import * as path from "path";
 import { BaseSessionMetadata, Session } from "../index.js";
 import { ListHistoryOptions } from "../protocol/core.js";
 
+import { writeFileAtomicSync } from "./atomicWrite.js";
 import { NEW_SESSION_TITLE } from "./constants.js";
 import {
   getSessionFilePath,
@@ -22,23 +23,116 @@ function safeParseArray<T>(
   }
 }
 
-/**
- * Replaces `file` by writing a temp file in the same directory and renaming
- * it over the destination. A crash mid-write leaves the temp file, and
- * readers keep seeing the previous complete file.
- */
+/** Session files are private to the person: 0600 when first written. */
 function writeAtomic(file: string, contents: string): void {
-  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileAtomicSync(file, contents, { mode: 0o600, fallbackInPlace: false });
+}
+
+const QUARANTINE_MARK = ".corrupt-";
+
+/** True for a damaged session file that was set aside (`<id>.corrupt-<time>.json`). */
+export function isQuarantinedSessionFile(name: string): boolean {
+  return path.basename(name).includes(QUARANTINE_MARK);
+}
+
+/**
+ * Moves a damaged session file aside as `<id>.corrupt-<time>.json` in the
+ * same folder and returns the new path. The bytes are kept so they can be
+ * repaired by hand; nothing later writes to that name. Throws when the file
+ * can be neither renamed nor copied.
+ */
+export function quarantineSessionFile(file: string): string {
+  const base = file.endsWith(".json") ? file.slice(0, -".json".length) : file;
+  let kept = `${base}${QUARANTINE_MARK}${Date.now()}.json`;
+  for (let n = 1; fs.existsSync(kept); n++) {
+    kept = `${base}${QUARANTINE_MARK}${Date.now()}-${n}.json`;
+  }
   try {
-    fs.writeFileSync(tmp, contents, { mode: 0o600 });
-    fs.renameSync(tmp, file);
+    fs.renameSync(file, kept);
+  } catch {
+    // Windows refuses to rename a file that is open elsewhere; a copy keeps
+    // the bytes just as well.
+    fs.copyFileSync(file, kept, fs.constants.COPYFILE_EXCL);
+  }
+  return kept;
+}
+
+/** What `loadWithStatus` found. */
+export interface SessionLoadResult {
+  session: Session;
+  /**
+   * Set when the session file existed and could not be used. `keptAt` is
+   * where its bytes are now; `reason` never holds file contents.
+   */
+  damaged?: { keptAt: string; reason: string };
+}
+
+/** One sentence for the person about a damaged session file. */
+export function damagedSessionNotice(damaged: {
+  keptAt: string;
+  reason: string;
+}): string {
+  return `This session's file is damaged and was not loaded (${damaged.reason}). It is kept at ${damaged.keptAt}.`;
+}
+
+/** Why a session file cannot be used, without quoting it. */
+function parseSessionText(
+  raw: string,
+): { session: Session } | { reason: string } {
+  if (raw.trim() === "") return { reason: "the file is empty" };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // The parser's message quotes the text around the error; a session
+    // holds the conversation, so only the fact is reported.
+    return { reason: "it is not valid JSON" };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { reason: "it does not hold a session" };
+  }
+  return { session: parsed as Session };
+}
+
+/**
+ * Reads one session file. A file whose contents cannot be used is moved
+ * aside (see quarantineSessionFile) and reported in `damaged`; a file that
+ * is not there answers `undefined`; one that cannot be read at all throws
+ * and is left alone.
+ */
+export function readSessionFile(
+  file: string,
+):
+  { session: Session } | { damaged: SessionLoadResult["damaged"] } | undefined {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(file, "utf8");
   } catch (error) {
-    try {
-      fs.unlinkSync(tmp);
-    } catch {
-      // the temp file was already renamed, or never created
-    }
-    throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    // Not readable right now (permissions, a lock, too many open files) is
+    // not the same as damaged: the file is left where it is, and not opened
+    // as an empty session that the next save would write over it.
+    const code = (error as NodeJS.ErrnoException).code ?? "error";
+    throw new Error(
+      `Session file ${file} could not be read (${code}). It was not opened, so that it is not overwritten.`,
+    );
+  }
+  const parsed = parseSessionText(raw);
+  if ("session" in parsed) return parsed;
+  return {
+    damaged: { keptAt: quarantineOrThrow(file), reason: parsed.reason },
+  };
+}
+
+function quarantineOrThrow(file: string): string {
+  try {
+    return quarantineSessionFile(file);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code ?? "error";
+    // Opening it as an empty session would let the next save replace it.
+    throw new Error(
+      `Session file ${file} is damaged and could not be set aside (${code}). It was not opened, so that it is not overwritten.`,
+    );
   }
 }
 
@@ -121,7 +215,8 @@ function rebuildSessionsList(): BaseSessionMetadata[] {
       (name) =>
         name.endsWith(".json") &&
         name !== "sessions.json" &&
-        !name.includes(".tmp"),
+        !name.includes(".tmp") &&
+        !isQuarantinedSessionFile(name),
     )
     .flatMap((name) => {
       const meta = metadataFromSessionFile(path.join(folder, name));
@@ -226,24 +321,36 @@ export class HistoryManager {
     fs.rmSync(getSessionsFolderPath(), { recursive: true, force: true });
   }
 
+  /**
+   * The session, or an empty one under the same id when there is no file or
+   * the file is damaged. A damaged file is moved aside first, so a later
+   * save under this id replaces nothing. Throws when the file cannot be
+   * read, or is damaged and cannot be moved aside. Use `loadWithStatus` to tell the person about it.
+   */
   load(sessionId: string): Session {
-    try {
-      const sessionFile = getSessionFilePath(sessionId);
-      if (!fs.existsSync(sessionFile)) {
-        throw new Error(`Session file ${sessionFile} does not exist`);
-      }
-      const session: Session = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
-      session.sessionId = sessionId;
-      return session;
-    } catch (e) {
-      console.log(`Error loading session: ${e}`);
-      return {
-        history: [],
-        title: NEW_SESSION_TITLE,
-        workspaceDirectory: "",
-        sessionId: sessionId,
-      };
+    const result = this.loadWithStatus(sessionId);
+    if (result.damaged) console.warn(damagedSessionNotice(result.damaged));
+    return result.session;
+  }
+
+  loadWithStatus(sessionId: string): SessionLoadResult {
+    const sessionFile = getSessionFilePath(sessionId);
+    const empty: Session = {
+      history: [],
+      title: NEW_SESSION_TITLE,
+      workspaceDirectory: "",
+      sessionId: sessionId,
+    };
+    const read = readSessionFile(sessionFile);
+    if (!read) {
+      console.log(
+        `Error loading session: Session file ${sessionFile} does not exist`,
+      );
+      return { session: empty };
     }
+    if ("damaged" in read) return { session: empty, damaged: read.damaged };
+    read.session.sessionId = sessionId;
+    return { session: read.session };
   }
 
   save(session: Session) {

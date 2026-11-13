@@ -24,8 +24,11 @@ export interface PermissionsYamlConfig {
   exclude?: string[];
 }
 
-function validatePermissionsYaml(parsed: unknown): string | undefined {
-  // An empty file or one holding only comments is an empty policy
+/**
+ * Why a parsed permissions.yaml cannot be used, or undefined when it can.
+ * An empty file, or one holding only comments, is an empty policy.
+ */
+export function permissionsYamlProblem(parsed: unknown): string | undefined {
   if (parsed === null || parsed === undefined) return undefined;
   if (typeof parsed !== "object" || Array.isArray(parsed)) {
     return "has the wrong structure (expected a mapping with allow, ask and exclude lists)";
@@ -58,7 +61,7 @@ export function readPermissionsYaml(
   const result = readPolicyFile<PermissionsYamlConfig | null>(
     file,
     "yaml",
-    validatePermissionsYaml,
+    permissionsYamlProblem,
   );
   if (result.status === "ok") {
     return { status: "ok", value: result.value ?? {} };
