@@ -44,7 +44,7 @@ If a hook sets both, the stricter one applies, and a value that is not understoo
 
 `transcript_path` is empty: there is no transcript file. Some things are logged and not obeyed yet: a `Stop` hook that asks the assistant to continue, a `PreCompact` hook that blocks, and context from `SessionStart` (it is not added to the conversation). A `PermissionRequest` hook can deny a call but its `allow` does not skip the question, because the question may be one a rule insisted on. `SessionEnd` does not run on a signal or a crash.
 
-Not covered yet: the `args` form that runs a command without a shell, an `if` filter, `prompt_id`, `agent_id` and the other optional input fields, and hooks in the IDE extensions. Hooks are a guardrail, not a boundary: the search and glob tools and MCP tools do not call tool hooks.
+Not covered yet: the `args` form that runs a command without a shell, an `if` filter, `prompt_id`, `agent_id` and the other optional input fields, and hooks in the IDE extensions. Hooks are a guardrail, not a boundary. In the CLI every tool call goes through the same hook step, the search and glob tools and MCP tools included. An MCP tool's hooks see the tool under the name the server gave it, with no server field in the input, so a Claude Code style matcher such as `mcp__server__tool` never matches it; match the server's own tool name instead.
 
 ## What a hook is sent
 
