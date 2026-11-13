@@ -32,6 +32,13 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 - The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
 
+## Accessibility: transcript landmarks, Jump to latest and focus after approvals
+
+- **The conversation is a landmark.** The message list is a region named "Conversation" and each message an article named "You" or "Assistant", so a screen reader can move by landmark or article and tell who spoke. There is no log role and no new live region; the existing announcer is still the only way the chat speaks unprompted.
+- **Jump to latest.** When you scroll up while the assistant is replying, a "Jump to latest" button appears under the conversation, next in the tab order. Activating it scrolls to the end (instantly under reduced motion) and puts focus in the chat input. The screen reader is told "New messages below" once per pause.
+- **Focus returns after an approval.** Accepting or rejecting the last pending command used to leave keyboard focus on the page body. It now goes to the chat input, unless you had already moved it elsewhere. With several commands pending it goes to the next Accept button, as before.
+- **New docs page.** "Accessibility" (`docs/ide-extensions/agent/accessibility.mdx`) lists the keyboard paths, what the announcer says and when, and how high contrast and reduced motion behave.
+
 ## File edits at IDGAF now reach outside the workspace
 
 At File edits = IDGAF (the top level, also reached by `--auto`), the agent can create, edit and write files outside the workspace folder, in the editor, the terminal UI, headless `-p` and `serve`, with no prompt and no refusal. Before, a headless run refused such a write whatever the level, and the editor's exact edit tools treated an absolute path elsewhere as a file that does not exist.
