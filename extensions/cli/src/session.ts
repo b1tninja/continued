@@ -366,6 +366,7 @@ function hasSessionContent(session: Session): boolean {
  * Save the current session to file
  */
 export function saveSession(): void {
+  let sessionId = "";
   try {
     const manager = SessionManager.getInstance();
     if (!manager.hasSession()) {
@@ -376,12 +377,23 @@ export function saveSession(): void {
     if (!hasSessionContent(session)) {
       return;
     }
+    sessionId = session.sessionId;
 
     const sessionToSave = getSessionPersistenceSnapshot(session);
     historyManager.save(sessionToSave);
   } catch (error) {
     logger.error("Error saving session:", error);
+    // A full disk or a folder that cannot be written fails on every
+    // message: say it once for this session, where the person will see it.
+    userNotice(sessionNotSavedNotice(error), `session-not-saved:${sessionId}`);
   }
+}
+
+/** The line shown once when a session cannot be written. */
+export function sessionNotSavedNotice(error: unknown): string {
+  const folder = path.join(env.continueHome, "sessions");
+  const reason = error instanceof Error ? error.message : String(error);
+  return `This session is not being saved (${folder}): ${reason}. The conversation continues in memory and is saved again as soon as a write succeeds.`;
 }
 
 /**
