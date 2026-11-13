@@ -486,7 +486,9 @@ describe("MCPConnection", () => {
           const canary = path.join(dir, "pwned.txt").split(path.sep).join("/");
           const args = [`a&echo x>${canary}`, "b|c", "%COMPUTERNAME%", "d e"];
           // cross-spawn is the transport SDK's own spawn, not a direct dependency.
-          const crossSpawn = createRequire(import.meta.url)("cross-spawn");
+          const crossSpawn = createRequire(path.join(process.cwd(), "noop.js"))(
+            "cross-spawn",
+          );
           const result = crossSpawn.sync("shim", args, {
             env: {
               ...process.env,

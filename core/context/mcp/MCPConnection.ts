@@ -2,6 +2,7 @@ import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { Readable } from "stream";
 import { homedir } from "os";
 import { fileURLToPath } from "url";
 
@@ -133,6 +134,9 @@ class MCPConnection {
   private transport: Transport;
   private connectionPromise: Promise<unknown> | null = null;
   private stdioStderr = new StdioOutputBuffer();
+  // Settles when the child's stderr has been read to the end (or at once when
+  // there is none), so the failure message holds the last thing it said.
+  private stdioStderrDrained: Promise<void> = Promise.resolve();
   private stdioEnv: Record<string, string> = {};
 
   constructor(
@@ -559,6 +563,15 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
           // Include stderr if the stdio server wrote any. Capped, and masked
           // with the shared secret scanner. stdout is the protocol channel
           // and is not captured.
+          if (this.options.type === "stdio") {
+            // The transport closes when the child exits, which can be before
+            // its last stderr chunks have been read. Give the pipe a moment to
+            // drain; a child that is still running just times the wait out.
+            await Promise.race([
+              this.stdioStderrDrained,
+              new Promise<void>((resolve) => setTimeout(resolve, 500)),
+            ]);
+          }
           if (this.options.type === "stdio" && !this.stdioStderr.isEmpty) {
             errorMessage += `\n\nProcess output:\nSTDERR:\n${this.stdioStderr.render(this.stdioEnv)}`;
           }
@@ -840,9 +853,20 @@ Set each one in ~/.continuous/.env, <workspace>/.continuous/.env or <workspace>/
 
     // Capture stdio output for better error reporting
     this.stdioEnv = env;
-    transport.stderr?.on("data", (data: Buffer) => {
+    const stderrStream = transport.stderr as Readable | null;
+    stderrStream?.on("data", (data: Buffer) => {
       this.stdioStderr.append(data.toString());
     });
+    this.stdioStderrDrained = stderrStream
+      ? new Promise<void>((resolve) => {
+          if (stderrStream.destroyed || stderrStream.readableEnded) {
+            resolve();
+            return;
+          }
+          stderrStream.once("end", () => resolve());
+          stderrStream.once("close", () => resolve());
+        })
+      : Promise.resolve();
 
     return transport;
   }
