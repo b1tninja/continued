@@ -8,6 +8,7 @@ import {
 import { commandLintGate } from "core/tools/permissions/commandLint.js";
 import { missingBinaryGate } from "core/tools/permissions/missingBinaryGate.js";
 import { getCommandExecutor } from "core/util/commandExecutor.js";
+import { decodeCommandOutput } from "core/util/commandOutput.js";
 import {
   COMMAND_STDIO,
   commandEnvironment,
@@ -352,13 +353,14 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
       resetTimeout();
 
       const onStdout = (data: Buffer) => {
-        stdout += data.toString();
+        // On Windows, PowerShell's code page when the bytes are not UTF-8
+        stdout += decodeCommandOutput(data);
         resetTimeout();
         showCurrentOutput();
       };
 
       const onStderr = (data: Buffer) => {
-        stderr += data.toString();
+        stderr += decodeCommandOutput(data);
         resetTimeout();
         showCurrentOutput();
       };

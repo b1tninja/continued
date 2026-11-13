@@ -1,4 +1,3 @@
-import iconv from "iconv-lite";
 import childProcess from "node:child_process";
 import os from "node:os";
 import {
@@ -6,6 +5,7 @@ import {
   commandEnvironment,
   realExitInvocation,
 } from "../../util/commandSpawn";
+import { decodeCommandOutput } from "../../util/commandOutput";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 
 // Default timeout for terminal commands (2 minutes)
@@ -52,21 +52,9 @@ function releaseStreams(child: childProcess.ChildProcess): void {
   child.stderr?.destroy?.();
 }
 
-// Automatically decode the buffer according to the platform to avoid garbled Chinese
+// UTF-8, or on Windows the machine's OEM code page when the bytes are not UTF-8
 function getDecodedOutput(data: Buffer): string {
-  if (process.platform === "win32") {
-    try {
-      let out = iconv.decode(data, "utf-8");
-      if (/�/.test(out)) {
-        out = iconv.decode(data, "gbk");
-      }
-      return out;
-    } catch {
-      return iconv.decode(data, "gbk");
-    }
-  } else {
-    return data.toString();
-  }
+  return decodeCommandOutput(data);
 } // Simple helper function to use login shell on Unix/macOS and PowerShell on Windows
 function getShellCommand(command: string): { shell: string; args: string[] } {
   // Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL;
