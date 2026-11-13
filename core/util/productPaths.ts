@@ -95,6 +95,7 @@ export const PRODUCT_STATE_PATHS = [
   ".staging",
   "worktrees",
   "bedrock-catalog",
+  "model-catalog",
   "input_history.json",
   "retirement-notices.json",
   ".onboarding_complete",

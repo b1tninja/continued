@@ -142,7 +142,8 @@ process.on("SIGINT", async () => {
   await gracefulExit(130);
 });
 
-const program = new Command();
+// Exported for tests that run the real option wiring without a network.
+export const program = new Command();
 
 program
   .name("continuous")
