@@ -71,7 +71,7 @@ written into config the way the row's `effort` field says (Bedrock
 `reasoning` and `reasoningBudgetTokens`, or `reasoning_effort` for an
 OpenAI-compatible server); `--max-tokens`, `--context` and `--compact-ratio`
 set the completion options. `--level area=level,...` is recorded on every
-record; it is applied where the CLI has the knob today (`tool-use=yolo` adds
+record; it is applied where the CLI has the knob today (`tool-use=idgaf` adds
 `--auto`, `tool-use=manual` removes it, `plan-edits` or `questions` pick the
 loop autonomy) and recorded only for the rest, since the five-level policy
 areas are not built yet.

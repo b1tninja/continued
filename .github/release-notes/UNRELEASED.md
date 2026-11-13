@@ -30,5 +30,15 @@ Earlier builds said they collect no telemetry, and the claim was not fully accur
 
 ## Behaviour changes
 
+- The YOLO level is now called IDGAF; existing settings keep working. A saved `yolo` (settings, loops, `--policy yolo`) is read as `idgaf`, and nothing writes the old name.
 - **A hook settings file or `permissions.yaml` that is present but broken no longer reads as "no policy".** Before, a hook settings file that did not parse was skipped with a log line (so a guard hook silently did not run), and a `permissions.yaml` that did not parse was treated as absent (so a headless run fell back to defaults that allow `Bash`). Now `cn -p` and `cn serve` refuse to start with exit code 2, naming each file and the line and column of the error (never its contents); `--ignore-broken-config` continues with the file ignored. The interactive agent starts and prints a visible WARNING with the same details. Absent files are still silent. See the Hooks and trust and Permissions pages.
 - **A hook `matcher` that is not a valid regular expression now runs the hook** (fail closed) and warns once per session, instead of silently switching the hook off.
+
+## File edits at IDGAF now reach outside the workspace
+
+At File edits = IDGAF (the top level, also reached by `--auto`), the agent can create, edit and write files outside the workspace folder, in the editor, the terminal UI, headless `-p` and `serve`, with no prompt and no refusal. Before, a headless run refused such a write whatever the level, and the editor's exact edit tools treated an absolute path elsewhere as a file that does not exist.
+
+- Each such write is listed in the audit trail as allowed by the level, with the resolved absolute path, and the tool result says `Wrote outside the workspace: <path>`.
+- Lower levels are unchanged: Manual, Cautious and Automatic ask, Permissive holds it by the outside-paths protection.
+- Still binding at IDGAF: the locked policy files, a tool switched off, an organisation ceiling and the `floor:` rules you wrote. Secret-file name checks inside the file tools, and the webview's own write guard (used for plan files), are not changed.
+- Separate fix: an absolute path inside the workspace given to the new-file tool is now written where it says, not under a folder named after the drive.
