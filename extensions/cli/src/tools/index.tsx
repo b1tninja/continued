@@ -1,4 +1,5 @@
 import { assignMcpToolNames } from "core/tools/mcpToolName.js";
+import { mcpToolIsUserReadOnly } from "core/tools/roleTools.js";
 import {
   stableToolOrder,
   stableToolOrderEnabled,
@@ -35,7 +36,11 @@ import { cliTrustedMcpServers } from "./mcpTrust.js";
 import { multiEditTool } from "./multiEdit.js";
 import { presentPlanTool } from "./presentPlan.js";
 import { readFileTool } from "./readFile.js";
-import { cliRoleRefusal, filterCliToolsForRole } from "./roleGate.js";
+import {
+  cliPlanMcpTrust,
+  cliRoleRefusal,
+  filterCliToolsForRole,
+} from "./roleGate.js";
 import { runTerminalCommandTool } from "./runTerminalCommand.js";
 import { checkIfRipgrepIsInstalled, searchCodeTool } from "./searchCode.js";
 import { applyCliToolSearch } from "./searchTools.js";
@@ -179,9 +184,25 @@ export async function getAllAvailableTools(
     },
   );
   const trusted = cliTrustedMcpServers();
-  const mcpTools = mcpState.tools.map((t, i) =>
-    convertMcpToolToContinueTool(t, names[i], trusted),
-  );
+  const planTrust = cliPlanMcpTrust();
+  const mcpTools = mcpState.tools.map((t, i) => {
+    const tool = convertMcpToolToContinueTool(t, names[i], trusted);
+    // A tool the person listed under plan.mcpTools is one they said reads and
+    // changes nothing. Without this it keeps the catch-all "ask" in Plan mode,
+    // and a headless run (nobody to ask) is never offered it.
+    return !tool.readonly &&
+      tool.mcpServer &&
+      mcpToolIsUserReadOnly(
+        {
+          server: tool.mcpServer,
+          tool: tool.mcpToolName ?? t.name,
+          readOnlyHint: false,
+        },
+        planTrust,
+      )
+      ? { ...tool, readonly: true }
+      : tool;
+  });
   tools.push(
     ...(stableToolOrderEnabled(process.env.CONTINUE_STABLE_TOOL_ORDER)
       ? stableToolOrder(

@@ -422,6 +422,18 @@ describe("MCP tool names and trust (TR22, TR23)", () => {
     resetPolicyLevels();
   });
 
+  it("a tool listed under plan.mcpTools is read-only, so a headless Plan run is not left without it", async () => {
+    loadPlanTrust(["plan:", "  mcpTools:", "  - docs/search", ""].join("\n"));
+    toolState.mcpTools = [
+      { name: "search", serverName: "docs", readOnlyHint: true },
+      { name: "lookup", serverName: "docs", readOnlyHint: true },
+    ];
+    const byName = Object.fromEntries(
+      (await offered()).map((t) => [t.name, t.readonly]),
+    );
+    expect(byName).toEqual({ search: true, lookup: undefined });
+  });
+
   it("a single server keeps its bare tool names, as before", async () => {
     toolState.mcpTools = [
       { name: "search", serverName: "docs" },
