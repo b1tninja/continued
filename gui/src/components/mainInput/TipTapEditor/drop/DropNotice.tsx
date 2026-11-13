@@ -17,7 +17,7 @@ export function DropNotice(props: { text: string; onDismiss: () => void }) {
           e.stopPropagation();
           props.onDismiss();
         }}
-        className="min-h-6 min-w-6 flex-none cursor-pointer border-none bg-transparent px-2 text-description hover:text-foreground"
+        className="min-h-6 min-w-6 flex-none cursor-pointer border-none bg-transparent px-2 text-xs text-description hover:text-foreground"
       >
         Dismiss
       </button>
