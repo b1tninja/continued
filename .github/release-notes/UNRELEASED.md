@@ -43,3 +43,9 @@ At File edits = IDGAF (the top level, also reached by `--auto`), the agent can c
 - Lower levels are unchanged: Manual, Cautious and Automatic ask, Permissive holds it by the outside-paths protection.
 - Still binding at IDGAF: the locked policy files, a tool switched off, an organisation ceiling and the `floor:` rules you wrote. Secret-file name checks inside the file tools, and the webview's own write guard (used for plan files), are not changed.
 - Separate fix: an absolute path inside the workspace given to the new-file tool is now written where it says, not under a folder named after the drive.
+
+## Model lists are downloaded when you ask, not when a screen opens
+
+- Provider setup no longer contacts `ollama.com` or `openrouter.ai` when it opens. Ollama asks "Download the latest model list from ollama.com?"; OpenRouter asks "Pull the latest model information from OpenRouter?" with **Pull now**, **Not now** and **Don't ask again** (saved as `modelCatalog: never` in `config.yaml`). **Refresh** stays on the model step.
+- The OpenRouter list (names, context sizes, per-token prices) is kept on this computer, dated, in `model-catalog/openrouter.json` in the global folder, and read from there afterwards. If the site cannot be reached, the list you already had stays.
+- The details are in [PRIVACY.md](https://github.com/b1tninja/continuous/blob/main/PRIVACY.md) and the OpenRouter provider page.

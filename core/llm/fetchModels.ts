@@ -4,6 +4,8 @@ import { networkFetch, networkFetchWith } from "../util/networkFetch.js";
 
 import { LLMClasses, llmFromProviderAndOptions } from "./llms/index.js";
 import { listOpenAICompatibleModels } from "./localServers.js";
+import { pullOpenRouterCatalog } from "./modelCatalogStore.js";
+import { catalogToFetchedModels } from "./openRouterCatalog.js";
 
 export interface FetchedModel {
   name: string;
@@ -143,34 +145,16 @@ async function fetchOllamaModels(
   }
 }
 
+/**
+ * The public OpenRouter list. Downloading it also keeps the dated copy
+ * (`model-catalog/openrouter.json`), so prices are there for later without a
+ * second request.
+ */
 async function fetchOpenRouterModels(
   requestOptions?: RequestOptions,
 ): Promise<FetchedModel[]> {
   try {
-    const response = await networkFetch(
-      "https://openrouter.ai/api/v1/models",
-      undefined,
-      requestOptions,
-    );
-    if (!response.ok) {
-      throw new Error(`Failed to fetch OpenRouter models: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (!data.data || !Array.isArray(data.data)) {
-      return [];
-    }
-
-    return data.data
-      .filter((m: any) => m.id && m.name)
-      .map((m: any) => ({
-        name: m.name,
-        modelId: m.id,
-        icon: "openrouter.png",
-        contextLength: m.context_length,
-        maxTokens: m.top_provider?.max_completion_tokens,
-        supportsTools: (m.supported_parameters ?? []).includes("tools"),
-      }));
+    return catalogToFetchedModels(await pullOpenRouterCatalog(requestOptions));
   } catch (error) {
     console.error("Error fetching OpenRouter models:", error);
     return [];
