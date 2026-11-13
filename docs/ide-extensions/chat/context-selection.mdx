@@ -20,6 +20,19 @@ You can include the currently open file as context by pressing opt/alt + enter w
 
 You can include a specific file in your current workspace by typing '@Files' and selecting the file.
 
+## How to Drop Files and Folders into Chat (VS Code)
+
+From VS Code 1.140, files dragged from the Explorer or an editor tab no longer reach the chat input ([microsoft/vscode#339036](https://github.com/microsoft/vscode/issues/339036)). Continuous adds a small **Drop Files for Chat** view under the chat for this. Drop files or folders on it from the Explorer, an editor tab or your file manager, and each one is added to the chat input as an `@` mention: a file is read when you send the message, and a folder narrows the codebase search to that folder. You can select several items and drop them together.
+
+Some items are not added, and a message says which and why:
+
+- Anything outside the folders open in the window, including files from your file manager that live elsewhere and unsaved `Untitled` tabs.
+- Files and folders that look like they hold secrets or keys, such as `.env`, `*.pem`, `id_rsa`, `.ssh/` and `.aws/`. These are the same names the `@` file list and indexing skip.
+
+From the keyboard, select the view's row and press Enter, or run **Continuous: Pick Files or Folders for Chat**, to choose items in a dialog. The same rules apply.
+
+The `continuous.chatDropZone` setting controls the view: `auto` (the default) shows it on VS Code 1.140 and later, `always` shows it on every version, and `never` hides it. You can also hide it from the view's context menu, or drag it to another place in the side bar.
+
 ## Codebase Search
 
 For better codebase awareness, see our [guide on making agent mode aware of codebases and documentation](../../guides/codebase-documentation-awareness.mdx).
