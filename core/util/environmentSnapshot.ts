@@ -278,8 +278,8 @@ export function baseSnapshot(input: GatherInput = {}): EnvironmentSnapshot {
     workspace: {
       home: m.home,
       user: m.user,
-      ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
-      ...(input.roots !== undefined ? { roots: [...input.roots] } : {}),
+      ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+      ...(input.roots === undefined ? {} : { roots: [...input.roots] }),
     },
     neverSend: {
       hostName: m.hostName,
@@ -326,7 +326,7 @@ export async function gatherEnvironment(
   snapshot.git = {
     isRepo: true,
     ...(branch.out?.trim() ? { branch: branch.out.trim() } : {}),
-    ...(status.out !== undefined ? { statusZ: status.out } : {}),
+    ...(status.out === undefined ? {} : { statusZ: status.out }),
     ...(status.timedOut ? { statusTimedOut: true } : {}),
     ...(origin.out?.trim() ? { remoteUrl: origin.out.trim() } : {}),
   };
