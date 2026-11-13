@@ -2,6 +2,10 @@ import fs from "fs";
 
 import type { Session, SessionEnvironment } from "core/index.js";
 import {
+  readUserEnvironmentDetail,
+  resolveEnvironmentDetail,
+} from "core/util/environmentDetail.js";
+import {
   CONTEXT_CLOSE,
   ENVIRONMENT_BLOCK_OPEN as BLOCK_OPEN,
   renderEnvironment,
@@ -12,7 +16,6 @@ import {
 } from "core/util/environmentPrompt.js";
 import {
   baseSnapshot,
-  DEFAULT_DETAIL,
   gatherEnvironment,
   isEnvironmentSnapshot,
   type GatherInput,
@@ -95,8 +98,24 @@ export function setEnvironmentDetail(detail: Detail | undefined): void {
   detailSetting = detail;
 }
 
+/**
+ * `--env-detail`, else `environment.detail` in the person's own config.yaml,
+ * else `standard` (core/util/environmentDetail.ts). An assistant's config may
+ * only lower it.
+ */
 export function environmentDetail(): Detail {
-  return detailSetting ?? DEFAULT_DETAIL;
+  return resolveEnvironmentDetail({
+    flag: detailSetting,
+    user: readUserEnvironmentDetail(),
+    lowerOnly: [assistantDetail],
+  });
+}
+
+let assistantDetail: Detail | undefined;
+
+/** `environment.detail` of the loaded assistant config: it may only lower the level. */
+export function setAssistantEnvironmentDetail(detail: Detail | undefined) {
+  assistantDetail = detail;
 }
 
 function currentSession(): Session | undefined {
@@ -197,6 +216,11 @@ export function inheritEnvironment(
     : undefined;
 }
 
+/** The strings a subagent run is carrying, if one is running. */
+export function inheritedEnvironment(): EnvironmentStrings | undefined {
+  return inherited;
+}
+
 /** The block for the first user message of this session. */
 export function environmentContextBlock(): string {
   return environmentDisclosure().firstMessageBlock;
@@ -209,6 +233,7 @@ export function resetEnvironmentContextBlock(): void {
   rendered = undefined;
   inherited = undefined;
   detailSetting = undefined;
+  assistantDetail = undefined;
   surface = "cli";
 }
 

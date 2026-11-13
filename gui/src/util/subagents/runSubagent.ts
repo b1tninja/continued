@@ -27,6 +27,8 @@ import {
 import { resolveSubagentTools } from "core/subagents/tools";
 import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { BuiltInToolNames } from "core/tools/builtIn";
+import { withTerminalToolSentence } from "core/tools/definitions/terminalToolText";
+import { withLeadingText } from "core/util/environmentMessages";
 import { flagToolOutput } from "core/tools/permissions/injection";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { interceptSystemToolCalls } from "core/tools/systemMessageTools/interceptSystemToolCalls";
@@ -127,12 +129,14 @@ function prefixKey(
 export function buildSubagentSystemMessage(
   definition: SubagentDefinition,
   workspaceDirs: string[],
+  /** The parent session has its environment: the folder is in its block, masked */
+  hasEnvironment = false,
 ): string {
   const preamble = [
     `You are "${definition.name}", a subagent. Another agent gave you one task; it sees only your final message, not your tool calls or their output.`,
     "Work on the task with the tools you have. You cannot ask the person questions, and you cannot start subagents.",
     "When you are done, reply with a self-contained report as your final message: the answer first, then the evidence (file paths and line numbers), then anything you could not finish.",
-    workspaceDirs.length
+    workspaceDirs.length && !hasEnvironment
       ? `Workspace folders: ${workspaceDirs.join(", ")}`
       : undefined,
   ]
@@ -212,12 +216,20 @@ export interface HandledCall {
 /** The conversation a run drives: a fresh session with the prompt as its first message. */
 export type LocalSession = ReturnType<typeof sessionSlice.reducer>;
 
-export function newLocalSession(prompt: string): LocalSession {
+export function newLocalSession(
+  prompt: string,
+  /** The parent's first-message block, put before the prompt (ENV17) */
+  environmentBlock?: string,
+): LocalSession {
   return {
     ...INITIAL_SESSION_STATE,
     history: [
       {
-        message: { role: "user", content: prompt, id: "subagent-prompt" },
+        message: {
+          role: "user",
+          content: withLeadingText(prompt, environmentBlock ?? ""),
+          id: "subagent-prompt",
+        },
         contextItems: [],
       },
     ],
@@ -615,6 +627,16 @@ export function prepareSubagentRequests(
   SubagentDriveInput,
   "systemMessage" | "framework" | "completionOptions" | "cachingOn"
 > {
+  // A subagent is told what its parent was told: the parent session's three
+  // environment strings, not a new gather (ENV17), so it can read the
+  // parent's cached prefix.
+  const environment = state.session.environment?.strings;
+  if (environment?.toolSentence) {
+    tools = withTerminalToolSentence(tools, environment.toolSentence);
+  }
+  if (environment?.systemLine) {
+    baseSystem = `${baseSystem}\n\n${environment.systemLine}`;
+  }
   const useNativeTools = state.config.config.experimental
     ?.onlyUseSystemMessageTools
     ? false
@@ -687,7 +709,10 @@ export async function runSubagentTool(
   update(run);
 
   let release: (() => void) | undefined;
-  let local: LocalSession = newLocalSession(args.prompt);
+  let local: LocalSession = newLocalSession(
+    args.prompt,
+    getState().session.environment?.strings?.firstMessageBlock,
+  );
 
   const finish = (status: SubagentRunStatus, error?: string) => {
     const texts = assistantTexts(local.history);
@@ -767,7 +792,11 @@ export async function runSubagentTool(
       state,
       model,
       tools,
-      buildSubagentSystemMessage(definition, workspaceDirs),
+      buildSubagentSystemMessage(
+        definition,
+        workspaceDirs,
+        !!state.session.environment?.strings,
+      ),
     );
 
     release = await acquireSubagentSlots(ideMessenger, model, signal);

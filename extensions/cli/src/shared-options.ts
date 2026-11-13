@@ -96,6 +96,10 @@ export function addCommonOptions(command: Command): Command {
     .option(
       "--agent <slug>",
       "Load agent file from the hub (slug in format 'owner/package')",
+    )
+    .option(
+      "--env-detail <level>",
+      "How much the agent is told about this machine and folder: minimal, standard (default) or full. Your account name, host name, git identity and addresses are never sent.",
     );
 }
 
@@ -127,6 +131,7 @@ export function mergeParentOptions(parentCommand: Command, options: any): any {
     "maxTurns",
     "maxDuration",
     "budgetAllowUnpriced",
+    "envDetail",
   ];
 
   for (const optName of inheritableOptions) {

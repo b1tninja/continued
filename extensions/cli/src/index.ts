@@ -4,6 +4,7 @@
 import "./init.js";
 
 import { Command } from "commander";
+import { parseEnvDetail } from "core/util/environmentSnapshot.js";
 import { dismissCurrentNotice } from "core/util/retirementStartup.js";
 
 import { addRunLimitOptions } from "./budget/runLimits.js";
@@ -24,6 +25,7 @@ import { sandboxCommand } from "./commands/sandbox.js";
 import { serve } from "./commands/serve.js";
 import { terminalEnvCommand } from "./commands/terminalEnv.js";
 import { testConnectionCommand } from "./commands/testConnection.js";
+import { setEnvironmentDetail } from "./environmentContext.js";
 import {
   handleValidationErrors,
   validateFlags,
@@ -238,6 +240,18 @@ addRunLimitOptions(addCommonOptions(program))
         );
       }
       logger.debug("Verbose logging enabled");
+    }
+
+    // --env-detail: how much the model is told about the machine (ENV18)
+    if (options.envDetail !== undefined) {
+      const detail = parseEnvDetail(options.envDetail);
+      if (!detail) {
+        safeStderr(
+          `--env-detail must be minimal, standard or full (got "${options.envDetail}")\n`,
+        );
+        process.exit(1);
+      }
+      setEnvironmentDetail(detail);
     }
 
     // Handle piped input for headless mode (only if we haven't already read it)

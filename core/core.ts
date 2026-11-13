@@ -15,6 +15,7 @@ import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveToolDialect } from "./config/yaml/saveToolDialect";
 import { getOllamaShowHint } from "./util/ollamaShowHint";
+import { editorEnvironmentDetail } from "./util/environmentDetail";
 import { editorSessionEnvironment } from "./util/environmentSession";
 import { probeStatusFor } from "./util/measuredFacts";
 import {
@@ -989,6 +990,10 @@ export class Core {
       editorSessionEnvironment({
         saved: msg.data?.saved,
         workspaceDirs: () => this.ide.getWorkspaceDirs(),
+        // A remote window: the system line says so, the shell is not known
+        // here and the local git is not read (ENV15)
+        remoteName: async () => (await this.ide.getIdeInfo()).remoteName,
+        detail: editorEnvironmentDetail(),
       }),
     );
 

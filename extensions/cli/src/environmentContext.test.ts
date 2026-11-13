@@ -6,10 +6,12 @@ import {
   ENVIRONMENT_BLOCK_OPEN,
   ensureSessionEnvironment,
   environmentContextBlock,
+  environmentDetail,
   environmentDisclosure,
   inheritEnvironment,
   resetEnvironmentContextBlock,
   sessionEnvironment,
+  setAssistantEnvironmentDetail,
   setEnvironmentDetail,
   withEnvironmentBlock,
 } from "./environmentContext.js";
@@ -78,6 +80,17 @@ describe("the session's environment", () => {
     setEnvironmentDetail("full");
     expect(sessionEnvironment().detail).toBe("minimal");
     expect(environmentContextBlock()).not.toContain("Working folder");
+  });
+
+  it("an assistant's environment.detail may lower the level, never raise it", () => {
+    setAssistantEnvironmentDetail("minimal");
+    expect(environmentDetail()).toBe("minimal");
+    setAssistantEnvironmentDetail("full");
+    expect(environmentDetail()).toBe("standard");
+    setEnvironmentDetail("full");
+    expect(environmentDetail()).toBe("full");
+    setAssistantEnvironmentDetail("minimal");
+    expect(environmentDetail()).toBe("minimal");
   });
 
   it("a subagent carries the parent's three strings", () => {

@@ -110,15 +110,16 @@ describe("the terminal tool's shell sentence", () => {
       "Runs in TESTSHELL.",
     );
     expect(terminal.function.description).toMatch(/Runs in TESTSHELL\.$/);
-    expect(terminal.systemMessageDescription?.prefix).toContain(
-      "Runs in TESTSHELL.",
-    );
+    expect(
+      (terminal as typeof runTerminalCommandTool).systemMessageDescription
+        ?.prefix,
+    ).toContain("Runs in TESTSHELL.");
     expect(read).toBe(other);
   });
 });
 
 describe("placing the texts in messages", () => {
-  const msgs = [
+  const msgs: Array<{ role: string; content: unknown }> = [
     { role: "system", content: "s" },
     { role: "user", content: "one" },
     { role: "assistant", content: "a" },
