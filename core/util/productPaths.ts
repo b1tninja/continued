@@ -100,6 +100,7 @@ export const PRODUCT_STATE_PATHS = [
   ".onboarding_complete",
   "node_modules",
   "plans",
+  "reset-backups",
 ] as const;
 
 export type LoadedDirName = keyof typeof PRODUCT_LOADED_DIRS;
