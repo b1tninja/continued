@@ -3026,12 +3026,20 @@ export interface CompiledMessagesResult {
 
 export interface AddToChatPayload {
   data: AddToChatPayloadItem[];
+  /** Resources the host would not add, so the chat can say why. */
+  refused?: AddToChatRefusal[];
 }
 
-interface AddToChatPayloadItem {
+export interface AddToChatPayloadItem {
   type: "file" | "folder";
+  /** A URI string, read by the `file` or `folder` provider at send time. */
   fullPath: string;
   name: string;
+}
+
+export interface AddToChatRefusal {
+  name: string;
+  reason: "secret" | "outside-workspace" | "not-found" | "unsaved";
 }
 
 export interface MessageOption {
