@@ -350,7 +350,7 @@
       },
       {
         "command": "continuous.forceAutocomplete",
-        "title": "Continuous: Force Autocomplete",
+        "title": "Force Autocomplete",
         "category": "Continuous"
       },
       {
@@ -481,17 +481,17 @@
       {
         "command": "continuous.forceNextEdit",
         "category": "Continuous",
-        "title": "Continuous: Force Next Edit"
+        "title": "Force Next Edit"
       },
       {
         "command": "continuous.acceptJump",
         "category": "Continuous",
-        "title": "Continuous: Accept Jump Suggestion"
+        "title": "Accept Jump Suggestion"
       },
       {
         "command": "continuous.rejectJump",
         "category": "Continuous",
-        "title": "Continuous: Reject Jump Suggestion"
+        "title": "Reject Jump Suggestion"
       },
       {
         "command": "continuous.openInNewWindow",

@@ -259,14 +259,14 @@ addRunLimitOptions(addCommonOptions(program))
     // Agent files can provide their own prompts, and resume can work without new input
     if (options.print && !prompt && !options.agent && !options.resume) {
       safeStderr(
-        "Error: A prompt is required when using the -p/--print flag, unless --prompt, --agent, or --resume is provided.\n\n",
+        "Error: A prompt is required when using the -p/--print flag, unless --agent or --resume is provided.\n\n",
       );
       safeStderr("Usage examples:\n");
       safeStderr('  cn -p "please review my current git diff"\n');
       safeStderr('  echo "hello" | cn -p\n');
       safeStderr('  cn -p "analyze the code in src/"\n');
-      safeStderr("  cn -p --agent my-org/my-agent\n");
-      safeStderr("  cn -p --prompt my-org/my-prompt\n");
+      safeStderr("  cn -p --agent ./agents/my-agent.md\n");
+      safeStderr("  cn -p --prompt ./notes.md 'summarize these notes'\n");
       safeStderr("  cn -p --resume\n");
       await gracefulExit(1);
     }
