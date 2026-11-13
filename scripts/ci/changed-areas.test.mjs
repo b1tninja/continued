@@ -126,6 +126,6 @@ test("an empty list fails safe", () => {
 test("job count of a full code push", () => {
   assert.equal(
     jobCount(allAreas()),
-    2 + 1 + 1 + 1 + 1 + 1 + 7 + 12 + 1 + 3 + 2,
+    2 + 1 + 1 + 1 + 1 + 1 + 1 + 11 + 1 + 3 + 2,
   );
 });

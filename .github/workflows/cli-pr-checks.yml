@@ -5,6 +5,12 @@ name: CLI PR Checks
 # the full OS x Node matrix runs nightly and on dispatch.
 on:
   workflow_call:
+    inputs:
+      # JSON array of the changed files, from the merge gate's `changes` job, for affected-only unit
+      # tests on pull requests (scripts/ci/affected-tests.mjs); empty means run everything.
+      changed_files:
+        type: string
+        default: ""
   schedule:
     - cron: "41 5 * * *"
   workflow_dispatch:
@@ -146,10 +152,16 @@ jobs:
           cd extensions/cli
           npm run test:smoke
 
+      # Pull requests: the unit tests related to the changed CLI modules plus a smoke set, or everything
+      # when narrowing is not safe; in shadow mode (the default) the selection is only reported. The
+      # smoke and e2e tests around this step always run in full.
       - name: Run tests
-        run: |
-          cd extensions/cli
-          npm test
+        run: node scripts/ci/affected-tests.mjs --suite cli
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGED_FILES: ${{ inputs.changed_files }}
+          # Unset: shadow mode (select, report, run everything). `on`: run the selection.
+          AFFECTED_TESTS: ${{ vars.CI_AFFECTED_TESTS }}
 
       # e2e tests are failing on Windows specifically - likely due to stdout flush issues
       - name: Run e2e tests
