@@ -1,3 +1,4 @@
+import type { ToolDialectSetting } from "@continuedev/config-yaml";
 import {
   ActionReducerMapBuilder,
   AsyncThunk,
@@ -5,7 +6,6 @@ import {
   createSelector,
   createSlice,
 } from "@reduxjs/toolkit";
-import type { ToolDialectSetting } from "@continuedev/config-yaml";
 import { JSONContent } from "@tiptap/react";
 import {
   ApplyState,
@@ -18,6 +18,7 @@ import {
   FileCheckpoint,
   FileSymbolMap,
   InputModifiers,
+  LoopState,
   McpUiState,
   MessageModes,
   PromptLog,
@@ -27,44 +28,48 @@ import {
   Session,
   SessionUsage,
   SubagentRunState,
+  TaskPlan,
   ThinkingChatMessage,
   Tool,
   ToolCallDelta,
   ToolCallState,
-  LoopState,
-  TaskPlan,
   TurnCheckpoint,
   TurnInterruption,
   Usage,
 } from "core";
 import { mergeReasoningDetails } from "core/llm/openaiTypeConverters";
 import { addRequestUsage } from "core/llm/utils/sessionUsage";
-import { historyKey } from "../../util/selectiveCompaction";
-import { interruptSubagentRuns } from "../../util/subagents/interrupt";
-import { markTurnCutOffOnLoad } from "../../util/resumeTurn";
-import { abortLoopWorkers } from "../../util/subagents/loopWorkers";
 import { addFileSnapshot } from "core/util/checkpoints";
-import { restoreLoop } from "core/util/loopMode";
-import { isTaskPlan } from "core/util/taskPlan";
 import { NEW_SESSION_TITLE } from "core/util/constants";
+import {
+  DROPPED_PROMPT_MARKER,
+  keepLatestPromptOnly,
+  withoutPrompt,
+} from "core/util/promptLogs";
+import { restoreLoop } from "core/util/loopMode";
 import {
   renderChatMessage,
   renderContextItems,
 } from "core/util/messageContent";
+import { isTaskPlan } from "core/util/taskPlan";
 import { findUriInDirs, getUriPathBasename } from "core/util/uri";
 import { findLastIndex } from "lodash";
 import { v4 as uuidv4 } from "uuid";
 import { type InlineErrorMessageType } from "../../components/mainInput/InlineErrorMessage";
 import { toolCallCtxItemToCtxItemWithId } from "../../pages/gui/ToolCallDiv/utils";
-import { addToolCallDeltaToState, isEditTool } from "../../util/toolCallState";
 import { appendLedger, type CacheLedgerEntry } from "../../util/cacheLedger";
-import { appendFailure, type RequestFailure } from "../../util/requestFailures";
 import {
   INITIAL_PROMPT_CACHE_STATE,
   type PromptCacheKey,
   type PromptCacheMiss,
   type PromptCacheSessionState,
 } from "../../util/promptCache";
+import { appendFailure, type RequestFailure } from "../../util/requestFailures";
+import { markTurnCutOffOnLoad } from "../../util/resumeTurn";
+import { historyKey } from "../../util/selectiveCompaction";
+import { interruptSubagentRuns } from "../../util/subagents/interrupt";
+import { abortLoopWorkers } from "../../util/subagents/loopWorkers";
+import { addToolCallDeltaToState, isEditTool } from "../../util/toolCallState";
 import { RootState } from "../store";
 import { streamResponseThunk } from "../thunks/streamResponse";
 import { findChatHistoryItemByToolCallId, findToolCallById } from "../util";
@@ -379,9 +384,24 @@ export const sessionSlice = createSlice({
 
       const lastMessage = state.history[state.history.length - 1];
 
+      // Only the newest request keeps its full prompt (core/util/promptLogs):
+      // every prompt repeats the whole conversation, so keeping them all grew
+      // the session with the square of its length until the window ran out
+      // of memory. Only a log that still holds a prompt is replaced, so the
+      // items that are already small stay the same objects.
+      for (const item of state.history) {
+        if (
+          item.promptLogs?.some((log) => log.prompt !== DROPPED_PROMPT_MARKER)
+        ) {
+          item.promptLogs = item.promptLogs.map(withoutPrompt);
+        }
+      }
+      const added = payload.map((log, i) =>
+        i === payload.length - 1 ? log : withoutPrompt(log),
+      );
       lastMessage.promptLogs = lastMessage.promptLogs
-        ? lastMessage.promptLogs.concat(payload)
-        : payload;
+        ? lastMessage.promptLogs.concat(added)
+        : added;
 
       // Inactive thinking for reasoning models when '</think>' tag is not received on request completion
       if (lastMessage.reasoning?.active) {
@@ -1082,7 +1102,7 @@ export const sessionSlice = createSlice({
       };
 
       if (payload) {
-        state.history = payload.history as any;
+        state.history = keepLatestPromptOnly(payload.history) as any;
         // A subagent cannot outlive the window that ran it: one saved while
         // running is shown as interrupted, not spinning forever.
         interruptSubagentRuns(state.history);

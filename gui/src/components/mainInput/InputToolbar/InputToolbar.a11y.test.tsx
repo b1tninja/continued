@@ -18,7 +18,7 @@ async function renderToolbar() {
   const store = setupStore({ ideMessenger });
   await renderWithProviders(
     <div>
-      <AttachMenu onAddContextItem={vi.fn()} onImageFileSelected={vi.fn()} />
+      <AttachMenu onAddContextItem={vi.fn()} onImageFilesSelected={vi.fn()} />
       <InputToolbar activeKey={null} onEnter={vi.fn()} isMainInput />
     </div>,
     { store, mockIdeMessenger: ideMessenger },

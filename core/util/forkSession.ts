@@ -1,4 +1,5 @@
 import type { Session, SessionPromptCache } from "../index.js";
+import { withoutPrompts } from "./promptLogs.js";
 
 /** Where a forked session came from. */
 export interface ForkedFrom {
@@ -69,8 +70,10 @@ export function forkSession(
     title: forkTitle(parent.title),
     workspaceDirectory: parent.workspaceDirectory,
     // A deep copy: the parent's items may be frozen (the GUI's store) and
-    // must not be shared with a session that will grow on its own
-    history: structuredClone(parent.history.slice(0, end)),
+    // must not be shared with a session that will grow on its own. Prompts
+    // are dropped before the copy: a fork is a new session, and each prompt
+    // repeats the conversation before it (promptLogs.ts)
+    history: structuredClone(withoutPrompts(parent.history.slice(0, end))),
     forkedFrom: {
       sessionId: parent.sessionId,
       ...(kept && { index: end - 1 }),

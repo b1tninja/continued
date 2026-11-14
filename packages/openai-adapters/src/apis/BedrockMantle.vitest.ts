@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BedrockMantleApi } from "./BedrockMantle.js";
+import { BedrockMantleApi, resetLearnedMantleQuirks } from "./BedrockMantle.js";
 import { OpenAIApi } from "./OpenAI.js";
 
 const make = (config: any = {}) =>
@@ -22,6 +22,9 @@ const wrongRoute = () =>
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // What one test taught the adapter is kept per region and model for the
+  // life of the process; the next test starts from nothing
+  resetLearnedMantleQuirks();
   delete process.env.AWS_BEARER_TOKEN_BEDROCK;
 });
 

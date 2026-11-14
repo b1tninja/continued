@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ChatHistoryItem, Session } from "../index.js";
 import { forkSession, forkTitle } from "./forkSession";
+import { DROPPED_PROMPT_MARKER } from "./promptLogs";
 
 const item = (
   role: "user" | "assistant",
@@ -96,6 +97,31 @@ describe("forkSession: what a fork copies", () => {
     const p = parent();
     const fork = forkSession(p, { sessionId: "fork" });
     expect(JSON.stringify(fork.history)).toBe(JSON.stringify(p.history));
+  });
+
+  it("drops prompts, keeping the completions", () => {
+    const p = parent();
+    p.history[1] = {
+      ...p.history[1],
+      promptLogs: [
+        {
+          modelTitle: "m",
+          modelProvider: "p",
+          prompt: "the whole conversation",
+          completion: "done",
+        },
+      ],
+    };
+    const fork = forkSession(p, { sessionId: "fork" });
+    expect(fork.history[1].promptLogs).toEqual([
+      {
+        modelTitle: "m",
+        modelProvider: "p",
+        prompt: DROPPED_PROMPT_MARKER,
+        completion: "done",
+      },
+    ]);
+    expect(p.history[1].promptLogs![0].prompt).toBe("the whole conversation");
   });
 
   it("copies the history instead of sharing it", () => {

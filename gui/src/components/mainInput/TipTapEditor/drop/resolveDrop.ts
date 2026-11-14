@@ -12,9 +12,9 @@
  *    a file becomes an `@file` mention, read by the file provider at send
  *    time, exactly as if it had been picked from the `@` list.
  */
-import { findUriInDirs } from "core/util/uri";
 import { securityPatternHit } from "core/indexing/securityPatterns";
 import { stripInvisible } from "core/util/fetchedText";
+import { findUriInDirs } from "core/util/uri";
 import { DropItem, FileLike, stripFragment, uriBasename } from "./classifyDrop";
 
 /** Image caps for one message (owner decision D3 in the input research). */
@@ -32,6 +32,7 @@ export type RefusalReason =
   | "no-vision"
   | "too-many-images"
   | "image-too-large"
+  | "unreadable-image"
   | "no-file-provider"
   | "no-folder-provider";
 
@@ -271,6 +272,7 @@ const REASON_TEXT: Record<RefusalReason, (name: string) => string> = {
   "too-many-images": (n) =>
     `${n}: a message can hold at most ${MAX_IMAGES_PER_MESSAGE} images`,
   "image-too-large": (n) => `${n} is larger than 5 MB`,
+  "unreadable-image": (n) => `${n} could not be read as an image`,
   "no-file-provider": (n) =>
     `${n}: file context is not available in this configuration`,
   "no-folder-provider": (n) =>
