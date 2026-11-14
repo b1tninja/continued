@@ -39,7 +39,11 @@ export function noteCliToolResult(
 
 /** `/untaint`: the person has reviewed what came in. */
 export function handleUntaint(): { exit: false; output: string } {
-  const cleared = untaintSession(CLI_TAINT_SESSION, "untaint-command");
+  const cleared = untaintSession(
+    CLI_TAINT_SESSION,
+    "untaint-command",
+    "/untaint",
+  );
   return {
     exit: false,
     output: cleared.length

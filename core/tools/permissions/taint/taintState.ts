@@ -26,6 +26,23 @@ export interface TaintFact {
 /** What ends a taint: the person's own action, or a new session. */
 export type TaintClearReason = "user-ack" | "untaint-command" | "new-session";
 
+/** How a label arrived: a tool's result, a subagent handing it back, or a fork. */
+export type TaintAddReason = "tool-result" | "subagent" | "inherited";
+
+/**
+ * One label added to or cleared from a session, for the audit trail. `source`
+ * is the tool that brought the content in (an add) or the control that
+ * cleared it (a clear).
+ */
+export interface TaintChange {
+  session: string;
+  op: "add" | "clear";
+  label: TaintKind;
+  turn?: number;
+  source?: string;
+  reason: TaintAddReason | TaintClearReason;
+}
+
 interface Entry {
   turn?: number;
   /** Copied from a parent at fork: a join does not hand it back */
@@ -41,15 +58,42 @@ export const DEFAULT_TAINT_SESSION = "default";
 export class TaintRegistry {
   private readonly sessions = new Map<string, SessionTaint>();
   private readonly callSession = new Map<string, string>();
+  private listener?: (change: TaintChange) => void;
+
+  /** Who hears of every add and clear (the audit trail). One at a time. */
+  setListener(listener: ((change: TaintChange) => void) | undefined): void {
+    this.listener = listener;
+  }
+
+  private emit(change: TaintChange): void {
+    try {
+      this.listener?.(change);
+    } catch {
+      // the record is a nicety; it never changes the taint
+    }
+  }
 
   /** Add a source. Returns true when this kind was not already recorded. */
-  mark(session: string, kind: TaintKind, turn?: number): boolean {
+  mark(
+    session: string,
+    kind: TaintKind,
+    turn?: number,
+    origin: { source?: string; reason?: TaintAddReason } = {},
+  ): boolean {
     let entries = this.sessions.get(session);
     if (!entries) this.sessions.set(session, (entries = new Map()));
     if (entries.has(kind)) return false;
     entries.set(kind, {
       inherited: false,
       ...(turn === undefined ? {} : { turn }),
+    });
+    this.emit({
+      session,
+      op: "add",
+      label: kind,
+      ...(turn === undefined ? {} : { turn }),
+      ...(origin.source ? { source: origin.source } : {}),
+      reason: origin.reason ?? "tool-result",
     });
     return true;
   }
@@ -67,10 +111,26 @@ export class TaintRegistry {
     };
   }
 
-  /** Clear the session. Returns the kinds that were cleared. */
-  clear(session: string, _reason: TaintClearReason): TaintKind[] {
+  /**
+   * Clear the session. Returns the kinds that were cleared; each is reported
+   * to the listener with the reason and the control that cleared it.
+   */
+  clear(
+    session: string,
+    reason: TaintClearReason,
+    source?: string,
+  ): TaintKind[] {
     const cleared = this.fact(session)?.kinds ?? [];
     this.sessions.delete(session);
+    for (const label of cleared) {
+      this.emit({
+        session,
+        op: "clear",
+        label,
+        reason,
+        ...(source ? { source } : {}),
+      });
+    }
     return cleared;
   }
 
@@ -81,6 +141,16 @@ export class TaintRegistry {
     const copy: SessionTaint = new Map();
     for (const [kind, e] of from) copy.set(kind, { ...e, inherited: true });
     this.sessions.set(child, copy);
+    for (const [kind, e] of copy) {
+      this.emit({
+        session: child,
+        op: "add",
+        label: kind,
+        ...(e.turn === undefined ? {} : { turn: e.turn }),
+        source: parent,
+        reason: "inherited",
+      });
+    }
   }
 
   /** What the child met comes back to the parent; what it only inherited does not. */
@@ -88,7 +158,9 @@ export class TaintRegistry {
     const from = this.sessions.get(child);
     if (!from) return;
     for (const [kind, e] of from) {
-      if (!e.inherited) this.mark(parent, kind, e.turn);
+      if (!e.inherited) {
+        this.mark(parent, kind, e.turn, { source: child, reason: "subagent" });
+      }
     }
   }
 

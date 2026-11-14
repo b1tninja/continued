@@ -458,7 +458,7 @@ export function listCallsBounded(
 export interface AuditChangeRow {
   ts: string;
   session: string;
-  /** "setting" or "policy": the record's own `ev` */
+  /** "setting", "policy" or "taint": the record's own `ev` */
   ev: string;
   /** What changed: a kind such as `level`, or `rule` for a rule edit; an unknown kind shows as written */
   kind: string;
@@ -488,6 +488,19 @@ function changeRow(r: AuditRecord): AuditChangeRow | undefined {
       loosens: rec.loosens === true,
     };
   }
+  if (r.ev === "taint") {
+    const why = str(rec.reason) ? ` (${str(rec.reason)})` : "";
+    return {
+      ts: r.ts,
+      session: r.session,
+      ev: r.ev,
+      kind: "taint",
+      source: str(rec.source) ?? "unknown",
+      summary: `${str(rec.op) ?? "change"} ${str(rec.label) ?? "?"}${why}`,
+      // A clear lets calls run unasked that asked before
+      loosens: rec.op === "clear",
+    };
+  }
   if (r.ev === "policy") {
     return {
       ts: r.ts,
@@ -504,7 +517,8 @@ function changeRow(r: AuditRecord): AuditChangeRow | undefined {
 }
 
 /**
- * Setting and rule changes across all sessions, oldest first. Records of a
+ * Setting and rule changes, and taint labels added and cleared, across all
+ * sessions, oldest first. Records of a
  * kind this reader does not know are skipped by the `ev` check, the way every
  * reader here skips them; a `setting` record with a kind it does not know is
  * listed with that kind as written.

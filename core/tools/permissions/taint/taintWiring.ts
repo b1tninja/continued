@@ -1,3 +1,4 @@
+import { getAuditTrail } from "../audit/global";
 import {
   readTaintedSessionRule,
   type TaintedSessionRule,
@@ -6,10 +7,25 @@ import { taintKindOfCall, type SourceCall } from "./taintSources";
 import {
   DEFAULT_TAINT_SESSION,
   taintRegistry,
+  type TaintChange,
   type TaintClearReason,
   type TaintFact,
   type TaintKind,
 } from "./taintState";
+
+/**
+ * Every add and clear goes to the audit trail as a `taint` record. Nothing is
+ * marked while the rule is `off`, so nothing is written either. Never throws.
+ */
+export function recordTaintChange(change: TaintChange): void {
+  try {
+    getAuditTrail().taint(change);
+  } catch {
+    // the trail is best effort
+  }
+}
+
+taintRegistry.setListener(recordTaintChange);
 
 /**
  * The few functions the hosts call. Each does nothing when the person's
@@ -64,17 +80,23 @@ export function noteToolResult(
       note.session ??
       taintRegistry.sessionOfCall(note.callId) ??
       DEFAULT_TAINT_SESSION;
-    taintRegistry.mark(session, kind, note.turn);
+    taintRegistry.mark(session, kind, note.turn, {
+      source: note.call.toolName,
+    });
     return kind;
   } catch {
     return undefined;
   }
 }
 
-/** The person acknowledged the content, or started over: the session is clean again. */
+/**
+ * The person acknowledged the content, or started over: the session is clean
+ * again. `source` names the control that cleared it, for the audit record.
+ */
 export function untaintSession(
   session: string | undefined,
   reason: TaintClearReason,
+  source?: string,
 ): TaintKind[] {
-  return taintRegistry.clear(session ?? DEFAULT_TAINT_SESSION, reason);
+  return taintRegistry.clear(session ?? DEFAULT_TAINT_SESSION, reason, source);
 }
