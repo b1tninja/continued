@@ -58,15 +58,15 @@ Owner report: "YOLO/IDGAF mode is still prompting in some scenarios asking the u
 
 ## Where the mode was lost
 
-| Place                                  | Before                                                                      | After                                                         |
-| -------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Subagent (CLI, headless)               | asks became `exclude` before core                                           | lifted at IDGAF; structural limits kept                       |
-| Subagent (GUI)                         | uses the parent's `selectApprovalSettings`                                  | unchanged (correct)                                           |
-| Loop worker (CLI)                      | raw levels: `--auto` lost                                                   | `effectiveLevels(mode)` (#825)                                |
-| Resumed loop (CLI)                     | the policy saved with the session was used (stale in either direction)      | re-synced to this process's levels on resume (follow-up PR)   |
-| Resumed session (CLI)                  | levels come from flags per process; IDGAF never written to permissions.yaml | unchanged: pass `--policy idgaf` again (owner decision 5)     |
-| Webview reload or editor restart (GUI) | `loadPolicySettings` replaced IDGAF with the file's levels                  | areas the webview remembered at IDGAF are kept (follow-up PR) |
-| New chat session or model switch (GUI) | levels are global in `ui.policyLevels`                                      | unchanged (correct)                                           |
+| Place                                              | Before                                                                      | After                                                                                                                                                                                 |
+| -------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Subagent (CLI, headless)                           | asks became `exclude` before core                                           | lifted at IDGAF; structural limits kept                                                                                                                                               |
+| Subagent (GUI)                                     | uses the parent's `selectApprovalSettings`                                  | unchanged (correct)                                                                                                                                                                   |
+| Loop worker (CLI)                                  | raw levels: `--auto` lost                                                   | `effectiveLevels(mode)` (#825)                                                                                                                                                        |
+| Resumed loop (CLI)                                 | the policy saved with the session was used (stale in either direction)      | re-synced to this process's levels on resume (follow-up PR)                                                                                                                           |
+| Resumed session (CLI)                              | levels come from flags per process; IDGAF never written to permissions.yaml | unchanged: pass `--policy idgaf` again (owner decision 5)                                                                                                                             |
+| Webview reload or extension host restart (VS Code) | `loadPolicySettings` replaced IDGAF with the file's levels                  | the session's IDGAF areas are kept in workspace state under `vscode.env.sessionId` (`util/sessionIdgaf.ts`); a new editor session or window starts at the saved levels (follow-up PR) |
+| New chat session or model switch (GUI)             | levels are global in `ui.policyLevels`                                      | unchanged (correct)                                                                                                                                                                   |
 
 ## Recording
 
