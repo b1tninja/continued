@@ -28,7 +28,9 @@ import {
 import {
   AWS_PRICE_LIST_SOURCE,
   calculateRequestCost,
+  standardPricedServedTier,
 } from "./utils/calculateRequestCost";
+import { addRequestUsage, summarizeSessionUsage } from "./utils/sessionUsage";
 
 /**
  * A trimmed AmazonBedrock offer file for us-east-1, in the bulk file's
@@ -288,6 +290,42 @@ describe("calculateRequestCost with the AWS Price List", () => {
     expect(cost.servedTier).toBe("flex");
     expect(cost.breakdown).toContain(", flex tier,");
     expect(cost.breakdown).not.toContain("Prices: standard tier");
+  });
+
+  it("gives session totals no standard-tier note for a tier priced at its own rows", () => {
+    const flex = addRequestUsage(
+      undefined,
+      "bedrock",
+      "meta.llama4-scout-17b-instruct-v1:0",
+      {
+        promptTokens: 1_000_000,
+        completionTokens: 1_000_000,
+        response: { serviceTier: "flex" },
+      } as any,
+    );
+    expect(summarizeSessionUsage(flex).servedTiers).toEqual([]);
+    const priority = addRequestUsage(
+      undefined,
+      "bedrock",
+      "amazon.nova-pro-v1:0",
+      {
+        promptTokens: 1_000_000,
+        completionTokens: 0,
+        response: { serviceTier: "priority" },
+      } as any,
+    );
+    expect(summarizeSessionUsage(priority).servedTiers).toEqual(["priority"]);
+  });
+
+  it("standardPricedServedTier names only a tier priced at standard rates", () => {
+    expect(standardPricedServedTier(undefined)).toBeUndefined();
+    expect(standardPricedServedTier({})).toBeUndefined();
+    expect(
+      standardPricedServedTier({ servedTier: "flex", pricedTier: "flex" }),
+    ).toBeUndefined();
+    expect(standardPricedServedTier({ servedTier: "priority" })).toBe(
+      "priority",
+    );
   });
 
   it("keeps the standard price and the note for a tier the list does not price", () => {

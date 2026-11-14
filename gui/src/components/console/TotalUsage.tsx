@@ -1,4 +1,7 @@
-import { calculateRequestCost } from "core/llm/utils/calculateRequestCost";
+import {
+  calculateRequestCost,
+  standardPricedServedTier,
+} from "core/llm/utils/calculateRequestCost";
 import React, { useMemo, useState } from "react";
 import { LLMLog } from "../../hooks/useLLMLog";
 import { ModelInfoFreshness } from "../ModelInfoFreshness";
@@ -306,7 +309,9 @@ const TotalUsage: React.FC<TotalUsageProps> = ({ llmLog }) => {
               <PriceSourceNote
                 className="text-center text-xs text-[color:var(--vscode-descriptionForeground)]"
                 sources={totalUsage.costBreakdowns.map((b) => b.priceSource)}
-                servedTiers={totalUsage.costBreakdowns.map((b) => b.servedTier)}
+                servedTiers={totalUsage.costBreakdowns.map(
+                  standardPricedServedTier,
+                )}
               />
               <ModelInfoFreshness className="mt-1 items-center" />
             </div>

@@ -863,6 +863,22 @@ export function isStandardTier(tier: string | undefined): boolean {
   return !tier || STANDARD_TIERS.has(tier.toLowerCase());
 }
 
+/**
+ * The served tier a cost was priced at the standard rates for, which is what
+ * `tierNote` describes: the tier the provider reported, unless the prices
+ * used were that tier's own (`pricedTier`, the AWS Price List's flex and
+ * priority rows), in which case there is nothing to note.
+ */
+export function standardPricedServedTier(
+  cost: Pick<CostBreakdown, "servedTier" | "pricedTier"> | null | undefined,
+): string | undefined {
+  const tier = cost?.servedTier;
+  if (!tier) return undefined;
+  return cost?.pricedTier?.toLowerCase() === tier.toLowerCase()
+    ? undefined
+    : tier;
+}
+
 /** What a non-standard tier means for the standard price shown. */
 export function tierNote(tier: string): string {
   const t = tier.toLowerCase();

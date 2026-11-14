@@ -1,6 +1,10 @@
 import type { ModelUsage, SessionUsage, Usage } from "../..";
 import { totalInputTokens } from "./cacheStats";
-import { calculateRequestCost, type PriceSource } from "./calculateRequestCost";
+import {
+  calculateRequestCost,
+  standardPricedServedTier,
+  type PriceSource,
+} from "./calculateRequestCost";
 import { distinctPriceSources } from "./priceSourceText";
 
 export const EMPTY_SESSION_USAGE: SessionUsage = {
@@ -75,7 +79,10 @@ export function addRequestUsage(
         }
       : {}),
     ...(priced?.priceSource ? { priceSource: priced.priceSource } : {}),
-    ...(priced?.servedTier ? { servedTier: priced.servedTier } : {}),
+    // Only a tier priced at the standard rates needs the tier note
+    ...(standardPricedServedTier(priced)
+      ? { servedTier: standardPricedServedTier(priced) }
+      : {}),
   };
 
   const prevDetails = base.promptTokensDetails ?? {};
