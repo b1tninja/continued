@@ -3,8 +3,12 @@
  * text so the model can tell it from the user's and the system's. After
  * Hines et al., "Defending Against Indirect Prompt Injection Attacks With
  * Spotlighting" (arXiv 2403.14720). It lowers the rate of the injections a
- * model would follow; it does not stop an adaptive attacker, and it is not
- * wired into any tool path yet.
+ * model would follow; it does not stop an adaptive attacker.
+ *
+ * Wired into one tool path: `fetch_url_content` wraps the page text
+ * (`core/tools/implementations/fetchUrlContent.ts`) when
+ * `experimental.spotlightUntrusted` is true or CONTINUOUS_SPOTLIGHT_UNTRUSTED=1
+ * is set. Both are off by default. No other tool result is wrapped.
  *
  * Pure: the only environment it touches is the random source, which a caller
  * can replace. No Node imports, so the webview may import it.
