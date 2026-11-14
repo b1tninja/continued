@@ -7,6 +7,11 @@
  * about the content is kept: not the text, not the URL, not a hash. The state
  * is a few bytes per session.
  *
+ * `secret` is the one confidentiality label: a secret was read into the
+ * session (a protected secret path, a credential printed by a command). It
+ * says private data is present, not that the content is untrusted, so on its
+ * own it raises only the sinks that send data out (`taintRule.ts`).
+ *
  * An MCP result is labelled per server, `mcp:<server>`, so acknowledging one
  * server's output does not forgive another's. `mcp-result` remains for a
  * result whose server the host cannot name.
@@ -17,6 +22,7 @@ export const TAINT_KINDS = [
   "outside-read",
   "untrusted-workspace",
   "issue-text",
+  "secret",
 ] as const;
 export type TaintKind = (typeof TAINT_KINDS)[number];
 /** A fixed kind, or the label of one MCP server's results. */

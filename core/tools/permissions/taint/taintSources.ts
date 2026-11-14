@@ -2,6 +2,8 @@ import * as nodePath from "node:path";
 import { BuiltInToolNames } from "../../builtIn";
 import { commandCandidateSet } from "../candidates";
 import { programName } from "../destinations";
+import { isSecretPath } from "../protectedPaths";
+import { jqEnvironmentLabel, secretWordLabel } from "../secretCommands";
 import type { ShellKind } from "../../../util/shell";
 import { mcpLabel, type TaintKind, type TaintLabel } from "./taintState";
 
@@ -99,13 +101,65 @@ function commandSource(command: string, shell?: ShellKind) {
   return undefined;
 }
 
+/** Tools that read a file's content (a folder listing is not a read of a secret). */
+const CONTENT_READS = new Set<string>([
+  BuiltInToolNames.ReadFile,
+  BuiltInToolNames.ReadFileRange,
+  BuiltInToolNames.CodeNavigation,
+]);
+
+const unquote = (w: string) => w.replace(/^['"]+|['"]+$/g, "");
+const slashes = (p: string) => p.replace(/\\/g, "/");
+
+/**
+ * Whether a command prints a credential (the words the `credential-read` sink
+ * names: an environment dump, a secret-looking variable) or names a secret
+ * file (`cat .env`, `type ~/.aws/credentials`). It errs toward yes: a command
+ * that only mentions a secret file is labelled too.
+ */
+function commandReadsSecret(command: string, shell?: ShellKind): boolean {
+  for (const c of commandCandidateSet(command, shell).list) {
+    const words = c.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) continue;
+    const printed = words.some((w, i) =>
+      secretWordLabel(w, i === 0, words.length > 1, words[i - 1]),
+    );
+    if (printed || jqEnvironmentLabel(words)) return true;
+    if (words.slice(1).some((w) => isSecretPath(slashes(unquote(w))))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether this call brought a secret into the conversation: a file tool's
+ * read of a protected secret path (`isSecretPath`), or a command that prints
+ * a credential or names a secret file. A confidentiality label: it says
+ * private data entered, not that the content is untrusted.
+ */
+function readsSecret(call: SourceCall): boolean {
+  const { toolName, parsedArgs } = call;
+  if (CONTENT_READS.has(toolName)) {
+    const raw = str(parsedArgs[FILE_READS[toolName]]);
+    return !!raw && isSecretPath(slashes(raw.trim()));
+  }
+  if (toolName === BuiltInToolNames.RunTerminalCommand) {
+    const command = str(parsedArgs.command);
+    return !!command && commandReadsSecret(command, call.shell);
+  }
+  return false;
+}
+
 /** The labels of the content this call brought into the conversation, if any. */
 export function taintLabelsOfCall(call: SourceCall): TaintLabel[] {
   if (call.mcp) return [mcpLabel(call.mcpServer)];
+  const labels: TaintLabel[] = [];
   const kind = fixedKindOfCall(call);
-  return kind ? [kind] : [];
+  if (kind) labels.push(kind);
+  if (readsSecret(call)) labels.push("secret");
+  return labels;
 }
-
 /** The first label of this call's content (see `taintLabelsOfCall`). */
 export function taintKindOfCall(call: SourceCall): TaintLabel | undefined {
   return taintLabelsOfCall(call)[0];

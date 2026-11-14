@@ -1,6 +1,23 @@
 import type { ToolPolicyResult, EvaluateInput } from "../evaluate";
-import { sinkOfCall, type Sink } from "./taintSinks";
+import { sinkOfCall, type Sink, type SinkClass } from "./taintSinks";
 import type { TaintFact } from "./taintState";
+
+/**
+ * The sinks a session that holds only the `secret` label asks on: the ones
+ * that send data out. Another local secret read or a write outside the
+ * workspace moves nothing off the machine, so a secret alone leaves them be.
+ * With any untrusted-content label present every sink asks, as before.
+ */
+const EGRESS_SINKS: ReadonlySet<SinkClass> = new Set([
+  "network-egress",
+  "vcs-publish",
+  "package-publish",
+  "mcp-send",
+]);
+
+function secretOnly(taint: TaintFact): boolean {
+  return taint.kinds.every((k) => k === "secret");
+}
 
 /**
  * The tainted-session rule as a deterministic step after every other check:
@@ -19,8 +36,12 @@ export interface TaintedSessionInput {
 }
 
 export function reasonOf(sink: Sink, taint: TaintFact): string {
-  const via = taint.kinds.join(", ");
-  return `Untrusted content (${via}) entered this session, and this call can send data out or change state (${sink.class}: ${sink.detail}), so it asks. Acknowledge the content to stop these asks.`;
+  const untrusted = taint.kinds.filter((k) => k !== "secret");
+  const secret = taint.kinds.includes("secret");
+  const what = untrusted.length
+    ? `Untrusted content (${untrusted.join(", ")}) entered this session${secret ? " and a secret was read in it" : ""}`
+    : "A secret was read in this session";
+  return `${what}, and this call can send data out or change state (${sink.class}: ${sink.detail}), so it asks. Acknowledge the content to stop these asks.`;
 }
 
 /** Whether the rule applies to a call, without changing a result (the replay uses this). */
@@ -45,6 +66,7 @@ export function applyTaintedSessionRule(
   if (!taint || taint.kinds.length === 0) return result;
   const sink = taintSinkFor(input);
   if (!sink) return result;
+  if (secretOnly(taint) && !EGRESS_SINKS.has(sink.class)) return result;
   // Named on every result of a tainted session, so a replay can count the
   // calls the rule would ask on that already ask
   if (result.policy !== "allowedWithoutPermission") {

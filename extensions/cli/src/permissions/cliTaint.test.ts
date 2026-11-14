@@ -122,4 +122,14 @@ describe("the tainted-session rule in the CLI", () => {
     expect(handleUntaint([]).output).toContain("web-fetch, mcp:slack");
     expect(taintRegistry.fact("cli")).toBeUndefined();
   });
+
+  it("a read of a secret file is labelled secret", () => {
+    setting.rule = "ask";
+    noteCliToolResult(
+      { id: "s1", name: "Read", arguments: { filepath: ".env" } },
+      undefined,
+      process.cwd(),
+    );
+    expect(taintRegistry.fact("cli")?.kinds).toContain("secret");
+  });
 });
