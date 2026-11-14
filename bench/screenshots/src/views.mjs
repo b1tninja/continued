@@ -43,6 +43,10 @@ export const VIEWS = {
     fixture: "usage-open",
     note: "the usage breakdown, opened from the readout under the prompt",
   },
+  "context-open": {
+    fixture: "context-open",
+    note: "what the context holds, opened from the context meter under the prompt",
+  },
   "preset-open": {
     fixture: "preset-open",
     note: "the preset picker above the input, open: a glyph and a tone for each preset",

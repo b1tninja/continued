@@ -115,6 +115,11 @@
       "aria-hidden-focus": 3,
       "color-contrast": 13,
       "scrollable-region-focusable": 1
+    },
+    "context-open": {
+      "aria-hidden-focus": 3,
+      "color-contrast": 14,
+      "scrollable-region-focusable": 2
     }
   }
 }
