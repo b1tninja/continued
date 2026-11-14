@@ -1,4 +1,5 @@
 import type { Tool, ToolExtras } from "..";
+import { folderHasTrustRecord } from "../config/projectTrust";
 import { resolveShell } from "../util/shell";
 import { uriToPath } from "./permissions/names";
 import { noteToolResult } from "./permissions/taint/taintWiring";
@@ -42,6 +43,7 @@ export async function noteCoreToolResult(
         workspaceDirs: dirs
           .map((d) => (d.startsWith("file:") ? uriToPath(d) : d))
           .filter((d): d is string => !!d),
+        folderTrusted: (dir) => folderHasTrustRecord(dir),
         shell: resolveShell().kind,
       },
     });

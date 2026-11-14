@@ -20,6 +20,13 @@ export interface SourceCall {
   mcpServer?: string;
   /** Workspace folders as paths; the first is the folder commands and relative paths start in */
   workspaceDirs?: readonly string[];
+  /**
+   * Whether the person has trusted this workspace folder (a project-trust
+   * record for any scope, `folderHasTrustRecord`). A read of a file in a
+   * folder it says no for is labelled `untrusted-workspace`. A host that
+   * cannot tell leaves it out, and no such label is added.
+   */
+  folderTrusted?: (dir: string) => boolean;
   shell?: ShellKind;
 }
 
@@ -41,8 +48,20 @@ export function isOutsideWorkspace(
   dirs: readonly string[] | undefined,
 ): boolean {
   if (!dirs?.length) return false;
+  return workspaceDirOf(raw, dirs) === undefined;
+}
+
+/**
+ * The workspace folder a path, as written, lies in (as the host gave it), or
+ * undefined when it lies in none. Same reading as `isOutsideWorkspace`.
+ */
+export function workspaceDirOf(
+  raw: string,
+  dirs: readonly string[] | undefined,
+): string | undefined {
+  if (!dirs?.length) return undefined;
   const text = raw.trim();
-  if (text.startsWith("~")) return true;
+  if (text.startsWith("~")) return undefined;
   const flavor = flavorOf(text);
   const fold = (p: string) => (flavor === nodePath.win32 ? p.toLowerCase() : p);
   const base = dirs[0];
@@ -51,7 +70,7 @@ export function isOutsideWorkspace(
   const abs = flavor.isAbsolute(text)
     ? flavor.normalize(text)
     : flavor.resolve(plain(base), text);
-  return !dirs.some((d) => {
+  return dirs.find((d) => {
     const dir = flavor.normalize(plain(d));
     const rel = flavor.relative(fold(dir), fold(abs));
     return rel === "" || (!rel.startsWith("..") && !flavor.isAbsolute(rel));
@@ -176,9 +195,15 @@ function fixedKindOfCall(call: SourceCall): TaintKind | undefined {
   const pathArg = FILE_READS[toolName];
   if (pathArg) {
     const raw = str(parsedArgs[pathArg]) ?? (pathArg === "dirPath" ? "." : "");
-    return raw && isOutsideWorkspace(raw, call.workspaceDirs)
-      ? "outside-read"
-      : undefined;
+    if (!raw || !call.workspaceDirs?.length) return undefined;
+    const dir = workspaceDirOf(raw, call.workspaceDirs);
+    if (dir === undefined) return "outside-read";
+    // A file's content from a folder the person has not trusted: a cloned
+    // repository's README, AGENTS.md or test fixture is somebody else's text
+    if (CONTENT_READS.has(toolName) && call.folderTrusted?.(dir) === false) {
+      return "untrusted-workspace";
+    }
+    return undefined;
   }
   if (toolName === BuiltInToolNames.RunTerminalCommand) {
     const command = str(parsedArgs.command);

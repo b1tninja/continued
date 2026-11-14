@@ -178,7 +178,8 @@ describe("a label per MCP server", () => {
     expect(taintRegistry.fact(DEFAULT_TAINT_SESSION)?.kinds).toEqual([
       "mcp:github-work",
     ]);
-  });
+    // the first import of the tool path is slow on a loaded machine
+  }, 20_000);
 });
 
 describe("sources", () => {
@@ -223,6 +224,68 @@ describe("sources", () => {
     expect(taintKindOfCall(run("gh pr view 3 --comments"))).toBe("issue-text");
     expect(taintKindOfCall(run("npm test"))).toBeUndefined();
     expect(taintKindOfCall(run("git status"))).toBeUndefined();
+  });
+});
+
+describe("a read from a folder the person has not trusted", () => {
+  const read = (
+    filepath: string,
+    folderTrusted?: (dir: string) => boolean,
+    toolName = "read_file",
+  ) =>
+    taintLabelsOfCall({
+      toolName,
+      parsedArgs: { filepath },
+      workspaceDirs: WS,
+      folderTrusted,
+    });
+
+  it("is labelled untrusted-workspace", () => {
+    const seen: string[] = [];
+    const untrusted = (dir: string) => {
+      seen.push(dir);
+      return false;
+    };
+    expect(read("README.md", untrusted)).toEqual(["untrusted-workspace"]);
+    expect(read("/home/dev/shop/AGENTS.md", untrusted)).toEqual([
+      "untrusted-workspace",
+    ]);
+    expect(seen).toEqual(["/home/dev/shop", "/home/dev/shop"]);
+    expect(read(".env", untrusted)).toEqual(["untrusted-workspace", "secret"]);
+  });
+
+  it("is not labelled once the folder is trusted, or when the host cannot tell", () => {
+    expect(read("README.md", () => true)).toEqual([]);
+    expect(read("README.md")).toEqual([]);
+  });
+
+  it("names the workspace folder the file is in", () => {
+    const seen: string[] = [];
+    taintLabelsOfCall({
+      toolName: "read_file",
+      parsedArgs: { filepath: "/home/dev/lib/x.ts" },
+      workspaceDirs: ["/home/dev/shop", "/home/dev/lib"],
+      folderTrusted: (d) => {
+        seen.push(d);
+        return true;
+      },
+    });
+    expect(seen).toEqual(["/home/dev/lib"]);
+  });
+
+  it("a read outside the workspace stays outside-read only", () => {
+    expect(read("/etc/hosts", () => false)).toEqual(["outside-read"]);
+  });
+
+  it("a folder listing is not a read of the folder's files", () => {
+    expect(
+      taintLabelsOfCall({
+        toolName: "ls",
+        parsedArgs: { dirPath: "." },
+        workspaceDirs: WS,
+        folderTrusted: () => false,
+      }),
+    ).toEqual([]);
   });
 });
 

@@ -1,3 +1,4 @@
+import { folderHasTrustRecord } from "core/config/projectTrust.js";
 import {
   isTaintLabel,
   type TaintLabel,
@@ -36,6 +37,7 @@ export function noteCliToolResult(
         mcp: !!mcpServer || !!core?.mcp,
         mcpServer,
         workspaceDirs: [cwd],
+        folderTrusted: (dir) => folderHasTrustRecord(dir),
       },
     });
   } catch {

@@ -4,7 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { handleUntaint, noteCliToolResult } from "./cliTaint.js";
 import { evaluateWithCoreRules, keepCoreVerdict } from "./coreRules.js";
 
-const setting = vi.hoisted(() => ({ rule: "off" as "off" | "ask" }));
+const setting = vi.hoisted(() => ({
+  rule: "off" as "off" | "ask",
+  folderTrusted: true,
+}));
+vi.mock("core/config/projectTrust.js", async (orig) => ({
+  ...(await orig<typeof import("core/config/projectTrust.js")>()),
+  folderHasTrustRecord: () => setting.folderTrusted,
+}));
 vi.mock("core/tools/permissions/taint/taintSetting.js", () => ({
   readTaintedSessionRule: () => setting.rule,
   parseTaintedSessionRule: (v: unknown) => (v === "ask" ? "ask" : "off"),
@@ -33,6 +40,7 @@ const fetched = {
 beforeEach(() => {
   taintRegistry.reset();
   setting.rule = "off";
+  setting.folderTrusted = true;
 });
 
 describe("the tainted-session rule in the CLI", () => {
@@ -131,5 +139,16 @@ describe("the tainted-session rule in the CLI", () => {
       process.cwd(),
     );
     expect(taintRegistry.fact("cli")?.kinds).toContain("secret");
+  });
+
+  it("a read in a working folder the person has not trusted is labelled untrusted-workspace", () => {
+    setting.rule = "ask";
+    setting.folderTrusted = false;
+    noteCliToolResult(
+      { id: "u1", name: "Read", arguments: { filepath: "README.md" } },
+      undefined,
+      process.cwd(),
+    );
+    expect(taintRegistry.fact("cli")?.kinds).toEqual(["untrusted-workspace"]);
   });
 });
