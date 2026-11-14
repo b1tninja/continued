@@ -59,9 +59,17 @@ export interface ApprovalTrace {
   held?: boolean;
   /** The role the tool table applied (core/tools/roleTools.ts) */
   role?: string;
+  /** IDGAF ran a call the CLI's own policy would have asked about or excluded */
+  idgafLifted?: "ask" | "exclude";
 }
 
 let answeredWithoutAuth = false;
+
+/** The audit reason for a call IDGAF ran past the CLI's own ask or exclude. */
+function idgafLiftedReason(trace: ApprovalTrace): string | undefined {
+  if (!trace.idgafLifted) return undefined;
+  return `Allowed: the level is IDGAF. The CLI's own policy would have ${trace.idgafLifted === "ask" ? "asked about" : "excluded"} this call.`;
+}
 
 /**
  * cn serve with no token: an approval that came in over an unauthenticated
@@ -120,7 +128,7 @@ export function recordCliDecision(
     trail.decision({
       ...base,
       policy: result.approved ? "allow" : "deny",
-      reason: v?.reason ?? result.denialMessage,
+      reason: v?.reason ?? idgafLiftedReason(trace) ?? result.denialMessage,
     });
   } catch {
     // the audit never blocks a call
