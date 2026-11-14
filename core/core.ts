@@ -1241,7 +1241,7 @@ export class Core {
     on("history/list", async (msg) => {
       const sessions = historyManager.list(msg.data);
       const limit = msg.data?.limit ?? 100;
-      return sessions.slice(0, limit);
+      return historyManager.withFileSizes(sessions.slice(0, limit));
     });
 
     on("history/delete", (msg) => {

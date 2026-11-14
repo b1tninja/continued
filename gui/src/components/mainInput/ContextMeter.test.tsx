@@ -7,6 +7,7 @@ import {
   newSession,
   setContextPercentage,
   setIsPruned,
+  setAllSessionMetadata,
   setPromptCacheState,
 } from "../../redux/slices/sessionSlice";
 import { setPromptCacheSetting } from "../../redux/slices/uiSlice";
@@ -353,5 +354,59 @@ describe("ContextMeter details", () => {
     expect(
       await screen.findByTestId("context-pruned-note"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("ContextMeter session file (STOR8)", () => {
+  const listed = (fileBytes?: number) =>
+    setAllSessionMetadata([
+      {
+        sessionId: "other",
+        title: "Other",
+        dateCreated: "0",
+        workspaceDirectory: "",
+        fileBytes: 999 * 1024 * 1024,
+      },
+      {
+        sessionId: "s",
+        title: "t",
+        dateCreated: "0",
+        workspaceDirectory: "",
+        fileBytes,
+      },
+    ]);
+
+  it("shows the current session's file size and item count", async () => {
+    const { user, store } = await setup({ reported: 86_000 });
+    await act(async () => {
+      store.dispatch(listed(3.4 * 1024 * 1024));
+    });
+    await user.click(screen.getByTestId("context-meter"));
+    const note = await screen.findByTestId("context-session-file");
+    expect(note.textContent).toBe("Session file 3.4 MB, 2 items.");
+    expect(note.getAttribute("data-over-budget")).toBeNull();
+  });
+
+  it("warns past the session budget", async () => {
+    const { user, store } = await setup({ reported: 86_000 });
+    await act(async () => {
+      store.dispatch(listed(63 * 1024 * 1024));
+    });
+    await user.click(screen.getByTestId("context-meter"));
+    const note = await screen.findByTestId("context-session-file");
+    expect(note.getAttribute("data-over-budget")).toBe("true");
+    expect(note.className).toContain("text-warning");
+    expect(note.textContent).toContain("Session file 63 MB, 2 items.");
+    expect(note.textContent).toContain("Past the 50 MB session budget");
+  });
+
+  it("says nothing while the size is unknown", async () => {
+    const { user, store } = await setup({ reported: 86_000 });
+    await act(async () => {
+      store.dispatch(listed(undefined));
+    });
+    await user.click(screen.getByTestId("context-meter"));
+    await screen.findByTestId("context-panel");
+    expect(screen.queryByTestId("context-session-file")).toBeNull();
   });
 });

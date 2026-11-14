@@ -6,7 +6,8 @@
   ],
   "gui": [
     "src/pages/gui/StreamError.test.tsx",
-    "src/components/StyledMarkdownPreview/utils/commandExtractor.test.ts"
+    "src/components/StyledMarkdownPreview/utils/commandExtractor.test.ts",
+    "src/redux/thunks/longSession.test.ts"
   ],
   "cli": ["src/args.test.ts", "src/config.test.ts"]
 }

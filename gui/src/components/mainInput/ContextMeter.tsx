@@ -1,4 +1,9 @@
 import { formatTokens } from "core/llm/utils/sessionUsage";
+import {
+  formatFileSize,
+  isOverSessionBudget,
+  SESSION_FILE_BUDGET_BYTES,
+} from "core/util/sessionFile";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCompactionCacheNote } from "../../hooks/useCompactionCacheNote";
@@ -201,6 +206,34 @@ function LegendTable({ breakdown }: { breakdown: ContextBreakdown }) {
   );
 }
 
+/**
+ * The session's file on disk and its item count (STOR8), and a warning past
+ * the session budget. The size is what core recorded at the last save (or
+ * read from the file when the session was listed), so it is known once the
+ * session list has been fetched.
+ */
+function SessionFileNote() {
+  const items = useAppSelector((s) => s.session.history.length);
+  const fileBytes = useAppSelector(
+    (s) =>
+      s.session.allSessionMetadata.find((m) => m.sessionId === s.session.id)
+        ?.fileBytes,
+  );
+  if (fileBytes === undefined) return null;
+  const over = isOverSessionBudget(fileBytes);
+  return (
+    <span
+      className={over ? "text-warning" : "text-description-muted"}
+      data-testid="context-session-file"
+      data-over-budget={over ? "true" : undefined}
+    >
+      {`Session file ${formatFileSize(fileBytes)}, ${items.toLocaleString("en-US")} ${items === 1 ? "item" : "items"}.`}
+      {over &&
+        ` Past the ${formatFileSize(SESSION_FILE_BUDGET_BYTES)} session budget: every save rewrites the whole file, so saving and opening it get slower. A new session starts small.`}
+    </span>
+  );
+}
+
 const LINK_CLASS =
   "cursor-pointer border-none bg-transparent p-0 text-xs text-link underline hover:brightness-125 focus-visible:outline focus-visible:outline-1";
 
@@ -364,6 +397,8 @@ function ContextPanel({
           </button>
         </span>
       )}
+
+      <SessionFileNote />
 
       <div className="flex flex-wrap gap-2">
         <button

@@ -1074,6 +1074,8 @@ export interface BaseSessionMetadata {
   dateCreated: string;
   workspaceDirectory: string;
   messageCount?: number;
+  /** Bytes of the session file when it was last saved (STOR8). */
+  fileBytes?: number;
 }
 
 export interface RangeInFile {
