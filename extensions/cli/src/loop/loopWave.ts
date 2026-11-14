@@ -21,8 +21,8 @@ import {
   createWorktree,
 } from "../commands/review/worktree.js";
 import {
+  effectiveLevels,
   getCommandPermissionFlags,
-  getPolicyLevels,
 } from "../permissions/policyLevels.js";
 import type { PermissionMode } from "../permissions/types.js";
 import {
@@ -287,7 +287,13 @@ function abortWave(): void {
   for (const controller of controllers.values()) controller.abort();
 }
 
-function workerOptions(): LoopWorkerInput["options"] {
+/**
+ * The parent's permission choices for a worker. The levels are the ones in
+ * force (`--auto` raises the tool areas to IDGAF): the worker never runs in
+ * auto mode, so without them a worker of an `--auto` parent asked, and was
+ * held, where its parent would have run the call.
+ */
+export function workerOptions(): LoopWorkerInput["options"] {
   let mode: PermissionMode = "normal";
   // Unknown counts as interactive: the stricter default lists, whose asks
   // the worker holds as questions rather than running
@@ -305,7 +311,7 @@ function workerOptions(): LoopWorkerInput["options"] {
     mode,
     parentHeadless,
     ...getCommandPermissionFlags(),
-    levels: getPolicyLevels(),
+    levels: effectiveLevels(mode),
   };
   try {
     const config = getServiceSync<ConfigServiceState>(SERVICE_NAMES.CONFIG);

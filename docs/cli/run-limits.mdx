@@ -36,11 +36,12 @@ A dollar cap cannot be held on a model the cost table has no price for: its spen
 
 ### OpenRouter models
 
-OpenRouter publishes per-token prices for its models. After you download them once with `continuous models refresh` (it contacts openrouter.ai, a plain GET with no key, and keeps a dated copy in `model-catalog/openrouter.json` in your global folder), `--max-budget-usd` is held on those models without `--budget-allow-unpriced`. The prices are estimates from that copy, and the run says so at the end ("prices from openrouter.ai as of 2026-11-12").
+OpenRouter publishes per-token prices for its models. Continuous keeps a dated copy in `model-catalog/openrouter.json` in your global folder: with model information updates on `automatic` (the default) it is refreshed in the background when older than 24 hours, and `continuous models refresh` downloads it at any time (a plain GET to openrouter.ai with no key; see [model information](/customize/model-providers/top-level/openrouter#model-information-and-prices) for `modelCatalog: manual | off` and `CONTINUOUS_MODEL_INFO_UPDATES`). With a copy, `--max-budget-usd` is held on those models without `--budget-allow-unpriced`. The prices are estimates from that copy, and the run says so at the end ("prices from openrouter.ai as of 2026-11-12"). A run never waits for the background refresh: it starts with the copy it finds. The prices are estimates from that copy, and the run says so at the end ("prices from openrouter.ai as of 2026-11-12").
 
 - A copy older than 30 days still works, with the warning "prices may be out of date: run `continuous models refresh`".
 - A copy older than 90 days is never used for a dollar cap: the model counts as unpriced and the error says how old the copy is.
 - With no copy, the error says to run `continuous models refresh`.
+- With model information updates `off`, the copy is not used: OpenRouter models count as unpriced unless the bundled data prices them.
 - `continuous models list [--json]` shows the downloaded models with their prices and never touches the network.
 
 ## Exit codes and the final message

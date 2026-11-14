@@ -54,6 +54,7 @@ export function UserSettingsSection() {
   const nudgeLeakedToolCalls = config.ui?.nudgeLeakedToolCalls ?? true;
   const codeWrap = config.ui?.codeWrap ?? false;
   const showChatScrollbar = config.ui?.showChatScrollbar ?? false;
+  const keepThinkingExpanded = config.ui?.keepThinkingExpanded ?? false;
   const readResponseTTS = config.experimental?.readResponseTTS ?? false;
   const displayRawMarkdown = config.ui?.displayRawMarkdown ?? false;
   const disableSessionTitles = config.disableSessionTitles ?? false;
@@ -126,6 +127,15 @@ export function UserSettingsSection() {
                   value={showChatScrollbar}
                   onChange={(value) =>
                     handleUpdate({ showChatScrollbar: value })
+                  }
+                />
+                <UserSetting
+                  type="toggle"
+                  title="Keep Thinking Expanded"
+                  description="The model's thinking streams open while it thinks and folds to one line when the answer starts. On: it stays open."
+                  value={keepThinkingExpanded}
+                  onChange={(value) =>
+                    handleUpdate({ keepThinkingExpanded: value })
                   }
                 />
                 <UserSetting

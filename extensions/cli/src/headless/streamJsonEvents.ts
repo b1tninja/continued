@@ -168,6 +168,8 @@ export interface ResultEvent extends EventBase<"result"> {
   numToolCalls: number;
   /** Tool calls that were refused. */
   numRefusals: number;
+  /** Tool calls IDGAF ran that a rule or guard would have refused or asked about. */
+  numIdgafObjections: number;
   usage: {
     inputTokens: number;
     outputTokens: number;

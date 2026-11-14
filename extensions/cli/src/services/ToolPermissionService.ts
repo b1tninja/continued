@@ -223,10 +223,12 @@ export class ToolPermissionService
     mcpServiceState?: MCPServiceState,
   ): ToolPermissionPolicy[] {
     if (!agentFileServiceState?.agentFile) return [];
-    return this.generateAgentFilePolicies(
-      agentFileServiceState,
-      mcpServiceState,
-    ).filter((p) => p.permission === "exclude");
+    return (
+      this.generateAgentFilePolicies(agentFileServiceState, mcpServiceState)
+        .filter((p) => p.permission === "exclude")
+        // Which tools an agent has is its role, not a permission: IDGAF keeps it
+        .map((p) => ({ ...p, structural: true }))
+    );
   }
 
   /**

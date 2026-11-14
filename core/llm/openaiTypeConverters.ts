@@ -637,9 +637,12 @@ function handleReasoningSummaryDone(
   if (e.text) details.push({ type: "summary_text", text: e.text });
   if ((e as any).item_id)
     details.push({ type: "reasoning_id", id: (e as any).item_id });
+  // The deltas already carried this text, so it is not content again (the
+  // chat appends content and showed the summary twice). The details are kept
+  // as they were: they are what is sent back.
   const thinking: ThinkingChatMessage = {
     role: "thinking",
-    content: e.text,
+    content: "",
     reasoning_details: details,
   };
   return thinking;
@@ -668,9 +671,10 @@ function handleReasoningTextDone(
   if (e.text) details.push({ type: "reasoning_text", text: e.text });
   if ((e as any).item_id)
     details.push({ type: "reasoning_id", id: (e as any).item_id });
+  // As for the summary: the deltas already carried the text
   const thinking: ThinkingChatMessage = {
     role: "thinking",
-    content: e.text,
+    content: "",
     reasoning_details: details,
   };
   return thinking;

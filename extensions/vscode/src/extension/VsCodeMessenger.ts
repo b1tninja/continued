@@ -23,6 +23,7 @@ import { addCurrentSelectionToEdit } from "../quickEdit/AddCurrentSelection";
 import EditDecorationManager from "../quickEdit/EditDecorationManager";
 import { handleLLMError } from "../util/errorHandling";
 import { showTutorial } from "../util/tutorial";
+import { readSessionIdgaf, writeSessionIdgaf } from "../util/sessionIdgaf";
 import { getExtensionUri } from "../util/vscode";
 import { VsCodeIde } from "../VsCodeIde";
 import { VsCodeWebviewProtocol } from "../webviewProtocol";
@@ -258,6 +259,17 @@ export class VsCodeMessenger {
 
     this.onWebview("edit/clearDecorations", async (msg) => {
       editDecorationManager.clear();
+    });
+
+    // IDGAF lasts for the editor session (util/sessionIdgaf.ts)
+    this.onWebview("policy/sessionIdgaf", async (msg) => {
+      const store = this.context.workspaceState;
+      const session = vscode.env.sessionId;
+      const areas =
+        msg.data?.areas === undefined
+          ? readSessionIdgaf(store, session)
+          : await writeSessionIdgaf(store, session, msg.data.areas);
+      return { areas };
     });
 
     this.onWebview("session/share", async (msg) => {

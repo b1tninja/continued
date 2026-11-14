@@ -96,6 +96,24 @@ describe("continuous models refresh", () => {
     expect((d.pull as any).mock.calls[0][0]).toBe(opts);
   });
 
+  it("is refused, with no request, when model information updates are off", async () => {
+    const d = deps({ settings: () => ({ policy: "off", refreshHours: 24 }) });
+    const code = await modelsRefreshCommand({}, io(), d);
+    expect(code).toBe(1);
+    expect(d.pull).not.toHaveBeenCalled();
+    expect(err.join("\n")).toMatch(/updates are off/);
+    expect(err.join("\n")).toMatch(/CONTINUOUS_MODEL_INFO_UPDATES/);
+  });
+
+  it.each(["automatic", "ask", "never"] as const)(
+    "runs when typed with updates %s",
+    async (policy) => {
+      const d = deps({ settings: () => ({ policy, refreshHours: 24 }) });
+      expect(await modelsRefreshCommand({}, io(), d)).toBe(0);
+      expect(d.pull).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("reports a failure, exits 1 and leaves the old list", async () => {
     const d = deps({
       pull: vi.fn(async () => {
@@ -164,7 +182,7 @@ describe("continuous models list", () => {
 });
 
 describe("egress allowlist", () => {
-  it("covers the one host `models refresh` contacts, as an opt-in contact", () => {
+  it("covers the one host `models refresh` contacts, as on by default", () => {
     const list = JSON.parse(
       fs.readFileSync(
         path.resolve(
@@ -176,6 +194,8 @@ describe("egress allowlist", () => {
     ) as { groups: { class: string; hosts: string[] }[] };
     const host = new URL(OPENROUTER_MODELS_URL).hostname;
     const group = list.groups.find((g) => g.hosts.includes(host));
-    expect(group?.class).toBe("O");
+    // The background refresh (model information updates `automatic`) is
+    // the default, so the host is reachable without opting in
+    expect(group?.class).toBe("D");
   });
 });

@@ -35,9 +35,13 @@ export const VIEWS = {
     fixture: "attach-open",
     note: 'the "+" menu at the left of the prompt, open',
   },
-  "overflow-open": {
-    fixture: "overflow-open",
-    note: 'the "..." menu under the prompt, open',
+  "status-row": {
+    fixture: "status-row",
+    note: "the row under the prompt after a reply: usage, reasoning, prompt cache",
+  },
+  "usage-open": {
+    fixture: "usage-open",
+    note: "the usage breakdown, opened from the readout under the prompt",
   },
   "preset-open": {
     fixture: "preset-open",

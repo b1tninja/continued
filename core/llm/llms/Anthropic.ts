@@ -49,6 +49,7 @@ import {
 import {
   AnthropicThinkingParams,
   getAnthropicThinkingParams,
+  thinkingDisplayDefaultsToOmitted,
 } from "./anthropicThinking.js";
 
 // The pinned @anthropic-ai/sdk types do not yet include adaptive thinking or
@@ -195,6 +196,7 @@ class Anthropic extends BaseLLM {
 
   private getContentBlocksFromChatMessage(
     message: ChatMessage,
+    model?: string,
   ): ContentBlockParam[] {
     switch (message.role) {
       // One tool message = one tool_result block
@@ -220,6 +222,13 @@ class Anthropic extends BaseLLM {
         // Strip thinking that has no signature
         const signature = message.signature;
         if (!signature) {
+          return [];
+        }
+        // A model that hides its thinking by default is asked for a summary
+        // to show in the chat (getAnthropicThinkingParams). Before that its
+        // blocks arrived empty and were dropped just below, so they are still
+        // not sent back: the conversation sent stays the one it was.
+        if (model && thinkingDisplayDefaultsToOmitted(model)) {
           return [];
         }
         if (typeof message.content === "string") {
@@ -265,6 +274,7 @@ class Anthropic extends BaseLLM {
     msgs: ChatMessage[],
     cachePrompt: boolean,
     ttl?: PromptCacheTtl,
+    model?: string,
   ): MessageParam[] {
     const nonSystemMessages = msgs.filter((m) => m.role !== "system");
 
@@ -291,7 +301,9 @@ class Anthropic extends BaseLLM {
         flushCurrentMessage();
         currentRole = newRole;
       }
-      currentParts.push(...this.getContentBlocksFromChatMessage(message));
+      currentParts.push(
+        ...this.getContentBlocksFromChatMessage(message, model),
+      );
     }
     flushCurrentMessage();
 
@@ -589,7 +601,12 @@ class Anthropic extends BaseLLM {
     );
     const anyCaching = parts.tools || parts.system || parts.conversation;
 
-    const msgs = this.convertMessages(messages, parts.conversation, ttl);
+    const msgs = this.convertMessages(
+      messages,
+      parts.conversation,
+      ttl,
+      options.model,
+    );
     const headers = getAnthropicHeaders(this.apiKey, anyCaching, this.apiBase);
 
     const convertedArgs = this.convertArgs(options);

@@ -36,6 +36,8 @@ const MODELS = [
   "anthropic.claude-haiku-4-5-20251001-v1:0",
   "us.anthropic.claude-sonnet-4-6",
   "global.anthropic.claude-opus-5-5",
+  "us.anthropic.claude-opus-4-8",
+  "anthropic.claude-fable-5-2",
   "us.amazon.nova-2-lite-v1:0",
   "us.amazon.nova-2-pro-v1:0",
   "us.amazon.nova-pro-v1:0",
@@ -149,6 +151,52 @@ describe("bedrockReasoningFields exists in core and in the adapter", () => {
       core.bedrockReasoningFields("anthropic.claude-haiku-4-5", true, 16384)
         .omitMaxTokens,
     ).toBe(false);
+  });
+
+  it("asks Claude for summarized thinking where it would arrive empty", () => {
+    for (const helpers of [core, adapter]) {
+      // 4.7 and later hide thinking by default: the request asks to see it
+      expect(
+        helpers.bedrockReasoningFields(
+          "us.anthropic.claude-opus-4-8",
+          true,
+          4096,
+        ).additionalModelRequestFields,
+      ).toEqual({
+        thinking: { type: "adaptive", display: "summarized" },
+        output_config: { effort: "medium" },
+      });
+      // 4.6 shows a summary by default; its request is unchanged
+      expect(
+        helpers.bedrockReasoningFields(
+          "us.anthropic.claude-sonnet-4-6",
+          true,
+          4096,
+        ).additionalModelRequestFields,
+      ).toEqual({
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium" },
+      });
+      // Opus 5.5 thinks with reasoning off, so its thinking is shown too,
+      // without an effort
+      for (const reasoning of [undefined, false]) {
+        expect(
+          helpers.bedrockReasoningFields(
+            "global.anthropic.claude-opus-5-5",
+            reasoning,
+            4096,
+          ).additionalModelRequestFields,
+        ).toEqual({ thinking: { type: "adaptive", display: "summarized" } });
+      }
+      // Opus 4.8 does not think with reasoning off: nothing is sent
+      expect(
+        helpers.bedrockReasoningFields(
+          "us.anthropic.claude-opus-4-8",
+          false,
+          4096,
+        ).additionalModelRequestFields,
+      ).toEqual({});
+    }
   });
 
   it("sends DeepSeek R1 and Nova Pro nothing, which is all they accept", () => {

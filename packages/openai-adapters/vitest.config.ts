@@ -5,6 +5,9 @@ export default defineConfig({
     environment: "node",
     globals: true,
     testTimeout: 10000,
+    // Removes provider credentials unless RUN_LIVE_PROVIDER_TESTS=1 (src/test/liveProviderGuard.ts).
+    globalSetup: ["./src/test/liveProviderGuard.global.ts"],
+    setupFiles: ["./src/test/liveProviderGuard.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}", "src/**/*.vitest.{ts,tsx}"],
     exclude: [...configDefaults.exclude, "src/**/*.live.test.{ts,tsx}"],
     tags: [

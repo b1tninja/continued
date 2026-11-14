@@ -163,6 +163,8 @@ jobs:
           CHANGED_FILES: ${{ inputs.changed_files }}
           # Unset: shadow mode (select, report, run everything). `on`: run the selection.
           AFFECTED_TESTS: ${{ vars.CI_AFFECTED_TESTS }}
+          # Live provider tests run only with this flag; without it the test setup removes the keys.
+          RUN_LIVE_PROVIDER_TESTS: "1"
           IGNORE_API_KEY_TESTS: ${{ steps.llm-changes.outputs.ignore_api_tests }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -319,6 +321,8 @@ jobs:
             exit 1
           fi
         env:
+          # Live provider tests run only with this flag; without it the test setup removes the keys.
+          RUN_LIVE_PROVIDER_TESTS: "1"
           IGNORE_API_KEY_TESTS: ${{ steps.llm-changes.outputs.ignore_api_tests }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
