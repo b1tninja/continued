@@ -14,6 +14,8 @@
  * can replace. No Node imports, so the webview may import it.
  */
 
+import { HIDDEN_CHARACTERS } from "../../util/hiddenCharacters";
+
 export interface SpotlightOptions {
   /** 16 or more random bytes. Defaults to `crypto.getRandomValues`. */
   randomBytes?: () => Uint8Array;
@@ -41,8 +43,6 @@ export interface Spotlight {
   wrap(text: string, options?: WrapOptions): string;
 }
 
-const ZERO_WIDTH = /[­​-‏⁠-⁤﻿‪-‮⁦-⁩\u{E0000}-\u{E007F}]/gu;
-
 /** Datamark character: U+02C6, as in the paper; rare in code and prose. */
 const DATAMARK = "ˆ";
 
@@ -64,7 +64,7 @@ function cleanSource(source: string | undefined): string {
   // The label can come from a URL or a server name, so it is attacker input
   // too: no quotes, brackets, angle brackets, control or invisible characters.
   const s = source
-    .replace(ZERO_WIDTH, "")
+    .replace(HIDDEN_CHARACTERS, "")
     .replace(/[^\p{L}\p{N} ._:/@#=+-]/gu, "_")
     .slice(0, 80);
   return s || "unknown";
@@ -78,7 +78,7 @@ function cleanSource(source: string | undefined): string {
  * passes through untouched.
  */
 function redactToken(text: string, token: string): string {
-  const view = text.normalize("NFKC").replace(ZERO_WIDTH, "");
+  const view = text.normalize("NFKC").replace(HIDDEN_CHARACTERS, "");
   if (!view.toLowerCase().includes(token)) return text;
   return view.replace(new RegExp(token, "gi"), "[boundary-token-removed]");
 }
