@@ -71,10 +71,11 @@ export function ModelRoleRow({
           />
         </div>
         {selectedModel && (
-          <ToolTip content="Configure">
+          <ToolTip content="Configure...">
             <Button
               variant="ghost"
               size="sm"
+              aria-label={`Configure ${selectedModel.title}`}
               onClick={() => onConfigure(selectedModel)}
               className="my-0 h-6 w-6 p-0 text-description hover:enabled:text-foreground"
             >
