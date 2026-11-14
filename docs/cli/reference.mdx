@@ -21,6 +21,8 @@ These belong to `continuous` itself, not to a subcommand.
 | `-p`, `--print`          | Headless run: print the answer and exit. Needs a prompt, piped input, `--prompt`, `--agent` or `--resume`                            |
 | `--format <format>`      | Output format of a headless run. The only value is `json`. Only with `-p`                                                            |
 | `--silent`               | Strip `<think>` blocks and extra whitespace from the output. Only with `-p`                                                          |
+| `--include-reasoning`    | With `-p --format stream-json`: also write each reply's reasoning as a `reasoning` line. See [Headless output](/cli/headless-output) |
+| `--thinking <mode>`      | How the terminal UI shows the model's reasoning: `fold` (the default), `expanded` or `hide`. See [`/thinking`](/cli/slash-commands) |
 | `--resume`               | Continue the most recent session. Cannot be combined with `--fork`                                                                   |
 | `--fork <sessionId>`     | Start a new session from a copy of an existing one                                                                                   |
 | `--trust-project-hooks`  | Run this project's hooks for this run without asking and without recording trust. See [Hooks](/ide-extensions/agent/hooks-trust)     |

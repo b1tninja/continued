@@ -121,6 +121,12 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
     category: "system",
   },
   {
+    name: "thinking",
+    description:
+      "How the model's reasoning shows: /thinking fold (one line after the answer), expanded, or hide",
+    category: "system",
+  },
+  {
     name: "skills",
     description: "List all available skills",
     category: "system",

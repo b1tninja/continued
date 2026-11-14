@@ -25,6 +25,7 @@ Every line has `type`, `seq` (1, 2, 3 ... with no gaps) and `time` (ISO 8601, UT
 | --------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `init`          | First line of every run that got as far as loading a model                 | `schemaVersion`, `sessionId`, `cliVersion`, `model`, `provider`, `cwd`, `mode`, `limits` (when a run limit is set)                       |
 | `usage`         | After each model request                                                   | `request` (1 for the first), `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `costUsd`, `totalCostUsd`, `costEstimated` |
+| `reasoning`     | A reply's reasoning, whole, with `--include-reasoning` only               | `role` (`assistant`), `content`, `durationMs` (from the first reasoning to the start of the answer)                                      |
 | `message`       | A complete reply of the model (not a partial chunk)                        | `role` (`assistant`), `content`                                                                                                          |
 | `tool_use`      | The model asked for a tool call                                            | `callId`, `tool`, `args`                                                                                                                 |
 | `tool_decision` | The permission system decided                                              | `callId`, `tool`, `decision` (`allowed`, `asked`, `refused`), `by` (`rules`, `reviewer`, `system`, `person`), `source`, `rule`, `reason`, `answer`, `held` |
@@ -40,14 +41,14 @@ Every line has `type`, `seq` (1, 2, 3 ... with no gaps) and `time` (ISO 8601, UT
 - `init` is first and `result` is last, exactly once. A failure before the model is loaded (a bad config) writes `error` and `result` only.
 - For one call: `tool_use`, then `tool_decision`, then `tool_result`. A call a hook blocked, or one the repeat guard refused, has no `tool_decision`.
 - The calls of one round run at the same time, so their `tool_result` lines come in the order they finish.
-- A request's `usage` line comes before its `message` and its `tool_use` lines.
+- A request's `usage` line comes before its `message` and its `tool_use` lines. With `--include-reasoning`, its `reasoning` line comes after `usage` and before them.
 - Ctrl+C writes `result` with `status: "interrupted"` and exit code 130.
 
 ### Masking and size
 
 Every text and every argument goes through the same masker as the audit trail and the approval prompt: a value that looks like a credential becomes `«masked:<kind>»`. Masking is best effort, as in the audit trail: a secret in a shape nobody listed passes through.
 
-A `tool_result` output is cut at 4000 characters and a string argument of `tool_use` at 2000, each ending in ` [cut]`. `outputLength` is the length before the cut. Reasoning (thinking) text is never written.
+A `tool_result` output is cut at 4000 characters and a string argument of `tool_use` at 2000, each ending in ` [cut]`. `outputLength` is the length before the cut. Reasoning (thinking) text is written only with `--include-reasoning`, as `reasoning` lines, masked like the rest; often it is a summary the provider returns rather than the model's whole thinking.
 
 The counts (`usage`, `numRequests`, `totalCostUsd`) are for this run only. Spend and calls restored with `--resume` or `--fork` are not counted.
 

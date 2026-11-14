@@ -32,6 +32,7 @@ import {
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { startTUIChat } from "../ui/index.js";
+import { initThinkingDisplay } from "../ui/thinkingDisplay.js";
 import { exitOnBrokenConfig } from "../util/configFileGate.js";
 import { gracefulExit } from "../util/exit.js";
 import { formatAnthropicError, formatError } from "../util/formatError.js";
@@ -55,6 +56,8 @@ export interface ChatOptions extends ExtendedCommandOptions {
   format?: headless.HeadlessFormat; // Output format for headless mode
   silent?: boolean; // Strip <think></think> tags and excess whitespace
   outputSchema?: string; // --output-schema: a JSON Schema the final answer must match
+  thinking?: string; // --thinking: fold, expanded or hide (ui/thinkingDisplay.ts)
+  includeReasoning?: boolean; // --include-reasoning: stream-json `reasoning` lines
 }
 
 export async function initializeChatHistory(
@@ -561,6 +564,7 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
     }
 
     runLimits.assertLimitsEnforceable(options);
+    initThinkingDisplay(options.thinking);
 
     // Interactive path - requires TTY for Ink rendering
     // If not in headless mode, use unified initialization with TUI

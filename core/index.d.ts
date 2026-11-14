@@ -1413,6 +1413,12 @@ interface Reasoning {
   text: string;
   startAt: number;
   endAt?: number;
+  /**
+   * What the provider needs back to continue from this reasoning (the CLI
+   * keeps Claude's signed and redacted thinking here, as `reasoning_details`
+   * entries). Absent when there is nothing to send back.
+   */
+  details?: Record<string, unknown>[];
 }
 
 export interface ChatHistoryItem {

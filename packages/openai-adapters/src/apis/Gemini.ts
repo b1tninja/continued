@@ -41,6 +41,10 @@ import {
   FimCreateParamsStreaming,
   RerankCreateParams,
 } from "./base.js";
+import {
+  reasoningSwitch,
+  requestedReasoningEffort,
+} from "./reasoningSwitch.js";
 
 type UsageInfo = Pick<
   CompletionUsage,
@@ -82,6 +86,48 @@ export function returnsThoughts(model: string): boolean {
   return /gemini-(?:2\.5|[3-9])|gemini-(?:flash|pro)(?:-lite)?-latest/i.test(
     model,
   );
+}
+
+/** Gemini's `thinkingConfig` fields other than `includeThoughts`. */
+export interface GeminiThinkingControl {
+  thinkingLevel?: "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
+  thinkingBudget?: number;
+}
+
+/**
+ * The reasoning switch (reasoningSwitch.ts) as Gemini's thinking control.
+ * Gemini 3 and later take `thinkingLevel`: the Flash models every level, and
+ * off as MINIMAL (they cannot turn thinking off); the Pro models LOW and HIGH
+ * only, so off and low are LOW and medium is HIGH. Gemini 2.5 takes
+ * `thinkingBudget` in tokens (the GUI's 1024, 4096 and 16384 for low, medium
+ * and high); off is 0 on Flash and Flash-Lite, and Pro, which cannot turn it
+ * off, is left at its default. Unset, nothing is sent and the model uses its
+ * own default, as before. Thinking tokens are billed as output.
+ */
+export function geminiThinkingControl(
+  model: string,
+  effort: string | undefined,
+): GeminiThinkingControl {
+  if (!effort || !returnsThoughts(model)) return {};
+  const { reasoning, level, budgetTokens } = reasoningSwitch(effort);
+  const isPro = /pro/i.test(model);
+  if (/gemini-[3-9]/i.test(model)) {
+    if (isPro) {
+      return {
+        thinkingLevel: reasoning && level !== "low" ? "HIGH" : "LOW",
+      };
+    }
+    if (!reasoning) return { thinkingLevel: "MINIMAL" };
+    return {
+      thinkingLevel:
+        level === "low" ? "LOW" : level === "medium" ? "MEDIUM" : "HIGH",
+    };
+  }
+  if (/gemini-2\.5/i.test(model)) {
+    if (!reasoning) return isPro ? {} : { thinkingBudget: 0 };
+    return { thinkingBudget: budgetTokens };
+  }
+  return {};
 }
 
 export class GeminiApi implements BaseLlmApi {
@@ -512,7 +558,12 @@ export class GeminiApi implements BaseLlmApi {
     model: string,
     convertedBody: ReturnType<typeof this._convertBody>,
     signal?: AbortSignal,
+    effort?: string,
   ) {
+    // Off (thinkingBudget 0) returns no thoughts to ask for
+    const control = geminiThinkingControl(model, effort);
+    const includeThoughts =
+      returnsThoughts(model) && control.thinkingBudget !== 0;
     // Use native fetch temporarily for stream operation to get proper ReadableStream
     // The withNativeFetch wrapper restores native fetch, makes the call, then reverts
     return withNativeFetch(() =>
@@ -523,9 +574,13 @@ export class GeminiApi implements BaseLlmApi {
           systemInstruction: convertedBody.systemInstruction,
           tools: convertedBody.tools,
           ...convertedBody.generationConfig,
-          // The model thinks either way; this returns summaries of it
-          ...(returnsThoughts(model) && {
-            thinkingConfig: { includeThoughts: true },
+          // The model thinks either way; includeThoughts returns summaries
+          // of it, and the control sets how much (geminiThinkingControl)
+          ...((includeThoughts || Object.keys(control).length > 0) && {
+            thinkingConfig: {
+              ...(includeThoughts && { includeThoughts: true }),
+              ...(control as Record<string, unknown>),
+            },
           }),
           // Without this the stop button only stopped reading; the request
           // kept generating (and billing) on Google's side.
@@ -549,6 +604,10 @@ export class GeminiApi implements BaseLlmApi {
       body.model,
       convertedBody,
       signal,
+      requestedReasoningEffort(
+        body,
+        this.config.requestOptions?.extraBodyProperties,
+      ),
     );
     yield* this.processStreamResponse(response, body.model, signal);
   }
@@ -564,6 +623,10 @@ export class GeminiApi implements BaseLlmApi {
       body.model,
       convertedBody,
       signal,
+      requestedReasoningEffort(
+        body,
+        this.config.requestOptions?.extraBodyProperties,
+      ),
     );
     yield* this.processStreamResponse(response, body.model, signal);
   }

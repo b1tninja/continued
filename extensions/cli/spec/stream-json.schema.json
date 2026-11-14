@@ -5,6 +5,7 @@
   "description": "One line of the event stream. A reader must ignore fields and event types it does not know: adding an optional field or an event type does not raise schemaVersion.",
   "oneOf": [
     { "$ref": "#/$defs/init" },
+    { "$ref": "#/$defs/reasoning" },
     { "$ref": "#/$defs/message" },
     { "$ref": "#/$defs/tool_use" },
     { "$ref": "#/$defs/tool_decision" },
@@ -50,6 +51,19 @@
             "maxDurationMinutes": { "type": "number" }
           }
         }
+      }
+    },
+    "reasoning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "seq", "time", "role", "content"],
+      "properties": {
+        "type": { "const": "reasoning" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "time": { "type": "string" },
+        "role": { "const": "assistant" },
+        "content": { "type": "string" },
+        "durationMs": { "type": "integer", "minimum": 0 }
       }
     },
     "message": {

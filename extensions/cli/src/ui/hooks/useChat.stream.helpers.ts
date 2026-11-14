@@ -19,6 +19,10 @@ interface CreateStreamCallbacksOptions {
   onShowStatusMessage?: (message: string) => void;
   /** The TUI's spinner text while a reply is held for tool call recovery */
   onRecoveryHold?: (holding: boolean) => void;
+  /** The reply's reasoning as it streams, for the live thinking view */
+  onReasoning?: (text: string) => void;
+  /** The reply's reasoning has ended (it is kept on the reply's item) */
+  onReasoningDone?: () => void;
 }
 
 /**
@@ -34,10 +38,20 @@ export function createStreamCallbacks(
     model,
     onShowStatusMessage,
     onRecoveryHold,
+    onReasoning,
+    onReasoningDone,
   } = options;
 
   return {
     onContent: (_: string) => {},
+
+    onReasoning: (text: string) => {
+      onReasoning?.(text);
+    },
+
+    onReasoningComplete: () => {
+      onReasoningDone?.();
+    },
 
     onRecoveryHold: (holding: boolean) => {
       onRecoveryHold?.(holding);

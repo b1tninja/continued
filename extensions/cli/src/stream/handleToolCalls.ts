@@ -22,6 +22,7 @@ import {
 } from "../tools/index.js";
 import { logger } from "../util/logger.js";
 
+import type { StreamedReasoning } from "./reasoning.js";
 import { recordRefusals } from "./refusalCap.js";
 import {
   checkRepeatedCall,
@@ -47,6 +48,8 @@ interface HandleToolCallsOptions {
   callbacks: StreamCallbacks | undefined;
   isHeadless: boolean;
   usage?: any;
+  /** The reply's reasoning, kept on its history item. */
+  reasoning?: StreamedReasoning;
   /** The turn's signal, passed on to tool runs. */
   abortSignal?: AbortSignal;
 }
@@ -191,6 +194,20 @@ function noteStuckRound(
   }
 }
 
+/** A reply's reasoning as its history item keeps it (ChatHistoryItem.reasoning). */
+function historyReasoning(
+  reasoning: StreamedReasoning | undefined,
+): ChatHistoryItem["reasoning"] | undefined {
+  if (!reasoning) return undefined;
+  return {
+    active: false,
+    text: reasoning.text,
+    startAt: reasoning.startAt,
+    endAt: reasoning.endAt,
+    ...(reasoning.details.length > 0 && { details: reasoning.details }),
+  };
+}
+
 export async function handleToolCalls(
   options: HandleToolCallsOptions,
 ): Promise<boolean> {
@@ -201,8 +218,10 @@ export async function handleToolCalls(
     callbacks,
     isHeadless,
     usage,
+    reasoning,
     abortSignal,
   } = options;
+  const itemReasoning = historyReasoning(reasoning);
   const chatHistorySvc = services.chatHistory;
   const useService =
     typeof chatHistorySvc?.isReady === "function" && chatHistorySvc.isReady();
@@ -210,7 +229,12 @@ export async function handleToolCalls(
     if (content) {
       if (useService) {
         // Service-driven: write assistant message via service
-        chatHistorySvc.addAssistantMessage(content, undefined, usage);
+        chatHistorySvc.addAssistantMessage(
+          content,
+          undefined,
+          usage,
+          itemReasoning,
+        );
       } else {
         // Fallback only when service is unavailable
         const message: any = {
@@ -220,7 +244,10 @@ export async function handleToolCalls(
         if (usage) {
           message.usage = usage;
         }
-        chatHistory.push(createHistoryItem(message));
+        chatHistory.push({
+          ...createHistoryItem(message),
+          ...(itemReasoning && { reasoning: itemReasoning }),
+        });
       }
     }
     return false;
@@ -262,13 +289,17 @@ export async function handleToolCalls(
       assistantMessage.content || "",
       assistantMessage.toolCalls,
       usage,
+      itemReasoning,
     );
   } else {
     // Fallback only when service is unavailable
     const messageWithUsage = usage
       ? { ...assistantMessage, usage }
       : assistantMessage;
-    chatHistory.push(createHistoryItem(messageWithUsage, [], toolCallStates));
+    chatHistory.push({
+      ...createHistoryItem(messageWithUsage, [], toolCallStates),
+      ...(itemReasoning && { reasoning: itemReasoning }),
+    });
   }
 
   // The repeat guard: a call identical to the ones before it is refused
