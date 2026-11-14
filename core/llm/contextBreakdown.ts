@@ -1,6 +1,10 @@
 import type { ChatHistoryItem, MessagePart } from "..";
 import { BuiltInToolNames } from "../tools/builtIn";
 import {
+  removedToolResultStub,
+  withRemovedParts,
+} from "../util/contextRemoval";
+import {
   renderContextItems,
   renderContextItemsWithStatus,
 } from "../util/messageContent";
@@ -249,7 +253,13 @@ export function computeContextBreakdown(
   // The same walk as constructMessages: the newest summary cuts the history,
   // tool messages are rebuilt from the assistant's tool call states, and empty
   // messages are left out.
-  for (const item of historyAfterSummary(input.history)) {
+  // What the person removed ("Choose what to keep") counts as its stub, and a
+  // removed old turn not at all (core/util/contextRemoval.ts).
+  for (const original of historyAfterSummary(input.history)) {
+    if (original.removedByUser?.turn) continue;
+    const item = withRemovedParts(original);
+    const removedResults = item.removedByUser?.toolResults ?? [];
+    const removedCtx = item.removedByUser?.contextItems ?? [];
     const message = item.message;
     if (
       message.role === "system" ||
@@ -259,14 +269,16 @@ export function computeContextBreakdown(
       continue;
     }
     if (message.role === "user") {
-      for (const ctx of item.contextItems ?? []) {
-        if (!ctx.content?.trim()) continue;
+      (item.contextItems ?? []).forEach((ctx, i) => {
+        if (!ctx.content?.trim()) return;
         add(
           "context",
           estimateTextTokens(`${ctx.content}\n`),
-          shorten(ctx.description || ctx.name || "Attached context"),
+          removedCtx.includes(i)
+            ? undefined
+            : shorten(ctx.description || ctx.name || "Attached context"),
         );
-      }
+      });
       const { text, images } = partTokens(partsOf(message.content));
       add("user", text, "Your message");
       add("images", images, "Image");
@@ -297,18 +309,22 @@ export function computeContextBreakdown(
       for (const state of item.toolCallStates ?? []) {
         const name = state.toolCall?.function?.name ?? "tool";
         const terminal = name === BuiltInToolNames.RunTerminalCommand;
-        const body = state.output
+        const full = state.output
           ? terminal
             ? renderContextItemsWithStatus(state.output)
             : renderContextItems(state.output)
           : "";
+        const label = describeToolCall(
+          name,
+          state.parsedArgs ?? state.toolCall?.function?.arguments,
+        );
+        const removed = !!full && removedResults.includes(state.toolCallId);
         add(
           terminal ? "terminal" : "toolResults",
-          estimateTextTokens(body),
-          describeToolCall(
-            name,
-            state.parsedArgs ?? state.toolCall?.function?.arguments,
+          estimateTextTokens(
+            removed ? removedToolResultStub(label, full.length) : full,
           ),
+          removed ? undefined : label,
         );
       }
     }

@@ -1,6 +1,6 @@
 # What the context holds: the context meter and its breakdown
 
-Design note, 2026-11-13. It records how other tools show context use, how ours counts it today, and the design of the context meter in the row under the prompt: a short bar and a percent beside the session cost that opens a breakdown of the context, with Compact now and New session. It stacks on the status row note (`status-row-layout.md`, #817) and answers that note's owner question 1: the `ContextStatus` battery and the usage readout are merged. It is a first IDE slice of rows J0 and J1 of `area-caching-cost-visibility.md`. Section 8 designs a selective compaction dialog, which is not built.
+Design note, 2026-11-13. It records how other tools show context use, how ours counts it today, and the design of the context meter in the row under the prompt: a short bar and a percent beside the session cost that opens a breakdown of the context, with Compact now and New session. It stacks on the status row note (`status-row-layout.md`, #817) and answers that note's owner question 1: the `ContextStatus` battery and the usage readout are merged. It is a first IDE slice of rows J0 and J1 of `area-caching-cost-visibility.md`. Section 8 designs a selective compaction dialog; section 8.1 records what was built of it (#833's follow-up).
 
 Code: `core/llm/contextBreakdown.ts` (the computation), `gui/src/components/mainInput/ContextMeter.tsx` (the meter and the details), `gui/src/util/contextLevel.ts` (the colour steps), `gui/src/hooks/useLastRequestContext.ts` (the number shared with the cost readout). Tests: `core/llm/contextBreakdown.vitest.ts`, `gui/src/components/mainInput/ContextMeter.test.tsx`, `gui/src/util/contextLevel.test.ts`, and the width ladder tests of #817.
 
@@ -112,7 +112,7 @@ Opened by a click, Enter or Space, or by resting the pointer on the meter for 30
 
 What the model is sent: the breakdown reads `buildChatRequest`'s output through `describeChatRequest` and the history; it writes nothing. Compaction, pruning, the cache settings and the reply toolbar's Compact link are unchanged. The JetBrains webview gets the same component; the chart colours are VS Code's `--vscode-charts-*` with fallbacks.
 
-## 8. Selective compaction ("Choose what to keep"), designed, not built
+## 8. Selective compaction ("Choose what to keep")
 
 The owner asked for a dialog beside Compact now, like the old Disk Cleanup wizard: the context by category and by largest item, with checkboxes, a live total, then apply. Automatic compaction (where there is one) stays the default and needs no dialog.
 
@@ -145,6 +145,19 @@ The owner asked for a dialog beside Compact now, like the old Disk Cleanup wizar
 - **Prompt cache.** Any edit before the end of the prompt invalidates the cache from the first edited message on. The dialog computes the first edited position and shows "this will re-read N tokens (about $X) on the next request" from the tokens after it, priced with `perMessageCost` warm against cold, and the local-server wording of `warmCacheLoss` (`gui/src/util/cacheSafeguards.ts:152`) for local models. Removing only items after the last cache point costs nothing extra; the dialog says so.
 - **With compaction.** The dialog is offered as "Choose what to keep..." beside Compact now. A summary made after a selective removal summarises the stubs, not the removed text. Automatic compaction, where it exists (the CLI), runs on what is left; the removed items stay removed after it.
 - **Why not built here.** It needs a new history edit (a removal mark that `constructMessages` honours), its persistence, the undo, the cost line and a dialog with nested checkboxes and keyboard support; it changes what the model is sent, which this slice must not. The breakdown and largest-items list built here are its input. Estimate: M.
+
+### 8.1 As built
+
+Code: `core/util/contextRemoval.ts` (the stubs, and `maskRemovedToolResults` over ageing's `maskOldToolResults`), `gui/src/util/selectiveCompaction.ts` (what can be removed, the selection, the marks, the totals and the cache cost), `gui/src/components/mainInput/SelectiveCompactDialog.tsx` (the dialog), the `applyContextRemovals` / `undoContextRemovals` reducers in `sessionSlice.ts`. Tests beside each.
+
+- **Marks.** `ChatHistoryItem.removedByUser` holds what was removed from that item: `toolResults` (call ids, on the assistant item), `contextItems` and `images` (indexes, on the user item) and `turn`. It is saved with the session. `constructMessages` and `computeContextBreakdown` both read it, so the meter and the request agree; core's compaction leaves out removed turns when it has no prefix. Editing and resending a message clears that message's marks.
+- **Stubs.** A tool result becomes "[output removed by you: 12k tokens, Read src/config/parseConfig.ts]" in its own tool message (`maskOldToolResults` with a `stub` option and a chosen set, `minChars` 0, nothing protected; ageing's metadata marks it, so ageing leaves it alone). For a model that takes tools as text the same line replaces the output before it is turned into text. An attached item becomes "[attached README.md removed by you]", an image "[image removed by you]".
+- **Turns.** Turns start at each user message after the newest summary; only the oldest can go (unticking turn 3 removes 1 to 3, ticking turn 1 keeps all), the latest is never offered, and a turn's items are disabled while it is removed. A tool exchange never spans two turns, so pairing holds.
+- **Not offered.** Reasoning (the per-provider check of section 8 is not done) and single messages or replies.
+- **Totals.** Sizes are four characters per token, scaled by the same factor as the meter's split. "After" is the provider's count less the estimated change. The re-read is the estimate of the history from the first changed item on, after the change.
+- **Cost.** `editCacheLoss` takes `warmCacheLoss` for the whole cached conversation and keeps the share after the first change (time for a local server), shown with `formatRereadCost`. The dialog warns up front while the cache is warm, and says "nothing extra" when it is not.
+- **Undo.** The session keeps, in memory and not saved, each changed item's marks from before the first change since the last request (`contextRemovalUndo`). Undo in the context panel restores them all; the request thunk clears them when the next request is compiled, since from then the stubs are in the cache and putting back is another edit. Nothing is ever deleted, so the dialog still lists removed items ("removed now") and ticking one puts it back, with the cost line.
+- **Keyboard.** Headless UI's `Dialog` traps focus and closes on Escape; focus returns to the meter. Each group has a checkbox with a mixed state, every item is a labelled checkbox, the totals are a polite live region. The app's shared `TextDialog` still has no focus trap; this dialog does not use it.
 
 ## 9. Owner decisions
 

@@ -1415,6 +1415,18 @@ interface Reasoning {
   endAt?: number;
 }
 
+/** What "Choose what to keep" took out of one history item. */
+export interface RemovedByUser {
+  /** The whole item is left out: part of an old turn removed from the start. */
+  turn?: boolean;
+  /** Tool calls of this assistant item whose results are sent as a stub. */
+  toolResults?: string[];
+  /** Indexes into `contextItems` sent as a stub. */
+  contextItems?: number[];
+  /** Indexes of image parts of the message sent as a stub. */
+  images?: number[];
+}
+
 export interface ChatHistoryItem {
   message: ChatMessage;
   contextItems: ContextItemWithId[];
@@ -1426,6 +1438,13 @@ export interface ChatHistoryItem {
   reasoning?: Reasoning;
   appliedRules?: RuleMetadata[];
   conversationSummary?: string;
+  /**
+   * Parts of this item the person took out of the context with "Choose what
+   * to keep" (gui SelectiveCompactDialog). Nothing is deleted: the request
+   * sends a one-line stub in their place (core/util/contextRemoval.ts), and
+   * the originals stay in the session.
+   */
+  removedByUser?: RemovedByUser;
   /**
    * Request-time only, never saved: a prompt cache point goes right after this
    * item (a fork point, such as a Loop item's first message), so a retry, a
