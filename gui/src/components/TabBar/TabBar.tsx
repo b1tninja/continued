@@ -1,4 +1,8 @@
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  ArchiveBoxIcon,
+  PlusIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import React, { useCallback, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import styled from "styled-components";
@@ -11,6 +15,7 @@ import {
   setActiveTab,
   setTabs,
 } from "../../redux/slices/tabsSlice";
+import { archiveSessions } from "../../redux/slices/uiSlice";
 import { AppDispatch, RootState } from "../../redux/store";
 import { loadSession, saveCurrentSession } from "../../redux/thunks/session";
 import { varWithFallback } from "../../styles/theme";
@@ -120,6 +125,55 @@ const CloseButton = styled.button`
   }
 `;
 
+/**
+ * Archive shows on hover like Close, but stays focusable (opacity, not
+ * visibility), so a keyboard can reach it.
+ */
+const ArchiveButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0;
+  cursor: pointer;
+  border-radius: ${defaultBorderRadius};
+  padding: 2px;
+
+  ${Tab}:hover &,
+  &:focus-visible {
+    opacity: 0.7;
+  }
+
+  &:hover {
+    opacity: 1;
+    background-color: ${tabHoverBackgroundVar};
+  }
+`;
+
+const NewSessionButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: ${tabForegroundVar};
+  opacity: 0.7;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    background-color: ${tabHoverBackgroundVar};
+  }
+`;
+
 const TabBarSpace = styled.div`
   flex: 1;
   display: flex;
@@ -225,6 +279,23 @@ export const TabBar = React.forwardRef<HTMLDivElement>((_, ref) => {
     }
   };
 
+  // Archive: hide the tab's session from the history list (kept on disk,
+  // Restore in History brings it back), then close the tab
+  const handleTabArchive = async (id: string) => {
+    const tab = tabs.find((t) => t.id === id);
+    if (!tab) return;
+    const sessionId = tab.isActive ? currentSessionId : tab.sessionId;
+    if (tab.isActive && hasHistory) {
+      await dispatch(
+        saveCurrentSession({ openNewSession: false, generateTitle: true }),
+      );
+    }
+    if (sessionId && (!tab.isActive || hasHistory)) {
+      dispatch(archiveSessions({ sessionIds: [sessionId] }));
+    }
+    await handleTabClose(id);
+  };
+
   return (
     <TabBarContainer
       ref={ref}
@@ -246,7 +317,20 @@ export const TabBar = React.forwardRef<HTMLDivElement>((_, ref) => {
           }}
         >
           <TabTitle>{tab.title}</TabTitle>
+          <ArchiveButton
+            type="button"
+            aria-label={`Archive ${tab.title}`}
+            title="Archive session"
+            data-testid="tab-archive"
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleTabArchive(tab.id);
+            }}
+          >
+            <ArchiveBoxIcon width={12} height={12} />
+          </ArchiveButton>
           <CloseButton
+            aria-label={`Close ${tab.title}`}
             /* disabled={tabs.length === 1} */
             onClick={(e) => {
               e.stopPropagation();
@@ -258,9 +342,15 @@ export const TabBar = React.forwardRef<HTMLDivElement>((_, ref) => {
         </Tab>
       ))}
       <TabBarSpace>
-        {/* <NewTabButton onClick={handleNewTab}>
-          <PlusIcon width={16} height={16} />
-        </NewTabButton> */}
+        <NewSessionButton
+          type="button"
+          aria-label="New session"
+          title="New session"
+          data-testid="tab-new-session"
+          onClick={() => void handleNewTab()}
+        >
+          <PlusIcon width={14} height={14} />
+        </NewSessionButton>
       </TabBarSpace>
     </TabBarContainer>
   );

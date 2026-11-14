@@ -64,6 +64,7 @@ const saveSubsetFilters = [
     "promptCacheSettings",
     "dismissedCacheTips",
     "archivedAgents",
+    "archivedSessions",
   ]),
   createFilter("indexing", []),
   createFilter("tabs", ["tabs"]),

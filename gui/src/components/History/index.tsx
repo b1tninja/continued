@@ -25,7 +25,7 @@ import { ROUTES } from "../../util/navigation";
 import ConfirmationDialog from "../dialogs/ConfirmationDialog";
 import { Button } from "../ui";
 import { HistoryTableRow } from "./HistoryTableRow";
-import { groupSessionsByDate, parseDate } from "./util";
+import { groupSessionsByDate, parseDate, splitArchivedSessions } from "./util";
 
 export function History() {
   const dispatch = useAppDispatch();
@@ -115,9 +115,18 @@ export function History() {
       );
   }, [allSessionMetadata, searchTerm, minisearch]);
 
+  // Archived sessions leave the date groups for a group of their own,
+  // collapsed until opened; a search looks through both
+  const archivedIds = useAppSelector((state) => state.ui.archivedSessions);
+  const [showArchived, setShowArchived] = useState(false);
+  const { active, archived } = useMemo(
+    () => splitArchivedSessions(filteredAndSortedSessions, archivedIds),
+    [filteredAndSortedSessions, archivedIds],
+  );
+
   const sessionGroups = useMemo(() => {
-    return groupSessionsByDate(filteredAndSortedSessions);
-  }, [filteredAndSortedSessions]);
+    return groupSessionsByDate(active);
+  }, [active]);
 
   const showClearSessionsDialog = () => {
     dispatch(
@@ -171,7 +180,7 @@ export function History() {
       </div>
 
       <div className="thin-scrollbar flex w-full flex-1 flex-col overflow-y-auto">
-        {filteredAndSortedSessions.length === 0 && (
+        {active.length === 0 && archived.length === 0 && (
           <div className="m-3 text-center">
             {isSessionMetadataLoading ? (
               "Loading Sessions..."
@@ -207,6 +216,33 @@ export function History() {
             ))}
           </tbody>
         </table>
+        {archived.length > 0 && (
+          <div className="mt-6 flex flex-col" data-testid="history-archived">
+            <button
+              type="button"
+              className="mb-2 ml-2 flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-left text-base font-bold text-foreground opacity-75"
+              aria-expanded={showArchived}
+              onClick={() => setShowArchived((open) => !open)}
+              data-testid="history-archived-toggle"
+            >
+              Archived ({archived.length})
+            </button>
+            {showArchived && (
+              <table className="flex w-full flex-col">
+                <tbody>
+                  {archived.map((session, i) => (
+                    <HistoryTableRow
+                      key={session.sessionId}
+                      sessionMetadata={session}
+                      index={active.length + i}
+                      archived
+                    />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col items-end justify-center border-0 border-t border-solid border-border px-2 py-3 text-xs">
