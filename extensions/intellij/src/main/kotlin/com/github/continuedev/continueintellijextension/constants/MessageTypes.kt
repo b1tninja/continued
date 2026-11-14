@@ -49,7 +49,8 @@ class MessageTypes {
             "copyText",
             "jetbrains/isOSREnabled",
             "jetbrains/getColors",
-            "jetbrains/onLoad"
+            "jetbrains/onLoad",
+            "policy/sessionIdgaf"
         )
 
         // Note: If updating these values, make a corresponding update in
@@ -157,6 +158,8 @@ class MessageTypes {
             "ollama/showHint",
             "config/getTerminalEnvironment",
             "config/setTerminalEnvironment",
+            "policy/load",
+            "policy/save", // a raised level is confirmed first (ContinueBrowser.kt)
             "policy/rules",
             "policy/test",
             "llm/compileChat",

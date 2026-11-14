@@ -1,14 +1,17 @@
 package com.github.continuedev.continueintellijextension.browser
 
+import com.github.continuedev.continueintellijextension.constants.PolicyGuard
 import com.github.continuedev.continueintellijextension.constants.WebviewIdeGate
 import com.github.continuedev.continueintellijextension.services.ContinuePluginService
 import com.github.continuedev.continueintellijextension.services.GsonService
 import com.github.continuedev.continueintellijextension.utils.uuid
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.jcef.*
 import org.cef.CefApp
@@ -40,8 +43,21 @@ class ContinueBrowser(
 
             when (WebviewIdeGate.route(messageType)) {
                 WebviewIdeGate.Route.CORE -> {
-                    project.service<ContinuePluginService>().coreMessenger?.request(messageType, data, messageId) { response ->
-                        sendToWebview(messageType, response, messageId ?: uuid())
+                    val forward = {
+                        project.service<ContinuePluginService>().coreMessenger?.request(messageType, data, messageId) { response ->
+                            sendToWebview(messageType, response, messageId ?: uuid())
+                        }
+                    }
+                    if (messageType == "policy/save") {
+                        confirmPolicySave(data) { allowed ->
+                            if (allowed) {
+                                forward()
+                            } else {
+                                sendError(messageType, "The permission change was not confirmed.", messageId)
+                            }
+                        }
+                    } else {
+                        forward()
                     }
                 }
 
@@ -63,15 +79,7 @@ class ContinueBrowser(
 
                 WebviewIdeGate.Route.REJECT -> {
                     log.warn("Rejected panel message: $messageType")
-                    sendToWebview(
-                        messageType ?: "",
-                        mapOf(
-                            "status" to "error",
-                            "error" to "This message is not available to the panel",
-                            "done" to true
-                        ),
-                        messageId ?: uuid()
-                    )
+                    sendError(messageType ?: "", "This message is not available to the panel", messageId)
                 }
             }
 
@@ -119,6 +127,39 @@ class ContinueBrowser(
 
     fun openDevTools() {
         browser.openDevtools()
+    }
+
+    private fun sendError(messageType: String, error: String, messageId: String?) {
+        sendToWebview(
+            messageType,
+            mapOf("status" to "error", "error" to error, "done" to true),
+            messageId ?: uuid()
+        )
+    }
+
+    /**
+     * A save that raises a permission level waits for a native confirmation,
+     * as in VS Code. Anything that is not a settings object is refused.
+     */
+    private fun confirmPolicySave(data: Any?, onDecided: (Boolean) -> Unit) {
+        if (!PolicyGuard.savePayloadOk(data)) return onDecided(false)
+        val levels = PolicyGuard.levelsOf(data) ?: return onDecided(true)
+        val messenger = project.service<ContinuePluginService>().coreMessenger ?: return onDecided(false)
+        messenger.request("policy/load", null, null) { loaded ->
+            val raised = PolicyGuard.raisedAreas(PolicyGuard.loadedLevels(loaded), levels)
+            if (raised.isEmpty()) return@request onDecided(true)
+            ApplicationManager.getApplication().invokeLater {
+                val choice = Messages.showOkCancelDialog(
+                    project,
+                    "Raise the Continuous permission level for ${raised.joinToString(", ")}?",
+                    "Continuous",
+                    "Raise",
+                    Messages.getCancelButton(),
+                    Messages.getWarningIcon()
+                )
+                onDecided(choice == Messages.OK)
+            }
+        }
     }
 
     fun sendToWebview(messageType: String, data: Any? = null, messageId: String = uuid()) {

@@ -375,7 +375,7 @@ describe("the settings beside the levels", () => {
     expect(store.getState().ui.policyLevels.tools).toBe("cautious");
   });
 
-  it("a host that does not keep session state (JetBrains) starts at the saved levels", async () => {
+  it("a host that does not keep session state starts at the saved levels", async () => {
     const { ideMessenger } = hostWith("unsupported");
     const store = setupStore({ ideMessenger });
     await act(async () => {
