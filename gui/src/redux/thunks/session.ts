@@ -2,6 +2,7 @@ import { createAsyncThunk, unwrapResult } from "@reduxjs/toolkit";
 import { BaseSessionMetadata, ChatMessage, Session } from "core";
 import { NEW_SESSION_TITLE } from "core/util/constants";
 import { renderChatMessage } from "core/util/messageContent";
+import { withoutPrompts } from "core/util/promptLogs";
 import { IIdeMessenger } from "../../context/IdeMessenger";
 import { selectSelectedChatModel } from "../slices/configSlice";
 import { selectSelectedProfile } from "../slices/profilesSlice";
@@ -252,7 +253,9 @@ export const saveCurrentSession = createAsyncThunk<
       sessionId: session.id,
       title,
       workspaceDirectory: window.workspacePaths?.[0] || "",
-      history: session.history,
+      // A session file keeps no prompts (core/util/promptLogs), so they are
+      // not sent to the extension on every save either
+      history: withoutPrompts(session.history),
       mode: session.mode,
       chatModelTitle: selectedChatModel?.title ?? null,
       ...(session.usage && { usage: session.usage }),

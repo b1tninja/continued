@@ -6,6 +6,7 @@ import {
   PromptLog,
 } from "core";
 import { describe, expect, it, vi } from "vitest";
+import { DROPPED_PROMPT_MARKER } from "core/util/promptLogs";
 import { createMockStore, getEmptyRootState } from "../../util/test/mockStore";
 import { streamResponseThunk } from "./streamResponse";
 
@@ -816,7 +817,8 @@ describe("streamResponseThunk", () => {
                 completion: "I'll search the codebase for you.",
                 modelProvider: "anthropic",
                 modelTitle: "Claude 3.5 Sonnet",
-                prompt: "Please search the codebase",
+                // An older request: only the newest keeps its prompt
+                prompt: DROPPED_PROMPT_MARKER,
               },
             ],
             toolCallStates: [

@@ -5,6 +5,8 @@ import { BaseSessionMetadata, Session } from "../index.js";
 import { ListHistoryOptions } from "../protocol/core.js";
 
 import { writeFileAtomicSync } from "./atomicWrite.js";
+import { withoutPrompts } from "./promptLogs.js";
+import { stripPromptsFromSessionBytes } from "./promptLogsFile.js";
 import { NEW_SESSION_TITLE } from "./constants.js";
 import {
   getSessionFilePath,
@@ -106,7 +108,9 @@ export function readSessionFile(
   { session: Session } | { damaged: SessionLoadResult["damaged"] } | undefined {
   let raw: string;
   try {
-    raw = fs.readFileSync(file, "utf8");
+    // Prompts are dropped from the bytes before parsing: a file saved while
+    // every request kept its prompt can be hundreds of MB (promptLogsFile.ts)
+    raw = stripPromptsFromSessionBytes(fs.readFileSync(file)).toString("utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     // Not readable right now (permissions, a lock, too many open files) is
@@ -186,7 +190,9 @@ function metadataFromSessionFile(
   file: string,
 ): BaseSessionMetadata | undefined {
   try {
-    const session = JSON.parse(fs.readFileSync(file, "utf8")) as Session;
+    const session = JSON.parse(
+      stripPromptsFromSessionBytes(fs.readFileSync(file)).toString("utf8"),
+    ) as Session;
     if (!session || typeof session !== "object" || !session.sessionId) {
       return undefined;
     }
@@ -361,7 +367,9 @@ export class HistoryManager {
       sessionId: session.sessionId,
       title: session.title,
       workspaceDirectory: session.workspaceDirectory,
-      history: session.history,
+      // No prompt is written: each repeats the conversation before it, so
+      // keeping them made the file grow with the square of its length
+      history: withoutPrompts(session.history),
     };
     if (session.mode) {
       orderedSession.mode = session.mode;

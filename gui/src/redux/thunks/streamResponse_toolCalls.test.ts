@@ -1,6 +1,7 @@
 import { JSONContent } from "@tiptap/core";
 import { AssistantChatMessage, InputModifiers, PromptLog } from "core";
 import { describe, expect, it, vi } from "vitest";
+import { DROPPED_PROMPT_MARKER } from "core/util/promptLogs";
 import { createMockStore } from "../../util/test/mockStore";
 import { streamResponseThunk } from "./streamResponse";
 
@@ -484,7 +485,8 @@ describe("streamResponseThunk - tool calls", () => {
                 completion: "I'll search the codebase for you.",
                 modelProvider: "anthropic",
                 modelTitle: "Claude 3.5 Sonnet",
-                prompt: "Please search the codebase",
+                // An older request: only the newest keeps its prompt
+                prompt: DROPPED_PROMPT_MARKER,
               },
             ],
             toolCallStates: [
@@ -2171,7 +2173,8 @@ describe("streamResponseThunk - tool calls", () => {
                 completion: "I'll search for test functions in the codebase.",
                 modelProvider: "anthropic",
                 modelTitle: "Claude 3.5 Sonnet",
-                prompt: "Please search the codebase for test functions",
+                // An older request: only the newest keeps its prompt
+                prompt: DROPPED_PROMPT_MARKER,
               },
             ],
             toolCallStates: [

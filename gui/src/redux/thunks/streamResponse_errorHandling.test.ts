@@ -68,6 +68,18 @@ beforeEach(() => {
   mockGetBaseSystemMessage.mockReturnValue("You are a helpful assistant.");
 });
 
+/**
+ * A failed turn is saved (streamThunkWrapper), which dispatches the save
+ * thunks; the flow below is asserted without them, and the save is asserted
+ * to have been made.
+ */
+const SAVE_ACTION =
+  /^session\/(saveCurrent|update|refreshMetadata)\/|^session\/(updateSessionMetadata|setIsSessionMetadataLoading|setAllSessionMetadata)$/;
+function savedAfterFailure(actions: any[]): any[] {
+  expect(actions.map((a) => a.type)).toContain("session/saveCurrent/pending");
+  return actions.filter((a) => !SAVE_ACTION.test(a.type));
+}
+
 describe("streamResponseThunk", () => {
   it("should throw error when no chat model is selected", async () => {
     const noModelState = getEmptyRootState();
@@ -98,7 +110,7 @@ describe("streamResponseThunk", () => {
     expect(result.type).toBe("chat/streamResponse/fulfilled");
 
     // Verify the complete error handling flow
-    const dispatchedActions = mockStoreNoModel.getActions();
+    const dispatchedActions = savedAfterFailure(mockStoreNoModel.getActions());
     expect(dispatchedActions).toEqual([
       {
         type: "chat/streamResponse/pending",
@@ -189,7 +201,11 @@ describe("streamResponseThunk", () => {
     ]);
 
     // Verify no IDE messenger calls were made
-    expect(requestSpy).not.toHaveBeenCalled();
+    // Nothing reached the model; only the failed turn was saved
+    expect(requestSpy.mock.calls.map(([type]) => type)).toEqual([
+      "history/save",
+      "history/list",
+    ]);
     expect(chatSpy).not.toHaveBeenCalled();
 
     // Verify final state shows error dialog and inactive streaming
@@ -198,6 +214,8 @@ describe("streamResponseThunk", () => {
       ...noModelState,
       session: {
         ...noModelState.session,
+        // the failed turn was saved, which titles the session
+        title: "Hello",
         streamAborter: expect.any(AbortController),
         history: [
           { ...noModelState.session.history[0], isGatheringContext: false },
@@ -598,7 +616,7 @@ describe("streamResponseThunk", () => {
     expect(result.type).toBe("chat/streamResponse/fulfilled");
 
     // Verify exact action sequence for compilation error with dialog
-    const dispatchedActions = mockStore.getActions();
+    const dispatchedActions = savedAfterFailure(mockStore.getActions());
     expect(dispatchedActions).toEqual([
       {
         type: "chat/streamResponse/pending",
@@ -816,6 +834,8 @@ describe("streamResponseThunk", () => {
       ...initialState,
       session: {
         ...initialState.session,
+        // the failed turn was saved, which titles the session
+        title: "Hello",
         streamAborter: expect.any(AbortController),
         mainEditorContentTrigger: mockEditorState, // Editor content that triggered the request
         // The failed request is noted for the session
