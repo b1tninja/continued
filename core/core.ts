@@ -14,6 +14,11 @@ import { ConfigHandler } from "./config/ConfigHandler";
 import { addModel, deleteModel } from "./config/util";
 import { saveModeModels } from "./config/yaml/saveModeModels";
 import { saveToolDialect } from "./config/yaml/saveToolDialect";
+import {
+  getModelBlock,
+  previewModelEdit,
+  saveModelEdit,
+} from "./config/modelEdit/modelBlockEdit";
 import { getOllamaShowHint } from "./util/ollamaShowHint";
 import { probeStatusFor } from "./util/measuredFacts";
 import {
@@ -21,7 +26,7 @@ import {
   testOpenAICompatConnection,
 } from "./util/openaiCompatTest";
 import { currentNotice, dismissCurrentNotice } from "./util/retirementStartup";
-import { isDismissed } from "./util/retirementNoticeState";
+import { isDismissed, recordLive } from "./util/retirementNoticeState";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { deputyWorkspace } from "./tools/permissions/workspaceRoots";
@@ -91,11 +96,31 @@ import { globalProfileStatus } from "./llm/llms/bedrockHelpers";
 import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
+import type { CommunityCatalog } from "./llm/communityCatalog";
+import {
+  createCommunityRefresher,
+  loadCommunityPrices,
+  needsCommunityPrice,
+  pullCommunityCatalog,
+  readCommunityCatalog,
+} from "./llm/communityCatalogStore";
+import {
+  BedrockMetadataTracker,
+  withQuotaWarnings,
+} from "./llm/bedrockMetadata";
+import { ensureBedrockPriceList } from "./llm/bedrockPriceList";
+import { zeroQuotaWarning } from "./llm/llms/bedrockQuotas";
 import {
   createOpenRouterRefresher,
   underTestRunner,
   type ModelCatalogRefresher,
 } from "./llm/modelCatalogRefresh";
+import {
+  createSelectedModelRefresher,
+  type RefreshTarget,
+  type SelectedModelRefresher,
+  targetKey,
+} from "./llm/providerModelRefresh";
 import {
   loadOpenRouterPrices,
   modelInfoFetchBlocked,
@@ -161,7 +186,11 @@ import {
   ToolCall,
   type ContextItem,
   type IDE,
+  type ILLM,
+  type RequestOptions,
 } from ".";
+import type { BaseLLM } from "./llm";
+import type { ProviderModelFacts } from "./util/providerModelLookup";
 
 import { ConfigYaml } from "@continuedev/config-yaml";
 import { getDiffFn, GitDiffCache } from "./autocomplete/snippets/gitDiffCache";
@@ -253,6 +282,12 @@ export class Core {
 
   /** The background OpenRouter list refresh (not started in tests). */
   private modelCatalogRefresher?: ModelCatalogRefresher;
+  private selectedModelRefresher?: SelectedModelRefresher;
+  private selectedChatModel?: ILLM;
+  /** The background community catalogue refresh (not started in tests). */
+  private communityCatalogRefresher?: ModelCatalogRefresher<CommunityCatalog>;
+  /** Prices and quotas for the selected Bedrock model (not started in tests). */
+  private bedrockMetadata?: BedrockMetadataTracker;
   private messageAbortControllers = new MessageAbortControllers();
   private addMessageAbortController(id: string): AbortController {
     return this.messageAbortControllers.add(id);
@@ -326,6 +361,11 @@ export class Core {
 
       this.configHandler.onConfigUpdate((result) => {
         void this.offerToMovePlaintextKeys();
+        this.selectedChatModel =
+          result.config?.selectedModelByRole.chat ?? undefined;
+        this.selectedModelRefresher?.select(
+          refreshTargetOf(this.selectedChatModel),
+        );
         void (async () => {
           const serializedResult =
             await this.configHandler.getSerializedConfig();
@@ -471,10 +511,45 @@ export class Core {
         log: (m) => console.warn(m),
       });
       this.modelCatalogRefresher.start();
+      // The selected Anthropic or OpenAI model's own facts, from its
+      // provider with the person's key; armed by the config update that
+      // names the selected model, never at start-up itself
+      this.selectedModelRefresher = createSelectedModelRefresher({
+        log: (m) => console.warn(m),
+        onUpdated: (target, facts) => this.applyModelFacts(target, facts),
+      });
+      // Prices and quotas for the selected Bedrock model
+      this.startBedrockMetadata(requestOptions);
+    }
+
+    // The community catalogue (models.dev) is the last price source: its copy
+    // is used when there is one (a file read), and with updates automatic it
+    // is downloaded in the background only while a selected model has no
+    // price from a better source (plans/research/provider-model-metadata.md).
+    loadCommunityPrices();
+    const unpricedSelection = async () => {
+      const { config } = await this.configHandler.loadConfig();
+      return [
+        config?.selectedModelByRole.chat,
+        config?.selectedModelByRole.reviewer,
+      ].some(
+        (m) =>
+          !!m &&
+          needsCommunityPrice({ provider: m.providerName, model: m.model }),
+      );
+    };
+    if (!underTestRunner()) {
+      this.communityCatalogRefresher = createCommunityRefresher({
+        unpriced: unpricedSelection,
+        requestOptions,
+        log: (m) => console.warn(m),
+      });
+      this.communityCatalogRefresher.start();
     }
 
     on("modelCatalog/status", async () => {
       const cached = readOpenRouterCatalog();
+      const community = readCommunityCatalog();
       const settings = readModelCatalogSettings();
       const refresh = this.modelCatalogRefresher?.getStatus();
       return {
@@ -496,7 +571,25 @@ export class Core {
               },
             }
           : {}),
+        ...(community
+          ? {
+              community: {
+                fetchedAt: community.fetchedAt,
+                count: community.prices.length,
+              },
+            }
+          : {}),
       };
+    });
+
+    // The community copy for the window's cost figures; none when updates
+    // are off
+    on("modelCatalog/communityCached", async () => {
+      if (readModelCatalogSettings().policy === "off") return null;
+      const cached = readCommunityCatalog();
+      return cached
+        ? { fetchedAt: cached.fetchedAt, prices: cached.prices }
+        : null;
     });
 
     // With updates off the bundled model data applies, not a copy kept from
@@ -516,6 +609,18 @@ export class Core {
       if (blocked) return { ok: false as const, error: blocked };
       try {
         const catalog = await pullOpenRouterCatalog(await requestOptions());
+        // The person's refresh also covers the community catalogue, but only
+        // while a selected model has no better price; its failure does not
+        // fail the refresh
+        try {
+          if (await unpricedSelection()) {
+            await pullCommunityCatalog(await requestOptions());
+          }
+        } catch (e) {
+          console.warn(
+            `Community catalogue refresh failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
         return {
           ok: true as const,
           fetchedAt: catalog.fetchedAt,
@@ -926,6 +1031,28 @@ export class Core {
   }
 
   /**
+   * Prices (AWS Price List) and quotas (Service Quotas) for the selected
+   * Bedrock model: looked at when the selection or config changes, and
+   * refreshed in the background under "Model information updates:
+   * Automatic". Never for a provider that is not selected.
+   */
+  private startBedrockMetadata(
+    requestOptions: () => Promise<RequestOptions | undefined>,
+  ) {
+    const tracker = new BedrockMetadataTracker({
+      requestOptions,
+      onZeroQuota: (warning) => void this.ide.showToast("warning", warning),
+      log: (m) => console.warn(m),
+    });
+    this.bedrockMetadata = tracker;
+    this.configHandler.onConfigUpdate((result) => {
+      const chat = result.config?.selectedModelByRole.chat;
+      void tracker.select(chat instanceof Bedrock ? chat : undefined);
+    });
+    tracker.refresher.start();
+  }
+
+  /**
    * The Bedrock test-connection handlers and the tool-dialect setting. Kept
    * out of registerMessageHandlers, which is at its statement limit.
    */
@@ -985,6 +1112,7 @@ export class Core {
         apiBase: msg.data.apiBase,
         apiKey: msg.data.apiKey,
         model: msg.data.model,
+        checkModel: msg.data.checkModel,
       }),
     );
 
@@ -1027,6 +1155,24 @@ export class Core {
         );
       }
       return { saved };
+    });
+
+    on("config/getModelBlock", async (msg) => getModelBlock(msg.data.title));
+    on("config/previewModelEdit", async (msg) =>
+      previewModelEdit(msg.data.title, msg.data.ops),
+    );
+    on("config/saveModelEdit", async (msg) => {
+      const result = saveModelEdit(
+        msg.data.title,
+        msg.data.ops,
+        msg.data.baseHash,
+      );
+      if (result.saved) {
+        await this.configHandler.reloadConfig(
+          "Model settings changed (config/saveModelEdit message)",
+        );
+      }
+      return result;
     });
 
     on("config/getTerminalEnvironment", async () => ({
@@ -1679,12 +1825,27 @@ export class Core {
           };
         }
         // "Test connection" is the user asking for a fresh answer, so the
-        // hour-long catalog cache is bypassed and refilled here.
+        // hour-long catalog cache is bypassed and refilled here. The quota
+        // check runs alongside (five seconds at most, never fails the test)
+        // and the region's AWS Price List is refreshed in the background.
         const bedrock = new Bedrock({ ...params, model: "" });
-        return {
-          ok: true as const,
-          models: await bedrock.listAvailableModels({ refresh: true }),
-        };
+        const [models, quotas] = await Promise.all([
+          bedrock.listAvailableModels({ refresh: true }),
+          bedrock.checkQuotas("test-connection"),
+        ]);
+        void (async () =>
+          ensureBedrockPriceList(bedrock.region, "test-connection", {
+            requestOptions: (await this.configHandler.loadConfig()).config
+              ?.requestOptions,
+            // Costs keep the selected model's region
+            activate: this.bedrockMetadata?.selected?.region === bedrock.region,
+          }))().catch(() => {});
+        const marked = withQuotaWarnings(models, quotas, (id, name) =>
+          quotas.quotas
+            ? zeroQuotaWarning(quotas.quotas, id, quotas.region, name)
+            : undefined,
+        );
+        return { ok: true as const, ...marked };
       } catch (e) {
         return {
           ok: false as const,
@@ -2449,6 +2610,38 @@ export class Core {
    * plain text into secure storage. Only offered when the editor has secure
    * storage; ~/.continuous/.env would still be plain text.
    */
+
+  /**
+   * A refreshed answer from the selected model's provider: the window and
+   * output cap the person did not set follow it, a deprecation or shutdown
+   * date reaches the model chip's notice, and the chip asks again.
+   */
+  private applyModelFacts(
+    target: RefreshTarget,
+    facts: ProviderModelFacts,
+  ): void {
+    const llm = this.selectedChatModel;
+    const current = refreshTargetOf(llm);
+    if (llm && current && targetKey(current) === targetKey(target)) {
+      (llm as Partial<BaseLLM>).applyProviderModelFacts?.(facts);
+    }
+    if (facts.retiresAt || (facts.lifecycle && facts.lifecycle !== "active")) {
+      recordLive(
+        target.model,
+        {
+          lifecycle: facts.lifecycle,
+          deprecatedAt: facts.deprecatedAt,
+          retiresAt: facts.retiresAt,
+        },
+        new Date().toISOString().slice(0, 10),
+      );
+    }
+    this.messenger.send("model/infoUpdated", {
+      provider: target.provider,
+      model: target.model,
+    });
+  }
+
   private async offerToMovePlaintextKeys(): Promise<void> {
     if (this.offeringPlaintextKeys) return;
     if (this.globalContext.get("skipPlaintextKeyOffer")) return;
@@ -2751,4 +2944,18 @@ export class Core {
 /** The settings file the IDE and the CLI share. */
 function policyFilePath(): string {
   return path.join(getContinueGlobalPath(), "permissions.yaml");
+}
+
+/** The refresh target for a selected model: Anthropic and OpenAI only. */
+function refreshTargetOf(llm: ILLM | undefined): RefreshTarget | undefined {
+  if (!llm?.model) return undefined;
+  const provider = llm.providerName;
+  if (provider !== "anthropic" && provider !== "openai") return undefined;
+  return {
+    provider,
+    apiBase: llm.apiBase,
+    apiKey: llm.apiKey,
+    model: llm.model,
+    requestOptions: llm.requestOptions,
+  };
 }

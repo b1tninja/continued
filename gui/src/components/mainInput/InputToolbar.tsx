@@ -10,7 +10,7 @@ import ModelSelect from "../modelSelection/ModelSelect";
 import { Button } from "../ui";
 import { useFontSize } from "../ui/font";
 import { CacheTipsButton } from "./CacheTipsButton";
-import ContextStatus from "./ContextStatus";
+import { ContextMeter } from "./ContextMeter";
 import { ModelRetirementChip } from "./ModelRetirementChip";
 import { ModelToolChip } from "./ModelToolChip";
 import HoverItem, { HoverButton } from "./InputToolbar/HoverItem";
@@ -91,7 +91,7 @@ function InputToolbar(props: InputToolbarProps) {
             fontSize: tinyFont,
           }}
         >
-          {!isInEdit && <ContextStatus />}
+          {!isInEdit && <ContextMeter />}
           <UsageIndicator />
           <ReasoningToggle />
           <PromptCacheButton />

@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/Auth";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { useProviderSetupDialog } from "../ProviderSetup/useProviderSetupDialog";
+import { useModelConfigDialog } from "../ModelConfig/useModelConfigDialog";
 import {
   setDialogMessage,
   setModeModelOverride,
@@ -85,7 +86,7 @@ function ModelOption({
   showMissingApiKeyMsg,
   isSelected,
 }: ModelOptionProps) {
-  const navigate = useNavigate();
+  const openModelConfig = useModelConfigDialog();
 
   function handleOptionClick(e: any) {
     if (showMissingApiKeyMsg) {
@@ -96,7 +97,8 @@ function ModelOption({
 
   function handleConfigureClick(e: React.MouseEvent) {
     e.stopPropagation();
-    navigate(CONFIG_ROUTES.MODELS);
+    e.preventDefault();
+    openModelConfig({ title: option.value, sourceFile: option.sourceFile });
   }
 
   return (

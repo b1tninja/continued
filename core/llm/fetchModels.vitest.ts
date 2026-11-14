@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchModels, windowFromInputAndOutput } from "./fetchModels";
+import {
+  anthropicModelToFetched,
+  fetchModels,
+  windowFromInputAndOutput,
+} from "./fetchModels";
 
 // Provider list requests go through the shared fetch; stand in for it with the
 // global stub these tests already use.
@@ -150,5 +154,55 @@ describe("fetchModels: separate input/output limits", () => {
     await fetchModels("gemini", "key", "https://llm.example/v1beta");
     const [url] = (fetch as any).mock.calls[0];
     expect(String(url)).toContain("https://llm.example/v1beta/models");
+  });
+});
+
+describe("anthropicModelToFetched", () => {
+  it("reads image input, lifecycle and the retirement date", () => {
+    const m = anthropicModelToFetched({
+      id: "claude-sonnet-4-5-20250929",
+      display_name: "Claude Sonnet 4.5",
+      max_input_tokens: 200_000,
+      max_tokens: 64_000,
+      capabilities: { image_input: { supported: true } },
+      lifecycle: "deprecated",
+      retires_at: "2026-11-30T00:00:00Z",
+    });
+    expect(m).toMatchObject({
+      modelId: "claude-sonnet-4-5-20250929",
+      contextLength: 264_000,
+      maxTokens: 64_000,
+      supportsImages: true,
+      deprecated: true,
+      retiresAt: "2026-11-30T00:00:00Z",
+    });
+    // Effort levels would become OpenAI-style reasoning_effort variants
+    expect(m.reasoningEfforts).toBeUndefined();
+  });
+
+  it("says a model takes no images only when the API says so", () => {
+    expect(
+      anthropicModelToFetched({
+        id: "a",
+        capabilities: { image_input: { supported: false } },
+      }).supportsImages,
+    ).toBe(false);
+    const bare = anthropicModelToFetched({ id: "b" });
+    expect("supportsImages" in bare).toBe(false);
+    expect(bare.deprecated).toBeUndefined();
+    expect("retiresAt" in bare).toBe(false);
+  });
+
+  it("ignores a retirement date that does not parse and an active model's null", () => {
+    expect(
+      anthropicModelToFetched({ id: "c", retires_at: "soon" }).retiresAt,
+    ).toBeUndefined();
+    const active = anthropicModelToFetched({
+      id: "d",
+      lifecycle: "active",
+      retires_at: null,
+    });
+    expect(active.deprecated).toBe(false);
+    expect(active.retiresAt).toBeUndefined();
   });
 });

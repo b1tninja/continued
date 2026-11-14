@@ -283,3 +283,131 @@ describe("stream-json events", () => {
     ).toBe(false);
   });
 });
+
+describe("stream-json price sources", () => {
+  const modelUsage = (priced: number, extra: Record<string, unknown> = {}) => ({
+    provider: "anthropic",
+    model: "claude-sonnet-4-5",
+    requests: priced,
+    pricedRequests: priced,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    cost: 0,
+    ...extra,
+  });
+  const curated = {
+    kind: "curated",
+    label: "Anthropic list prices",
+    url: "https://platform.claude.com/docs/en/about-claude/pricing",
+    asOf: "2026-11-02",
+  };
+  const community = {
+    kind: "community",
+    label: "community catalogue (models.dev)",
+    url: "https://models.dev/api.json",
+    asOf: "2026-11-10T08:00:00.000Z",
+  };
+
+  it("usage carries the request's source and tier; result lists the run's sources", () => {
+    const h = harness();
+    // Resumed with a model priced before this run: not one of this run's sources
+    h.setUsage({
+      ...usage(0.5, 1000, 100),
+      byModel: {
+        "openai/gpt-4o": {
+          ...modelUsage(3),
+          provider: "openai",
+          model: "gpt-4o",
+          priceSource: {
+            kind: "curated",
+            label: "OpenAI pricing page (Standard tier)",
+          },
+        },
+      },
+    });
+    h.run.init(
+      {
+        sessionId: "s1",
+        cliVersion: "1.0.0",
+        model: "m",
+        provider: "anthropic",
+        cwd: "/w",
+        mode: "normal",
+      },
+      [],
+    );
+    h.setUsage({
+      ...usage(0.6, 2000, 200),
+      byModel: {
+        "openai/gpt-4o": { ...modelUsage(3), provider: "openai" },
+        "anthropic/claude-sonnet-4-5": modelUsage(1, {
+          priceSource: curated,
+          servedTier: "priority",
+        }),
+      },
+    });
+    h.run.requestDone();
+    h.setUsage({
+      ...usage(0.7, 3000, 300),
+      byModel: {
+        "openai/gpt-4o": { ...modelUsage(3), provider: "openai" },
+        "anthropic/claude-sonnet-4-5": modelUsage(1, {
+          priceSource: curated,
+          servedTier: "priority",
+        }),
+        "mistral/mistral-large-latest": modelUsage(1, {
+          provider: "mistral",
+          model: "mistral-large-latest",
+          priceSource: community,
+        }),
+      },
+    });
+    h.run.requestDone();
+    h.run.finish({ status: "success", exitCode: 0, result: "ok" });
+    const events = h.events();
+    const usages = events.filter((e) => e.type === "usage");
+    expect(usages[0].priceSource).toEqual(curated);
+    expect(usages[0].servedTier).toBe("priority");
+    expect(usages[1].priceSource).toEqual(community);
+    expect(usages[1].servedTier).toBeUndefined();
+    const result = events.at(-1);
+    expect(result.priceSources).toEqual([curated, community]);
+    expect(result.servedTiers).toEqual(["priority"]);
+    for (const line of h.lines) {
+      expect(lineSchema.safeParse(JSON.parse(line)).success).toBe(true);
+    }
+  });
+
+  it("an unpriced request has no priceSource, and the result an empty list", () => {
+    const h = harness();
+    h.run.init(
+      {
+        sessionId: "s1",
+        cliVersion: "1.0.0",
+        model: "m",
+        provider: "ollama",
+        cwd: "/w",
+        mode: "normal",
+      },
+      [],
+    );
+    h.setUsage(usage(0.5, 2000, 200));
+    h.run.requestDone();
+    h.run.finish({ status: "success", exitCode: 0, result: "ok" });
+    const events = h.events();
+    expect(events.find((e) => e.type === "usage").priceSource).toBeUndefined();
+    expect(events.at(-1).priceSources).toEqual([]);
+  });
+
+  it("the schema rejects an unknown price source kind", () => {
+    const h = harness();
+    h.run.finish({ status: "success", exitCode: 0, result: "ok" });
+    const result = {
+      ...h.events().at(-1),
+      priceSources: [{ kind: "guess", label: "x" }],
+    };
+    expect(lineSchema.safeParse(result).success).toBe(false);
+  });
+});

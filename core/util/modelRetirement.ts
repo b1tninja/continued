@@ -7,7 +7,10 @@
  *     `GET /v1/models` (core/util/anthropicSurfaceTest.ts), kept locally.
  * The dates apply to Anthropic-operated platforms only: Bedrock and
  * Google-managed Vertex set their own schedules, so only provider
- * "anthropic" is matched. Pure and GUI-safe: no I/O, the caller passes `now`.
+ * "anthropic" is matched against the table. Provider "openai" gets a notice
+ * only from its own live answer (`shutdown_date` from OpenAI's models API,
+ * read by the selected model's background refresh). Pure and GUI-safe: no
+ * I/O, the caller passes `now`.
  * A notice is information; nothing is blocked.
  */
 import data from "./modelRetirements.generated.json";
@@ -175,7 +178,10 @@ export function retirementNotice(
   input: RetirementInput,
 ): RetirementNotice | undefined {
   const { model } = input;
-  if (input.provider !== "anthropic" || !model) return undefined;
+  if (!model) return undefined;
+  if (input.provider !== "anthropic") {
+    if (input.provider !== "openai" || !input.live) return undefined;
+  }
   const row = findRetirementRow(input.provider, model, input.rows);
   if (!row && !input.live) return undefined;
   const f = mergeFacts(row, input.live);

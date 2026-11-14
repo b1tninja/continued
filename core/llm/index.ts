@@ -53,6 +53,8 @@ import {
   unresolvedSecretNamesOfLlm,
 } from "../util/unresolvedSecrets.js";
 import { withExponentialBackoff } from "../util/withExponentialBackoff.js";
+import { providerModelFactsFor } from "./providerModelInfoStore.js";
+import { type LimitInputs, resolveModelLimits } from "./providerModelLimits.js";
 import { retryStreamOnDroppedConnection } from "./utils/streamRetry.js";
 import {
   promptProgressOf,
@@ -299,21 +301,36 @@ export abstract class BaseLLM implements ILLM {
     this.toolDialect = options.toolDialect;
     this.basePlanSystemMessage = options.basePlanSystemMessage;
     this.baseChatSystemMessage = options.baseChatSystemMessage;
-    this._contextLength = options.contextLength ?? llmInfo?.contextLength;
+    // Context window and output cap: the person's config, then what the
+    // provider's own models API last said (Anthropic, OpenAI; cached, never
+    // fetched here), then llm-info. The output cap stays at most a quarter
+    // of the window so one reply cannot take the whole context.
+    this.limitInputs = {
+      userContextLength: _options.contextLength,
+      userMaxTokens: _options.completionOptions?.maxTokens,
+      classMaxTokens:
+        _options.completionOptions === undefined
+          ? options.completionOptions?.maxTokens
+          : undefined,
+      llmInfo,
+      defaultContextLength: DEFAULT_CONTEXT_LENGTH,
+      defaultMaxTokens: DEFAULT_MAX_TOKENS,
+    };
+    const providerFacts = providerModelFactsFor(this.providerName, {
+      apiBase: options.apiBase,
+      apiKey: options.apiKey,
+      model: options.model,
+    });
+    const limits = resolveModelLimits({
+      ...this.limitInputs,
+      ...(providerFacts ? { provider: providerFacts } : {}),
+    });
+    this._contextLength = limits.contextLength;
     this.maxStopWords = options.maxStopWords ?? this.maxStopWords;
     this.completionOptions = {
       ...options.completionOptions,
       model: options.model || "gpt-4",
-      maxTokens:
-        options.completionOptions?.maxTokens ??
-        (llmInfo?.maxCompletionTokens
-          ? Math.min(
-              llmInfo.maxCompletionTokens,
-              // Even if the model has a large maxTokens, we don't want to use that every time,
-              // because it takes away from the context length
-              this.contextLength / 4,
-            )
-          : DEFAULT_MAX_TOKENS),
+      maxTokens: limits.maxTokens,
     };
     this.requestOptions = options.requestOptions;
     this.promptTemplates = {
@@ -381,6 +398,26 @@ export abstract class BaseLLM implements ILLM {
     this.sourceFile = options.sourceFile;
     this.isFromAutoDetect = options.isFromAutoDetect;
     this.toolOverrides = options.toolOverrides;
+  }
+
+  /** What the limits were resolved from, to apply a newer provider answer. */
+  private limitInputs: LimitInputs;
+
+  /**
+   * A newer answer from the provider's models API (the background refresh of
+   * the selected model): the window and output cap the person did not set
+   * follow it from the next request on.
+   */
+  applyProviderModelFacts(facts: {
+    contextLength?: number;
+    maxOutputTokens?: number;
+  }): void {
+    const limits = resolveModelLimits({ ...this.limitInputs, provider: facts });
+    this._contextLength = limits.contextLength;
+    this.completionOptions = {
+      ...this.completionOptions,
+      maxTokens: limits.maxTokens,
+    };
   }
 
   get contextLength() {

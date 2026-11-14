@@ -13,6 +13,7 @@ import {
 } from "core/tools/permissions/policy";
 import type { ToolCallTestResult } from "core/tools/permissions/testToolCall";
 import { useContext, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Alert from "../../../../components/gui/Alert";
 import { Button } from "../../../../components/ui";
 import { IdeMessengerContext } from "../../../../context/IdeMessenger";
@@ -21,6 +22,7 @@ import { updateConfig } from "../../../../redux/slices/configSlice";
 import { modifyAnyConfigWithSharedConfig } from "core/config/sharedConfig";
 import { ConfigHeader } from "../../components/ConfigHeader";
 import { AuditOverviewPanel, type ReviewRequest } from "./AuditOverviewPanel";
+import { CustomPolicy, isBaseName } from "./custom/CustomPolicy";
 import { EditableRules, type EditorEnv } from "./EditableRules";
 import { AuditInbox } from "./audit/AuditInbox";
 import { AuditList } from "./audit/AuditList";
@@ -195,6 +197,20 @@ export function PermissionsSection() {
     levels,
   );
   const [active, setActive] = useState<PolicyArea>("tools");
+  // ?custom=<preset|current>&area=<area>: the Custom… entry of a policy control
+  const [params, setParams] = useSearchParams();
+  const customBase = params.get("custom");
+  const customArea = params.get("area");
+  const closeCustom = (message?: string) => {
+    const next = new URLSearchParams(params);
+    next.delete("custom");
+    next.delete("area");
+    setParams(next, { replace: true });
+    if (message) {
+      setStatus({ text: message });
+      reload();
+    }
+  };
   const [view, setView] = useState<PermissionsView>("rules");
   const [review, setReview] = useState<
     (ReviewRequest & { nonce: number }) | undefined
@@ -271,6 +287,37 @@ export function PermissionsSection() {
         className="mb-2"
       />
       {showIntro && <FirstRunOverview onDismiss={dismissIntro} />}
+      {report && isBaseName(customBase) ? (
+        <CustomPolicy
+          key={`${customBase}:${customArea ?? ""}`}
+          base={customBase}
+          area={
+            POLICY_AREAS.includes(customArea as PolicyArea)
+              ? (customArea as PolicyArea)
+              : undefined
+          }
+          report={report}
+          env={env}
+          audit={audit.overview}
+          onClose={closeCustom}
+        />
+      ) : (
+        report && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mb-2 min-h-6"
+            data-testid="open-custom-policy"
+            onClick={() => {
+              const next = new URLSearchParams(params);
+              next.set("custom", "current");
+              setParams(next);
+            }}
+          >
+            Custom policy…
+          </Button>
+        )
+      )}
       <ViewSwitch view={view} onChange={setView} />
       <div hidden={view !== "rules"}>
         {loading && <PermissionsSkeleton slow={slow} onRetry={reload} />}

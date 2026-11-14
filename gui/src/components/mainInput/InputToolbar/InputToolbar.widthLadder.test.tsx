@@ -99,12 +99,17 @@ describe("status row width ladder", () => {
       const row = screen.getByTestId("input-toolbar");
       expect(row.getAttribute("data-width-tier")).toBe(widthTier(width));
       const status = screen.getByTestId("input-status-group");
+      const meter = within(status).getByTestId("context-meter");
+      expect(meter.textContent).toMatch(/^(Context )?10%$/);
+      expect(meter.getAttribute("aria-label")).toBe("Context 10% used");
       const usage = within(status).getByTestId("usage-indicator");
-      expect(usage.textContent).toContain("10%");
-      expect(usage.textContent).toContain("$0.06");
-      // Its name carries both, whatever the visible form
-      expect(usage.getAttribute("aria-label")).toMatch(
-        /^10%( context)? · \$0\.06: context 10% used, estimated cost \$0\.06\. Show usage details$/,
+      expect(usage.textContent).toBe("$0.06");
+      expect(usage.getAttribute("aria-label")).toBe(
+        "$0.06: estimated cost $0.06. Show usage details",
+      );
+      // The meter sits right before the cost
+      expect(meter.compareDocumentPosition(usage)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
       );
       // No "..." menu any more
       expect(screen.queryByTestId("input-overflow-button")).toBeNull();
@@ -132,9 +137,7 @@ describe("status row width ladder", () => {
 
   it("drops labels first: words when wide, numbers and icons when narrow", async () => {
     await renderAt(800);
-    expect(screen.getByTestId("usage-indicator").textContent).toContain(
-      "10% context",
-    );
+    expect(screen.getByTestId("context-meter").textContent).toBe("Context 10%");
     expect(screen.getByTestId("reasoning-toggle-label")).toBeInTheDocument();
     expect(screen.getByTestId("prompt-cache-state").textContent).toBe(
       "Cache cold",
@@ -145,9 +148,7 @@ describe("status row width ladder", () => {
 
   it("at medium width keeps numbers and the cache state word", async () => {
     await renderAt(360);
-    expect(screen.getByTestId("usage-indicator").textContent).not.toContain(
-      "context",
-    );
+    expect(screen.getByTestId("context-meter").textContent).toBe("10%");
     expect(screen.queryByTestId("reasoning-toggle-label")).toBeNull();
     expect(screen.getByTestId("prompt-cache-state").textContent).toBe("cold");
     expect(screen.getByTestId("cache-tips-count").textContent).toBe("1");
@@ -156,9 +157,8 @@ describe("status row width ladder", () => {
 
   it("at narrow width shows icons and numbers only", async () => {
     await renderAt(280);
-    expect(screen.getByTestId("usage-indicator").textContent).toBe(
-      "10% · $0.06",
-    );
+    expect(screen.getByTestId("context-meter").textContent).toBe("10%");
+    expect(screen.getByTestId("usage-indicator").textContent).toBe("$0.06");
     expect(screen.queryByTestId("prompt-cache-state")).toBeNull();
     expect(screen.getByTestId("cache-tips-count").textContent).toBe("1");
     expect(screen.queryByTestId("active-file-button")).toBeNull();
@@ -178,8 +178,11 @@ describe("status row accessible names", () => {
       screen.getByRole("button", { name: /^1 tip about this model/ }),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("button", { name: "Context 10% used" }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("button", {
-        name: "10% · $0.06: context 10% used, estimated cost $0.06. Show usage details",
+        name: "$0.06: estimated cost $0.06. Show usage details",
       }),
     ).toBeInTheDocument();
 
@@ -220,5 +223,19 @@ describe("status row accessible names", () => {
     expect(panel.textContent).toContain("Estimated cost");
     await user.keyboard("{Escape}");
     expect(screen.queryByTestId("usage-panel")).toBeNull();
+  });
+
+  it("the context details open from the keyboard, with Compact now in them", async () => {
+    await renderAt(280);
+    const user = userEvent.setup();
+    screen.getByTestId("context-meter").focus();
+    await user.keyboard("{Enter}");
+    const panel = await screen.findByTestId("context-panel");
+    expect(panel.textContent).toContain("Context: 20k of 200k tokens (10%)");
+    expect(
+      within(panel).getByRole("button", { name: "Compact now" }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByTestId("context-panel")).toBeNull();
   });
 });

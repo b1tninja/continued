@@ -91,6 +91,9 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "bedrock/testModel",
     "bedrock/probeToolCalls",
     "config/setToolDialect",
+    "config/getModelBlock",
+    "config/previewModelEdit",
+    "config/saveModelEdit",
     "ollama/showHint",
     "openaiCompat/testConnection",
     "openaiCompat/probeStatus",
@@ -142,6 +145,7 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "models/fetch",
     "modelCatalog/status",
     "modelCatalog/cached",
+    "modelCatalog/communityCached",
     "modelCatalog/pull",
     "modelCatalog/setPolicy",
     "models/detectLocal",
@@ -172,4 +176,5 @@ export const CORE_TO_WEBVIEW_PASS_THROUGH: (keyof ToWebviewFromCoreProtocol)[] =
     "sessionUpdate",
     "didCloseFiles",
     "toolCallPartialOutput",
+    "model/infoUpdated",
   ];

@@ -699,6 +699,16 @@ export const FIXTURES: Record<string, Fixture> = {
     // Let the popover be placed above the readout before the picture
     await new Promise((r) => setTimeout(r, 300));
   },
+  /** What the context holds, opened from the context meter beside the cost */
+  "context-open": async ({ store }) => {
+    contextScene(store);
+    await new Promise((r) => setTimeout(r, 800));
+    const meters = document.querySelectorAll<HTMLElement>(
+      "[data-testid=context-meter]",
+    );
+    meters[meters.length - 1]?.click();
+    await new Promise((r) => setTimeout(r, 300));
+  },
   /** The preset picker in the toolbar, open: glyph, what each sets, the check */
   "preset-open": async ({ store }) => {
     store.dispatch(newSession());
@@ -1174,6 +1184,83 @@ Object.assign(FIXTURES, {
 export const FIXTURE_NAMES = Object.keys(FIXTURES);
 
 /** A reply that reported usage, with the prompt cache warm. */
+/**
+ * A conversation whose context has something in every common part: an
+ * attached file, a file read, a test run and the replies, with a reported
+ * count close to what they hold, so the split is the one a person would see.
+ */
+function contextScene(store: Store): void {
+  const line = (
+    n: number,
+  ) => `export const value${n} = compute(${n}); // a line of code
+`;
+  const file = (lines: number) =>
+    Array.from({ length: lines }, (_, i) => line(i)).join("");
+  const readCall = {
+    id: "call-read",
+    type: "function" as const,
+    function: {
+      name: "read_file",
+      arguments: JSON.stringify({ filepath: "src/config/parseConfig.ts" }),
+    },
+  };
+  const ask: ChatHistoryItem = {
+    message: { role: "user", content: "Why does the parseConfig test fail?" },
+    contextItems: [
+      {
+        id: { providerTitle: "file", itemId: "readme" },
+        name: "README.md",
+        description: "README.md",
+        content: file(220),
+      },
+    ],
+  };
+  const read: ChatHistoryItem = {
+    message: { role: "assistant", content: "", toolCalls: [readCall] },
+    contextItems: [],
+    toolCallStates: [
+      {
+        toolCallId: readCall.id,
+        toolCall: readCall,
+        status: "done",
+        parsedArgs: { filepath: "src/config/parseConfig.ts" },
+        output: [
+          {
+            name: "parseConfig.ts",
+            description: "src/config/parseConfig.ts",
+            content: file(700),
+          },
+        ],
+      } as ToolCallState,
+    ],
+  };
+  store.dispatch(
+    newSession(
+      session([
+        ask,
+        read,
+        assistant("Running the test to confirm.", [runCommandCall("done")]),
+        assistant(MARKDOWN_REPLY),
+      ]),
+    ),
+  );
+  store.dispatch(
+    addRequestUsageToSession({
+      provider: CHAT_MODEL.provider,
+      model: CHAT_MODEL.model,
+      usage: { promptTokens: 15_000, completionTokens: 400 },
+    }),
+  );
+  store.dispatch(
+    setPromptCacheState({
+      escalated: false,
+      lastRequestAt: Date.now() - 60_000,
+      lastTtl: "5m",
+      lastInputTokens: 15_000,
+    }),
+  );
+}
+
 function statusRowScene(store: Store): void {
   store.dispatch(
     newSession(

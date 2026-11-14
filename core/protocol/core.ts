@@ -16,6 +16,7 @@ import type {
   TerminalEnvironmentStatus,
 } from "../util/terminalEnvironment";
 import type { CatalogModel } from "../llm/openRouterCatalog";
+import type { CommunityPrice } from "../llm/communityCatalog";
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type {
@@ -30,6 +31,12 @@ import type { SubagentLoadResult } from "../subagents/loadSubagents";
 import type { ApplyPatchResult, WorktreeInfo } from "../util/worktree";
 import type { DetectedLocalServer } from "../llm/localServers";
 import type { RulesByModeInput } from "../config/yaml/saveRulesByMode";
+import type {
+  ModelBlockInfo,
+  ModelEditPreview,
+  ModelEditSaveResult,
+} from "../config/modelEdit/modelBlockEdit";
+import type { ModelPatchOp } from "../config/modelEdit/modelEditFields";
 import type {
   AutoReviewReply,
   AutoReviewRequest,
@@ -135,10 +142,33 @@ export interface BedrockModelOptionInfo {
    * "pending" while an access request is open.
    */
   access?: "available" | "needs-access" | "pending";
+  /**
+   * Set when the account's applied tokens- or requests-per-minute quota for
+   * this model on its route is 0 (Service Quotas): the warning to show
+   * before the first request, with the Service Quotas console link.
+   */
+  quotaWarning?: string;
+}
+
+/** The optional Service Quotas check that runs with Test connection. */
+export interface BedrockQuotaCheckInfo {
+  /** `ok`: quotas known; `skipped`: not checked (see `note`); `off`: model information updates are off */
+  status: "ok" | "skipped" | "off";
+  /** One quiet line, e.g. "Quota check skipped: this profile lacks servicequotas:ListServiceQuotas" */
+  note?: string;
+  docsUrl?: string;
+  fetchedAt?: string;
+  /** How many listed models have a 0 quota on their route */
+  zeroQuotaModels?: number;
 }
 
 export type BedrockListModelsResult =
-  { ok: true; models: BedrockModelOptionInfo[] } | { ok: false; error: string };
+  | {
+      ok: true;
+      models: BedrockModelOptionInfo[];
+      quota?: BedrockQuotaCheckInfo;
+    }
+  | { ok: false; error: string };
 
 /**
  * Whether the account lists the `global.` inference profile of a configured
@@ -244,6 +274,25 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
       confirm?: string;
     },
     { saved: boolean; declined?: boolean },
+  ];
+  /**
+   * The config.yaml entry of the model with this title, for the model
+   * configuration dialog. Plain credential values are masked; secret
+   * references are returned as names.
+   */
+  "config/getModelBlock": [{ title: string }, ModelBlockInfo];
+  /** Check a change to that entry and return the YAML diff it would make. */
+  "config/previewModelEdit": [
+    { title: string; ops: ModelPatchOp[] },
+    ModelEditPreview,
+  ];
+  /**
+   * Write the change, if the file still matches the preview's `baseHash`.
+   * Comments, key order and keys the dialog does not manage are kept.
+   */
+  "config/saveModelEdit": [
+    { title: string; ops: ModelPatchOp[]; baseHash: string },
+    ModelEditSaveResult,
   ];
   /**
    * The effective policy for the environment commands inherit, where it comes
@@ -562,6 +611,8 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
       apiBase?: string;
       apiKey?: string;
       model?: string;
+      /** The configured model id to check with `GET /models/{id}`. */
+      checkModel?: string;
     },
     OpenAICompatTestResult,
   ];
@@ -826,11 +877,21 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
       refreshHours: number;
       lastAttempt?: { at: string; error?: string };
       openrouter?: { fetchedAt: string; count: number };
+      /** The community catalogue copy (models.dev), when there is one */
+      community?: { fetchedAt: string; count: number };
     },
   ];
   "modelCatalog/cached": [
     undefined,
     { fetchedAt: string; models: CatalogModel[] } | null,
+  ];
+  /**
+   * The trimmed community catalogue copy (models.dev prices), the last price
+   * source; a file read, null when there is none or updates are `off`.
+   */
+  "modelCatalog/communityCached": [
+    undefined,
+    { fetchedAt: string; prices: CommunityPrice[] } | null,
   ];
   "modelCatalog/pull": [
     undefined,

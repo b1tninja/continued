@@ -44,6 +44,8 @@ export const loadPolicySettings = createAsyncThunk<void, void, ThunkApiType>(
           floor: settings.floor ?? [],
           planMcpTools: settings.planMcpTools ?? [],
           trustedMcpServers: Object.keys(settings.mcpServers ?? {}),
+          questionDelivery: settings.questions?.delivery,
+          planAllowTerminal: settings.planAllowTerminal,
         }),
       );
       for (const notice of notices) console.warn(notice);
@@ -117,6 +119,63 @@ export const savePolicySettings = createAsyncThunk<void, void, ThunkApiType>(
     }
   },
 );
+
+/** What the Custom policy page saves to permissions.yaml in one write. */
+export interface CustomPolicySave {
+  levels: PolicyLevels;
+  extras: Pick<
+    PolicyExtras,
+    | "builtin"
+    | "maxNewPlanItems"
+    | "questions"
+    | "questionDelivery"
+    | "floor"
+    | "trustedMcpServers"
+    | "planMcpTools"
+    | "planAllowTerminal"
+  >;
+}
+
+/**
+ * The Custom policy page's save: the levels and every setting it shows, in
+ * one write of permissions.yaml (core's writer: temp file and rename, other
+ * keys and comments kept). On failure nothing in the page's state changes and
+ * the error is the writer's sentence.
+ */
+export const saveCustomPolicy = createAsyncThunk<
+  void,
+  CustomPolicySave,
+  ThunkApiType
+>("policy/saveCustom", async ({ levels, extras }, { dispatch, extra }) => {
+  const update: PolicyFileUpdate = {
+    levels,
+    ...(extras.maxNewPlanItems !== undefined
+      ? { maxNewPlanItems: extras.maxNewPlanItems }
+      : {}),
+    questions: {
+      ...(extras.questionDelivery ? { delivery: extras.questionDelivery } : {}),
+      ...(extras.questions?.youDecide
+        ? { youDecide: extras.questions.youDecide }
+        : {}),
+      ...(extras.questions?.agentDecides
+        ? { agentDecides: extras.questions.agentDecides }
+        : {}),
+    },
+    builtin: extras.builtin ?? {},
+    floor: extras.floor ?? [],
+    trustedMcpServers: extras.trustedMcpServers ?? [],
+    planMcpTools: extras.planMcpTools ?? [],
+    planAllowTerminal: extras.planAllowTerminal ?? false,
+  };
+  const res = await extra.ideMessenger.request("policy/save", update);
+  if (res.status !== "success") {
+    throw new Error(
+      res.status === "error" ? res.error : "Could not save the policy settings",
+    );
+  }
+  dispatch(setPolicyLevels(levels));
+  dispatch(setPolicyExtras(extras));
+});
 
 export const changePolicyLevel = createAsyncThunk<
   void,

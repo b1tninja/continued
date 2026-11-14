@@ -21,8 +21,10 @@ import {
   type PolicyPresetName,
 } from "core/tools/permissions/policy";
 import { useEffect, useId, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { applyPolicyPreset } from "../../redux/thunks/policySettings";
+import { customPolicyRoute } from "../../util/navigation";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
 import { CHIP, LEVEL_TONES, IDGAF_SENTENCE } from "./levelStyle";
 
@@ -106,6 +108,7 @@ export function PresetSelect({
   placement?: "toolbar" | "settings";
 }) {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const levels = useAppSelector((s) => s.ui.policyLevels);
   const preset = presetOf(levels);
   const key = preset ?? "custom";
@@ -131,7 +134,9 @@ export function PresetSelect({
     <Listbox
       value={key}
       onChange={(name: string) => {
-        if (name in POLICY_PRESETS) {
+        if (name === "custom") {
+          void navigate(customPolicyRoute({ base: preset ?? "current" }));
+        } else if (name in POLICY_PRESETS) {
           void dispatch(
             applyPolicyPreset(POLICY_PRESETS[name as PolicyPresetName].levels),
           );
@@ -221,23 +226,29 @@ export function PresetSelect({
               </ListboxOption>
             );
           })}
-          <div
-            data-testid="policy-preset-custom-note"
-            className="flex items-start gap-1 px-2 py-1 text-2xs text-description"
+          <ListboxOption
+            value="custom"
+            data-testid="policy-preset-custom"
+            className="items-start gap-1"
           >
             <AdjustmentsHorizontalIcon
               className="mt-0.5 h-3 w-3 shrink-0"
               aria-hidden="true"
             />
-            <span className="whitespace-normal">
-              Custom: set the five areas one by one.
-              {preset ? "" : " This is your current set."}
-            </span>
+            <div className="flex flex-col">
+              <span>Custom…</span>
+              <span className="text-2xs whitespace-normal text-description">
+                Open the policy editor: levels, rules and settings, starting
+                from{" "}
+                {preset ? POLICY_PRESETS[preset].label : "your current set"}.
+                {preset ? "" : " This is your current set."}
+              </span>
+            </div>
             <CheckIcon
               className={`ml-auto h-3 w-3 shrink-0 ${preset ? "opacity-0" : ""}`}
               aria-hidden="true"
             />
-          </div>
+          </ListboxOption>
         </ListboxOptions>
       </div>
     </Listbox>

@@ -1,4 +1,6 @@
 import type { ChatHistoryItem, SessionUsage } from "core/index.js";
+import type { PriceSource } from "core/llm/utils/calculateRequestCost.js";
+import { distinctPriceSources } from "core/llm/utils/priceSourceText.js";
 import { clipMasked } from "core/tools/permissions/audit/mask.js";
 import {
   maskArgsForDisplay,
@@ -10,6 +12,7 @@ import { idgafObjectionCount } from "../audit/idgafObjections.js";
 import {
   STREAM_JSON_SCHEMA_VERSION,
   type InitEvent,
+  type PriceSourceJson,
   type RunErrorKind,
   type RunStatus,
   type StreamJsonEvent,
@@ -48,15 +51,56 @@ interface UsageMark {
   cacheRead: number;
   cacheWrite: number;
   cost: number;
+  /** Priced requests per model (`provider/model`), to tell which were priced since */
+  priced: Record<string, number>;
 }
 
 function markOf(usage: SessionUsage | undefined): UsageMark {
+  const priced: Record<string, number> = {};
+  for (const [key, m] of Object.entries(usage?.byModel ?? {})) {
+    priced[key] = m.pricedRequests;
+  }
   return {
     input: usage?.promptTokens ?? 0,
     output: usage?.completionTokens ?? 0,
     cacheRead: usage?.promptTokensDetails?.cachedTokens ?? 0,
     cacheWrite: usage?.promptTokensDetails?.cacheWriteTokens ?? 0,
     cost: usage?.totalCost ?? 0,
+    priced,
+  };
+}
+
+/** A price source as the stream carries it: only the known fields. */
+function sourceJson(s: PriceSource): PriceSourceJson {
+  return {
+    kind: s.kind,
+    label: s.label,
+    ...(s.url ? { url: s.url } : {}),
+    ...(s.asOf ? { asOf: s.asOf } : {}),
+  };
+}
+
+/**
+ * Where the prices of the requests priced between two marks came from, and
+ * the non-standard tiers their providers reported.
+ */
+function pricedSince(
+  usage: SessionUsage | undefined,
+  from: UsageMark,
+  to: UsageMark,
+): { sources: PriceSourceJson[]; tiers: string[] } {
+  const models = Object.entries(usage?.byModel ?? {})
+    .filter(([key]) => (to.priced[key] ?? 0) > (from.priced[key] ?? 0))
+    .map(([, m]) => m);
+  return {
+    sources: distinctPriceSources(models.map((m) => m.priceSource)).map(
+      sourceJson,
+    ),
+    tiers: [
+      ...new Set(
+        models.map((m) => m.servedTier).filter((t): t is string => !!t),
+      ),
+    ],
   };
 }
 
@@ -261,6 +305,7 @@ export class StreamJsonRun {
     const last = this.lastMark;
     this.lastMark = mark;
     this.requests++;
+    const priced = pricedSince(usage, last, mark);
     this.emit({
       type: "usage",
       request: this.requests,
@@ -271,6 +316,8 @@ export class StreamJsonRun {
       costUsd: usd(mark.cost - last.cost),
       totalCostUsd: usd(mark.cost - this.startMark.cost),
       costEstimated: !!usage?.costEstimated,
+      ...(priced.sources[0] ? { priceSource: priced.sources[0] } : {}),
+      ...(priced.tiers[0] ? { servedTier: priced.tiers[0] } : {}),
     });
   }
 
@@ -306,6 +353,7 @@ export class StreamJsonRun {
     const usage = this.options.usage?.();
     const mark = markOf(usage);
     const start = this.startMark;
+    const priced = pricedSince(usage, start, mark);
     this.emit({
       type: "result",
       schemaVersion: STREAM_JSON_SCHEMA_VERSION,
@@ -325,6 +373,8 @@ export class StreamJsonRun {
       },
       totalCostUsd: usd(mark.cost - start.cost),
       costEstimated: !!usage?.costEstimated,
+      priceSources: priced.sources,
+      ...(priced.tiers.length > 0 ? { servedTiers: priced.tiers } : {}),
     });
     this.finished = true;
   }

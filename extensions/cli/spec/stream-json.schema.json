@@ -149,7 +149,20 @@
         "cacheWriteTokens": { "type": "integer", "minimum": 0 },
         "costUsd": { "type": "number", "minimum": 0 },
         "totalCostUsd": { "type": "number", "minimum": 0 },
-        "costEstimated": { "type": "boolean" }
+        "costEstimated": { "type": "boolean" },
+        "priceSource": {
+          "description": "Where a price came from and as of when. kind: user (a price the person entered), provider (a list the provider publishes, downloaded), curated (a table in Continuous checked against the provider pricing page), community (the models.dev catalogue, a third-party estimate and the last resort).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "label"],
+          "properties": {
+            "kind": { "enum": ["user", "provider", "curated", "community"] },
+            "label": { "type": "string" },
+            "url": { "type": "string" },
+            "asOf": { "type": "string" }
+          }
+        },
+        "servedTier": { "type": "string" }
       }
     },
     "run_limit": {
@@ -241,7 +254,23 @@
           }
         },
         "totalCostUsd": { "type": "number", "minimum": 0 },
-        "costEstimated": { "type": "boolean" }
+        "costEstimated": { "type": "boolean" },
+        "priceSources": {
+          "type": "array",
+          "items": {
+            "description": "Where a price came from and as of when. kind: user (a price the person entered), provider (a list the provider publishes, downloaded), curated (a table in Continuous checked against the provider pricing page), community (the models.dev catalogue, a third-party estimate and the last resort).",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "label"],
+            "properties": {
+              "kind": { "enum": ["user", "provider", "curated", "community"] },
+              "label": { "type": "string" },
+              "url": { "type": "string" },
+              "asOf": { "type": "string" }
+            }
+          }
+        },
+        "servedTiers": { "type": "array", "items": { "type": "string" } }
       }
     }
   }

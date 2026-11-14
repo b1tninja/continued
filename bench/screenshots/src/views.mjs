@@ -43,6 +43,10 @@ export const VIEWS = {
     fixture: "usage-open",
     note: "the usage breakdown, opened from the readout under the prompt",
   },
+  "context-open": {
+    fixture: "context-open",
+    note: "what the context holds, opened from the context meter under the prompt",
+  },
   "preset-open": {
     fixture: "preset-open",
     note: "the preset picker above the input, open: a glyph and a tone for each preset",
@@ -131,11 +135,11 @@ export const VIEWS = {
   "settings-help": { fixture: "settings-help", note: "Settings, Help tab" },
   "agents-running": {
     fixture: "agents-running",
-    note: "the agents tree with long names and unknown costs",
+    note: "the agents panel: Active and Done groups, long names, unknown costs",
   },
   "agents-ended": {
     fixture: "agents-ended",
-    note: "the agents tree after every agent ended, one interrupted",
+    note: "the agents panel after every agent ended (Done folded), one interrupted",
   },
   catalogue: {
     fixture: "catalogue",

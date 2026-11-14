@@ -3,16 +3,84 @@ import {
   normalizeClaudeModelId,
   normalizeNovaModelId,
 } from "@continuedev/llm-info";
+import { OPENROUTER_MODELS_URL } from "../openRouterCatalog";
+import {
+  getBedrockPriceList,
+  priceListPricing,
+  type PriceRowTier,
+} from "./bedrockPriceListPricing";
 import { priceFromCatalog } from "./catalogPricing";
+import { priceFromCommunity } from "./communityPricing";
 import {
   openAIWriteCost,
   openAIWriteRates,
   type OpenAIWriteRates,
 } from "./openaiCacheWrite";
 
+/**
+ * Where a price came from, for the "price source and date" line next to a
+ * cost (plans/research/provider-model-metadata.md). In order of precedence:
+ * `user` (a price the person entered), `provider` (a list the provider
+ * publishes and Continuous downloaded, such as OpenRouter's), `curated` (a
+ * table in this code, checked by hand against the provider's pricing page on
+ * `asOf`), `community` (the models.dev catalogue, the last resort; an
+ * estimate, and never the basis of a dollar budget without
+ * `--budget-allow-unpriced`).
+ */
+export interface PriceSource {
+  kind: "user" | "provider" | "curated" | "community";
+  /** Short name for the UI: "Anthropic list prices", "OpenRouter model list" */
+  label: string;
+  /** The page or file the prices were read from */
+  url?: string;
+  /** ISO date (or date-time) the prices were checked or downloaded */
+  asOf?: string;
+}
+
+/** Anthropic's prices, as the ANTHROPIC_PRICING table carries them. */
+export const ANTHROPIC_PRICE_SOURCE: PriceSource = {
+  kind: "curated",
+  label: "Anthropic list prices",
+  url: "https://platform.claude.com/docs/en/about-claude/pricing",
+  // The oldest check of a current row (the Claude 4.x rows); later rows were
+  // checked on 2026-11-03, 2026-11-04 and 2026-11-10.
+  asOf: "2026-11-02",
+};
+
+/** OpenAI's Standard-tier prices, as OPENAI_PRICES carries them. */
+export const OPENAI_PRICE_SOURCE: PriceSource = {
+  kind: "curated",
+  label: "OpenAI pricing page (Standard tier)",
+  url: "https://developers.openai.com/api/docs/pricing",
+  asOf: "2026-11-05",
+};
+
+/** The Bedrock rows read from the AWS Price List (NOVA_PRICING, BEDROCK_PRICING). */
+export const AWS_PRICE_LIST_SOURCE: PriceSource = {
+  kind: "curated",
+  label: "AWS Price List, us-east-1 on-demand",
+  url: "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrock/current/us-east-1/index.json",
+  asOf: "2026-11-08",
+};
+
 export interface CostBreakdown {
   cost: number;
   breakdown: string;
+  /** Where the prices came from and as of when. Set on every priced result. */
+  priceSource?: PriceSource;
+  /**
+   * The service tier the provider says served the request, when it is not
+   * the standard one the prices are for (`flex`, `priority`, `batch`, ...).
+   * The cost shown is then the standard-tier price, and the breakdown says
+   * so.
+   */
+  servedTier?: string;
+  /**
+   * The tier the prices are for, when a downloaded list priced the served
+   * tier itself (the AWS Price List's flex and priority rows). Absent means
+   * the standard tier.
+   */
+  pricedTier?: string;
   /**
    * Set when the price came from a downloaded list rather than a table in the
    * code: where it came from and when it was downloaded. Show such a figure
@@ -271,7 +339,10 @@ function calculateCachedModelCost(
     regionalFactor !== 1
       ? `Prices: Anthropic list × ${regionalFactor} (Bedrock regional endpoint)`
       : undefined;
-  return priceCachedUsage(model, usage, modelPricing, note);
+  return {
+    ...priceCachedUsage(model, usage, modelPricing, note),
+    priceSource: ANTHROPIC_PRICE_SOURCE,
+  };
 }
 
 /**
@@ -480,26 +551,107 @@ export function findBedrockPricing(model: string): ModelPricing | null {
 function calculateBedrockCost(
   model: string,
   usage: Usage,
+  mantle = false,
 ): CostBreakdown | null {
+  const fromList = priceFromAwsPriceList(model, usage, mantle);
+  if (fromList) return fromList;
   const nova = findNovaPricing(model);
   if (nova) {
-    return priceCachedUsage(
-      model,
-      usage,
-      nova,
-      "Prices: AWS Price List, us-east-1 on-demand (Amazon Nova)",
-    );
+    return {
+      ...priceCachedUsage(
+        model,
+        usage,
+        nova,
+        "Prices: AWS Price List, us-east-1 on-demand (Amazon Nova)",
+      ),
+      priceSource: AWS_PRICE_LIST_SOURCE,
+    };
   }
   const other = findBedrockPricing(model);
   if (other) {
-    return priceCachedUsage(
-      model,
-      usage,
-      other,
-      "Prices: AWS Price List, us-east-1 on-demand",
-    );
+    return {
+      ...priceCachedUsage(
+        model,
+        usage,
+        other,
+        "Prices: AWS Price List, us-east-1 on-demand",
+      ),
+      priceSource: AWS_PRICE_LIST_SOURCE,
+    };
   }
   return calculateCachedModelCost(model, usage);
+}
+
+/**
+ * The downloaded AWS Price List of the selected Bedrock model's region
+ * (bedrockPriceList.ts), ahead of the tables above. The served tier is
+ * priced at its own rows when the list has them (flex, priority); cache
+ * rates the list does not carry come from the tables. Null when no list is
+ * loaded or it does not price this model, and for a prompt over a
+ * long-context limit, which the list's standard rows do not cover.
+ */
+function priceFromAwsPriceList(
+  model: string,
+  usage: Usage,
+  mantle: boolean,
+): CostBreakdown | null {
+  const list = getBedrockPriceList();
+  if (!list) return null;
+  const curated =
+    findNovaPricing(model) ??
+    findBedrockPricing(model) ??
+    findModelPricing(model);
+  const wholePrompt =
+    usage.promptTokens +
+    (usage.promptTokensDetails?.cachedTokens ?? 0) +
+    (usage.promptTokensDetails?.cacheWriteTokens ?? 0);
+  if (curated?.longContext && wholePrompt > curated.longContext.aboveTokens) {
+    return null;
+  }
+  const served = usage.response?.serviceTier?.toLowerCase();
+  const tier: PriceRowTier =
+    served === "flex" || served === "priority" ? served : "standard";
+  const listed =
+    priceListPricing(list, model, { tier, mantle }) ??
+    (tier === "standard"
+      ? undefined
+      : priceListPricing(list, model, { mantle }));
+  if (!listed) return null;
+  const details = usage.promptTokensDetails;
+  const usesCache =
+    (details?.cachedTokens ?? 0) > 0 || (details?.cacheWriteTokens ?? 0) > 0;
+  const cacheFromTable =
+    usesCache &&
+    (listed.cacheRead === undefined || listed.cacheWrite === undefined);
+  const pricing: ModelPricing = {
+    input: listed.input,
+    output: listed.output,
+    cacheRead: listed.cacheRead ?? curated?.cacheRead ?? 0,
+    cacheWrite: listed.cacheWrite ?? curated?.cacheWrite ?? 0,
+    cacheWrite1h:
+      listed.cacheWrite1h ?? curated?.cacheWrite1h ?? listed.cacheWrite ?? 0,
+  };
+  const route =
+    listed.route === "in-region"
+      ? "in-region"
+      : listed.route === "global"
+        ? "global cross-region"
+        : "cross-region";
+  const note = `Prices: AWS Price List, ${list.region} ${route}${
+    listed.tier === "standard" ? "" : `, ${listed.tier} tier`
+  }, downloaded ${list.fetchedAt.slice(0, 10)}${
+    cacheFromTable ? "; cache prices from the built-in table" : ""
+  }`;
+  return {
+    ...priceCachedUsage(model, usage, pricing, note),
+    priceSource: {
+      kind: "provider",
+      label: "AWS Price List",
+      url: list.source,
+      asOf: list.fetchedAt,
+    },
+    ...(listed.tier === "standard" ? {} : { pricedTier: listed.tier }),
+  };
 }
 
 interface OpenAIPrice {
@@ -681,7 +833,7 @@ function calculateOpenAICost(
     breakdown += `\nTotal: $${totalCost.toFixed(6)}`;
   }
 
-  return { cost: totalCost, breakdown };
+  return { cost: totalCost, breakdown, priceSource: OPENAI_PRICE_SOURCE };
 }
 
 /**
@@ -700,15 +852,92 @@ function usageWithCacheTakenOut(usage: Usage): Usage {
   };
 }
 
+/**
+ * Tier names that mean the standard (on-demand) tier the tables price:
+ * Anthropic `standard`, Bedrock `default`, OpenAI `default` / `auto`.
+ */
+const STANDARD_TIERS = new Set(["standard", "default", "auto", "on_demand"]);
+
+/** Whether `tier` is the standard (on-demand) tier the tables price. */
+export function isStandardTier(tier: string | undefined): boolean {
+  return !tier || STANDARD_TIERS.has(tier.toLowerCase());
+}
+
+/**
+ * The served tier a cost was priced at the standard rates for, which is what
+ * `tierNote` describes: the tier the provider reported, unless the prices
+ * used were that tier's own (`pricedTier`, the AWS Price List's flex and
+ * priority rows), in which case there is nothing to note.
+ */
+export function standardPricedServedTier(
+  cost: Pick<CostBreakdown, "servedTier" | "pricedTier"> | null | undefined,
+): string | undefined {
+  const tier = cost?.servedTier;
+  if (!tier) return undefined;
+  return cost?.pricedTier?.toLowerCase() === tier.toLowerCase()
+    ? undefined
+    : tier;
+}
+
+/** What a non-standard tier means for the standard price shown. */
+export function tierNote(tier: string): string {
+  const t = tier.toLowerCase();
+  const effect =
+    t === "flex" || t === "batch"
+      ? "which is billed at a discount, so the actual charge is lower"
+      : t === "priority" || t === "fast"
+        ? "which is billed at a premium, so the actual charge is higher"
+        : t === "reserved"
+          ? "which is billed by the reservation rather than per token"
+          : "whose price may differ";
+  return `Prices: standard tier; the provider served this request at the ${tier} tier, ${effect}`;
+}
+
+/**
+ * The cost of one request, from the first source that prices the model: the
+ * provider's list or the curated tables, then (with `community` left on) the
+ * community catalogue, models.dev, when a copy is held
+ * (`setCommunityCatalog`). A community price never replaces a better one: it
+ * is only asked for when the others have none. A price the person entered
+ * comes before all of these and is applied by `costOf`.
+ */
 export function calculateRequestCost(
+  provider: string,
+  model: string,
+  usage: Usage,
+  opts: { community?: boolean } = {},
+): CostBreakdown | null {
+  const priced =
+    priceByProvider(provider, model, usage) ??
+    (opts.community === false
+      ? null
+      : priceFromCommunity(provider, model, usage));
+  if (!priced) return null;
+  const tier = usage.response?.serviceTier;
+  if (isStandardTier(tier) || !tier) return priced;
+  // Priced at the served tier's own rows: nothing to correct
+  if (priced.pricedTier?.toLowerCase() === tier.toLowerCase()) {
+    return { ...priced, servedTier: tier };
+  }
+  // The note goes right under the "Model:" line, with the other "Prices:" notes
+  const [first, ...rest] = priced.breakdown.split("\n");
+  return {
+    ...priced,
+    servedTier: tier,
+    breakdown: [first, tierNote(tier), ...rest].join("\n"),
+  };
+}
+
+function priceByProvider(
   provider: string,
   model: string,
   usage: Usage,
 ): CostBreakdown | null {
   switch (provider.toLowerCase()) {
     case "bedrock":
-    case "bedrock-mantle":
       return calculateBedrockCost(model, usage);
+    case "bedrock-mantle":
+      return calculateBedrockCost(model, usage, true);
     case "anthropic":
     // Claude models served by other providers use the same list prices as an
     // estimate. Regional pricing, data residency and reseller margins can differ.
@@ -718,7 +947,17 @@ export function calculateRequestCost(
       // The downloaded OpenRouter prices come first when the list holds this
       // id; otherwise the Claude-style ids keep the table price below.
       const fromList = priceFromCatalog(model, usage);
-      if (fromList) return fromList;
+      if (fromList) {
+        return {
+          ...fromList,
+          priceSource: {
+            kind: "provider",
+            label: "OpenRouter model list",
+            url: OPENROUTER_MODELS_URL,
+            asOf: fromList.estimate.fetchedAt,
+          },
+        };
+      }
       return calculateCachedModelCost(
         model,
         usageWithCacheTakenOut(usage),

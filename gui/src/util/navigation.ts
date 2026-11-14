@@ -35,3 +35,19 @@ export const CONFIG_ROUTES = {
   SETTINGS: buildConfigRoute("settings"),
   HELP: buildConfigRoute("help"),
 } as const;
+
+/**
+ * The Custom policy editor on the Permissions page, started from a preset
+ * (or the current levels) and, from an area's control, open at that area.
+ */
+export const customPolicyRoute = (opts: {
+  base?: string;
+  area?: string;
+}): string => {
+  const params = new URLSearchParams({
+    tab: "permissions",
+    custom: opts.base ?? "current",
+  });
+  if (opts.area) params.set("area", opts.area);
+  return `${ROUTES.CONFIG}?${params.toString()}`;
+};

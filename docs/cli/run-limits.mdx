@@ -44,6 +44,14 @@ OpenRouter publishes per-token prices for its models. Continuous keeps a dated c
 - With model information updates `off`, the copy is not used: OpenRouter models count as unpriced unless the bundled data prices them.
 - `continuous models list [--json]` shows the downloaded models with their prices and never touches the network.
 
+### Models only the community catalogue prices
+
+When neither a price you entered, a provider list nor the price tables have a price for a model, Continuous can price it from the community catalogue [models.dev](https://models.dev), downloaded only while such a model is selected and never when model information updates are `off` (see [PRIVACY.md](https://github.com/b1tninja/continuous/blob/main/PRIVACY.md)). Those figures are labelled "community catalogue (models.dev), &lt;date&gt; — estimate".
+
+- `--max-budget-usd` is **not** held on a community price: the run is refused at startup with an error naming the catalogue and its date.
+- With `--budget-allow-unpriced` the cap **is** held on the community estimate, and the run says so at the end ("prices from the community catalogue (models.dev) as of 2026-11-10").
+- The shadow reviewer's budget is never held on a community price.
+
 ## Exit codes and the final message
 
 | Code | Reason                           |

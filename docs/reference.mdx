@@ -695,7 +695,11 @@ Model information updates: when OpenRouter's public model list (names, context s
 - `manual`: only when you choose Pull now or Refresh now, or run `continuous models refresh`. `ask` is accepted as the same; `never` is `manual` without the question in provider setup.
 - `off`: never; the bundled model data is used.
 
+The same setting covers the selected chat model's own provider when that is Anthropic or OpenAI: with `automatic`, Continuous asks that provider's `GET /v1/models/{id}` (at the API base you configured, with your key) a few seconds after the model is selected and once per interval, for the context window, maximum output and deprecation dates ([Anthropic](/customize/model-providers/top-level/anthropic#model-information-from-anthropic), [OpenAI](/customize/model-providers/top-level/openai#model-information-from-openai)). With `manual` only Test connection asks; with `off` nothing is asked and a kept answer is not used.
+
 `modelCatalogRefreshHours` (number, default `24`, 1 to 720) sets the interval for `automatic`. The environment variables `CONTINUOUS_MODEL_INFO_UPDATES` and `CONTINUOUS_MODEL_INFO_REFRESH_HOURS` override both. Ollama's model list is not covered: it is fetched only from Ollama's own setup.
+
+The same setting covers the metadata of the **selected Bedrock model**, and only when a Bedrock model is configured: the AWS Price List for its region (public, from `pricing.us-east-1.amazonaws.com`) and the account's Service Quotas (with your own AWS credentials, optional permission). `automatic` looks them up on selection and in the background, `manual` only on Bedrock Test connection, `off` never. See [optional quota check](/customize/model-providers/top-level/bedrock#optional-quota-check) and [prices from the AWS Price List](/customize/model-providers/top-level/bedrock#prices-from-the-aws-price-list).
 
 ```yaml title="config.yaml"
 name: My Config

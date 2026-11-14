@@ -67,6 +67,7 @@ class MessageTypes {
             "sessionUpdate",
             "didCloseFiles",
             "toolCallPartialOutput",
+            "model/infoUpdated",
         )
 
         // Note: If updating these values, make a corresponding update in
@@ -154,6 +155,9 @@ class MessageTypes {
             "bedrock/testModel",
             "bedrock/probeToolCalls",
             "config/setToolDialect",
+            "config/getModelBlock",
+            "config/previewModelEdit",
+            "config/saveModelEdit",
             "ollama/showHint",
             "config/getTerminalEnvironment",
             "config/setTerminalEnvironment",
