@@ -18,8 +18,10 @@ import { setPolicyLevel } from "@gui/redux/slices/uiSlice";
 import { POLICY_AREAS } from "core/tools/permissions/policy";
 import type { MockIdeMessenger } from "@gui/context/MockIdeMessenger";
 import {
+  addRequestUsageToSession,
   newSession,
   setLoop,
+  setPromptCacheState,
   noteToolDialectLeak,
   setActive,
   setMode,
@@ -683,15 +685,19 @@ export const FIXTURES: Record<string, Fixture> = {
       document.querySelector("[data-testid=attach-menu-button]") as HTMLElement
     )?.click();
   },
-  /** The "..." menu under the prompt, open */
-  "overflow-open": async ({ store }) => {
-    store.dispatch(newSession());
+  /** A conversation with usage: the row under the prompt, every control in it */
+  "status-row": ({ store }) => statusRowScene(store),
+  /** The same, with the usage breakdown opened from the readout */
+  "usage-open": async ({ store }) => {
+    statusRowScene(store);
     await new Promise((r) => setTimeout(r, 800));
-    (
-      document.querySelector(
-        "[data-testid=input-overflow-button]",
-      ) as HTMLElement
-    )?.click();
+    // The last one: earlier messages keep a hidden toolbar of their own
+    const readouts = document.querySelectorAll<HTMLElement>(
+      "[data-testid=usage-indicator]",
+    );
+    readouts[readouts.length - 1]?.click();
+    // Let the popover be placed above the readout before the picture
+    await new Promise((r) => setTimeout(r, 300));
   },
   /** The preset picker in the toolbar, open: glyph, what each sets, the check */
   "preset-open": async ({ store }) => {
@@ -1163,3 +1169,30 @@ Object.assign(FIXTURES, {
 });
 
 export const FIXTURE_NAMES = Object.keys(FIXTURES);
+
+/** A reply that reported usage, with the prompt cache warm. */
+function statusRowScene(store: Store): void {
+  store.dispatch(
+    newSession(
+      session([
+        user("Why does the parseConfig test fail?"),
+        assistant(MARKDOWN_REPLY),
+      ]),
+    ),
+  );
+  store.dispatch(
+    addRequestUsageToSession({
+      provider: CHAT_MODEL.provider,
+      model: CHAT_MODEL.model,
+      usage: { promptTokens: 84_000, completionTokens: 1_200 },
+    }),
+  );
+  store.dispatch(
+    setPromptCacheState({
+      escalated: false,
+      lastRequestAt: Date.now() - 60_000,
+      lastTtl: "5m",
+      lastInputTokens: 84_000,
+    }),
+  );
+}

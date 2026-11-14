@@ -32,9 +32,6 @@
       "color-contrast": 1
     },
     "loop": {},
-    "overflow-open": {
-      "aria-hidden-focus": 3
-    },
     "permissions-editor": {
       "color-contrast": 5
     },
@@ -109,6 +106,15 @@
     "onboarding-local-server": {
       "button-name": 1,
       "select-name": 1
+    },
+    "status-row": {
+      "color-contrast": 13,
+      "scrollable-region-focusable": 1
+    },
+    "usage-open": {
+      "aria-hidden-focus": 3,
+      "color-contrast": 13,
+      "scrollable-region-focusable": 1
     }
   }
 }
