@@ -37,7 +37,7 @@ export function noteCliToolResult(
         mcp: !!mcpServer || !!core?.mcp,
         mcpServer,
         workspaceDirs: [cwd],
-        folderTrusted: (dir) => folderHasTrustRecord(dir),
+        folderTrusted: (dir: string) => folderHasTrustRecord(dir),
       },
     });
   } catch {
