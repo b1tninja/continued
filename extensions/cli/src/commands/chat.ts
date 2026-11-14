@@ -2,7 +2,6 @@ import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import chalk from "chalk";
 import { ChatHistoryItem, Session } from "core";
-import { ChatDescriber } from "core/util/chatDescriber.js";
 
 import * as runLimits from "../budget/runLimits.js";
 import { compactChatHistory, findCompactionIndex } from "../compaction.js";
@@ -25,11 +24,7 @@ import {
   ModelServiceState,
   SERVICE_NAMES,
 } from "../services/types.js";
-import {
-  loadSession,
-  updateSessionHistory,
-  updateSessionTitle,
-} from "../session.js";
+import { loadSession, updateSessionHistory } from "../session.js";
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { startTUIChat } from "../ui/index.js";
@@ -48,6 +43,7 @@ import {
 
 import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
 import { processJsonOutput, stripThinkTags } from "./chatOutput.js";
+import { handleTitleGeneration } from "./chatTitle.js";
 import { printRetirementNotice } from "./retirementNotice.js";
 
 export interface ChatOptions extends ExtendedCommandOptions {
@@ -276,30 +272,6 @@ async function handleAutoCompaction(
 /**
  * Helper to generate and update session title after first assistant response
  */
-async function handleTitleGeneration(
-  assistantResponse: string,
-  llmApi: BaseLlmApi,
-  model: ModelConfig,
-): Promise<void> {
-  try {
-    if (!assistantResponse) return;
-
-    const generatedTitle = await ChatDescriber.describeWithBaseLlmApi(
-      llmApi,
-      model,
-      assistantResponse,
-    );
-
-    if (generatedTitle) {
-      updateSessionTitle(generatedTitle);
-      logger.debug("Generated session title:", generatedTitle);
-    }
-  } catch (error) {
-    // Don't fail the response if title generation fails
-    logger.debug("Session title generation failed:", error);
-  }
-}
-
 interface ProcessMessageOptions {
   userInput: string;
   chatHistory: ChatHistoryItem[];
