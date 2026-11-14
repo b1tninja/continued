@@ -562,6 +562,8 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
       apiBase?: string;
       apiKey?: string;
       model?: string;
+      /** The configured model id to check with `GET /models/{id}`. */
+      checkModel?: string;
     },
     OpenAICompatTestResult,
   ];

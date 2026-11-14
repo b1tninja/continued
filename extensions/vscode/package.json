@@ -215,7 +215,7 @@
           ],
           "default": "automatic",
           "scope": "application",
-          "markdownDescription": "Model information updates: OpenRouter's public model list (names, context sizes, per-token prices for cost estimates and `--max-budget-usd`, tool support). `automatic` sends one GET to `openrouter.ai/api/v1/models`, with no key, account or prompt, when the copy is older than `#continuous.modelInformationRefreshHours#`. Saved as `modelCatalog:` in the user-level `config.yaml`, so JetBrains and the terminal agent follow it too. Ollama's model list is not affected: it is fetched only from Ollama's own setup."
+          "markdownDescription": "Model information updates: OpenRouter's public model list (names, context sizes, per-token prices for cost estimates and `--max-budget-usd`, tool support). `automatic` sends one GET to `openrouter.ai/api/v1/models`, with no key, account or prompt, when the copy is older than `#continuous.modelInformationRefreshHours#`. Saved as `modelCatalog:` in the user-level `config.yaml`, so JetBrains and the terminal agent follow it too. Ollama's model list is not affected: it is fetched only from Ollama's own setup. `automatic` also looks up the selected Anthropic or OpenAI chat model at its own API base, with your key, for its context window, output cap and deprecation date; `off` stops that too."
         },
         "continuous.modelInformationRefreshHours": {
           "type": "number",
