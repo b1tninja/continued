@@ -23,7 +23,6 @@ const actionId = (toolCallId: string) => `pending-action-${toolCallId}`;
 
 export function PendingToolCallToolbar() {
   const dispatch = useAppDispatch();
-  const jetbrains = isJetBrains();
   const metaKey = getMetaKeyLabel() === "⌘" ? "Meta" : "Control";
   const pendingToolCalls = useAppSelector(selectPendingToolCalls);
   const editor = useMainEditor();
@@ -112,7 +111,6 @@ export function PendingToolCallToolbar() {
                 variant="ghost"
                 size="sm"
                 className="my-0.5 min-h-6 min-w-6 font-medium text-description"
-                aria-keyshortcuts={`${jetbrains ? "Alt" : metaKey}+Backspace`}
                 title="Reject this command"
                 aria-describedby={actionId(toolCall.toolCallId)}
                 onClick={() => handleReject(toolCall.toolCallId)}
@@ -121,12 +119,6 @@ export function PendingToolCallToolbar() {
                   toolCall.toolCallId,
                 )}
               >
-                {/* JetBrains overrides cmd+backspace, so we have to use another shortcut */}
-                {index === 0 && (
-                  <span className="mr-1 shrink-0 text-2xs" aria-hidden="true">
-                    {jetbrains ? getAltKeyLabel() : getMetaKeyLabel()}⌫
-                  </span>
-                )}
                 <span>Reject</span>
               </Button>
 

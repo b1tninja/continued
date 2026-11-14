@@ -8,12 +8,9 @@ import {
   selectToolCallsByStatus,
 } from "../../../../redux/selectors/selectToolCalls";
 import { cancelToolCall } from "../../../../redux/slices/sessionSlice";
-import { cancelToolCallThunk } from "../../../../redux/thunks/cancelToolCall";
 import { callToolById } from "../../../../redux/thunks/callToolById";
 import { cancelStream } from "../../../../redux/thunks/cancelStream";
 import { logToolUsage } from "../../../../redux/util";
-import { isJetBrains } from "../../../../util";
-import { useMainEditor } from "../../TipTapEditor";
 import { BlockSettingsTopToolbar } from "./BlockSettingsTopToolbar";
 import { EditOutcomeToolbar } from "./EditOutcomeToolbar";
 import { EditToolbar } from "./EditToolbar";
@@ -27,16 +24,6 @@ import { TtsActiveToolbar } from "./TtsActiveToolbar";
 const isExecuteToolCallShortcut = (event: KeyboardEvent) => {
   const metaKey = event.metaKey || event.ctrlKey;
   return metaKey && event.key === "Enter";
-};
-
-const isCancelToolCallShortcut = (
-  event: KeyboardEvent,
-  isJetBrains: boolean,
-) => {
-  const metaKey = event.metaKey || event.ctrlKey;
-  const altKey = event.altKey;
-  const modifierKey = isJetBrains ? altKey : metaKey;
-  return modifierKey && event.key === "Backspace";
 };
 
 // Check if a tool call is a terminal command
@@ -105,8 +92,6 @@ export function LumpToolbar() {
   const dispatch = useAppDispatch();
   const ideMessenger = useContext(IdeMessengerContext);
   const isStreaming = useAppSelector((state) => state.session.isStreaming);
-  const jetbrains = isJetBrains();
-  const pendingToolCalls = useAppSelector(selectPendingToolCalls);
   const firstPendingToolCall = useAppSelector(selectFirstPendingToolCall);
   const applyStates = useAppSelector(
     (state) => state.session.codeBlockApplyStates.states,
@@ -114,7 +99,6 @@ export function LumpToolbar() {
   const pendingApplyStates = applyStates.filter(
     (state) => state.status === "done",
   );
-  const editor = useMainEditor();
 
   // Get ALL running terminal commands
   const runningToolCalls = useAppSelector((state) =>
@@ -183,25 +167,6 @@ export function LumpToolbar() {
         void dispatch(
           callToolById({ toolCallId: firstPendingToolCall.toolCallId }),
         );
-      } else if (isCancelToolCallShortcut(event, jetbrains)) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        if (hasRunningTerminalCommand) {
-          // Stop running terminal commands
-          void handleStopAction();
-        } else if (firstPendingToolCall) {
-          // Cancel pending tool call. If last call, focus editor
-          if (pendingToolCalls.length === 1) {
-            editor.mainEditor?.commands.focus();
-          }
-          void dispatch(
-            cancelToolCallThunk({
-              toolCallId: firstPendingToolCall.toolCallId,
-            }),
-          );
-          logToolUsage(firstPendingToolCall, false, true, ideMessenger);
-        }
       }
     };
 
@@ -209,13 +174,7 @@ export function LumpToolbar() {
     return () => {
       document.removeEventListener("keydown", handleToolCallKeyboardShortcuts);
     };
-  }, [
-    firstPendingToolCall,
-    pendingToolCalls,
-    editor,
-    hasRunningTerminalCommand,
-    runningTerminalCalls,
-  ]);
+  }, [firstPendingToolCall, hasRunningTerminalCommand, runningTerminalCalls]);
 
   switch (kind) {
     case "applying":

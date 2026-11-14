@@ -9,6 +9,8 @@ Staging note for the next release. Fold it into that release's `<tag>.md` (the r
 
 ## Behaviour changes
 
+- **Ctrl+Backspace no longer cancels anything.** Ctrl+Backspace (Cmd+Backspace on macOS, Alt+Backspace in JetBrains) used to stop the running response and reject a pending tool call, even when you were only deleting a word in the chat input, and work was lost that way. Backspace with any of those modifiers now only edits text, while a response is streaming too. Stop a response or a running terminal command with the **Stop** button, and reject a command with its **Reject** button. The `Shift+Ctrl+Backspace` (`Shift+Cmd+Backspace`) shortcut that rejects all diff changes in VS Code is unchanged.
+
 ## Fixes
 
 - **Stopping a reply while the model is still reasoning no longer breaks the next request.** Stop, or a request that failed, used to keep the model's reasoning as if it were an answer, so the next message sent a reply holding only reasoning; Bedrock refused it ("no content in assistant message before conversational turn change") and other providers could reject it too. The reasoning stays on screen but is no longer sent, a partial answer is kept as before, and a tool call that was still being written is cancelled. Saved sessions that already hold such a reply are sent correctly too.
