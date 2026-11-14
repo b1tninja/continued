@@ -14,9 +14,10 @@ import {
   minMaxTokensFor,
   unsupportedInferenceFor,
 } from "./bedrockFamilyRules.js";
+import type { CompletionOptions } from "../../index.js";
 import {
   budgetTokensToEffort,
-  supportsAdaptiveThinking,
+  getAnthropicThinkingParams,
 } from "./anthropicThinking.js";
 
 /**
@@ -1005,7 +1006,9 @@ const REASONING_EFFORT_MODEL = /(^|\.)(qwen\.|deepseek\.v3)/i;
  * (probe-model-families.md):
  *
  * - Claude: Anthropic's `thinking` (adaptive with `output_config.effort` on
- *   the models that take it, else `budget_tokens`).
+ *   the models that take it, else `budget_tokens`), with `display:
+ *   "summarized"` on the models that otherwise return empty thinking, and on
+ *   the models that think with reasoning off, that field alone.
  * - Nova 2 (`nova-2-`): `reasoningConfig: { type: "enabled",
  *   maxReasoningEffort }`, and no `maxTokens` at `high`. On at `low` when
  *   the config says nothing: without it Nova 2 Lite reasons in plain text
@@ -1040,20 +1043,15 @@ export function bedrockReasoningFields(
 ): BedrockReasoningRequest {
   const none = { additionalModelRequestFields: {}, omitMaxTokens: false };
   if (/claude/i.test(modelId)) {
-    if (!reasoning) return none;
-    if (supportsAdaptiveThinking(modelId)) {
-      return {
-        additionalModelRequestFields: {
-          thinking: { type: "adaptive" },
-          output_config: { effort: budgetTokensToEffort(budgetTokens) },
-        },
-        omitMaxTokens: false,
-      };
-    }
+    // The same fields as Anthropic's API, `display: "summarized"` included
+    // where the model hides its thinking by default (getAnthropicThinkingParams)
+    const thinking = getAnthropicThinkingParams({
+      model: modelId,
+      reasoning: !!reasoning,
+      reasoningBudgetTokens: budgetTokens,
+    } as CompletionOptions);
     return {
-      additionalModelRequestFields: {
-        thinking: { type: "enabled", budget_tokens: budgetTokens },
-      },
+      additionalModelRequestFields: { ...thinking },
       omitMaxTokens: false,
     };
   }
