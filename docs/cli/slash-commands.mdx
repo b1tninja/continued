@@ -46,6 +46,7 @@ A line is read as a command only when `/` is its first character. If the word af
 | `/policy`        | Show the preset and the level of each of the five areas                                                                                   |
 | `/policy <spec>` | Set them: a preset, a level, or `area=level` pairs. The same value as [`--policy`](/cli/reference#--policy)                               |
 | `/untaint`       | Acknowledge the untrusted content this session has read, so that network, publish and credential calls stop asking because of it          |
+| `/untaint <label>` | Acknowledge one label only, such as `mcp:github` or `web-fetch`; the others keep asking                                                   |
 
 ```text
 /policy
@@ -68,6 +69,8 @@ Level of each area:
 ```
 
 `/untaint` answers `Nothing to acknowledge` when the session has not been marked. The rule it lifts is `toolPermissions.auto.environment.taintedSessionRule` in your own `config.yaml`, which is `off` unless you set it to `ask`.
+
+Each MCP server's results carry their own label, `mcp:<server>`, so `/untaint mcp:github` forgives what the GitHub server returned and leaves a later result from another server asking. A label the session does not hold is refused, and the answer lists the labels it does hold. Every label added and every clear is written to the audit trail as a `taint` record with where it came from and why.
 
 ## Loops and background work
 

@@ -4,6 +4,16 @@ import { uriToPath } from "./permissions/names";
 import { noteToolResult } from "./permissions/taint/taintWiring";
 import { isFileReadTool } from "./permissions/taint/taintSources";
 
+/** The server of an `mcp://<server>/<tool>` URI. */
+function mcpServerOf(uri: string | undefined): string | undefined {
+  if (!uri?.startsWith("mcp:")) return undefined;
+  try {
+    return decodeURIComponent(new URL(uri).hostname) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The tool result path's one call into the tainted-session rule: after a tool
  * ran, mark the session when the call was a source of untrusted content (a
@@ -28,6 +38,7 @@ export async function noteCoreToolResult(
         toolName: tool.function.name,
         parsedArgs: args,
         mcp: !!tool.uri?.startsWith("mcp:"),
+        mcpServer: mcpServerOf(tool.uri),
         workspaceDirs: dirs
           .map((d) => (d.startsWith("file:") ? uriToPath(d) : d))
           .filter((d): d is string => !!d),

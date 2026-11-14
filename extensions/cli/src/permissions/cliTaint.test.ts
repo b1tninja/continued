@@ -72,7 +72,7 @@ describe("the tainted-session rule in the CLI", () => {
       { id: "c2", name: "search_issues", arguments: {} },
       "github",
     );
-    expect(taintRegistry.fact("cli")?.kinds).toEqual(["mcp-result"]);
+    expect(taintRegistry.fact("cli")?.kinds).toEqual(["mcp:github"]);
   });
 
   it("a read outside the working folder taints; one inside does not", () => {
@@ -99,5 +99,27 @@ describe("the tainted-session rule in the CLI", () => {
     expect(taintRegistry.fact("cli")).toBeUndefined();
     expect(await decide("git push origin main")).toBeUndefined();
     expect(handleUntaint().output).toContain("Nothing to acknowledge");
+  });
+
+  it("/untaint <label> clears that label only; /untaint alone clears all", () => {
+    setting.rule = "ask";
+    noteCliToolResult(fetched, undefined);
+    noteCliToolResult({ id: "m1", name: "search", arguments: {} }, "github");
+    noteCliToolResult({ id: "m2", name: "read", arguments: {} }, "slack");
+
+    const one = handleUntaint(["mcp:github"]).output;
+    expect(one).toContain("mcp:github");
+    expect(taintRegistry.fact("cli")?.kinds).toEqual([
+      "web-fetch",
+      "mcp:slack",
+    ]);
+
+    const unknown = handleUntaint(["mcp:nowhere"]).output;
+    expect(unknown).toContain("not marked");
+    expect(unknown).toContain("web-fetch, mcp:slack");
+    expect(taintRegistry.fact("cli")?.kinds).toHaveLength(2);
+
+    expect(handleUntaint([]).output).toContain("web-fetch, mcp:slack");
+    expect(taintRegistry.fact("cli")).toBeUndefined();
   });
 });

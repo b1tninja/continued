@@ -101,7 +101,7 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   {
     name: "untaint",
     description:
-      "Acknowledge the untrusted content in this session (taintedSessionRule)",
+      "Acknowledge the untrusted content in this session (taintedSessionRule): /untaint, or /untaint <label> for one, such as mcp:github",
     category: "system",
   },
   {

@@ -1,10 +1,15 @@
 /**
  * The tainted-session flag (plans/design/tainted-session.md, ROADMAP X4).
  *
- * Per session, a monotone set of source kinds: once untrusted content has
- * entered the conversation, the kind stays recorded (with the turn it first
- * entered) until the person clears it. Nothing about the content is kept: not
- * the text, not the URL, not a hash. The state is a few bytes per session.
+ * Per session, a monotone set of labels: once untrusted content has entered
+ * the conversation, its label stays recorded (with the turn it first entered)
+ * until the person clears it, all at once or one label at a time. Nothing
+ * about the content is kept: not the text, not the URL, not a hash. The state
+ * is a few bytes per session.
+ *
+ * An MCP result is labelled per server, `mcp:<server>`, so acknowledging one
+ * server's output does not forgive another's. `mcp-result` remains for a
+ * result whose server the host cannot name.
  */
 export const TAINT_KINDS = [
   "web-fetch",
@@ -14,11 +19,50 @@ export const TAINT_KINDS = [
   "issue-text",
 ] as const;
 export type TaintKind = (typeof TAINT_KINDS)[number];
+/** A fixed kind, or the label of one MCP server's results. */
+export type TaintLabel = TaintKind | `mcp:${string}`;
+
+const MAX_SERVER_LABEL_CHARS = 40;
+
+/**
+ * The label for a result from this MCP server. The name can come from a file
+ * in the open folder and is shown to the reviewer, so it is cut to letters,
+ * digits, dot, underscore and hyphen, and to 40 characters.
+ */
+export function mcpLabel(server: string | undefined): TaintLabel {
+  const word = (server ?? "")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, MAX_SERVER_LABEL_CHARS);
+  return word ? `mcp:${word}` : "mcp-result";
+}
+
+/** Whether a word, as typed by the person, is a label the registry could hold. */
+export function isTaintLabel(word: string): word is TaintLabel {
+  return (
+    (TAINT_KINDS as readonly string[]).includes(word) ||
+    /^mcp:[A-Za-z0-9._-]{1,40}$/.test(word)
+  );
+}
+
+/** Fixed kinds in their order, each server's label after `mcp-result`, by name. */
+function ordered(labels: Iterable<TaintLabel>): TaintLabel[] {
+  const all = new Set(labels);
+  const servers = [...all]
+    .filter((l) => l.startsWith("mcp:"))
+    .sort((a, b) => a.localeCompare(b));
+  const out: TaintLabel[] = [];
+  for (const k of TAINT_KINDS) {
+    if (all.has(k)) out.push(k);
+    if (k === "mcp-result") out.push(...servers);
+  }
+  return out;
+}
 
 /** What the evaluator, the reviewer prompt and the audit record are given. */
 export interface TaintFact {
-  /** Source kinds in a fixed order */
-  kinds: TaintKind[];
+  /** Labels in a fixed order */
+  kinds: TaintLabel[];
   /** The turn the first source entered, when the host counts turns */
   firstTurn?: number;
 }
@@ -37,7 +81,7 @@ export type TaintAddReason = "tool-result" | "subagent" | "inherited";
 export interface TaintChange {
   session: string;
   op: "add" | "clear";
-  label: TaintKind;
+  label: TaintLabel;
   turn?: number;
   source?: string;
   reason: TaintAddReason | TaintClearReason;
@@ -49,7 +93,7 @@ interface Entry {
   inherited: boolean;
 }
 
-type SessionTaint = Map<TaintKind, Entry>;
+type SessionTaint = Map<TaintLabel, Entry>;
 
 const MAX_BOUND_CALLS = 500;
 /** A host with no session id of its own shares this one */
@@ -73,10 +117,10 @@ export class TaintRegistry {
     }
   }
 
-  /** Add a source. Returns true when this kind was not already recorded. */
+  /** Add a source. Returns true when this label was not already recorded. */
   mark(
     session: string,
-    kind: TaintKind,
+    kind: TaintLabel,
     turn?: number,
     origin: { source?: string; reason?: TaintAddReason } = {},
   ): boolean {
@@ -101,7 +145,7 @@ export class TaintRegistry {
   fact(session: string): TaintFact | undefined {
     const entries = this.sessions.get(session);
     if (!entries || entries.size === 0) return undefined;
-    const kinds = TAINT_KINDS.filter((k) => entries.has(k));
+    const kinds = ordered(entries.keys());
     const turns = [...entries.values()]
       .map((e) => e.turn)
       .filter((t): t is number => t !== undefined);
@@ -112,16 +156,24 @@ export class TaintRegistry {
   }
 
   /**
-   * Clear the session. Returns the kinds that were cleared; each is reported
-   * to the listener with the reason and the control that cleared it.
+   * Clear the session, or only the labels named. Returns the labels that were
+   * cleared; each is reported to the listener with the reason and the
+   * control that cleared it.
    */
   clear(
     session: string,
     reason: TaintClearReason,
     source?: string,
-  ): TaintKind[] {
-    const cleared = this.fact(session)?.kinds ?? [];
-    this.sessions.delete(session);
+    labels?: readonly TaintLabel[],
+  ): TaintLabel[] {
+    const held = this.fact(session)?.kinds ?? [];
+    const entries = this.sessions.get(session);
+    const cleared = labels ? held.filter((l) => labels.includes(l)) : held;
+    if (!labels || cleared.length === held.length) {
+      this.sessions.delete(session);
+    } else {
+      for (const l of cleared) entries?.delete(l);
+    }
     for (const label of cleared) {
       this.emit({
         session,

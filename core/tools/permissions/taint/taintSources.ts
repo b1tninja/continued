@@ -3,7 +3,7 @@ import { BuiltInToolNames } from "../../builtIn";
 import { commandCandidateSet } from "../candidates";
 import { programName } from "../destinations";
 import type { ShellKind } from "../../../util/shell";
-import type { TaintKind } from "./taintState";
+import { mcpLabel, type TaintKind, type TaintLabel } from "./taintState";
 
 /**
  * What counts as untrusted content entering the conversation, judged from the
@@ -14,6 +14,8 @@ export interface SourceCall {
   parsedArgs: Record<string, unknown>;
   /** An MCP tool: its output is the server's, whoever runs the server */
   mcp?: boolean;
+  /** The MCP server's name, when the host knows it: the label is `mcp:<server>` */
+  mcpServer?: string;
   /** Workspace folders as paths; the first is the folder commands and relative paths start in */
   workspaceDirs?: readonly string[];
   shell?: ShellKind;
@@ -97,10 +99,20 @@ function commandSource(command: string, shell?: ShellKind) {
   return undefined;
 }
 
-/** The kind of untrusted content this call brought into the conversation, if any. */
-export function taintKindOfCall(call: SourceCall): TaintKind | undefined {
+/** The labels of the content this call brought into the conversation, if any. */
+export function taintLabelsOfCall(call: SourceCall): TaintLabel[] {
+  if (call.mcp) return [mcpLabel(call.mcpServer)];
+  const kind = fixedKindOfCall(call);
+  return kind ? [kind] : [];
+}
+
+/** The first label of this call's content (see `taintLabelsOfCall`). */
+export function taintKindOfCall(call: SourceCall): TaintLabel | undefined {
+  return taintLabelsOfCall(call)[0];
+}
+
+function fixedKindOfCall(call: SourceCall): TaintKind | undefined {
   const { toolName, parsedArgs } = call;
-  if (call.mcp) return "mcp-result";
   if (
     toolName === BuiltInToolNames.FetchUrlContent ||
     toolName === BuiltInToolNames.SearchWeb

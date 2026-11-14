@@ -3,14 +3,14 @@ import {
   readTaintedSessionRule,
   type TaintedSessionRule,
 } from "./taintSetting";
-import { taintKindOfCall, type SourceCall } from "./taintSources";
+import { taintLabelsOfCall, type SourceCall } from "./taintSources";
 import {
   DEFAULT_TAINT_SESSION,
   taintRegistry,
   type TaintChange,
   type TaintClearReason,
   type TaintFact,
-  type TaintKind,
+  type TaintLabel,
 } from "./taintState";
 
 /**
@@ -71,19 +71,21 @@ export interface ToolResultNote {
 export function noteToolResult(
   note: ToolResultNote,
   rule: TaintedSessionRule = readTaintedSessionRule(),
-): TaintKind | undefined {
+): TaintLabel | undefined {
   try {
     if (rule !== "ask") return undefined;
-    const kind = taintKindOfCall(note.call);
-    if (!kind) return undefined;
+    const labels = taintLabelsOfCall(note.call);
+    if (labels.length === 0) return undefined;
     const session =
       note.session ??
       taintRegistry.sessionOfCall(note.callId) ??
       DEFAULT_TAINT_SESSION;
-    taintRegistry.mark(session, kind, note.turn, {
-      source: note.call.toolName,
-    });
-    return kind;
+    for (const label of labels) {
+      taintRegistry.mark(session, label, note.turn, {
+        source: note.call.toolName,
+      });
+    }
+    return labels[0];
   } catch {
     return undefined;
   }
@@ -97,6 +99,17 @@ export function untaintSession(
   session: string | undefined,
   reason: TaintClearReason,
   source?: string,
-): TaintKind[] {
-  return taintRegistry.clear(session ?? DEFAULT_TAINT_SESSION, reason, source);
+  labels?: readonly TaintLabel[],
+): TaintLabel[] {
+  return taintRegistry.clear(
+    session ?? DEFAULT_TAINT_SESSION,
+    reason,
+    source,
+    labels,
+  );
+}
+
+/** The labels a session holds now, in their fixed order. */
+export function taintLabels(session: string | undefined): TaintLabel[] {
+  return taintRegistry.fact(session ?? DEFAULT_TAINT_SESSION)?.kinds ?? [];
 }
