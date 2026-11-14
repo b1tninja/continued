@@ -24,6 +24,12 @@ class WebviewIdeGateTest : TestCase() {
         assertEquals(WebviewIdeGate.Route.CORE, WebviewIdeGate.route("tools/evaluatePolicy"))
     }
 
+    fun `test policy settings reach core, which confirms a loosening save itself`() {
+        assertEquals(WebviewIdeGate.Route.CORE, WebviewIdeGate.route("policy/load"))
+        assertEquals(WebviewIdeGate.Route.CORE, WebviewIdeGate.route("policy/save"))
+        assertEquals(WebviewIdeGate.Route.CORE, WebviewIdeGate.route("policy/preview"))
+    }
+
     fun `test panel file and terminal messages stay allowed`() {
         assertEquals(WebviewIdeGate.Route.IDE, WebviewIdeGate.route("writeFile"))
         assertEquals(WebviewIdeGate.Route.IDE, WebviewIdeGate.route("runCommand"))

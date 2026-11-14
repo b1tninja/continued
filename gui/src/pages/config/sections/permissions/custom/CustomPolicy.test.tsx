@@ -1,17 +1,31 @@
 import { act, fireEvent, screen, within } from "@testing-library/react";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { listEffectiveRules } from "core/tools/permissions/effectiveRules";
 import {
   DEFAULT_POLICY_LEVELS,
   POLICY_AREAS,
   POLICY_PRESETS,
 } from "core/tools/permissions/policy";
+import {
+  POLICY_SAVE_NOT_CONFIRMED,
+  previewPolicySave,
+  savePolicyWithConfirmation,
+} from "core/tools/permissions/policySave";
+import { readPolicyFile } from "core/tools/permissions/settingsFile";
 import { useLocation } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
-import { PolicyControls } from "../../../../../components/PolicyControls";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  PolicyCard,
+  PolicyControls,
+} from "../../../../../components/PolicyControls";
 import { MockIdeMessenger } from "../../../../../context/MockIdeMessenger";
 import { setupStore } from "../../../../../redux/store";
 import { renderWithProviders } from "../../../../../util/test/render";
 import { PermissionsSection } from "../PermissionsSection";
+import { policyChipLabel } from "../../../../../components/PolicyControls/PresetSelect";
+import { customSetToStore } from "./customPolicyState";
 
 const report = listEffectiveRules({
   levels: DEFAULT_POLICY_LEVELS,
@@ -88,15 +102,48 @@ interface Calls {
   edits: { type: string; data: any }[];
 }
 
-async function openEditor(entry: string, over: { saveFails?: string } = {}) {
-  const ideMessenger = new MockIdeMessenger();
-  const edits: Calls["edits"] = [];
-  const save = vi.fn(async (_update: unknown) => {
+const dirs: string[] = [];
+afterEach(() => {
+  for (const dir of dirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * The host's side of policy/save and policy/preview, for real: core's
+ * confirmation and writer on a permissions.yaml in a temp directory. The
+ * native dialog is `confirm`; the page has no way to answer it.
+ */
+function policyHost(
+  ideMessenger: MockIdeMessenger,
+  over: { saveFails?: string; confirm?: boolean; fileText?: string } = {},
+) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "custom-policy-gui-"));
+  dirs.push(dir);
+  const file = path.join(dir, "permissions.yaml");
+  if (over.fileText !== undefined) fs.writeFileSync(file, over.fileText);
+  const confirm = vi.fn(async (_text: string) => over.confirm ?? true);
+  const save = vi.fn(async (update: any) => {
     if (over.saveFails) throw new Error(over.saveFails);
+    await savePolicyWithConfirmation(file, update, { confirm });
     return undefined;
   });
-  ideMessenger.responseHandlers["policy/rules"] = (async () => report) as any;
   ideMessenger.responseHandlers["policy/save"] = save as any;
+  ideMessenger.responseHandlers["policy/preview"] = (async (update: any) =>
+    previewPolicySave(file, update)) as any;
+  ideMessenger.responseHandlers["policy/load"] = (async () =>
+    readPolicyFile(file)) as any;
+  return { file, confirm, save };
+}
+
+async function openEditor(
+  entry: string,
+  over: { saveFails?: string; confirm?: boolean } = {},
+) {
+  const ideMessenger = new MockIdeMessenger();
+  const edits: Calls["edits"] = [];
+  const { save, confirm, file } = policyHost(ideMessenger, over);
+  ideMessenger.responseHandlers["policy/rules"] = (async () => report) as any;
   ideMessenger.responseHandlers["audit/overview"] = (async () => ({
     state: "ready",
     coverageDays: 30,
@@ -173,7 +220,7 @@ async function openEditor(entry: string, over: { saveFails?: string } = {}) {
     routerProps: { initialEntries: [entry] } as any,
   });
   await act(async () => {});
-  return { ...view, store, save, edits };
+  return { ...view, store, save, edits, confirm, file };
 }
 
 const step = async (n: number) => {
@@ -346,7 +393,9 @@ describe("the Custom policy editor", () => {
   });
 
   it("settings in permissions.yaml: the floor, trust and Plan's MCP tools are saved in one write", async () => {
-    const { save } = await openEditor("/config?tab=permissions&custom=current");
+    const { save, confirm, file } = await openEditor(
+      "/config?tab=permissions&custom=current",
+    );
     await step(2);
     await act(async () => {
       fireEvent.change(screen.getByTestId("add-rule-list"), {
@@ -386,17 +435,24 @@ describe("the Custom policy editor", () => {
     const changes = screen.getByTestId("custom-setting-changes").textContent;
     expect(changes).toContain("floor");
     expect(changes).toContain("plan.mcpTools");
-    // Trusting a server loosens: Save waits for the acknowledgement
+    // Trusting a server and a Plan MCP tool loosen: no page checkbox; the
+    // review says the editor's own dialog will ask, and Save is not held
+    expect(screen.queryByTestId("custom-ack")).toBeNull();
+    const asks = screen.getByTestId("custom-native-list").textContent;
+    expect(asks).toContain("Trust the read-only hints of the MCP server docs");
+    expect(asks).toContain("Let Plan mode use the MCP tool github/get_issue");
     const saveButton = screen.getByTestId("custom-save") as HTMLButtonElement;
-    expect(saveButton.disabled).toBe(true);
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("custom-ack"));
-    });
     expect(saveButton.disabled).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
     await act(async () => {
       fireEvent.click(saveButton);
     });
     expect(save).toHaveBeenCalledTimes(1);
+    // The host asked once, natively, naming both
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0][0]).toContain("MCP server docs");
+    expect(confirm.mock.calls[0][0]).toContain("github/get_issue");
+    expect(fs.readFileSync(file, "utf-8")).toContain("docs: trusted");
     expect(save.mock.calls[0][0]).toMatchObject({
       floor: ["runTerminalCommand(git push --force*)"],
       planMcpTools: ["github/get_issue"],
@@ -429,5 +485,248 @@ describe("the Custom policy editor", () => {
     );
     expect(screen.getByTestId("custom-policy")).toBeDefined();
     expect(edits.filter((e) => !e.data.dryRun)).toEqual([]);
+  });
+
+  it("no in the editor's own dialog saves nothing: not permissions.yaml, not one rule", async () => {
+    const { confirm, edits, file, store } = await openEditor(
+      "/config?tab=permissions&custom=current",
+      { confirm: false },
+    );
+    await step(1);
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("custom-level-tools"), {
+        target: { value: "permissive" },
+      });
+    });
+    await step(2);
+    // A rule change too: none of it may be written after a no
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("add-rule-list"), {
+        target: { value: "deny" },
+      });
+    });
+    fireEvent.change(screen.getByTestId("add-rule-input"), {
+      target: { value: "runTerminalCommand(rm -rf*)" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("add-rule-submit"));
+    });
+    await step(4);
+    await act(async () => {});
+    expect(screen.getByTestId("custom-native-list").textContent).toContain(
+      "Tool use: Cautious → Permissive",
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("custom-save"));
+    });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("custom-save-error").textContent).toContain(
+      `Nothing was saved: ${POLICY_SAVE_NOT_CONFIRMED}`,
+    );
+    expect(fs.existsSync(file)).toBe(false);
+    expect(edits.filter((e) => !e.data.dryRun)).toEqual([]);
+    expect(store.getState().ui.policyLevels.tools).toBe("cautious");
+    expect(screen.getByTestId("custom-policy")).toBeDefined();
+  });
+
+  it("the review shows the exact permissions.yaml diff from the host's dry run", async () => {
+    const ideMessenger = new MockIdeMessenger();
+    const { file } = policyHost(ideMessenger, {
+      fileText: "# mine\nlevels:\n  tools: cautious # keep\nallow:\n  - Read\n",
+    });
+    ideMessenger.responseHandlers["policy/rules"] = (async () => report) as any;
+    const store = setupStore({ ideMessenger });
+    await renderWithProviders(<PermissionsSection />, {
+      store,
+      mockIdeMessenger: ideMessenger,
+      routerProps: {
+        initialEntries: ["/config?tab=permissions&custom=current"],
+      } as any,
+    });
+    await act(async () => {});
+    await step(1);
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("custom-level-tools"), {
+        target: { value: "permissive" },
+      });
+    });
+    await step(4);
+    await act(async () => {});
+    const diff = screen.getByTestId("custom-yaml-diff");
+    const lines = [...diff.querySelectorAll("[data-diff]")].map((el) => [
+      el.getAttribute("data-diff"),
+      el.textContent?.replace(/^(Removed|Added): /, ""),
+    ]);
+    // The writer's own output: the comment kept, every level written, the
+    // custom set stored under levels (Careful with Tool use raised)
+    expect(lines).toContainEqual(["same", "  # mine"]);
+    expect(lines).toContainEqual(["old", "-   tools: cautious # keep"]);
+    expect(lines).toContainEqual(["new", "+   tools: permissive # keep"]);
+    expect(lines).toContainEqual(["new", "+   edits: manual"]);
+    expect(lines).toContainEqual(["new", "+   custom:"]);
+    expect(lines).toContainEqual(["new", "+     from: careful"]);
+    expect(fs.readFileSync(file, "utf-8")).not.toContain("permissive");
+  });
+});
+
+describe("the stored custom set: Custom (from X) and recall", () => {
+  it("is saved with its preset, named on the chip, and recalled after a preset", async () => {
+    const { store, file } = await openEditor(
+      "/config?tab=permissions&custom=careful",
+    );
+    await step(1);
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("custom-level-edits"), {
+        target: { value: "permissive" },
+      });
+      fireEvent.change(screen.getByTestId("custom-level-tools"), {
+        target: { value: "manual" },
+      });
+    });
+    await step(4);
+    await act(async () => {});
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("custom-save"));
+    });
+    const custom = {
+      from: "careful",
+      levels: {
+        ...DEFAULT_POLICY_LEVELS,
+        edits: "permissive",
+        tools: "manual",
+      },
+    };
+    expect(readPolicyFile(file).settings.custom).toEqual(custom);
+    expect(store.getState().ui.policyExtras.customSet).toEqual(custom);
+
+    // A fresh panel reads it back from the file: the chip names its base
+    const ideMessenger = new MockIdeMessenger();
+    ideMessenger.responseHandlers["policy/load"] = (async () =>
+      readPolicyFile(file)) as any;
+    const save = vi.fn(async (update: any) => {
+      await savePolicyWithConfirmation(file, update, {
+        confirm: async () => true,
+      });
+    });
+    ideMessenger.responseHandlers["policy/save"] = save as any;
+    const fresh = setupStore({ ideMessenger });
+    const { loadPolicySettings } =
+      await import("../../../../../redux/thunks/policySettings");
+    await fresh.dispatch(loadPolicySettings());
+    const { user } = await renderWithProviders(<PolicyControls />, {
+      store: fresh,
+      mockIdeMessenger: ideMessenger,
+    });
+    const chip = () => screen.getAllByTestId("policy-preset")[0];
+    expect(chip().textContent).toContain("Custom (from Careful)");
+
+    // Choose a preset: the set stays in the file and is offered back
+    await user.click(chip());
+    await user.click(await screen.findByTestId("policy-preset-handsOff"));
+    await act(async () => {});
+    expect(chip().textContent).toContain("Hands off");
+    expect(readPolicyFile(file).settings.custom).toEqual(custom);
+    await user.click(chip());
+    const recall = await screen.findByTestId("policy-preset-recall");
+    expect(recall.textContent).toContain("Custom (from Careful)");
+    await user.click(recall);
+    await act(async () => {});
+    expect(save.mock.calls.at(-1)?.[0].levels).toEqual(custom.levels);
+    expect(readPolicyFile(file).settings.levels).toEqual(custom.levels);
+    expect(chip().textContent).toContain("Custom (from Careful)");
+  });
+});
+
+describe("the toolbar and Settings controls go through the same native confirmation", () => {
+  it("no to switching a built-in rule off leaves it on, in the file and on the page", async () => {
+    const ideMessenger = new MockIdeMessenger();
+    const { confirm, file } = policyHost(ideMessenger, { confirm: false });
+    const store = setupStore({ ideMessenger });
+    const { user } = await renderWithProviders(<PolicyCard />, {
+      store,
+      mockIdeMessenger: ideMessenger,
+    });
+    await user.click(
+      screen
+        .getByTestId("builtin-protect-secrets")
+        .querySelector(".rounded-full")!,
+    );
+    await act(async () => {});
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0][0]).toContain(
+      'Switch off the built-in rule "Ask before touching credentials"',
+    );
+    expect(fs.existsSync(file)).toBe(false);
+    expect(store.getState().ui.policyExtras.builtin?.["protect-secrets"]).toBe(
+      undefined,
+    );
+  });
+});
+
+describe("customSetToStore: which set is kept, and its preset", () => {
+  const careful = { ...DEFAULT_POLICY_LEVELS };
+  const mine = { ...careful, tools: "permissive" as const };
+  it.each<[string, Parameters<typeof customSetToStore>, unknown]>([
+    [
+      "a set made from a preset keeps that preset",
+      [{ base: "careful", levels: mine }, careful, undefined],
+      { from: "careful", levels: mine },
+    ],
+    [
+      "a preset's own levels are not a custom set (the stored one stays)",
+      [
+        { base: "careful", levels: POLICY_PRESETS.handsOff.levels },
+        careful,
+        undefined,
+      ],
+      undefined,
+    ],
+    [
+      "IDGAF in the set: session only",
+      [
+        { base: "careful", levels: { ...mine, edits: "idgaf" } },
+        careful,
+        undefined,
+      ],
+      undefined,
+    ],
+    [
+      "started from IDGAF: session only",
+      [{ base: "idgaf", levels: mine }, careful, undefined],
+      undefined,
+    ],
+    [
+      "from what is set now, when that was a preset",
+      [{ base: "current", levels: mine }, careful, undefined],
+      { from: "careful", levels: mine },
+    ],
+    [
+      "from what is set now, when that was the stored set, keeps its preset",
+      [
+        { base: "current", levels: { ...mine, plan: "manual" } },
+        mine,
+        { from: "acceptEdits", levels: mine },
+      ],
+      { from: "acceptEdits", levels: { ...mine, plan: "manual" } },
+    ],
+    [
+      "from what is set now, matching nothing known: no preset named",
+      [
+        { base: "current", levels: { ...mine, plan: "manual" } },
+        mine,
+        undefined,
+      ],
+      { levels: { ...mine, plan: "manual" } },
+    ],
+  ])("%s", (_name, args, expected) => {
+    expect(customSetToStore(...args)).toEqual(expected);
+  });
+
+  it("the chip names the stored set's preset only while it is in force", () => {
+    const stored = { from: "careful" as const, levels: mine };
+    expect(policyChipLabel(mine, stored)).toBe("Custom (from Careful)");
+    expect(policyChipLabel({ ...mine, plan: "manual" }, stored)).toBe("Custom");
+    expect(policyChipLabel(careful, stored)).toBe("Careful");
+    expect(policyChipLabel(mine, { levels: mine })).toBe("Custom");
   });
 });

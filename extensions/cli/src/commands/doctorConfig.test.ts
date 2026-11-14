@@ -2,7 +2,15 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { DEFAULT_POLICY_LEVELS } from "core/tools/permissions/policy.js";
+import { writePolicyFile } from "core/tools/permissions/settingsFile.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as YAML from "yaml";
+
+import {
+  permissionsYamlProblem,
+  readPermissionsYaml,
+} from "../permissions/permissionsYamlLoader.js";
 
 import { doctorCommand } from "./doctor.js";
 import {
@@ -151,6 +159,29 @@ describe("file checks", () => {
     ]);
     expect(check.errors.find((e) => e.key === "exclude.0")?.line).toBe(3);
     expect(check.errors.find((e) => e.key === "foo")?.line).toBe(4);
+  });
+
+  it("reads a permissions.yaml holding a stored custom set (levels.custom) as a whole file", () => {
+    // The Custom policy page keeps its set under levels, which every CLI
+    // accepts, so this build and the ones before it read the allow list
+    const file = write(
+      path.join(root, "permissions.yaml"),
+      "levels:\n  tools: cautious\nallow:\n  - Read\n",
+    );
+    writePolicyFile(file, {
+      custom: {
+        from: "careful",
+        levels: { ...DEFAULT_POLICY_LEVELS, edits: "permissive" },
+      },
+    });
+    expect(fs.readFileSync(file, "utf-8")).toContain("custom:");
+    expect(checkPermissionsYaml(file).state).toBe("ok");
+    const read = readPermissionsYaml(file);
+    expect(read.status).toBe("ok");
+    expect(read.status === "ok" && read.value.allow).toEqual(["Read"]);
+    expect(
+      permissionsYamlProblem(YAML.parse(fs.readFileSync(file, "utf-8"))),
+    ).toBeUndefined();
   });
 
   it("points a config.yaml schema problem at its key and line", () => {

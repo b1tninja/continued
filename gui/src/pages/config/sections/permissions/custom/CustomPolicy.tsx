@@ -23,9 +23,16 @@ import { useContext, useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../../../../components/ui";
 import { IdeMessengerContext } from "../../../../../context/IdeMessenger";
 import { useAppDispatch, useAppSelector } from "../../../../../redux/hooks";
-import { saveCustomPolicy } from "../../../../../redux/thunks/policySettings";
+import {
+  customPolicyUpdate,
+  saveCustomPolicy,
+  type CustomPolicySave,
+} from "../../../../../redux/thunks/policySettings";
+import type { PolicySavePreview } from "core/tools/permissions/policySave";
+import type { PolicyFileUpdate } from "core/tools/permissions/settingsFile";
 import type { EditorEnv } from "../EditableRules";
 import {
+  customSetToStore,
   describeRuleChange,
   initialDraft,
   levelsOfBase,
@@ -115,6 +122,26 @@ export function CustomPolicy({
   const set = (patch: Partial<CustomDraft>) =>
     setDraft((d) => ({ ...d, ...patch }));
 
+  // The one permissions.yaml write: previewed in the review step, then saved
+  const custom = customSetToStore(draft, current, extras.customSet);
+  const save: CustomPolicySave = {
+    levels: draft.levels,
+    extras: {
+      builtin: draft.builtin,
+      maxNewPlanItems: draft.maxNewPlanItems,
+      questions: {
+        youDecide: draft.youDecide,
+        agentDecides: draft.agentDecides,
+      },
+      questionDelivery: draft.questionDelivery,
+      floor: draft.lists.floor,
+      trustedMcpServers: draft.trustedMcpServers,
+      planMcpTools: draft.planMcpTools,
+      planAllowTerminal: draft.planAllowTerminal,
+    },
+    ...(custom ? { custom } : {}),
+  };
+
   return (
     <section
       aria-labelledby={`${id}-title`}
@@ -199,28 +226,14 @@ export function CustomPolicy({
           draft={draft}
           editable={env.editable}
           decisionOrder={report.decisionOrder}
+          update={customPolicyUpdate(save)}
           onSave={async (confirm) => {
             try {
-              await dispatch(
-                saveCustomPolicy({
-                  levels: draft.levels,
-                  extras: {
-                    builtin: draft.builtin,
-                    maxNewPlanItems: draft.maxNewPlanItems,
-                    questions: {
-                      youDecide: draft.youDecide,
-                      agentDecides: draft.agentDecides,
-                    },
-                    questionDelivery: draft.questionDelivery,
-                    floor: draft.lists.floor,
-                    trustedMcpServers: draft.trustedMcpServers,
-                    planMcpTools: draft.planMcpTools,
-                    planAllowTerminal: draft.planAllowTerminal,
-                  },
-                }),
-              ).unwrap();
+              await dispatch(saveCustomPolicy(save)).unwrap();
             } catch (e) {
-              return `Nothing was saved: ${e instanceof Error ? e.message : String(e)}`;
+              // unwrap() rejects with a serialized error, not an Error
+              const why = (e as { message?: string } | undefined)?.message;
+              return `Nothing was saved: ${why ?? String(e)}`;
             }
             const changes = ruleChanges(saved, draft);
             let hash = env.baseHash;
@@ -547,6 +560,7 @@ function ReviewStep({
   draft,
   editable,
   decisionOrder,
+  update,
   onSave,
 }: {
   saved: CustomDraft;
@@ -554,6 +568,8 @@ function ReviewStep({
   editable: boolean;
   /** The engine's order, in words (effectiveRules.ts) */
   decisionOrder: string;
+  /** The permissions.yaml update the save sends, for the host's dry run */
+  update: PolicyFileUpdate;
   /** Returns the error sentence, or undefined when everything was saved */
   onSave: (confirm: string | undefined) => Promise<string | undefined>;
 }) {
@@ -562,10 +578,26 @@ function ReviewStep({
   const changes = ruleChanges(saved, draft);
   const [checks, setChecks] = useState<DryRun[] | undefined>();
   const [typed, setTyped] = useState("");
-  const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [preview, setPreview] = useState<PolicySavePreview | "failed">();
   const key = JSON.stringify(changes);
+  const updateKey = JSON.stringify(update);
+
+  // The exact permissions.yaml the save would write, from the host's writer
+  useEffect(() => {
+    let live = true;
+    setPreview(undefined);
+    void ideMessenger
+      .request("policy/preview", update)
+      .then((res) => {
+        if (live) setPreview(res.status === "success" ? res.content : "failed");
+      })
+      .catch(() => live && setPreview("failed"));
+    return () => {
+      live = false;
+    };
+  }, [updateKey]);
 
   useEffect(() => {
     let live = true;
@@ -593,17 +625,27 @@ function ReviewStep({
   const needsTyped = (checks ?? []).some(
     (c) => c.res?.analysis?.friction === "typed",
   );
-  const loosens =
-    settings.some((s) => s.loosens) ||
-    (checks ?? []).some((c) => c.res?.analysis?.friction === "confirm");
+  const ruleLoosens = (checks ?? []).some(
+    (c) => c.res?.analysis?.friction === "confirm",
+  );
   const nothing = settings.length === 0 && changes.length === 0;
+  const problem =
+    preview === "failed"
+      ? "Could not check permissions.yaml, so nothing can be saved now."
+      : preview?.problem
+        ? `permissions.yaml cannot be saved: ${preview.problem}`
+        : undefined;
+  // No page checkbox: what loosens is confirmed in the editor's own dialog,
+  // which the page cannot click
   const ready =
     editable &&
     !nothing &&
     checks !== undefined &&
+    preview !== undefined &&
+    !problem &&
     blocked.length === 0 &&
-    (!needsTyped || typed.trim().toLowerCase() === CONFIRM_PHRASE) &&
-    (!loosens || ack);
+    (!needsTyped || typed.trim().toLowerCase() === CONFIRM_PHRASE);
+  const nativeAsks = preview && preview !== "failed" ? preview.loosens : [];
 
   return (
     <div className="flex flex-col gap-2" data-testid="custom-review">
@@ -627,6 +669,7 @@ function ReviewStep({
           </ul>
         </section>
       )}
+      {!nothing && <PolicyDiff preview={preview} problem={problem} />}
       {changes.length > 0 && (
         <section aria-label="config.yaml rule changes">
           <h6 className="my-0 text-xs font-semibold">
@@ -678,6 +721,20 @@ function ReviewStep({
           </li>
         </ul>
       </section>
+      {nativeAsks.length > 0 && (
+        <div
+          className="m-0 text-2xs text-description"
+          data-testid="custom-native-settings"
+        >
+          When you save, your editor will ask you to confirm these in its own
+          dialog, which the page cannot answer. No means nothing is saved.
+          <ul className="m-0 pl-4" data-testid="custom-native-list">
+            {nativeAsks.map((l) => (
+              <li key={`${l.key}:${l.text}`}>{l.text}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {(checks ?? []).some((c) => c.res?.analysis?.loosens) && (
         <p
           className="m-0 text-2xs text-description"
@@ -701,20 +758,6 @@ function ReviewStep({
           />
         </label>
       )}
-      {loosens && (
-        <label className="flex items-start gap-1 text-xs">
-          <input
-            type="checkbox"
-            checked={ack}
-            onChange={(e) => setAck(e.target.checked)}
-            data-testid="custom-ack"
-          />
-          <span>
-            I understand that changes marked as loosening let more run without
-            asking.
-          </span>
-        </label>
-      )}
       {!editable && (
         <p className="m-0 text-xs text-error">
           Your config.yaml cannot be written now, so nothing can be saved.
@@ -731,7 +774,7 @@ function ReviewStep({
         onClick={async () => {
           setBusy(true);
           const why = await onSave(
-            needsTyped ? CONFIRM_PHRASE : loosens ? "yes" : undefined,
+            needsTyped ? CONFIRM_PHRASE : ruleLoosens ? "yes" : undefined,
           );
           setBusy(false);
           setError(why);
@@ -740,5 +783,106 @@ function ReviewStep({
         Save
       </Button>
     </div>
+  );
+}
+
+/** Unchanged lines kept around each change; longer runs are folded. */
+const CONTEXT_LINES = 2;
+
+/**
+ * The exact permissions.yaml diff the save would write: the host's writer,
+ * dry-run. Unchanged runs are folded, keeping two lines of context.
+ */
+function PolicyDiff({
+  preview,
+  problem,
+}: {
+  preview: PolicySavePreview | "failed" | undefined;
+  problem: string | undefined;
+}) {
+  if (problem) {
+    return (
+      <p
+        className="m-0 text-xs text-error"
+        role="alert"
+        data-testid="custom-yaml-problem"
+      >
+        {problem}
+      </p>
+    );
+  }
+  if (!preview || preview === "failed") {
+    return (
+      <p
+        className="m-0 text-2xs text-description"
+        data-testid="custom-yaml-loading"
+      >
+        Checking permissions.yaml…
+      </p>
+    );
+  }
+  if (!preview.changed) {
+    return (
+      <p
+        className="m-0 text-2xs text-description"
+        data-testid="custom-yaml-same"
+      >
+        permissions.yaml stays as it is.
+      </p>
+    );
+  }
+  const rows: { text: string; kind: "same" | "old" | "new" | "fold" }[] = [];
+  const lines = preview.diff;
+  const near = (i: number) =>
+    lines
+      .slice(Math.max(0, i - CONTEXT_LINES), i + CONTEXT_LINES + 1)
+      .some((d) => d.type !== "same");
+  for (let i = 0; i < lines.length; i++) {
+    const d = lines[i];
+    if (d.type !== "same" || near(i)) {
+      const sign = d.type === "old" ? "-" : d.type === "new" ? "+" : " ";
+      rows.push({ kind: d.type, text: `${sign} ${d.line}` });
+      continue;
+    }
+    let j = i;
+    while (j < lines.length && lines[j].type === "same" && !near(j)) j++;
+    if (j - i === 1) {
+      rows.push({ kind: "same", text: `  ${d.line}` });
+      continue;
+    }
+    rows.push({
+      kind: "fold",
+      text: `  … ${j - i} unchanged lines`,
+    });
+    i = j - 1;
+  }
+  return (
+    <section aria-label="permissions.yaml as it will be written">
+      <h6 className="my-0 text-xs font-semibold">
+        permissions.yaml, exactly as it will be written
+      </h6>
+      <pre
+        className="m-0 overflow-x-auto rounded-sm border border-solid border-border p-1 text-2xs"
+        data-testid="custom-yaml-diff"
+      >
+        {rows.map((r, i) => (
+          <div
+            key={i}
+            data-diff={r.kind}
+            className={
+              r.kind === "old"
+                ? "text-error"
+                : r.kind === "new"
+                  ? "text-success"
+                  : "text-description"
+            }
+          >
+            {r.kind === "old" && <span className="sr-only">Removed: </span>}
+            {r.kind === "new" && <span className="sr-only">Added: </span>}
+            {r.text}
+          </div>
+        ))}
+      </pre>
+    </section>
   );
 }

@@ -1,3 +1,4 @@
+import type { StoredCustomSet } from "core/tools/permissions/settingsFile";
 import type { JSX } from "react";
 import { cacheTipKey } from "../../util/cacheTips";
 import { ToolPolicy } from "@continuedev/terminal-security";
@@ -86,6 +87,12 @@ export interface PolicyExtras {
   questionDelivery?: "inbox" | "wait";
   /** `plan.allowTerminal`: Plan mode is offered the terminal (the CLI); written only by the Custom policy page */
   planAllowTerminal?: boolean;
+  /**
+   * `levels.custom`: the person's custom set and the preset it came from, for
+   * the chip's "Custom (from X)" and for recalling the set after a preset.
+   * Written only by the Custom policy page; never decides a call.
+   */
+  customSet?: StoredCustomSet;
 }
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";
