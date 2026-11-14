@@ -13,6 +13,7 @@ import {
   getSessionsFolderPath,
   getSessionsListPath,
 } from "./paths.js";
+import { markSessionOpen } from "./sessionLeases.js";
 function safeParseArray<T>(
   value: string,
   errorMessage: string = "Error parsing array",
@@ -356,6 +357,8 @@ export class HistoryManager {
     }
     if ("damaged" in read) return { session: empty, damaged: read.damaged };
     read.session.sessionId = sessionId;
+    // A cleanup run in another process leaves an open session alone
+    markSessionOpen(sessionId);
     return { session: read.session };
   }
 
@@ -409,6 +412,7 @@ export class HistoryManager {
       getSessionFilePath(session.sessionId),
       JSON.stringify(orderedSession, undefined, 2),
     );
+    markSessionOpen(session.sessionId);
 
     const messageCount = session.history.filter(
       (item) => item.message.role === "assistant",
