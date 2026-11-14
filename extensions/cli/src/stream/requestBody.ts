@@ -161,10 +161,10 @@ function markReasoningSources(
 function convertWithReplayedReasoning(
   provider: string,
   conversation: ChatMessage[],
-): ChatCompletionMessageParam[] {
+): ReturnType<typeof convertChatMessagesToOpenAI> {
   const field = REASONING_REPLAY[provider];
   if (!field) return convertChatMessagesToOpenAI(conversation);
-  const converted: ChatCompletionMessageParam[] = [];
+  const converted: ReturnType<typeof convertChatMessagesToOpenAI> = [];
   for (const message of conversation) {
     const openai = convertFromUnifiedMessage(message);
     if (!openai) continue;
