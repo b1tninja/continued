@@ -4,6 +4,7 @@ import {
   policyDraft,
   settingDraft,
   shadowDraft,
+  taintDraft,
   turnDraft,
   type AuditAgent,
   type AuditPolicy,
@@ -12,6 +13,7 @@ import {
   type PolicyInput,
   type SettingInput,
   type ShadowInput,
+  type TaintInput,
 } from "./record";
 import { pruneAudit, type PruneResult } from "./reader";
 import { AuditWriter, DEFAULT_MAX_FILE_BYTES } from "./writer";
@@ -245,6 +247,14 @@ export class AuditTrail {
       }
     });
     return ok;
+  }
+
+  /** A taint label added to or cleared from a session. */
+  taint(input: TaintInput): void {
+    this.guard(() => {
+      const result = this.writer.write(taintDraft(input));
+      if (!result.ok) this.fail(result.error);
+    });
   }
 
   /** Delete files past the retention. Never throws. */

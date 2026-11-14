@@ -27,7 +27,10 @@ import {
 import { resolveSubagentTools } from "core/subagents/tools";
 import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { BuiltInToolNames } from "core/tools/builtIn";
-import { flagToolOutput } from "core/tools/permissions/injection";
+import {
+  flagToolOutput,
+  stripsHiddenCharacters,
+} from "core/tools/permissions/injection";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { interceptSystemToolCalls } from "core/tools/systemMessageTools/interceptSystemToolCalls";
 import { SystemMessageToolCodeblocksFramework } from "core/tools/systemMessageTools/toolCodeblocks";
@@ -587,7 +590,9 @@ export async function driveSubagent(
         fail(`${name} failed with the message: ${result.content.errorMessage}`);
         return false;
       }
-      const { items } = flagToolOutput(result.content.contextItems ?? []);
+      const { items } = flagToolOutput(result.content.contextItems ?? [], {
+        stripHidden: stripsHiddenCharacters(name, call.tool?.uri),
+      });
       succeed(items);
     } catch (e) {
       fail(e instanceof Error ? e.message : String(e));

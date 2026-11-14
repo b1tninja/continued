@@ -7,7 +7,10 @@ import {
   calculateRequestCost,
   type CostBreakdown,
 } from "core/llm/utils/calculateRequestCost.js";
-import { flagToolText } from "core/tools/permissions/injection.js";
+import {
+  flagToolText,
+  stripsHiddenCharacters,
+} from "core/tools/permissions/injection.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { ChatCompletionToolMessageParam } from "openai/resources/chat/completions.mjs";
 
@@ -69,9 +72,20 @@ import {
   runPreToolUseHooks,
 } from "./toolHooks.js";
 
-/** A tool result with the injection notice in front when it reads like instructions. */
-export function flagToolResult(result: string): string {
-  return typeof result === "string" ? flagToolText(result).text : result;
+/**
+ * A tool result with the injection notice in front when it reads like
+ * instructions. An MCP result or a file read flagged for hidden characters
+ * also has them removed; other output is returned as it was.
+ */
+export function flagToolResult(
+  result: string,
+  call?: { name: string; tool?: { mcpServer?: string } },
+): string {
+  if (typeof result !== "string") return result;
+  const stripHidden =
+    !!call &&
+    (!!call.tool?.mcpServer || stripsHiddenCharacters(call.name, undefined));
+  return flagToolText(result, { stripHidden }).text;
 }
 
 export interface ToolResultWithStatus extends ChatCompletionToolMessageParam {
@@ -1076,7 +1090,7 @@ export async function executeStreamedToolCalls(
             // notice the IDE puts in front of it (plans/prompt-injection.md P5).
             const toolResult = await runPostToolUseHooks(
               approvedCall,
-              flagToolResult(rawResult),
+              flagToolResult(rawResult, approvedCall),
             );
             noteCliToolResult(approvedCall, approvedCall.tool?.mcpServer);
             recordCliOutcome(approvedCall, {

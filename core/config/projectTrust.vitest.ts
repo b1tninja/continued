@@ -8,6 +8,7 @@ import { tryLink } from "../tools/permissions/testLinks";
 import {
   beginTrustCheck,
   decideFromFiles,
+  folderHasTrustRecord,
   inspectProjectConfig,
   isScopeTrusted,
   pendingProjectTrust,
@@ -160,5 +161,26 @@ describe("project config trust", () => {
 
     trustProjectScopes(project, { data: before[0].fingerprint }, globalDir);
     expect(inspectProjectConfig(project, globalDir)[0].trusted).toBe(true);
+  });
+});
+
+describe("folderHasTrustRecord", () => {
+  it("is false for a folder with no trust record, true once any scope is trusted", () => {
+    expect(folderHasTrustRecord(project, globalDir)).toBe(false);
+    trustProjectScopes(project, { mcp: "fingerprint" }, globalDir);
+    expect(folderHasTrustRecord(project, globalDir)).toBe(true);
+    revokeProjectConfig(project, globalDir);
+    expect(folderHasTrustRecord(project, globalDir)).toBe(false);
+  });
+
+  it("is true while this run trusts project configuration", () => {
+    setProjectConfigTrustedForRun(true);
+    expect(folderHasTrustRecord(project, globalDir)).toBe(true);
+  });
+
+  it("is false when the global folder is inside the project", () => {
+    const inside = path.join(project, ".global");
+    fs.mkdirSync(inside, { recursive: true });
+    expect(folderHasTrustRecord(project, inside)).toBe(false);
   });
 });
