@@ -51,6 +51,12 @@ type UIState = {
    * run stays in the session (and in what the model read).
    */
   archivedAgents: Record<string, number>;
+  /**
+   * Sessions the person archived, by session id, with when. Only hides them
+   * from the history list (an "Archived" group there): the session file is
+   * kept as it was, and Restore brings it back. Deleting is separate.
+   */
+  archivedSessions: Record<string, number>;
   /** Model the user picked by hand per mode; wins over `modeModels` until reload. */
   modeModelOverrides: Partial<Record<MessageModes, string>>;
   ttsActive: boolean;
@@ -105,11 +111,33 @@ export const DEFAULT_UI_SLICE: UIState = {
   promptCacheSettings: {},
   dismissedCacheTips: {},
   archivedAgents: {},
+  archivedSessions: {},
   modeModelOverrides: {},
 };
 
 /** How many archived rows are remembered; the oldest go first. */
 export const MAX_ARCHIVED_AGENTS = 500;
+/** How many archived sessions are remembered; the oldest come back first. */
+export const MAX_ARCHIVED_SESSIONS = 1000;
+
+/** Adds keys with a time, dropping the oldest above the cap. */
+function withArchived(
+  current: Record<string, number> | undefined,
+  keys: string[],
+  at: number,
+  max: number,
+): Record<string, number> {
+  const archived = { ...(current ?? {}) };
+  for (const key of keys) archived[key] = at;
+  const all = Object.keys(archived);
+  if (all.length > max) {
+    all
+      .sort((a, b) => archived[a] - archived[b])
+      .slice(0, all.length - max)
+      .forEach((key) => delete archived[key]);
+  }
+  return archived;
+}
 
 export const uiSlice = createSlice({
   name: "ui",
@@ -264,21 +292,36 @@ export const uiSlice = createSlice({
       state,
       action: PayloadAction<{ keys: string[]; at?: number }>,
     ) => {
-      const archived = { ...(state.archivedAgents ?? {}) };
-      const at = action.payload.at ?? Date.now();
-      for (const key of action.payload.keys) archived[key] = at;
-      const keys = Object.keys(archived);
-      if (keys.length > MAX_ARCHIVED_AGENTS) {
-        keys
-          .sort((a, b) => archived[a] - archived[b])
-          .slice(0, keys.length - MAX_ARCHIVED_AGENTS)
-          .forEach((key) => delete archived[key]);
-      }
-      state.archivedAgents = archived;
+      state.archivedAgents = withArchived(
+        state.archivedAgents,
+        action.payload.keys,
+        action.payload.at ?? Date.now(),
+        MAX_ARCHIVED_AGENTS,
+      );
     },
     restoreAgents: (state, action: PayloadAction<{ keys: string[] }>) => {
       if (!state.archivedAgents) return;
       for (const key of action.payload.keys) delete state.archivedAgents[key];
+    },
+    archiveSessions: (
+      state,
+      action: PayloadAction<{ sessionIds: string[]; at?: number }>,
+    ) => {
+      state.archivedSessions = withArchived(
+        state.archivedSessions,
+        action.payload.sessionIds,
+        action.payload.at ?? Date.now(),
+        MAX_ARCHIVED_SESSIONS,
+      );
+    },
+    restoreSessions: (
+      state,
+      action: PayloadAction<{ sessionIds: string[] }>,
+    ) => {
+      if (!state.archivedSessions) return;
+      for (const id of action.payload.sessionIds) {
+        delete state.archivedSessions[id];
+      }
     },
     setModeModelOverride: (
       state,
@@ -312,6 +355,8 @@ export const {
   restoreCacheTipsForModel,
   archiveAgents,
   restoreAgents,
+  archiveSessions,
+  restoreSessions,
   setModeModelOverride,
 } = uiSlice.actions;
 

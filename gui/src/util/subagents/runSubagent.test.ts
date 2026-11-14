@@ -741,3 +741,188 @@ describe("messages from the person to a running subagent", () => {
     expect(system(second[0])).toBe(system(first[0]));
   });
 });
+
+describe("messages between subagents started together", () => {
+  /** Each run answers from its own script, picked by its prompt. */
+  function scriptByPrompt(
+    messenger: MockIdeMessenger,
+    turns: Record<string, Turn[]>,
+  ) {
+    const requests: Record<string, ToCoreProtocol["llm/streamChat"][0][]> = {};
+    messenger.llmStreamChat = async function* (msg, signal) {
+      const prompt = renderChatMessage(msg.messages[1]);
+      (requests[prompt] ??= []).push(msg);
+      const turn = turns[prompt]?.shift();
+      if (!turn) throw new Error(`no more turns for ${prompt}`);
+      if (typeof turn === "function") {
+        yield* turn(signal);
+      } else {
+        for (const chunk of turn) yield [chunk];
+      }
+      return undefined as PromptLog | undefined;
+    };
+    return requests;
+  }
+
+  const toolNames = (request: ToCoreProtocol["llm/streamChat"][0]) =>
+    request.completionOptions.tools?.map((t) => t.function.name).sort();
+
+  it("lets one run list the other and send it a message, which it reads after its tool calls, labelled as not from the person", async () => {
+    const { store, messenger } = makeStore(["s1", "s2"], {
+      promptCacheSettings: { Claude: "off" },
+      // Permissive for this one tool: the message goes without asking
+      toolSettings: {
+        [BuiltInToolNames.SendMessage]: "allowedWithoutPermission",
+      },
+    });
+    let sent!: () => void;
+    const s1Sent = new Promise<void>((r) => (sent = r));
+    const requests = scriptByPrompt(messenger, {
+      A: [
+        [toolCallChunk("l1", BuiltInToolNames.ListSessions, {})],
+        [
+          toolCallChunk("m1", BuiltInToolNames.SendMessage, {
+            to: "s2",
+            message: "foo is in a.ts:3, no need to search src/",
+          }),
+        ],
+        async function* () {
+          sent();
+          yield [{ role: "assistant", content: "A done" }];
+        },
+      ],
+      B: [
+        async function* () {
+          await s1Sent;
+          yield [
+            toolCallChunk("g1", BuiltInToolNames.GrepSearch, { query: "x" }),
+          ];
+        },
+        [{ role: "assistant", content: "B done" }],
+      ],
+    });
+
+    await Promise.all([
+      runSubagentTool(
+        { ...args(), prompt: "A" },
+        "s1",
+        extras(store, messenger),
+      ),
+      runSubagentTool(
+        { ...args(), prompt: "B" },
+        "s2",
+        extras(store, messenger),
+      ),
+    ]);
+
+    // Both runs of the batch carry the two tools, so they keep one prefix
+    expect(toolNames(requests.A[0])).toEqual(toolNames(requests.B[0]));
+    expect(toolNames(requests.A[0])).toEqual(
+      [
+        BuiltInToolNames.GrepSearch,
+        BuiltInToolNames.ListSessions,
+        BuiltInToolNames.ReadFile,
+        BuiltInToolNames.SendMessage,
+      ].sort(),
+    );
+    // list_sessions names the other run, not this one
+    const listed = JSON.stringify(requests.A[1].messages);
+    expect(listed).toContain('id s2: Explore, \\"find\\", running');
+    expect(listed).toContain("You are Explore (id s1)");
+    // send_message tells the sender it was queued
+    expect(JSON.stringify(requests.A[2].messages)).toContain(
+      "Queued for Explore (id s2)",
+    );
+    // The receiver reads it after its tool results, framed as an agent's
+    const last = userTexts(requests.B[1]).at(-1)!;
+    expect(requests.B[1].messages.map((m) => m.role)).toEqual([
+      "system",
+      "user",
+      "assistant",
+      "tool",
+      "user",
+    ]);
+    expect(last).toContain('<message from="agent" name="Explore" id="s1">');
+    expect(last).toContain("not from the person");
+    expect(last).toContain("foo is in a.ts:3, no need to search src/");
+    expect(last).not.toContain('from="person"');
+    expect(runOf(store, "s2")!.messages).toEqual([
+      {
+        text: "foo is in a.ts:3, no need to search src/",
+        at: expect.any(Number),
+        delivered: true,
+        from: "Explore",
+      },
+    ]);
+    // The parent reads only the reports, never the messages
+    expect(runOf(store, "s1")!.text).toBe("A done");
+  });
+
+  it("asks the person before a message is sent at the default level, and a rejection sends nothing", async () => {
+    const { store, messenger } = makeStore(["s1", "s2"], {
+      promptCacheSettings: { Claude: "off" },
+    });
+    scriptByPrompt(messenger, {
+      A: [
+        [
+          toolCallChunk("m1", BuiltInToolNames.SendMessage, {
+            to: "s2",
+            message: "stop searching",
+          }),
+        ],
+        [{ role: "assistant", content: "A done" }],
+      ],
+      B: [blockingTurn("searching")],
+    });
+    const first = runSubagentTool(
+      { ...args(), prompt: "A" },
+      "s1",
+      extras(store, messenger),
+    );
+    const second = runSubagentTool(
+      { ...args(), prompt: "B" },
+      "s2",
+      extras(store, messenger),
+    );
+    await until(() => !!runOf(store, "s1")?.pendingApproval);
+    const pending = runOf(store, "s1")!.pendingApproval!;
+    expect(pending.toolName).toBe(BuiltInToolNames.SendMessage);
+    answerSubagentApproval(pending.id, false);
+    await first;
+    expect(peekInbox("s2")).toHaveLength(0);
+    expect(runOf(store, "s1")!.toolCalls).toEqual([
+      expect.objectContaining({ name: "send_message", status: "canceled" }),
+    ]);
+    stopSubagentRun("s2");
+    await second;
+  });
+
+  it("refuses a message to a run that was not started with it", async () => {
+    const { store, messenger } = makeStore(["s1", "s2"], {
+      promptCacheSettings: { Claude: "off" },
+      toolSettings: {
+        [BuiltInToolNames.SendMessage]: "allowedWithoutPermission",
+      },
+    });
+    const requests = scriptByPrompt(messenger, {
+      A: [
+        [
+          toolCallChunk("m1", BuiltInToolNames.SendMessage, {
+            to: "elsewhere",
+            message: "hi",
+          }),
+        ],
+        [{ role: "assistant", content: "A done" }],
+      ],
+    });
+    await runSubagentTool(
+      { ...args(), prompt: "A" },
+      "s1",
+      extras(store, messenger),
+    );
+    expect(JSON.stringify(requests.A[1].messages)).toContain(
+      'No subagent with id \\"elsewhere\\" was started with you',
+    );
+    expect(runOf(store, "s1")!.toolCalls[0].status).toBe("errored");
+  });
+});

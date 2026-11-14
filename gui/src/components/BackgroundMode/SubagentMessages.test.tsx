@@ -147,12 +147,44 @@ describe("SubagentMessages", () => {
       />,
     );
     expect(screen.queryByRole("textbox")).toBe(null);
-    const list = screen.getByRole("list", { name: "Your messages to explore" });
+    const list = screen.getByRole("list", { name: "Messages to explore" });
     expect(
       within(list)
         .getAllByRole("listitem")
         .map((i) => i.textContent),
     ).toEqual(["adelivered", "bnot delivered"]);
+  });
+
+  it("names the agent a message came from, queued or delivered, so it is not read as the person's", () => {
+    goLive();
+    act(() => {
+      sendToSubagent("r1", "found it", {
+        steer: true,
+        from: { kind: "agent", name: "scout", runId: "r2" },
+      });
+    });
+    render(
+      <SubagentMessages
+        runId="r1"
+        name="explore"
+        run={run({
+          messages: [
+            { text: "a.ts:3", at: 1, delivered: true, from: "scout" },
+            { text: "mine", at: 2, delivered: true },
+          ],
+        })}
+      />,
+    );
+    const queued = screen.getByRole("list", { name: "Queued for explore" });
+    expect(within(queued).getByTestId("agent-message-from").textContent).toBe(
+      "from scout:",
+    );
+    const sent = screen.getByRole("list", { name: "Messages to explore" });
+    expect(
+      within(sent)
+        .getAllByRole("listitem")
+        .map((i) => i.textContent),
+    ).toEqual(["from scout:a.ts:3delivered", "minedelivered"]);
   });
 
   it("keeps a draft when Escape is pressed in it, so Escape does not leave the record", () => {

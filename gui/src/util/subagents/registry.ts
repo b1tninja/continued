@@ -1,4 +1,9 @@
 import {
+  MAX_AGENT_MESSAGE_CHARS,
+  MAX_AGENT_MESSAGES_PER_RUN,
+  type SessionMessageSender,
+} from "core/subagents/messages";
+import {
   MAX_CONCURRENT_SUBAGENTS,
   PrefixGate,
   Semaphore,
@@ -47,6 +52,7 @@ export function registerSubagentRun(
   return () => {
     if (runs.get(toolCallId) === controller) {
       runs.delete(toolCallId);
+      agentSends.delete(toolCallId);
       emit();
     }
   };
@@ -65,15 +71,18 @@ export function isSubagentRunLive(toolCallId: string): boolean {
 }
 
 /**
- * A message the person sent to a running subagent from its record. "Send"
- * waits until the run would otherwise finish; "Send now" (steer) goes in
- * after the current tool calls, as the main chat's steering does.
+ * A message to a running subagent: from the person, sent from its record,
+ * or from another agent started with it (send_message). "Send" waits until
+ * the run would otherwise finish; "Send now" (steer) goes in after the
+ * current tool calls, as the main chat's steering does.
  */
 export interface SubagentInboxMessage {
   id: string;
   text: string;
   steer: boolean;
   at: number;
+  /** Absent means the person (messages queued before agents could send) */
+  from?: SessionMessageSender;
 }
 
 const NO_MESSAGES: readonly SubagentInboxMessage[] = [];
@@ -105,7 +114,7 @@ export function subscribeSubagentRuns(listener: () => void): () => void {
 export function sendToSubagent(
   runId: string,
   text: string,
-  opts: { steer: boolean },
+  opts: { steer: boolean; from?: SessionMessageSender },
 ): "queued" | "not-live" | "empty" {
   if (!runs.has(runId)) return "not-live";
   const trimmed = text.trim();
@@ -117,9 +126,55 @@ export function sendToSubagent(
       text: trimmed,
       steer: opts.steer,
       at: Date.now(),
+      ...(opts.from && opts.from.kind !== "person" ? { from: opts.from } : {}),
     },
   ]);
   return "queued";
+}
+
+/** Per sending run: the texts it sent, by receiver, for the limits below. */
+const agentSends = new Map<string, { to: string; text: string }[]>();
+
+export type AgentSendOutcome =
+  "queued" | "not-live" | "empty" | "self" | "too-long" | "limit" | "duplicate";
+
+/**
+ * A message from one running subagent to another (send_message). The caller
+ * has checked that the two were started together. Delivered after the
+ * receiver's current tool calls. Each run may send a few, never the same
+ * text twice to the same receiver, so two runs cannot keep each other going.
+ */
+export function sendAgentMessage(
+  from: { runId: string; name: string },
+  toRunId: string,
+  text: string,
+): AgentSendOutcome {
+  if (from.runId === toRunId) return "self";
+  if (!runs.has(from.runId) || !runs.has(toRunId)) return "not-live";
+  const trimmed = text.trim();
+  if (!trimmed) return "empty";
+  if (trimmed.length > MAX_AGENT_MESSAGE_CHARS) return "too-long";
+  const sent = agentSends.get(from.runId) ?? [];
+  if (sent.length >= MAX_AGENT_MESSAGES_PER_RUN) return "limit";
+  if (sent.some((s) => s.to === toRunId && s.text === trimmed)) {
+    return "duplicate";
+  }
+  const outcome = sendToSubagent(toRunId, trimmed, {
+    steer: true,
+    from: { kind: "agent", name: from.name, runId: from.runId },
+  });
+  if (outcome === "queued") {
+    agentSends.set(from.runId, [...sent, { to: toRunId, text: trimmed }]);
+  }
+  return outcome;
+}
+
+/** How many more messages a run may send to other agents. */
+export function agentMessagesLeft(runId: string): number {
+  return Math.max(
+    0,
+    MAX_AGENT_MESSAGES_PER_RUN - (agentSends.get(runId)?.length ?? 0),
+  );
 }
 
 /** The run's queued messages, oldest first. Stable until the queue changes. */
