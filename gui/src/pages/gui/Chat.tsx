@@ -58,6 +58,7 @@ import {
 import { streamEditThunk } from "../../redux/thunks/edit";
 import { loadLastSession } from "../../redux/thunks/session";
 import { streamResponseThunk } from "../../redux/thunks/streamResponse";
+import ResumeResponse from "../../components/StepContainer/ResumeResponse";
 import { ToolCallDiv } from "./ToolCallDiv";
 import { McpAppTurn } from "./ToolCallDiv/McpAppTurn";
 import { isMcpAppTurn } from "./ToolCallDiv/mcpAppTurnContent";
@@ -538,6 +539,7 @@ export function Chat() {
               {index === history.length - 1 && <InlineErrorMessage />}
             </TranscriptMessage>
           ))}
+        <ResumeResponse />
         {/* Inside the scroll area, so it does not push the input down */}
         <ToolDialectNotice />
       </StepsDiv>
