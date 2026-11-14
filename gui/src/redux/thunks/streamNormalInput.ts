@@ -12,6 +12,7 @@ import {
   setActive,
   setAppliedRulesAtIndex,
   addRequestUsageToSession,
+  clearContextRemovalUndo,
   setContextPercentage,
   setInactive,
   setInlineErrorMessage,
@@ -228,6 +229,11 @@ export const streamNormalInput = createAsyncThunk<
 
     dispatch(setIsPruned(didPrune));
     dispatch(setContextPercentage(contextPercentage));
+    // This request carries what "Choose what to keep" left: from here an
+    // undo would be another edit of the cached conversation
+    if (getState().session.contextRemovalUndo) {
+      dispatch(clearContextRemovalUndo());
+    }
 
     const start = Date.now();
     const streamAborter = state.session.streamAborter;
