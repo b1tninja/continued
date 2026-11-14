@@ -150,7 +150,11 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   logServeConfiguration(config.name, model, options.config);
 
   // Run limits cover the whole serve process; see docs/cli/run-limits.mdx
-  startRunLimits(options, { provider: model.provider, model: model.model });
+  startRunLimits(options, {
+    provider: model.provider,
+    model: model.model,
+    pricing: model.pricing,
+  });
 
   // Initialize session with system message
   const systemMessage = await constructSystemMessage(

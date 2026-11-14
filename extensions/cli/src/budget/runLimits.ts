@@ -3,6 +3,7 @@ import * as path from "path";
 
 import type { Command } from "commander";
 import { costSince, costMarkOf } from "core/util/loopCost.js";
+import { userPriceOf, type PricedModel } from "core/util/modelPrice.js";
 
 import { cliAuditSession, cliAuditTrail } from "../audit/cliAudit.js";
 import { configError } from "../headless/exitCodes.js";
@@ -128,7 +129,7 @@ export function setActiveRunBudget(budget: RunBudget | undefined): void {
  */
 export function startRunLimits(
   options: RunLimitOptions,
-  model: { provider: string; model: string },
+  model: { provider: string; model: string } & PricedModel,
   opts: {
     homeDir?: string;
     now?: () => number;
@@ -156,19 +157,28 @@ export function startRunLimits(
     const warning = stalePriceWarning(prices);
     if (warning) (opts.warn ?? logger.warn.bind(logger))(warning);
   }
+  // A price on the model's own entry (`pricing:`) prices it ahead of the tables
+  const userPrice = userPriceOf(model);
+  const costModel = { provider: model.provider, model: model.model };
   const problem = unpricedBudgetProblem(
     limits,
-    model,
+    costModel,
     options.budgetAllowUnpriced,
     prices,
+    userPrice,
   );
   if (problem) throw configError(problem);
   const start = costMarkOf(getSessionUsage());
+  const userPrices = userPrice
+    ? { [`${model.provider}/${model.model}`]: userPrice }
+    : undefined;
   const budget = new RunBudget({
     limits,
-    model,
+    model: costModel,
+    userPrice,
     now: opts.now,
-    spentUsd: () => costSince(start, costMarkOf(getSessionUsage())).amount,
+    spentUsd: () =>
+      costSince(start, costMarkOf(getSessionUsage()), { userPrices }).amount,
   });
   setActiveRunBudget(budget);
   return budget;

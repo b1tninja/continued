@@ -154,12 +154,41 @@ describe("editModelBlockText", () => {
       "cacheBehavior.cacheSystemMessage": true,
       "cacheBehavior.cacheConversation": false,
       "cacheBehavior.ttl": "1h",
+      "env.accessKeyId": "${{ secrets.AWS_ID }}",
+      "env.secretAccessKey": "${{ secrets.AWS_SECRET }}",
+      "env.sessionToken": "${{ secrets.AWS_TOKEN }}",
+      "env.crossRegionInference": "global",
+      "env.serviceTier": "flex",
+      "env.latency": "optimized",
+      "env.guardrailIdentifier": "gr-abc123",
+      "env.guardrailVersion": "1",
+      "env.deploymentId": "dep-1",
+      "chatOptions.baseSystemMessage": "Be brief.\nUse lists.",
+      "chatOptions.baseAgentSystemMessage": "Act.",
+      "chatOptions.basePlanSystemMessage": "Plan first.",
+      "promptTemplates.chat": "llama3",
+      "promptTemplates.edit": "Edit {{{codeToEdit}}}\nas {{{userInput}}}",
+      "promptTemplates.apply": "{{{original_code}}}\n{{{new_code}}}",
+      "promptTemplates.autocomplete": "<PRE>{{{prefix}}}<SUF>{{{suffix}}}",
+      "pricing.input": 0.5,
+      "pricing.output": 2,
+      "pricing.cacheRead": 0.05,
+      "pricing.cacheWrite": 0,
     };
+    // A price needs both input and output, so each rate is written with them
+    const companions = (key: string) =>
+      key.startsWith("pricing.")
+        ? [
+            { path: ["pricing", "input"], value: 1 },
+            { path: ["pricing", "output"], value: 1 },
+          ].filter((op) => op.path.join(".") !== key)
+        : [];
     for (const field of MODEL_EDIT_FIELDS) {
       const key = field.path.join(".");
       expect(samples, `a sample for ${key}`).toHaveProperty([key]);
       const value = samples[key];
       const { text, errors, error } = editModelBlockText(SRC, "Qwen", [
+        ...companions(key),
         { path: field.path, value },
       ]);
       expect(error, key).toBeUndefined();
@@ -212,13 +241,13 @@ describe("editModelBlockText", () => {
     const r = editModelBlockText(SRC, "Qwen", [
       { path: ["name"], value: "Renamed" },
       { path: ["futureKey"], value: "x" },
-      { path: ["chatOptions", "baseSystemMessage"], value: "x" },
+      { path: ["autocompleteOptions", "disable"], value: true },
     ]);
     expect(r.text).toBeUndefined();
     expect(r.errors.map((e) => e.path.join("."))).toEqual([
       "name",
       "futureKey",
-      "chatOptions.baseSystemMessage",
+      "autocompleteOptions.disable",
     ]);
   });
 

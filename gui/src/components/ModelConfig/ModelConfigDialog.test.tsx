@@ -103,9 +103,11 @@ describe("ModelConfigDialog", () => {
     );
 
     await user.keyboard("{End}");
-    expect(screen.getByRole("tab", { name: "Context & cost" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Advanced (YAML)" })).toHaveFocus();
     await user.keyboard("{ArrowRight}");
     expect(first).toHaveFocus();
+    await user.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("tab", { name: "Advanced (YAML)" })).toHaveFocus();
     await user.keyboard("{ArrowLeft}");
     expect(screen.getByRole("tab", { name: "Context & cost" })).toHaveFocus();
     await user.keyboard("{Home}");

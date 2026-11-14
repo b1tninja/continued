@@ -1,4 +1,5 @@
-import { costOf, type CostModel } from "core/util/costOf.js";
+import { costOf, type CostModel, type UserPrice } from "core/util/costOf.js";
+import { USER_PRICE_SOURCE } from "core/util/modelPrice.js";
 
 import {
   REFRESH_HINT,
@@ -53,6 +54,8 @@ export const DEFAULT_OUTPUT_ESTIMATE = 1024;
 export interface RunBudgetOptions {
   limits: RunLimits;
   model: CostModel;
+  /** The price on the model's config entry (`pricing:`), which wins over the tables */
+  userPrice?: UserPrice;
   /** Milliseconds, injectable for tests */
   now?: () => number;
   /** USD this run has spent so far, or "unknown" when a model it used has no price */
@@ -63,11 +66,12 @@ function positive(n: number | undefined): n is number {
   return typeof n === "number" && Number.isFinite(n) && n > 0;
 }
 
-function hasPrice(model: CostModel): boolean {
+function hasPrice(model: CostModel, userPrice?: UserPrice): boolean {
   return (
     costOf(
       { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 },
       model,
+      { userPrice },
     ).amount !== "unknown"
   );
 }
@@ -82,9 +86,10 @@ export function unpricedBudgetProblem(
   model: CostModel,
   allowUnpriced: boolean | undefined,
   prices?: PriceListStatus,
+  userPrice?: UserPrice,
 ): string | undefined {
   if (!positive(limits.maxBudgetUsd) || allowUnpriced) return undefined;
-  if (hasPrice(model)) return undefined;
+  if (hasPrice(model, userPrice)) return undefined;
   if (model.provider.toLowerCase() === "openrouter") {
     const id = `${model.provider}/${model.model}`;
     const escape =
@@ -97,7 +102,7 @@ export function unpricedBudgetProblem(
     }
     return `--max-budget-usd cannot be held on ${id}: the downloaded OpenRouter list (${prices.fetchedAt.slice(0, 10)}) has no price for this model id. Pick a priced model, or ${REFRESH_HINT} in case it was added since, ${escape}.`;
   }
-  return `--max-budget-usd cannot be held on ${model.provider}/${model.model}: the cost table has no price for it, so spend would read as unknown. Pick a priced model, or pass --budget-allow-unpriced to run without the dollar cap.`;
+  return `--max-budget-usd cannot be held on ${model.provider}/${model.model}: the cost table has no price for it, so spend would read as unknown. Pick a priced model, set its price in config.yaml (pricing: input and output, US dollars per million tokens), or pass --budget-allow-unpriced to run without the dollar cap.`;
 }
 
 /**
@@ -118,7 +123,7 @@ export class RunBudget {
     this.limits = opts.limits;
     this.now = opts.now ?? Date.now;
     this.startedAt = this.now();
-    this.priced = hasPrice(opts.model);
+    this.priced = hasPrice(opts.model, opts.userPrice);
   }
 
   get stop(): RunStop | undefined {
@@ -131,7 +136,10 @@ export class RunBudget {
 
   /** "prices from openrouter.ai as of <date>" when the model is priced from the downloaded list. */
   get priceNote(): string | undefined {
-    return this.priced ? priceSourceNote(this.opts.model) : undefined;
+    if (!this.priced) return undefined;
+    return this.opts.userPrice
+      ? `prices from ${USER_PRICE_SOURCE}`
+      : priceSourceNote(this.opts.model);
   }
 
   /** Whether the dollar cap is actually being enforced for this run. */
@@ -153,6 +161,7 @@ export class RunBudget {
         cacheWrite: 0,
       },
       this.opts.model,
+      { userPrice: this.opts.userPrice },
     );
     return r.amount === "unknown" ? undefined : r.amount;
   }

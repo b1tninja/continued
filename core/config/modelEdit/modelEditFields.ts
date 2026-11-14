@@ -10,16 +10,26 @@
  * ever written as `${{ secrets.NAME }}` references.
  */
 import {
+  CHAT_TEMPLATE_VALUES,
   modelRolesSchema,
   TOOL_DIALECT_VALUES,
+  toolOverrideSchema,
 } from "@continuedev/config-yaml";
 import { isValidSecretName } from "../../util/unresolvedSecrets";
 
 export type ModelEditSection =
-  "connection" | "capabilities" | "generation" | "context";
+  "connection" | "capabilities" | "generation" | "templates" | "context";
 
 export type FieldKind =
-  "text" | "url" | "number" | "boolean" | "enum" | "list" | "secretRef";
+  | "text"
+  /** Text over several lines, written as typed (a prompt, a template). */
+  | "multiline"
+  | "url"
+  | "number"
+  | "boolean"
+  | "enum"
+  | "list"
+  | "secretRef";
 
 export interface ModelEditField {
   /** Path inside the model entry, e.g. ["defaultCompletionOptions", "temperature"]. */
@@ -46,8 +56,23 @@ export interface ModelEditField {
 export const MODEL_ROLES: readonly string[] = modelRolesSchema.options;
 export const DEFAULT_ROLES = ["chat", "edit", "apply", "summarize"] as const;
 export const TOOL_DIALECTS: readonly string[] = TOOL_DIALECT_VALUES;
+export const CHAT_TEMPLATES: readonly string[] = CHAT_TEMPLATE_VALUES;
+
+/** `crossRegionInference` values: auto, or an inference profile prefix (bedrockHelpers). */
+export const CROSS_REGION_VALUES = [
+  "auto",
+  "us",
+  "us-gov",
+  "eu",
+  "apac",
+  "jp",
+  "au",
+  "ca",
+  "global",
+] as const;
 
 const HTTP = ["http:", "https:"] as const;
+const AWS = ["bedrock", "bedrock-mantle", "sagemaker"] as const;
 
 export const MODEL_EDIT_FIELDS: readonly ModelEditField[] = [
   // Connection
@@ -96,11 +121,79 @@ export const MODEL_EDIT_FIELDS: readonly ModelEditField[] = [
     defaultText: "the default credential chain",
   },
   {
+    path: ["env", "accessKeyId"],
+    section: "connection",
+    label: "AWS access key id",
+    kind: "secretRef",
+    providers: AWS,
+  },
+  {
+    path: ["env", "secretAccessKey"],
+    section: "connection",
+    label: "AWS secret access key",
+    kind: "secretRef",
+    providers: AWS,
+  },
+  {
+    path: ["env", "sessionToken"],
+    section: "connection",
+    label: "AWS session token",
+    kind: "secretRef",
+    providers: AWS,
+    help: "Only for temporary credentials.",
+  },
+  {
+    path: ["env", "crossRegionInference"],
+    section: "connection",
+    label: "Cross-region inference",
+    kind: "enum",
+    options: CROSS_REGION_VALUES,
+    providers: ["bedrock"],
+    defaultText: "off, the model id as written",
+    help: "Adds the inference profile prefix to the model id; auto picks it from the region.",
+  },
+  {
+    path: ["env", "serviceTier"],
+    section: "connection",
+    label: "Service tier",
+    kind: "enum",
+    options: ["default", "priority", "flex", "reserved"],
+    providers: ["bedrock"],
+    defaultText: "default",
+    help: "priority is faster at a higher price, flex cheaper and slower, reserved uses reserved capacity.",
+  },
+  {
+    path: ["env", "latency"],
+    section: "connection",
+    label: "Latency mode",
+    kind: "enum",
+    options: ["standard", "optimized"],
+    providers: ["bedrock"],
+    defaultText: "standard",
+    help: "optimized works only on the models and regions that offer it.",
+  },
+  {
+    path: ["env", "guardrailIdentifier"],
+    section: "connection",
+    label: "Guardrail id or ARN",
+    kind: "text",
+    providers: ["bedrock"],
+    defaultText: "none",
+  },
+  {
+    path: ["env", "guardrailVersion"],
+    section: "connection",
+    label: "Guardrail version",
+    kind: "text",
+    providers: ["bedrock"],
+    defaultText: "DRAFT",
+  },
+  {
     path: ["env", "projectId"],
     section: "connection",
     label: "Project id",
     kind: "text",
-    providers: ["vertexai"],
+    providers: ["vertexai", "watsonx"],
   },
   {
     path: ["env", "deployment"],
@@ -108,13 +201,22 @@ export const MODEL_EDIT_FIELDS: readonly ModelEditField[] = [
     label: "Deployment",
     kind: "text",
     providers: ["azure"],
+    defaultText: "the model id",
+  },
+  {
+    path: ["env", "deploymentId"],
+    section: "connection",
+    label: "Deployment id",
+    kind: "text",
+    providers: ["watsonx"],
+    defaultText: "none, the project id is used",
   },
   {
     path: ["env", "apiVersion"],
     section: "connection",
     label: "API version",
     kind: "text",
-    providers: ["azure"],
+    providers: ["azure", "watsonx"],
   },
   {
     path: ["env", "apiType"],
@@ -265,6 +367,58 @@ export const MODEL_EDIT_FIELDS: readonly ModelEditField[] = [
     integer: true,
     min: 1,
   },
+  // Templates and system message
+  {
+    path: ["chatOptions", "baseSystemMessage"],
+    section: "templates",
+    label: "Chat system message",
+    kind: "multiline",
+    defaultText: "the built-in chat system message",
+  },
+  {
+    path: ["chatOptions", "baseAgentSystemMessage"],
+    section: "templates",
+    label: "Agent system message",
+    kind: "multiline",
+    defaultText: "the built-in agent system message",
+  },
+  {
+    path: ["chatOptions", "basePlanSystemMessage"],
+    section: "templates",
+    label: "Plan system message",
+    kind: "multiline",
+    defaultText: "the built-in plan system message",
+  },
+  {
+    path: ["promptTemplates", "chat"],
+    section: "templates",
+    label: "Chat template",
+    kind: "enum",
+    options: CHAT_TEMPLATES,
+    defaultText: "detected from the model id",
+    help: "Only for providers that send a raw prompt; chat APIs apply the model's own template.",
+  },
+  {
+    path: ["promptTemplates", "edit"],
+    section: "templates",
+    label: "Edit prompt template",
+    kind: "multiline",
+    defaultText: "the built-in edit prompt",
+  },
+  {
+    path: ["promptTemplates", "apply"],
+    section: "templates",
+    label: "Apply prompt template",
+    kind: "multiline",
+    defaultText: "the built-in apply prompt",
+  },
+  {
+    path: ["promptTemplates", "autocomplete"],
+    section: "templates",
+    label: "Autocomplete prompt template",
+    kind: "multiline",
+    defaultText: "the template detected for the model",
+  },
   // Context and cost
   {
     path: ["contextLength"],
@@ -300,7 +454,49 @@ export const MODEL_EDIT_FIELDS: readonly ModelEditField[] = [
     kind: "enum",
     options: ["auto", "5m", "1h"],
   },
+  {
+    path: ["pricing", "input"],
+    section: "context",
+    label: "Input price (USD per million tokens)",
+    kind: "number",
+    min: 0,
+    defaultText: "the price table's, if it has one",
+  },
+  {
+    path: ["pricing", "output"],
+    section: "context",
+    label: "Output price (USD per million tokens)",
+    kind: "number",
+    min: 0,
+    defaultText: "the price table's, if it has one",
+  },
+  {
+    path: ["pricing", "cacheRead"],
+    section: "context",
+    label: "Cache read price (USD per million tokens)",
+    kind: "number",
+    min: 0,
+    defaultText: "the input price",
+  },
+  {
+    path: ["pricing", "cacheWrite"],
+    section: "context",
+    label: "Cache write price (USD per million tokens)",
+    kind: "number",
+    min: 0,
+    defaultText: "the input price",
+  },
 ];
+
+/** `chatOptions.toolOverrides.<tool>`: one tool's override, set as a whole. */
+export function isToolOverridePath(path: readonly string[]): boolean {
+  return (
+    path.length === 3 &&
+    path[0] === "chatOptions" &&
+    path[1] === "toolOverrides" &&
+    /^[A-Za-z0-9_.:-]+$/.test(path[2])
+  );
+}
 
 /** Header names whose values are credentials: only a secret reference may be written. */
 export const SENSITIVE_HEADER =
@@ -408,9 +604,10 @@ export interface FieldError {
   message: string;
 }
 
-function isAllowedPath(path: readonly string[]): boolean {
+export function isAllowedPath(path: readonly string[]): boolean {
   if (fieldFor(path)) return true;
   if (path.length === 1 && path[0] === "capabilities") return true;
+  if (isToolOverridePath(path)) return true;
   return (
     path.length === 3 &&
     path[0] === "requestOptions" &&
@@ -441,11 +638,15 @@ function numberError(f: ModelEditField, v: unknown): string | undefined {
   return undefined;
 }
 
-/** The message for one field's new value, or undefined when it is valid. */
-export function validateFieldValue(
+/**
+ * Paths that are not fields of the registry (a request header, the
+ * capabilities list, one tool's override): the message, or undefined when
+ * valid. `false` when the path is none of these.
+ */
+function validateOtherPath(
   path: readonly string[],
   value: unknown,
-): string | undefined {
+): string | undefined | false {
   if (path[0] === "requestOptions" && path[1] === "headers") {
     if (value === undefined) return undefined;
     if (typeof value !== "string") return "A header value is text.";
@@ -460,6 +661,24 @@ export function validateFieldValue(
       ? undefined
       : "Capabilities is a list of names.";
   }
+  if (isToolOverridePath(path)) {
+    if (value === undefined) return undefined;
+    const parsed = toolOverrideSchema.safeParse(value);
+    if (parsed.success) return undefined;
+    const issue = parsed.error.issues[0];
+    const where = issue.path.length ? `${issue.path.join(".")}: ` : "";
+    return `${where}${issue.message}`;
+  }
+  return false;
+}
+
+/** The message for one field's new value, or undefined when it is valid. */
+export function validateFieldValue(
+  path: readonly string[],
+  value: unknown,
+): string | undefined {
+  const other = validateOtherPath(path, value);
+  if (other !== false) return other;
   const f = fieldFor(path);
   if (!f) return "This setting cannot be changed here.";
   if (value === undefined) {
@@ -470,6 +689,8 @@ export function validateFieldValue(
       if (typeof value !== "string") return "Enter text.";
       if (f.required && value.trim() === "") return `${f.label} is required.`;
       return undefined;
+    case "multiline":
+      return typeof value === "string" ? undefined : "Enter text.";
     case "url": {
       if (typeof value !== "string" || value.trim() === "") {
         return "Enter a URL.";
@@ -517,7 +738,9 @@ export function validateFieldValue(
       if (typeof value !== "string") return "Choose a secret.";
       const name = secretRefName(value);
       if (!name) {
-        return "Keys are never written into config.yaml: store the key as a secret and refer to it.";
+        return f.path[0] === "apiKey"
+          ? "Keys are never written into config.yaml: store the key as a secret and refer to it."
+          : `${f.label} is a credential and is never written into config.yaml: store it as a secret and refer to it.`;
       }
       return isValidSecretName(name)
         ? undefined
@@ -589,6 +812,79 @@ export function getPath(obj: unknown, path: readonly string[]): unknown {
     cur = cur[p];
   }
   return cur;
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((x, i) => sameValue(x, b[i]))
+    );
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...keys].every((k) => sameValue(a[k], b[k]));
+  }
+  return false;
+}
+
+/** Does a managed path lie below `prefix`? The entry itself is `[]`. */
+function hasManagedChild(prefix: readonly string[]): boolean {
+  if (prefix.length === 0) return true;
+  const key = pathKey(prefix);
+  if (key === "requestOptions.headers" || key === "chatOptions.toolOverrides") {
+    return true;
+  }
+  return MODEL_EDIT_FIELDS.some(
+    (f) =>
+      f.path.length > prefix.length && prefix.every((x, i) => f.path[i] === x),
+  );
+}
+
+export interface EntryEditResult {
+  ops: ModelPatchOp[];
+  /** Paths that differ but cannot be changed here (dot-joined). */
+  refused: string[];
+}
+
+/**
+ * The patch that turns `before` into `after`, for the Advanced (YAML) tab.
+ * Both are the entry as the dialog sees it (credentials masked), so a masked
+ * value left alone is equal and produces no operation. A difference at a path
+ * the dialog manages becomes an operation on that path, validated like any
+ * other; a difference anywhere else is listed in `refused` and never
+ * written. A map that appears or disappears is walked as an empty one, so
+ * adding `pricing: {input: 1, output: 2}` is two operations.
+ */
+export function opsFromEntryEdit(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): EntryEditResult {
+  const ops: ModelPatchOp[] = [];
+  const refused: string[] = [];
+  const isMapOrAbsent = (v: unknown) => v === undefined || isPlainObject(v);
+  const walk = (path: string[], a: unknown, b: unknown) => {
+    if (path.length > 0 && isAllowedPath(path)) {
+      if (!sameValue(a, b)) {
+        ops.push(b === undefined ? { path } : { path, value: b });
+      }
+      return;
+    }
+    if (hasManagedChild(path) && isMapOrAbsent(a) && isMapOrAbsent(b)) {
+      const ao = (a ?? {}) as Record<string, unknown>;
+      const bo = (b ?? {}) as Record<string, unknown>;
+      for (const k of new Set([...Object.keys(ao), ...Object.keys(bo)])) {
+        walk([...path, k], ao[k], bo[k]);
+      }
+      return;
+    }
+    if (!sameValue(a, b)) refused.push(pathKey(path));
+  };
+  walk([], before, after);
+  return { ops, refused };
 }
 
 /** Capability names the dialog sets; any other name in the list is kept as it is. */
