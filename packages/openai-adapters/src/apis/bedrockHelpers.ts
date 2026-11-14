@@ -11,12 +11,12 @@ import {
   noteSamplingOmitted,
   omitsSampling,
 } from "./anthropicSamplingGuard.js";
-import type { CacheTtl } from "./cacheTtl.js";
 import {
   familyRuleFor,
   minMaxTokensFor,
   unsupportedInferenceFor,
 } from "./bedrockFamilyRules.js";
+import type { CacheTtl } from "./cacheTtl.js";
 
 // The text-stream filters moved to ../dialects/textFilters.ts; re-exported so
 // existing imports of this file keep working.
@@ -29,8 +29,8 @@ export {
   leaksDsmlMarker,
   stripDsmlMarker,
   ThinkingTagSplitter,
-  type ThinkingSplit,
   writesThinkingTags,
+  type ThinkingSplit,
 } from "../dialects/textFilters.js";
 
 /** Geographic prefixes Bedrock uses for cross-region inference profile IDs. */
@@ -414,9 +414,13 @@ export function normalizeToolUseIds<
 
 /**
  * Gives every toolUse a toolResult in the message right after it, with `text`
- * as the result of any that has none. Claude refuses a conversation with an
- * unanswered tool call ("tool_use ids were found without tool_result blocks
- * immediately after"), and the rest of the history can't be sent without it.
+ * as the result of any that has none, and puts those results first in that
+ * message. Claude refuses both a conversation with an unanswered tool call
+ * and one whose results come after other content ("tool_use ids were found
+ * without tool_result blocks immediately after"; Anthropic's tool-use docs:
+ * "the tool_result blocks must come FIRST in the content array"). A turn cut
+ * off mid-call can leave either: a call with no id turned into text ahead of
+ * the next real result is how a resumed session was refused.
  */
 export function fillMissingToolResults<
   M extends {
@@ -428,31 +432,41 @@ export function fillMissingToolResults<
     }>;
   },
 >(messages: M[], text: string): M[] {
+  type Block = NonNullable<M["content"]>[number];
+  const resultId = (block: Block) =>
+    (block.toolResult as { toolUseId?: string } | undefined)?.toolUseId;
   const filled: M[] = [];
   messages.forEach((message, index) => {
     filled.push(message);
     if (message.role !== "assistant") return;
-    const next = messages[index + 1];
-    const answered = new Set(
-      next?.role === "user"
-        ? (next.content ?? []).map(
-            (block) =>
-              (block.toolResult as { toolUseId?: string } | undefined)
-                ?.toolUseId,
-          )
-        : [],
+    const callIds = new Set(
+      (message.content ?? [])
+        .map((block) => block.toolUse?.toolUseId)
+        .filter((id): id is string => id !== undefined),
     );
-    const results = (message.content ?? [])
-      .map((block) => block.toolUse?.toolUseId)
-      .filter((id) => id !== undefined && !answered.has(id))
-      .map((toolUseId) => ({
-        toolResult: { toolUseId, content: [{ text }] },
-      }));
-    if (results.length === 0) return;
-    if (next?.role === "user") {
-      next.content = [...results, ...(next.content ?? [])];
-    } else {
-      filled.push({ role: "user", content: results } as M);
+    if (callIds.size === 0) return;
+    const next = messages[index + 1];
+    const nextContent = next?.role === "user" ? (next.content ?? []) : [];
+    const answered = new Set(nextContent.map(resultId));
+    const results = [...callIds]
+      .filter((id) => !answered.has(id))
+      .map(
+        (toolUseId) =>
+          ({ toolResult: { toolUseId, content: [{ text }] } }) as Block,
+      );
+    if (next?.role !== "user") {
+      if (results.length) filled.push({ role: "user", content: results } as M);
+      return;
+    }
+    const isAnswer = (block: Block) => {
+      const id = resultId(block);
+      return id !== undefined && callIds.has(id);
+    };
+    const answers = nextContent.filter(isAnswer);
+    const rest = nextContent.filter((block) => !isAnswer(block));
+    const ordered = [...results, ...answers, ...rest];
+    if (ordered.some((block, i) => block !== nextContent[i])) {
+      next.content = ordered;
     }
   });
   return filled;

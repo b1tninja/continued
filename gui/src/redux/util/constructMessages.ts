@@ -34,7 +34,7 @@ import { toolCallStateToContextItems } from "../../pages/gui/ToolCallDiv/utils";
  */
 function hasAnswerAfter(history: ChatHistoryItem[], index: number): boolean {
   for (let i = index + 1; i < history.length; i++) {
-    const { message } = history[i];
+    const { message } = withoutIncompleteToolCalls(history[i]);
     if (message.role === "user" || message.role === "tool") return false;
     if (
       message.role === "assistant" &&
@@ -48,6 +48,42 @@ function hasAnswerAfter(history: ChatHistoryItem[], index: number): boolean {
 
 // Helper function to render context items and append status information
 // Helper function to render context items and append status information
+
+/** A call the model finished naming: it has an id and a tool name. */
+function isCompleteToolCall(
+  call: { id?: string; function?: { name?: string } } | undefined,
+): boolean {
+  return !!call?.id && !!call.function?.name;
+}
+
+/**
+ * The assistant item without tool calls that have no id or no name. A turn
+ * cut off mid-call (a stream that stopped, a window that reloaded) can leave
+ * one. Providers refuse a tool result with an empty id, and Bedrock turned
+ * the call into text ahead of the next real result, which Claude refuses
+ * ("tool_use ids were found without tool_result blocks immediately after").
+ * The call and its result are left out of the request; they stay on screen.
+ */
+export function withoutIncompleteToolCalls(
+  item: ChatHistoryItem,
+): ChatHistoryItem {
+  const message = item.message;
+  const states = item.toolCallStates;
+  const calls = message.role === "assistant" ? message.toolCalls : undefined;
+  const keptStates = states?.filter((s) => isCompleteToolCall(s.toolCall));
+  const keptCalls = calls?.filter((c) => isCompleteToolCall(c));
+  const statesChanged = keptStates?.length !== states?.length;
+  const callsChanged = keptCalls?.length !== calls?.length;
+  if (!statesChanged && !callsChanged) return item;
+  return {
+    ...item,
+    ...(states && { toolCallStates: keptStates }),
+    message:
+      message.role === "assistant" && calls
+        ? { ...message, toolCalls: keptCalls?.length ? keptCalls : undefined }
+        : message,
+  };
+}
 
 /** Starts the conversation summary appended to the system message. */
 export const SUMMARY_MARKER = "\n\nPrevious conversation summary:";
@@ -86,8 +122,9 @@ export function constructMessages(
   const msgs: MessageWithContextItems[] = [];
   let appliedRuleIndex = -1;
   let index = -1;
-  for (const item of historyCopy) {
+  for (const original of historyCopy) {
     index++;
+    const item = withoutIncompleteToolCalls(original);
     if (
       item.message.role === "system" ||
       item.message.role === "tool" ||
