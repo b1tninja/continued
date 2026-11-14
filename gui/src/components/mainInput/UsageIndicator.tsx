@@ -1,29 +1,27 @@
 import {
-  contextUsage,
   formatCost,
   formatTokens,
   summarizeSessionUsage,
 } from "core/llm/utils/sessionUsage";
 import { useMemo } from "react";
+import { useLastRequestContext } from "../../hooks/useLastRequestContext";
 import { useAppSelector } from "../../redux/hooks";
 import { Popover, PopoverButton, PopoverPanel } from "../ui";
 import { HoverButton } from "./InputToolbar/HoverItem";
 import { useToolbarWidthTier } from "./InputToolbar/widthTier";
 
 /**
- * Usage readout in the row under the prompt: context used against the
- * model's window and the session's estimated cost. It is never moved into a
- * menu; as the row narrows it drops its "context" label and the route note
- * (both stay in its name). Pressing it opens the breakdown of tokens and cost
- * per model, so the details do not depend on hovering. Hidden until the first
- * request reports usage, since before that there is nothing to show.
+ * Cost readout in the row under the prompt: the session's estimated cost, or
+ * its tokens when no price is known. The context window has its own meter
+ * beside it (`ContextMeter`). It is never moved into a menu; as the row
+ * narrows it drops the route note (which stays in its name). Pressing it
+ * opens the breakdown of tokens and cost per model, so the details do not
+ * depend on hovering. Hidden until the first request reports usage, since
+ * before that there is nothing to show.
  */
 export function UsageIndicator() {
   const tier = useToolbarWidthTier();
-  const usage = useAppSelector((s) => s.session.usage);
-  const chatModels = useAppSelector(
-    (s) => s.config.config.modelsByRole?.chat ?? [],
-  );
+  const { usage, context } = useLastRequestContext();
   const selected = useAppSelector(
     (s) => s.config.config.selectedModelByRole.chat,
   );
@@ -39,23 +37,6 @@ export function UsageIndicator() {
       : undefined;
 
   const summary = useMemo(() => summarizeSessionUsage(usage), [usage]);
-  const last = usage?.lastRequest;
-  const contextLength = useMemo(() => {
-    if (!last) return undefined;
-    const match =
-      chatModels.find(
-        (m) => m.provider === last.provider && m.model === last.model,
-      ) ??
-      (selected?.model === last.model && selected.provider === last.provider
-        ? selected
-        : undefined) ??
-      // A model with routes: the last request may have used another
-      // route's id for it; the window is the model's
-      (selected?.routes?.length ? selected : undefined);
-    return match?.contextLength;
-  }, [last, chatModels, selected]);
-  const context = contextUsage(usage, contextLength);
-
   if (!usage || summary.requests === 0) return null;
 
   const percent = context ? Math.round(context.fraction * 100) : undefined;
@@ -119,18 +100,17 @@ export function UsageIndicator() {
       ? `${summary.costIsPartial ? "at least " : ""}${formatCost(summary.cost)}`
       : undefined;
   const showRoute = !!route?.fallback && tier !== "narrow";
-  // What the row shows; the name starts with it, so speech and sight agree
+  // What the row shows; the name starts with it, so speech and sight agree.
+  // The context share is the meter's, beside this readout.
   const visible =
-    (context
-      ? `${percent}%${tier === "wide" ? " context" : ""}`
-      : formatTokens(summary.inputTokens + summary.outputTokens)) +
-    (summary.cost !== undefined ? ` · ${formatCost(summary.cost)}` : "") +
+    (summary.cost !== undefined
+      ? formatCost(summary.cost)
+      : `${formatTokens(summary.inputTokens + summary.outputTokens)}${tier === "narrow" ? "" : " tokens"}`) +
     (showRoute ? ` · via ${route?.name}` : "");
   const meaning = [
-    context
-      ? `context ${percent}% used`
-      : "tokens this session, context window unknown",
-    costText ? `estimated cost ${costText}` : "no price known",
+    costText
+      ? `estimated cost ${costText}`
+      : "tokens this session, no price known",
     route?.fallback ? `answered via ${route.name}` : undefined,
   ]
     .filter(Boolean)
@@ -144,17 +124,6 @@ export function UsageIndicator() {
         data-testid="usage-indicator"
         className="flex-none gap-1 px-0.5 [font-size:inherit] tabular-nums"
       >
-        {context ? (
-          <span
-            className={`relative h-[3px] ${tier === "narrow" ? "w-3" : "w-6"} overflow-hidden rounded-xs bg-command-border`}
-            aria-hidden="true"
-          >
-            <span
-              className={`absolute top-0 left-0 h-full ${context.fraction >= 0.9 ? "bg-error" : "bg-description"}`}
-              style={{ width: `${percent}%` }}
-            />
-          </span>
-        ) : null}
         <span aria-hidden="true">{visible}</span>
       </PopoverButton>
       <PopoverPanel

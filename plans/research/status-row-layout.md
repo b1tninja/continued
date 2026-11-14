@@ -15,7 +15,7 @@ From most to least important. A lower item gives up space before a higher one; i
 | #   | Item                                      | Never hidden | How it shrinks                                                                   |
 | --- | ----------------------------------------- | ------------ | -------------------------------------------------------------------------------- |
 | 1   | Send                                      | yes          | "⏎ Enter" becomes "⏎" (the word stays for screen readers)                        |
-| 2   | Context used (percent and bar)            | yes          | "42% context" becomes "42%"; the bar narrows from 24 to 12 px                    |
+| 2   | Context used (percent and bar)            | yes          | "Context 42%" becomes "42%"; the bar narrows from 24 to 12 px                    |
 | 3   | Estimated cost                            | yes          | none: "$0.12" is already the short form                                          |
 | 4   | Reasoning switch                          | yes          | "Reasoning off" becomes the bulb alone (outlined off, filled on)                 |
 | 5   | Prompt cache control and state            | yes          | "Cache 4:12" becomes "4:12", then the ring or database icon alone                |
@@ -35,7 +35,7 @@ The steps measure the row itself with a `ResizeObserver` (`useWidthTier`), not t
 | -------- | ------------- | ------------------- | ---------------------------------------------------------------------------------------------- |
 | `narrow` | below 300 px  | below 340 px        | icons and numbers: bar 12 px, "42% · $0.12", bulb, cache icon, tips count, "⏎"                 |
 | `medium` | 300 to 599 px | 340 to 639 px       | adds the cache state word or time left ("4:12", "cold", "off"), the route note, the "Esc" hint |
-| `wide`   | 600 px and up | 640 px and up       | adds labels: "42% context", "Reasoning off", "Cache 4:12", "2 tips", active-file, "⏎ Enter"    |
+| `wide`   | 600 px and up | 640 px and up       | adds labels: "Context 42%", "Reasoning off", "Cache 4:12", "2 tips", active-file, "⏎ Enter"    |
 
 ## 4. Mockups
 
@@ -70,7 +70,7 @@ Wide (about 640 px panel and up):
 
 ```
 +--------------------------------------------------------------------------------------------------------------+
-| Claude Sonnet   [==-] 43% context . $0.27  (R) Reasoning on  (o) Cache 4:00  ! 1 tip  Ctrl+Enter Active file  [Send: Enter] |
+| Claude Sonnet   [==-] Context 43%  $0.27  (R) Reasoning on  (o) Cache 4:00  ! 1 tip  Ctrl+Enter Active file  [Send: Enter] |
 +--------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -79,7 +79,7 @@ The prompt editor and the "+" button sit above the row and are not drawn. The pu
 ## 5. Accessibility
 
 - Every control is a real `button` in the Tab order: model, usage, reasoning, cache, tips, active file (wide), send. Nothing is revealed on hover.
-- Each name starts with the text the row shows (axe `label-content-name-mismatch`) and then carries the state, so no tooltip is needed to know it: "43% · $0.27: context 43% used, estimated cost $0.27. Show usage details", "Reasoning off" with `aria-pressed`, "Prompt cache 4:00 left" (or "cold", "off", "on, nothing cached yet"), "1 tip about this model (needs attention)".
+- Each name starts with the text the row shows (axe `label-content-name-mismatch`) and then carries the state, so no tooltip is needed to know it: "Context 43% used" for the context meter and "$0.27: estimated cost $0.27. Show usage details" for the cost beside it (two controls since the context breakdown, `context-usage-breakdown.md`), "Reasoning off" with `aria-pressed`, "Prompt cache 4:00 left" (or "cold", "off", "on, nothing cached yet"), "1 tip about this model (needs attention)".
 - The usage breakdown (tokens in and out, cache reads and writes, per-model cost, the price list date, the route) used to be a hover tooltip. It is now a popover opened with Enter or a click and closed with Escape.
 - The "..." button is gone, and with it the `aria-hidden-focus` finding the axe baseline recorded for its open view.
 
@@ -89,6 +89,6 @@ What the model receives, permissions and approvals are untouched: the controls d
 
 ## 7. Open questions for the owner
 
-1. **Two meters.** `ContextStatus` (the battery from 60 percent, with Compact and New session in its tooltip) and the usage readout both show context. Merge them, with Compact and New session in the usage popover, or keep the battery as a warning that appears late?
+1. **Two meters.** `ContextStatus` (the battery from 60 percent, with Compact and New session in its tooltip) and the usage readout both show context. Merge them, with Compact and New session in the usage popover, or keep the battery as a warning that appears late? **Answered: merge.** The battery is gone; the context meter beside the cost opens what the context holds, with Compact now and New session (`plans/research/context-usage-breakdown.md`).
 2. **Before the first reply.** The usage readout is absent until a request reports usage, because there is no number to show. A placeholder ("–") would hold the space and make the readout findable in a new chat.
 3. **Reasoning effort.** The row switches reasoning on and off. A per-mode effort (`modeModels.<use>.reasoningEffort`) is shown in the mode picker, not here; an effort picker in the row would need a session-level effort the store does not have today.
