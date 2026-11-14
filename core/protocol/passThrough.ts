@@ -142,6 +142,7 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "models/fetch",
     "modelCatalog/status",
     "modelCatalog/cached",
+    "modelCatalog/communityCached",
     "modelCatalog/pull",
     "modelCatalog/setPolicy",
     "models/detectLocal",

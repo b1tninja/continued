@@ -5,6 +5,7 @@ import {
 } from "@continuedev/llm-info";
 import { OPENROUTER_MODELS_URL } from "../openRouterCatalog";
 import { priceFromCatalog } from "./catalogPricing";
+import { priceFromCommunity } from "./communityPricing";
 import {
   openAIWriteCost,
   openAIWriteRates,
@@ -17,7 +18,9 @@ import {
  * `user` (a price the person entered), `provider` (a list the provider
  * publishes and Continuous downloaded, such as OpenRouter's), `curated` (a
  * table in this code, checked by hand against the provider's pricing page on
- * `asOf`), `community` (a third-party catalogue; not used yet).
+ * `asOf`), `community` (the models.dev catalogue, the last resort; an
+ * estimate, and never the basis of a dollar budget without
+ * `--budget-allow-unpriced`).
  */
 export interface PriceSource {
   kind: "user" | "provider" | "curated" | "community";
@@ -769,8 +772,13 @@ function usageWithCacheTakenOut(usage: Usage): Usage {
  */
 const STANDARD_TIERS = new Set(["standard", "default", "auto", "on_demand"]);
 
+/** Whether `tier` is the standard (on-demand) tier the tables price. */
+export function isStandardTier(tier: string | undefined): boolean {
+  return !tier || STANDARD_TIERS.has(tier.toLowerCase());
+}
+
 /** What a non-standard tier means for the standard price shown. */
-function tierNote(tier: string): string {
+export function tierNote(tier: string): string {
   const t = tier.toLowerCase();
   const effect =
     t === "flex" || t === "batch"
@@ -783,15 +791,28 @@ function tierNote(tier: string): string {
   return `Prices: standard tier; the provider served this request at the ${tier} tier, ${effect}`;
 }
 
+/**
+ * The cost of one request, from the first source that prices the model: the
+ * provider's list or the curated tables, then (with `community` left on) the
+ * community catalogue, models.dev, when a copy is held
+ * (`setCommunityCatalog`). A community price never replaces a better one: it
+ * is only asked for when the others have none. A price the person entered
+ * comes before all of these and is applied by `costOf`.
+ */
 export function calculateRequestCost(
   provider: string,
   model: string,
   usage: Usage,
+  opts: { community?: boolean } = {},
 ): CostBreakdown | null {
-  const priced = priceByProvider(provider, model, usage);
+  const priced =
+    priceByProvider(provider, model, usage) ??
+    (opts.community === false
+      ? null
+      : priceFromCommunity(provider, model, usage));
   if (!priced) return null;
   const tier = usage.response?.serviceTier;
-  if (!tier || STANDARD_TIERS.has(tier.toLowerCase())) return priced;
+  if (isStandardTier(tier) || !tier) return priced;
   // The note goes right under the "Model:" line, with the other "Prices:" notes
   const [first, ...rest] = priced.breakdown.split("\n");
   return {

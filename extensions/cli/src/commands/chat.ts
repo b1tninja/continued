@@ -547,8 +547,11 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
 
   try {
     // Model information updates: a background refresh of a stale OpenRouter
-    // list when the setting is automatic. Sets a timer only.
-    startModelInfoRefresh();
+    // list when the setting is automatic, and of the community catalogue
+    // while the run's model has no better price. Sets timers only.
+    startModelInfoRefresh(undefined, undefined, {
+      currentModel: () => services.model?.getModelId?.(),
+    });
 
     // Record session start
     telemetryService.recordSessionStart();

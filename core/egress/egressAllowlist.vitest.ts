@@ -70,5 +70,8 @@ describe("egress allowlist", () => {
     // Model information updates are automatic by default (modelCatalog: off
     // turns them off), so openrouter.ai is listed as reachable by default
     expect(allowed.get("openrouter.ai")?.class).toBe("D");
+    // The community catalogue is fetched only while a selected model is
+    // unpriced, but that needs no opt-in under the default setting
+    expect(allowed.get("models.dev")?.class).toBe("D");
   });
 });

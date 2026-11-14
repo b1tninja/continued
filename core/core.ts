@@ -91,6 +91,14 @@ import { globalProfileStatus } from "./llm/llms/bedrockHelpers";
 import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
+import type { CommunityCatalog } from "./llm/communityCatalog";
+import {
+  createCommunityRefresher,
+  loadCommunityPrices,
+  needsCommunityPrice,
+  pullCommunityCatalog,
+  readCommunityCatalog,
+} from "./llm/communityCatalogStore";
 import {
   createOpenRouterRefresher,
   underTestRunner,
@@ -253,6 +261,8 @@ export class Core {
 
   /** The background OpenRouter list refresh (not started in tests). */
   private modelCatalogRefresher?: ModelCatalogRefresher;
+  /** The background community catalogue refresh (not started in tests). */
+  private communityCatalogRefresher?: ModelCatalogRefresher<CommunityCatalog>;
   private messageAbortControllers = new MessageAbortControllers();
   private addMessageAbortController(id: string): AbortController {
     return this.messageAbortControllers.add(id);
@@ -473,8 +483,34 @@ export class Core {
       this.modelCatalogRefresher.start();
     }
 
+    // The community catalogue (models.dev) is the last price source: its copy
+    // is used when there is one (a file read), and with updates automatic it
+    // is downloaded in the background only while a selected model has no
+    // price from a better source (plans/research/provider-model-metadata.md).
+    loadCommunityPrices();
+    const unpricedSelection = async () => {
+      const { config } = await this.configHandler.loadConfig();
+      return [
+        config?.selectedModelByRole.chat,
+        config?.selectedModelByRole.reviewer,
+      ].some(
+        (m) =>
+          !!m &&
+          needsCommunityPrice({ provider: m.providerName, model: m.model }),
+      );
+    };
+    if (!underTestRunner()) {
+      this.communityCatalogRefresher = createCommunityRefresher({
+        unpriced: unpricedSelection,
+        requestOptions,
+        log: (m) => console.warn(m),
+      });
+      this.communityCatalogRefresher.start();
+    }
+
     on("modelCatalog/status", async () => {
       const cached = readOpenRouterCatalog();
+      const community = readCommunityCatalog();
       const settings = readModelCatalogSettings();
       const refresh = this.modelCatalogRefresher?.getStatus();
       return {
@@ -496,7 +532,25 @@ export class Core {
               },
             }
           : {}),
+        ...(community
+          ? {
+              community: {
+                fetchedAt: community.fetchedAt,
+                count: community.prices.length,
+              },
+            }
+          : {}),
       };
+    });
+
+    // The community copy for the window's cost figures; none when updates
+    // are off
+    on("modelCatalog/communityCached", async () => {
+      if (readModelCatalogSettings().policy === "off") return null;
+      const cached = readCommunityCatalog();
+      return cached
+        ? { fetchedAt: cached.fetchedAt, prices: cached.prices }
+        : null;
     });
 
     // With updates off the bundled model data applies, not a copy kept from
@@ -516,6 +570,18 @@ export class Core {
       if (blocked) return { ok: false as const, error: blocked };
       try {
         const catalog = await pullOpenRouterCatalog(await requestOptions());
+        // The person's refresh also covers the community catalogue, but only
+        // while a selected model has no better price; its failure does not
+        // fail the refresh
+        try {
+          if (await unpricedSelection()) {
+            await pullCommunityCatalog(await requestOptions());
+          }
+        } catch (e) {
+          console.warn(
+            `Community catalogue refresh failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
         return {
           ok: true as const,
           fetchedAt: catalog.fetchedAt,

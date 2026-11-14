@@ -140,6 +140,11 @@
       "hosts": ["openrouter.ai"]
     },
     {
+      "class": "D",
+      "reason": "The community model catalogue (models.dev/api.json), a plain GET with no key and the same fixed user-agent: only while a selected model (the IDE's chat or reviewer model, the terminal agent's model) has no price from a price the person entered, a provider list or the curated tables. With model information updates `automatic` (the default) the background refresher fetches it when the local copy is missing or older than modelCatalogRefreshHours; with `manual` only on Refresh now in the IDE; `off` stops every request. Reachable without opting in, so class D.",
+      "hosts": ["models.dev"]
+    },
+    {
       "class": "S",
       "reason": "Documentation, console, help and model-card links shown to the user in the settings UI, error messages and model metadata; opened only when the user clicks, never fetched by code.",
       "hosts": [
@@ -188,6 +193,7 @@
         "novita.ai",
         "ollama.ai",
         "openai.com",
+        "platform.claude.com",
         "platform.deepseek.com",
         "platform.inceptionlabs.ai",
         "platform.kimi.ai",
@@ -197,6 +203,7 @@
         "platform.xiaomimimo.com",
         "podman.io",
         "portal.nousresearch.com",
+        "pricing.us-east-1.amazonaws.com",
         "recipes.vllm.ai",
         "replicate.com",
         "runtime.sagemaker",

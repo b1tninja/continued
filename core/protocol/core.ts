@@ -16,6 +16,7 @@ import type {
   TerminalEnvironmentStatus,
 } from "../util/terminalEnvironment";
 import type { CatalogModel } from "../llm/openRouterCatalog";
+import type { CommunityPrice } from "../llm/communityCatalog";
 import { ProfileDescription } from "../config/ProfileLifecycleManager";
 import { SharedConfigSchema } from "../config/sharedConfig";
 import type {
@@ -826,11 +827,21 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
       refreshHours: number;
       lastAttempt?: { at: string; error?: string };
       openrouter?: { fetchedAt: string; count: number };
+      /** The community catalogue copy (models.dev), when there is one */
+      community?: { fetchedAt: string; count: number };
     },
   ];
   "modelCatalog/cached": [
     undefined,
     { fetchedAt: string; models: CatalogModel[] } | null,
+  ];
+  /**
+   * The trimmed community catalogue copy (models.dev prices), the last price
+   * source; a file read, null when there is none or updates are `off`.
+   */
+  "modelCatalog/communityCached": [
+    undefined,
+    { fetchedAt: string; prices: CommunityPrice[] } | null,
   ];
   "modelCatalog/pull": [
     undefined,
