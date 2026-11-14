@@ -5,7 +5,6 @@ import { BaseSessionMetadata, Session } from "../index.js";
 import { ListHistoryOptions } from "../protocol/core.js";
 
 import { writeFileAtomicSync } from "./atomicWrite.js";
-import { withoutPrompts } from "./promptLogs.js";
 import { stripPromptsFromSessionBytes } from "./promptLogsFile.js";
 import { NEW_SESSION_TITLE } from "./constants.js";
 import {
@@ -13,6 +12,14 @@ import {
   getSessionsFolderPath,
   getSessionsListPath,
 } from "./paths.js";
+import {
+  formatFileSize,
+  isOverSessionBudget,
+  serializeSession,
+  SESSION_FILE_BUDGET_BYTES,
+  sessionBudgetWarning,
+  SLOW_SESSION_SAVE_MS,
+} from "./sessionFile.js";
 function safeParseArray<T>(
   value: string,
   errorMessage: string = "Error parsing array",
@@ -275,6 +282,13 @@ function updateSessionsList(
 }
 
 export class HistoryManager {
+  private readonly warnedOverBudget = new Set<string>();
+
+  /** `budgetBytes`: when a save logs that the file is too large. */
+  constructor(
+    private readonly budgetBytes: number = SESSION_FILE_BUDGET_BYTES,
+  ) {}
+
   list(options: ListHistoryOptions): BaseSessionMetadata[] {
     const filepath = getSessionsListPath();
     if (!fs.existsSync(filepath)) {
@@ -359,56 +373,31 @@ export class HistoryManager {
     return { session: read.session };
   }
 
-  save(session: Session) {
-    // Save the main session json file
-    // Explicitely rewriting here to influence the written key order in the file!
-    // e.g. id at the top, history next, etc.
-    const orderedSession: Session = {
-      sessionId: session.sessionId,
-      title: session.title,
-      workspaceDirectory: session.workspaceDirectory,
-      // No prompt is written: each repeats the conversation before it, so
-      // keeping them made the file grow with the square of its length
-      history: withoutPrompts(session.history),
-    };
-    if (session.mode) {
-      orderedSession.mode = session.mode;
-    }
-    if (session.chatModelTitle !== undefined) {
-      orderedSession.chatModelTitle = session.chatModelTitle;
-    }
-    if (session.usage !== undefined) {
-      orderedSession.usage = session.usage;
-    }
-    if (session.promptCache !== undefined) {
-      orderedSession.promptCache = session.promptCache;
-    }
-    if (session.checkpoints?.length) {
-      orderedSession.checkpoints = session.checkpoints;
-    }
-    if (session.taskPlan?.items.length) {
-      orderedSession.taskPlan = session.taskPlan;
-    }
-    if (session.planFile) {
-      orderedSession.planFile = session.planFile;
-    }
-    if (session.queuedMessages?.length) {
-      orderedSession.queuedMessages = session.queuedMessages;
-    }
-    if (session.loop) {
-      orderedSession.loop = session.loop;
-    }
-    if (session.loopRequested) {
-      orderedSession.loopRequested = true;
-    }
-    if (session.forkedFrom) {
-      orderedSession.forkedFrom = session.forkedFrom;
-    }
+  save(session: Session): { fileBytes: number } {
+    // The key order of the file is fixed by orderSession: id at the top,
+    // history next, etc.
+    const started = Date.now();
+    const contents = serializeSession(session);
+    const fileBytes = Buffer.byteLength(contents, "utf8");
+    writeAtomic(getSessionFilePath(session.sessionId), contents);
+    const elapsed = Date.now() - started;
 
-    writeAtomic(
-      getSessionFilePath(session.sessionId),
-      JSON.stringify(orderedSession, undefined, 2),
-    );
+    // Logged once per session and process: every save of a large session
+    // would repeat it
+    if (
+      isOverSessionBudget(fileBytes, this.budgetBytes) &&
+      !this.warnedOverBudget.has(session.sessionId)
+    ) {
+      this.warnedOverBudget.add(session.sessionId);
+      console.warn(
+        sessionBudgetWarning(session.sessionId, fileBytes, this.budgetBytes),
+      );
+    }
+    if (elapsed >= SLOW_SESSION_SAVE_MS) {
+      console.warn(
+        `Saving session ${session.sessionId} took ${elapsed} ms (${formatFileSize(fileBytes)})`,
+      );
+    }
 
     const messageCount = session.history.filter(
       (item) => item.message.role === "assistant",
@@ -420,6 +409,7 @@ export class HistoryManager {
           sessionMetadata.title = session.title;
           sessionMetadata.workspaceDirectory = session.workspaceDirectory;
           sessionMetadata.messageCount = messageCount;
+          sessionMetadata.fileBytes = fileBytes;
           found = true;
           break;
         }
@@ -431,9 +421,27 @@ export class HistoryManager {
           dateCreated: String(Date.now()),
           workspaceDirectory: session.workspaceDirectory,
           messageCount,
+          fileBytes,
         });
       }
       return sessionsList;
+    });
+    return { fileBytes };
+  }
+
+  /**
+   * Fills in `fileBytes` for listed sessions saved before it was recorded,
+   * from the file itself. Call it on a page of the list, not all of it.
+   */
+  withFileSizes(sessions: BaseSessionMetadata[]): BaseSessionMetadata[] {
+    return sessions.map((session) => {
+      if (session.fileBytes !== undefined) return session;
+      try {
+        const { size } = fs.statSync(getSessionFilePath(session.sessionId));
+        return { ...session, fileBytes: size };
+      } catch {
+        return session;
+      }
     });
   }
 }
