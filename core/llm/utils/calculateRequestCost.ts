@@ -3,6 +3,7 @@ import {
   normalizeClaudeModelId,
   normalizeNovaModelId,
 } from "@continuedev/llm-info";
+import { OPENROUTER_MODELS_URL } from "../openRouterCatalog";
 import { priceFromCatalog } from "./catalogPricing";
 import {
   openAIWriteCost,
@@ -10,9 +11,62 @@ import {
   type OpenAIWriteRates,
 } from "./openaiCacheWrite";
 
+/**
+ * Where a price came from, for the "price source and date" line next to a
+ * cost (plans/research/provider-model-metadata.md). In order of precedence:
+ * `user` (a price the person entered), `provider` (a list the provider
+ * publishes and Continuous downloaded, such as OpenRouter's), `curated` (a
+ * table in this code, checked by hand against the provider's pricing page on
+ * `asOf`), `community` (a third-party catalogue; not used yet).
+ */
+export interface PriceSource {
+  kind: "user" | "provider" | "curated" | "community";
+  /** Short name for the UI: "Anthropic list prices", "OpenRouter model list" */
+  label: string;
+  /** The page or file the prices were read from */
+  url?: string;
+  /** ISO date (or date-time) the prices were checked or downloaded */
+  asOf?: string;
+}
+
+/** Anthropic's prices, as the ANTHROPIC_PRICING table carries them. */
+export const ANTHROPIC_PRICE_SOURCE: PriceSource = {
+  kind: "curated",
+  label: "Anthropic list prices",
+  url: "https://platform.claude.com/docs/en/about-claude/pricing",
+  // The oldest check of a current row (the Claude 4.x rows); later rows were
+  // checked on 2026-11-03, 2026-11-04 and 2026-11-10.
+  asOf: "2026-11-02",
+};
+
+/** OpenAI's Standard-tier prices, as OPENAI_PRICES carries them. */
+export const OPENAI_PRICE_SOURCE: PriceSource = {
+  kind: "curated",
+  label: "OpenAI pricing page (Standard tier)",
+  url: "https://developers.openai.com/api/docs/pricing",
+  asOf: "2026-11-05",
+};
+
+/** The Bedrock rows read from the AWS Price List (NOVA_PRICING, BEDROCK_PRICING). */
+export const AWS_PRICE_LIST_SOURCE: PriceSource = {
+  kind: "curated",
+  label: "AWS Price List, us-east-1 on-demand",
+  url: "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrock/current/us-east-1/index.json",
+  asOf: "2026-11-08",
+};
+
 export interface CostBreakdown {
   cost: number;
   breakdown: string;
+  /** Where the prices came from and as of when. Set on every priced result. */
+  priceSource?: PriceSource;
+  /**
+   * The service tier the provider says served the request, when it is not
+   * the standard one the prices are for (`flex`, `priority`, `batch`, ...).
+   * The cost shown is then the standard-tier price, and the breakdown says
+   * so.
+   */
+  servedTier?: string;
   /**
    * Set when the price came from a downloaded list rather than a table in the
    * code: where it came from and when it was downloaded. Show such a figure
@@ -271,7 +325,10 @@ function calculateCachedModelCost(
     regionalFactor !== 1
       ? `Prices: Anthropic list × ${regionalFactor} (Bedrock regional endpoint)`
       : undefined;
-  return priceCachedUsage(model, usage, modelPricing, note);
+  return {
+    ...priceCachedUsage(model, usage, modelPricing, note),
+    priceSource: ANTHROPIC_PRICE_SOURCE,
+  };
 }
 
 /**
@@ -483,21 +540,27 @@ function calculateBedrockCost(
 ): CostBreakdown | null {
   const nova = findNovaPricing(model);
   if (nova) {
-    return priceCachedUsage(
-      model,
-      usage,
-      nova,
-      "Prices: AWS Price List, us-east-1 on-demand (Amazon Nova)",
-    );
+    return {
+      ...priceCachedUsage(
+        model,
+        usage,
+        nova,
+        "Prices: AWS Price List, us-east-1 on-demand (Amazon Nova)",
+      ),
+      priceSource: AWS_PRICE_LIST_SOURCE,
+    };
   }
   const other = findBedrockPricing(model);
   if (other) {
-    return priceCachedUsage(
-      model,
-      usage,
-      other,
-      "Prices: AWS Price List, us-east-1 on-demand",
-    );
+    return {
+      ...priceCachedUsage(
+        model,
+        usage,
+        other,
+        "Prices: AWS Price List, us-east-1 on-demand",
+      ),
+      priceSource: AWS_PRICE_LIST_SOURCE,
+    };
   }
   return calculateCachedModelCost(model, usage);
 }
@@ -681,7 +744,7 @@ function calculateOpenAICost(
     breakdown += `\nTotal: $${totalCost.toFixed(6)}`;
   }
 
-  return { cost: totalCost, breakdown };
+  return { cost: totalCost, breakdown, priceSource: OPENAI_PRICE_SOURCE };
 }
 
 /**
@@ -700,7 +763,45 @@ function usageWithCacheTakenOut(usage: Usage): Usage {
   };
 }
 
+/**
+ * Tier names that mean the standard (on-demand) tier the tables price:
+ * Anthropic `standard`, Bedrock `default`, OpenAI `default` / `auto`.
+ */
+const STANDARD_TIERS = new Set(["standard", "default", "auto", "on_demand"]);
+
+/** What a non-standard tier means for the standard price shown. */
+function tierNote(tier: string): string {
+  const t = tier.toLowerCase();
+  const effect =
+    t === "flex" || t === "batch"
+      ? "which is billed at a discount, so the actual charge is lower"
+      : t === "priority" || t === "fast"
+        ? "which is billed at a premium, so the actual charge is higher"
+        : t === "reserved"
+          ? "which is billed by the reservation rather than per token"
+          : "whose price may differ";
+  return `Prices: standard tier; the provider served this request at the ${tier} tier, ${effect}`;
+}
+
 export function calculateRequestCost(
+  provider: string,
+  model: string,
+  usage: Usage,
+): CostBreakdown | null {
+  const priced = priceByProvider(provider, model, usage);
+  if (!priced) return null;
+  const tier = usage.response?.serviceTier;
+  if (!tier || STANDARD_TIERS.has(tier.toLowerCase())) return priced;
+  // The note goes right under the "Model:" line, with the other "Prices:" notes
+  const [first, ...rest] = priced.breakdown.split("\n");
+  return {
+    ...priced,
+    servedTier: tier,
+    breakdown: [first, tierNote(tier), ...rest].join("\n"),
+  };
+}
+
+function priceByProvider(
   provider: string,
   model: string,
   usage: Usage,
@@ -718,7 +819,17 @@ export function calculateRequestCost(
       // The downloaded OpenRouter prices come first when the list holds this
       // id; otherwise the Claude-style ids keep the table price below.
       const fromList = priceFromCatalog(model, usage);
-      if (fromList) return fromList;
+      if (fromList) {
+        return {
+          ...fromList,
+          priceSource: {
+            kind: "provider",
+            label: "OpenRouter model list",
+            url: OPENROUTER_MODELS_URL,
+            asOf: fromList.estimate.fetchedAt,
+          },
+        };
+      }
       return calculateCachedModelCost(
         model,
         usageWithCacheTakenOut(usage),

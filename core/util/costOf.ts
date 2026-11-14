@@ -1,6 +1,11 @@
 import type { Usage } from "..";
 import { promptTokensExcludeCache } from "../llm/utils/cacheStats";
-import { calculateRequestCost } from "../llm/utils/calculateRequestCost";
+import {
+  calculateRequestCost,
+  type PriceSource,
+} from "../llm/utils/calculateRequestCost";
+
+export type { PriceSource };
 
 /**
  * What a slice of work used, by kind (plans/cost-counter.md). `input` is the
@@ -48,7 +53,18 @@ export interface CostResult {
   assumptions: string[];
   /** Set when the prices came from a downloaded list: its source and date */
   estimate?: { source: string; fetchedAt: string };
+  /**
+   * Where the prices came from and as of when, for a "price source and
+   * date" line next to the figure. Set whenever `amount` is a number.
+   */
+  priceSource?: PriceSource;
 }
+
+/** The source of a price the person entered. */
+export const USER_PRICE_SOURCE: PriceSource = {
+  kind: "user",
+  label: "Your price",
+};
 
 const PER_M = 1_000_000;
 
@@ -79,6 +95,7 @@ function userPriced(usage: CostUsage, price: UserPrice): CostResult {
     assumptions: [
       "Priced at the per-million-token rates you entered, not at a list price",
     ],
+    priceSource: USER_PRICE_SOURCE,
   };
 }
 
@@ -165,6 +182,7 @@ export function costOf(
   return {
     amount: priced.cost * requests,
     ...(priced.estimate ? { estimate: priced.estimate } : {}),
+    ...(priced.priceSource ? { priceSource: priced.priceSource } : {}),
     breakdown:
       requests > 1 ? [`Per average request (x${requests}):`, ...body] : body,
     assumptions,

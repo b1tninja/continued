@@ -1019,6 +1019,7 @@ class Bedrock extends BaseLLM {
       let usage: Usage | undefined;
       let stopReason: string | undefined;
       let latencyMs: number | undefined;
+      let serviceTier: string | undefined;
       // Off unless asked for (the CONTINUE_RECOVER_TEXT_TOOL_CALLS variable or
       // extraBodyProperties.x_continue_recover_text_tool_calls): calls the
       // model wrote as text are held until the reply ends and made only when
@@ -1079,6 +1080,9 @@ class Bedrock extends BaseLLM {
         }
         if (chunk.metadata?.metrics?.latencyMs !== undefined) {
           latencyMs = chunk.metadata.metrics.latencyMs;
+        }
+        if (chunk.metadata?.serviceTier?.type) {
+          serviceTier = chunk.metadata.serviceTier.type;
         }
         if (chunk.messageStop?.stopReason) {
           stopReason = chunk.messageStop.stopReason;
@@ -1145,6 +1149,7 @@ class Bedrock extends BaseLLM {
             stopReason,
             latencyMs,
             requestId: response.$metadata?.requestId,
+            serviceTier,
           }),
         };
       }
@@ -1277,6 +1282,7 @@ class Bedrock extends BaseLLM {
           stopReason: response.stopReason,
           latencyMs: response.metrics?.latencyMs,
           requestId: response.$metadata?.requestId,
+          serviceTier: response.serviceTier?.type,
         }),
       };
     }
