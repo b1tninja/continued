@@ -112,6 +112,18 @@ Below that level nothing changes: Manual, Cautious and Automatic ask, and Permis
 
 At IDGAF the locked policy and configuration files and the **Always on** rules you wrote no longer hold: such a write runs and is recorded as one they would have refused. These still hold: a tool you switched off, an organisation ceiling, and Plan mode (including `--readonly`), which holds every write by design.
 
+## Custom policy
+
+Every policy control (the preset and each area, in the toolbar and in **Settings, Tools**) ends with **Custom…**. It opens the **Custom policy** editor at the top of this page, started from the preset you are on (or from the current levels when they match none). The page's **Custom policy…** button opens it too. From an area's control it opens at the levels with that area selected.
+
+1. **Start from**: a preset, or what is set now. This sets the five levels; your rules and settings start as they are.
+2. **Levels and settings**: the five levels, the built-in rules, the plan limit, what happens while a question waits, and who decides each type of question.
+3. **Rules**: your **Never**, **Ask** and **Always** lists (your own `config.yaml`) and the **Always-on Never** list (`floor:` in `permissions.yaml`). Add a rule, remove one, or move one to another list. A new rule is checked as you type and matched against your recent calls from the audit trail, with the same matching the agent uses, so you see what it would catch before you add it. Rules the audit trail shows you always answered the same way, and recent calls, can be added from there. Rules from a workspace, an assistant or the terminal agent's file are not in these lists and are not copied into yours.
+4. **Read-only and trust**: the MCP servers whose read-only hints you trust, the MCP tools Plan mode may use, and whether the terminal agent offers the terminal in Plan mode. What counts as read-only is not a list: a tool marked read-only, a command the parser vouches for as read-only, and an MCP tool a trusted server marks read-only.
+5. **Review and save**: every setting that changes, old and new, marked where it loosens; every rule change, checked as a single edit would be; how a call is decided; and that Ask means Deny when nobody can answer. **Save** writes `permissions.yaml` once, then each rule change through the same checks, confirmation dialog and audit record as **Add a rule**. If a change cannot be saved, the editor stops there and says what was saved.
+
+IDGAF chosen here is for this session only, as everywhere else.
+
 ## Edit your rules
 
 Each area with rules has **Add a rule**, and your own rules have **Change** and **Remove**. Rules are saved to the `toolPermissions` of your own `config.yaml`, with its comments kept. Only that dialect is written: rules in the CLI's `Bash(...)` form in `permissions.yaml` are still read and shown, never written, and say so.

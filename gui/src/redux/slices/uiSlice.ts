@@ -68,8 +68,12 @@ export interface PolicyExtras {
   floor?: string[];
   /** MCP tools Plan mode may use ("server/tool", "server/*"); read from the file, never written here */
   planMcpTools?: string[];
-  /** MCP servers whose read-only hints the person trusts; read from the file, never written here */
+  /** MCP servers whose read-only hints the person trusts; written only by the Custom policy page */
   trustedMcpServers?: string[];
+  /** Whether work goes on while a question waits (`questions.delivery`) */
+  questionDelivery?: "inbox" | "wait";
+  /** `plan.allowTerminal`: Plan mode is offered the terminal (the CLI); written only by the Custom policy page */
+  planAllowTerminal?: boolean;
 }
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";

@@ -217,9 +217,9 @@ describe("PolicyControls", () => {
     expect(chip.className).toContain("bg-error/20");
     expect(chip.textContent).toContain("Custom");
     await user.click(chip);
-    expect(
-      screen.getByTestId("policy-preset-custom-note").textContent,
-    ).toContain("your current set");
+    expect(screen.getByTestId("policy-preset-custom").textContent).toContain(
+      "your current set",
+    );
   });
 
   it("each preset row has a glyph, what it sets and a check on the current one", async () => {
