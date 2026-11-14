@@ -338,10 +338,14 @@ jobs:
           # --skip-duplicate: a platform already published at this version is
           # skipped, so a re-run only adds the missing ones.
           for f in vsix-artifacts/*.vsix; do npx --yes @vscode/vsce@4.1.0 publish --oidc --skip-duplicate --packagePath "$f"; done
+          versions=$(ls vsix-artifacts/*.vsix | sed -E 's/.*-([0-9]+\.[0-9]+\.[0-9]+[^/]*)\.vsix$/\1/' | sort -u | paste -sd, -)
+          echo "VS Code Marketplace: published ${versions} ($(ls vsix-artifacts/*.vsix | wc -l) packages; platforms already there were skipped)" >> "$GITHUB_STEP_SUMMARY"
 
   # Open VSX has no trusted publishing, so it keeps a token. The token is a
   # secret on the marketplace environment, and the job waits for that
-  # environment's approval. Skipped when the secret is not set.
+  # environment's approval. When the secret is not set the job still succeeds,
+  # so a release is not blocked, but it raises a warning annotation and says
+  # "NOT published" in the run summary instead of skipping silently.
   publish-openvsx:
     runs-on: ubuntu-latest
     needs:
@@ -353,6 +357,12 @@ jobs:
     env:
       OVSX_PAT: ${{ secrets.VSX_REGISTRY_TOKEN }}
     steps:
+      - name: Check Open VSX token
+        if: env.OVSX_PAT == ''
+        run: |
+          echo "::warning title=Open VSX not published::OVSX_PAT is empty: the VSX_REGISTRY_TOKEN secret is not set on the marketplace environment, so nothing was published to Open VSX."
+          echo "Open VSX: NOT published — OVSX_PAT is not set on the marketplace environment (secret VSX_REGISTRY_TOKEN)" >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/download-artifact@v8
         if: env.OVSX_PAT != ''
         with:
@@ -364,3 +374,5 @@ jobs:
         if: env.OVSX_PAT != ''
         run: |
           for f in vsix-artifacts/*.vsix; do npx --yes ovsx@1.3.0 publish --packagePath "$f"; done
+          versions=$(ls vsix-artifacts/*.vsix | sed -E 's/.*-([0-9]+\.[0-9]+\.[0-9]+[^/]*)\.vsix$/\1/' | sort -u | paste -sd, -)
+          echo "Open VSX: published ${versions} ($(ls vsix-artifacts/*.vsix | wc -l) packages)" >> "$GITHUB_STEP_SUMMARY"

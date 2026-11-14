@@ -1,5 +1,7 @@
 import {
+  ArchiveBoxIcon,
   ArrowDownOnSquareIcon,
+  ArrowUturnLeftIcon,
   PencilSquareIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
@@ -10,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { Input } from "..";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { archiveSessions, restoreSessions } from "../../redux/slices/uiSlice";
 import { exitEdit } from "../../redux/thunks/edit";
 import {
   deleteSession,
@@ -26,9 +29,12 @@ const shareSessionSupported = isShareSessionSupported();
 export function HistoryTableRow({
   sessionMetadata,
   index,
+  archived = false,
 }: {
   sessionMetadata: BaseSessionMetadata;
   index: number;
+  /** In the Archived group: Restore instead of Archive */
+  archived?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -171,6 +177,37 @@ export function HistoryTableRow({
                   }}
                 >
                   <ArrowDownOnSquareIcon width="1em" height="1em" />
+                </HeaderButtonWithToolTip>
+              )}
+              {archived ? (
+                <HeaderButtonWithToolTip
+                  text="Restore"
+                  testId={`history-row-restore-${index}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    dispatch(
+                      restoreSessions({
+                        sessionIds: [sessionMetadata.sessionId],
+                      }),
+                    );
+                  }}
+                >
+                  <ArrowUturnLeftIcon width="1em" height="1em" />
+                </HeaderButtonWithToolTip>
+              ) : (
+                <HeaderButtonWithToolTip
+                  text="Archive"
+                  testId={`history-row-archive-${index}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    dispatch(
+                      archiveSessions({
+                        sessionIds: [sessionMetadata.sessionId],
+                      }),
+                    );
+                  }}
+                >
+                  <ArchiveBoxIcon width="1em" height="1em" />
                 </HeaderButtonWithToolTip>
               )}
               <HeaderButtonWithToolTip

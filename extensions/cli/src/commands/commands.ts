@@ -75,7 +75,8 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   },
   {
     name: "fork",
-    description: "Start a forked chat session from the current history",
+    description:
+      "Fork this session into a new one (history, mode, model, task plan) and continue there",
     category: "system",
   },
   {
@@ -101,7 +102,7 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   {
     name: "untaint",
     description:
-      "Acknowledge the untrusted content in this session (taintedSessionRule)",
+      "Acknowledge the untrusted content in this session (taintedSessionRule): /untaint, or /untaint <label> for one, such as mcp:github",
     category: "system",
   },
   {
@@ -118,6 +119,12 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   {
     name: "sessions",
     description: "Show all chat sessions",
+    category: "system",
+  },
+  {
+    name: "thinking",
+    description:
+      "How the model's reasoning shows: /thinking fold (one line after the answer), expanded, or hide",
     category: "system",
   },
   {

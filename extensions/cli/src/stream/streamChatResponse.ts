@@ -50,6 +50,7 @@ import {
   leakedCallNudgeAllowed,
   noteLeakedCallNudge,
 } from "./leakedCallNudge.js";
+import { ReasoningAccumulator, type StreamedReasoning } from "./reasoning.js";
 import { resetRefusalCount } from "./refusalCap.js";
 import { resetRepeatGuard } from "./repeatGuard.js";
 import { buildChatRequestBody } from "./requestBody.js";
@@ -132,6 +133,8 @@ interface ProcessChunkOptions {
   indexToIdMap: Map<number, string>;
   callbacks?: StreamCallbacks;
   isHeadless?: boolean;
+  /** The reply's reasoning so far. */
+  reasoning?: ReasoningAccumulator;
 }
 
 function processChunk(options: ProcessChunkOptions): {
@@ -145,6 +148,7 @@ function processChunk(options: ProcessChunkOptions): {
     indexToIdMap,
     callbacks,
     isHeadless,
+    reasoning,
   } = options;
   const holding = recoveryHoldOf(chunk);
   if (holding !== undefined) callbacks?.onRecoveryHold?.(holding);
@@ -159,6 +163,15 @@ function processChunk(options: ProcessChunkOptions): {
   }
 
   let updatedResponse = aiResponse;
+
+  // The model's reasoning, shown live where a caller asks for it; never
+  // written to stdout or added to the reply
+  const now = Date.now();
+  const thought = reasoning?.add(choice.delta, now);
+  if (thought) callbacks?.onReasoning?.(thought);
+  if (choice.delta.content || choice.delta.tool_calls) {
+    reasoning?.markAnswer(now);
+  }
 
   // Handle content streaming
   if (choice.delta.content) {
@@ -347,6 +360,8 @@ export async function processStreamingResponse(
   usage?: any;
   /** The provider's finish_reason of the last chunk that carried one. */
   finishReason?: string;
+  /** The reply's reasoning, when the model sent any. */
+  reasoning?: StreamedReasoning;
 }> {
   const {
     model,
@@ -460,6 +475,7 @@ export async function processStreamingResponse(
   let finalContent = "";
   const toolCallsMap = new Map<string, ToolCall>();
   const indexToIdMap = new Map<number, string>(); // Track index to ID mapping
+  const reasoning = new ReasoningAccumulator();
   let firstTokenTime: number | null = null;
   let inputTokens = 0;
   let outputTokens = 0;
@@ -515,6 +531,7 @@ export async function processStreamingResponse(
         indexToIdMap,
         callbacks,
         isHeadless,
+        reasoning,
       });
       aiResponse = result.aiResponse;
       if (!result.shouldContinue) break;
@@ -578,6 +595,7 @@ export async function processStreamingResponse(
         toolCalls: [],
         shouldContinue: false,
         usage: fullUsage,
+        reasoning: reasoning.result(Date.now()),
       };
     }
 
@@ -616,6 +634,7 @@ export async function processStreamingResponse(
     shouldContinue: validToolCalls.length > 0,
     usage: fullUsage,
     finishReason,
+    reasoning: reasoning.result(Date.now()),
   };
 }
 
@@ -753,7 +772,7 @@ export async function streamChatResponse(
     // Get response from LLM ("Steer now" interrupts only while it streams;
     // Loop mode sends each run without the turns before it)
     callbacks?.onModelStreaming?.(true);
-    const { content, toolCalls, shouldContinue, usage } =
+    const { content, toolCalls, shouldContinue, usage, reasoning } =
       await processStreamingResponse({
         isHeadless,
         chatHistory: loopRequestHistory(chatHistory, isCompacting),
@@ -768,6 +787,10 @@ export async function streamChatResponse(
       }).finally(() => callbacks?.onModelStreaming?.(false));
 
     options.onRequest?.();
+
+    // The reply's whole reasoning, once: after the request's usage and
+    // before the reply's message is reported
+    if (reasoning) callbacks?.onReasoningComplete?.(reasoning);
 
     if (abortController?.signal.aborted) {
       return finalResponse || content || fullResponse;
@@ -805,6 +828,7 @@ export async function streamChatResponse(
       callbacks,
       isHeadless,
       usage,
+      reasoning,
       abortSignal: abortController.signal,
     });
 

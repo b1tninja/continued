@@ -2,7 +2,6 @@ import { ModelConfig } from "@continuedev/config-yaml";
 import { BaseLlmApi } from "@continuedev/openai-adapters";
 import chalk from "chalk";
 import { ChatHistoryItem, Session } from "core";
-import { ChatDescriber } from "core/util/chatDescriber.js";
 
 import * as runLimits from "../budget/runLimits.js";
 import { compactChatHistory, findCompactionIndex } from "../compaction.js";
@@ -25,14 +24,11 @@ import {
   ModelServiceState,
   SERVICE_NAMES,
 } from "../services/types.js";
-import {
-  loadSession,
-  updateSessionHistory,
-  updateSessionTitle,
-} from "../session.js";
+import { loadSession, updateSessionHistory } from "../session.js";
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { startTUIChat } from "../ui/index.js";
+import { initThinkingDisplay } from "../ui/thinkingDisplay.js";
 import { exitOnBrokenConfig } from "../util/configFileGate.js";
 import { gracefulExit } from "../util/exit.js";
 import { formatAnthropicError, formatError } from "../util/formatError.js";
@@ -47,6 +43,7 @@ import {
 
 import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
 import { processJsonOutput, stripThinkTags } from "./chatOutput.js";
+import { handleTitleGeneration } from "./chatTitle.js";
 import { printRetirementNotice } from "./retirementNotice.js";
 
 export interface ChatOptions extends ExtendedCommandOptions {
@@ -56,6 +53,8 @@ export interface ChatOptions extends ExtendedCommandOptions {
   format?: headless.HeadlessFormat; // Output format for headless mode
   silent?: boolean; // Strip <think></think> tags and excess whitespace
   outputSchema?: string; // --output-schema: a JSON Schema the final answer must match
+  thinking?: string; // --thinking: fold, expanded or hide (ui/thinkingDisplay.ts)
+  includeReasoning?: boolean; // --include-reasoning: stream-json `reasoning` lines
 }
 
 export async function initializeChatHistory(
@@ -65,11 +64,12 @@ export async function initializeChatHistory(
 
   // Fork from an existing session if --fork flag is used
   if (options.fork) {
-    const { loadSessionById, startNewSession } = await import("../session.js");
+    const { loadSessionById, forkIntoNewSession } =
+      await import("../session.js");
     const sessionToFork = loadSessionById(options.fork);
     if (sessionToFork) {
       logger.info(chalk.yellow("Forking from existing session..."));
-      const newSession = startNewSession(sessionToFork.history);
+      const newSession = forkIntoNewSession(sessionToFork);
       return newSession.history;
     } else {
       logger.error(chalk.red(`Session with ID "${options.fork}" not found.`));
@@ -272,30 +272,6 @@ async function handleAutoCompaction(
 /**
  * Helper to generate and update session title after first assistant response
  */
-async function handleTitleGeneration(
-  assistantResponse: string,
-  llmApi: BaseLlmApi,
-  model: ModelConfig,
-): Promise<void> {
-  try {
-    if (!assistantResponse) return;
-
-    const generatedTitle = await ChatDescriber.describeWithBaseLlmApi(
-      llmApi,
-      model,
-      assistantResponse,
-    );
-
-    if (generatedTitle) {
-      updateSessionTitle(generatedTitle);
-      logger.debug("Generated session title:", generatedTitle);
-    }
-  } catch (error) {
-    // Don't fail the response if title generation fails
-    logger.debug("Session title generation failed:", error);
-  }
-}
-
 interface ProcessMessageOptions {
   userInput: string;
   chatHistory: ChatHistoryItem[];
@@ -453,6 +429,7 @@ async function runHeadlessMode(
   runLimits.startRunLimits(options, {
     provider: model.provider,
     model: model.model,
+    pricing: model.pricing,
   });
 
   // Initialize service-driven history (resume if requested)
@@ -569,6 +546,7 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
     }
 
     runLimits.assertLimitsEnforceable(options);
+    initThinkingDisplay(options.thinking);
 
     // Interactive path - requires TTY for Ink rendering
     // If not in headless mode, use unified initialization with TUI

@@ -770,6 +770,15 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
     void,
   ];
   /**
+   * The save, dry-run: the exact permissions.yaml text core's writer would
+   * produce, line by line, and what the save's native dialog would ask about.
+   * Nothing is written.
+   */
+  "policy/preview": [
+    import("../tools/permissions/settingsFile").PolicyFileUpdate,
+    import("../tools/permissions/policySave").PolicySavePreview,
+  ];
+  /**
    * Every permission rule in effect with its area, source and state, and the
    * levels. Read-only. `levels` are the session's, when the caller has them.
    */

@@ -406,6 +406,11 @@ export interface Session {
    * stay Plan and Agent; a plan presented while it is set starts the loop.
    */
   loopRequested?: boolean;
+  /**
+   * Optional: the session this one was forked from, and the last history item
+   * the fork kept (absent when it kept all of them). See core/util/forkSession.ts.
+   */
+  forkedFrom?: { sessionId: string; index?: number };
 }
 
 /** Where one plan item is in Loop mode. The task list shows it too. */
@@ -1409,6 +1414,18 @@ export interface SubagentRunState {
   error?: string;
   /** Notes for the person (a model fallback, a tool it could not have). */
   notices?: string[];
+  /**
+   * Messages to the run: the person's, sent from its record in the agents
+   * panel, and another subagent's (send_message), named by `from`. Delivered
+   * into its conversation, or not (the run ended first).
+   */
+  messages?: {
+    text: string;
+    at: number;
+    delivered: boolean;
+    /** The sending subagent's name; absent for the person */
+    from?: string;
+  }[];
   /** A call of the subagent's waiting for the person's approval. */
   pendingApproval?: {
     id: string;
@@ -1430,6 +1447,12 @@ interface Reasoning {
   text: string;
   startAt: number;
   endAt?: number;
+  /**
+   * What the provider needs back to continue from this reasoning (the CLI
+   * keeps Claude's signed and redacted thinking here, as `reasoning_details`
+   * entries). Absent when there is nothing to send back.
+   */
+  details?: Record<string, unknown>[];
 }
 
 /**
@@ -1437,6 +1460,18 @@ interface Reasoning {
  * that closed or reloaded while it ran.
  */
 export type TurnInterruption = "stopped" | "failed" | "reloaded";
+
+/** What "Choose what to keep" took out of one history item. */
+export interface RemovedByUser {
+  /** The whole item is left out: part of an old turn removed from the start. */
+  turn?: boolean;
+  /** Tool calls of this assistant item whose results are sent as a stub. */
+  toolResults?: string[];
+  /** Indexes into `contextItems` sent as a stub. */
+  contextItems?: number[];
+  /** Indexes of image parts of the message sent as a stub. */
+  images?: number[];
+}
 
 export interface ChatHistoryItem {
   message: ChatMessage;
@@ -1454,6 +1489,13 @@ export interface ChatHistoryItem {
    * failed, or that a reload cut off. The chat offers Resume for it.
    */
   interrupted?: TurnInterruption;
+  /**
+   * Parts of this item the person took out of the context with "Choose what
+   * to keep" (gui SelectiveCompactDialog). Nothing is deleted: the request
+   * sends a one-line stub in their place (core/util/contextRemoval.ts), and
+   * the originals stay in the session.
+   */
+  removedByUser?: RemovedByUser;
   /**
    * Request-time only, never saved: a prompt cache point goes right after this
    * item (a fork point, such as a Loop item's first message), so a retry, a
@@ -3095,6 +3137,8 @@ export interface CompiledMessagesResult {
   didPrune: boolean;
   /** History ageing masked more tool results in this request (a planned cache rebuild). */
   didAge?: boolean;
+  /** What normalizeTurns repaired in the history (llm/normalizeTurns.ts); absent when nothing. */
+  repairs?: string[];
   contextPercentage: number;
   /** Tokens the context has left for the reply, after the prompt. */
   outputTokensAvailable?: number;

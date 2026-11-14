@@ -81,6 +81,7 @@ import {
   countTokens,
   pruneRawPromptFromTop,
 } from "./countTokens.js";
+import { providerRequiresAlternation } from "./normalizeTurns.js";
 import {
   messagesFromChatCompletionChunk,
   fromChatResponse,
@@ -1135,6 +1136,7 @@ export abstract class BaseLLM implements ILLM {
       supportsImages: this.supportsImages(),
       tools: options.tools,
       ageing: this._ageing(),
+      requiresAlternation: providerRequiresAlternation(this.providerName),
     });
   }
 
@@ -1441,6 +1443,7 @@ export abstract class BaseLLM implements ILLM {
         supportsImages: this.supportsImages(),
         tools: optionsWithOverrides.tools,
         ageing: this._ageing(),
+        requiresAlternation: providerRequiresAlternation(this.providerName),
       });
 
       messages = compiledChatMessages;

@@ -12,6 +12,7 @@ export const STREAM_JSON_SCHEMA_VERSION = 1;
 /** Every event type, in the order a run can first produce them. */
 export const STREAM_JSON_EVENT_TYPES = [
   "init",
+  "reasoning",
   "message",
   "tool_use",
   "tool_decision",
@@ -57,6 +58,19 @@ export interface InitEvent extends EventBase<"init"> {
     maxTurns?: number;
     maxDurationMinutes?: number;
   };
+}
+
+/**
+ * One reply's reasoning (thinking), masked, whole, before the reply's
+ * `message` and `tool_use` lines. Written only with `--include-reasoning`.
+ * What a provider returns is often a summary of the model's thinking, not
+ * all of it.
+ */
+export interface ReasoningEvent extends EventBase<"reasoning"> {
+  role: "assistant";
+  content: string;
+  /** From the first reasoning to the start of the answer, when known. */
+  durationMs?: number;
 }
 
 /** One complete reply of the model, masked. Never a partial chunk. */
@@ -208,6 +222,7 @@ export interface ResultEvent extends EventBase<"result"> {
 
 export type StreamJsonEvent =
   | InitEvent
+  | ReasoningEvent
   | MessageEvent
   | ToolUseEvent
   | ToolDecisionEvent

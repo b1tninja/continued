@@ -22,7 +22,8 @@ export type AuditBy = "rules" | "reviewer" | "person" | "system";
 
 export interface AuditEnvelope {
   v: typeof AUDIT_VERSION;
-  ev: "decision" | "outcome" | "turn" | "policy" | "shadow" | "setting";
+  ev:
+    "decision" | "outcome" | "turn" | "policy" | "shadow" | "setting" | "taint";
   /** UTC, ISO 8601 */
   ts: string;
   session: string;
@@ -290,13 +291,34 @@ export interface ShadowEvent extends AuditEnvelope {
   maskedKinds?: string[];
 }
 
+/**
+ * A taint label added to or cleared from a session (the tainted-session rule,
+ * plans/design/tainted-session.md). Written only while the person's
+ * `taintedSessionRule` is `ask`, since nothing is marked otherwise. It names
+ * the label and where it came from, never the content: `source` is the tool
+ * that brought the content in (an add) or the control that cleared it (a
+ * clear), `reason` why. A separate `ev`, so a reader written before it
+ * existed skips it.
+ */
+export interface TaintEvent extends AuditEnvelope {
+  ev: "taint";
+  op: "add" | "clear";
+  /** `web-fetch`, `mcp:<server>`, `secret`, ... */
+  label: string;
+  source?: string;
+  /** add: tool-result, subagent, inherited; clear: user-ack, untaint-command, new-session */
+  reason: string;
+  maskedKinds?: string[];
+}
+
 export type AuditRecord =
   | DecisionEvent
   | OutcomeEvent
   | TurnEvent
   | PolicyEvent
   | ShadowEvent
-  | SettingEvent;
+  | SettingEvent
+  | TaintEvent;
 
 /** A record as the builders produce it: the writer adds `v`, `ts` and `seq`. */
 export type AuditDraft = DistributiveOmit<AuditRecord, "v" | "seq" | "ts"> & {
@@ -533,6 +555,32 @@ export function settingDraft(input: SettingInput): AuditDraft {
     name: clipMasked(name.text, MAX_SETTING_FIELD_CHARS),
     from: from ? clipMasked(from.text, MAX_SETTING_FIELD_CHARS) : undefined,
     to: to ? clipMasked(to.text, MAX_SETTING_FIELD_CHARS) : undefined,
+    maskedKinds: kinds.length ? kinds : undefined,
+  }) as AuditDraft;
+}
+
+export interface TaintInput {
+  session: string;
+  op: TaintEvent["op"];
+  label: string;
+  source?: string;
+  reason: string;
+  turn?: number;
+}
+
+const MAX_TAINT_FIELD_CHARS = 120;
+
+export function taintDraft(input: TaintInput): AuditDraft {
+  const label = maskText(input.label);
+  const source =
+    input.source === undefined ? undefined : maskText(input.source);
+  const kinds = [...new Set([...label.kinds, ...(source?.kinds ?? [])])];
+  return clean({
+    ...input,
+    ev: "taint" as const,
+    label: clipMasked(label.text, MAX_TAINT_FIELD_CHARS),
+    source: source ? clipMasked(source.text, MAX_TAINT_FIELD_CHARS) : undefined,
+    reason: input.reason.slice(0, MAX_TAINT_FIELD_CHARS),
     maskedKinds: kinds.length ? kinds : undefined,
   }) as AuditDraft;
 }

@@ -22,6 +22,7 @@ import {
   MessageModes,
   PromptLog,
   PromptProgress,
+  RemovedByUser,
   RuleMetadata,
   Session,
   SessionUsage,
@@ -38,6 +39,7 @@ import {
 } from "core";
 import { mergeReasoningDetails } from "core/llm/openaiTypeConverters";
 import { addRequestUsage } from "core/llm/utils/sessionUsage";
+import { historyKey } from "../../util/selectiveCompaction";
 import { interruptSubagentRuns } from "../../util/subagents/interrupt";
 import { markTurnCutOffOnLoad } from "../../util/resumeTurn";
 import { abortLoopWorkers } from "../../util/subagents/loopWorkers";
@@ -274,6 +276,14 @@ type SessionState = {
   answeredRoute?: { model: string; route: string };
   isPruned?: boolean;
   contextPercentage?: number;
+  /**
+   * What "Choose what to keep" changed since the last request was sent, so it
+   * can be undone: each changed item's marks before the first change, by
+   * message id. Until the next request the prompt cache still holds the
+   * conversation as it was, so undoing costs nothing. Cleared when a request
+   * is sent and with the session. Not saved.
+   */
+  contextRemovalUndo?: ContextRemovalUndo;
   /** Tokens and estimated cost of this session's requests, saved with it. */
   usage?: SessionUsage;
   inlineErrorMessage?: InlineErrorMessageType;
@@ -292,6 +302,8 @@ type SessionState = {
    * presented plan starts the loop by itself. Saved with the session.
    */
   loopRequested?: boolean;
+  /** The session this one was forked from; saved with it (forkSession). */
+  forkedFrom?: Session["forkedFrom"];
   /**
    * The mode picked while a loop item ran: the loop stops after the item and
    * the mode is taken then, so the item finishes in its own mode.
@@ -304,6 +316,13 @@ type SessionState = {
   /** Set when a turn ends; the chat view then sends the queue and clears it */
   isQueueSendRequested: boolean;
 };
+
+export interface ContextRemovalUndo {
+  /** Marks before the first change since the last request; null for none. */
+  previous: Record<string, RemovedByUser | null>;
+  /** Estimated tokens taken out of the context (negative when put back). */
+  removedTokens: number;
+}
 
 export interface QueuedMessage {
   id: string;
@@ -515,6 +534,8 @@ export const sessionSlice = createSlice({
         historyItem.message.content = ""; // IMPORTANT - this is quickly updated by resolveEditorContent based on editor state prior to streaming
         historyItem.editorState = payload.editorState;
         historyItem.contextItems = [];
+        // The marks point into the old context items
+        historyItem.removedByUser = undefined;
 
         state.history = state.history.slice(0, index + 1).concat({
           message: {
@@ -648,6 +669,49 @@ export const sessionSlice = createSlice({
       { payload }: PayloadAction<MessageModes | undefined>,
     ) => {
       state.modeAfterLoop = payload;
+    },
+    /**
+     * Set the "Choose what to keep" marks of the given items (by message id;
+     * null clears them), remembering the marks they replace for Undo.
+     */
+    applyContextRemovals: (
+      state,
+      {
+        payload,
+      }: PayloadAction<{
+        marks: Record<string, RemovedByUser | null>;
+        removedTokens: number;
+      }>,
+    ) => {
+      const undo: ContextRemovalUndo = state.contextRemovalUndo ?? {
+        previous: {},
+        removedTokens: 0,
+      };
+      state.history.forEach((item, i) => {
+        const id = historyKey(item, i);
+        if (!(id in payload.marks)) return;
+        if (!(id in undo.previous)) {
+          undo.previous[id] = item.removedByUser ?? null;
+        }
+        item.removedByUser = payload.marks[id] ?? undefined;
+      });
+      undo.removedTokens += payload.removedTokens;
+      state.contextRemovalUndo = undo;
+    },
+    /** Put back what "Choose what to keep" changed since the last request. */
+    undoContextRemovals: (state) => {
+      const undo = state.contextRemovalUndo;
+      if (!undo) return;
+      state.history.forEach((item, i) => {
+        const id = historyKey(item, i);
+        if (id in undo.previous) {
+          item.removedByUser = undo.previous[id] ?? undefined;
+        }
+      });
+      state.contextRemovalUndo = undefined;
+    },
+    clearContextRemovalUndo: (state) => {
+      state.contextRemovalUndo = undefined;
     },
     deleteCompaction: (state, action: PayloadAction<number>) => {
       // Removes the conversation summary from the specified message
@@ -992,6 +1056,7 @@ export const sessionSlice = createSlice({
       state.inlineErrorMessage = undefined;
       state.isPruned = false;
       state.contextPercentage = undefined;
+      state.contextRemovalUndo = undefined;
       state.answeredRoute = undefined;
       state.usage = payload?.usage;
       // A different conversation shares nothing with the cached one: its size,
@@ -1056,6 +1121,7 @@ export const sessionSlice = createSlice({
           typeof payload.planFile === "string" ? payload.planFile : undefined;
         state.loop = restoreLoop(payload.loop);
         state.loopRequested = payload.loopRequested === true || undefined;
+        state.forkedFrom = payload.forkedFrom;
         state.modeAfterLoop = undefined;
         if (payload.mode) {
           state.mode = payload.mode;
@@ -1069,6 +1135,7 @@ export const sessionSlice = createSlice({
         state.planFile = undefined;
         state.loop = undefined;
         state.loopRequested = undefined;
+        state.forkedFrom = undefined;
         state.modeAfterLoop = undefined;
       }
     },
@@ -1609,6 +1676,9 @@ export const {
   setMainEditorContentTrigger,
   deleteMessage,
   deleteCompaction,
+  applyContextRemovals,
+  undoContextRemovals,
+  clearContextRemovalUndo,
   addCheckpointSnapshot,
   setCheckpoints,
   setTaskPlan,

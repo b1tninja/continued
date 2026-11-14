@@ -33,7 +33,6 @@ import {
   isInsideWorkspace,
   openUrlFromWebviewOk,
   policySavePayloadOk,
-  raisedPolicyAreas,
   runCommandFromWebviewOk,
   subprocessFromWebviewOk,
   writeFileFromWebviewOk,
@@ -282,11 +281,13 @@ export class VsCodeMessenger {
     /** PASS THROUGH FROM WEBVIEW TO CORE AND BACK **/
     WEBVIEW_TO_CORE_PASS_THROUGH.forEach((messageType) => {
       this.onWebview(messageType, async (msg) => {
-        if (messageType === "policy/save") {
-          const allowed = await this.confirmPolicySave(msg.data);
-          if (!allowed) {
-            throw new Error("The permission change was not confirmed.");
-          }
+        // Core asks in a modal before a save that loosens (policySave.ts);
+        // here only the shape is checked
+        if (
+          (messageType === "policy/save" || messageType === "policy/preview") &&
+          !policySavePayloadOk(msg.data)
+        ) {
+          throw new Error("That is not a permission settings change.");
         }
         return await this.inProcessMessenger.externalRequest(
           messageType,
@@ -492,28 +493,5 @@ export class VsCodeMessenger {
     this.onWebviewOrCore("reportError", async (msg) => {
       await handleLLMError(msg.data);
     });
-  }
-
-  /**
-   * A save that raises a permission level waits for a native confirmation.
-   * Anything that is not a settings object is refused.
-   */
-  private async confirmPolicySave(data: unknown): Promise<boolean> {
-    if (!policySavePayloadOk(data)) return false;
-    const levels = (data as { levels?: Record<string, string> }).levels;
-    if (!levels) return true;
-    const loaded = await this.inProcessMessenger.externalRequest(
-      "policy/load",
-      undefined,
-    );
-    const current = loaded?.settings?.levels;
-    const raised = raisedPolicyAreas(current, levels);
-    if (raised.length === 0) return true;
-    const choice = await vscode.window.showWarningMessage(
-      `Raise the Continuous permission level for ${raised.join(", ")}?`,
-      { modal: true },
-      "Raise",
-    );
-    return choice === "Raise";
   }
 }
