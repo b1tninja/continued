@@ -4,6 +4,11 @@ import {
   normalizeNovaModelId,
 } from "@continuedev/llm-info";
 import { OPENROUTER_MODELS_URL } from "../openRouterCatalog";
+import {
+  getBedrockPriceList,
+  priceListPricing,
+  type PriceRowTier,
+} from "./bedrockPriceListPricing";
 import { priceFromCatalog } from "./catalogPricing";
 import {
   openAIWriteCost,
@@ -67,6 +72,12 @@ export interface CostBreakdown {
    * so.
    */
   servedTier?: string;
+  /**
+   * The tier the prices are for, when a downloaded list priced the served
+   * tier itself (the AWS Price List's flex and priority rows). Absent means
+   * the standard tier.
+   */
+  pricedTier?: string;
   /**
    * Set when the price came from a downloaded list rather than a table in the
    * code: where it came from and when it was downloaded. Show such a figure
@@ -537,7 +548,10 @@ export function findBedrockPricing(model: string): ModelPricing | null {
 function calculateBedrockCost(
   model: string,
   usage: Usage,
+  mantle = false,
 ): CostBreakdown | null {
+  const fromList = priceFromAwsPriceList(model, usage, mantle);
+  if (fromList) return fromList;
   const nova = findNovaPricing(model);
   if (nova) {
     return {
@@ -563,6 +577,78 @@ function calculateBedrockCost(
     };
   }
   return calculateCachedModelCost(model, usage);
+}
+
+/**
+ * The downloaded AWS Price List of the selected Bedrock model's region
+ * (bedrockPriceList.ts), ahead of the tables above. The served tier is
+ * priced at its own rows when the list has them (flex, priority); cache
+ * rates the list does not carry come from the tables. Null when no list is
+ * loaded or it does not price this model, and for a prompt over a
+ * long-context limit, which the list's standard rows do not cover.
+ */
+function priceFromAwsPriceList(
+  model: string,
+  usage: Usage,
+  mantle: boolean,
+): CostBreakdown | null {
+  const list = getBedrockPriceList();
+  if (!list) return null;
+  const curated =
+    findNovaPricing(model) ??
+    findBedrockPricing(model) ??
+    findModelPricing(model);
+  const wholePrompt =
+    usage.promptTokens +
+    (usage.promptTokensDetails?.cachedTokens ?? 0) +
+    (usage.promptTokensDetails?.cacheWriteTokens ?? 0);
+  if (curated?.longContext && wholePrompt > curated.longContext.aboveTokens) {
+    return null;
+  }
+  const served = usage.response?.serviceTier?.toLowerCase();
+  const tier: PriceRowTier =
+    served === "flex" || served === "priority" ? served : "standard";
+  const listed =
+    priceListPricing(list, model, { tier, mantle }) ??
+    (tier === "standard"
+      ? undefined
+      : priceListPricing(list, model, { mantle }));
+  if (!listed) return null;
+  const details = usage.promptTokensDetails;
+  const usesCache =
+    (details?.cachedTokens ?? 0) > 0 || (details?.cacheWriteTokens ?? 0) > 0;
+  const cacheFromTable =
+    usesCache &&
+    (listed.cacheRead === undefined || listed.cacheWrite === undefined);
+  const pricing: ModelPricing = {
+    input: listed.input,
+    output: listed.output,
+    cacheRead: listed.cacheRead ?? curated?.cacheRead ?? 0,
+    cacheWrite: listed.cacheWrite ?? curated?.cacheWrite ?? 0,
+    cacheWrite1h:
+      listed.cacheWrite1h ?? curated?.cacheWrite1h ?? listed.cacheWrite ?? 0,
+  };
+  const route =
+    listed.route === "in-region"
+      ? "in-region"
+      : listed.route === "global"
+        ? "global cross-region"
+        : "cross-region";
+  const note = `Prices: AWS Price List, ${list.region} ${route}${
+    listed.tier === "standard" ? "" : `, ${listed.tier} tier`
+  }, downloaded ${list.fetchedAt.slice(0, 10)}${
+    cacheFromTable ? "; cache prices from the built-in table" : ""
+  }`;
+  return {
+    ...priceCachedUsage(model, usage, pricing, note),
+    priceSource: {
+      kind: "provider",
+      label: "AWS Price List",
+      url: list.source,
+      asOf: list.fetchedAt,
+    },
+    ...(listed.tier === "standard" ? {} : { pricedTier: listed.tier }),
+  };
 }
 
 interface OpenAIPrice {
@@ -792,6 +878,10 @@ export function calculateRequestCost(
   if (!priced) return null;
   const tier = usage.response?.serviceTier;
   if (!tier || STANDARD_TIERS.has(tier.toLowerCase())) return priced;
+  // Priced at the served tier's own rows: nothing to correct
+  if (priced.pricedTier?.toLowerCase() === tier.toLowerCase()) {
+    return { ...priced, servedTier: tier };
+  }
   // The note goes right under the "Model:" line, with the other "Prices:" notes
   const [first, ...rest] = priced.breakdown.split("\n");
   return {
@@ -808,8 +898,9 @@ function priceByProvider(
 ): CostBreakdown | null {
   switch (provider.toLowerCase()) {
     case "bedrock":
-    case "bedrock-mantle":
       return calculateBedrockCost(model, usage);
+    case "bedrock-mantle":
+      return calculateBedrockCost(model, usage, true);
     case "anthropic":
     // Claude models served by other providers use the same list prices as an
     // estimate. Regional pricing, data residency and reseller margins can differ.

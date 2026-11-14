@@ -46,17 +46,17 @@ export interface RefreshStatus {
   nextCheckAt?: string;
 }
 
-export interface RefresherDeps {
+export interface RefresherDeps<T = ModelCatalog> {
   settings: () => ModelCatalogSettings;
   /** The date of the copy on this computer, or undefined when there is none. */
   fetchedAt: () => string | undefined;
   /** The one request: download, validate and write the list. */
-  pull: () => Promise<ModelCatalog>;
+  pull: () => Promise<T>;
   now?: () => number;
   random?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
-  onRefreshed?: (catalog: ModelCatalog) => void;
+  onRefreshed?: (catalog: T) => void;
   log?: (message: string) => void;
 }
 
@@ -90,13 +90,13 @@ export function backoffDelay(failures: number, random: () => number): number {
   return withJitter(raw, random);
 }
 
-export class ModelCatalogRefresher {
+export class ModelCatalogRefresher<T = ModelCatalog> {
   private timer: unknown;
   private running = false;
   private inFlight = false;
   private readonly status: RefreshStatus = { failures: 0 };
 
-  constructor(private readonly deps: RefresherDeps) {}
+  constructor(private readonly deps: RefresherDeps<T>) {}
 
   private now(): number {
     return this.deps.now?.() ?? Date.now();

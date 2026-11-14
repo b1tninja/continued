@@ -24,6 +24,10 @@ import {
   ListFoundationModelsCommand,
   ListInferenceProfilesCommand,
 } from "@aws-sdk/client-bedrock";
+import {
+  ListServiceQuotasCommand,
+  ServiceQuotasClient,
+} from "@aws-sdk/client-service-quotas";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import { withToolDialect } from "@continuedev/config-yaml";
 import { getTlsErrorHint } from "@continuedev/fetch";
@@ -70,6 +74,18 @@ import {
   readBedrockCatalogCache,
   writeBedrockCatalogCache,
 } from "./bedrockCatalogCache.js";
+import {
+  checkBedrockQuotas,
+  credentialFingerprint,
+  zeroQuotaWarning,
+  type BedrockQuotaReport,
+  type QuotaCheckTrigger,
+} from "./bedrockQuotas.js";
+import {
+  modelCatalogDir,
+  readModelCatalogSettings,
+  type ModelCatalogSettings,
+} from "../modelCatalogStore.js";
 import {
   applyCrossRegionInference,
   applyModelAccess,
@@ -559,6 +575,104 @@ class Bedrock extends BaseLLM {
    */
   cachedCatalog(): BedrockModelOption[] | undefined {
     return readBedrockCatalogCache(this._catalogCacheKey());
+  }
+
+  /**
+   * The account's per-minute inference quotas in this region, from Service
+   * Quotas (`servicequotas:ListServiceQuotas`, optional), through a cache
+   * under the model information setting. Uses the same credentials, region,
+   * proxy and CA settings as the Bedrock client. Advisory: never throws,
+   * gives up after five seconds, and a refusal is remembered for a day (see
+   * bedrockQuotas.ts).
+   */
+  async checkQuotas(
+    trigger: QuotaCheckTrigger,
+    opts: {
+      settings?: ModelCatalogSettings;
+      dir?: string;
+      listPage?: Parameters<typeof checkBedrockQuotas>[0]["listPage"];
+      now?: () => number;
+      timeoutMs?: number;
+    } = {},
+  ): Promise<BedrockQuotaReport> {
+    const region = this.region ?? "us-east-1";
+    let client: ServiceQuotasClient | undefined;
+    // Resolved once: the fingerprint and the client use the same credentials
+    let credentials: ReturnType<Bedrock["_getCredentials"]> | undefined;
+    const getCredentials = () => (credentials ??= this._getCredentials());
+    const listPage =
+      opts.listPage ??
+      (async (nextToken: string | undefined, signal: AbortSignal) => {
+        client ??= await this._getQuotasClient(await getCredentials());
+        return client.send(
+          new ListServiceQuotasCommand({
+            ServiceCode: "bedrock",
+            MaxResults: 100,
+            NextToken: nextToken,
+          }),
+          { abortSignal: signal },
+        );
+      });
+    try {
+      return await checkBedrockQuotas({
+        key: this._catalogCacheKey(),
+        region,
+        trigger,
+        settings: opts.settings ?? readModelCatalogSettings(),
+        dir: opts.dir ?? modelCatalogDir(),
+        apiKey: !!this._resolveApiKey(),
+        credentials: async () =>
+          credentialFingerprint((await getCredentials()).accessKeyId),
+        listPage,
+        now: opts.now,
+        timeoutMs: opts.timeoutMs,
+      });
+    } catch {
+      return { status: "skipped", region };
+    } finally {
+      client?.destroy();
+    }
+  }
+
+  /**
+   * The warning for a 0 tokens- or requests-per-minute quota on the route
+   * this model's requests take, from a quota report; undefined otherwise.
+   */
+  zeroQuotaWarning(report: BedrockQuotaReport): string | undefined {
+    if (!report.quotas || !this.model) return undefined;
+    const effective = applyCrossRegionInference(
+      this.model,
+      this.crossRegionInference,
+      this.region,
+    );
+    return zeroQuotaWarning(
+      report.quotas,
+      effective,
+      report.region,
+      this.title ?? this.model,
+    );
+  }
+
+  /** Service Quotas client: IAM credentials only, one attempt, the user's network settings. */
+  private async _getQuotasClient(credentials: {
+    accessKeyId: string;
+    secretAccessKey: string;
+    sessionToken?: string;
+  }): Promise<ServiceQuotasClient> {
+    const region = this.region ?? "us-east-1";
+    const requestHandler = await this._requestHandlerFor(
+      `https://servicequotas.${region}.amazonaws.com`,
+    );
+    return new ServiceQuotasClient({
+      region,
+      ...(requestHandler ? { requestHandler } : {}),
+      credentials: {
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+        sessionToken: credentials.sessionToken || undefined,
+      },
+      maxAttempts: 1,
+    });
   }
 
   /**

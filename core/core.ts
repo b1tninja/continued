@@ -92,6 +92,12 @@ import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
 import {
+  BedrockMetadataTracker,
+  withQuotaWarnings,
+} from "./llm/bedrockMetadata";
+import { ensureBedrockPriceList } from "./llm/bedrockPriceList";
+import { zeroQuotaWarning } from "./llm/llms/bedrockQuotas";
+import {
   createOpenRouterRefresher,
   underTestRunner,
   type ModelCatalogRefresher,
@@ -161,6 +167,7 @@ import {
   ToolCall,
   type ContextItem,
   type IDE,
+  type RequestOptions,
 } from ".";
 
 import { ConfigYaml } from "@continuedev/config-yaml";
@@ -253,6 +260,8 @@ export class Core {
 
   /** The background OpenRouter list refresh (not started in tests). */
   private modelCatalogRefresher?: ModelCatalogRefresher;
+  /** Prices and quotas for the selected Bedrock model (not started in tests). */
+  private bedrockMetadata?: BedrockMetadataTracker;
   private messageAbortControllers = new MessageAbortControllers();
   private addMessageAbortController(id: string): AbortController {
     return this.messageAbortControllers.add(id);
@@ -471,6 +480,7 @@ export class Core {
         log: (m) => console.warn(m),
       });
       this.modelCatalogRefresher.start();
+      this.startBedrockMetadata(requestOptions);
     }
 
     on("modelCatalog/status", async () => {
@@ -923,6 +933,28 @@ export class Core {
       getAuditTrail().answer(data.callId, data.approved);
       void this.shadowIde.answered(data.callId, data.approved);
     });
+  }
+
+  /**
+   * Prices (AWS Price List) and quotas (Service Quotas) for the selected
+   * Bedrock model: looked at when the selection or config changes, and
+   * refreshed in the background under "Model information updates:
+   * Automatic". Never for a provider that is not selected.
+   */
+  private startBedrockMetadata(
+    requestOptions: () => Promise<RequestOptions | undefined>,
+  ) {
+    const tracker = new BedrockMetadataTracker({
+      requestOptions,
+      onZeroQuota: (warning) => void this.ide.showToast("warning", warning),
+      log: (m) => console.warn(m),
+    });
+    this.bedrockMetadata = tracker;
+    this.configHandler.onConfigUpdate((result) => {
+      const chat = result.config?.selectedModelByRole.chat;
+      void tracker.select(chat instanceof Bedrock ? chat : undefined);
+    });
+    tracker.refresher.start();
   }
 
   /**
@@ -1679,12 +1711,27 @@ export class Core {
           };
         }
         // "Test connection" is the user asking for a fresh answer, so the
-        // hour-long catalog cache is bypassed and refilled here.
+        // hour-long catalog cache is bypassed and refilled here. The quota
+        // check runs alongside (five seconds at most, never fails the test)
+        // and the region's AWS Price List is refreshed in the background.
         const bedrock = new Bedrock({ ...params, model: "" });
-        return {
-          ok: true as const,
-          models: await bedrock.listAvailableModels({ refresh: true }),
-        };
+        const [models, quotas] = await Promise.all([
+          bedrock.listAvailableModels({ refresh: true }),
+          bedrock.checkQuotas("test-connection"),
+        ]);
+        void (async () =>
+          ensureBedrockPriceList(bedrock.region, "test-connection", {
+            requestOptions: (await this.configHandler.loadConfig()).config
+              ?.requestOptions,
+            // Costs keep the selected model's region
+            activate: this.bedrockMetadata?.selected?.region === bedrock.region,
+          }))().catch(() => {});
+        const marked = withQuotaWarnings(models, quotas, (id, name) =>
+          quotas.quotas
+            ? zeroQuotaWarning(quotas.quotas, id, quotas.region, name)
+            : undefined,
+        );
+        return { ok: true as const, ...marked };
       } catch (e) {
         return {
           ok: false as const,
