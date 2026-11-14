@@ -1,8 +1,6 @@
 # Continuous CLI
 
-The Continuous CLI (`cn`) is a customizable command line coding agent.
-
-![Continuous CLI Demo](./media/demo.gif)
+The Continuous CLI (`continuous`, short alias `cn`) is a customizable command line coding agent.
 
 ## Installation
 
@@ -25,7 +23,7 @@ notepad install.ps1
 Or install a release tarball with npm if you have Node.js 22+ (see [Installing Continuous](../../docs/continuous-install.md) for pinning a version):
 
 ```bash
-npm i -g https://github.com/b1tninja/continuous/releases/download/v2.14.0-vscode/continuous-cli-2.14.0.tgz
+npm i -g https://github.com/b1tninja/continuous/releases/download/v2.16.2-vscode/continuous-cli-2.16.2.tgz
 ```
 
 ## Usage
