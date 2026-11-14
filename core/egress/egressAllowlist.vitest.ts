@@ -73,5 +73,22 @@ describe("egress allowlist", () => {
     // The community catalogue is fetched only while a selected model is
     // unpriced, but that needs no opt-in under the default setting
     expect(allowed.get("models.dev")?.class).toBe("D");
+    // The AWS Price List is fetched when a Bedrock model is configured
+    expect(allowed.get("pricing.us-east-1.amazonaws.com")?.class).toBe("R");
+  });
+
+  it("lists each host in one group only", () => {
+    const groupsOf = new Map<string, string[]>();
+    for (const g of allowlist.groups) {
+      for (const h of g.hosts) {
+        groupsOf.set(h, [...(groupsOf.get(h) ?? []), g.class]);
+      }
+    }
+    const twice = [...groupsOf]
+      .filter(([, classes]) => classes.length > 1)
+      .map(([h, classes]) => `${h}: ${classes.join(", ")}`);
+    expect(twice, "a host in two groups takes the class of the last").toEqual(
+      [],
+    );
   });
 });
