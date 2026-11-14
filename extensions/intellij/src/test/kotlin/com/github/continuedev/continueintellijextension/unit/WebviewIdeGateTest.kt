@@ -22,6 +22,8 @@ class WebviewIdeGateTest : TestCase() {
     fun `test core pass-through stays on the core route`() {
         assertEquals(WebviewIdeGate.Route.CORE, WebviewIdeGate.route("llm/streamChat"))
         assertEquals(WebviewIdeGate.Route.CORE, WebviewIdeGate.route("tools/evaluatePolicy"))
+        assertEquals(WebviewIdeGate.Route.CORE, WebviewIdeGate.route("policy/load"))
+        assertEquals(WebviewIdeGate.Route.CORE, WebviewIdeGate.route("policy/save"))
     }
 
     fun `test policy settings reach core, which confirms a loosening save itself`() {
@@ -35,6 +37,7 @@ class WebviewIdeGateTest : TestCase() {
         assertEquals(WebviewIdeGate.Route.IDE, WebviewIdeGate.route("runCommand"))
         assertEquals(WebviewIdeGate.Route.IDE, WebviewIdeGate.route("openUrl"))
         assertEquals(WebviewIdeGate.Route.IDE, WebviewIdeGate.route("readFile"))
+        assertEquals(WebviewIdeGate.Route.IDE, WebviewIdeGate.route("policy/sessionIdgaf"))
     }
 
     fun `test denied types are not also allowed`() {
