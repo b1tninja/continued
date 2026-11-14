@@ -164,7 +164,7 @@ Where to set it:
 Other details:
 
 - With **Only when I ask**, **Pull now** downloads the list once. **Not now** sends nothing, and the question is not asked again in that session. Tick **Don't ask again** to stop the question for good.
-- The model step, the Models settings page and the console's Total Usage show "OpenRouter model information last updated <time> · Refresh now". **Refresh now** downloads the list straight away (not offered when updates are off). If the last automatic update failed, the line says so.
+- The model step, the Models settings page and the console's Total Usage show "OpenRouter model information last updated &lt;time&gt; · Refresh now". **Refresh now** downloads the list straight away (not offered when updates are off). If the last automatic update failed, the line says so.
 - The list is stored on this computer in `model-catalog/openrouter.json` in your global folder (`~/.continuous` by default), with the date it was downloaded. It is written to a temporary file first and then renamed, so a reader never sees half a list. If the file is missing, damaged or from an older format it is ignored.
 - If `openrouter.ai` cannot be reached (offline, a proxy that refuses it), the list you already had stays in use. An automatic update tries again after 5 minutes, then 10, 20 and so on, up to every 6 hours.
 - Ollama is not covered by this setting. Its model list on `ollama.com` is fetched only from Ollama's own setup, when you choose **Download** or **Refresh** there.
