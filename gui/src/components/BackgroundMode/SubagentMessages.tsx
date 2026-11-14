@@ -15,12 +15,26 @@ const TEXT_BUTTON =
 const LINK_BUTTON =
   "flex-shrink-0 cursor-pointer border-none bg-transparent p-0 text-2xs text-link hover:underline";
 
+/** Marks a message another subagent sent, not the person. */
+function FromAgent({ name }: { name: string }) {
+  return (
+    <span
+      className="mr-1 text-2xs text-description"
+      data-testid="agent-message-from"
+    >
+      from {name}:
+    </span>
+  );
+}
+
 /**
- * The person's messages to a running subagent, under its record: an input
- * while the run is live, the messages queued for it (each can be cancelled,
- * or sent now, until it is delivered), and the ones already delivered or
- * left unread when it ended. Send waits until the run would finish; Send now
- * goes in after its current tool calls.
+ * Messages to a running subagent, under its record: an input while the run
+ * is live, the messages queued for it (each can be cancelled, or sent now,
+ * until it is delivered), and the ones already delivered or left unread when
+ * it ended. Send waits until the run would finish; Send now goes in after its
+ * current tool calls. A message another subagent sent it (send_message) is
+ * shown with that agent's name, so the person sees what the agents told each
+ * other; the person can cancel one before it is delivered.
  */
 export function SubagentMessages({
   runId,
@@ -61,7 +75,7 @@ export function SubagentMessages({
     <div className="flex min-w-0 flex-col gap-1" data-testid="agent-messages">
       {sent.length > 0 && (
         <ul
-          aria-label={`Your messages to ${name}`}
+          aria-label={`Messages to ${name}`}
           className="m-0 flex list-none flex-col gap-0.5 p-0"
           data-testid="agent-messages-sent"
         >
@@ -71,6 +85,7 @@ export function SubagentMessages({
               className="flex min-w-0 items-baseline gap-1.5"
             >
               <span className="min-w-0 flex-1 break-words whitespace-pre-wrap">
+                {m.from && <FromAgent name={m.from} />}
                 {m.text}
               </span>
               <span
@@ -97,6 +112,7 @@ export function SubagentMessages({
               data-testid="agent-message-queued"
             >
               <span className="line-clamp-2 min-w-0 flex-1 break-words">
+                {m.from?.kind === "agent" && <FromAgent name={m.from.name} />}
                 {m.text}
               </span>
               <span className="flex-shrink-0 text-2xs text-description-muted">

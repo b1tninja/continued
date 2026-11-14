@@ -478,7 +478,16 @@ const EDIT_RULE_NAMES = new Set<string>([
 ]);
 /** Web tools can send data out, so they are never just context. */
 const WEB_RULE_NAMES = new Set<string>(["fetchUrl", "searchWeb", "Fetch"]);
+/**
+ * A message to another agent changes what that agent does, so it is a Tools
+ * call: Careful asks, Permissive and IDGAF run it. The receiver's own calls
+ * are still checked against the person's policies, so a message cannot raise
+ * what another agent may do.
+ */
+const MESSAGE_RULE_NAMES = new Set<string>([BuiltInToolNames.SendMessage]);
 const CONTEXT_RULE_NAMES = new Set<string>([
+  // Lists the agents of this session: names, tasks and states, nothing else
+  BuiltInToolNames.ListSessions,
   "readFile",
   "listDirectory",
   "grepSearch",
@@ -515,6 +524,7 @@ export function areaOfTool(
   }
   if (EDIT_RULE_NAMES.has(name)) return "edits";
   if (WEB_RULE_NAMES.has(name)) return "tools";
+  if (MESSAGE_RULE_NAMES.has(name)) return "tools";
   if (CONTEXT_RULE_NAMES.has(name)) return "context";
   return tool?.readonly ? "context" : "tools";
 }

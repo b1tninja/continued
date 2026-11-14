@@ -23,6 +23,7 @@ import {
 import { currentNotice, dismissCurrentNotice } from "./util/retirementStartup";
 import { isDismissed } from "./util/retirementNoticeState";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
+import { toolForPolicy } from "./tools/definitions/sessionMessaging";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { deputyWorkspace } from "./tools/permissions/workspaceRoots";
 import { uriToPath } from "./tools/permissions/names";
@@ -2161,7 +2162,9 @@ export class Core {
           throw new Error("Config not loaded");
         }
 
-        const tool = config.tools.find((t) => t.function.name === toolName);
+        // A tool the gui answers (send_message) is not in the config's list,
+        // but the person's levels and rules still decide it
+        const tool = toolForPolicy(config.tools, toolName);
         // The folder lets git be vouched as read-only after its config is checked
         const dirs = await this.ide.getWorkspaceDirs();
         const result = evaluateToolPolicyWithRules({

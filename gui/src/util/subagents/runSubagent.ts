@@ -24,6 +24,7 @@ import {
   SubagentToolCallSummary,
   summarizeToolArgs,
 } from "core/subagents/result";
+import { sessionMessageText } from "core/subagents/messages";
 import { resolveSubagentTools } from "core/subagents/tools";
 import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { BuiltInToolNames } from "core/tools/builtIn";
@@ -67,6 +68,11 @@ import {
 } from "../promptCache";
 import { splitPromptProgress } from "../promptProgress";
 import { subagentResultItem } from "./interrupt";
+import {
+  answerSessionTool,
+  sessionToolsFor,
+  subagentBatchOf,
+} from "./sessionTools";
 import {
   registerSubagentRun,
   STOPPED_BY_USER,
@@ -168,15 +174,27 @@ function assistantTexts(history: ChatHistoryItem[]): string[] {
 }
 
 /**
- * The person's messages as the subagent reads them: one user message, each
- * in its own tag so it is not mistaken for the parent's task.
+ * Messages as the subagent reads them: one user message, each in its own tag
+ * so it is not mistaken for the parent's task, and one from another agent
+ * labelled as not from the person (core/subagents/messages.ts).
  */
 export function personMessageText(
   messages: readonly SubagentInboxMessage[],
 ): string {
-  return messages
-    .map((m) => `<message from="person">\n${m.text}\n</message>`)
-    .join("\n\n");
+  return sessionMessageText(messages);
+}
+
+/** How a message is kept in the run's record. */
+function recordOf(
+  m: SubagentInboxMessage,
+  delivered: boolean,
+): NonNullable<SubagentRunState["messages"]>[number] {
+  return {
+    text: m.text,
+    at: m.at,
+    delivered,
+    ...(m.from?.kind === "agent" ? { from: m.from.name } : {}),
+  };
 }
 
 function lastToolCalls(local: LocalSession): ToolCallState[] {
@@ -272,6 +290,12 @@ export interface SubagentDriveInput {
    * call to core as usual.
    */
   handleCall?: (call: ToolCallState) => Promise<HandledCall | undefined>;
+  /**
+   * Calls the gui answers itself, after the parent's policies allowed them
+   * (asked the person, at Careful): list_sessions and send_message. Undefined
+   * for a tool sends the call to core.
+   */
+  localCall?: (call: ToolCallState) => Promise<ContextItem[] | undefined>;
   /** Folders (URIs) the tool calls run in: a worker's worktree */
   workspaceDirs?: string[];
   /** Who the audit trail names for this run's calls, under the parent's session */
@@ -386,10 +410,7 @@ export async function driveSubagent(
         },
       ],
     };
-    sent = [
-      ...sent,
-      ...messages.map((m) => ({ text: m.text, at: m.at, delivered: true })),
-    ];
+    sent = [...sent, ...messages.map((m) => recordOf(m, true))];
     update({ messages: sent });
   };
 
@@ -612,6 +633,14 @@ export async function driveSubagent(
         }
       }
 
+      const answered = signal.aborted
+        ? undefined
+        : await input.localCall?.(current);
+      if (answered) {
+        succeed(answered);
+        return false;
+      }
+
       // Stop does not wait for the call: core cannot cancel a tool call, so
       // its result is dropped, and a terminal command is killed as the
       // parent's own Stop does.
@@ -809,7 +838,12 @@ export async function runSubagentTool(
       parentTools = applyToolOverrides(parentTools, model.toolOverrides).tools;
     }
     const resolved = resolveSubagentTools(definition, parentTools);
-    const tools = resolved.tools;
+    // Started with other subagents: it may list them and message them
+    const batchSize = subagentBatchOf(state.session.history, toolCallId).length;
+    const tools = [
+      ...resolved.tools,
+      ...sessionToolsFor(definition, batchSize),
+    ];
     const notices = [
       ...(fallbackReason ? [fallbackReason] : []),
       // Built-in agents list tools that only some setups have; only a
@@ -846,6 +880,12 @@ export async function runSubagentTool(
       onUpdate: update,
       approvalScope: toolCallId,
       inboxId: toolCallId,
+      localCall: async (call) =>
+        answerSessionTool(
+          call,
+          { runId: toolCallId, name: definition.name },
+          getState,
+        ),
       audit: {
         sessionId: getState().session.id,
         agent: subagentAuditAgent(
@@ -877,11 +917,7 @@ export async function runSubagentTool(
     update({
       messages: [
         ...(run.messages ?? []),
-        ...undelivered.map((m) => ({
-          text: m.text,
-          at: m.at,
-          delivered: false,
-        })),
+        ...undelivered.map((m) => recordOf(m, false)),
       ],
       notices: [
         ...(run.notices ?? []),
