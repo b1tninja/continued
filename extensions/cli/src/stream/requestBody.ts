@@ -1,10 +1,14 @@
 import { type ModelConfig, withToolDialect } from "@continuedev/config-yaml";
 import { CACHE_PIN_FIELD } from "@continuedev/openai-adapters";
-import type { ChatHistoryItem } from "core/index.js";
+import type { ChatHistoryItem, ChatMessage } from "core/index.js";
+import {
+  normalizeTurns,
+  providerRequiresAlternation,
+} from "core/llm/normalizeTurns.js";
 import { withTurnTail } from "core/llm/prompts/usePrompts.js";
 import {
-  convertFromUnifiedHistory,
-  convertFromUnifiedHistoryWithSystemMessage,
+  chatMessagesFromUnifiedHistory,
+  convertChatMessagesToOpenAI,
 } from "core/util/messageConversion.js";
 import { providerRecoversText } from "core/util/toolDialectLeak.js";
 import type {
@@ -42,6 +46,29 @@ import { getDefaultCompletionOptions } from "./streamChatResponse.types.js";
  */
 const PIN_PROVIDERS = new Set(["bedrock", "anthropic"]);
 
+/**
+ * How many messages are sent ahead of the first one history item `item`
+ * produced. A message normalizeTurns added or rewrote counts as part of the
+ * item before it; a reasoning turn is not sent.
+ */
+function sentBeforeItem(
+  history: { messages: ChatMessage[]; itemIndex: number[] },
+  conversation: ChatMessage[],
+  item: number,
+): number {
+  const origin = new Map(
+    history.messages.map((message, i) => [message, history.itemIndex[i]]),
+  );
+  let from = -1;
+  let sent = 0;
+  for (const message of conversation) {
+    from = origin.get(message) ?? from;
+    if (from >= item) break;
+    if (message.role !== "thinking") sent++;
+  }
+  return sent;
+}
+
 export function buildChatRequestBody(args: {
   model: ModelConfig;
   chatHistory: ChatHistoryItem[];
@@ -55,25 +82,30 @@ export function buildChatRequestBody(args: {
   turnTail?: string;
 }): ChatCompletionCreateParamsStreaming {
   const { model, chatHistory, systemMessage, tools, taskListBlock } = args;
+  // The history as a conversation every provider accepts: an aborted or
+  // empty turn dropped, reasoning left out, every tool call answered
+  // (core/llm/normalizeTurns.ts). A valid history comes back as it is, so the
+  // request is byte-identical and the prompt cache keeps hitting.
+  const history = chatMessagesFromUnifiedHistory(chatHistory);
+  const conversation = normalizeTurns(history.messages, {
+    requiresAlternation: providerRequiresAlternation(model.provider),
+  }).messages;
   const messages = withTurnTail(
-    withEnvironmentBlock(
-      convertFromUnifiedHistoryWithSystemMessage(
-        chatHistory,
-        systemMessage,
-      ) as ChatCompletionMessageParam[],
-    ),
+    withEnvironmentBlock([
+      { role: "system", content: systemMessage },
+      ...convertChatMessagesToOpenAI(conversation),
+    ] as ChatCompletionMessageParam[]),
     args.turnTail,
   );
   if (taskListBlock) {
     messages.push({ role: "user", content: taskListBlock });
   }
   // A history item marked as a fork point (ChatHistoryItem.cachePin) becomes
-  // the mark on the message it produced: index 0 is the system message, then
-  // the messages the items before it produce.
+  // the mark on the first message it produced: index 0 is the system message,
+  // then the messages the items before it produce.
   const pinAt = chatHistory.findIndex((item) => item.cachePin);
   if (pinAt >= 0 && PIN_PROVIDERS.has(model.provider)) {
-    const index =
-      1 + convertFromUnifiedHistory(chatHistory.slice(0, pinAt)).length;
+    const index = 1 + sentBeforeItem(history, conversation, pinAt);
     const pinned = messages[index] as unknown as
       Record<string, unknown> | undefined;
     if (pinned) pinned[CACHE_PIN_FIELD] = true;

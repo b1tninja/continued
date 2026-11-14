@@ -106,6 +106,18 @@ export function anthropicFinishReason(
   }
 }
 
+function orphanToolResultText(
+  message: OpenAI.Chat.Completions.ChatCompletionToolMessageParam,
+): string {
+  const text =
+    typeof message.content === "string"
+      ? message.content
+      : (message.content ?? [])
+          .map((part) => (part.type === "text" ? part.text : ""))
+          .join("\n");
+  return `Tool call output for Tool Call ID ${message.tool_call_id || "unknown"}:\n\n${text.trim() || "No tool output"}`;
+}
+
 export class AnthropicApi implements BaseLlmApi {
   apiBase: string = "https://api.anthropic.com/v1/";
 
@@ -441,6 +453,10 @@ export class AnthropicApi implements BaseLlmApi {
       }
     };
 
+    // A tool_result must answer a tool_use that was sent. One whose call was
+    // left out (no id or name) goes as text instead of a 400, in the words
+    // Bedrock uses for the same case.
+    const sentToolUseIds = new Set<string>();
     for (const message of nonSystemMessages) {
       const newRole =
         message.role === "user" || message.role === "tool"
@@ -450,7 +466,14 @@ export class AnthropicApi implements BaseLlmApi {
         flushCurrentMessage();
         currentRole = newRole;
       }
-      currentParts.push(...this.getContentBlocksFromChatMessage(message));
+      const blocks: ContentBlockParam[] =
+        message.role === "tool" && !sentToolUseIds.has(message.tool_call_id)
+          ? [{ type: "text", text: orphanToolResultText(message) }]
+          : this.getContentBlocksFromChatMessage(message);
+      for (const block of blocks) {
+        if (block.type === "tool_use") sentToolUseIds.add(block.id);
+      }
+      currentParts.push(...blocks);
       // A pinned message (CACHE_PIN_FIELD, a fork point): its last block takes
       // the mark, and the caching step turns it into a marker or strips it.
       if (isCachePinned(message) && currentParts.length > 0) {
