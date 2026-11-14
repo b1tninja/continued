@@ -171,6 +171,8 @@ export function useChat({
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   // The reply is held while recovery looks for a tool call written as text
   const [isReadingReply, setIsReadingReply] = useState(false);
+  // The reasoning of the reply now streaming, shown live; null when none
+  const [liveReasoning, setLiveReasoning] = useState<string | null>(null);
   const [responseStartTime, setResponseStartTime] = useState<number | null>(
     null,
   );
@@ -379,6 +381,9 @@ export function useChat({
         model: turnModel,
         onShowStatusMessage,
         onRecoveryHold: setIsReadingReply,
+        onReasoning: (text: string) =>
+          setLiveReasoning((prev) => (prev ?? "") + text),
+        onReasoningDone: () => setLiveReasoning(null),
       });
       // Steering: deliver queued messages at the next tool boundary when the
       // person asked for it (Enter on an empty prompt while the agent works),
@@ -435,6 +440,7 @@ export function useChat({
       setAbortController(null);
       setIsWaitingForResponse(false);
       setIsReadingReply(false);
+      setLiveReasoning(null);
       setResponseStartTime(null);
       setInputMode(true);
 
@@ -1065,6 +1071,7 @@ export function useChat({
     setChatHistory: setChatHistory,
     isWaitingForResponse,
     isReadingReply,
+    liveReasoning,
     responseStartTime,
     isCompacting,
     compactionStartTime,

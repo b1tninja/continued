@@ -4,9 +4,23 @@ import type { ChatCompletionCreateParamsStreaming } from "openai/resources.mjs";
 
 import { ToolCallPreview } from "../tools/types.js";
 
+import type { StreamedReasoning } from "./reasoning.js";
+
 export interface StreamCallbacks {
   onContent?: (content: string) => void;
   onContentComplete?: (content: string) => void;
+  /**
+   * The model's reasoning as it streams, one piece at a time. Never part of
+   * the reply's content; the terminal UI shows it dimmed while the model
+   * thinks.
+   */
+  onReasoning?: (text: string) => void;
+  /**
+   * A reply's whole reasoning, once, after its stream ends (and after the
+   * request's `onRequest`) and before `onContentComplete`. Not called for a
+   * reply without reasoning.
+   */
+  onReasoningComplete?: (reasoning: StreamedReasoning) => void;
   /**
    * `toolCallId` on the four tool callbacks is the model's id for the call.
    * Calls of one turn can run at the same time, and two of them can be the

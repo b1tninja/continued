@@ -30,6 +30,12 @@ import { telemetryService } from "./telemetry/telemetryService.js";
 import { buildImportSkillPrompt } from "./tools/skills.js";
 import { SlashCommandResult } from "./ui/hooks/useChat.types.js";
 import {
+  getThinkingDisplay,
+  parseThinkingDisplay,
+  setThinkingDisplay,
+  THINKING_DISPLAYS,
+} from "./ui/thinkingDisplay.js";
+import {
   getSkillSlashCommandName,
   loadMarkdownSkills,
 } from "./util/loadMarkdownSkills.js";
@@ -225,6 +231,23 @@ async function handleImportSkill(args: string[]): Promise<SlashCommandResult> {
   };
 }
 
+/** `/thinking [fold|expanded|hide]`: shows or sets the thinking display. */
+function handleThinking(args: string[]) {
+  const value = args.join(" ").trim();
+  const choices = THINKING_DISPLAYS.join(", ");
+  if (!value) {
+    return { output: `Thinking display: ${getThinkingDisplay()} (${choices})` };
+  }
+  const mode = parseThinkingDisplay(value);
+  if (!mode) {
+    return {
+      output: `"${value}" is not a thinking display; use ${choices}`,
+    };
+  }
+  setThinkingDisplay(mode);
+  return { output: `Thinking display: ${mode}` };
+}
+
 function handleSessions() {
   return { openSessionSelector: true };
 }
@@ -375,6 +398,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   skills: () => handleSkills(),
   "import-skill": (args) => handleImportSkill(args),
   sessions: handleSessions,
+  thinking: handleThinking,
   export: handleExport,
   import: handleImport,
 };

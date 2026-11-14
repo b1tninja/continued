@@ -147,6 +147,7 @@ export class ChatHistoryService extends BaseService<ChatHistoryState> {
     content: string,
     toolCalls?: any[],
     usage?: any,
+    reasoning?: ChatHistoryItem["reasoning"],
   ): ChatHistoryItem {
     const message: any = {
       role: "assistant",
@@ -207,6 +208,7 @@ export class ChatHistoryService extends BaseService<ChatHistoryState> {
     });
 
     const newMessage = createHistoryItem(message, [], toolCallStates);
+    if (reasoning) newMessage.reasoning = reasoning;
     const newHistory = [...this.currentState.history, newMessage];
     this.setHistoryInternal(newHistory);
 

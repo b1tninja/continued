@@ -9,6 +9,7 @@ import { withTurnTail } from "core/llm/prompts/usePrompts.js";
 import {
   chatMessagesFromUnifiedHistory,
   convertChatMessagesToOpenAI,
+  convertFromUnifiedMessage,
 } from "core/util/messageConversion.js";
 import { providerRecoversText } from "core/util/toolDialectLeak.js";
 import type {
@@ -69,6 +70,120 @@ function sentBeforeItem(
   return sent;
 }
 
+/**
+ * Providers that need a reply's reasoning back on the next request, and in
+ * which field. Claude (on Anthropic's API and Vertex) needs its signed and
+ * redacted thinking: with thinking on, a tool call's turn is refused without
+ * it. The adapter decides which blocks Claude reads (anthropicThinkingBlocks:
+ * the same rules as core). DeepSeek refuses a request with tools unless every
+ * assistant message carries its `reasoning_content` (empty when it had none),
+ * as core sends it (openaiTypeConverters.ts).
+ */
+const REASONING_REPLAY: Record<string, "details" | "content"> = {
+  anthropic: "details",
+  vertexai: "details",
+  deepseek: "content",
+};
+
+/**
+ * Providers whose adapter turns `reasoning_effort` into the provider's own
+ * reasoning switch (packages/openai-adapters/src/apis/reasoningSwitch.ts).
+ * Other OpenAI-compatible servers get no new field.
+ */
+const REASONING_SWITCH_PROVIDERS = new Set([
+  "anthropic",
+  "vertexai",
+  "gemini",
+  "openrouter",
+  "deepseek",
+  "bedrock",
+]);
+
+/**
+ * The model's `defaultCompletionOptions.reasoning` as the adapters' switch:
+ * `none` when off, else the effort for `reasoningBudgetTokens` (low up to
+ * 1024, medium up to 4096, high above; 2048 when unset, as in the IDE).
+ * Nothing when the config says nothing, when a `reasoning_effort` is already
+ * in the model's extra body fields (a catalog variant, or the use's
+ * `modeModels` effort: those win), or for a provider whose adapter does not
+ * read the switch (OpenAI only on its own API).
+ */
+export function reasoningEffortForModel(
+  model: ModelConfig,
+): "none" | "low" | "medium" | "high" | undefined {
+  const reasoning = model.defaultCompletionOptions?.reasoning;
+  if (reasoning === undefined) return undefined;
+  if (model.requestOptions?.extraBodyProperties?.reasoning_effort) {
+    return undefined;
+  }
+  const officialOpenAI =
+    model.provider === "openai" &&
+    (!model.apiBase || /^https:\/\/api\.openai\.com\//.test(model.apiBase));
+  if (!officialOpenAI && !REASONING_SWITCH_PROVIDERS.has(model.provider)) {
+    return undefined;
+  }
+  if (!reasoning) return "none";
+  const budget = model.defaultCompletionOptions?.reasoningBudgetTokens ?? 2048;
+  return budget <= 1024 ? "low" : budget <= 4096 ? "medium" : "high";
+}
+
+/**
+ * Marks each assistant message the history gives with the item it came from,
+ * on a copy (the history itself is not changed), so the reply's reasoning can
+ * be put back on the message it produced after normalizeTurns has dropped,
+ * added or rewritten turns. The mark is a symbol: a repaired copy keeps it
+ * (object spread copies symbol keys), and it never reaches the request.
+ */
+const REASONING_SOURCE = Symbol("reasoningSource");
+
+function markReasoningSources(
+  provider: string,
+  chatHistory: ChatHistoryItem[],
+  history: { messages: ChatMessage[]; itemIndex: number[] },
+): void {
+  if (!REASONING_REPLAY[provider]) return;
+  history.messages.forEach((message, i) => {
+    const item = chatHistory[history.itemIndex[i]];
+    if (message.role === "assistant" && item?.message === message) {
+      history.messages[i] = {
+        ...message,
+        [REASONING_SOURCE]: item,
+      } as ChatMessage;
+    }
+  });
+}
+
+/**
+ * The conversation in the OpenAI format (reasoning turns left out), with each
+ * assistant reply's reasoning on the message it produced, in the field its
+ * provider reads back (REASONING_REPLAY).
+ */
+function convertWithReplayedReasoning(
+  provider: string,
+  conversation: ChatMessage[],
+): ChatCompletionMessageParam[] {
+  const field = REASONING_REPLAY[provider];
+  if (!field) return convertChatMessagesToOpenAI(conversation);
+  const converted: ChatCompletionMessageParam[] = [];
+  for (const message of conversation) {
+    const openai = convertFromUnifiedMessage(message);
+    if (!openai) continue;
+    if (message.role === "assistant") {
+      const item = (message as unknown as Record<symbol, unknown>)[
+        REASONING_SOURCE
+      ] as ChatHistoryItem | undefined;
+      const target = openai as unknown as Record<string, unknown>;
+      if (field === "content") {
+        target.reasoning_content = item?.reasoning?.text ?? "";
+      } else if (item?.reasoning?.details?.length) {
+        target.reasoning_details = item.reasoning.details;
+      }
+    }
+    converted.push(openai);
+  }
+  return converted;
+}
+
 export function buildChatRequestBody(args: {
   model: ModelConfig;
   chatHistory: ChatHistoryItem[];
@@ -87,16 +202,18 @@ export function buildChatRequestBody(args: {
   // (core/llm/normalizeTurns.ts). A valid history comes back as it is, so the
   // request is byte-identical and the prompt cache keeps hitting.
   const history = chatMessagesFromUnifiedHistory(chatHistory);
+  markReasoningSources(model.provider, chatHistory, history);
   const conversation = normalizeTurns(history.messages, {
     requiresAlternation: providerRequiresAlternation(model.provider),
   }).messages;
   const messages = withTurnTail(
     withEnvironmentBlock([
       { role: "system", content: systemMessage },
-      ...convertChatMessagesToOpenAI(conversation),
+      ...convertWithReplayedReasoning(model.provider, conversation),
     ] as ChatCompletionMessageParam[]),
     args.turnTail,
   );
+  const reasoningEffort = reasoningEffortForModel(model);
   if (taskListBlock) {
     messages.push({ role: "user", content: taskListBlock });
   }
@@ -116,6 +233,7 @@ export function buildChatRequestBody(args: {
     stream: true,
     tools,
     ...getDefaultCompletionOptions(model.defaultCompletionOptions),
+    ...(reasoningEffort && { reasoning_effort: reasoningEffort }),
     ...getRequestBodyHints(
       model,
       args.isCompacting ? "oneShot" : "conversation",
