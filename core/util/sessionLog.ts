@@ -51,8 +51,7 @@ export const SESSION_LOG_VERSION = 1;
 export const COMPACT_RATIO = 2;
 /** ... and at least this big, so short sessions never compact. */
 export const COMPACT_MIN_BYTES = 256 * 1024;
-/** The IDE's default for the `sessionLogStorage` setting. */
-export const SESSION_LOG_STORAGE_DEFAULT = true;
+export { SESSION_LOG_STORAGE_DEFAULT } from "./constants.js";
 
 type MetaKey = Exclude<keyof Session, "history" | "sessionId">;
 
@@ -811,7 +810,7 @@ export class SessionLogWriter {
 
   private async drain(s: LogState): Promise<void> {
     try {
-      while (!s.dropped && this.hasPending(s)) {
+      while (!s.dropped && !s.jsonFallback && this.hasPending(s)) {
         const blobs = new Map(s.pendingBlobs);
         // Blobs first: a line is never on disk before what it refers to
         if (blobs.size) {
@@ -853,7 +852,7 @@ export class SessionLogWriter {
     } finally {
       s.inflight = undefined;
       s.running = false;
-      if (!s.dropped && this.hasPending(s)) {
+      if (!s.dropped && !s.jsonFallback && this.hasPending(s)) {
         s.running = true;
         setImmediate(() => void this.drain(s));
       } else {
@@ -927,7 +926,21 @@ export class SessionLogWriter {
       const ok = this.readsBackAs(tmp, s.blobDir, snap.expect);
       if (!ok) {
         await fs.promises.rm(tmp, { force: true });
+        // This save, and the later ones, go to the .json: changes queued
+        // behind the snapshot are in the next whole-session save, which a
+        // fallback session always asks for
         s.jsonFallback = true;
+        s.pendingOps.clear();
+        s.pendingTrunc = undefined;
+        s.pendingBlobs.clear();
+        s.compactQueued = false;
+        const legacyTmp = `${snap.migrateFrom}.${process.pid}.${++revCounter}.tmp`;
+        await fs.promises.writeFile(
+          legacyTmp,
+          JSON.stringify(snap.expect, undefined, 2),
+          { encoding: "utf8", mode: 0o600 },
+        );
+        await renameWithRetry(legacyTmp, snap.migrateFrom);
         this.onError(
           `Session ${s.sessionId} did not read back the same in the new format; it stays in ${path.basename(snap.migrateFrom)}.`,
         );

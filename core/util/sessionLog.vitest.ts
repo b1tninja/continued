@@ -300,18 +300,31 @@ describe("session log: migration from .json", () => {
     const s = session([user("keep me")]);
     new HistoryManager().save(s);
     const m = logManager();
-    m.save(m.load(s.sessionId));
+    const edited = { ...m.load(s.sessionId), title: "Edited" };
+    m.save(edited);
+    // queued behind the migration
+    m.save({ ...edited, history: [...edited.history, user("queued")] });
     await m.flush(s.sessionId);
     expect(fs.existsSync(getSessionFilePath(s.sessionId))).toBe(true);
     expect(fs.existsSync(getSessionLogFilePath(s.sessionId))).toBe(false);
     expect(onError).toHaveBeenCalled();
-    // later saves in this process go to the .json
-    const next = { ...s, history: [...s.history, assistant("ok")] };
+    // The save that tried the migration is in the .json
+    const json = () =>
+      JSON.parse(fs.readFileSync(getSessionFilePath(s.sessionId), "utf8"));
+    expect(json().title).toBe("Edited");
+    // later saves in this process go to the .json, whole
+    const next = { ...edited, history: [...s.history, assistant("ok")] };
     expect(m.save(next).rev).toBeNull();
+    expect(json().history).toHaveLength(2);
     expect(
-      JSON.parse(fs.readFileSync(getSessionFilePath(s.sessionId), "utf8"))
-        .history,
-    ).toHaveLength(2);
+      m.saveDelta({
+        sessionId: s.sessionId,
+        baseRev: "any",
+        length: 2,
+        items: [],
+        meta: {},
+      }).needFull,
+    ).toBe(true);
   });
 
   it("turning the log off writes .json and removes the log", async () => {
