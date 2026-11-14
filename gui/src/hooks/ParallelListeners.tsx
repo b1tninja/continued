@@ -1,4 +1,11 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { IdeMessengerContext } from "../context/IdeMessenger";
 
 import { FromCoreProtocol } from "core/protocol";
@@ -13,17 +20,20 @@ import {
 } from "../redux/slices/profilesSlice";
 import {
   addContextItemsAtIndex,
-  newSession,
   setHasReasoningEnabled,
   setIsSessionMetadataLoading,
-  setMode,
+  setLoadingSessionId,
 } from "../redux/slices/sessionSlice";
 import { setTTSActive } from "../redux/slices/uiSlice";
 
 import { modelSupportsReasoning } from "core/llm/autodetect";
+import { expectsSessionToResume } from "../pages/gui/resumingSession";
 import { cancelStream } from "../redux/thunks/cancelStream";
 import { handleApplyStateUpdate } from "../redux/thunks/handleApplyStateUpdate";
-import { loadSession, refreshSessionMetadata } from "../redux/thunks/session";
+import {
+  refreshSessionMetadata,
+  resumeInitialSession,
+} from "../redux/thunks/session";
 import { updateFileSymbolsFromHistory } from "../redux/thunks/updateFileSymbols";
 import {
   setDocumentStylesFromLocalStorage,
@@ -51,6 +61,17 @@ function ParallelListeners() {
   const sessionId = useAppSelector((state) => state.session.id);
   const lastSessionId = useAppSelector((store) => store.session.lastSessionId);
   const [initialSessionId] = useState(sessionId || lastSessionId);
+  const persistedTitle = useAppSelector((store) => store.session.title);
+  const [initialSessionTitle] = useState(persistedTitle);
+
+  // The saved session is only fetched once the config has loaded, which can
+  // take a while. Mark it as loading before the first paint so the chat shows
+  // that, rather than the empty state, in the meantime.
+  useLayoutEffect(() => {
+    if (initialSessionId && expectsSessionToResume(initialSessionTitle)) {
+      dispatch(setLoadingSessionId(initialSessionId));
+    }
+  }, []);
 
   const handleConfigUpdate = useCallback(
     async (isInitial: boolean, result: FromCoreProtocol["configUpdate"][0]) => {
@@ -115,12 +136,7 @@ function ParallelListeners() {
       }
       dispatch(setConfigLoading(false));
       if (initialSessionId) {
-        await dispatch(
-          loadSession({
-            sessionId: initialSessionId,
-            saveCurrentSession: false,
-          }),
-        );
+        await dispatch(resumeInitialSession(initialSessionId));
       }
     }
     void initialLoadConfig();

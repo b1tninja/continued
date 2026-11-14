@@ -42,15 +42,15 @@ import { findLastIndex } from "lodash";
 import { v4 as uuidv4 } from "uuid";
 import { type InlineErrorMessageType } from "../../components/mainInput/InlineErrorMessage";
 import { toolCallCtxItemToCtxItemWithId } from "../../pages/gui/ToolCallDiv/utils";
-import { addToolCallDeltaToState, isEditTool } from "../../util/toolCallState";
 import { appendLedger, type CacheLedgerEntry } from "../../util/cacheLedger";
-import { appendFailure, type RequestFailure } from "../../util/requestFailures";
 import {
   INITIAL_PROMPT_CACHE_STATE,
   type PromptCacheKey,
   type PromptCacheMiss,
   type PromptCacheSessionState,
 } from "../../util/promptCache";
+import { appendFailure, type RequestFailure } from "../../util/requestFailures";
+import { addToolCallDeltaToState, isEditTool } from "../../util/toolCallState";
 import { RootState } from "../store";
 import { streamResponseThunk } from "../thunks/streamResponse";
 import { findChatHistoryItemByToolCallId, findToolCallById } from "../util";
@@ -215,6 +215,13 @@ export type ChatHistoryItemWithMessageId = ChatHistoryItem & {
 
 type SessionState = {
   lastSessionId?: string;
+  /**
+   * Set while a saved session is being fetched from the IDE. A large session
+   * can take a while, and until it arrives `history` is empty. Any
+   * `newSession` clears it, so a slow load the user has moved on from is
+   * dropped rather than replacing what they are doing.
+   */
+  loadingSessionId?: string;
   isSessionMetadataLoading: boolean;
   allSessionMetadata: BaseSessionMetadata[];
   history: ChatHistoryItemWithMessageId[];
@@ -719,6 +726,7 @@ export const sessionSlice = createSlice({
     },
     newSession: (state, { payload }: PayloadAction<Session | undefined>) => {
       state.lastSessionId = state.id;
+      state.loadingSessionId = undefined;
 
       state.streamAborter.abort();
       state.streamAborter = new AbortController();
@@ -769,6 +777,12 @@ export const sessionSlice = createSlice({
     },
     updateSessionTitle: (state, { payload }: PayloadAction<string>) => {
       state.title = payload;
+    },
+    setLoadingSessionId: (
+      state,
+      { payload }: PayloadAction<string | undefined>,
+    ) => {
+      state.loadingSessionId = payload;
     },
     setIsSessionMetadataLoading: (
       state,
@@ -1200,6 +1214,7 @@ export const {
   streamUpdate,
   newSession,
   updateSessionTitle,
+  setLoadingSessionId,
   addHighlightedCode,
   addPromptCompletionPair,
   setActive,

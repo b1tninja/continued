@@ -10,9 +10,10 @@ import {
   newSession,
   setAllSessionMetadata,
   setIsSessionMetadataLoading,
+  setLoadingSessionId,
   updateSessionMetadata,
 } from "../slices/sessionSlice";
-import { ThunkApiType } from "../store";
+import { AppThunkDispatch, RootState, ThunkApiType } from "../store";
 import { updateSelectedModelByRole } from "../thunks/updateSelectedModelByRole";
 
 const MAX_TITLE_LENGTH = 100;
@@ -81,9 +82,31 @@ export const updateSession = createAsyncThunk<void, Session, ThunkApiType>(
   },
 );
 
-/*
- this is only used for the custom focusContinueSessionId command at the moment
-*/
+/**
+ * Fetches a saved session while `loadingSessionId` marks it as in flight.
+ * Returns undefined when the user has moved on before it arrived (started a
+ * new session, or asked for a different one), so the caller drops it.
+ */
+async function fetchSessionToLoad(
+  sessionId: string,
+  fetch: () => Promise<Session>,
+  dispatch: AppThunkDispatch,
+  getState: () => RootState,
+): Promise<Session | undefined> {
+  dispatch(setLoadingSessionId(sessionId));
+  const isStillWanted = () => getState().session.loadingSessionId === sessionId;
+  let session: Session;
+  try {
+    session = await fetch();
+  } catch (e) {
+    if (isStillWanted()) {
+      dispatch(setLoadingSessionId(undefined));
+    }
+    throw e;
+  }
+  return isStillWanted() ? session : undefined;
+}
+
 export const loadSession = createAsyncThunk<
   void,
   {
@@ -93,7 +116,10 @@ export const loadSession = createAsyncThunk<
   ThunkApiType
 >(
   "session/load",
-  async ({ sessionId, saveCurrentSession: save }, { extra, dispatch }) => {
+  async (
+    { sessionId, saveCurrentSession: save },
+    { extra, dispatch, getState },
+  ) => {
     if (save) {
       // save the session in the background
       void dispatch(
@@ -103,7 +129,15 @@ export const loadSession = createAsyncThunk<
         }),
       );
     }
-    const session = await getSession(extra.ideMessenger, sessionId);
+    const session = await fetchSessionToLoad(
+      sessionId,
+      () => getSession(extra.ideMessenger, sessionId),
+      dispatch,
+      getState,
+    );
+    if (!session) {
+      return;
+    }
     dispatch(newSession(session));
 
     // Restore selected chat model from session, if present
@@ -112,6 +146,28 @@ export const loadSession = createAsyncThunk<
     }
   },
 );
+
+/**
+ * Resumes the session that was open when the webview last closed. Skipped if
+ * the user has already started or picked another session while the IDE was
+ * still loading, so a late startup load never replaces their choice.
+ */
+export const resumeInitialSession = createAsyncThunk<
+  void,
+  string,
+  ThunkApiType
+>("session/resumeInitial", async (sessionId, { dispatch, getState }) => {
+  const { session } = getState();
+  const userMovedOn =
+    session.id !== sessionId ||
+    session.history.length > 0 ||
+    (session.loadingSessionId !== undefined &&
+      session.loadingSessionId !== sessionId);
+  if (userMovedOn) {
+    return;
+  }
+  await dispatch(loadSession({ sessionId, saveCurrentSession: false }));
+});
 
 export const selectChatModelForProfile = createAsyncThunk<
   void,
@@ -154,13 +210,23 @@ export const loadLastSession = createAsyncThunk<void, void, ThunkApiType>(
       return;
     }
 
-    let session: Session;
-    try {
-      session = await getSession(extra.ideMessenger, lastSessionId);
-    } catch {
-      // retry again after 1 sec
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      session = await getSession(extra.ideMessenger, lastSessionId);
+    const sessionId = lastSessionId;
+    const session = await fetchSessionToLoad(
+      sessionId,
+      async () => {
+        try {
+          return await getSession(extra.ideMessenger, sessionId);
+        } catch {
+          // retry again after 1 sec
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          return await getSession(extra.ideMessenger, sessionId);
+        }
+      },
+      dispatch,
+      getState,
+    );
+    if (!session) {
+      return;
     }
     dispatch(newSession(session));
     if (session.chatModelTitle) {

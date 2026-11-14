@@ -20,10 +20,10 @@ import { useFindWidget } from "../../components/find/FindWidget";
 import TimelineItem from "../../components/gui/TimelineItem";
 import { NewSessionButton } from "../../components/mainInput/belowMainInput/NewSessionButton";
 import ThinkingBlockPeek from "../../components/mainInput/belowMainInput/ThinkingBlockPeek";
-import ContinueInputBox from "../../components/mainInput/ContinueInputBox";
 import { CacheMissNotice } from "../../components/mainInput/CacheMissNotice";
 import { CachingOffNotice } from "../../components/mainInput/CachingOffNotice";
 import { ColdCacheNotice } from "../../components/mainInput/ColdCacheNotice";
+import ContinueInputBox from "../../components/mainInput/ContinueInputBox";
 import { LargeMessageNotice } from "../../components/mainInput/LargeMessageNotice";
 import { useOnboardingCard } from "../../components/OnboardingCard";
 import StepContainer from "../../components/StepContainer";
@@ -40,6 +40,7 @@ import {
   cancelToolCall,
   ChatHistoryItemWithMessageId,
   newSession,
+  setLoadingSessionId,
   updateToolCallOutput,
 } from "../../redux/slices/sessionSlice";
 import { streamEditThunk } from "../../redux/thunks/edit";
@@ -53,13 +54,13 @@ import FeedbackDialog from "../../components/dialogs/FeedbackDialog";
 
 import { FatalErrorIndicator } from "../../components/config/FatalErrorNotice";
 import InlineErrorMessage from "../../components/mainInput/InlineErrorMessage";
-import { resolveEditorContent } from "../../components/mainInput/TipTapEditor/utils/resolveEditorContent";
 import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
 import { RootState } from "../../redux/store";
 import { cancelStream } from "../../redux/thunks/cancelStream";
 import { getLocalStorage, setLocalStorage } from "../../util/localStorage";
 import { EmptyChatBody } from "./EmptyChatBody";
 import { ExploreDialogWatcher } from "./ExploreDialogWatcher";
+import { ResumingSessionBody } from "./ResumingSessionBody";
 import { useAutoScroll } from "./useAutoScroll";
 
 // Helper function to find the index of the latest conversation summary
@@ -129,6 +130,11 @@ export function Chat() {
   const isInEdit = useAppSelector((store) => store.session.isInEdit);
 
   const lastSessionId = useAppSelector((state) => state.session.lastSessionId);
+  const loadingSessionId = useAppSelector(
+    (state) => state.session.loadingSessionId,
+  );
+  const isResumingSession =
+    history.length === 0 && !!loadingSessionId && !isInEdit;
   const hasDismissedExploreDialog = useAppSelector(
     (state) => state.ui.hasDismissedExploreDialog,
   );
@@ -177,6 +183,18 @@ export function Chat() {
       const selectedModelByRole =
         stateSnapshot.config.config.selectedModelByRole;
       const currentMode = stateSnapshot.session.mode;
+
+      // Typing while a saved session is still loading means the user has moved
+      // on: drop the load so it can't replace what they just sent. With an
+      // empty chat the current id is the session being loaded, so start a
+      // fresh one rather than writing over it.
+      if (stateSnapshot.session.loadingSessionId && !isCurrentlyInEdit) {
+        if (stateSnapshot.session.history.length === 0) {
+          dispatch(newSession());
+        } else {
+          dispatch(setLoadingSessionId(undefined));
+        }
+      }
 
       // Cancel all pending tool calls
       latestPendingToolCalls.forEach((toolCallState) => {
@@ -436,23 +454,30 @@ export function Chat() {
         >
           <div className="flex flex-row items-center justify-between pr-2 pb-1 pl-0.5">
             <div className="hidden xs:inline">
-              {history.length === 0 && lastSessionId && !isInEdit && (
-                <NewSessionButton
-                  onClick={async () => {
-                    await dispatch(loadLastSession());
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <ArrowLeftIcon className="h-3 w-3" />
-                  <span className="text-xs">Last Session</span>
-                </NewSessionButton>
-              )}
+              {history.length === 0 &&
+                lastSessionId &&
+                !isInEdit &&
+                !isResumingSession && (
+                  <NewSessionButton
+                    onClick={async () => {
+                      await dispatch(loadLastSession());
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <ArrowLeftIcon className="h-3 w-3" />
+                    <span className="text-xs">Last Session</span>
+                  </NewSessionButton>
+                )}
             </div>
           </div>
           <FatalErrorIndicator />
           {!hasDismissedExploreDialog && <ExploreDialogWatcher />}
-          {history.length === 0 && (
-            <EmptyChatBody showOnboardingCard={onboardingCard.show} />
+          {isResumingSession && loadingSessionId ? (
+            <ResumingSessionBody loadingSessionId={loadingSessionId} />
+          ) : (
+            history.length === 0 && (
+              <EmptyChatBody showOnboardingCard={onboardingCard.show} />
+            )
           )}
         </div>
       </div>
