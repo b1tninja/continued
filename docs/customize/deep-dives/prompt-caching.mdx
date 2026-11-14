@@ -103,6 +103,12 @@ While the cache is warm and you open the model picker, Continuous shows how many
 
 The usage panel shows cost estimates for Claude models on Anthropic, Bedrock, Vertex AI and OpenRouter, and for the four Nova models on Bedrock, split into 5-minute writes, 1-hour writes and reads when the provider reports the split. Its cache hit rate is cache-read tokens divided by the input tokens the API reports.
 
+## Forking a session
+
+**Fork from here** (in the actions under a response) and **Fork session** (in the "..." menu of a session tab, when session tabs are on) copy the conversation into a new session and open it, leaving the original unchanged. The fork keeps the history up to that point exactly as it was, the mode, the model, the task list and the cache record; it does not take the plan file, Loop state, file checkpoints, queued messages or the original's cost. Permission levels belong to the window, so a fork opened in it keeps them, including an IDGAF setting.
+
+Because the fork sends the same tools, system prompt and messages to the same model, its first message can read the cache entry the original wrote, if that entry is still alive. Hover over or focus the action to see one line before you fork: "Fork re-reads 210k tokens ≈ $1.05; within the cache window (4 min left) ≈ $0.09". The first figure is what the fork's first message pays for the copied conversation if nothing is cached, the second what it pays while the entry lasts. For a point earlier than the last message the line says it is an estimate: how long the cache keeps an earlier point after the conversation has moved on has not been measured yet. To change the model or mode, fork first and switch in the fork, where the switch says what it costs.
+
 ## Toolbar button
 
 The button is shown for Claude models on the `anthropic`, `bedrock`, `vertexai` and `openrouter` providers, and for Amazon Nova 2 Lite, Nova Pro, Nova Lite and Nova Micro on `bedrock`. For Nova the menu offers 5 minutes, Off and the config default only: Nova has one lifetime, so there is no Auto or 1 hour entry, and the default in Agent, Plan and Background is 5 minutes. A filled icon means requests carry cache markers; a brighter one means an entry should still be alive. The tooltip says whether the cache is warm, which lifetime applies, and about how long is left. Warm is Continuous's estimate from the time of your last request; the provider does not report it.

@@ -64,11 +64,12 @@ export async function initializeChatHistory(
 
   // Fork from an existing session if --fork flag is used
   if (options.fork) {
-    const { loadSessionById, startNewSession } = await import("../session.js");
+    const { loadSessionById, forkIntoNewSession } =
+      await import("../session.js");
     const sessionToFork = loadSessionById(options.fork);
     if (sessionToFork) {
       logger.info(chalk.yellow("Forking from existing session..."));
-      const newSession = startNewSession(sessionToFork.history);
+      const newSession = forkIntoNewSession(sessionToFork);
       return newSession.history;
     } else {
       logger.error(chalk.red(`Session with ID "${options.fork}" not found.`));

@@ -14,6 +14,7 @@ import {
 import { AppDispatch, RootState } from "../../redux/store";
 import { loadSession, saveCurrentSession } from "../../redux/thunks/session";
 import { varWithFallback } from "../../styles/theme";
+import { TabActionsMenu } from "./TabActionsMenu";
 
 // Haven't set up theme colors for tabs yet
 // Will keep it simple and choose from existing ones. Comments show vars we could use
@@ -246,6 +247,19 @@ export const TabBar = React.forwardRef<HTMLDivElement>((_, ref) => {
           }}
         >
           <TabTitle>{tab.title}</TabTitle>
+          {/* The menu's clicks (its items are in a portal, but React events
+              still bubble through it) must not also switch tabs */}
+          <span
+            className="flex"
+            onClick={(e) => e.stopPropagation()}
+            onAuxClick={(e) => e.stopPropagation()}
+          >
+            <TabActionsMenu
+              title={tab.title}
+              sessionId={tab.sessionId}
+              isActive={tab.isActive}
+            />
+          </span>
           <CloseButton
             /* disabled={tabs.length === 1} */
             onClick={(e) => {

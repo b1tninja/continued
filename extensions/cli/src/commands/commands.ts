@@ -75,7 +75,8 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
   },
   {
     name: "fork",
-    description: "Start a forked chat session from the current history",
+    description:
+      "Fork this session into a new one (history, mode, model, task plan) and continue there",
     category: "system",
   },
   {

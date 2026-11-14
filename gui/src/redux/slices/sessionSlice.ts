@@ -292,6 +292,8 @@ type SessionState = {
    * presented plan starts the loop by itself. Saved with the session.
    */
   loopRequested?: boolean;
+  /** The session this one was forked from; saved with it (forkSession). */
+  forkedFrom?: Session["forkedFrom"];
   /**
    * The mode picked while a loop item ran: the loop stops after the item and
    * the mode is taken then, so the item finishes in its own mode.
@@ -1056,6 +1058,7 @@ export const sessionSlice = createSlice({
           typeof payload.planFile === "string" ? payload.planFile : undefined;
         state.loop = restoreLoop(payload.loop);
         state.loopRequested = payload.loopRequested === true || undefined;
+        state.forkedFrom = payload.forkedFrom;
         state.modeAfterLoop = undefined;
         if (payload.mode) {
           state.mode = payload.mode;
@@ -1069,6 +1072,7 @@ export const sessionSlice = createSlice({
         state.planFile = undefined;
         state.loop = undefined;
         state.loopRequested = undefined;
+        state.forkedFrom = undefined;
         state.modeAfterLoop = undefined;
       }
     },

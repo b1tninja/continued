@@ -13,6 +13,7 @@ import type {
 } from "core/index.js";
 import { totalInputTokens } from "core/llm/utils/cacheStats.js";
 import { addRequestUsage } from "core/llm/utils/sessionUsage.js";
+import { forkSession } from "core/util/forkSession.js";
 import historyManager, {
   damagedSessionNotice,
   isQuarantinedSessionFile,
@@ -724,6 +725,26 @@ export function startNewSession(history: ChatHistoryItem[] = []): Session {
 
   manager.setSession(newSession);
   return newSession;
+}
+
+/**
+ * Fork `parent` into a new session and make the fork the current one. The
+ * fork keeps what `startNewSession` dropped: the mode, the chat model, the
+ * task plan and the prompt cache record (core/util/forkSession.ts has the
+ * copy table). Its history is the parent's, unchanged, so its first request
+ * starts with the same bytes and can read the parent's cache. The parent's
+ * file is not touched. Permission levels are the process's, not the
+ * session's, so a fork keeps them (an IDGAF set for this run stays set).
+ */
+export function forkIntoNewSession(parent: Session): Session {
+  const manager = SessionManager.getInstance();
+  const fork = forkSession(parent, { sessionId: uuidv4() });
+  fork.workspaceDirectory = process.cwd();
+
+  manager.clear();
+  manager.setSession(fork);
+  saveSession();
+  return fork;
 }
 
 type TaskPlanListener = (plan: TaskPlan | undefined) => void;
