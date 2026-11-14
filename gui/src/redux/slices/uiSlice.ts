@@ -45,6 +45,12 @@ type UIState = {
   promptCacheSettings: PromptCacheSettings;
   /** Cache tips the user dismissed, keyed by `cacheTipKey(modelTitle, tipId)`. */
   dismissedCacheTips: Record<string, true>;
+  /**
+   * Ended agents the person archived from the agents panel, keyed by
+   * `agentArchiveKey(rootId, agentId)`, with when. Only hides the row: the
+   * run stays in the session (and in what the model read).
+   */
+  archivedAgents: Record<string, number>;
   /** Model the user picked by hand per mode; wins over `modeModels` until reload. */
   modeModelOverrides: Partial<Record<MessageModes, string>>;
   ttsActive: boolean;
@@ -98,8 +104,12 @@ export const DEFAULT_UI_SLICE: UIState = {
   reasoningSettings: {},
   promptCacheSettings: {},
   dismissedCacheTips: {},
+  archivedAgents: {},
   modeModelOverrides: {},
 };
+
+/** How many archived rows are remembered; the oldest go first. */
+export const MAX_ARCHIVED_AGENTS = 500;
 
 export const uiSlice = createSlice({
   name: "ui",
@@ -250,6 +260,26 @@ export const uiSlice = createSlice({
         if (key.startsWith(prefix)) delete state.dismissedCacheTips[key];
       }
     },
+    archiveAgents: (
+      state,
+      action: PayloadAction<{ keys: string[]; at?: number }>,
+    ) => {
+      const archived = { ...(state.archivedAgents ?? {}) };
+      const at = action.payload.at ?? Date.now();
+      for (const key of action.payload.keys) archived[key] = at;
+      const keys = Object.keys(archived);
+      if (keys.length > MAX_ARCHIVED_AGENTS) {
+        keys
+          .sort((a, b) => archived[a] - archived[b])
+          .slice(0, keys.length - MAX_ARCHIVED_AGENTS)
+          .forEach((key) => delete archived[key]);
+      }
+      state.archivedAgents = archived;
+    },
+    restoreAgents: (state, action: PayloadAction<{ keys: string[] }>) => {
+      if (!state.archivedAgents) return;
+      for (const key of action.payload.keys) delete state.archivedAgents[key];
+    },
     setModeModelOverride: (
       state,
       action: PayloadAction<{ mode: MessageModes; title: string }>,
@@ -280,6 +310,8 @@ export const {
   dismissCacheTip,
   restoreCacheTips,
   restoreCacheTipsForModel,
+  archiveAgents,
+  restoreAgents,
   setModeModelOverride,
 } = uiSlice.actions;
 
