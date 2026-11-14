@@ -45,15 +45,36 @@ export type KeyChoice =
   /** Remove apiKey from the entry. */
   | { mode: "remove" };
 
+/** One tool's override in the Templates tab. */
+export interface ToolOverrideRow {
+  /** Stable key for React. */
+  id: string;
+  /** The tool's name, such as read_file. */
+  tool: string;
+  /** "" keeps the tool's own description. */
+  description: string;
+  disabled: boolean;
+  /** The override as written, so keys this editor does not show are kept. */
+  raw?: Record<string, unknown>;
+}
+
 export interface ModelForm {
   fields: Record<string, string | string[] | null>;
   tools: TriState;
   images: TriState;
   headers: HeaderRow[];
   key: KeyChoice;
+  /** The other credential fields (env.accessKeyId, ...), by path key. */
+  secrets: Record<string, KeyChoice>;
+  toolOverrides: ToolOverrideRow[];
   /** `capabilities` as written, so names the dialog does not manage are kept. */
   rawCapabilities?: unknown;
 }
+
+/** Credential fields other than apiKey: written only as secret references. */
+export const SECRET_FIELDS = MODEL_EDIT_FIELDS.filter(
+  (f) => f.kind === "secretRef" && pathKey(f.path) !== "apiKey",
+);
 
 export function isBooleanField(f: ModelEditField) {
   return f.kind === "boolean";
@@ -112,14 +133,35 @@ export function formFromBlock(info: ModelBlockInfo): ModelForm {
           },
         )
       : [];
+  const rawOverrides = getPath(entry, ["chatOptions", "toolOverrides"]);
+  const toolOverrides: ToolOverrideRow[] = isRecord(rawOverrides)
+    ? Object.entries(rawOverrides).map(([tool, raw], i) => {
+        const o = isRecord(raw) ? raw : {};
+        return {
+          id: `t${i}`,
+          tool,
+          description: typeof o.description === "string" ? o.description : "",
+          disabled: o.disabled === true,
+          raw: o,
+        };
+      })
+    : [];
   return {
     fields,
     tools: capabilityState(entry.capabilities, "tool_use"),
     images: capabilityState(entry.capabilities, "image_input"),
     headers,
     key: { mode: "keep" },
+    secrets: Object.fromEntries(
+      SECRET_FIELDS.map((f) => [pathKey(f.path), { mode: "keep" } as const]),
+    ),
+    toolOverrides,
     rawCapabilities: entry.capabilities,
   };
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 /** The value to write for a field's input, or undefined to remove the key. */
@@ -130,6 +172,9 @@ export function fromInput(
   if (pathKey(f.path) === "roles") return input === null ? undefined : input;
   if (typeof input !== "string") return undefined;
   switch (f.kind) {
+    case "multiline":
+      // Written as typed: leading spaces and inner blank lines can matter in a prompt
+      return input.trim() === "" ? undefined : input.replace(/\s+$/, "");
     case "boolean":
       return input === "on" ? true : input === "off" ? false : undefined;
     case "number":
@@ -195,17 +240,130 @@ export function formToOps(initial: ModelForm, current: ModelForm): FormResult {
 
   headerOps(initial.headers, current.headers, push, errors);
 
-  const key = current.key;
-  if (key.mode === "remove") push(["apiKey"], undefined);
-  if (key.mode === "secret") {
-    if (!isValidSecretName(key.secretName)) {
-      errors.apiKey =
+  const secretOps = (path: string[], choice: KeyChoice | undefined) => {
+    if (!choice || choice.mode === "keep") return;
+    if (choice.mode === "remove") return push(path, undefined);
+    if (!isValidSecretName(choice.secretName)) {
+      errors[pathKey(path)] =
         "A secret name is letters, digits and _, not starting with a digit.";
     } else {
-      push(["apiKey"], secretRef(key.secretName));
+      push(path, secretRef(choice.secretName));
+    }
+  };
+  secretOps(["apiKey"], current.key);
+  for (const f of SECRET_FIELDS) {
+    secretOps(f.path, current.secrets?.[pathKey(f.path)]);
+  }
+
+  toolOverrideOps(
+    initial.toolOverrides ?? [],
+    current.toolOverrides ?? [],
+    push,
+    errors,
+  );
+  return { ops, errors };
+}
+
+/** The override a row stands for, or undefined when it overrides nothing. */
+export function overrideValue(
+  row: ToolOverrideRow,
+): Record<string, unknown> | undefined {
+  const { description: _d, disabled: _x, ...rest } = row.raw ?? {};
+  const value: Record<string, unknown> = { ...rest };
+  if (row.description.trim()) value.description = row.description.trim();
+  if (row.disabled) value.disabled = true;
+  return Object.keys(value).length > 0 ? value : undefined;
+}
+
+function toolOverrideOps(
+  before: ToolOverrideRow[],
+  after: ToolOverrideRow[],
+  push: (path: string[], value: unknown) => void,
+  errors: Record<string, string>,
+) {
+  const seen = new Set<string>();
+  for (const row of after) {
+    const tool = row.tool.trim();
+    if (!tool) {
+      if (row.description.trim() || row.disabled) {
+        errors[`chatOptions.toolOverrides.${row.id}`] = "Choose the tool.";
+      }
+      continue;
+    }
+    const path = ["chatOptions", "toolOverrides", tool];
+    if (seen.has(tool)) {
+      errors[pathKey(path)] = "This tool is listed twice.";
+      continue;
+    }
+    seen.add(tool);
+    const old = before.find((b) => b.tool === tool);
+    const value = overrideValue(row);
+    if (old && same(overrideValue(old), value)) continue;
+    if (!old && value === undefined) continue;
+    push(path, value);
+  }
+  for (const old of before) {
+    if (!after.some((a) => a.tool.trim() === old.tool)) {
+      push(["chatOptions", "toolOverrides", old.tool], undefined);
     }
   }
-  return { ops, errors };
+}
+
+/** A secret the dialog stores (config/setSecret) before it saves the reference. */
+export interface SecretToStore {
+  /** What it is, for the review: "API key", "AWS secret access key". */
+  label: string;
+  secretName: string;
+  value: string;
+  storage: "secure" | "env";
+}
+
+/** Every typed credential to store before the save, apiKey first. */
+export function secretsToStore(form: ModelForm): SecretToStore[] {
+  const out: SecretToStore[] = [];
+  const add = (label: string, c: KeyChoice | undefined) => {
+    if (c?.mode === "secret" && c.value !== "") {
+      out.push({
+        label,
+        secretName: c.secretName,
+        value: c.value,
+        storage: c.storage,
+      });
+    }
+  };
+  add("API key", form.key);
+  for (const f of SECRET_FIELDS) add(f.label, form.secrets?.[pathKey(f.path)]);
+  return out;
+}
+
+const isPrefix = (a: readonly string[], b: readonly string[]) =>
+  a.length <= b.length && a.every((x, i) => b[i] === x);
+
+/**
+ * The form's changes and the Advanced tab's together. The same change made in
+ * both is kept once; different changes to one setting (or to a setting and a
+ * map that holds it) are a conflict, so neither silently wins.
+ */
+export function mergeOps(
+  formOps: readonly ModelPatchOp[],
+  yamlOps: readonly ModelPatchOp[],
+): { ops: ModelPatchOp[]; conflicts: string[] } {
+  const ops: ModelPatchOp[] = [...formOps];
+  const conflicts: string[] = [];
+  for (const y of yamlOps) {
+    const overlapping = formOps.filter(
+      (f) => isPrefix(f.path, y.path) || isPrefix(y.path, f.path),
+    );
+    if (overlapping.length === 0) {
+      ops.push(y);
+      continue;
+    }
+    const identical = overlapping.every(
+      (f) => pathKey(f.path) === pathKey(y.path) && same(f.value, y.value),
+    );
+    if (!identical) conflicts.push(pathKey(y.path));
+  }
+  return { ops, conflicts };
 }
 
 function headerOps(

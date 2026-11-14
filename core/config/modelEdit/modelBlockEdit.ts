@@ -25,6 +25,7 @@ import {
   getEditableConfigYamlPath,
 } from "../../util/paths";
 import { editYamlText } from "../../util/yamlEdit";
+import { entryYamlText } from "./entryYaml";
 import {
   applyModelPatch,
   credentialState,
@@ -49,6 +50,8 @@ export interface ModelBlockInfo {
   scope?: ConfigScope;
   /** The entry as written, with plain credential values masked. */
   entry?: Record<string, unknown>;
+  /** The entry's own YAML lines (comments kept), credentials masked: the Advanced tab. */
+  entryYaml?: string;
   credentials?: {
     apiKey: CredentialState;
     /** Only for header names that carry credentials. */
@@ -153,9 +156,11 @@ export function readModelBlock(text: string, title: string): ModelBlockInfo {
   }
   const found = locate(config, title);
   if (!found.ok) return { editable: false, reason: found.reason };
+  const entry = maskEntry(found.entry) as Record<string, unknown>;
   return {
     editable: true,
-    entry: maskEntry(found.entry) as Record<string, unknown>,
+    entry,
+    entryYaml: entryYamlText(text, found.index, entry),
     credentials: credentialsOf(found.entry),
   };
 }

@@ -457,6 +457,7 @@ async function runHeadlessMode(
   runLimits.startRunLimits(options, {
     provider: model.provider,
     model: model.model,
+    pricing: model.pricing,
   });
 
   // Initialize service-driven history (resume if requested)

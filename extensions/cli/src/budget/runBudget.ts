@@ -1,4 +1,5 @@
-import { costOf, type CostModel } from "core/util/costOf.js";
+import { costOf, type CostModel, type UserPrice } from "core/util/costOf.js";
+import { USER_PRICE_SOURCE } from "core/util/modelPrice.js";
 
 import {
   REFRESH_HINT,
@@ -58,6 +59,8 @@ export interface RunBudgetOptions {
    * when that is the only price: set by --budget-allow-unpriced.
    */
   allowCommunityPrice?: boolean;
+  /** The price on the model's config entry (`pricing:`), which wins over the tables */
+  userPrice?: UserPrice;
   /** Milliseconds, injectable for tests */
   now?: () => number;
   /** USD this run has spent so far, or "unknown" when a model it used has no price */
@@ -68,10 +71,11 @@ function positive(n: number | undefined): n is number {
   return typeof n === "number" && Number.isFinite(n) && n > 0;
 }
 
-function probe(model: CostModel) {
+function probe(model: CostModel, userPrice?: UserPrice) {
   return costOf(
     { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 },
     model,
+    { userPrice },
   );
 }
 
@@ -80,8 +84,12 @@ function probe(model: CostModel) {
  * community catalogue (models.dev) counts only with `allowCommunity`
  * (--budget-allow-unpriced): it is a third-party estimate.
  */
-function hasPrice(model: CostModel, allowCommunity = false): boolean {
-  const r = probe(model);
+function hasPrice(
+  model: CostModel,
+  allowCommunity = false,
+  userPrice?: UserPrice,
+): boolean {
+  const r = probe(model, userPrice);
   if (r.amount === "unknown") return false;
   return allowCommunity || r.priceSource?.kind !== "community";
 }
@@ -104,9 +112,10 @@ export function unpricedBudgetProblem(
   model: CostModel,
   allowUnpriced: boolean | undefined,
   prices?: PriceListStatus,
+  userPrice?: UserPrice,
 ): string | undefined {
   if (!positive(limits.maxBudgetUsd) || allowUnpriced) return undefined;
-  if (hasPrice(model)) return undefined;
+  if (hasPrice(model, false, userPrice)) return undefined;
   const communityDate = communityOnlyPrice(model);
   if (communityDate !== undefined) {
     return `--max-budget-usd cannot be held on ${model.provider}/${model.model}: its only price is from the community catalogue (models.dev, ${communityDate}), a third-party estimate a dollar cap is not held on. Pick a model with a price from the provider or the price tables, or pass --budget-allow-unpriced to hold the cap on the community estimate.`;
@@ -123,7 +132,7 @@ export function unpricedBudgetProblem(
     }
     return `--max-budget-usd cannot be held on ${id}: the downloaded OpenRouter list (${prices.fetchedAt.slice(0, 10)}) has no price for this model id. Pick a priced model, or ${REFRESH_HINT} in case it was added since, ${escape}.`;
   }
-  return `--max-budget-usd cannot be held on ${model.provider}/${model.model}: the cost table has no price for it, so spend would read as unknown. Pick a priced model, or pass --budget-allow-unpriced to run without the dollar cap.`;
+  return `--max-budget-usd cannot be held on ${model.provider}/${model.model}: the cost table has no price for it, so spend would read as unknown. Pick a priced model, set its price in config.yaml (pricing: input and output, US dollars per million tokens), or pass --budget-allow-unpriced to run without the dollar cap.`;
 }
 
 /**
@@ -144,7 +153,11 @@ export class RunBudget {
     this.limits = opts.limits;
     this.now = opts.now ?? Date.now;
     this.startedAt = this.now();
-    this.priced = hasPrice(opts.model, opts.allowCommunityPrice);
+    this.priced = hasPrice(
+      opts.model,
+      opts.allowCommunityPrice,
+      opts.userPrice,
+    );
   }
 
   get stop(): RunStop | undefined {
@@ -162,6 +175,7 @@ export class RunBudget {
    */
   get priceNote(): string | undefined {
     if (!this.priced) return undefined;
+    if (this.opts.userPrice) return `prices from ${USER_PRICE_SOURCE}`;
     const community = communityOnlyPrice(this.opts.model);
     if (community !== undefined) {
       return `prices from the community catalogue (models.dev) as of ${community}`;
@@ -188,6 +202,7 @@ export class RunBudget {
         cacheWrite: 0,
       },
       this.opts.model,
+      { userPrice: this.opts.userPrice },
     );
     return r.amount === "unknown" ? undefined : r.amount;
   }
