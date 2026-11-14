@@ -223,6 +223,7 @@
         "numRequests": { "type": "integer", "minimum": 0 },
         "numToolCalls": { "type": "integer", "minimum": 0 },
         "numRefusals": { "type": "integer", "minimum": 0 },
+        "numIdgafObjections": { "type": "integer", "minimum": 0 },
         "usage": {
           "type": "object",
           "additionalProperties": false,

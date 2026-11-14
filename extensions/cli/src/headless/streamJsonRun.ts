@@ -5,6 +5,8 @@ import {
   maskCommandForDisplay,
 } from "core/tools/permissions/displayMask.js";
 
+import { idgafObjectionCount } from "../audit/idgafObjections.js";
+
 import {
   STREAM_JSON_SCHEMA_VERSION,
   type InitEvent,
@@ -314,6 +316,7 @@ export class StreamJsonRun {
       numRequests: this.requests,
       numToolCalls: this.toolCalls,
       numRefusals: this.refusals,
+      numIdgafObjections: idgafObjectionCount(),
       usage: {
         inputTokens: Math.max(0, mark.input - start.input),
         outputTokens: Math.max(0, mark.output - start.output),

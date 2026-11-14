@@ -14,6 +14,11 @@ import {
 } from "../";
 
 export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
+  /**
+   * The areas at IDGAF for this editor session: `areas` given sets them, none
+   * reads them. A host without it answers with an error, read as none.
+   */
+  "policy/sessionIdgaf": [{ areas?: string[] }, { areas: string[] }];
   openUrl: [string, void];
   applyToFile: [ApplyToFilePayload, void];
   overwriteFile: [{ filepath: string; prevFileContent: string | null }, void];
