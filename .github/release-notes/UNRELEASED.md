@@ -4,7 +4,7 @@ Staging note for the next release. Fold it into that release's `<tag>.md` (the r
 
 ## New
 
-- A turn is saved while it runs. Your message is saved when you send it, each tool result when the tool finishes, and the answer every few seconds as it streams, so if the window or VS Code dies in the middle of a turn, the chat reopens with all of that and offers Resume.
+- A turn is saved while it runs. Your message is saved when you send it, each tool result when the tool finishes, and the answer every few seconds as it streams, so if the window or VS Code dies in the middle of a turn, the chat reopens with all of that and offers Resume. This needs the append-only chat log below, which is on by default.
 
 ## Behaviour changes
 

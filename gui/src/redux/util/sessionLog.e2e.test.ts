@@ -283,10 +283,9 @@ describe("readers on a blob-backed session", () => {
   });
 
   it("constructMessages (the request)", () => {
-    const args = ["You are helpful.", [], {}] as const;
-    expect(constructMessages(loaded.history, ...args)).toEqual(
-      constructMessages(original.history, ...args),
-    );
+    const build = (history: ChatHistoryItem[]) =>
+      constructMessages(history, "You are helpful.", [], {});
+    expect(build(loaded.history)).toEqual(build(original.history));
   });
 
   it("the context meter's estimate and its cache record", () => {
