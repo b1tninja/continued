@@ -36,6 +36,12 @@ export interface SinkCall {
   resolved?: { isWithinWorkspace: boolean } | null;
   /** Hosts the person trusts (their own config only) */
   trustedDomains?: readonly string[];
+  /**
+   * The session holds the `secret` label. A trusted host is then an egress
+   * like any other: anyone may be able to write to it (a code host, a paste
+   * site, a search box), so a secret in the path or query reaches them.
+   */
+  secretHeld?: boolean;
   shell?: ShellKind;
 }
 
@@ -46,6 +52,22 @@ export interface Sink {
 }
 
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+
+const TRUSTED_WITH_SECRET = "trusted, but a secret was read";
+
+/**
+ * The egress sink for a host, or undefined when the host is trusted and no
+ * secret is held. A trusted host is exempt only while the session holds no
+ * secret.
+ */
+function egressTo(call: SinkCall, host: string): Sink | undefined {
+  if (!hostTrusted(host, call.trustedDomains ?? [])) {
+    return { class: "network-egress", detail: host };
+  }
+  return call.secretHeld
+    ? { class: "network-egress", detail: `${host} (${TRUSTED_WITH_SECRET})` }
+    : undefined;
+}
 
 /** Programs that send to a destination the command line chooses. */
 const FREE_EGRESS = new Set([
@@ -141,6 +163,10 @@ function commandSink(call: SinkCall, command: string): Sink | undefined {
       (d) => !hostTrusted(d.host, trusted),
     );
     if (stranger) return { class: "network-egress", detail: stranger.host };
+    const trustedOne = found.destinations
+      .map((d) => egressTo(call, d.host))
+      .find(Boolean);
+    if (trustedOne) return trustedOne;
     if (found.unresolved.length) {
       return { class: "network-egress", detail: "an unreadable destination" };
     }
@@ -176,8 +202,8 @@ export function sinkOfCall(call: SinkCall): Sink | undefined {
   }
   if (toolName === BuiltInToolNames.FetchUrlContent) {
     const host = hostOf(parsedArgs.url);
-    if (host && hostTrusted(host, call.trustedDomains ?? [])) return undefined;
-    return { class: "network-egress", detail: host ?? "an unreadable URL" };
+    if (host) return egressTo(call, host);
+    return { class: "network-egress", detail: "an unreadable URL" };
   }
   if (toolName === BuiltInToolNames.RunTerminalCommand) {
     const command = str(parsedArgs.command);

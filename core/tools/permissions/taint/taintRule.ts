@@ -44,8 +44,15 @@ export function reasonOf(sink: Sink, taint: TaintFact): string {
   return `${what}, and this call can send data out or change state (${sink.class}: ${sink.detail}), so it asks. Acknowledge the content to stop these asks.`;
 }
 
-/** Whether the rule applies to a call, without changing a result (the replay uses this). */
-export function taintSinkFor(input: EvaluateInput): Sink | undefined {
+/**
+ * Whether the rule applies to a call, without changing a result (the replay
+ * uses this). With `taint` given, a session that holds `secret` makes a
+ * trusted host an egress too.
+ */
+export function taintSinkFor(
+  input: EvaluateInput,
+  taint?: TaintFact,
+): Sink | undefined {
   const { tool, toolName, parsedArgs, processedArgs } = input;
   return sinkOfCall({
     toolName,
@@ -54,6 +61,7 @@ export function taintSinkFor(input: EvaluateInput): Sink | undefined {
     resolved: processedArgs?.resolvedPath as
       { isWithinWorkspace: boolean } | null | undefined,
     trustedDomains: input.trustedDomains,
+    secretHeld: !!taint?.kinds.includes("secret"),
     shell: input.shell,
   });
 }
@@ -64,7 +72,7 @@ export function applyTaintedSessionRule(
 ): ToolPolicyResult {
   const { taint } = input;
   if (!taint || taint.kinds.length === 0) return result;
-  const sink = taintSinkFor(input);
+  const sink = taintSinkFor(input, taint);
   if (!sink) return result;
   if (secretOnly(taint) && !EGRESS_SINKS.has(sink.class)) return result;
   // Named on every result of a tainted session, so a replay can count the
