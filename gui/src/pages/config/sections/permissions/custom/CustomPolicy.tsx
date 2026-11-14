@@ -323,8 +323,9 @@ function BaseStep({
           data-testid="custom-idgaf-note"
         >
           IDGAF is for one session: it is never saved, and the file keeps the
-          level it had. At IDGAF every rule is ignored except the Always-on
-          Never list.
+          level it had. At IDGAF every rule is ignored, Always-on Never
+          included: the call runs and the audit trail records the rule that
+          would have stopped it.
         </p>
       )}
     </fieldset>
