@@ -43,8 +43,12 @@ export function registerSubagentRun(
   controller: AbortController,
 ): () => void {
   runs.set(toolCallId, controller);
+  emit();
   return () => {
-    if (runs.get(toolCallId) === controller) runs.delete(toolCallId);
+    if (runs.get(toolCallId) === controller) {
+      runs.delete(toolCallId);
+      emit();
+    }
   };
 }
 
@@ -58,6 +62,109 @@ export function stopSubagentRun(toolCallId: string): boolean {
 
 export function isSubagentRunLive(toolCallId: string): boolean {
   return runs.has(toolCallId);
+}
+
+/**
+ * A message the person sent to a running subagent from its record. "Send"
+ * waits until the run would otherwise finish; "Send now" (steer) goes in
+ * after the current tool calls, as the main chat's steering does.
+ */
+export interface SubagentInboxMessage {
+  id: string;
+  text: string;
+  steer: boolean;
+  at: number;
+}
+
+const NO_MESSAGES: readonly SubagentInboxMessage[] = [];
+/** Per run (the parent's tool call id); replaced, never mutated, on change */
+const inboxes = new Map<string, readonly SubagentInboxMessage[]>();
+const listeners = new Set<() => void>();
+let nextMessageId = 0;
+
+function emit() {
+  for (const listener of [...listeners]) listener();
+}
+
+function setInbox(runId: string, messages: readonly SubagentInboxMessage[]) {
+  if (messages.length) inboxes.set(runId, messages);
+  else inboxes.delete(runId);
+  emit();
+}
+
+/** Called when a run starts or ends, or its queue changes. */
+export function subscribeSubagentRuns(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/**
+ * Queue a message for a live run. A run that is not live in this window
+ * (ended, or a Loop worker, which takes no messages) refuses it.
+ */
+export function sendToSubagent(
+  runId: string,
+  text: string,
+  opts: { steer: boolean },
+): "queued" | "not-live" | "empty" {
+  if (!runs.has(runId)) return "not-live";
+  const trimmed = text.trim();
+  if (!trimmed) return "empty";
+  setInbox(runId, [
+    ...(inboxes.get(runId) ?? []),
+    {
+      id: `m${++nextMessageId}`,
+      text: trimmed,
+      steer: opts.steer,
+      at: Date.now(),
+    },
+  ]);
+  return "queued";
+}
+
+/** The run's queued messages, oldest first. Stable until the queue changes. */
+export function peekInbox(runId: string): readonly SubagentInboxMessage[] {
+  return inboxes.get(runId) ?? NO_MESSAGES;
+}
+
+/**
+ * Take the messages due at this point, oldest first: the steered ones at a
+ * tool boundary, or all of them when the run would finish or has ended.
+ */
+export function takeInbox(
+  runId: string,
+  which: "steer" | "all",
+): SubagentInboxMessage[] {
+  const queued = peekInbox(runId);
+  const taken = queued.filter((m) => which === "all" || m.steer);
+  if (taken.length)
+    setInbox(
+      runId,
+      queued.filter((m) => !taken.includes(m)),
+    );
+  return taken;
+}
+
+/** Cancel a message before it is delivered. False when it already went. */
+export function cancelInboxMessage(runId: string, id: string): boolean {
+  const queued = peekInbox(runId);
+  if (!queued.some((m) => m.id === id)) return false;
+  setInbox(
+    runId,
+    queued.filter((m) => m.id !== id),
+  );
+  return true;
+}
+
+/** "Send now" on a queued message: deliver it at the next tool boundary. */
+export function steerInboxMessage(runId: string, id: string): boolean {
+  const queued = peekInbox(runId);
+  if (!queued.some((m) => m.id === id && !m.steer)) return false;
+  setInbox(
+    runId,
+    queued.map((m) => (m.id === id ? { ...m, steer: true } : m)),
+  );
+  return true;
 }
 
 /**

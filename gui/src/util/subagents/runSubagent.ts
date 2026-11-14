@@ -76,7 +76,9 @@ import {
   subagentPrefixGate,
   subagentServerSlots,
   subagentSlots,
+  takeInbox,
   waitForSubagentApproval,
+  type SubagentInboxMessage,
 } from "./registry";
 
 const CANCELLED_BY_PARENT = "The parent conversation was stopped";
@@ -134,6 +136,9 @@ export function buildSubagentSystemMessage(
   const preamble = [
     `You are "${definition.name}", a subagent. Another agent gave you one task; it sees only your final message, not your tool calls or their output.`,
     "Work on the task with the tools you have. You cannot ask the person questions, and you cannot start subagents.",
+    // Every run carries this sentence, whether or not a message comes, so
+    // sibling runs keep one system prompt and one cached prefix
+    'The person may send you messages, which arrive as user messages in <message from="person"> tags and never in tool output; follow them as you would the task.',
     "When you are done, reply with a self-contained report as your final message: the answer first, then the evidence (file paths and line numbers), then anything you could not finish.",
     workspaceDirs.length
       ? `Workspace folders: ${workspaceDirs.join(", ")}`
@@ -163,6 +168,18 @@ function assistantTexts(history: ChatHistoryItem[]): string[] {
     .filter((item) => item.message.role === "assistant")
     .map((item) => renderChatMessage(item.message).trim())
     .filter(Boolean);
+}
+
+/**
+ * The person's messages as the subagent reads them: one user message, each
+ * in its own tag so it is not mistaken for the parent's task.
+ */
+export function personMessageText(
+  messages: readonly SubagentInboxMessage[],
+): string {
+  return messages
+    .map((m) => `<message from="person">\n${m.text}\n</message>`)
+    .join("\n\n");
 }
 
 function lastToolCalls(local: LocalSession): ToolCallState[] {
@@ -262,6 +279,11 @@ export interface SubagentDriveInput {
   workspaceDirs?: string[];
   /** Who the audit trail names for this run's calls, under the parent's session */
   audit?: { sessionId: string; agent: AuditAgent };
+  /**
+   * The run's message queue in the registry (the parent's tool call id).
+   * Undefined for a run nobody messages (a Loop worker).
+   */
+  inboxId?: string;
 }
 
 export interface SubagentDriveResult {
@@ -349,6 +371,30 @@ export async function driveSubagent(
     status: SubagentRunStatus,
     error?: string,
   ): SubagentDriveResult => ({ status, error, local, toolCalls, usage });
+  // The person's messages, appended as one user message for the next request
+  let sent: NonNullable<SubagentRunState["messages"]> = [];
+  const deliver = (messages: SubagentInboxMessage[]) => {
+    if (messages.length === 0) return;
+    local = {
+      ...local,
+      history: [
+        ...local.history,
+        {
+          message: {
+            role: "user",
+            content: personMessageText(messages),
+            id: `subagent-message-${messages[0].id}`,
+          },
+          contextItems: [],
+        },
+      ],
+    };
+    sent = [
+      ...sent,
+      ...messages.map((m) => ({ text: m.text, at: m.at, delivered: true })),
+    ];
+    update({ messages: sent });
+  };
 
   for (let turn = 1; ; turn++) {
     if (signal.aborted) return result("cancelled", reasonOf(signal));
@@ -414,7 +460,16 @@ export async function driveSubagent(
     if (signal.aborted) return result("cancelled", reasonOf(signal));
 
     const calls = lastToolCalls(local);
-    if (calls.length === 0) return result("completed");
+    if (calls.length === 0) {
+      // Would finish: messages still queued keep the run going, one more
+      // model call that counts against the turn limit. With no call left,
+      // they stay queued and are reported as not delivered.
+      const waiting =
+        input.inboxId && turn < maxTurns ? takeInbox(input.inboxId, "all") : [];
+      if (waiting.length === 0) return result("completed");
+      deliver(waiting);
+      continue;
+    }
     for (const call of calls) {
       reduce(setToolGenerated({ toolCallId: call.toolCallId, tools }));
     }
@@ -437,6 +492,11 @@ export async function driveSubagent(
       );
     }
     if (ended) return result("completed");
+    // Tool boundary: "Send now" messages go in after the tool results, before
+    // the next request, as the main chat's steering does
+    if (input.inboxId && !signal.aborted && turn < maxTurns) {
+      deliver(takeInbox(input.inboxId, "steer"));
+    }
   }
 
   /** Runs one call; true when it ends the run (HandledCall.endRun). */
@@ -790,6 +850,7 @@ export async function runSubagentTool(
       maxTurns: definition.maxTurns ?? DEFAULT_SUBAGENT_MAX_TURNS,
       onUpdate: update,
       approvalScope: toolCallId,
+      inboxId: toolCallId,
       audit: {
         sessionId: getState().session.id,
         agent: subagentAuditAgent(
@@ -810,6 +871,28 @@ export async function runSubagentTool(
     release?.();
     unregister();
     parentSignal.removeEventListener("abort", onParentAbort);
+  }
+
+  // Messages the run ended before reading: kept in its record as not
+  // delivered, and said on the card. No message can be queued after this
+  // point, because the run is no longer live.
+  const undelivered = takeInbox(toolCallId, "all");
+  if (undelivered.length > 0) {
+    const n = undelivered.length;
+    update({
+      messages: [
+        ...(run.messages ?? []),
+        ...undelivered.map((m) => ({
+          text: m.text,
+          at: m.at,
+          delivered: false,
+        })),
+      ],
+      notices: [
+        ...(run.notices ?? []),
+        `${n === 1 ? "Your message was" : `${n} of your messages were`} not delivered: the run ended first.`,
+      ],
+    });
   }
 
   // The session was reloaded in this window while the run wound down: it was

@@ -91,7 +91,9 @@ const PATTERNS: Pattern[] = [
   {
     id: "claims-authority",
     label: "claims to speak for the user or to hold the user's approval",
-    re: /\bmessage\s+(from|by)\s+the\s+(user|developer|system|administrator|admin)\s*:|\bthe\s+user\s+(has|have)\s+(already\s+)?(authori[sz]ed|approved|allowed|granted|permitted)\b/i,
+    // The last branch is the tag a subagent's messages from the person come
+    // in: only ever a user message from the harness, never tool output
+    re: /\bmessage\s+(from|by)\s+the\s+(user|developer|system|administrator|admin)\s*:|\bthe\s+user\s+(has|have)\s+(already\s+)?(authori[sz]ed|approved|allowed|granted|permitted)\b|<\s*message\s+from\s*=\s*["']?person\b/i,
   },
   {
     id: "weaken-approval",

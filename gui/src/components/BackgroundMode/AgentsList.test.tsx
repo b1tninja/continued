@@ -24,7 +24,13 @@ vi.mock("../../util/subagents/registry", () => ({
   stopSubagentRun: vi.fn(() => true),
   answerSubagentApproval: vi.fn(),
   isSubagentRunLive: vi.fn((id: string) => live.has(id)),
+  subscribeSubagentRuns: vi.fn(() => () => undefined),
+  peekInbox: vi.fn(() => NO_MESSAGES),
+  sendToSubagent: vi.fn(() => "queued"),
+  cancelInboxMessage: vi.fn(() => true),
+  steerInboxMessage: vi.fn(() => true),
 }));
+const NO_MESSAGES = vi.hoisted(() => [] as const);
 
 vi.mock("../../util/subagents/loopWorkers", () => ({
   stopLoopWorker: vi.fn(() => true),
@@ -39,6 +45,7 @@ vi.mock("../../util/subagents/loopWorkers", () => ({
 import { stopLoopWorker } from "../../util/subagents/loopWorkers";
 import {
   answerSubagentApproval,
+  sendToSubagent,
   stopSubagentRun,
 } from "../../util/subagents/registry";
 
@@ -300,6 +307,30 @@ describe("AgentsList", () => {
     expect(store.getState().ui.archivedAgents["main-s1|sub-a"]).toBeDefined();
     fireEvent.click(within(toolbar).getByRole("button", { name: "Restore" }));
     expect(store.getState().ui.archivedAgents["main-s1|sub-a"]).toBeUndefined();
+  });
+
+  it("offers a message input in a live subagent's record only, and it reaches that run", async () => {
+    live.add("a");
+    await setup({
+      a: { agent: "live" },
+      b: { agent: "ended", status: "completed", endedAt: Date.now() },
+    });
+    fireEvent.click(screen.getByTestId("agent-open-sub-a"));
+    const box = screen.getByRole("textbox", { name: "Message live" });
+    fireEvent.change(box, { target: { value: "look at b.ts too" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(sendToSubagent).toHaveBeenCalledWith("a", "look at b.ts too", {
+      steer: false,
+    });
+    expect(getAnnouncement("polite").text).toBe(
+      "Queued for live. It reads it before it finishes.",
+    );
+    fireEvent.click(screen.getByTestId("agent-detail-back"));
+
+    fireEvent.click(screen.getByTestId("agents-group-toggle-done"));
+    fireEvent.click(screen.getByTestId("agent-open-sub-b"));
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByTestId("agent-messages")).toBeNull();
   });
 
   it("links a waiting approval to the card in the conversation instead of answering it here", async () => {

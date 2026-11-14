@@ -1414,6 +1414,11 @@ export interface SubagentRunState {
   error?: string;
   /** Notes for the person (a model fallback, a tool it could not have). */
   notices?: string[];
+  /**
+   * The person's messages to the run, sent from its record in the agents
+   * panel: delivered into its conversation, or not (the run ended first).
+   */
+  messages?: { text: string; at: number; delivered: boolean }[];
   /** A call of the subagent's waiting for the person's approval. */
   pendingApproval?: {
     id: string;

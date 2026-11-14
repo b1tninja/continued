@@ -25,6 +25,7 @@ import {
 } from "../../util/subagents/registry";
 import { announce } from "../a11y/announcer";
 import { jumpToPlan } from "../loop/LoopStatusLine";
+import { SubagentMessages } from "./SubagentMessages";
 import {
   agentActions,
   agentArchiveKey,
@@ -504,6 +505,14 @@ function AgentDetail({
             ? "Its record is not in this session."
             : actions.transcript.reason}
         </div>
+      )}
+      {/* Loop workers take no messages here: the loop steers its items */}
+      {toolCallId && (
+        <SubagentMessages
+          runId={toolCallId}
+          name={name}
+          run={toolCallState?.subagent}
+        />
       )}
     </section>
   );
