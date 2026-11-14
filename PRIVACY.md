@@ -49,6 +49,14 @@ Continuous prices a request from, in order: a price you entered, a list the prov
 - **How it is used**: only for a model that has no other price. A figure priced from it is labelled "community catalogue (models.dev), <date> — estimate". `--max-budget-usd` is not held on it unless you pass `--budget-allow-unpriced`, and the Auto reviewer's shadow budget is never held on it.
 - **How to turn it off**: set **Model information updates** to **Off**, as for OpenRouter's list. The copy is then not used either.
 
+## Contacted when a Bedrock model is configured: AWS Price List and Service Quotas
+
+These are requests to AWS beyond the Bedrock requests themselves. Neither happens unless a Bedrock model is configured, and only for the region of the selected Bedrock model.
+
+- **AWS Price List** (Bedrock prices for cost estimates): one `GET https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrock/current/<region>/index.json`, a public file. No AWS credentials, account id, prompt or body; the only headers are `accept: application/json` and `user-agent: continuous`, and the `headers` from your `requestOptions` are not sent (its proxy and certificate settings are used). AWS sees your IP address and the region you use. Kept: the per-token prices and their date, in `model-catalog/bedrock-prices-<region>.json`.
+- **Service Quotas** (the optional quota check): `ListServiceQuotas` for service code `bedrock` at `servicequotas.<region>.amazonaws.com`, signed with the same AWS credentials as your Bedrock requests (a Bedrock API key is never used for it). It reads your account's applied quotas and changes nothing. Kept: the per-minute inference quota names and values, or the fact that the permission is missing, in `model-catalog/bedrock-quotas-<hash>.json`, keyed by a hash of the profile or key id and the region (no key, secret or account id).
+- **When**: with model information updates on **Automatic** (the default), when you select a Bedrock model, on Bedrock Test connection, and in the background at most once per `modelCatalogRefreshHours` for the selected model; on **Only when I ask**, on Bedrock Test connection only; on **Off**, never, and copies kept from before are not used.
+
 ## Contacts a third party only if you set it up
 
 - **Web search**: the `search_web` tool and `@web` exist only if you set `CONTINUOUS_WEB_SEARCH_URL` to a search endpoint you run or choose (optional `CONTINUOUS_WEB_SEARCH_KEY`, sent to that endpoint only). See [web search](docs/customize/web-search.mdx).

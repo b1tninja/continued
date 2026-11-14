@@ -153,13 +153,24 @@ No new requests: everything comes from answers Continuous already receives.
 4. **Price source and date on every priced cost**: `CostBreakdown.priceSource` and `CostResult.priceSource` (`user`, `provider`, `curated`, `community`, with label, URL and date).
 5. **Served tier**: Bedrock's `serviceTier` (stream metadata and Converse response) and Anthropic's `usage.service_tier` are kept in `Usage.response.serviceTier`; a non-standard tier adds a "Prices: standard tier; the provider served this request at the flex tier, ..." line and sets `CostBreakdown.servedTier`.
 
+## What the second slice does
+
+Owner decisions 1, 2, 4 and 5 below were approved; this slice implements them for Bedrock.
+
+1. **Service Quotas** (`core/llm/llms/bedrockQuotas.ts`, `Bedrock.checkQuotas`): `ListServiceQuotas` for service code `bedrock`, every page, five seconds at most, with the Bedrock client's credentials, region, profile, proxy and CA. The per-minute on-demand, cross-region and global quotas are matched to model IDs by name (`bedrockModelNames.ts`: vendor words dropped, a trailing `V2` is the version, the rest must be the ID's words exactly). A 0 tokens- or requests-per-minute quota on the route the model's requests take gives "<model> has a 0 tokens-per-minute quota in <region> for this account; request an increase in Service Quotas" with the console link, on Test connection (for the selected model) and once per model and region when a Bedrock model is selected. AccessDenied is one quiet line ("Quota check skipped: this profile lacks servicequotas:ListServiceQuotas") remembered per profile and region for a day or until the access key changes; throttling (15 minutes), timeouts and network errors (an hour) and a region without Service Quotas (a day) are remembered too; a Bedrock API key skips the check. Cached in `model-catalog/bedrock-quotas-<hash>.json`.
+2. **AWS Price List** (`core/llm/bedrockPriceList.ts`, `core/llm/utils/bedrockPriceListPricing.ts`): the public `AmazonBedrock` bulk file for the selected model's region, read as a stream (a member-at-a-time JSON scanner; only per-token rows are kept), size and time limited, cached atomically in `model-catalog/bedrock-prices-<region>.json` with `fetchedAt`. `calculateRequestCost` uses it ahead of `NOVA_PRICING`, `BEDROCK_PRICING` and the Anthropic list, as `{kind: "provider", label: "AWS Price List", asOf}`, with global cross-region, flex and priority rows where the list has them and the curated tables as the fallback.
+3. **Under the setting** (`core/llm/bedrockMetadata.ts`): only the provider of the selected model, never every configured one. `automatic`: on selection, on Test connection and in the background (the #829 refresher, at most once per `refreshHours`); `manual`: Test connection only; `off`: no request, and nothing kept is used.
+4. **Served tier** (decision 5): a tier the Price List prices (flex, priority) is priced at its rows; any other non-standard tier keeps the standard price and the note.
+
+The Price List usage types and Service Quotas names were read from AWS documentation and the 2026-11-08 Price List reading, not captured for this slice (no AWS calls were made while building it); the test fixtures are shaped like the real answers. Check the matching against a live `ListServiceQuotas` page and a live offer file before relying on it for a dollar budget.
+
 ## Next slices
 
 1. Show the price source and date in the usage indicator, the console total and the CLI `/cost` (GUI and CLI only read the new field).
-2. Bedrock flex and priority prices from the Price List's `-flex` / `-priority` usage types, so a served tier is priced instead of noted.
+2. ~~Bedrock flex and priority prices from the Price List's `-flex` / `-priority` usage types, so a served tier is priced instead of noted.~~ Done in the second slice.
 3. Anthropic: `GET /v1/models/{id}` on Test connection to validate the configured id (404 means "no such model for this key") and fill images, thinking types and effort levels into the model's capabilities; cache it under the setting.
 4. OpenAI: read `shutdown_date` from the list in setup and validate the configured id on Test connection.
-5. Bedrock quotas through Service Quotas, behind the new IAM permission.
+5. ~~Bedrock quotas through Service Quotas, behind the new IAM permission.~~ Done in the second slice.
 6. A community catalogue (models.dev first) only as the last fallback, behind the setting, and only after the owner decides.
 
 ## Owner decisions
