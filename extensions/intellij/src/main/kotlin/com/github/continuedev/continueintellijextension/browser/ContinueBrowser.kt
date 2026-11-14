@@ -7,11 +7,9 @@ import com.github.continuedev.continueintellijextension.services.GsonService
 import com.github.continuedev.continueintellijextension.utils.uuid
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.jcef.*
 import org.cef.CefApp
@@ -48,14 +46,13 @@ class ContinueBrowser(
                             sendToWebview(messageType, response, messageId ?: uuid())
                         }
                     }
-                    if (messageType == "policy/save") {
-                        confirmPolicySave(data) { allowed ->
-                            if (allowed) {
-                                forward()
-                            } else {
-                                sendError(messageType, "The permission change was not confirmed.", messageId)
-                            }
-                        }
+                    // Core asks in the IDE's own notification before a save that
+                    // loosens (core/tools/permissions/policySave.ts); here only
+                    // the shape is checked, as in VS Code
+                    if ((messageType == "policy/save" || messageType == "policy/preview") &&
+                        !PolicyGuard.savePayloadOk(data)
+                    ) {
+                        sendError(messageType, "That is not a permission settings change.", messageId)
                     } else {
                         forward()
                     }
@@ -135,31 +132,6 @@ class ContinueBrowser(
             mapOf("status" to "error", "error" to error, "done" to true),
             messageId ?: uuid()
         )
-    }
-
-    /**
-     * A save that raises a permission level waits for a native confirmation,
-     * as in VS Code. Anything that is not a settings object is refused.
-     */
-    private fun confirmPolicySave(data: Any?, onDecided: (Boolean) -> Unit) {
-        if (!PolicyGuard.savePayloadOk(data)) return onDecided(false)
-        val levels = PolicyGuard.levelsOf(data) ?: return onDecided(true)
-        val messenger = project.service<ContinuePluginService>().coreMessenger ?: return onDecided(false)
-        messenger.request("policy/load", null, null) { loaded ->
-            val raised = PolicyGuard.raisedAreas(PolicyGuard.loadedLevels(loaded), levels)
-            if (raised.isEmpty()) return@request onDecided(true)
-            ApplicationManager.getApplication().invokeLater {
-                val choice = Messages.showOkCancelDialog(
-                    project,
-                    "Raise the Continuous permission level for ${raised.joinToString(", ")}?",
-                    "Continuous",
-                    "Raise",
-                    Messages.getCancelButton(),
-                    Messages.getWarningIcon()
-                )
-                onDecided(choice == Messages.OK)
-            }
-        }
     }
 
     fun sendToWebview(messageType: String, data: Any? = null, messageId: String = uuid()) {
