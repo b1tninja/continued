@@ -25,7 +25,13 @@ import {
   savePolicyFile,
   setPolicyLevels,
 } from "./permissions/policyLevels.js";
-import { getCurrentSession, updateSessionTitle } from "./session.js";
+import { services } from "./services/index.js";
+import {
+  forkIntoNewSession,
+  getCurrentSession,
+  saveSession,
+  updateSessionTitle,
+} from "./session.js";
 import { telemetryService } from "./telemetry/telemetryService.js";
 import { buildImportSkillPrompt } from "./tools/skills.js";
 import { SlashCommandResult } from "./ui/hooks/useChat.types.js";
@@ -76,28 +82,35 @@ async function handleHelp(_args: string[], _assistant: AssistantConfig) {
   return { output: helpMessage };
 }
 
-async function handleFork() {
+/**
+ * Fork the current session into a new one and carry on in the fork. The fork
+ * keeps the history unchanged (so its next request can read the prompt cache
+ * the original built), the mode, the model, the task plan and the cache
+ * record; the original stays on disk as it is, and /resume reaches it.
+ */
+function handleFork(): SlashCommandResult {
   try {
-    const currentSession = getCurrentSession();
-    const forkCommand = `continuous --fork ${currentSession.sessionId}`;
-    // Try to copy to clipboard dynamically to avoid hard dependency in tests
-    try {
-      const clipboardy = await import("clipboardy");
-      await clipboardy.default.write(forkCommand);
+    const parent = getCurrentSession();
+    if (!parent.history.some((item) => item.message.role !== "system")) {
       return {
         exit: false,
-        output: chalk.gray(`${forkCommand} (copied to clipboard)`),
-      };
-    } catch {
-      return {
-        exit: false,
-        output: chalk.gray(`${forkCommand}`),
+        output: chalk.yellow("Nothing to fork yet: send a message first."),
       };
     }
+    // The original as it is now, so /resume finds every message of it
+    saveSession();
+    const fork = forkIntoNewSession(parent);
+    services.chatHistory.adoptSession(fork.sessionId);
+    return {
+      exit: false,
+      output: chalk.gray(
+        `Forked into a new session (${fork.sessionId}); you are in the fork now. The original (${parent.sessionId}) is unchanged: /resume opens it.`,
+      ),
+    };
   } catch (error: any) {
     return {
       exit: false,
-      output: chalk.red(`Failed to create fork command: ${error.message}`),
+      output: chalk.red(`Failed to fork the session: ${error.message}`),
     };
   }
 }

@@ -27,7 +27,7 @@ While the model thinks, its reasoning streams dimmed above the status line, newe
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `/resume`        | Pick an earlier session and continue it                                                                                                 |
 | `/sessions`      | Show all sessions. It opens the same picker as `/resume`                                                                                |
-| `/fork`          | Print `continuous --fork <id>` for this session, and copy it to the clipboard when one is available. Run it to branch off a copy        |
+| `/fork`          | Fork this session into a new one and continue there. The fork keeps the history unchanged, the mode, the model, the task plan and the prompt cache record, so its next message can read the cache the original built. The original is unchanged; `/resume` opens it |
 | `/export`        | Pick a session and write it to a JSON file                                                                                              |
 | `/import <file>` | Read a session from a JSON file written by `/export`. If a session with that id already exists, the import gets a new id                |
 

@@ -495,6 +495,14 @@ export class ChatHistoryService extends BaseService<ChatHistoryState> {
   }
 
   /**
+   * Carry on in another session that holds the same history, as /fork does:
+   * the history stays, later changes are saved to that session.
+   */
+  adoptSession(sessionId: string): void {
+    this.setState({ sessionId });
+  }
+
+  /**
    * Get current session ID
    */
   getSessionId(): string {

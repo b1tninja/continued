@@ -393,6 +393,9 @@ export class HistoryManager {
     if (session.loopRequested) {
       orderedSession.loopRequested = true;
     }
+    if (session.forkedFrom) {
+      orderedSession.forkedFrom = session.forkedFrom;
+    }
 
     writeAtomic(
       getSessionFilePath(session.sessionId),

@@ -19,7 +19,9 @@ import { toolPermissionManager } from "../../permissions/permissionManager.js";
 import { services } from "../../services/index.js";
 import {
   createSession,
+  forkIntoNewSession,
   loadSession,
+  loadSessionById,
   onLoopChange,
   updateSessionHistory,
 } from "../../session.js";
@@ -101,10 +103,9 @@ export function useChat({
 
     // Fork from an existing session if fork flag is used
     if (fork) {
-      const { loadSessionById, startNewSession } = require("../../session.js");
       const sessionToFork = loadSessionById(fork);
       if (sessionToFork) {
-        return startNewSession(sessionToFork.history);
+        return forkIntoNewSession(sessionToFork);
       }
       // If session not found, create a new empty session
       return createSession([]);

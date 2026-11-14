@@ -406,6 +406,11 @@ export interface Session {
    * stay Plan and Agent; a plan presented while it is set starts the loop.
    */
   loopRequested?: boolean;
+  /**
+   * Optional: the session this one was forked from, and the last history item
+   * the fork kept (absent when it kept all of them). See core/util/forkSession.ts.
+   */
+  forkedFrom?: { sessionId: string; index?: number };
 }
 
 /** Where one plan item is in Loop mode. The task list shows it too. */

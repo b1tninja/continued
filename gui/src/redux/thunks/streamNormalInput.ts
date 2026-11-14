@@ -39,6 +39,7 @@ import {
   promptCacheStatus,
 } from "../../util/promptCache";
 import { buildLedgerEntry } from "../../util/cacheLedger";
+import { sentHistoryItems } from "../../util/forkCost";
 import { splitPromptProgress } from "../../util/promptProgress";
 import {
   detectCacheMiss,
@@ -167,6 +168,12 @@ export const streamNormalInput = createAsyncThunk<
       cacheStateBefore.lastKey,
     );
     const cacheKey = cacheKeyFor(routeExpected);
+    // Where this request's prompt (and the cache entry it writes) ends in the
+    // history, so a fork at that point can be priced (forkCost)
+    const historyItems = sentHistoryItems(
+      state.session.history,
+      state.session.loop,
+    );
 
     // TODO parallel tool calls will cause issues with this
     // because there will be multiple tool messages, so which one should have applied rules?
@@ -351,6 +358,7 @@ export const streamNormalInput = createAsyncThunk<
                     usage: message.usage,
                     pruned: didPrune,
                     missCauses,
+                    historyItems,
                   }),
                 ),
               );
