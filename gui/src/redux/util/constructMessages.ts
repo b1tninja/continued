@@ -17,8 +17,15 @@ import {
   ERRORED_TOOL_CALL_OUTPUT_MESSAGE,
   NO_TOOL_CALL_OUTPUT_MESSAGE,
 } from "core/tools/constants";
+import { describeToolCall } from "core/llm/contextBreakdown";
 import { convertToolCallStatesToSystemCallsAndOutput } from "core/tools/systemMessageTools/convertSystemTools";
 import { SystemMessageToolsFramework } from "core/tools/systemMessageTools/types";
+import {
+  maskRemovedToolResults,
+  removedToolResultLabels,
+  removedToolResultStub,
+  withRemovedParts,
+} from "core/util/contextRemoval";
 import { findLast, findLastIndex } from "core/util/findLast";
 import {
   normalizeToMessageParts,
@@ -117,7 +124,15 @@ export function constructMessages(
     }
   }
 
-  const historyCopy = [...filteredHistory];
+  // What the person removed with "Choose what to keep" is sent as stubs
+  // (core/util/contextRemoval.ts); a removed old turn is left out whole.
+  const removedToolResults = removedToolResultLabels(filteredHistory, (state) =>
+    describeToolCall(
+      state.toolCall?.function?.name ?? "tool",
+      state.parsedArgs ?? state.toolCall?.function?.arguments,
+    ),
+  );
+  const historyCopy = filteredHistory.map(withRemovedParts);
 
   const msgs: MessageWithContextItems[] = [];
   let appliedRuleIndex = -1;
@@ -126,6 +141,7 @@ export function constructMessages(
     index++;
     const item = withoutIncompleteToolCalls(original);
     if (
+      item.removedByUser?.turn ||
       item.message.role === "system" ||
       item.message.role === "tool" ||
       chatMessageIsEmpty(item.message)
@@ -171,7 +187,21 @@ export function constructMessages(
         const { userMessage, assistantMessage } =
           convertToolCallStatesToSystemCallsAndOutput(
             item.message,
-            item.toolCallStates ?? [],
+            (item.toolCallStates ?? []).map((state) => {
+              const label = removedToolResults.get(state.toolCallId);
+              if (label === undefined || !state.output) return state;
+              const chars = renderContextItems(state.output).length;
+              return {
+                ...state,
+                output: [
+                  {
+                    name: "Removed",
+                    description: "",
+                    content: removedToolResultStub(label, chars),
+                  },
+                ],
+              };
+            }),
             useSystemToolsFramework,
           );
         msgs.push({
@@ -296,7 +326,10 @@ export function constructMessages(
     });
   }
 
-  const messages = msgs.map((m) => m.message);
+  const messages = maskRemovedToolResults(
+    msgs.map((m) => m.message),
+    removedToolResults,
+  ).messages;
   return {
     messages,
     appliedRules,

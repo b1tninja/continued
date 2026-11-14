@@ -1,16 +1,15 @@
 import { formatTokens } from "core/llm/utils/sessionUsage";
-import { useMemo, useRef } from "react";
-import { useStore } from "react-redux";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCompactionCacheNote } from "../../hooks/useCompactionCacheNote";
+import { useContextBreakdown } from "../../hooks/useContextBreakdown";
 import { useLastRequestContext } from "../../hooks/useLastRequestContext";
 import { useNow } from "../../hooks/useNow";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectCacheSetting } from "../../redux/selectors/selectCacheSetting";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
-import type { RootState } from "../../redux/store";
+import { undoContextRemovals } from "../../redux/slices/sessionSlice";
 import { saveCurrentSession } from "../../redux/thunks/session";
-import { describeChatRequest } from "../../redux/util/describeChatRequest";
 import {
   contextMeterTokens,
   formatUsd,
@@ -20,7 +19,6 @@ import {
 } from "../../util/cacheNotices";
 import { useCompactConversation } from "../../util/compactConversation";
 import {
-  computeContextBreakdown,
   type ContextBreakdown,
   type ContextCategoryKey,
 } from "core/llm/contextBreakdown";
@@ -34,6 +32,7 @@ import {
 import { Popover, PopoverButton, PopoverPanel } from "../ui";
 import { HoverButton } from "./InputToolbar/HoverItem";
 import { useToolbarWidthTier } from "./InputToolbar/widthTier";
+import { SelectiveCompactDialog } from "./SelectiveCompactDialog";
 
 /** Hovering this long opens the details; leaving for this long closes them. */
 export const HOVER_OPEN_MS = 300;
@@ -210,8 +209,13 @@ const LINK_CLASS =
  * largest items, the cache, and what to do about it. Built only while open:
  * the split reads the same request description the cache tools use.
  */
-function ContextPanel({ close }: { close: () => void }) {
-  const store = useStore<RootState>();
+function ContextPanel({
+  close,
+  chooseWhatToKeep,
+}: {
+  close: () => void;
+  chooseWhatToKeep: () => void;
+}) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const history = useAppSelector((s) => s.session.history);
@@ -220,28 +224,11 @@ function ContextPanel({ close }: { close: () => void }) {
   const model = useAppSelector(selectSelectedChatModel);
   const cacheSetting = useAppSelector(selectCacheSetting);
   const cacheState = useAppSelector((s) => s.session.promptCache);
-  const { usage, contextLength } = useLastRequestContext();
+  const removalUndo = useAppSelector((s) => s.session.contextRemovalUndo);
   const compactConversation = useCompactConversation();
   const compactionNote = useCompactionCacheNote();
   const now = useNow();
-
-  const breakdown = useMemo(() => {
-    const state = store.getState();
-    let segments: ReturnType<typeof describeChatRequest> = [];
-    try {
-      segments = describeChatRequest(state);
-    } catch {
-      // No chat model selected: the conversation is still counted
-    }
-    const last = usage?.lastRequest;
-    return computeContextBreakdown({
-      segments,
-      history,
-      contextLength: contextLength ?? model?.contextLength,
-      maxTokens: model?.completionOptions?.maxTokens,
-      reportedTokens: last ? last.inputTokens + last.outputTokens : undefined,
-    });
-  }, [store, history, usage, contextLength, model]);
+  const { breakdown } = useContextBreakdown();
 
   const tokens = cacheState?.lastInputTokens ?? 0;
   const isLarge = !!model && tokens >= contextMeterTokens(model);
@@ -289,7 +276,9 @@ function ContextPanel({ close }: { close: () => void }) {
             ? "Estimated at about four characters per token; no provider count yet."
             : breakdown.categories.some((c) => c.key === "other")
               ? "Estimated split: the total is the provider's count for the last request, well above the estimate of what the conversation holds now, so the difference is not itemised. It updates with the next request."
-              : "Estimated split: the total is the provider's count for the last request, shared out by size."}
+              : removalUndo
+                ? "Estimated split: the provider's count for the last request, less the estimated size of what you removed since."
+                : "Estimated split: the total is the provider's count for the last request, shared out by size."}
         </span>
       </div>
 
@@ -350,6 +339,32 @@ function ContextPanel({ close }: { close: () => void }) {
         </span>
       )}
 
+      {removalUndo && (
+        <span data-testid="context-removal-undo-note">
+          {removalUndo.removedTokens >= 0
+            ? `You took about ${formatTokens(removalUndo.removedTokens)} tokens out of the context.`
+            : `You put about ${formatTokens(-removalUndo.removedTokens)} tokens back into the context.`}{" "}
+          Undo puts everything back as it was when the last message was sent, at
+          no cost, until you send the next one.{" "}
+          <button
+            type="button"
+            data-testid="context-removal-undo"
+            className={LINK_CLASS}
+            onClick={() => {
+              dispatch(undoContextRemovals());
+              void dispatch(
+                saveCurrentSession({
+                  openNewSession: false,
+                  generateTitle: false,
+                }),
+              );
+            }}
+          >
+            Undo
+          </button>
+        </span>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -362,6 +377,19 @@ function ContextPanel({ close }: { close: () => void }) {
           }}
         >
           Compact now
+        </button>
+        <button
+          type="button"
+          data-testid="context-choose-what-to-keep"
+          aria-haspopup="dialog"
+          className="cursor-pointer rounded border border-solid border-border bg-secondary px-2 py-0.5 text-xs text-secondary-foreground hover:bg-secondary-hover disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={history.length === 0 || isStreaming}
+          onClick={() => {
+            close();
+            chooseWhatToKeep();
+          }}
+        >
+          Choose what to keep…
         </button>
         <button
           type="button"
@@ -433,6 +461,7 @@ export function ContextMeter() {
   const hoverOpened = useRef(false);
   const programmatic = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [keepOpen, setKeepOpen] = useState(false);
 
   const fraction = context?.fraction ?? estimate;
   if (fraction === undefined) return null;
@@ -470,57 +499,70 @@ export function ContextMeter() {
   const name = `Context ${percent}% used${isPruned ? ", oldest messages left out" : ""}`;
 
   return (
-    <Popover className="relative flex flex-none">
-      {({ open, close }) => {
-        openRef.current = open;
-        closeRef.current = close;
-        if (!open) hoverOpened.current = false;
-        return (
-          <>
-            <PopoverButton
-              as={HoverButton}
-              ref={buttonRef}
-              aria-label={name}
-              data-testid="context-meter"
-              data-level={level}
-              className="flex-none gap-1 px-0.5 [font-size:inherit] tabular-nums"
-              onMouseEnter={onEnter}
-              onMouseLeave={onLeave}
-              onClick={(e: React.MouseEvent) => {
-                if (programmatic.current) return;
-                clearTimer();
-                // A click on details the pointer opened keeps them open
-                if (hoverOpened.current && openRef.current) {
-                  e.preventDefault();
-                  hoverOpened.current = false;
-                }
-              }}
-            >
-              <span
-                className={`relative h-[3px] ${tier === "narrow" ? "w-3" : "w-6"} overflow-hidden rounded-xs bg-command-border`}
-                aria-hidden="true"
+    <>
+      <Popover className="relative flex flex-none">
+        {({ open, close }) => {
+          openRef.current = open;
+          closeRef.current = close;
+          if (!open) hoverOpened.current = false;
+          return (
+            <>
+              <PopoverButton
+                as={HoverButton}
+                ref={buttonRef}
+                aria-label={name}
+                data-testid="context-meter"
+                data-level={level}
+                className="flex-none gap-1 px-0.5 [font-size:inherit] tabular-nums"
+                onMouseEnter={onEnter}
+                onMouseLeave={onLeave}
+                onClick={(e: React.MouseEvent) => {
+                  if (programmatic.current) return;
+                  clearTimer();
+                  // A click on details the pointer opened keeps them open
+                  if (hoverOpened.current && openRef.current) {
+                    e.preventDefault();
+                    hoverOpened.current = false;
+                  }
+                }}
               >
                 <span
-                  className={`absolute top-0 left-0 h-full ${LEVEL_BAR[level]}`}
-                  style={{ width: `${percent}%` }}
-                  data-testid="context-meter-fill"
+                  className={`relative h-[3px] ${tier === "narrow" ? "w-3" : "w-6"} overflow-hidden rounded-xs bg-command-border`}
+                  aria-hidden="true"
+                >
+                  <span
+                    className={`absolute top-0 left-0 h-full ${LEVEL_BAR[level]}`}
+                    style={{ width: `${percent}%` }}
+                    data-testid="context-meter-fill"
+                  />
+                </span>
+                <span aria-hidden="true">{visible}</span>
+              </PopoverButton>
+              <PopoverPanel
+                anchor="top end"
+                data-testid="context-details"
+                aria-label="What the context holds"
+                onMouseEnter={onEnter}
+                onMouseLeave={onLeave}
+                className="z-[200000] max-w-[90vw] rounded border border-solid border-border bg-vsc-input-background p-2 text-xs text-foreground shadow-md"
+              >
+                <ContextPanel
+                  close={close}
+                  chooseWhatToKeep={() => setKeepOpen(true)}
                 />
-              </span>
-              <span aria-hidden="true">{visible}</span>
-            </PopoverButton>
-            <PopoverPanel
-              anchor="top end"
-              data-testid="context-details"
-              aria-label="What the context holds"
-              onMouseEnter={onEnter}
-              onMouseLeave={onLeave}
-              className="z-[200000] max-w-[90vw] rounded border border-solid border-border bg-vsc-input-background p-2 text-xs text-foreground shadow-md"
-            >
-              <ContextPanel close={close} />
-            </PopoverPanel>
-          </>
-        );
-      }}
-    </Popover>
+              </PopoverPanel>
+            </>
+          );
+        }}
+      </Popover>
+      {keepOpen && (
+        <SelectiveCompactDialog
+          onClose={() => {
+            setKeepOpen(false);
+            buttonRef.current?.focus();
+          }}
+        />
+      )}
+    </>
   );
 }

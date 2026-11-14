@@ -49,7 +49,8 @@ class MessageTypes {
             "copyText",
             "jetbrains/isOSREnabled",
             "jetbrains/getColors",
-            "jetbrains/onLoad"
+            "jetbrains/onLoad",
+            "policy/sessionIdgaf"
         )
 
         // Note: If updating these values, make a corresponding update in
@@ -161,6 +162,11 @@ class MessageTypes {
             "ollama/showHint",
             "config/getTerminalEnvironment",
             "config/setTerminalEnvironment",
+            // policy/save asks in the IDE's own notification before a
+            // change that loosens (core: policySave.ts)
+            "policy/load",
+            "policy/save",
+            "policy/preview",
             "policy/rules",
             "policy/test",
             "llm/compileChat",

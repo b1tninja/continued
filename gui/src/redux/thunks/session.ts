@@ -264,6 +264,7 @@ export const saveCurrentSession = createAsyncThunk<
       ...(session.planFile && { planFile: session.planFile }),
       ...(session.loop && { loop: session.loop }),
       ...(session.loopRequested && { loopRequested: true }),
+      ...(session.forkedFrom && { forkedFrom: session.forkedFrom }),
       // Saving an empty list removes queued messages from the file
       queuedMessages: session.queuedMessages ?? [],
       // Enough for a resumed session to know its cache has expired and what

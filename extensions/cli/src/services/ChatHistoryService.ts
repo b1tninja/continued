@@ -147,6 +147,7 @@ export class ChatHistoryService extends BaseService<ChatHistoryState> {
     content: string,
     toolCalls?: any[],
     usage?: any,
+    reasoning?: ChatHistoryItem["reasoning"],
   ): ChatHistoryItem {
     const message: any = {
       role: "assistant",
@@ -207,6 +208,7 @@ export class ChatHistoryService extends BaseService<ChatHistoryState> {
     });
 
     const newMessage = createHistoryItem(message, [], toolCallStates);
+    if (reasoning) newMessage.reasoning = reasoning;
     const newHistory = [...this.currentState.history, newMessage];
     this.setHistoryInternal(newHistory);
 
@@ -490,6 +492,14 @@ export class ChatHistoryService extends BaseService<ChatHistoryState> {
     const next = this.future.pop()!;
     pushBounded(this.past, [...this.currentState.history]);
     this.setHistoryInternal(next, { recordUndo: false });
+  }
+
+  /**
+   * Carry on in another session that holds the same history, as /fork does:
+   * the history stays, later changes are saved to that session.
+   */
+  adoptSession(sessionId: string): void {
+    this.setState({ sessionId });
   }
 
   /**

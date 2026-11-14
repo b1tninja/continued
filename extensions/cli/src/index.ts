@@ -30,6 +30,7 @@ import {
   handleValidationErrors,
   validateFlags,
 } from "./flags/flagValidator.js";
+import { addReasoningFlags } from "./flags/reasoningFlags.js";
 import { configureConsoleForHeadless, safeStderr } from "./init.js";
 import { applySafeMode, SAFE_FLAG_HELP } from "./safeMode.js";
 import { addCommonOptions, mergeParentOptions } from "./shared-options.js";
@@ -155,7 +156,7 @@ program
 
 // Root command - chat functionality (default)
 // Add common options to the root command
-addRunLimitOptions(addCommonOptions(program))
+addReasoningFlags(addRunLimitOptions(addCommonOptions(program)))
   .option("--safe", SAFE_FLAG_HELP)
   .argument("[prompt]", "Optional prompt to send to the assistant")
   .option("-p, --print", "Print response and exit (useful for pipes)")

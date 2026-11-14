@@ -14,12 +14,14 @@ import {
   POLICY_LEVELS,
   POLICY_PRESETS,
   policyLevelLabel,
+  presetOf,
   type BuiltinRuleId,
   type PolicyLevels,
   type PolicyPresetName,
   type QuestionType,
 } from "core/tools/permissions/policy";
 import type { RuleDecision } from "core/tools/permissions/rules";
+import type { StoredCustomSet } from "core/tools/permissions/settingsFile";
 import type { PolicyExtras } from "../../../../../redux/slices/uiSlice";
 
 /** The four lists the editor shows: three in config.yaml, the floor in permissions.yaml. */
@@ -42,8 +44,8 @@ export const LIST_NAMES: Record<ListKey, string> = {
 };
 
 export const LIST_HINTS: Record<ListKey, string> = {
-  deny: "Refused. Saved in your config.yaml. IDGAF ignores it.",
-  ask: "Asks you first. Saved in your config.yaml. IDGAF ignores it.",
+  deny: "Refused. Saved in your config.yaml. At IDGAF the call runs and the audit trail records the rule.",
+  ask: "Asks you first. Saved in your config.yaml. At IDGAF the call runs and the audit trail records the rule.",
   allow:
     "Runs without asking where the level consults rules. Saved in your config.yaml; only your own file may allow.",
   floor:
@@ -213,6 +215,39 @@ export function settingChanges(
     });
   }
   return out;
+}
+
+/**
+ * The custom set to keep at `levels.custom` when this draft is saved, or
+ * undefined to leave the file's as it is: a draft at a preset's levels is
+ * that preset (and the old set stays recallable), and a set with IDGAF in it
+ * or one started from IDGAF is for this session only (owner decision O2).
+ * `from` is the preset it started from; from "what is set now", the preset
+ * those levels matched, or the stored set's own `from` when they were it.
+ */
+export function customSetToStore(
+  draft: Pick<CustomDraft, "base" | "levels">,
+  current: PolicyLevels,
+  stored: StoredCustomSet | undefined,
+): StoredCustomSet | undefined {
+  const { base, levels } = draft;
+  if (presetOf(levels)) return undefined;
+  if (base === "idgaf" || POLICY_AREAS.some((a) => levels[a] === "idgaf")) {
+    return undefined;
+  }
+  let from: StoredCustomSet["from"];
+  if (base !== "current") from = base;
+  else {
+    const was = presetOf(current);
+    if (was && was !== "idgaf") from = was;
+    else if (
+      stored &&
+      POLICY_AREAS.every((a) => stored.levels[a] === current[a])
+    ) {
+      from = stored.from;
+    }
+  }
+  return { ...(from ? { from } : {}), levels: { ...levels } };
 }
 
 /** The config.yaml edits, one checked change at a time (the rule editor's own). */

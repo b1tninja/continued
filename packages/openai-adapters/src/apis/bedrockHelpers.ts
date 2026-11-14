@@ -639,6 +639,56 @@ const OMITTED_DISPLAY_MODEL =
 const THINKS_BY_DEFAULT_MODEL =
   /claude-(?:(?:opus|sonnet|haiku)-[5-9]|fable|mythos)/;
 
+/** Claude's thinking request fields, as `getAnthropicThinkingParams` builds them. */
+export interface ClaudeThinkingFields {
+  thinking?:
+    | { type: "enabled"; budget_tokens: number }
+    | { type: "adaptive"; display?: "summarized" };
+  output_config?: { effort: BedrockReasoningEffort };
+}
+
+/**
+ * Claude's `thinking` and `output_config` for a reasoning switch, the same on
+ * Anthropic's API, Vertex and Bedrock: `display: "summarized"` where the
+ * thinking would otherwise arrive empty, and a model that thinks anyway gets
+ * that field with reasoning off too; adaptive thinking with an effort on 4.6
+ * and later, a token budget before. Same as `getAnthropicThinkingParams` in
+ * core/llm/llms/anthropicThinking.ts, which
+ * core/llm/llms/anthropicThinkingParity.vitest.ts compares with this one.
+ */
+export function claudeThinkingFields(
+  modelId: string,
+  reasoning: boolean | undefined,
+  budgetTokens: number,
+): ClaudeThinkingFields {
+  const summarize = OMITTED_DISPLAY_MODEL.test(modelId);
+  if (!reasoning) {
+    return summarize && THINKS_BY_DEFAULT_MODEL.test(modelId)
+      ? { thinking: { type: "adaptive", display: "summarized" } }
+      : {};
+  }
+  if (ADAPTIVE_THINKING_MODEL.test(modelId)) {
+    return {
+      thinking: summarize
+        ? { type: "adaptive", display: "summarized" }
+        : { type: "adaptive" },
+      output_config: { effort: budgetTokensToEffort(budgetTokens) },
+    };
+  }
+  return { thinking: { type: "enabled", budget_tokens: budgetTokens } };
+}
+
+/**
+ * Claude models whose thinking display defaults to "omitted": their thinking
+ * summaries are not sent back to Anthropic's API (see
+ * `thinkingDisplayDefaultsToOmitted` in core/llm/llms/anthropicThinking.ts).
+ */
+export function claudeThinkingDisplayDefaultsToOmitted(
+  modelId: string,
+): boolean {
+  return OMITTED_DISPLAY_MODEL.test(modelId);
+}
+
 /** What a Converse request sends to turn a model's reasoning on or off. */
 export interface BedrockReasoningRequest {
   /** Spread into `additionalModelRequestFields`; empty when nothing is sent. */
@@ -671,33 +721,9 @@ export function bedrockReasoningFields(
 ): BedrockReasoningRequest {
   const none = { additionalModelRequestFields: {}, omitMaxTokens: false };
   if (/claude/i.test(modelId)) {
-    // `display: "summarized"` where the thinking would otherwise arrive empty;
-    // a model that thinks anyway gets that field with reasoning off too
-    const summarize = OMITTED_DISPLAY_MODEL.test(modelId);
-    if (!reasoning) {
-      return summarize && THINKS_BY_DEFAULT_MODEL.test(modelId)
-        ? {
-            additionalModelRequestFields: {
-              thinking: { type: "adaptive", display: "summarized" },
-            },
-            omitMaxTokens: false,
-          }
-        : none;
-    }
-    if (ADAPTIVE_THINKING_MODEL.test(modelId)) {
-      return {
-        additionalModelRequestFields: {
-          thinking: summarize
-            ? { type: "adaptive", display: "summarized" }
-            : { type: "adaptive" },
-          output_config: { effort: budgetTokensToEffort(budgetTokens) },
-        },
-        omitMaxTokens: false,
-      };
-    }
     return {
       additionalModelRequestFields: {
-        thinking: { type: "enabled", budget_tokens: budgetTokens },
+        ...claudeThinkingFields(modelId, reasoning, budgetTokens),
       },
       omitMaxTokens: false,
     };

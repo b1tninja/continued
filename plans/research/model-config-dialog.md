@@ -121,7 +121,7 @@ Review:
 |                                          [Back] [Save]      |
 ```
 
-Planned tabs, not in the first slice: **Templates & system message** (`promptTemplates`, `chatOptions.base*SystemMessage`, `toolOverrides`), **Autocomplete** and **Embeddings** (shown only when the role applies), **Advanced (YAML)** (the entry as text, parsed and validated, written through the same writer).
+Added in the second slice (section 7): **Templates & system message** (`promptTemplates`, `chatOptions.base*SystemMessage`, `toolOverrides`) and **Advanced (YAML)** (the entry as text, parsed, turned into the same patch and written through the same writer). Still planned: **Autocomplete** and **Embeddings** (shown only when the role applies).
 
 ### 2.3 Behaviour
 
@@ -145,7 +145,7 @@ There is no `continuous models edit` today; `continuous models` is the OpenRoute
 | #   | Question                                                                                                                                | Recommendation                                                                                                                                                                                                          |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | D1  | Make the prompt style a per-model setting (`toolPrompt: native \| system-message \| <family form>`) instead of riding on `capabilities` | Not yet. The family forms are data only and unmeasured (ROADMAP Q17, Q24, TR10). The dialog shows the preset's recommendation and the real choice (native or system message). Revisit when Q17 measures a prompted path |
-| D2  | A price field on the model (`pricing: { input, output, cacheRead, cacheWrite }` per MTok)                                               | Yes, small: `costOf` already takes a `UserPrice`; wire it from the model so budgets work for local and unlisted models. The dialog's Context & cost tab is where it goes                                                |
+| D2  | A price field on the model (`pricing: { input, output, cacheRead, cacheWrite }` per MTok)                                               | Approved (by the owner's delegate, 2026-11-13) and done in the second slice: section 7                                                                                                                                  |
 | D3  | Edit the provider account (providers.yaml) from this dialog, or only the model                                                          | Only the model; link to the account card. One file per save keeps the review honest                                                                                                                                     |
 | D4  | Edit models defined in block files and catalogs (`from:`)                                                                               | Later: the writer works per file, so it is the same code pointed at `sourceFile`; the review must then name that file                                                                                                   |
 | D5  | CLI command name and shape (2.4)                                                                                                        | `continuous model show/set`, not under `models` (that is the OpenRouter list)                                                                                                                                           |
@@ -168,11 +168,11 @@ Not covered yet (still kept untouched on save, and editable by hand): `name` (re
 
 ## 5. Follow-ups, in order
 
-1. Advanced (YAML) tab: the entry as text, validated with the schema, written through the same preview and save.
-2. Templates & system message tab (`chatOptions`, `promptTemplates`, tool overrides), with the default system message shown as the placeholder.
+1. Done (section 7). Advanced (YAML) tab: the entry as text, validated with the schema, written through the same preview and save.
+2. Done (section 7). Templates & system message tab (`chatOptions`, `promptTemplates`, tool overrides), with the default system message shown as the placeholder.
 3. Autocomplete and Embeddings tabs, shown when the role applies.
-4. Price field (D2), then show it and its source in the Context & cost tab.
-5. The remaining env keys (Bedrock service tier, latency, guardrails, cross-region inference; Azure deploymentId) and env credentials as secret references.
+4. Done (section 7). Price field (D2), then show it and its source in the Context & cost tab.
+5. Done (section 7), except as noted there for `deploymentId`. The remaining env keys (Bedrock service tier, latency, guardrails, cross-region inference; Azure deploymentId) and env credentials as secret references.
 6. Edit models in block files and catalog entries (D4).
 7. CLI `continuous model show/set` (D5).
 8. Rename (`name`), updating `modeModels` and selected-model references in the same save.
@@ -181,5 +181,49 @@ Not covered yet (still kept untouched on save, and editable by hand): `name` (re
 ## 6. Not verified
 
 - Run in a real VS Code or JetBrains window: only unit and component tests ran (no screenshot harness run).
-- The app dialog container (`gui/src/components/dialogs/index.tsx`) does not trap focus; the dialog sets its own role and moves focus to the first tab, but Tab can leave it.
+- The app dialog container (`gui/src/components/dialogs/index.tsx`) does not trap focus. Since the second slice this dialog traps it itself (`useFocusTrap`); other dialogs in the app still do not.
 - `useSystemCa` default text is from docs/reference.mdx :138, not from code.
+
+## 7. Second slice
+
+Written 2026-11-13, stacked on the first slice (#826).
+
+### 7.1 Advanced (YAML) tab
+
+- Core returns `entryYaml` with the entry (`core/config/modelEdit/entryYaml.ts`): the entry's own lines from the file, de-indented, comments and key order kept, every plain credential replaced by the mask on the parsed document (not by line, so a block scalar is masked too). If that text does not parse back to the masked entry (an alias to an anchor outside the entry, say), the masked entry is shown as plain YAML instead.
+- What is typed is parsed in the webview (`parseEntryYaml`, the error names its line) and compared with the masked entry (`opsFromEntryEdit` in `modelEditFields.ts`). A difference at a managed path becomes an operation on that path; a difference anywhere else (`name`, `routes`, an unknown key) is listed and refused before any preview, and core refuses such a path anyway. A masked value left alone is equal, so it is never written; a plain credential typed over the mask fails the same secret-reference check as the other tabs.
+- The operations go through `config/previewModelEdit` and `config/saveModelEdit` unchanged: same field rules, same schema check of the whole entry, same diff, same hash check. The file keeps its own comments; a comment typed in the tab is not written (the tab says so).
+- The form's changes and the YAML's are merged (`mergeOps`). The same change in both is kept once; different changes to one setting, or to a map and a key inside it, are refused with the setting's name, so neither silently wins.
+- An error core reports is shown in the tab where the change was typed: the YAML tab when only the YAML changed anything, or when the YAML changed that setting.
+
+### 7.2 Templates & system message tab
+
+- `chatOptions.baseSystemMessage`, `baseAgentSystemMessage`, `basePlanSystemMessage`: multi-line fields (written as typed, trailing whitespace dropped, empty removes the key). The built-in text (`core/llm/defaultSystemMessages.ts`) is the placeholder, and a preview shows what is sent first for the chosen mode.
+- `promptTemplates.chat`: the names the schema accepts (`CHAT_TEMPLATE_VALUES`, now exported from config-yaml), previewed with `autodetectTemplateFunction` on a two-message conversation; for a provider that sends chat messages the preview says the server applies the model's own template.
+- `promptTemplates.edit`, `apply`, `autocomplete`: Handlebars, rendered with sample values for exactly the variables core fills in (edit: `userInput`, `prefix`, `codeToEdit`, `suffix`, `language`, from `core/edit/streamDiffLines.ts`; apply: `original_code`, `new_code`; autocomplete: `prefix`, `suffix`, `filename`, `reponame`, `language`, from `core/autocomplete/templating`). A template that does not compile, or reads a variable that is never filled in, is flagged.
+- `chatOptions.toolOverrides.<tool>`: one operation per tool, validated with `toolOverrideSchema`. The editor sets the description and `disabled`; other override keys written in the file (`displayTitle`, `systemMessageDescription`, ...) are kept. The preview runs `applyToolOverrides` on the loaded tool.
+
+### 7.3 Price field (D2)
+
+- Schema: `pricing: { input, output, cacheRead?, cacheWrite?, currency? }` on every model shape (`modelPricingSchema` in `packages/config-yaml/src/schemas/models.ts`): non-negative numbers, US dollars per million tokens, `currency` only `USD`.
+- `core/util/modelPrice.ts`: `userPriceOf(model)` turns it into the `UserPrice` `costOf` already takes (checked again: a negative or non-numeric rate makes no price, never a made-up one), and `USER_PRICE_SOURCE` = "your config", the label #836 uses for `kind: "user"`.
+- Budgets: `startRunLimits` (cn -p and cn serve) passes the model's price to `RunBudget` (refusal check, estimate before each request, price note) and to `costSince` for the run's spend, keyed `provider/model` as the session's usage is. `costOf`, `calculateRequestCost` and the price-source code of #836 are not changed.
+- Dialog: Context & cost has the four fields and the price note says "from your config" when they are set.
+
+Coordination with #836 (draft, price source and date on cost displays): this branch does not touch its price-source files (`priceSourceText.ts`, `costOf.ts`, `calculateRequestCost.ts`, the community catalogue). It does change three files #836 also changes, in small additive hunks: `extensions/cli/src/budget/runBudget.ts` and `runLimits.ts` (an optional `userPrice`), `extensions/cli/src/commands/chat.ts` (one line passing `pricing`), and `.github/release-notes/UNRELEASED.md`. Once both are in, #836's `PriceSource` for a run priced this way is `kind: "user"`; nothing here creates a second label.
+
+Not wired yet: the chat's own cost display and session totals in the IDE and the CLI (`calculateRequestCost` in `sessionUsage.ts` and `streamChatResponse.helpers.ts`), and the Auto reviewer's shadow budget (`ShadowDeps.userPrices` exists but no caller fills it). Each is a one-line `userPriceOf` at its call site once #836 has landed in those files.
+
+### 7.4 Provider settings
+
+- Bedrock (`env`): `crossRegionInference` (auto and the inference profile prefixes; a test keeps the list equal to `INFERENCE_PROFILE_PREFIXES`), `serviceTier` (default, priority, flex, reserved), `latency` (standard, optimized), `guardrailIdentifier`, `guardrailVersion` (default DRAFT), as docs/customize/model-providers/top-level/bedrock.mdx lists them.
+- AWS credentials (`env.accessKeyId`, `secretAccessKey`, `sessionToken`, for bedrock, bedrock-mantle and sagemaker): secret references only, with the same Keep / Use a secret / Remove editor as the API key; a typed value is stored with `config/setSecret` before the save, and every credential to store is stored first, so a failure saves nothing.
+- `deploymentId`: the code reads it only in the watsonx provider (`core/llm/llms/WatsonX.ts`); Azure reads `env.deployment` (already in the first slice) and `env.apiVersion`. So `deploymentId` is shown for watsonx, with its `projectId` and `apiVersion`, not for Azure.
+
+### 7.5 Focus trap
+
+`gui/src/components/ModelConfig/useFocusTrap.ts`: Tab from the last control goes to the first and Shift+Tab from the first to the last, focus that lands outside the dialog is brought back, and on close focus returns to the element that opened it. The dialog now renders one root element for the loading, read-only and editing states so the trap holds across them.
+
+### 7.6 Still not covered
+
+`name` (rename), `connection`, `routes`, `maxStopWords`, `useLegacyCompletionsEndpoint`, `useResponsesApi`, the rest of `defaultCompletionOptions` and `requestOptions` listed in section 4, the other env keys (`modelArn`, `mantlePathPrefix`, `maxTokensParam`, `aiGatewaySlug`, `accountId`), `embedOptions`, `autocompleteOptions`, `contextManagement`, catalog `variants`. They are kept on save, editable by hand, and refused in the Advanced tab with Open file as the way to change them.

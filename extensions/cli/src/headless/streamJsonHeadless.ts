@@ -65,6 +65,8 @@ function ensureRun(): StreamJsonRun {
 }
 
 let outputSchema: OutputSchema | undefined;
+/** `--include-reasoning`: write each reply's reasoning as a `reasoning` line. */
+let includeReasoning = false;
 
 /**
  * Call at the start of a headless run: with `--format stream-json` the
@@ -75,8 +77,10 @@ let outputSchema: OutputSchema | undefined;
 export function beginHeadlessRun(options: {
   format?: string;
   outputSchema?: string;
+  includeReasoning?: boolean;
 }): void {
   if (isStreamJson(options.format)) ensureRun();
+  includeReasoning = options.includeReasoning === true;
   outputSchema = options.outputSchema
     ? loadOutputSchema(options.outputSchema)
     : undefined;
@@ -258,7 +262,13 @@ export function streamJsonHooks(): {
   const run = activeStreamJson();
   if (!run) return {};
   return {
-    callbacks: { onContentComplete: (content) => run.message(content) },
+    callbacks: {
+      onContentComplete: (content) => run.message(content),
+      ...(includeReasoning && {
+        onReasoningComplete: (reasoning) =>
+          run.reasoning(reasoning.text, reasoning.endAt - reasoning.startAt),
+      }),
+    },
     options: { onRequest: () => run.requestDone() },
   };
 }

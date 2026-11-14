@@ -75,6 +75,8 @@ export const BUILT_IN_TOOL_CLASS: Record<BuiltInToolNames, ToolClass> = {
   [BuiltInToolNames.RemindMe]: "session",
   [BuiltInToolNames.RecallMaskedResult]: "session",
   [BuiltInToolNames.SearchTools]: "session",
+  [BuiltInToolNames.ListSessions]: "session",
+  [BuiltInToolNames.SendMessage]: "delegation",
   [BuiltInToolNames.CreateRuleBlock]: "rules",
   [BuiltInToolNames.RequestRule]: "rules",
 };

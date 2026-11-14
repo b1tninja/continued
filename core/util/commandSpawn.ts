@@ -1,3 +1,4 @@
+import type { ChildProcess, SpawnOptions } from "node:child_process";
 import type { CommandExecutor } from "./commandExecutor";
 import { getTerminalShellPreference, withRealExitCode } from "./shell";
 import {
@@ -40,10 +41,34 @@ export const COMMAND_STDIO: ["ignore", "pipe", "pipe"] = [
 export function realExitInvocation(
   executor: Pick<CommandExecutor, "invocation" | "shell">,
   command: string,
+  cwd?: string,
 ): { shell: string; args: string[] } {
-  return executor.invocation(
-    withRealExitCode(command, executor.shell.kind, { resetFirst: false }),
-  );
+  return executor.invocation(realExitCommand(executor, command), cwd);
+}
+
+/** The text handed to the shell for `command`: `command` with the real-exit tail where the shell needs one. */
+function realExitCommand(
+  executor: Pick<CommandExecutor, "shell">,
+  command: string,
+): string {
+  return withRealExitCode(command, executor.shell.kind, { resetFirst: false });
+}
+
+/**
+ * Starts a command the agent asked for, the one way every terminal tool does
+ * it (the editor's three paths, the CLI's tool and its background jobs):
+ * through the executor, so the shell, WSL or a container and anything that
+ * later wraps them (an OS sandbox) are chosen in one place, with the exit code
+ * the command's own program chose (`realExitInvocation`). The caller passes
+ * the environment (`commandEnvironment(terminalEnvironment(...))`) and the
+ * streams; `cwd` is where the command starts and what a container mounts.
+ */
+export function spawnAgentCommand(
+  executor: Pick<CommandExecutor, "spawn" | "shell">,
+  command: string,
+  options: SpawnOptions,
+): Promise<ChildProcess> {
+  return executor.spawn(realExitCommand(executor, command), options);
 }
 
 /**

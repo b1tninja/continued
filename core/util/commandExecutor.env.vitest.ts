@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { EventEmitter } from "node:events";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const spawn = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", async (orig) => ({
@@ -10,6 +11,11 @@ import { getCommandExecutor } from "./commandExecutor";
 import { setTerminalShellPreference } from "./shell";
 import { setTerminalEnvironmentSettings } from "./terminalEnvironment";
 
+// A process that never reports back: these tests read the spawn arguments only
+beforeEach(() => {
+  spawn.mockImplementation(() => new EventEmitter());
+});
+
 afterEach(() => {
   setTerminalEnvironmentSettings(undefined);
   vi.unstubAllEnvs();
@@ -20,7 +26,7 @@ describe("command executor environment", () => {
   it("does not hand the host's secrets to a local command", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant");
     vi.stubEnv("PATH", "/usr/bin");
-    getCommandExecutor({ platform: "linux", env: {} }).spawn("ls");
+    void getCommandExecutor({ platform: "linux", env: {} }).spawn("ls");
     const env = spawn.mock.calls[0][2].env;
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(env.PATH).toBe("/usr/bin");
@@ -29,12 +35,12 @@ describe("command executor environment", () => {
   it("inherit passes the host's environment on", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant");
     setTerminalEnvironmentSettings({ environment: "inherit" });
-    getCommandExecutor({ platform: "linux", env: {} }).spawn("ls");
+    void getCommandExecutor({ platform: "linux", env: {} }).spawn("ls");
     expect(spawn.mock.calls[0][2].env.ANTHROPIC_API_KEY).toBe("sk-ant");
   });
 
   it("a caller's own env is not touched", () => {
-    getCommandExecutor({ platform: "linux", env: {} }).spawn("ls", {
+    void getCommandExecutor({ platform: "linux", env: {} }).spawn("ls", {
       env: { CANARY_TOKEN: "c" },
     });
     expect(spawn.mock.calls[0][2].env).toEqual({ CANARY_TOKEN: "c" });
@@ -44,7 +50,7 @@ describe("command executor environment", () => {
     vi.stubEnv("PAGER", "less");
     vi.stubEnv("GIT_PAGER", "delta");
     setTerminalEnvironmentSettings({ passEnv: ["GIT_PAGER"] });
-    getCommandExecutor({ platform: "linux", env: {} }).spawn("git log");
+    void getCommandExecutor({ platform: "linux", env: {} }).spawn("git log");
     const env = spawn.mock.calls[0][2].env;
     expect(env.PAGER).toBe("cat");
     expect(env.MANPAGER).toBe("cat");
@@ -53,11 +59,11 @@ describe("command executor environment", () => {
 
   it("leaves no standard input open unless the caller sets stdio", () => {
     const local = getCommandExecutor({ platform: "linux", env: {} });
-    local.spawn("ls");
+    void local.spawn("ls");
     expect(spawn.mock.calls[0][2].stdio).toEqual(["ignore", "pipe", "pipe"]);
-    local.spawn("ls", { stdio: "pipe" });
+    void local.spawn("ls", { stdio: "pipe" });
     expect(spawn.mock.calls[1][2].stdio).toBe("pipe");
-    getCommandExecutor({
+    void getCommandExecutor({
       platform: "linux",
       terminalShell: { kind: "container", runtime: "docker" },
       containerStatus: { runtime: "docker" } as never,
@@ -72,7 +78,7 @@ describe("command executor environment", () => {
     setTerminalEnvironmentSettings({ passEnv: ["PASSED_TOKEN"] });
     setTerminalShellPreference({ kind: "wsl" });
     try {
-      getCommandExecutor({
+      void getCommandExecutor({
         platform: "win32",
         terminalShell: { kind: "wsl" },
         wslDistros: [{ name: "Ubuntu", state: "Running", version: 2 } as never],
@@ -91,7 +97,7 @@ describe("command executor environment", () => {
   it("the host's shell does not get a WSLENV it did not have", () => {
     vi.stubEnv("PASSED_TOKEN", "p");
     setTerminalEnvironmentSettings({ passEnv: ["PASSED_TOKEN"] });
-    getCommandExecutor({ platform: "linux", env: {} }).spawn("ls");
+    void getCommandExecutor({ platform: "linux", env: {} }).spawn("ls");
     expect(spawn.mock.calls[0][2].env.WSLENV).toBeUndefined();
   });
 
@@ -100,7 +106,7 @@ describe("command executor environment", () => {
     vi.stubEnv("GITHUB_TOKEN", "ghp");
     vi.stubEnv("SystemRoot", "C:\Windows");
     setTerminalEnvironmentSettings({ environment: "allowlist" });
-    getCommandExecutor({
+    void getCommandExecutor({
       platform: "win32",
       terminalShell: { kind: "wsl" },
       wslDistros: [{ name: "Ubuntu", state: "Running", version: 2 } as never],

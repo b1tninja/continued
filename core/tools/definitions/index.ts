@@ -26,3 +26,4 @@ export { viewRepoMapTool } from "./viewRepoMap";
 export { viewSubdirectoryTool } from "./viewSubdirectory";
 export { subagentTool } from "./subagent";
 export { finishItemTool, holdQuestionTool, remindMeTool } from "./loopTools";
+export { listSessionsTool, sendMessageTool } from "./sessionMessaging";

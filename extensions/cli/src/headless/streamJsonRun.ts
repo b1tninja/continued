@@ -214,6 +214,18 @@ export class StreamJsonRun {
     });
   }
 
+  /** One reply's reasoning, whole (`--include-reasoning`). */
+  reasoning(content: string, durationMs?: number): void {
+    if (!content.trim()) return;
+    this.emit({
+      type: "reasoning",
+      role: "assistant",
+      content: maskCommandForDisplay(content),
+      ...(durationMs !== undefined &&
+        durationMs >= 0 && { durationMs: Math.round(durationMs) }),
+    });
+  }
+
   /** One complete reply of the model. */
   message(content: string): void {
     if (!content.trim()) return;

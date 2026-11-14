@@ -32,9 +32,16 @@ afterEach(() => {
 
 async function runAndGetEnv(): Promise<Record<string, string>> {
   const child = fakeChild();
-  spawn.mockReturnValue(child);
+  // A real process reports that it started; the executor waits for that
+  // before the tool listens for output and exit (executor.spawn)
+  spawn.mockImplementation(() => {
+    setImmediate(() => child.emit("spawn"));
+    return child;
+  });
   const p = runTerminalCommandTool.run({ command: "echo hi" } as any);
-  await Promise.resolve();
+  await vi.waitFor(() =>
+    expect(child.listenerCount("close")).toBeGreaterThan(0),
+  );
   child.emit("close", 0);
   await p;
   return spawn.mock.calls[0][2].env;
