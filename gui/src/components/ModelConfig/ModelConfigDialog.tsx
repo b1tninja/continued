@@ -16,6 +16,7 @@ import {
   type TriState,
 } from "core/config/modelEdit/modelEditFields";
 import { modelSupportsNativeTools } from "core/llm/toolSupport";
+import { formatPriceSource } from "core/llm/utils/priceSourceText";
 import { hasConnectionTest } from "core/util/anthropicSurfaceTest";
 import { costOf } from "core/util/costOf";
 import { providerRecoversText } from "core/util/toolDialectLeak";
@@ -1152,10 +1153,19 @@ function PriceNote({ provider, model }: { provider: string; model: string }) {
         <span className="text-2xs">
           ${(inPrice.amount as number).toFixed(2)} in / $
           {(outPrice.amount as number).toFixed(2)} out per million tokens
-          {inPrice.estimate
-            ? `, from ${inPrice.estimate.source} as of ${inPrice.estimate.fetchedAt.slice(0, 10)}`
-            : ", from the built-in price table"}
+          {inPrice.priceSource
+            ? `. ${formatPriceSource(inPrice.priceSource)}`
+            : inPrice.estimate
+              ? `, from ${inPrice.estimate.source} as of ${inPrice.estimate.fetchedAt.slice(0, 10)}`
+              : ", from the built-in price table"}
           .
+          {inPrice.priceSource?.kind === "community" && (
+            <>
+              {" "}
+              A dollar budget (<code>--max-budget-usd</code>) is held on this
+              estimate only with <code>--budget-allow-unpriced</code>.
+            </>
+          )}
         </span>
       ) : (
         <span className="text-2xs text-description-muted">

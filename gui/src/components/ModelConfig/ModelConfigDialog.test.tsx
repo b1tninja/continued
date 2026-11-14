@@ -315,4 +315,21 @@ describe("ModelConfigDialog", () => {
       /No price is known for vllm\/qwen3-coder/,
     );
   });
+
+  it("names where a known price comes from, as the cost displays do", async () => {
+    const { user } = await open({
+      ...BLOCK,
+      entry: {
+        name: "Qwen",
+        provider: "anthropic",
+        model: "claude-sonnet-4-5",
+      },
+    });
+    await user.click(
+      await screen.findByRole("tab", { name: "Context & cost" }),
+    );
+    expect(screen.getByTestId("price-note").textContent).toMatch(
+      /per million tokens\. Prices: Anthropic list prices/,
+    );
+  });
 });
