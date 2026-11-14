@@ -21,7 +21,13 @@ import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import { abortStream } from "../../redux/slices/sessionSlice";
 import { RootState } from "../../redux/store";
 import { createMockStore, getEmptyRootState } from "../test/mockStore";
-import { answerSubagentApproval, stopSubagentRun } from "./registry";
+import {
+  answerSubagentApproval,
+  cancelInboxMessage,
+  peekInbox,
+  sendToSubagent,
+  stopSubagentRun,
+} from "./registry";
 import { runSubagentTool } from "./runSubagent";
 
 const model: ModelDescription = {
@@ -508,5 +514,230 @@ describe("runSubagentTool", () => {
     await Promise.all([first, second]);
     expect(requests).toHaveLength(2);
     expect(requests[0].completionOptions.promptCaching).toBe(true);
+  });
+});
+
+/** A turn that sends the person's messages while it streams, then answers. */
+function sendingTurn(
+  send: () => void,
+  ...chunks: ChatMessage[]
+): (signal: AbortSignal) => AsyncGenerator<ChatMessage[]> {
+  return async function* () {
+    send();
+    for (const chunk of chunks) yield [chunk];
+  };
+}
+
+const userTexts = (request: { messages: ChatMessage[] }) =>
+  request.messages
+    .filter((m) => m.role === "user")
+    .map((m) => renderChatMessage(m));
+
+const wrapped = (text: string) =>
+  `<message from="person">\n${text}\n</message>`;
+
+describe("messages from the person to a running subagent", () => {
+  it("puts a Send now message after the tool results, wrapped as the person's, in the next request", async () => {
+    const { store, messenger } = makeStore(["s1"]);
+    const requests = script(messenger, [
+      sendingTurn(
+        () =>
+          expect(sendToSubagent("s1", "Skip tests/", { steer: true })).toBe(
+            "queued",
+          ),
+        toolCallChunk("c1", BuiltInToolNames.GrepSearch, { query: "foo" }),
+      ),
+      [{ role: "assistant", content: "foo is in a.ts:3, tests skipped" }],
+    ]);
+
+    await runSubagentTool(args(), "s1", extras(store, messenger));
+
+    expect(requests).toHaveLength(2);
+    expect(userTexts(requests[0])).toEqual(["Find foo"]);
+    const roles = requests[1].messages.map((m) => m.role);
+    expect(roles).toEqual(["system", "user", "assistant", "tool", "user"]);
+    expect(userTexts(requests[1])[1]).toBe(wrapped("Skip tests/"));
+    const run = runOf(store, "s1")!;
+    expect(run.status).toBe("completed");
+    expect(run.text).toBe("foo is in a.ts:3, tests skipped");
+    expect(run.messages).toEqual([
+      { text: "Skip tests/", at: expect.any(Number), delivered: true },
+    ]);
+    expect(peekInbox("s1")).toHaveLength(0);
+  });
+
+  it("keeps a queued message until the run would finish, then continues with it as one more model call", async () => {
+    const { store, messenger } = makeStore(["s1"]);
+    const requests = script(messenger, [
+      sendingTurn(
+        () => sendToSubagent("s1", "Also check b.ts", { steer: false }),
+        toolCallChunk("c1", BuiltInToolNames.GrepSearch, { query: "foo" }),
+      ),
+      [{ role: "assistant", content: "foo is in a.ts:3" }],
+      [{ role: "assistant", content: "foo is in a.ts:3 and b.ts:9" }],
+    ]);
+
+    const result = await runSubagentTool(
+      args(),
+      "s1",
+      extras(store, messenger),
+    );
+
+    // Not at the tool boundary: only Send now goes in there
+    expect(userTexts(requests[1])).toEqual(["Find foo"]);
+    expect(requests).toHaveLength(3);
+    expect(requests[2].messages.map((m) => m.role).slice(-2)).toEqual([
+      "assistant",
+      "user",
+    ]);
+    expect(userTexts(requests[2]).at(-1)).toBe(wrapped("Also check b.ts"));
+    expect(result.output![0].content).toContain("foo is in a.ts:3 and b.ts:9");
+    expect(runOf(store, "s1")!.messages?.map((m) => m.delivered)).toEqual([
+      true,
+    ]);
+  });
+
+  it("delivers several messages as one user message in the order sent, Send now at the boundary and the rest at the end", async () => {
+    const { store, messenger } = makeStore(["s1"]);
+    const requests = script(messenger, [
+      sendingTurn(
+        () => {
+          sendToSubagent("s1", "one (queued)", { steer: false });
+          sendToSubagent("s1", "two (now)", { steer: true });
+          sendToSubagent("s1", "three (now)", { steer: true });
+          sendToSubagent("s1", "four (queued)", { steer: false });
+        },
+        toolCallChunk("c1", BuiltInToolNames.GrepSearch, { query: "foo" }),
+      ),
+      [{ role: "assistant", content: "first answer" }],
+      [{ role: "assistant", content: "final answer" }],
+    ]);
+
+    await runSubagentTool(args(), "s1", extras(store, messenger));
+
+    expect(userTexts(requests[1]).at(-1)).toBe(
+      `${wrapped("two (now)")}\n\n${wrapped("three (now)")}`,
+    );
+    expect(userTexts(requests[2]).at(-1)).toBe(
+      `${wrapped("one (queued)")}\n\n${wrapped("four (queued)")}`,
+    );
+    expect(runOf(store, "s1")!.messages?.map((m) => m.text)).toEqual([
+      "two (now)",
+      "three (now)",
+      "one (queued)",
+      "four (queued)",
+    ]);
+  });
+
+  it("never delivers a message cancelled before delivery", async () => {
+    const { store, messenger } = makeStore(["s1"]);
+    const requests = script(messenger, [
+      sendingTurn(
+        () => {
+          sendToSubagent("s1", "never mind", { steer: true });
+          const [queued] = peekInbox("s1");
+          expect(cancelInboxMessage("s1", queued.id)).toBe(true);
+          expect(cancelInboxMessage("s1", queued.id)).toBe(false);
+        },
+        toolCallChunk("c1", BuiltInToolNames.GrepSearch, { query: "foo" }),
+      ),
+      [{ role: "assistant", content: "done" }],
+    ]);
+
+    await runSubagentTool(args(), "s1", extras(store, messenger));
+
+    expect(requests).toHaveLength(2);
+    expect(JSON.stringify(requests[1].messages)).not.toContain("never mind");
+    expect(runOf(store, "s1")!.messages).toBeUndefined();
+  });
+
+  it("reports messages the run ended before reading: stopped by the person", async () => {
+    const { store, messenger } = makeStore(["s1"]);
+    script(messenger, [blockingTurn("halfway")]);
+    const done = runSubagentTool(args(), "s1", extras(store, messenger));
+    await until(() => runOf(store, "s1")?.status === "running");
+    sendToSubagent("s1", "and then b.ts", { steer: false });
+    stopSubagentRun("s1");
+    const result = await done;
+
+    const run = runOf(store, "s1")!;
+    expect(run.status).toBe("cancelled");
+    expect(run.messages).toEqual([
+      { text: "and then b.ts", at: expect.any(Number), delivered: false },
+    ]);
+    expect(run.notices).toContain(
+      "Your message was not delivered: the run ended first.",
+    );
+    // The parent model is not told what the person wrote to the subagent
+    expect(result.output![0].content).not.toContain("and then b.ts");
+    expect(peekInbox("s1")).toHaveLength(0);
+    // The run has ended: nothing more is accepted
+    expect(sendToSubagent("s1", "late", { steer: true })).toBe("not-live");
+  });
+
+  it("does not start a call past the turn limit for a queued message; it is reported instead", async () => {
+    const { store, messenger } = makeStore(["s1"]);
+    messenger.responses["subagents/list"] = {
+      agents: [{ ...EXPLORE_AGENT, maxTurns: 1 }],
+      errors: [],
+    };
+    const requests = script(messenger, [
+      sendingTurn(
+        () => {
+          sendToSubagent("s1", "one", { steer: false });
+          sendToSubagent("s1", "two", { steer: true });
+        },
+        { role: "assistant", content: "The answer" },
+      ),
+    ]);
+
+    await runSubagentTool(args(), "s1", extras(store, messenger));
+
+    expect(requests).toHaveLength(1);
+    const run = runOf(store, "s1")!;
+    expect(run.status).toBe("completed");
+    expect(run.text).toBe("The answer");
+    expect(run.messages?.map((m) => [m.text, m.delivered])).toEqual([
+      ["one", false],
+      ["two", false],
+    ]);
+    expect(run.notices).toContain(
+      "2 of your messages were not delivered: the run ended first.",
+    );
+  });
+
+  it("refuses an empty message and a run that is not live", async () => {
+    expect(sendToSubagent("nobody", "hi", { steer: false })).toBe("not-live");
+    const { store, messenger } = makeStore(["s1"]);
+    script(messenger, [blockingTurn("working")]);
+    const done = runSubagentTool(args(), "s1", extras(store, messenger));
+    await until(() => runOf(store, "s1")?.status === "running");
+    expect(sendToSubagent("s1", "   ", { steer: true })).toBe("empty");
+    expect(peekInbox("s1")).toHaveLength(0);
+    stopSubagentRun("s1");
+    await done;
+  });
+
+  it("gives every run the same system prompt, messaged or not, so siblings share a cached prefix", async () => {
+    const { store, messenger } = makeStore(["s1", "s2"]);
+    const first = script(messenger, [
+      sendingTurn(() => sendToSubagent("s1", "hurry", { steer: false }), {
+        role: "assistant",
+        content: "one",
+      }),
+      [{ role: "assistant", content: "one, hurried" }],
+    ]);
+    await runSubagentTool(args(), "s1", extras(store, messenger));
+    const second = script(messenger, [[{ role: "assistant", content: "two" }]]);
+    await runSubagentTool(args(), "s2", extras(store, messenger));
+
+    const system = (r: { messages: ChatMessage[] }) => r.messages[0].content;
+    expect(system(first[0])).toContain(
+      'The person may send you messages, which arrive as user messages in <message from="person"> tags and never in tool output; follow them as you would the task.',
+    );
+    // The message went in as a user message; the system prompt is unchanged
+    expect(first).toHaveLength(2);
+    expect(system(first[1])).toBe(system(first[0]));
+    expect(system(second[0])).toBe(system(first[0]));
   });
 });
