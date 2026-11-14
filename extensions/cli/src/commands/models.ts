@@ -3,9 +3,12 @@ import * as path from "node:path";
 
 import type { Command } from "commander";
 import {
+  modelInfoFetchBlocked,
   openRouterCatalogPath,
   pullOpenRouterCatalog,
+  readModelCatalogSettings,
   readOpenRouterCatalog,
+  type ModelCatalogSettings,
 } from "core/llm/modelCatalogStore.js";
 import {
   OPENROUTER_MODELS_URL,
@@ -25,8 +28,10 @@ import { gracefulExit } from "../util/exit.js";
 /**
  * `continuous models refresh` and `continuous models list` (also `cn models`):
  * the CLI side of "Pull the latest model information from OpenRouter?". The
- * refresh is the only request, it runs only when this command is typed, and
- * it says which host it contacts and what it keeps before it does anything.
+ * refresh says which host it contacts and what it keeps before it does
+ * anything, and is refused when model information updates are `off`. With
+ * updates `automatic` (the default) a run also refreshes a stale list in the
+ * background (`../modelInfoRefresh.ts`).
  */
 
 export interface ModelsIo {
@@ -47,10 +52,12 @@ export interface ModelsDeps {
   /** The user's `requestOptions` (proxy, CA bundle), or undefined. */
   requestOptions: () => unknown;
   now: () => number;
+  /** Model information updates; `off` refuses the refresh. */
+  settings?: () => ModelCatalogSettings;
 }
 
 /** The `requestOptions` block of the user-level config.yaml, if any. */
-function userRequestOptions(): unknown {
+export function userRequestOptions(): unknown {
   try {
     const file = path.join(getContinueGlobalPath(), "config.yaml");
     if (!fs.existsSync(file)) return undefined;
@@ -69,6 +76,7 @@ const defaultDeps: ModelsDeps = {
   file: openRouterCatalogPath,
   requestOptions: userRequestOptions,
   now: Date.now,
+  settings: () => readModelCatalogSettings(),
 };
 
 export async function modelsRefreshCommand(
@@ -77,6 +85,19 @@ export async function modelsRefreshCommand(
   deps: ModelsDeps = defaultDeps,
 ): Promise<number> {
   const file = deps.file();
+  const blocked = deps.settings
+    ? modelInfoFetchBlocked(deps.settings())
+    : undefined;
+  if (blocked) {
+    const hint =
+      "Set modelCatalog: manual or automatic in config.yaml (or CONTINUOUS_MODEL_INFO_UPDATES) to allow it";
+    if (options.json) {
+      io.out(JSON.stringify({ ok: false, error: blocked, file }));
+    } else {
+      io.err(`${blocked}. ${hint}.`);
+    }
+    return 1;
+  }
   if (!options.json) {
     io.out(
       `Contacting openrouter.ai (${OPENROUTER_MODELS_URL}): one public GET. No account, key or prompt is sent.`,
@@ -194,7 +215,7 @@ export function registerModelsCommand(program: Command): void {
   models
     .command("refresh")
     .description(
-      "Download OpenRouter's public model list (names, context sizes, per-token prices) once. The only request; contacts openrouter.ai",
+      "Download OpenRouter's public model list (names, context sizes, per-token prices) now. Contacts openrouter.ai; refused when model information updates are off",
     )
     .option("--json", "Machine-readable output")
     .action(async (options) => {

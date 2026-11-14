@@ -268,10 +268,13 @@ describe("the rule", () => {
     expect(decide("git status", "s").decision).toBe("allow");
   });
 
-  it("holds even at IDGAF, where everything else runs: nobody is asked, so it is refused", () => {
+  it("does not hold at IDGAF: the call runs and the rule's ask is recorded", () => {
     setRule("ask");
     taintRegistry.mark("s", "mcp-result");
-    expect(decide("git push origin main", "s", "idgaf").decision).toBe("deny");
+    const r = decide("git push origin main", "s", "idgaf");
+    expect(r.decision).toBe("allow");
+    expect(r.source).toBe("idgaf");
+    expect(r.reason).toContain("would have been asked");
     expect(decide("git push origin main", "clean", "idgaf").decision).toBe(
       "allow",
     );

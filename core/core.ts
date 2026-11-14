@@ -93,11 +93,17 @@ import BedrockMantle, { mantleRegionError } from "./llm/llms/BedrockMantle";
 import Lemonade from "./llm/llms/Lemonade";
 import { fetchModels } from "./llm/fetchModels";
 import {
+  createOpenRouterRefresher,
+  underTestRunner,
+  type ModelCatalogRefresher,
+} from "./llm/modelCatalogRefresh";
+import {
   loadOpenRouterPrices,
+  modelInfoFetchBlocked,
   pullOpenRouterCatalog,
-  readModelCatalogPolicy,
+  readModelCatalogSettings,
   readOpenRouterCatalog,
-  saveModelCatalogPolicy,
+  saveModelCatalogSettings,
 } from "./llm/modelCatalogStore";
 import {
   convertConnectionToAccount,
@@ -246,6 +252,8 @@ export class Core {
   private shadowIde = new IdeShadow();
   llmLogger = new LLMLogger();
 
+  /** The background OpenRouter list refresh (not started in tests). */
+  private modelCatalogRefresher?: ModelCatalogRefresher;
   private messageAbortControllers = new MessageAbortControllers();
   private addMessageAbortController(id: string): AbortController {
     return this.messageAbortControllers.add(id);
@@ -453,10 +461,34 @@ export class Core {
     // Cost figures use the downloaded prices, if there are any (a file read)
     loadOpenRouterPrices();
 
+    // "Model information updates: Automatic" (the default): refresh the
+    // OpenRouter list in the background when it is older than the interval.
+    // Only a timer is set here; start-up and requests never wait for it.
+    const requestOptions = async () =>
+      (await this.configHandler.loadConfig()).config?.requestOptions;
+    if (!underTestRunner()) {
+      this.modelCatalogRefresher = createOpenRouterRefresher({
+        requestOptions,
+        log: (m) => console.warn(m),
+      });
+      this.modelCatalogRefresher.start();
+    }
+
     on("modelCatalog/status", async () => {
       const cached = readOpenRouterCatalog();
+      const settings = readModelCatalogSettings();
+      const refresh = this.modelCatalogRefresher?.getStatus();
       return {
-        policy: readModelCatalogPolicy(),
+        policy: settings.policy,
+        refreshHours: settings.refreshHours,
+        ...(refresh?.lastAttemptAt
+          ? {
+              lastAttempt: {
+                at: refresh.lastAttemptAt,
+                ...(refresh.lastError ? { error: refresh.lastError } : {}),
+              },
+            }
+          : {}),
         ...(cached
           ? {
               openrouter: {
@@ -468,19 +500,23 @@ export class Core {
       };
     });
 
+    // With updates off the bundled model data applies, not a copy kept from
+    // before
     on("modelCatalog/cached", async () => {
+      if (readModelCatalogSettings().policy === "off") return null;
       const cached = readOpenRouterCatalog();
       return cached
         ? { fetchedAt: cached.fetchedAt, models: cached.models }
         : null;
     });
 
-    // The one request to openrouter.ai: runs only on the person's say-so.
+    // Refresh now / Pull now: the person's own request. Refused only when
+    // model information updates are off.
     on("modelCatalog/pull", async () => {
+      const blocked = modelInfoFetchBlocked();
+      if (blocked) return { ok: false as const, error: blocked };
       try {
-        const catalog = await pullOpenRouterCatalog(
-          (await this.configHandler.loadConfig()).config?.requestOptions,
-        );
+        const catalog = await pullOpenRouterCatalog(await requestOptions());
         return {
           ok: true as const,
           fetchedAt: catalog.fetchedAt,
@@ -495,7 +531,10 @@ export class Core {
     });
 
     on("modelCatalog/setPolicy", async (msg) => ({
-      saved: saveModelCatalogPolicy(msg.data.policy),
+      saved: saveModelCatalogSettings({
+        policy: msg.data.policy,
+        refreshHours: msg.data.refreshHours,
+      }),
     }));
 
     on("models/detectLocal", async () => detectLocalServers());

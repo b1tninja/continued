@@ -280,13 +280,15 @@ describe("File edits outside the working folder, by level, through the CLI", () 
     expect(v?.decision).toBe("allow");
   });
 
-  it("IDGAF still refuses the product's own policy files", async () => {
+  it("IDGAF writes the product's own policy files too, and says it would have refused", async () => {
     const v = await run(
       "Write",
       { filepath: path.join(os.homedir(), ".continuous", "permissions.yaml") },
       "idgaf",
     );
-    expect(v?.decision).toBe("deny");
+    expect(v?.decision).toBe("allow");
+    expect(v?.source).toBe("idgaf");
+    expect(v?.reason).toContain("would have been refused");
   });
 
   it("Manual, Cautious, Automatic and Permissive hold each of them", async () => {

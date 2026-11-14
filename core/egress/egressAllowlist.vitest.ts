@@ -65,9 +65,10 @@ describe("egress allowlist", () => {
     }
   });
 
-  it("covers the model catalogue hosts as opt-in contacts", () => {
-    for (const host of ["openrouter.ai", "ollama.com"]) {
-      expect(allowed.get(host)?.class, host).toBe("O");
-    }
+  it("covers the model catalogue hosts: ollama.com opt-in, openrouter.ai on by default", () => {
+    expect(allowed.get("ollama.com")?.class).toBe("O");
+    // Model information updates are automatic by default (modelCatalog: off
+    // turns them off), so openrouter.ai is listed as reachable by default
+    expect(allowed.get("openrouter.ai")?.class).toBe("D");
   });
 });

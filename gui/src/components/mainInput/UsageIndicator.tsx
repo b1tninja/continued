@@ -6,14 +6,21 @@ import {
 } from "core/llm/utils/sessionUsage";
 import { useMemo } from "react";
 import { useAppSelector } from "../../redux/hooks";
-import { ToolTip } from "../gui/Tooltip";
+import { Popover, PopoverButton, PopoverPanel } from "../ui";
+import { formatUpdatedAt } from "../ModelInfoFreshness";
+import { HoverButton } from "./InputToolbar/HoverItem";
+import { useToolbarWidthTier } from "./InputToolbar/widthTier";
 
 /**
- * Small usage readout in the input toolbar: context used against the model's
- * window, with a tooltip that breaks down tokens and estimated cost per model
- * for this session. Hidden until the first request reports usage.
+ * Usage readout in the row under the prompt: context used against the
+ * model's window and the session's estimated cost. It is never moved into a
+ * menu; as the row narrows it drops its "context" label and the route note
+ * (both stay in its name). Pressing it opens the breakdown of tokens and cost
+ * per model, so the details do not depend on hovering. Hidden until the first
+ * request reports usage, since before that there is nothing to show.
  */
 export function UsageIndicator() {
+  const tier = useToolbarWidthTier();
   const usage = useAppSelector((s) => s.session.usage);
   const chatModels = useAppSelector(
     (s) => s.config.config.modelsByRole?.chat ?? [],
@@ -90,8 +97,9 @@ export function UsageIndicator() {
       </span>
       {summary.cost !== undefined && summary.priceListDate && (
         <span className="text-description-muted" data-testid="usage-price-date">
-          Estimate: OpenRouter prices from the list downloaded{" "}
-          {summary.priceListDate.slice(0, 10)}
+          Estimate: OpenRouter prices, last updated{" "}
+          {formatUpdatedAt(summary.priceListDate)}. Refresh now from the Models
+          settings.
         </span>
       )}
       {models.length > 1 &&
@@ -108,16 +116,40 @@ export function UsageIndicator() {
     </div>
   );
 
+  const costText =
+    summary.cost !== undefined
+      ? `${summary.costIsPartial ? "at least " : ""}${formatCost(summary.cost)}`
+      : undefined;
+  const showRoute = !!route?.fallback && tier !== "narrow";
+  // What the row shows; the name starts with it, so speech and sight agree
+  const visible =
+    (context
+      ? `${percent}%${tier === "wide" ? " context" : ""}`
+      : formatTokens(summary.inputTokens + summary.outputTokens)) +
+    (summary.cost !== undefined ? ` · ${formatCost(summary.cost)}` : "") +
+    (showRoute ? ` · via ${route?.name}` : "");
+  const meaning = [
+    context
+      ? `context ${percent}% used`
+      : "tokens this session, context window unknown",
+    costText ? `estimated cost ${costText}` : "no price known",
+    route?.fallback ? `answered via ${route.name}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   return (
-    <ToolTip place="top" content={content}>
-      <span
+    <Popover className="relative flex flex-none">
+      <PopoverButton
+        as={HoverButton}
+        aria-label={`${visible}: ${meaning}. Show usage details`}
         data-testid="usage-indicator"
-        className="flex flex-none items-center gap-1 text-description"
+        className="flex-none gap-1 px-0.5 [font-size:inherit] tabular-nums"
       >
         {context ? (
           <span
-            className="relative h-[3px] w-6 overflow-hidden rounded-xs bg-command-border"
-            aria-hidden
+            className={`relative h-[3px] ${tier === "narrow" ? "w-3" : "w-6"} overflow-hidden rounded-xs bg-command-border`}
+            aria-hidden="true"
           >
             <span
               className={`absolute top-0 left-0 h-full ${context.fraction >= 0.9 ? "bg-error" : "bg-description"}`}
@@ -125,14 +157,15 @@ export function UsageIndicator() {
             />
           </span>
         ) : null}
-        <span>
-          {context
-            ? `${percent}%`
-            : formatTokens(summary.inputTokens + summary.outputTokens)}
-          {summary.cost !== undefined ? ` · ${formatCost(summary.cost)}` : ""}
-          {route?.fallback ? ` · via ${route.name}` : ""}
-        </span>
-      </span>
-    </ToolTip>
+        <span aria-hidden="true">{visible}</span>
+      </PopoverButton>
+      <PopoverPanel
+        anchor="top end"
+        data-testid="usage-panel"
+        className="z-[200000] max-w-[90vw] rounded border border-solid border-border bg-vsc-input-background p-2 text-xs text-foreground shadow-md"
+      >
+        {content}
+      </PopoverPanel>
+    </Popover>
   );
 }

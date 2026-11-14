@@ -1415,6 +1415,12 @@ interface Reasoning {
   endAt?: number;
 }
 
+/**
+ * How a turn ended early: Stop, a request that failed for good, or a window
+ * that closed or reloaded while it ran.
+ */
+export type TurnInterruption = "stopped" | "failed" | "reloaded";
+
 export interface ChatHistoryItem {
   message: ChatMessage;
   contextItems: ContextItemWithId[];
@@ -1426,6 +1432,11 @@ export interface ChatHistoryItem {
   reasoning?: Reasoning;
   appliedRules?: RuleMetadata[];
   conversationSummary?: string;
+  /**
+   * Set on the last item kept from a turn that the person stopped or that
+   * failed, or that a reload cut off. The chat offers Resume for it.
+   */
+  interrupted?: TurnInterruption;
   /**
    * Request-time only, never saved: a prompt cache point goes right after this
    * item (a fork point, such as a Loop item's first message), so a retry, a
@@ -2457,6 +2468,8 @@ export interface ContinueUIConfig {
   nudgeLeakedToolCalls?: boolean;
   /** The first-run overview on Settings > Permissions was dismissed. Never shown again. */
   permissionsIntroDismissed?: boolean;
+  /** Leave the model's thinking open after the answer starts, instead of folding it to "Thought for Ns". Default false. */
+  keepThinkingExpanded?: boolean;
 }
 
 export interface ContextMenuConfig {

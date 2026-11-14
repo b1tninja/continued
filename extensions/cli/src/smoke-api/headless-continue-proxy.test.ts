@@ -7,6 +7,7 @@ import {
   runHeadless,
   smokeEnv,
   type SmokeTestContext,
+  smokeTitle,
 } from "./smoke-api-helpers.js";
 
 const CONTINUE_API_KEY = smokeEnv("CONTINUE_API_KEY");
@@ -16,7 +17,10 @@ const CONTINUE_API_KEY = smokeEnv("CONTINUE_API_KEY");
 const SMOKE_PROXY_MODEL = smokeEnv("SMOKE_PROXY_MODEL");
 
 describe.skipIf(!CONTINUE_API_KEY || !SMOKE_PROXY_MODEL)(
-  "Smoke: Headless → real Continue proxy",
+  smokeTitle("Smoke: Headless → real Continue proxy", [
+    "CONTINUE_API_KEY",
+    "SMOKE_PROXY_MODEL",
+  ]),
   () => {
     let ctx: SmokeTestContext;
 

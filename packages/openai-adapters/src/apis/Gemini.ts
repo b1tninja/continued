@@ -70,6 +70,20 @@ interface GeminiToolDelta
   };
 }
 
+/**
+ * Gemini 2.5 and later think before they answer but return none of it unless
+ * asked with `thinkingConfig.includeThoughts`; then thought summaries come
+ * back as parts marked `thought: true`. Thinking tokens are billed whether or
+ * not the summaries are returned. Image, speech, live and embedding models
+ * take no thinking config.
+ */
+export function returnsThoughts(model: string): boolean {
+  if (/image|tts|live|audio|embedding/i.test(model)) return false;
+  return /gemini-(?:2\.5|[3-9])|gemini-(?:flash|pro)(?:-lite)?-latest/i.test(
+    model,
+  );
+}
+
 export class GeminiApi implements BaseLlmApi {
   apiBase: string = "https://generativelanguage.googleapis.com/v1beta/";
   private genAI: GoogleGenAI;
@@ -427,6 +441,23 @@ export class GeminiApi implements BaseLlmApi {
               });
             }
 
+            // A thought summary (`includeThoughts`) is reasoning, not the
+            // answer: it goes out as `reasoning_content`, which the chat shows
+            // as thinking and a completion leaves out.
+            if ((part as any).thought === true) {
+              if (part.text) {
+                yield chatChunkFromDelta({
+                  model,
+                  delta: {
+                    role: "assistant",
+                    reasoning_content: part.text,
+                  } as ChatCompletionChunk.Choice["delta"],
+                  finish_reason: null,
+                });
+              }
+              continue;
+            }
+
             yield chatChunk({
               content: part.text,
               model,
@@ -492,6 +523,10 @@ export class GeminiApi implements BaseLlmApi {
           systemInstruction: convertedBody.systemInstruction,
           tools: convertedBody.tools,
           ...convertedBody.generationConfig,
+          // The model thinks either way; this returns summaries of it
+          ...(returnsThoughts(model) && {
+            thinkingConfig: { includeThoughts: true },
+          }),
           // Without this the stop button only stopped reading; the request
           // kept generating (and billing) on Google's side.
           ...(signal && { abortSignal: signal }),

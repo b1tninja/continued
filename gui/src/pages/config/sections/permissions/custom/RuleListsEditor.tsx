@@ -20,7 +20,8 @@ import {
 
 /**
  * The person's own lists as one editor: Never, Ask and Always (config.yaml)
- * and Always-on (the `floor:` of permissions.yaml, which binds at IDGAF). Each
+ * and Always-on (the `floor:` of permissions.yaml, which binds at every level
+ * below IDGAF; at IDGAF it is recorded). Each
  * rule can be removed or moved to another list; a new rule is checked as it is
  * typed and previewed against recent calls with the engine's own matchers.
  * Nothing is written here: the review step saves.

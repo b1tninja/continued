@@ -27,6 +27,8 @@ import {
   keepCoreVerdict,
   getReviewer,
   isAutoReviewEnabled,
+  liftAtIdgaf,
+  runsAtIdgaf,
   type CoreVerdict,
 } from "../permissions/coreRules.js";
 import { checkToolPermission } from "../permissions/permissionChecker.js";
@@ -277,12 +279,37 @@ async function coreRulesVerdict(
     });
   } catch (e) {
     logger.warn("Could not apply toolPermissions rules", { error: e });
+    // IDGAF has nothing for the engine to decide: the call runs
+    if (callRunsAtIdgaf(toolCall, currentPermissionMode())) {
+      return {
+        decision: "allow",
+        by: "system",
+        source: "idgaf",
+        reason: `${ENGINE_ERROR_REASON} The level is IDGAF, so it runs anyway.`,
+      };
+    }
     // Fail closed, at the default levels too: the engine also holds the
     // protected-path, floor and deny checks, so a call it could not look at
     // is never left to a list default (which allows Bash and unlisted tools
     // in a headless run). An ask goes to the person, is held by a loop, and
     // is a refusal when nobody can be asked. The audit trail gets the verdict.
     return { decision: "ask", by: "system", reason: ENGINE_ERROR_REASON };
+  }
+}
+
+/** True when the call's area is IDGAF (and the mode is not Plan); never throws. */
+function callRunsAtIdgaf(
+  toolCall: PreprocessedToolCall,
+  mode: "normal" | "plan" | "auto" | undefined,
+): boolean {
+  try {
+    return runsAtIdgaf(effectiveLevels(mode ?? "normal"), mode, {
+      name: toolCall.name,
+      arguments: toolCall.arguments,
+      readonly: toolCall.tool?.readonly,
+    });
+  } catch {
+    return false;
   }
 }
 
@@ -348,10 +375,14 @@ async function decideToolApproval(
       denialMessage: roleRefusal,
     };
   }
-  const permissionCheck = withReadOnlyMcp(
-    checkToolPermission(toolCall, permissions),
-    toolCall.tool,
+  // IDGAF: the CLI's own ask and exclude do not stop the call (runsAtIdgaf)
+  const idgaf = callRunsAtIdgaf(toolCall, mode);
+  const permissionCheck = liftAtIdgaf(
+    withReadOnlyMcp(checkToolPermission(toolCall, permissions), toolCall.tool),
+    idgaf,
   );
+  if (permissionCheck.idgafLifted)
+    trace.idgafLifted = permissionCheck.idgafLifted;
   let permission = permissionCheck.permission;
 
   // PreToolUse hooks adjust the CLI policy first; the CLI's own exclude

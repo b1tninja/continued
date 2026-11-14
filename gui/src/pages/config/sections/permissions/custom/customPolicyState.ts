@@ -44,12 +44,12 @@ export const LIST_NAMES: Record<ListKey, string> = {
 };
 
 export const LIST_HINTS: Record<ListKey, string> = {
-  deny: "Refused. Saved in your config.yaml. IDGAF ignores it.",
-  ask: "Asks you first. Saved in your config.yaml. IDGAF ignores it.",
+  deny: "Refused. Saved in your config.yaml. At IDGAF the call runs and the audit trail records the rule.",
+  ask: "Asks you first. Saved in your config.yaml. At IDGAF the call runs and the audit trail records the rule.",
   allow:
     "Runs without asking where the level consults rules. Saved in your config.yaml; only your own file may allow.",
   floor:
-    "Refused at every level, IDGAF included (floor: in permissions.yaml). The one list IDGAF does not ignore.",
+    "Refused at every level below IDGAF (floor: in permissions.yaml), whatever the level or your other lists say. At IDGAF the call runs and the audit trail records the rule.",
 };
 
 export const decisionOfList = (key: ListKey): RuleDecision =>

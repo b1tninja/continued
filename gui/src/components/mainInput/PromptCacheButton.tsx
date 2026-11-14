@@ -31,6 +31,7 @@ import {
   ringFraction,
 } from "../../util/promptCacheCountdown";
 import { ToolTip } from "../gui/Tooltip";
+import { useToolbarWidthTier } from "./InputToolbar/widthTier";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
 
 const CHOICES: (PromptCacheSetting | "config")[] = [
@@ -106,15 +107,37 @@ function tooltipText(
 }
 
 /**
- * Toolbar control for prompt caching, next to the reasoning light bulb. While
- * the cache is warm it shows a ring that drains toward expiry, with the time
- * left beside it when there is room. Otherwise it is the database icon, filled
- * when requests carry cache breakpoints and outlined when they do not. Shown
- * only for models whose provider honours it. `inMenu`: a labelled row in the
- * toolbar's overflow menu.
+ * The state of the cache in a word or two, for the button's name and, when
+ * there is room, beside its icon. Nothing here is new state: it is
+ * `promptCacheStatus` read aloud.
  */
-export function PromptCacheButton({ inMenu = false }: { inMenu?: boolean }) {
+export function promptCacheStateWords(
+  status: ReturnType<typeof promptCacheStatus>,
+  isStreaming: boolean,
+): { short: string; long: string } {
+  if (!status.on) return { short: "off", long: "off" };
+  if (status.belowMinimum)
+    return { short: "on", long: "on, nothing cached yet" };
+  if (status.warm) {
+    if (isStreaming) return { short: "warm", long: "warm" };
+    const left = formatCountdown(status.msLeft ?? 0);
+    return { short: left, long: `${left} left` };
+  }
+  return { short: "cold", long: "cold" };
+}
+
+/**
+ * Control for prompt caching in the row under the prompt, next to the
+ * reasoning light bulb. While the cache is warm it shows a ring that drains
+ * toward expiry. Otherwise it is the database icon, filled when requests carry
+ * cache breakpoints and outlined when they do not. Beside the icon, when the
+ * row has room, the state: time left, "cold", "on" or "off" (a "Cache" label
+ * too when wide). The state is always in the button's name. Shown only for
+ * models whose provider honours it.
+ */
+export function PromptCacheButton() {
   const dispatch = useAppDispatch();
+  const tier = useToolbarWidthTier();
   const model = useAppSelector(selectSelectedChatModel);
   // What was picked in the menu, and what is in force (the default applies
   // when nothing was picked and config says nothing).
@@ -159,6 +182,7 @@ export function PromptCacheButton({ inMenu = false }: { inMenu?: boolean }) {
     ? 1
     : ringFraction(msLeft, status.lifetimeMs ?? 0);
   const warn = !isStreaming && msLeft <= COUNTDOWN_WARN_MS;
+  const words = promptCacheStateWords(status, isStreaming);
 
   return (
     <Listbox
@@ -203,29 +227,35 @@ export function PromptCacheButton({ inMenu = false }: { inMenu?: boolean }) {
         >
           <ListboxButton
             data-testid="prompt-cache-button"
-            aria-label="Prompt cache"
-            className={`m-0 flex min-h-6 flex-none cursor-pointer items-center border-none bg-transparent p-0 text-description hover:brightness-150 ${inMenu ? "w-full px-2 text-left" : "min-w-6 justify-center"}`}
+            aria-label={`Prompt cache ${words.long}`}
+            className={`m-0 flex min-h-6 min-w-6 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent p-0 [font-size:inherit] text-description hover:brightness-150 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-[-1px] focus-visible:outline-border-focus ${tier === "narrow" ? "" : "px-0.5"}`}
           >
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-1">
               {showRing ? (
-                <>
-                  <CountdownRing fraction={fraction} warn={warn} />
-                  {!isStreaming && (
-                    <span
-                      data-testid="prompt-cache-countdown"
-                      className={`${inMenu ? "" : "hidden xs:inline"} text-[10px] tabular-nums ${warn ? "text-warning" : ""}`}
-                    >
-                      {formatCountdown(msLeft)}
-                    </span>
-                  )}
-                </>
+                <CountdownRing fraction={fraction} warn={warn} />
               ) : status.on ? (
-                <CircleStackIconSolid className="h-4 w-4 opacity-60" />
+                <CircleStackIconSolid
+                  className="h-4 w-4 opacity-60"
+                  aria-hidden="true"
+                />
               ) : (
-                <CircleStackIconOutline className="h-4 w-4" />
+                <CircleStackIconOutline
+                  className="h-4 w-4"
+                  aria-hidden="true"
+                />
               )}
-              {inMenu && (
-                <span className="text-xs text-foreground">Prompt cache</span>
+              {tier !== "narrow" && (
+                <span
+                  data-testid={
+                    showRing && !isStreaming
+                      ? "prompt-cache-countdown"
+                      : "prompt-cache-state"
+                  }
+                  aria-hidden="true"
+                  className={`tabular-nums ${showRing && warn ? "text-warning" : ""}`}
+                >
+                  {tier === "wide" ? `Cache ${words.short}` : words.short}
+                </span>
               )}
             </span>
           </ListboxButton>

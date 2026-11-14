@@ -133,6 +133,11 @@ export interface DecisionEvent extends AuditEnvelope {
   /** The `seq` of the ask this line answers */
   answers?: number;
   reviewer?: AuditReviewer;
+  /**
+   * IDGAF ran the call past an objection: what the rule or guard would have
+   * decided below IDGAF. Masked like `reason`.
+   */
+  wouldHave?: AuditWouldHave;
   jail?: string;
   loopItem?: string;
   modelMain?: string;
@@ -301,6 +306,14 @@ type DistributiveOmit<T, K extends keyof any> = T extends unknown
   ? Omit<T, K>
   : never;
 
+/** What a rule or guard would have decided for a call IDGAF ran anyway. */
+export interface AuditWouldHave {
+  policy: "ask" | "deny";
+  source?: string;
+  rule?: string;
+  reason?: string;
+}
+
 export interface DecisionInput {
   session: string;
   turn?: number;
@@ -322,6 +335,7 @@ export interface DecisionInput {
   reason?: string;
   answers?: number;
   reviewer?: AuditReviewer;
+  wouldHave?: AuditWouldHave;
   jail?: string;
   loopItem?: string;
   modelMain?: string;
@@ -351,6 +365,13 @@ export function decisionDraft(input: DecisionInput): AuditDraft {
     displayValue: maskLine(input.displayValue, MAX_ARGS_CHARS),
     reason: maskLine(input.reason, MAX_REASON_CHARS),
     reviewer: input.reviewer ? clean({ ...input.reviewer }) : undefined,
+    wouldHave: input.wouldHave
+      ? clean({
+          ...input.wouldHave,
+          rule: maskLine(input.wouldHave.rule, MAX_REASON_CHARS),
+          reason: maskLine(input.wouldHave.reason, MAX_REASON_CHARS),
+        })
+      : undefined,
     agent: auditAgentOf(input.agent),
   }) as AuditDraft;
 }

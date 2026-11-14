@@ -16,6 +16,7 @@ import { AssignModelsCard } from "../components/AssignModelsCard";
 import { ModeModelsTable } from "../components/ModeModelsTable";
 import { ProviderInstancesCard } from "../components/ProviderInstancesCard";
 import { ProvidersCard } from "../components/ProvidersCard";
+import { ModelInformationControl } from "./ModelInformationControl";
 
 const MODEL_DOCS_URLS = {
   chat: {
@@ -244,6 +245,8 @@ export function ModelsSection() {
           </div>
         </Toggle>
       </Card>
+
+      <ModelInformationControl />
     </div>
   );
 }

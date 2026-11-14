@@ -98,7 +98,7 @@ Choosing it navigates to `/config?tab=permissions&custom=<base>[&area=<area>]`. 
 │  ? runTerminalCommand(git push*)          [Move to… ▾] [Remove]       │
 │ Always (1)      Only your own file may allow.                        │
 │  ✓ runTerminalCommand(npm test*)          [Move to… ▾] [Remove]       │
-│ Always-on Never (0)  Refused at every level (floor:).                │
+│ Always-on Never (0)  Refused below IDGAF (floor:).                   │
 │                                                                      │
 │ From the audit trail                                                 │
 │  runTerminalCommand(ls*)    5× always          [Add to Always]       │

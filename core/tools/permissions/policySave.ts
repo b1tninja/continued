@@ -58,7 +58,7 @@ export function policySaveLoosenings(
       const level = parsePolicyLevel(after)!;
       out.push({
         key: `levels.${area}`,
-        text: `${POLICY_AREA_LABELS[area]}: ${policyLevelLabel(area, was)} → ${policyLevelLabel(area, level)}${level === "idgaf" ? " (this session only; every rule but the Always-on Never list is ignored)" : ""}`,
+        text: `${POLICY_AREA_LABELS[area]}: ${policyLevelLabel(area, was)} → ${policyLevelLabel(area, level)}${level === "idgaf" ? " (this session only; nothing is refused or asked, the Always-on Never list included)" : ""}`,
       });
     }
   }

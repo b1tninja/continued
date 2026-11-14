@@ -22,10 +22,29 @@ import { SystemMessageToolsFramework } from "core/tools/systemMessageTools/types
 import { findLast, findLastIndex } from "core/util/findLast";
 import {
   normalizeToMessageParts,
+  renderChatMessage,
   renderContextItems,
   renderContextItemsWithStatus,
 } from "core/util/messageContent";
 import { toolCallStateToContextItems } from "../../pages/gui/ToolCallDiv/utils";
+
+/**
+ * Whether the reasoning at `index` is followed, within its turn (before the
+ * next user or tool item), by an assistant answer: text or tool calls.
+ */
+function hasAnswerAfter(history: ChatHistoryItem[], index: number): boolean {
+  for (let i = index + 1; i < history.length; i++) {
+    const { message } = history[i];
+    if (message.role === "user" || message.role === "tool") return false;
+    if (
+      message.role === "assistant" &&
+      (!!message.toolCalls?.length || !!renderChatMessage(message).trim())
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 // Helper function to render context items and append status information
 // Helper function to render context items and append status information
@@ -101,6 +120,10 @@ export function constructMessages(
         },
       });
     } else if (item.message.role === "thinking") {
+      // Reasoning from a turn stopped or failed before any answer stays on
+      // screen but is not sent: alone it would be an assistant turn holding
+      // only reasoning, which providers reject or turn into an empty turn
+      if (!hasAnswerAfter(historyCopy, index)) continue;
       msgs.push({
         ctxItems: item.contextItems,
         message: item.message,

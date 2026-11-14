@@ -50,6 +50,7 @@ import {
   prepareLoopTurn,
   requestLoopTurnEnd,
   resetLoopMemory,
+  resumeStoppedLoop,
   runLoopItemAgain,
   setRunningLoopBudget,
   skipLoopItem,
@@ -565,6 +566,28 @@ describe("Loop mode's driver in the CLI", () => {
     expect(loopRequestHistory(history())[0].message.content).toBe(
       `${turn!.prompt}\n\n${block}`,
     );
+  });
+
+  it("a resumed loop follows this process's levels, not the ones saved with it", async () => {
+    await planOf("One");
+    const plan = getSessionTaskPlan()!;
+    const now = new Date("2026-11-07T10:00:00Z");
+    const saved = {
+      ...createLoop(plan, { now, sessionTokens: 0, autonomy: "auto" }),
+      policy: { plan: "cautious", questions: "cautious" },
+      status: "stopped" as const,
+    } as LoopState;
+    commitLoop(saved);
+    setPolicyLevels({
+      ...getPolicyLevels(),
+      plan: "idgaf",
+      questions: "idgaf",
+    });
+    expect(resumeStoppedLoop(now)).toBe(true);
+    expect(getSessionLoop()?.policy).toMatchObject({
+      plan: "idgaf",
+      questions: "idgaf",
+    });
   });
 
   it("an unattended loop wakes when its wait runs out", async () => {

@@ -30,10 +30,19 @@ Your messages, the files and tool output the agent reads, and the conversation s
 - The update check is a stub; it contacts nothing.
 - Terminal commands the agent runs start with a scrubbed environment (secret-looking variables removed).
 
+## Contacts a third party by default: OpenRouter's model list
+
+**This changed after 2.16.1.** Builds 2.16.0 and 2.16.1 contacted `openrouter.ai` only when you chose Pull now or Refresh. Now, by default, Continuous keeps OpenRouter's public model list current on its own, whether or not you use OpenRouter.
+
+- **What is sent**: one `GET https://openrouter.ai/api/v1/models`. No account, API key, prompt, file, body or machine id. The only headers are `accept: application/json` and `user-agent: continuous` (no version or platform). The `headers` from your `requestOptions` are not sent to this host; its proxy and certificate settings are used. OpenRouter sees your IP address (or your proxy's) and the time of the request, as any web server would.
+- **When**: with model information updates on **Automatic** (the default), when the copy on this computer is missing or older than 24 hours (`modelCatalogRefreshHours`): about 15 to 60 seconds after the IDE starts, 1 to 3 seconds after the terminal agent starts, and again each time the interval passes while it keeps running. Each open IDE window and terminal session checks the file's date first, so a list another window just downloaded is not fetched again. When the host cannot be reached it tries again after 5 minutes, then 10, 20 and so on, up to every 6 hours. Nothing waits for it. **Refresh now** in the model, settings and usage screens, Pull now in provider setup and `continuous models refresh` also send it, at once.
+- **What is kept**: the list (names, ids, context sizes, tool support, per-token prices) and its date, in `model-catalog/openrouter.json` in the global folder. Nothing else is written to that file. It is used for model lists, context sizes and cost estimates, including `--max-budget-usd`.
+- **How to turn it off**: set **Model information updates** to **Off** (`continuous.modelInformationUpdates` in VS Code, the Models settings page, `modelCatalog: off` in `~/.continuous/config.yaml`, or `CONTINUOUS_MODEL_INFO_UPDATES=off`). Then `openrouter.ai` is never contacted and the bundled model data is used. **Only when I ask** (`modelCatalog: manual`) restores the 2.16.0 behaviour; `modelCatalog: never`, saved by "Don't ask again" in those builds, is kept and means the same without the question.
+
 ## Contacts a third party only if you set it up
 
 - **Web search**: the `search_web` tool and `@web` exist only if you set `CONTINUOUS_WEB_SEARCH_URL` to a search endpoint you run or choose (optional `CONTINUOUS_WEB_SEARCH_KEY`, sent to that endpoint only). See [web search](docs/customize/web-search.mdx).
-- **Model catalogues**: provider setup contacts `ollama.com` (the public model library page) or `openrouter.ai` (`/api/v1/models`, the public model list) with a plain GET, no key, no account and no prompt, only after you choose Download, Pull now or Refresh for that provider. For OpenRouter the downloaded list (names, ids, context sizes, per-token prices and the date) is kept on this computer in `model-catalog/openrouter.json` in the global folder (`~/.continuous` by default) and read from there afterwards; nothing else is written to that file. "Don't ask again" is saved as `modelCatalog: never` in your `config.yaml`.
+- **Ollama's model library**: Ollama's provider setup contacts `ollama.com` (the public model library page) with a plain GET, no key, no account and no prompt, only after you choose Download or Refresh there. It is never fetched at start-up or on a timer, and the Model information updates setting does not change that.
 - **MCP servers** you add, and their sign-in pages.
 - **Pages you name**: `@url`, the `fetch_url` tool and docs indexing fetch the sites you point them at, directly from your machine.
 - **Docs on GitHub**: a docs entry on github.com uses the GitHub API.
@@ -57,7 +66,7 @@ API keys are not kept in the repository. In VS Code they are stored encrypted in
 
 Builds 2.12.0 and 2.12.1 sent web search queries and, for sites with `useLocalCrawling: false`, docs URLs to a proxy run by the upstream Continue project, with the extension version, operating system, a machine id and a key embedded in the code. They also told the model to add a `Co-Authored-By: Continue` trailer to commits. Upgrade to a release that includes the egress fix and the attribution fix ([#626](https://github.com/b1tninja/continuous/pull/626)).
 
-Builds 2.14.0 and earlier looked up model lists on `openrouter.ai` and `ollama.com` (public GET requests, no key) as soon as the provider setup screen opened. From 2.16.0 that happens only when you choose Download, Pull now or Refresh.
+Builds 2.14.0 and earlier looked up model lists on `openrouter.ai` and `ollama.com` (public GET requests, no key) as soon as the provider setup screen opened. In 2.16.0 and 2.16.1 that happened only when you chose Download, Pull now or Refresh. After 2.16.1 the OpenRouter list is refreshed automatically by default (see [above](#contacts-a-third-party-by-default-openrouters-model-list)); `ollama.com` is still contacted only when you ask in Ollama's setup.
 
 ## Reporting a privacy or security problem
 

@@ -30,6 +30,13 @@ export function mergePackages(
     ...((incoming.modelCatalog ?? current.modelCatalog)
       ? { modelCatalog: incoming.modelCatalog ?? current.modelCatalog }
       : {}),
+    ...((incoming.modelCatalogRefreshHours ?? current.modelCatalogRefreshHours)
+      ? {
+          modelCatalogRefreshHours:
+            incoming.modelCatalogRefreshHours ??
+            current.modelCatalogRefreshHours,
+        }
+      : {}),
     requestOptions: mergeConfigYamlRequestOptions(
       current.requestOptions,
       incoming.requestOptions,
@@ -143,6 +150,13 @@ export function mergeUnrolledAssistants(
     ...mergeToolPermissionsField(current, incoming),
     ...((incoming.modelCatalog ?? current.modelCatalog)
       ? { modelCatalog: incoming.modelCatalog ?? current.modelCatalog }
+      : {}),
+    ...((incoming.modelCatalogRefreshHours ?? current.modelCatalogRefreshHours)
+      ? {
+          modelCatalogRefreshHours:
+            incoming.modelCatalogRefreshHours ??
+            current.modelCatalogRefreshHours,
+        }
       : {}),
     requestOptions: mergeConfigYamlRequestOptions(
       current.requestOptions,

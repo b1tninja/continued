@@ -4,7 +4,10 @@ import { networkFetch, networkFetchWith } from "../util/networkFetch.js";
 
 import { LLMClasses, llmFromProviderAndOptions } from "./llms/index.js";
 import { listOpenAICompatibleModels } from "./localServers.js";
-import { pullOpenRouterCatalog } from "./modelCatalogStore.js";
+import {
+  modelInfoFetchBlocked,
+  pullOpenRouterCatalog,
+} from "./modelCatalogStore.js";
 import { catalogToFetchedModels } from "./openRouterCatalog.js";
 
 export interface FetchedModel {
@@ -153,6 +156,8 @@ async function fetchOllamaModels(
 async function fetchOpenRouterModels(
   requestOptions?: RequestOptions,
 ): Promise<FetchedModel[]> {
+  const blocked = modelInfoFetchBlocked();
+  if (blocked) throw new Error(blocked);
   try {
     return catalogToFetchedModels(await pullOpenRouterCatalog(requestOptions));
   } catch (error) {

@@ -516,9 +516,11 @@ describe("ToolPermissionService - Agent File Integration", () => {
       const notBash = allBuiltInNames.filter((name) => name !== "Bash");
 
       for (const toolName of notBash) {
+        // structural: an agent's tool list is its role, which IDGAF keeps
         expect(state.permissions.policies).toContainEqual({
           tool: toolName,
           permission: "exclude",
+          structural: true,
         });
       }
 
@@ -573,7 +575,11 @@ describe("ToolPermissionService - Agent File Integration", () => {
       // bring it back
       expect(first("Read")).toEqual({ tool: "Read", permission: "exclude" });
       // The person allowed Bash; the agent file left it out, so it is gone
-      expect(first("Bash")).toEqual({ tool: "Bash", permission: "exclude" });
+      expect(first("Bash")).toEqual({
+        tool: "Bash",
+        permission: "exclude",
+        structural: true,
+      });
     });
   });
 

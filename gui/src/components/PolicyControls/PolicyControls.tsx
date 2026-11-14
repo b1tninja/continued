@@ -35,7 +35,7 @@ import {
   changePolicyLevel,
 } from "../../redux/thunks/policySettings";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "../ui";
-import { CHIP, LEVEL_GLYPHS, LEVEL_TONES, idgafSentence } from "./levelStyle";
+import { CHIP, LEVEL_GLYPHS, LEVEL_TONES, IDGAF_SENTENCE } from "./levelStyle";
 import { PresetSelect } from "./PresetSelect";
 
 const AREA_ICONS: Record<PolicyArea, typeof EyeIcon> = {
@@ -270,7 +270,7 @@ export function IdgafChip() {
   const preset = presetOf(useAppSelector((s) => s.ui.policyLevels));
   // At the IDGAF preset the preset chip already says so, and carries the sentence
   if (areas.length === 0 || preset === "idgaf") return null;
-  const sentence = idgafSentence(areas);
+  const sentence = IDGAF_SENTENCE;
   return (
     <>
       <button

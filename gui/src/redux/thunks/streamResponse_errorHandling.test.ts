@@ -140,7 +140,7 @@ describe("streamResponseThunk", () => {
       },
       {
         type: "session/clearDanglingMessages",
-        payload: undefined,
+        payload: "failed",
       },
       {
         type: "chat/cancelStream/fulfilled",
@@ -732,7 +732,7 @@ describe("streamResponseThunk", () => {
       },
       {
         type: "session/clearDanglingMessages",
-        payload: undefined,
+        payload: "failed",
       },
       {
         type: "chat/cancelStream/fulfilled",
