@@ -8,12 +8,12 @@ import { hadUnhandledError } from "./errorState.js";
 import { fieldFallbackLines } from "./fieldFallbackLines.js";
 import { logger } from "./logger.js";
 import { formatReplyTally } from "./replyTally.js";
-import { formatSessionCost } from "./sessionCost.js";
+import { formatPriceSourceLines, formatSessionCost } from "./sessionCost.js";
 
 /**
  * Display session usage breakdown in verbose mode
  */
-function displaySessionUsage(): void {
+export function displaySessionUsage(): void {
   const isVerbose = process.argv.includes("--verbose");
   if (!isVerbose) {
     return;
@@ -29,6 +29,7 @@ function displaySessionUsage(): void {
     logger.info("Session Usage Summary");
     logger.info("=".repeat(60));
     logger.info(`Total Cost: ${formatSessionCost(usage)}`);
+    for (const line of formatPriceSourceLines(usage)) logger.info(line);
     logger.info("");
     logger.info("Token Usage:");
     // Input is what the provider processed: uncached plus cache reads plus

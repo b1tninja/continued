@@ -24,14 +24,14 @@ Every line has `type`, `seq` (1, 2, 3 ... with no gaps) and `time` (ISO 8601, UT
 | `type`          | When                                                                       | Fields                                                                                                                                   |
 | --------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `init`          | First line of every run that got as far as loading a model                 | `schemaVersion`, `sessionId`, `cliVersion`, `model`, `provider`, `cwd`, `mode`, `limits` (when a run limit is set)                       |
-| `usage`         | After each model request                                                   | `request` (1 for the first), `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `costUsd`, `totalCostUsd`, `costEstimated` |
+| `usage`         | After each model request                                                   | `request` (1 for the first), `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `costUsd`, `totalCostUsd`, `costEstimated`; `priceSource` when the request was priced, `servedTier` when the provider served a non-standard tier |
 | `message`       | A complete reply of the model (not a partial chunk)                        | `role` (`assistant`), `content`                                                                                                          |
 | `tool_use`      | The model asked for a tool call                                            | `callId`, `tool`, `args`                                                                                                                 |
 | `tool_decision` | The permission system decided                                              | `callId`, `tool`, `decision` (`allowed`, `asked`, `refused`), `by` (`rules`, `reviewer`, `system`, `person`), `source`, `rule`, `reason`, `answer`, `held` |
 | `tool_result`   | A call ended                                                               | `callId`, `tool`, `status` (`done`, `errored`, `canceled`), `output`, `outputLength`, `truncated`                                        |
 | `run_limit`     | A run limit ended the run                                                  | `reason` (`budget`, `turns`, `duration`), `phase`, `message`, `exitCode`, `spentUsd`                                                     |
 | `error`         | The run failed                                                             | `kind` (`config`, `refused`, `provider`, `output_schema`, `internal`), `message`, `code`                                                  |
-| `result`        | Last line of every run, whatever ended it                                  | `schemaVersion`, `status` (`success`, `error`, `refused`, `stopped`, `interrupted`), `exitCode`, `result`, `durationMs`, `numRequests`, `numToolCalls`, `numRefusals`, `numIdgafObjections` (calls IDGAF ran that a rule or guard would have refused or asked about), `usage`, `totalCostUsd`, `costEstimated` |
+| `result`        | Last line of every run, whatever ended it                                  | `schemaVersion`, `status` (`success`, `error`, `refused`, `stopped`, `interrupted`), `exitCode`, `result`, `durationMs`, `numRequests`, `numToolCalls`, `numRefusals`, `numIdgafObjections` (calls IDGAF ran that a rule or guard would have refused or asked about), `usage`, `totalCostUsd`, `costEstimated`, `priceSources`, and `servedTiers` when a provider served a non-standard tier |
 
 `result.exitCode` is the code the process exits with; see [Exit codes](/cli/exit-codes).
 
@@ -48,6 +48,8 @@ Every line has `type`, `seq` (1, 2, 3 ... with no gaps) and `time` (ISO 8601, UT
 Every text and every argument goes through the same masker as the audit trail and the approval prompt: a value that looks like a credential becomes `«masked:<kind>»`. Masking is best effort, as in the audit trail: a secret in a shape nobody listed passes through.
 
 A `tool_result` output is cut at 4000 characters and a string argument of `tool_use` at 2000, each ending in ` [cut]`. `outputLength` is the length before the cut. Reasoning (thinking) text is never written.
+
+A price source is `{ kind, label, url?, asOf? }`, where `kind` is `user` (a price you entered), `provider` (a list the provider publishes, downloaded, such as OpenRouter's), `curated` (a price table in Continuous checked against the provider's pricing page on `asOf`) or `community` (the models.dev catalogue: a third-party estimate, used only when nothing else prices the model). With a `servedTier` such as `flex` or `priority`, the cost is the standard-tier price.
 
 The counts (`usage`, `numRequests`, `totalCostUsd`) are for this run only. Spend and calls restored with `--resume` or `--fork` are not counted.
 

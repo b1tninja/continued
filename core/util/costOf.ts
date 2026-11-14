@@ -161,9 +161,11 @@ export function costOf(
   }
   const lines = priced.breakdown.split("\n");
   const assumptions = [
-    priced.estimate
-      ? "Estimate from the per-token prices OpenRouter published in the downloaded list (standard tier; web search requests are not counted)"
-      : "List price, standard tier (batch, flex and fast tiers are not detected)",
+    priced.priceSource?.kind === "community"
+      ? "Estimate from the community catalogue (models.dev), the last price source: no price you entered, provider list or curated table has this model"
+      : priced.estimate
+        ? "Estimate from the per-token prices OpenRouter published in the downloaded list (standard tier; web search requests are not counted)"
+        : "List price, standard tier (batch, flex and fast tiers are not detected)",
     ...lines.filter((l) => l.startsWith("Prices:")),
   ];
   if (requests > 1) {

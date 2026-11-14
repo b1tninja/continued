@@ -12,6 +12,7 @@ import type {
   Usage,
 } from "core/index.js";
 import { totalInputTokens } from "core/llm/utils/cacheStats.js";
+import type { CostBreakdown } from "core/llm/utils/calculateRequestCost.js";
 import { addRequestUsage } from "core/llm/utils/sessionUsage.js";
 import historyManager, {
   damagedSessionNotice,
@@ -25,6 +26,14 @@ import { DEFAULT_SESSION_TITLE } from "./constants/session.js";
 import { env } from "./env.js";
 import { logger } from "./util/logger.js";
 import { userNotice } from "./util/userNotice.js";
+
+/** How a request was priced, for `trackUsage`. */
+export interface TrackHow {
+  /** Priced at the fallback rate: the session total becomes an estimate */
+  estimated?: boolean;
+  /** The price used, so the per-model price source matches the total */
+  pricedAs?: CostBreakdown | null;
+}
 
 // Re-export BaseSessionMetadata for external consumers
 export type { BaseSessionMetadata };
@@ -217,8 +226,14 @@ class SessionManager {
     usage: Usage,
     provider?: string,
     model?: string,
-    estimated = false,
+    /**
+     * `true` (or `estimated`): priced at the fallback rate. `pricedAs`: the
+     * price the caller used, so the per-model source matches the total.
+     */
+    how: boolean | TrackHow = false,
   ): void {
+    const { estimated = false, pricedAs } =
+      typeof how === "boolean" ? { estimated: how } : how;
     // Accumulate cost
     this.sessionUsage.totalCost += cost;
     if (estimated) {
@@ -233,6 +248,7 @@ class SessionManager {
       provider ?? "unattributed",
       model ?? "unattributed",
       usage,
+      pricedAs,
     ).byModel;
 
     // Accumulate token counts
@@ -810,15 +826,9 @@ export function trackSessionUsage(
   usage: Usage,
   provider?: string,
   model?: string,
-  estimated = false,
+  how: boolean | TrackHow = false,
 ): void {
-  SessionManager.getInstance().trackUsage(
-    cost,
-    usage,
-    provider,
-    model,
-    estimated,
-  );
+  SessionManager.getInstance().trackUsage(cost, usage, provider, model, how);
 }
 
 /**

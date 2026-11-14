@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import type { Command } from "commander";
+import { loadCommunityPrices } from "core/llm/communityCatalogStore.js";
 import { costSince, costMarkOf } from "core/util/loopCost.js";
 
 import { cliAuditSession, cliAuditTrail } from "../audit/cliAudit.js";
@@ -135,6 +136,8 @@ export function startRunLimits(
     warn?: (m: string) => void;
     /** The downloaded price list (tests pass a temporary file). */
     priceFile?: string;
+    /** The community catalogue copy (tests pass a temporary file). */
+    communityFile?: string;
   } = {},
 ): RunBudget | undefined {
   const { limits, ignored } = tightenLimits(
@@ -152,6 +155,9 @@ export function startRunLimits(
     forBudget: limits.maxBudgetUsd !== undefined,
     file: opts.priceFile,
   });
+  // The community catalogue (models.dev), the last price source: a file read.
+  // A budget is held on it only with --budget-allow-unpriced.
+  loadCommunityPrices({ file: opts.communityFile });
   if (model.provider.toLowerCase() === "openrouter") {
     const warning = stalePriceWarning(prices);
     if (warning) (opts.warn ?? logger.warn.bind(logger))(warning);
@@ -167,6 +173,7 @@ export function startRunLimits(
   const budget = new RunBudget({
     limits,
     model,
+    allowCommunityPrice: options.budgetAllowUnpriced === true,
     now: opts.now,
     spentUsd: () => costSince(start, costMarkOf(getSessionUsage())).amount,
   });

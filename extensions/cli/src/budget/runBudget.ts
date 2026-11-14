@@ -53,6 +53,11 @@ export const DEFAULT_OUTPUT_ESTIMATE = 1024;
 export interface RunBudgetOptions {
   limits: RunLimits;
   model: CostModel;
+  /**
+   * Hold the dollar cap on a price from the community catalogue (models.dev)
+   * when that is the only price: set by --budget-allow-unpriced.
+   */
+  allowCommunityPrice?: boolean;
   /** Milliseconds, injectable for tests */
   now?: () => number;
   /** USD this run has spent so far, or "unknown" when a model it used has no price */
@@ -63,13 +68,30 @@ function positive(n: number | undefined): n is number {
   return typeof n === "number" && Number.isFinite(n) && n > 0;
 }
 
-function hasPrice(model: CostModel): boolean {
-  return (
-    costOf(
-      { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 },
-      model,
-    ).amount !== "unknown"
+function probe(model: CostModel) {
+  return costOf(
+    { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 },
+    model,
   );
+}
+
+/**
+ * Whether a dollar cap can be held on this model's price. A price from the
+ * community catalogue (models.dev) counts only with `allowCommunity`
+ * (--budget-allow-unpriced): it is a third-party estimate.
+ */
+function hasPrice(model: CostModel, allowCommunity = false): boolean {
+  const r = probe(model);
+  if (r.amount === "unknown") return false;
+  return allowCommunity || r.priceSource?.kind !== "community";
+}
+
+/** The date of the community copy when that is the model's only price. */
+function communityOnlyPrice(model: CostModel): string | undefined {
+  const r = probe(model);
+  return r.amount !== "unknown" && r.priceSource?.kind === "community"
+    ? (r.priceSource.asOf ?? "").slice(0, 10)
+    : undefined;
 }
 
 /**
@@ -85,6 +107,10 @@ export function unpricedBudgetProblem(
 ): string | undefined {
   if (!positive(limits.maxBudgetUsd) || allowUnpriced) return undefined;
   if (hasPrice(model)) return undefined;
+  const communityDate = communityOnlyPrice(model);
+  if (communityDate !== undefined) {
+    return `--max-budget-usd cannot be held on ${model.provider}/${model.model}: its only price is from the community catalogue (models.dev, ${communityDate}), a third-party estimate a dollar cap is not held on. Pick a model with a price from the provider or the price tables, or pass --budget-allow-unpriced to hold the cap on the community estimate.`;
+  }
   if (model.provider.toLowerCase() === "openrouter") {
     const id = `${model.provider}/${model.model}`;
     const escape =
@@ -118,7 +144,7 @@ export class RunBudget {
     this.limits = opts.limits;
     this.now = opts.now ?? Date.now;
     this.startedAt = this.now();
-    this.priced = hasPrice(opts.model);
+    this.priced = hasPrice(opts.model, opts.allowCommunityPrice);
   }
 
   get stop(): RunStop | undefined {
@@ -129,9 +155,18 @@ export class RunBudget {
     return this.calls;
   }
 
-  /** "prices from openrouter.ai as of <date>" when the model is priced from the downloaded list. */
+  /**
+   * "prices from openrouter.ai as of <date>" when the model is priced from the
+   * downloaded list, "prices from the community catalogue (models.dev) as of
+   * <date>" when from that.
+   */
   get priceNote(): string | undefined {
-    return this.priced ? priceSourceNote(this.opts.model) : undefined;
+    if (!this.priced) return undefined;
+    const community = communityOnlyPrice(this.opts.model);
+    if (community !== undefined) {
+      return `prices from the community catalogue (models.dev) as of ${community}`;
+    }
+    return priceSourceNote(this.opts.model);
   }
 
   /** Whether the dollar cap is actually being enforced for this run. */

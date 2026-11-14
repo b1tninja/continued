@@ -3,7 +3,10 @@
 
 import type { ToolStatus, Usage } from "core/index.js";
 import { totalInputTokens } from "core/llm/utils/cacheStats.js";
-import { calculateRequestCost } from "core/llm/utils/calculateRequestCost.js";
+import {
+  calculateRequestCost,
+  type CostBreakdown,
+} from "core/llm/utils/calculateRequestCost.js";
 import { flagToolText } from "core/tools/permissions/injection.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { ChatCompletionToolMessageParam } from "openai/resources/chat/completions.mjs";
@@ -674,6 +677,9 @@ export function recordStreamTelemetry(options: {
   // the session total is then marked an estimate. Against the AWS list the
   // fallback reported $4.00 for a $2.35 run (research-bedrock-families.md).
   let estimated = false;
+  // Left undefined when the request had no usage to price from: the
+  // session then prices it itself, as before
+  let costBreakdown: CostBreakdown | null | undefined;
   const provider = pricingProvider(model);
 
   if (fullUsage) {
@@ -701,13 +707,20 @@ export function recordStreamTelemetry(options: {
 
     // Price under the config's provider. A provider with no price table
     // (a proxy, say) falls back to the name guess, which prices Claude and
-    // GPT models by their vendors' lists; anything else gets the fallback.
+    // GPT models by their vendors' lists; then the community catalogue
+    // (models.dev, when a copy is held) under the config's provider, which
+    // never comes before a better source; anything else gets the fallback.
     const guessed = guessProviderFromName(model.model);
-    const costBreakdown =
-      calculateRequestCost(provider, model.model, usage) ??
+    costBreakdown =
+      calculateRequestCost(provider, model.model, usage, {
+        community: false,
+      }) ??
       (guessed === provider
         ? null
-        : calculateRequestCost(guessed, model.model, usage));
+        : calculateRequestCost(guessed, model.model, usage, {
+            community: false,
+          })) ??
+      calculateRequestCost(provider, model.model, usage);
 
     // Use fallback for unknown models
     if (costBreakdown) {
@@ -750,7 +763,10 @@ export function recordStreamTelemetry(options: {
   // The session totals count the input the provider processed (uncached plus
   // cache reads plus writes), which needs the provider to know what its own
   // count leaves out; the cache tally does the same per request.
-  trackSessionUsage(cost, usage, provider, model.model, estimated);
+  trackSessionUsage(cost, usage, provider, model.model, {
+    estimated,
+    pricedAs: costBreakdown,
+  });
   recordCacheTally(provider, model.model, usage);
 
   telemetryService.recordResponseTime(

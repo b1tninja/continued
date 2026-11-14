@@ -2,6 +2,7 @@ import { calculateRequestCost } from "core/llm/utils/calculateRequestCost";
 import React, { useMemo, useState } from "react";
 import { LLMLog } from "../../hooks/useLLMLog";
 import { ModelInfoFreshness } from "../ModelInfoFreshness";
+import { PriceSourceNote } from "../PriceSourceNote";
 import useTotalUsage from "../../hooks/useTotalUsage";
 
 interface TotalUsageProps {
@@ -302,15 +303,11 @@ const TotalUsage: React.FC<TotalUsageProps> = ({ llmLog }) => {
               <div className="text-xs text-[color:var(--vscode-descriptionForeground)]">
                 {totalUsage.costBreakdowns.length} cost calculations
               </div>
-              {totalUsage.priceListDate && (
-                <div
-                  className="text-xs text-[color:var(--vscode-descriptionForeground)]"
-                  data-testid="total-usage-price-date"
-                >
-                  Estimate: OpenRouter prices from the list downloaded{" "}
-                  {totalUsage.priceListDate.slice(0, 10)}
-                </div>
-              )}
+              <PriceSourceNote
+                className="text-center text-xs text-[color:var(--vscode-descriptionForeground)]"
+                sources={totalUsage.costBreakdowns.map((b) => b.priceSource)}
+                servedTiers={totalUsage.costBreakdowns.map((b) => b.servedTier)}
+              />
               <ModelInfoFreshness className="mt-1 items-center" />
             </div>
           </div>

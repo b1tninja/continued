@@ -1,4 +1,9 @@
+import {
+  COMMUNITY_CATALOG_SCHEMA_VERSION,
+  MODELS_DEV_URL,
+} from "core/llm/communityCatalog";
 import { setOpenRouterCatalog } from "core/llm/utils/catalogPricing";
+import { setCommunityCatalog } from "core/llm/utils/communityPricing";
 import { useContext, useEffect } from "react";
 import { IdeMessengerContext } from "../context/IdeMessenger";
 
@@ -6,8 +11,8 @@ import { IdeMessengerContext } from "../context/IdeMessenger";
 export const PRICE_RELOAD_MS = 10 * 60 * 1000;
 
 /**
- * Gives the cost figures in this window the OpenRouter prices downloaded
- * earlier (a file read in core, never a request to the network), so the usage
+ * Gives the cost figures in this window the OpenRouter prices (and the
+ * community catalogue's, the last price source) downloaded earlier (a file read in core, never a request to the network), so the usage
  * readouts can price those models and label the figure with the list's date.
  * Core may refresh the list in the background (model information updates
  * `automatic`), so the window reads it again now and then and takes the newer
@@ -42,8 +47,37 @@ export function useOpenRouterPrices(): void {
         .catch(() => {
           // No prices for those models: tokens only, as before
         });
-    void load();
-    const timer = setInterval(() => void load(), PRICE_RELOAD_MS);
+    // The community catalogue (models.dev), the last price source, the same
+    // way: a file read in core, null when there is none or updates are off
+    let communityAt: string | null | undefined;
+    const loadCommunity = () =>
+      ideMessenger
+        .request("modelCatalog/communityCached", undefined)
+        .then((res) => {
+          if (cancelled || res.status !== "success") return;
+          const fetchedAt = res.content?.fetchedAt ?? null;
+          if (fetchedAt === communityAt) return;
+          communityAt = fetchedAt;
+          setCommunityCatalog(
+            res.content
+              ? {
+                  schemaVersion: COMMUNITY_CATALOG_SCHEMA_VERSION,
+                  source: MODELS_DEV_URL,
+                  fetchedAt: res.content.fetchedAt,
+                  prices: res.content.prices,
+                }
+              : undefined,
+          );
+        })
+        .catch(() => {
+          // No community prices: those models stay unpriced
+        });
+    const loadAll = () => {
+      void load();
+      void loadCommunity();
+    };
+    loadAll();
+    const timer = setInterval(loadAll, PRICE_RELOAD_MS);
     return () => {
       cancelled = true;
       clearInterval(timer);

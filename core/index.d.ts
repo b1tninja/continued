@@ -12,6 +12,7 @@ import { TextResourceContents } from "@modelcontextprotocol/sdk/types.js";
 import Parser from "web-tree-sitter";
 import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
 import { LLMConfigurationStatuses } from "./llm/constants";
+import type { PriceSource } from "./llm/utils/calculateRequestCost";
 import type {
   SubagentRunStatus,
   SubagentToolCallSummary,
@@ -308,6 +309,16 @@ export interface ModelUsage {
    * from and the date of the oldest list used. The figure is an estimate.
    */
   priceEstimate?: { source: string; fetchedAt: string };
+  /**
+   * Where the latest priced request's prices came from and as of when, for
+   * the "price source and date" line next to the cost.
+   */
+  priceSource?: PriceSource;
+  /**
+   * The latest non-standard service tier a provider reported serving
+   * (`flex`, `priority`, ...). The cost is then the standard-tier price.
+   */
+  servedTier?: string;
 }
 
 export interface SessionUsage extends Usage {

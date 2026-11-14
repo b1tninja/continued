@@ -112,6 +112,21 @@ export interface ToolResultEvent extends EventBase<"tool_result"> {
   truncated: boolean;
 }
 
+/**
+ * Where a price came from and as of when: `user` (a price the person
+ * entered), `provider` (a list the provider publishes, downloaded), `curated`
+ * (a table in Continuous checked against the provider's pricing page),
+ * `community` (the models.dev catalogue: a third-party estimate, the last
+ * resort).
+ */
+export interface PriceSourceJson {
+  kind: "user" | "provider" | "curated" | "community";
+  label: string;
+  url?: string;
+  /** ISO date or date-time the prices were checked or downloaded. */
+  asOf?: string;
+}
+
 /** One model request's tokens and price, after the provider reported them. */
 export interface UsageEvent extends EventBase<"usage"> {
   /** 1 for the run's first model request. */
@@ -127,6 +142,13 @@ export interface UsageEvent extends EventBase<"usage"> {
   totalCostUsd: number;
   /** True when a fallback rate priced part of the total. */
   costEstimated: boolean;
+  /** Where this request's price came from; absent when it was not priced. */
+  priceSource?: PriceSourceJson;
+  /**
+   * The non-standard service tier the provider reported serving (`flex`,
+   * `priority`, ...); `costUsd` is then the standard-tier price.
+   */
+  servedTier?: string;
 }
 
 /** A run limit ended the run (see the run limits page). */
@@ -178,6 +200,10 @@ export interface ResultEvent extends EventBase<"result"> {
   };
   totalCostUsd: number;
   costEstimated: boolean;
+  /** Where the prices of the run's priced requests came from, one per source. */
+  priceSources?: PriceSourceJson[];
+  /** Non-standard service tiers the providers reported serving in the run. */
+  servedTiers?: string[];
 }
 
 export type StreamJsonEvent =
