@@ -813,13 +813,18 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
   "mdm/setLicenseKey": [{ licenseKey: string }, boolean];
   /**
    * The dated local copy of OpenRouter's public model list. `status` and
-   * `cached` read the file only; `pull` is the one request to openrouter.ai
-   * and runs only when the person asks.
+   * `cached` read the file only; `pull` is a request to openrouter.ai made
+   * when the person asks (Pull now, Refresh now), refused when model
+   * information updates are `off`. With `automatic` (the default) core also
+   * refreshes the copy in the background when it is older than
+   * `refreshHours`; `lastAttempt` is that refresher's last request.
    */
   "modelCatalog/status": [
     undefined,
     {
-      policy: "ask" | "never";
+      policy: "automatic" | "ask" | "never" | "off";
+      refreshHours: number;
+      lastAttempt?: { at: string; error?: string };
       openrouter?: { fetchedAt: string; count: number };
     },
   ];
@@ -834,7 +839,13 @@ export type ToCoreFromIdeOrWebviewProtocol = AuditListProtocol & {
       | { ok: false; error: string }
     ),
   ];
-  "modelCatalog/setPolicy": [{ policy: "ask" | "never" }, { saved: boolean }];
+  "modelCatalog/setPolicy": [
+    {
+      policy?: "automatic" | "ask" | "never" | "off";
+      refreshHours?: number;
+    },
+    { saved: boolean },
+  ];
   "models/fetch": [
     { provider: string; apiKey?: string; apiBase?: string },
     {

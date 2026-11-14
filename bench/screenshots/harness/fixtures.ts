@@ -981,7 +981,10 @@ function bedrock(ok: boolean): Fixture {
 function catalogue(): Fixture {
   return async ({ messenger }) => {
     const h = messenger.responseHandlers as any;
-    h["modelCatalog/status"] = async () => ({ policy: "ask" });
+    h["modelCatalog/status"] = async () => ({
+      policy: "ask",
+      refreshHours: 24,
+    });
     h["modelCatalog/cached"] = async () => null;
     await sleep(400);
   };

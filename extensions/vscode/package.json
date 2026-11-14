@@ -196,6 +196,35 @@
           "scope": "machine",
           "markdownDescription": "The image for `#continuous.terminal.shell#` set to `container`. It needs `bash` and `base64`. Empty uses `ubuntu:24.04`. The runtime pulls it on first use."
         },
+        "continuous.modelInformationUpdates": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "manual",
+            "off"
+          ],
+          "enumItemLabels": [
+            "Automatic",
+            "Only when I ask",
+            "Off"
+          ],
+          "enumDescriptions": [
+            "Refresh OpenRouter's public model list in the background when the copy on this computer is older than the refresh interval: at start-up and while running.",
+            "Contact openrouter.ai only when you choose Pull now or Refresh now, or run `continuous models refresh`.",
+            "Never contact openrouter.ai; use the bundled model data."
+          ],
+          "default": "automatic",
+          "scope": "application",
+          "markdownDescription": "Model information updates: OpenRouter's public model list (names, context sizes, per-token prices for cost estimates and `--max-budget-usd`, tool support). `automatic` sends one GET to `openrouter.ai/api/v1/models`, with no key, account or prompt, when the copy is older than `#continuous.modelInformationRefreshHours#`. Saved as `modelCatalog:` in the user-level `config.yaml`, so JetBrains and the terminal agent follow it too. Ollama's model list is not affected: it is fetched only from Ollama's own setup."
+        },
+        "continuous.modelInformationRefreshHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "maximum": 720,
+          "scope": "application",
+          "markdownDescription": "With `#continuous.modelInformationUpdates#` set to `automatic`: how old, in hours, the OpenRouter model list may get before it is refreshed. Saved as `modelCatalogRefreshHours:` in the user-level `config.yaml`."
+        },
         "continuous.shareMcpServersWithVSCode": {
           "type": "boolean",
           "default": true,

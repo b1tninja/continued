@@ -298,10 +298,17 @@ export const baseConfigYamlSchema = z.object({
   toolPermissions: toolPermissionsSchema.optional(),
   terminal: terminalSchema.optional(),
   /**
-   * Whether to offer the one-time download of OpenRouter's public model list
-   * (names, sizes, prices). `ask` (default) shows the dialog, `never` does not.
+   * Model information updates: OpenRouter's public model list (names, sizes,
+   * prices). `automatic` (default) refreshes it in the background when the
+   * copy is older than `modelCatalogRefreshHours`; `manual` only when asked
+   * (provider setup offers it); `off` never contacts openrouter.ai. `ask` is
+   * the old spelling of `manual`; `never` is `manual` without the offer.
    */
-  modelCatalog: z.enum(["ask", "never"]).optional(),
+  modelCatalog: z
+    .enum(["automatic", "manual", "off", "ask", "never"])
+    .optional(),
+  /** Hours before an automatic refresh replaces the list (default 24). */
+  modelCatalogRefreshHours: z.number().positive().optional(),
   env: envRecord.optional(),
   requestOptions: requestOptionsSchema.optional(),
 });
