@@ -72,10 +72,11 @@ import {
   recordSettingChanges,
   rememberSettings,
 } from "./tools/permissions/settingChanges";
+import { readPolicyFile } from "./tools/permissions/settingsFile";
 import {
-  readPolicyFile,
-  writePolicyFile,
-} from "./tools/permissions/settingsFile";
+  previewPolicySave,
+  savePolicyWithConfirmation,
+} from "./tools/permissions/policySave";
 import { AutoReviewSessions } from "./tools/permissions/auto/state";
 import {
   suggestAllowRule,
@@ -753,7 +754,10 @@ export class Core {
       } catch {
         // the audit never blocks a save
       }
-      writePolicyFile(file, data);
+      // A save that loosens waits for the IDE's own dialog; a "no" writes nothing
+      await savePolicyWithConfirmation(file, data, {
+        confirm: (text) => confirmInIde(this.ide, text),
+      });
       // The settings page changed levels, built-in switches or the question
       // lists: what moved is written to the audit trail. Never blocks the save.
       try {
@@ -767,6 +771,11 @@ export class Core {
         // the audit never blocks a save
       }
     });
+
+    // The save, dry-run: the exact permissions.yaml text and what would be asked
+    on("policy/preview", async ({ data }) =>
+      previewPolicySave(policyFilePath(), data),
+    );
 
     on("policy/rules", async ({ data }) => {
       const { config } = await this.configHandler.loadConfig();

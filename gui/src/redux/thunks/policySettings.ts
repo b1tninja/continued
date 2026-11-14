@@ -4,7 +4,10 @@ import type {
   PolicyLevel,
   PolicyLevels,
 } from "core/tools/permissions/policy";
-import type { PolicyFileUpdate } from "core/tools/permissions/settingsFile";
+import type {
+  PolicyFileUpdate,
+  StoredCustomSet,
+} from "core/tools/permissions/settingsFile";
 import {
   setPolicyExtras,
   setPolicyLevel,
@@ -40,6 +43,7 @@ export const loadPolicySettings = createAsyncThunk<void, void, ThunkApiType>(
           trustedMcpServers: Object.keys(settings.mcpServers ?? {}),
           questionDelivery: settings.questions?.delivery,
           planAllowTerminal: settings.planAllowTerminal,
+          customSet: settings.custom,
         }),
       );
       for (const notice of notices) console.warn(notice);
@@ -94,6 +98,11 @@ export interface CustomPolicySave {
     | "planMcpTools"
     | "planAllowTerminal"
   >;
+  /**
+   * The set to keep at `levels.custom` for the chip and for recall; absent
+   * leaves what the file has (a preset's levels are not a custom set).
+   */
+  custom?: StoredCustomSet;
 }
 
 /**
@@ -106,8 +115,33 @@ export const saveCustomPolicy = createAsyncThunk<
   void,
   CustomPolicySave,
   ThunkApiType
->("policy/saveCustom", async ({ levels, extras }, { dispatch, extra }) => {
-  const update: PolicyFileUpdate = {
+>("policy/saveCustom", async (save, { dispatch, extra }) => {
+  const update = customPolicyUpdate(save);
+  const res = await extra.ideMessenger.request("policy/save", update);
+  if (res.status !== "success") {
+    throw new Error(
+      res.status === "error" ? res.error : "Could not save the policy settings",
+    );
+  }
+  dispatch(setPolicyLevels(save.levels));
+  dispatch(
+    setPolicyExtras({
+      ...save.extras,
+      ...(save.custom ? { customSet: save.custom } : {}),
+    }),
+  );
+});
+
+/**
+ * The one permissions.yaml update the Custom policy page saves, and previews
+ * with `policy/preview` before it does.
+ */
+export function customPolicyUpdate({
+  levels,
+  extras,
+  custom,
+}: CustomPolicySave): PolicyFileUpdate {
+  return {
     levels,
     ...(extras.maxNewPlanItems !== undefined
       ? { maxNewPlanItems: extras.maxNewPlanItems }
@@ -126,16 +160,9 @@ export const saveCustomPolicy = createAsyncThunk<
     trustedMcpServers: extras.trustedMcpServers ?? [],
     planMcpTools: extras.planMcpTools ?? [],
     planAllowTerminal: extras.planAllowTerminal ?? false,
+    ...(custom ? { custom } : {}),
   };
-  const res = await extra.ideMessenger.request("policy/save", update);
-  if (res.status !== "success") {
-    throw new Error(
-      res.status === "error" ? res.error : "Could not save the policy settings",
-    );
-  }
-  dispatch(setPolicyLevels(levels));
-  dispatch(setPolicyExtras(extras));
-});
+}
 
 export const changePolicyLevel = createAsyncThunk<
   void,
@@ -167,11 +194,19 @@ export const changePolicyExtras = createAsyncThunk<
   void,
   Partial<PolicyExtras>,
   ThunkApiType
->("policy/changeExtras", async (change, { dispatch }) => {
+>("policy/changeExtras", async (change, { dispatch, getState }) => {
+  const previous = getState().ui.policyExtras;
   dispatch(setPolicyExtras(change));
   try {
     await dispatch(savePolicySettings()).unwrap();
   } catch (e) {
+    // Not saved (the editor's own dialog said no, or the write failed): the
+    // switch shows what the file still says
+    const restore: Partial<PolicyExtras> = {};
+    for (const key of Object.keys(change) as (keyof PolicyExtras)[]) {
+      (restore as Record<string, unknown>)[key] = previous[key];
+    }
+    dispatch(setPolicyExtras(restore));
     console.warn("Could not save the policy settings", e);
   }
 });

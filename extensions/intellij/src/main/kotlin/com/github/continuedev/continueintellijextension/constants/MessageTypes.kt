@@ -157,6 +157,11 @@ class MessageTypes {
             "ollama/showHint",
             "config/getTerminalEnvironment",
             "config/setTerminalEnvironment",
+            // policy/save asks in the IDE's own notification before a
+            // change that loosens (core: policySave.ts)
+            "policy/load",
+            "policy/save",
+            "policy/preview",
             "policy/rules",
             "policy/test",
             "llm/compileChat",

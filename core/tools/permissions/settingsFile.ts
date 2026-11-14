@@ -8,9 +8,11 @@ import {
   normalizePolicy,
   parsePolicyLevel,
   POLICY_AREAS,
+  POLICY_PRESETS,
   type BuiltinRuleId,
   type PolicyArea,
   type PolicyLevels,
+  type PolicyPresetName,
   type PolicySettings,
   type QuestionDelivery,
 } from "./policy.js";
@@ -37,7 +39,29 @@ export interface PolicyFileSettings extends PolicySettings {
   planMcpTools?: string[];
   /** Offer the terminal in Plan mode (the CLI; it still asks). Default false. */
   planAllowTerminal?: boolean;
+  /** The person's custom set of levels and the preset it started from (`levels.custom`). */
+  custom?: StoredCustomSet;
 }
+
+/**
+ * A custom set of the five levels, kept so it can be recalled after a preset
+ * is chosen, and the preset it was made from, so the chip can say "Custom
+ * (from Careful)". Provenance only: nothing reads it to decide a call.
+ *
+ * Stored at `levels.custom`, not at a new top-level key: every CLI and IDE
+ * that reads permissions.yaml accepts `levels` and reads only the five area
+ * names inside it, so an older build ignores this entry instead of treating
+ * the whole file as broken (an unknown top-level key does that; see the CLI's
+ * permissionsYamlProblem). Never holds IDGAF, which is for one session only.
+ */
+export interface StoredCustomSet {
+  /** The preset the set was made from; absent when it was made from another custom set */
+  from?: Exclude<PolicyPresetName, "idgaf">;
+  levels: PolicyLevels;
+}
+
+/** Where the custom set lives in the file. */
+export const CUSTOM_SET_PATH = ["levels", "custom"] as const;
 
 export interface PolicyFileRead {
   settings: PolicyFileSettings;
@@ -137,7 +161,49 @@ export function parsePolicyFile(text: string | undefined): PolicyFileRead {
   }
   const allowTerminal = asBool(raw.plan?.allowTerminal);
   if (allowTerminal !== undefined) settings.planAllowTerminal = allowTerminal;
+  const rawCustom = raw.levels?.custom;
+  if (rawCustom !== undefined) {
+    const custom = readCustomSet(rawCustom);
+    if (custom) settings.custom = custom;
+    else {
+      notices.push(
+        "levels.custom: not a complete set of five levels, so it is not offered.",
+      );
+    }
+  }
   return { settings, notices };
+}
+
+/** A stored custom set, or undefined when it is not one (missing area, IDGAF, unknown preset). */
+export function readCustomSet(value: unknown): StoredCustomSet | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const { from, levels } = value as { from?: unknown; levels?: unknown };
+  if (!levels || typeof levels !== "object" || Array.isArray(levels)) {
+    return undefined;
+  }
+  const out: Partial<PolicyLevels> = {};
+  for (const area of POLICY_AREAS) {
+    const level = parsePolicyLevel((levels as Record<string, unknown>)[area]);
+    if (!level || level === "idgaf") return undefined;
+    out[area] = level;
+  }
+  if (from !== undefined && !isStorablePreset(from)) return undefined;
+  return {
+    ...(from === undefined ? {} : { from }),
+    levels: out as PolicyLevels,
+  };
+}
+
+function isStorablePreset(
+  value: unknown,
+): value is Exclude<PolicyPresetName, "idgaf"> {
+  return (
+    typeof value === "string" &&
+    value !== "idgaf" &&
+    Object.prototype.hasOwnProperty.call(POLICY_PRESETS, value)
+  );
 }
 
 /** What `save` is given: the parts of the settings a person can change. */
@@ -158,6 +224,8 @@ export interface PolicyFileUpdate {
   planMcpTools?: string[];
   /** `plan.allowTerminal` */
   planAllowTerminal?: boolean;
+  /** `levels.custom`: the set to keep for recall; null removes it, absent keeps what the file has */
+  custom?: StoredCustomSet | null;
 }
 
 /** Why an update cannot be written, or undefined. Nothing is written when it cannot. */
@@ -177,6 +245,9 @@ export function policyUpdateProblem(
     if (!isPlanMcpTool(entry)) {
       return `plan.mcpTools: ${JSON.stringify(entry)}: write server/tool, server/* or server.`;
     }
+  }
+  if (update.custom && !readCustomSet(update.custom)) {
+    return "levels.custom: a custom set needs all five levels, none of them IDGAF, and a preset name in from.";
   }
   return undefined;
 }
@@ -285,6 +356,21 @@ export function applyPolicyUpdate(
     else if (doc.hasIn(["plan", "allowTerminal"])) {
       doc.deleteIn(["plan", "allowTerminal"]);
       dropEmptyMap(doc, "plan");
+    }
+  }
+  if (update.custom === null) {
+    if (doc.hasIn([...CUSTOM_SET_PATH])) doc.deleteIn([...CUSTOM_SET_PATH]);
+    dropEmptyMap(doc, "levels");
+  } else if (update.custom) {
+    const custom = readCustomSet(update.custom);
+    if (custom) {
+      doc.setIn(
+        [...CUSTOM_SET_PATH],
+        doc.createNode({
+          ...(custom.from ? { from: custom.from } : {}),
+          levels: { ...custom.levels },
+        }),
+      );
     }
   }
   if (update.trustedMcpServers) {
