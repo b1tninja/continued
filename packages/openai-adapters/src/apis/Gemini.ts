@@ -106,7 +106,7 @@ export class GeminiApi implements BaseLlmApi {
     part:
       | OpenAI.Chat.Completions.ChatCompletionContentPart
       | OpenAI.Chat.Completions.ChatCompletionContentPartRefusal,
-  ): GeminiChatContentPart {
+  ): GeminiChatContentPart | undefined {
     switch (part.type) {
       case "refusal":
         return {
@@ -119,16 +119,37 @@ export class GeminiApi implements BaseLlmApi {
       case "input_audio":
         throw new Error("Unsupported part type: input_audio");
       case "image_url":
-      default:
+      default: {
+        // inlineData takes base64 bytes. An http(s) URL has none, and would
+        // go out as `data: undefined`.
+        const url = (part as ChatCompletionContentPartImage).image_url?.url;
+        const data = url?.startsWith("data:") ? url.split(",")[1] : undefined;
+        if (!data) {
+          console.warn(
+            "Gemini: skipping an image that is not a data URL. The image was left out of the request.",
+          );
+          return undefined;
+        }
         return {
           inlineData: {
             mimeType: "image/jpeg",
-            data: (part as ChatCompletionContentPartImage).image_url?.url.split(
-              ",",
-            )[1],
+            data,
           },
         };
+      }
     }
+  }
+
+  /** Content parts as Gemini parts, without the ones that can't be sent. */
+  private _oaiPartsToGeminiParts(
+    parts: Array<
+      | OpenAI.Chat.Completions.ChatCompletionContentPart
+      | OpenAI.Chat.Completions.ChatCompletionContentPartRefusal
+    >,
+  ): GeminiChatContentPart[] {
+    return parts
+      .map((part) => this._oaiPartToGeminiPart(part))
+      .filter((part): part is GeminiChatContentPart => part !== undefined);
   }
 
   private _messageText(
@@ -206,16 +227,24 @@ export class GeminiApi implements BaseLlmApi {
           if (typeof msg.content === "string" && msg.content) {
             textParts.push({ text: msg.content });
           } else if (Array.isArray(msg.content)) {
-            textParts.push(
-              ...msg.content.map((part) => this._oaiPartToGeminiPart(part)),
-            );
+            textParts.push(...this._oaiPartsToGeminiParts(msg.content));
           }
+
+          // A call with no name would go out as `name: undefined`
+          const namedCalls = (msg.tool_calls as GeminiToolCall[]).filter(
+            (toolCall) =>
+              !(
+                toolCall.type === "function" &&
+                "function" in toolCall &&
+                !toolCall.function?.name
+              ),
+          );
 
           return {
             role: "model" as const,
             parts: [
               ...textParts,
-              ...(msg.tool_calls as GeminiToolCall[]).map((toolCall, index) => {
+              ...namedCalls.map((toolCall, index) => {
                 if (toolCall.type === "function" && "function" in toolCall) {
                   let thoughtSignature: string | undefined;
                   if (index === 0) {
@@ -266,6 +295,9 @@ export class GeminiApi implements BaseLlmApi {
                     part as OpenAI.Chat.Completions.ChatCompletionContentPart,
                   ),
                 )
+                .filter(
+                  (part): part is GeminiChatContentPart => part !== undefined,
+                )
             : [];
           return {
             role: "user" as const,
@@ -294,10 +326,12 @@ export class GeminiApi implements BaseLlmApi {
           parts:
             typeof msg.content === "string"
               ? [{ text: msg.content }]
-              : msg.content.map(this._oaiPartToGeminiPart),
+              : this._oaiPartsToGeminiParts(msg.content),
         };
       })
-      .filter((c) => c !== null) as GeminiChatContent[];
+      // Gemini rejects a Content with no parts (`[]` content, or a turn
+      // whose only image or call could not be sent)
+      .filter((c) => c !== null && c.parts.length > 0) as GeminiChatContent[];
 
     const mergedContents = mergeConsecutiveGeminiMessages(contents);
 

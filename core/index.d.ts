@@ -3095,6 +3095,8 @@ export interface CompiledMessagesResult {
   didPrune: boolean;
   /** History ageing masked more tool results in this request (a planned cache rebuild). */
   didAge?: boolean;
+  /** What normalizeTurns repaired in the history (llm/normalizeTurns.ts); absent when nothing. */
+  repairs?: string[];
   contextPercentage: number;
   /** Tokens the context has left for the reply, after the prompt. */
   outputTokensAvailable?: number;

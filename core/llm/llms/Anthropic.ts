@@ -37,6 +37,7 @@ import {
 import { renderChatMessage, stripImages } from "../../util/messageContent.js";
 import { extractBase64FromDataUrl } from "../../util/url.js";
 import { BaseLLM } from "../index.js";
+import { orphanToolResultText } from "../normalizeTurns.js";
 import { withResponseInfo } from "../utils/cacheStats.js";
 import {
   cacheControlFor,
@@ -298,6 +299,9 @@ class Anthropic extends BaseLLM {
       }
     };
 
+    // A tool_result must answer a tool_use that was sent. One whose call was
+    // left out (no id or name) goes as text instead of a 400.
+    const sentToolUseIds = new Set<string>();
     for (const message of nonSystemMessages) {
       const newRole =
         message.role === "user" || message.role === "tool"
@@ -307,9 +311,22 @@ class Anthropic extends BaseLLM {
         flushCurrentMessage();
         currentRole = newRole;
       }
-      currentParts.push(
-        ...this.getContentBlocksFromChatMessage(message, model),
-      );
+      const blocks: ContentBlockParam[] =
+        message.role === "tool" && !sentToolUseIds.has(message.toolCallId)
+          ? [
+              {
+                type: "text",
+                text: orphanToolResultText(
+                  message.toolCallId,
+                  renderChatMessage(message),
+                ),
+              },
+            ]
+          : this.getContentBlocksFromChatMessage(message, model);
+      for (const block of blocks) {
+        if (block.type === "tool_use") sentToolUseIds.add(block.id);
+      }
+      currentParts.push(...blocks);
     }
     flushCurrentMessage();
 
