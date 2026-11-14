@@ -37,6 +37,7 @@ The top-level properties in the `config.yaml` configuration file are:
 - [`docs`](#docs)
 - [`mcpServers`](#mcpservers)
 - [`data`](#data)
+- [`modelCatalog`](#modelcatalog)
 
 ---
 
@@ -682,6 +683,26 @@ data:
     events:
       - autocomplete
       - chatInteraction
+```
+
+---
+
+### `modelCatalog`
+
+Model information updates: when OpenRouter's public model list (names, context sizes, per-token prices, tool support) is downloaded from `openrouter.ai`. Read from the user-level `config.yaml` (`~/.continuous/config.yaml`) by every IDE and the terminal agent. See [model information and prices](/customize/model-providers/top-level/openrouter#model-information-and-prices).
+
+- `automatic` (default when the line is absent): in the background, when the copy on this computer is older than `modelCatalogRefreshHours`.
+- `manual`: only when you choose Pull now or Refresh now, or run `continuous models refresh`. `ask` is accepted as the same; `never` is `manual` without the question in provider setup.
+- `off`: never; the bundled model data is used.
+
+`modelCatalogRefreshHours` (number, default `24`, 1 to 720) sets the interval for `automatic`. The environment variables `CONTINUOUS_MODEL_INFO_UPDATES` and `CONTINUOUS_MODEL_INFO_REFRESH_HOURS` override both. Ollama's model list is not covered: it is fetched only from Ollama's own setup.
+
+```yaml title="config.yaml"
+name: My Config
+version: 1.0.0
+schema: v1
+modelCatalog: manual
+modelCatalogRefreshHours: 48
 ```
 
 ---

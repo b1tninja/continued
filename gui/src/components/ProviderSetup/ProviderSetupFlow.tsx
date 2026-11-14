@@ -38,6 +38,7 @@ import {
   openRouterListFetchedAt,
   refreshProviderCatalogue,
   saveCatalogPolicy,
+  type CatalogPolicy,
 } from "../../pages/AddNewModel/configs/fetchProviderModels";
 import {
   DisplayInfo,
@@ -48,6 +49,7 @@ import {
   providers,
 } from "../../pages/AddNewModel/configs/providers";
 import ModelSelectionListbox from "../modelSelection/ModelSelectionListbox";
+import { ModelInfoFreshness } from "../ModelInfoFreshness";
 import { OpenRouterCataloguePrompt } from "./CataloguePrompt";
 import { LocalServerPicker } from "./LocalServerPicker";
 import { ModelChecklist } from "./ModelChecklist";
@@ -280,7 +282,7 @@ export function ProviderSetupFlow({
   // copy of its list is already on this computer. Both are local reads; until
   // they arrive the prompt is not shown.
   const [orState, setOrState] = useState<{
-    policy: "ask" | "never";
+    policy: CatalogPolicy;
     haveCopy: boolean;
   }>();
   const isOpenRouter = provider.provider === "openrouter";
@@ -300,11 +302,15 @@ export function ProviderSetupFlow({
       cancelled = true;
     };
   }, [isOpenRouter, ideMessenger]);
+  // Only "Only when I ask" offers the OpenRouter download here. Automatic
+  // needs no question (core keeps the list current); off never fetches.
+  // Ollama always asks: its list is fetched only from its own setup.
   const showCataloguePrompt =
     !!CATALOGUE_HOSTS[provider.provider] &&
     !catalogueAnswered(provider.provider) &&
     (!isOpenRouter ||
       (orState !== undefined && orState.policy === "ask" && !orState.haveCopy));
+  const openRouterOff = isOpenRouter && orState?.policy === "off";
   const groups = useMemo(
     () => buildChecklistRows(modelLists, configuredModels),
     [modelLists.top, modelLists.other, configuredModels],
@@ -368,8 +374,24 @@ export function ProviderSetupFlow({
     isBedrock || isLocal
       ? fieldsFilled
       : catalogueHost
-        ? true
+        ? !openRouterOff
         : !!keyChoice.value;
+
+  // Automatic updates and no list on this computer yet (the background
+  // refresh has not run, or could not): get it now instead of asking.
+  const autoPulled = useRef(false);
+  useEffect(() => {
+    if (
+      !isOpenRouter ||
+      orState?.policy !== "automatic" ||
+      orState.haveCopy ||
+      autoPulled.current
+    ) {
+      return;
+    }
+    autoPulled.current = true;
+    void refreshModels();
+  }, [isOpenRouter, orState]);
 
   async function refreshModels() {
     const forProvider = provider.provider;
@@ -927,17 +949,24 @@ export function ProviderSetupFlow({
               Couldn't refresh the model list: {refreshError}
             </span>
           )}
-          {catalogueHost && noModelsYet && (
+          {catalogueHost && noModelsYet && !openRouterOff && (
             <span className="text-xs text-description-muted">
               Model list not downloaded. Refresh from {catalogueHost}, or type a
               model id.
             </span>
           )}
-          {isOpenRouter && openRouterListFetchedAt() && (
-            <span className="text-xs text-description-muted">
-              Model list from {catalogueHost}, downloaded{" "}
-              {new Date(openRouterListFetchedAt()!).toLocaleDateString()}.
-            </span>
+          {isOpenRouter && (
+            <ModelInfoFreshness
+              key={openRouterListFetchedAt() ?? "none"}
+              onRefresh={() =>
+                refreshProviderCatalogue(ideMessenger, "openrouter").then(
+                  (r) => {
+                    if (r.ok) setCatalogueVersion((v) => v + 1);
+                    return r;
+                  },
+                )
+              }
+            />
           )}
           <ModelChecklist
             groups={groups}

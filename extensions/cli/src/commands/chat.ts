@@ -16,6 +16,7 @@ import {
 import { safeStderr, safeStdout } from "../init.js";
 import { configureLogger } from "../logger.js";
 import * as logging from "../logging.js";
+import { startModelInfoRefresh } from "../modelInfoRefresh.js";
 import { seedPlanBuild } from "../plans/planBuild.js";
 import { initializeServices, services } from "../services/index.js";
 import { serviceContainer } from "../services/ServiceContainer.js";
@@ -545,6 +546,10 @@ export async function chat(prompt?: string, options: ChatOptions = {}) {
   logging.configureLogger({ headless: options.headless ?? false });
 
   try {
+    // Model information updates: a background refresh of a stale OpenRouter
+    // list when the setting is automatic. Sets a timer only.
+    startModelInfoRefresh();
+
     // Record session start
     telemetryService.recordSessionStart();
 
