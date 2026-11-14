@@ -122,13 +122,15 @@ describe("PolicyControls", () => {
     expect(chip.textContent).not.toContain("Every rule is ignored");
     expect(chip.textContent).toContain("IDGAF");
     // The sentence is the tooltip and the described-by text
-    expect(chip.getAttribute("title")).toContain("Questions");
+    expect(chip.getAttribute("title")).toBe(
+      "Every rule is ignored. Select to go back to Careful.",
+    );
     expect(chip.getAttribute("title")).toContain("Every rule is ignored");
     const description = document.getElementById(
       chip.getAttribute("aria-describedby")!,
     )!;
-    expect(description.textContent).toContain("Questions");
-    expect(description.textContent).toContain("Every rule is ignored");
+    // It does not list the areas: the selectors already show them
+    expect(description.textContent).toBe("Every rule is ignored.");
     // It is not an alert: a standing state is not announced as an interruption
     expect(chip.getAttribute("role")).toBeNull();
     // Unrelated state changes do not remove it.
@@ -162,7 +164,7 @@ describe("PolicyControls", () => {
     const description = document.getElementById(
       chip.getAttribute("aria-describedby")!,
     )!;
-    expect(description.textContent).toContain("nothing asks");
+    expect(description.textContent).toBe("Every rule is ignored.");
     expect(chip.parentElement!.getAttribute("title")).toContain(
       "Every rule is ignored",
     );
