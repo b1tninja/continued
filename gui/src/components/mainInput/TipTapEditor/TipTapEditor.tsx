@@ -17,13 +17,12 @@ import InputToolbar, { ToolbarOptions } from "../InputToolbar";
 import { AttachMenu } from "../InputToolbar/AttachMenu";
 import { ComboBoxItem } from "../types";
 import { DragOverlay } from "./components/DragOverlay";
+import { InputBoxDiv } from "./components/StyledComponents";
 import { DropNotice } from "./drop/DropNotice";
 import { useChatInputDrop } from "./drop/useChatInputDrop";
-import { InputBoxDiv } from "./components/StyledComponents";
 import { useMainEditor } from "./MainEditorProvider";
 import "./TipTapEditor.css";
 import { createEditorConfig, getPlaceholderText } from "./utils/editorConfig";
-import { handleImageFile } from "./utils/imageUtils";
 import { useEditorEventHandlers } from "./utils/keyHandlers";
 
 export interface TipTapEditorProps {
@@ -210,17 +209,8 @@ function TipTapEditorInner(props: TipTapEditorProps) {
     setShouldHideToolbar(false);
   }, [cancelBlurTimeout]);
 
-  const onImageFileSelected = (file: File) => {
-    void handleImageFile(ideMessenger, file).then((result) => {
-      if (!editor || !result) return;
-      const [_, dataUrl] = result;
-      const { schema } = editor.state;
-      const node = schema.nodes.image.create({ src: dataUrl });
-      editor.commands.command(({ tr }) => {
-        tr.insert(0, node);
-        return true;
-      });
-    });
+  const onImageFilesSelected = (files: File[]) => {
+    void drop.addImageFiles(files);
   };
 
   return (
@@ -247,7 +237,7 @@ function TipTapEditorInner(props: TipTapEditorProps) {
                 hideImageUpload={props.toolbarOptions?.hideImageUpload}
                 hideAddContext={props.toolbarOptions?.hideAddContext}
                 onAddContextItem={() => insertCharacterWithWhitespace("@")}
-                onImageFileSelected={onImageFileSelected}
+                onImageFilesSelected={onImageFilesSelected}
               />
             </div>
           )}

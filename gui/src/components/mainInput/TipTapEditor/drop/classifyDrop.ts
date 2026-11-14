@@ -164,7 +164,7 @@ function resourceItem(
   };
 }
 
-function fileItem<F extends FileLike>(file: F): DropItem<F> {
+export function fileItem<F extends FileLike>(file: F): DropItem<F> {
   const mime = (file.type || "").toLowerCase();
   const base = {
     source: "os" as const,
@@ -298,4 +298,55 @@ export function isHandledDrag(types: readonly string[] | undefined): boolean {
   return [VSCODE_URI_LIST, RESOURCE_URLS, CODE_EDITORS, URI_LIST, FILES, TEXT]
     .map((t) => t.toLowerCase())
     .some((t) => lower.includes(t));
+}
+
+export interface ClipboardItemLike<F extends FileLike = FileLike> {
+  kind: string;
+  type: string;
+  getAsFile(): F | null;
+}
+
+export interface ClipboardDataLike<F extends FileLike = FileLike> {
+  types?: readonly string[];
+  getData(format: string): string;
+  items?: ArrayLike<ClipboardItemLike<F>> | null;
+  files?: ArrayLike<F> | null;
+}
+
+/**
+ * The files of a paste. Chromium lists a pasted file under `items` and again
+ * under `files`; `items` is read first and `files` only when it has none.
+ */
+function pastedFiles<F extends FileLike>(cb: ClipboardDataLike<F>): F[] {
+  const fromItems: F[] = [];
+  for (const item of Array.from(cb.items ?? [])) {
+    if (item.kind !== "file") continue;
+    const file = item.getAsFile();
+    if (file) fromItems.push(file);
+  }
+  return fromItems.length ? fromItems : Array.from(cb.files ?? []);
+}
+
+/**
+ * Turns a paste into the items to add, or none when the editor should paste
+ * as usual. Only files are taken: a screenshot or an image copied from a
+ * browser (`image/png`, sometimes with `text/html` holding an `<img>` tag).
+ *
+ * A paste with real text keeps the editor's own paste. Office apps put a
+ * picture of the copied cells or paragraph next to the text, and the text is
+ * what was meant; a copied image has no `text/plain`.
+ */
+export function classifyPaste<F extends FileLike = FileLike>(
+  cb: ClipboardDataLike<F>,
+): DropItem<F>[] {
+  const files = pastedFiles(cb);
+  if (files.length === 0) return [];
+  let text = "";
+  try {
+    text = cb.getData(TEXT) ?? "";
+  } catch {
+    text = "";
+  }
+  if (text.trim()) return [];
+  return files.map((f) => fileItem(f));
 }
