@@ -21,7 +21,7 @@ import {
   testOpenAICompatConnection,
 } from "./util/openaiCompatTest";
 import { currentNotice, dismissCurrentNotice } from "./util/retirementStartup";
-import { isDismissed } from "./util/retirementNoticeState";
+import { isDismissed, recordLive } from "./util/retirementNoticeState";
 import { saveRulesByMode } from "./config/yaml/saveRulesByMode";
 import { evaluateToolPolicyWithRules } from "./tools/permissions/evaluate";
 import { deputyWorkspace } from "./tools/permissions/workspaceRoots";
@@ -97,6 +97,12 @@ import {
   type ModelCatalogRefresher,
 } from "./llm/modelCatalogRefresh";
 import {
+  createSelectedModelRefresher,
+  type RefreshTarget,
+  type SelectedModelRefresher,
+  targetKey,
+} from "./llm/providerModelRefresh";
+import {
   loadOpenRouterPrices,
   modelInfoFetchBlocked,
   pullOpenRouterCatalog,
@@ -161,7 +167,10 @@ import {
   ToolCall,
   type ContextItem,
   type IDE,
+  type ILLM,
 } from ".";
+import type { BaseLLM } from "./llm";
+import type { ProviderModelFacts } from "./util/providerModelLookup";
 
 import { ConfigYaml } from "@continuedev/config-yaml";
 import { getDiffFn, GitDiffCache } from "./autocomplete/snippets/gitDiffCache";
@@ -253,6 +262,8 @@ export class Core {
 
   /** The background OpenRouter list refresh (not started in tests). */
   private modelCatalogRefresher?: ModelCatalogRefresher;
+  private selectedModelRefresher?: SelectedModelRefresher;
+  private selectedChatModel?: ILLM;
   private messageAbortControllers = new MessageAbortControllers();
   private addMessageAbortController(id: string): AbortController {
     return this.messageAbortControllers.add(id);
@@ -326,6 +337,11 @@ export class Core {
 
       this.configHandler.onConfigUpdate((result) => {
         void this.offerToMovePlaintextKeys();
+        this.selectedChatModel =
+          result.config?.selectedModelByRole.chat ?? undefined;
+        this.selectedModelRefresher?.select(
+          refreshTargetOf(this.selectedChatModel),
+        );
         void (async () => {
           const serializedResult =
             await this.configHandler.getSerializedConfig();
@@ -471,6 +487,13 @@ export class Core {
         log: (m) => console.warn(m),
       });
       this.modelCatalogRefresher.start();
+      // The selected Anthropic or OpenAI model's own facts, from its
+      // provider with the person's key; armed by the config update that
+      // names the selected model, never at start-up itself
+      this.selectedModelRefresher = createSelectedModelRefresher({
+        log: (m) => console.warn(m),
+        onUpdated: (target, facts) => this.applyModelFacts(target, facts),
+      });
     }
 
     on("modelCatalog/status", async () => {
@@ -985,6 +1008,7 @@ export class Core {
         apiBase: msg.data.apiBase,
         apiKey: msg.data.apiKey,
         model: msg.data.model,
+        checkModel: msg.data.checkModel,
       }),
     );
 
@@ -2449,6 +2473,38 @@ export class Core {
    * plain text into secure storage. Only offered when the editor has secure
    * storage; ~/.continuous/.env would still be plain text.
    */
+
+  /**
+   * A refreshed answer from the selected model's provider: the window and
+   * output cap the person did not set follow it, a deprecation or shutdown
+   * date reaches the model chip's notice, and the chip asks again.
+   */
+  private applyModelFacts(
+    target: RefreshTarget,
+    facts: ProviderModelFacts,
+  ): void {
+    const llm = this.selectedChatModel;
+    const current = refreshTargetOf(llm);
+    if (llm && current && targetKey(current) === targetKey(target)) {
+      (llm as Partial<BaseLLM>).applyProviderModelFacts?.(facts);
+    }
+    if (facts.retiresAt || (facts.lifecycle && facts.lifecycle !== "active")) {
+      recordLive(
+        target.model,
+        {
+          lifecycle: facts.lifecycle,
+          deprecatedAt: facts.deprecatedAt,
+          retiresAt: facts.retiresAt,
+        },
+        new Date().toISOString().slice(0, 10),
+      );
+    }
+    this.messenger.send("model/infoUpdated", {
+      provider: target.provider,
+      model: target.model,
+    });
+  }
+
   private async offerToMovePlaintextKeys(): Promise<void> {
     if (this.offeringPlaintextKeys) return;
     if (this.globalContext.get("skipPlaintextKeyOffer")) return;
@@ -2751,4 +2807,18 @@ export class Core {
 /** The settings file the IDE and the CLI share. */
 function policyFilePath(): string {
   return path.join(getContinueGlobalPath(), "permissions.yaml");
+}
+
+/** The refresh target for a selected model: Anthropic and OpenAI only. */
+function refreshTargetOf(llm: ILLM | undefined): RefreshTarget | undefined {
+  if (!llm?.model) return undefined;
+  const provider = llm.providerName;
+  if (provider !== "anthropic" && provider !== "openai") return undefined;
+  return {
+    provider,
+    apiBase: llm.apiBase,
+    apiKey: llm.apiKey,
+    model: llm.model,
+    requestOptions: llm.requestOptions,
+  };
 }

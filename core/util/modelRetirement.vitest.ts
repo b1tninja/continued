@@ -144,3 +144,39 @@ describe("retirementNotice", () => {
     expect(a?.key).not.toBe(b?.key);
   });
 });
+
+describe("retirementNotice for OpenAI", () => {
+  it("speaks only from OpenAI's own shutdown_date", () => {
+    expect(
+      retirementNotice({
+        provider: "openai",
+        model: "gpt-4.1",
+        now: "2026-11-13",
+      }),
+    ).toBeUndefined();
+    expect(
+      retirementNotice({
+        provider: "openai",
+        model: "gpt-4.1",
+        now: "2026-11-13",
+        live: { lifecycle: "deprecated", retiresAt: "2027-02-14" },
+      }),
+    ).toMatchObject({
+      from: "live",
+      severity: "retiring",
+      retiresAt: "2027-02-14",
+      message: expect.stringContaining("retires on 2027-02-14"),
+    });
+  });
+
+  it("other providers still get nothing", () => {
+    expect(
+      retirementNotice({
+        provider: "mistral",
+        model: "m",
+        now: "2026-11-13",
+        live: { lifecycle: "deprecated", retiresAt: "2027-02-14" },
+      }),
+    ).toBeUndefined();
+  });
+});

@@ -67,6 +67,7 @@ class MessageTypes {
             "sessionUpdate",
             "didCloseFiles",
             "toolCallPartialOutput",
+            "model/infoUpdated",
         )
 
         // Note: If updating these values, make a corresponding update in
