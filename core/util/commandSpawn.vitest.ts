@@ -35,10 +35,9 @@ describe("a command cannot wait for an answer", () => {
   it.runIf(process.platform === "win32")(
     "Read-Host fails at once in Windows PowerShell",
     async () => {
-      const child = getCommandExecutor({ terminalShell: "default" }).spawn(
-        "Read-Host 'name'",
-        { windowsHide: true },
-      );
+      const child = await getCommandExecutor({
+        terminalShell: "default",
+      }).spawn("Read-Host 'name'", { windowsHide: true });
       expect(child.stdin).toBeNull();
       const result = await finish(child);
       expect(result.code).toBe(1);
@@ -53,9 +52,10 @@ describe("a command cannot wait for an answer", () => {
     async () => {
       // Get-Content with no -Path asks "Path[0]:" in an interactive session
       const result = await finish(
-        getCommandExecutor({ terminalShell: "default" }).spawn("Get-Content", {
-          windowsHide: true,
-        }),
+        await getCommandExecutor({ terminalShell: "default" }).spawn(
+          "Get-Content",
+          { windowsHide: true },
+        ),
       );
       expect(result.code).toBe(1);
       expect(result.err).toMatch(/Path/);
@@ -67,7 +67,7 @@ describe("a command cannot wait for an answer", () => {
   it.runIf(process.platform !== "win32")(
     "read in sh sees end of file at once",
     async () => {
-      const child = getCommandExecutor({
+      const child = await getCommandExecutor({
         terminalShell: "default",
         env: { SHELL: "/bin/sh" },
       }).spawn("read x; echo got=$x");

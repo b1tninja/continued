@@ -3,7 +3,7 @@ import os from "node:os";
 import {
   COMMAND_STDIO,
   commandEnvironment,
-  realExitInvocation,
+  spawnAgentCommand,
 } from "../../util/commandSpawn";
 import { decodeCommandOutput } from "../../util/commandOutput";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
@@ -55,11 +55,19 @@ function releaseStreams(child: childProcess.ChildProcess): void {
 // UTF-8, or on Windows the machine's OEM code page when the bytes are not UTF-8
 function getDecodedOutput(data: Buffer): string {
   return decodeCommandOutput(data);
-} // Simple helper function to use login shell on Unix/macOS and PowerShell on Windows
-function getShellCommand(command: string): { shell: string; args: string[] } {
-  // Windows PowerShell on Windows, the login shell elsewhere, or bash in WSL;
-  // PowerShell is asked for the exit code the command's own program chose
-  return realExitInvocation(getCommandExecutor(), command);
+}
+
+/**
+ * Starts the command through the executor: Windows PowerShell on Windows, the
+ * login shell elsewhere, bash in WSL or a container, started from the
+ * workspace folder (which a container mounts). PowerShell is asked for the
+ * exit code the command's own program chose.
+ */
+function startCommand(
+  command: string,
+  options: childProcess.SpawnOptions,
+): Promise<childProcess.ChildProcess> {
+  return spawnAgentCommand(getCommandExecutor(), command, options);
 }
 
 import { fileURLToPath } from "node:url";
@@ -137,7 +145,7 @@ const spawnOptions = (cwd: string): childProcess.SpawnOptions => ({
 
 // Only spawn processes locally when there is no remote workspace.
 // With extensionKind: ["ui", "workspace"], the extension host almost always
-// runs on the local machine. childProcess.spawn() executes on the extension
+// runs on the local machine. executor.spawn() executes on the extension
 // host, so for any remote workspace it would run commands on the wrong machine
 // (or fail with ENOENT when the local shell doesn't match the remote OS).
 // All remote types delegate to ide.runCommand() which routes through VS Code's
@@ -191,6 +199,27 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
         const workspaceDirs = await extras.ide.getWorkspaceDirs();
         const cwd = resolveWorkingDirectory(workspaceDirs);
 
+        if (!waitForCompletion) {
+          const status = "Command is running in the background...";
+          if (extras.onPartialOutput) {
+            extras.onPartialOutput({
+              toolCallId,
+              contextItems: [
+                {
+                  name: "Terminal",
+                  description: "Terminal command output",
+                  content: "",
+                  status: status,
+                },
+              ],
+            });
+          }
+        }
+
+        // Started with the color environment; a shell that cannot start
+        // rejects here, as its "error" event did
+        const childProc = await startCommand(command, spawnOptions(cwd));
+
         return new Promise((resolve, reject) => {
           let terminalOutput = "";
           let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -199,27 +228,6 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
           let exitTimeoutId: ReturnType<typeof setTimeout> | undefined;
           let timedOut = false;
           let finished = false;
-
-          if (!waitForCompletion) {
-            const status = "Command is running in the background...";
-            if (extras.onPartialOutput) {
-              extras.onPartialOutput({
-                toolCallId,
-                contextItems: [
-                  {
-                    name: "Terminal",
-                    description: "Terminal command output",
-                    content: "",
-                    status: status,
-                  },
-                ],
-              });
-            }
-          }
-
-          // Use spawn with color environment
-          const { shell, args } = getShellCommand(command);
-          const childProc = childProcess.spawn(shell, args, spawnOptions(cwd));
 
           // Track this process for foreground cancellation
           if (toolCallId && waitForCompletion) {
@@ -478,9 +486,9 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
       if (waitForCompletion) {
         // Standard execution, waiting for completion
         try {
-          // Use spawn approach for consistency with streaming version
-          const { shell: nonStreamingShell, args: nonStreamingArgs } =
-            getShellCommand(command);
+          // Same start as the streaming version; a shell that cannot start
+          // is reported below, as its "error" event was
+          const childProc = await startCommand(command, spawnOptions(cwd));
           const output = await new Promise<{ stdout: string; stderr: string }>(
             (resolve, reject) => {
               let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -488,12 +496,6 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
               let forceTimeoutId: ReturnType<typeof setTimeout> | undefined;
               let exitTimeoutId: ReturnType<typeof setTimeout> | undefined;
               let finished = false;
-
-              const childProc = childProcess.spawn(
-                nonStreamingShell,
-                nonStreamingArgs,
-                spawnOptions(cwd),
-              );
 
               // Track this process for foreground cancellation
               if (toolCallId) {
@@ -629,9 +631,7 @@ export const runTerminalCommandImpl: ToolImpl = async (args, extras) => {
         // but don't attach any listeners other than error
         try {
           // Use spawn with color environment
-          const { shell: detachedShell, args: detachedArgs } =
-            getShellCommand(command);
-          const childProc = childProcess.spawn(detachedShell, detachedArgs, {
+          const childProc = await startCommand(command, {
             cwd,
             env: getColorEnv(), // Add color environment
             // Detach the process so it's not tied to the parent
